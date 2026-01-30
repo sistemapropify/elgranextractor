@@ -1,0 +1,9 @@
+# Oryx manifest file to help with framework detection
+[python]
+version = "3.12"
+framework = "django"
+framework_version = "5.2.8"
+
+[build]
+build_command = "pip install -r requirements.txt"
+run_command = "gunicorn webapp.wsgi:application --bind 0.0.0.0:8000"

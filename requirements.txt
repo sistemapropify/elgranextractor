@@ -1,0 +1,6 @@
+Django==5.2.8
+azure-storage-blob
+gunicorn
+django-environ
+mssql-django
+whitenoise
