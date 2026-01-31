@@ -14,6 +14,7 @@ class FuenteWebAdmin(admin.ModelAdmin):
         'nombre',
         'url_truncada',
         'tipo',
+        'categoria',
         'estado',
         'prioridad',
         'fecha_ultima_revision',
@@ -22,6 +23,7 @@ class FuenteWebAdmin(admin.ModelAdmin):
     
     list_filter = [
         'tipo',
+        'categoria',
         'estado',
         'prioridad',
     ]
@@ -47,6 +49,7 @@ class FuenteWebAdmin(admin.ModelAdmin):
         ('Configuración de Monitoreo', {
             'fields': (
                 'tipo',
+                'categoria',
                 'estado',
                 'prioridad',
                 'frecuencia_revision_horas',
