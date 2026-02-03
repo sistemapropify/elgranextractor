@@ -1,11 +1,493 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <title>Página de Bienvenida</title>
-</head>
-<body>
-    <h1>¡Bienvenido a tu proyecto Django en Azure!</h1>
-    <p>Despliegue exitoso.</p>
-</body>
-</html>
+{% extends "base.html" %}
+
+{% block title %}El Gran Extractor - Dashboard{% endblock %}
+
+{% block extra_css %}
+<style>
+    .dashboard-header {
+        background: linear-gradient(135deg, #047d7d 0%, #035e5e 100%);
+        color: white;
+        padding: 2rem 0;
+        margin-bottom: 2rem;
+        border-radius: 10px;
+        border: 1px solid rgba(4, 125, 125, 0.2);
+    }
+    
+    .card {
+        border: none;
+        border-radius: 15px;
+        box-shadow: 0 4px 6px rgba(3, 94, 94, 0.1);
+        margin-bottom: 1.5rem;
+        background-color: #ffffff;
+        border: 1px solid #daeded;
+    }
+    
+    .btn-primary {
+        background: linear-gradient(135deg, #047d7d 0%, #035e5e 100%);
+        border: none;
+    }
+    
+    .btn-primary:hover {
+        background: linear-gradient(135deg, #049b9b 0%, #047d7d 100%);
+    }
+    
+    .btn-outline-success {
+        border-color: #28a745;
+        color: #28a745;
+    }
+    
+    .btn-outline-success:hover {
+        background-color: #28a745;
+        color: white;
+    }
+    
+    .btn-outline-info {
+        border-color: #84bcbc;
+        color: #047d7d;
+    }
+    
+    .btn-outline-info:hover {
+        background-color: #84bcbc;
+        color: white;
+    }
+    
+    .btn-outline-warning {
+        border-color: #ffc107;
+        color: #ffc107;
+    }
+    
+    .btn-outline-warning:hover {
+        background-color: #ffc107;
+        color: #212529;
+    }
+    
+    .stat-card {
+        text-align: center;
+        padding: 1.5rem;
+        background-color: #ffffff;
+    }
+    
+    .stat-number {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #047d7d;
+    }
+    
+    .url-list {
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    
+    .url-item {
+        padding: 10px 15px;
+        border-bottom: 1px solid #daeded;
+    }
+    
+    .status-active {
+        color: #28a745;
+    }
+    
+    .status-error {
+        color: #dc3545;
+    }
+    
+    .footer {
+        margin-top: 3rem;
+        padding: 1.5rem 0;
+        background-color: #035e5e;
+        color: white;
+        text-align: center;
+        border-radius: 10px;
+        border-top: 1px solid #84bcbc;
+    }
+    
+    .text-muted {
+        color: #6c757d !important;
+    }
+    
+    .alert-info {
+        background-color: rgba(4, 125, 125, 0.1);
+        border-color: #84bcbc;
+        color: #035e5e;
+    }
+    
+    .spinner-border.text-primary {
+        color: #047d7d !important;
+    }
+    
+    .form-control, .form-select {
+        border: 1px solid #84bcbc;
+    }
+    
+    .form-control:focus, .form-select:focus {
+        border-color: #047d7d;
+        box-shadow: 0 0 0 0.25rem rgba(4, 125, 125, 0.25);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+    <div class="dashboard-header">
+        <div class="container">
+            <h1 class="display-5 fw-bold"><i class="bi bi-speedometer2 me-2"></i>Dashboard de Monitoreo</h1>
+            <p class="lead">Sistema de captura y análisis automático de portales inmobiliarios en Arequipa</p>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="row mb-4">
+                    <div class="col-md-3"><div class="card stat-card"><div class="stat-number" id="total-fuentes">0</div><div>Fuentes Activas</div></div></div>
+                    <div class="col-md-3"><div class="card stat-card"><div class="stat-number" id="total-capturas">0</div><div>Capturas Totales</div></div></div>
+                    <div class="col-md-3"><div class="card stat-card"><div class="stat-number" id="cambios-detectados">0</div><div>Cambios Detectados</div></div></div>
+                    <div class="col-md-3"><div class="card stat-card"><div class="stat-number" id="urls-descubiertas">0</div><div>URLs Descubiertas</div></div></div>
+                </div>
+
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <h5 class="card-title"><i class="bi bi-plus-circle me-2"></i>Agregar Nueva Fuente Web</h5>
+                        <p class="text-muted">Ingresa una URL de portal inmobiliario para comenzar a monitorear</p>
+                        <form id="urlForm">
+                            <div class="mb-3">
+                                <label for="url" class="form-label">URL del Portal</label>
+                                <input type="url" class="form-control" id="url" placeholder="https://ejemplo.com/propiedades" required>
+                                <div class="form-text">Ej: https://www.adondevivir.com/departamentos-en-venta-arequipa</div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="frecuencia" class="form-label">Frecuencia (minutos)</label>
+                                    <input type="number" class="form-control" id="frecuencia" value="60" min="5" max="1440">
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="categoria" class="form-label">Categoría</label>
+                                    <select class="form-select" id="categoria">
+                                        <option value="venta">Venta</option>
+                                        <option value="alquiler">Alquiler</option>
+                                        <option value="proyectos">Proyectos</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Agregar Fuente</button>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title"><i class="bi bi-play-circle me-2"></i>Control del Sistema</h5>
+                        <p class="text-muted">Ejecuta tareas del sistema manualmente</p>
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <button class="btn btn-outline-success w-100" id="btnEjecutarSistema">
+                                    <i class="bi bi-play-fill me-1"></i>Ejecutar Sistema
+                                </button>
+                                <small class="text-muted">Inicia monitoreo de todas las fuentes</small>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <button class="btn btn-outline-info w-100" id="btnDescubrirURLs">
+                                    <i class="bi bi-search me-1"></i>Descubrir URLs
+                                </button>
+                                <small class="text-muted">Busca nuevos portales en Arequipa</small>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <button class="btn btn-outline-warning w-100" id="btnActualizarFrecuencias">
+                                    <i class="bi bi-graph-up me-1"></i>Ajustar Frecuencias
+                                </button>
+                                <small class="text-muted">Ajusta frecuencias automáticamente</small>
+                            </div>
+                        </div>
+                        <div class="mt-3 alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <strong>Estado del sistema:</strong> <span id="sistemaEstado">Listo para ejecutar</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <h5 class="card-title"><i class="bi bi-list-ul me-2"></i>Fuentes Activas</h5>
+                        <div class="url-list" id="urlList">
+                            <div class="text-center py-4">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Cargando...</span>
+                                </div>
+                                <p class="mt-2 text-muted">Cargando fuentes...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title"><i class="bi bi-clock-history me-2"></i>Cambios Recientes</h5>
+                        <div id="recentChanges">
+                            <div class="url-item">
+                                <small class="text-muted">No hay cambios recientes</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <div class="container">
+                <p class="mb-0"><strong>El Gran Extractor</strong> - Sistema de Monitoreo de Mercado Inmobiliario Arequipeño</p>
+                <small class="text-light">Versión 1.0 | Desarrollado con Django, Celery y Bootstrap</small>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Cargar datos iniciales
+        cargarEstadisticas();
+        cargarFuentesActivas();
+        
+        // Form submission
+        document.getElementById('urlForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            agregarFuente();
+        });
+        
+        // System control buttons
+        document.getElementById('btnEjecutarSistema').addEventListener('click', ejecutarSistema);
+        document.getElementById('btnDescubrirURLs').addEventListener('click', descubrirURLs);
+        document.getElementById('btnActualizarFrecuencias').addEventListener('click', actualizarFrecuencias);
+        
+        // Auto-refresh
+        setInterval(cargarEstadisticas, 30000);
+        setInterval(cargarFuentesActivas, 45000);
+    });
+    
+    function cargarEstadisticas() {
+        fetch('/api/estadisticas/')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('total-fuentes').textContent = data.total_fuentes || 0;
+                document.getElementById('total-capturas').textContent = data.total_capturas || 0;
+                document.getElementById('cambios-detectados').textContent = data.cambios_detectados || 0;
+                document.getElementById('urls-descubiertas').textContent = data.urls_descubiertas || 0;
+            })
+            .catch(error => {
+                console.error('Error cargando estadísticas:', error);
+                // Datos de respaldo
+                document.getElementById('total-fuentes').textContent = '0';
+                document.getElementById('total-capturas').textContent = '0';
+                document.getElementById('cambios-detectados').textContent = '0';
+                document.getElementById('urls-descubiertas').textContent = '0';
+            });
+    }
+    
+    function cargarFuentesActivas() {
+        fetch('/api/fuentes/')
+            .then(response => response.json())
+            .then(data => {
+                const urlList = document.getElementById('urlList');
+                urlList.innerHTML = '';
+                
+                if (data.length === 0) {
+                    urlList.innerHTML = '<div class="text-center py-4 text-muted">No hay fuentes activas</div>';
+                    return;
+                }
+                
+                data.slice(0, 8).forEach(fuente => {
+                    const urlItem = document.createElement('div');
+                    urlItem.className = 'url-item';
+                    
+                    let statusClass = 'status-active';
+                    if (fuente.estado === 'pausada' || fuente.estado === 'inactiva') statusClass = 'text-muted';
+                    if (fuente.estado === 'error') statusClass = 'status-error';
+                    
+                    urlItem.innerHTML = `
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div style="max-width: 80%;">
+                                <strong class="d-block text-truncate">${fuente.nombre || fuente.url}</strong>
+                                <small class="text-muted">${fuente.ultima_captura || 'Nunca'}</small>
+                            </div>
+                            <span class="${statusClass}">${fuente.estado || 'activa'}</span>
+                        </div>
+                    `;
+                    urlList.appendChild(urlItem);
+                });
+            })
+            .catch(error => {
+                console.error('Error cargando fuentes:', error);
+                const urlList = document.getElementById('urlList');
+                urlList.innerHTML = '<div class="text-center py-4 text-muted">Error cargando fuentes</div>';
+            });
+    }
+    
+    function agregarFuente() {
+        const url = document.getElementById('url').value.trim();
+        const frecuencia = document.getElementById('frecuencia').value;
+        const categoria = document.getElementById('categoria').value;
+        
+        if (!url) {
+            alert('Por favor ingresa una URL válida');
+            return;
+        }
+        
+        const btnAgregar = document.querySelector('#urlForm button[type="submit"]');
+        const originalText = btnAgregar.innerHTML;
+        btnAgregar.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Agregando...';
+        btnAgregar.disabled = true;
+        
+        fetch('/api/agregar-fuente/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken') || ''
+            },
+            body: JSON.stringify({
+                url: url,
+                frecuencia: parseInt(frecuencia),
+                categoria: categoria,
+                prioridad: 'media'
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Fuente agregada exitosamente');
+                document.getElementById('urlForm').reset();
+                cargarEstadisticas();
+                cargarFuentesActivas();
+            } else {
+                alert('Error: ' + (data.error || 'No se pudo agregar la fuente'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error al agregar la fuente');
+        })
+        .finally(() => {
+            btnAgregar.innerHTML = originalText;
+            btnAgregar.disabled = false;
+        });
+    }
+    
+    function ejecutarSistema() {
+        const btn = document.getElementById('btnEjecutarSistema');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Ejecutando...';
+        btn.disabled = true;
+        
+        document.getElementById('sistemaEstado').textContent = 'Ejecutando...';
+        
+        fetch('/api/ejecutar-sistema/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken') || ''
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Sistema ejecutado. ' + data.message);
+            } else {
+                alert('Error: ' + (data.error || 'No se pudo ejecutar el sistema'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error al ejecutar el sistema');
+        })
+        .finally(() => {
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                document.getElementById('sistemaEstado').textContent = 'Listo para ejecutar';
+            }, 2000);
+        });
+    }
+    
+    function descubrirURLs() {
+        const btn = document.getElementById('btnDescubrirURLs');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Buscando...';
+        btn.disabled = true;
+        
+        fetch('/api/descubrir-urls/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken') || ''
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Búsqueda iniciada. ' + data.message);
+            } else {
+                alert('Error: ' + (data.error || 'No se pudo iniciar la búsqueda'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error al iniciar la búsqueda');
+        })
+        .finally(() => {
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }, 2000);
+        });
+    }
+    
+    function actualizarFrecuencias() {
+        const btn = document.getElementById('btnActualizarFrecuencias');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Ajustando...';
+        btn.disabled = true;
+        
+        fetch('/api/actualizar-frecuencias/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken') || ''
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Frecuencias ajustadas. ' + data.message);
+            } else {
+                alert('Error: ' + (data.error || 'No se pudieron ajustar las frecuencias'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error al ajustar frecuencias');
+        })
+        .finally(() => {
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }, 2000);
+        });
+    }
+    
+    // Helper function to get CSRF token
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+</script>
+{% endblock %}

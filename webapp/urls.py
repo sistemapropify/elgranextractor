@@ -16,10 +16,27 @@ Including another URLconf
 """
 
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, include
 from . import views
 
 urlpatterns = [
+    # Página principal
     path('', views.home, name='home'),
+    
+    # Fuentes Web
+    path('fuentes-web/', views.fuentes_web, name='fuentes_web'),
+    
+    # Admin
     path('admin/', admin.site.urls),
+    
+    # API del dashboard
+    path('api/estadisticas/', views.estadisticas_api, name='estadisticas_api'),
+    path('api/fuentes/', views.fuentes_api, name='fuentes_api'),
+    path('api/agregar-fuente/', views.agregar_fuente_api, name='agregar_fuente_api'),
+    path('api/ejecutar-sistema/', views.ejecutar_sistema_api, name='ejecutar_sistema_api'),
+    path('api/descubrir-urls/', views.descubrir_urls_api, name='descubrir_urls_api'),
+    path('api/actualizar-frecuencias/', views.actualizar_frecuencias_api, name='actualizar_frecuencias_api'),
+    
+    # API REST (DRF)
+    path('api/', include('api.urls')),
 ]

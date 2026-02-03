@@ -1,6 +1,16 @@
-Django==5.2.8
+Django==5.0.6
 azure-storage-blob
 gunicorn
 django-environ
 mssql-django
 whitenoise
+celery==5.4.0
+django-celery-beat==2.6.0
+django-celery-results==2.6.0
+requests==2.32.5
+beautifulsoup4==4.12.3
+djangorestframework==3.15.2
+djangorestframework-simplejwt==5.3.1
+drf-yasg==1.21.8
+python-dateutil==2.9.0.post0
+cryptography==46.0.4
