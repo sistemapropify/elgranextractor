@@ -26,6 +26,9 @@ urlpatterns = [
     # Fuentes Web
     path('fuentes-web/', views.fuentes_web, name='fuentes_web'),
     
+    # Capturas - Nueva sección
+    path('capturas/', views.capturas_view, name='capturas'),
+    
     # Admin
     path('admin/', admin.site.urls),
     
@@ -36,6 +39,13 @@ urlpatterns = [
     path('api/ejecutar-sistema/', views.ejecutar_sistema_api, name='ejecutar_sistema_api'),
     path('api/descubrir-urls/', views.descubrir_urls_api, name='descubrir_urls_api'),
     path('api/actualizar-frecuencias/', views.actualizar_frecuencias_api, name='actualizar_frecuencias_api'),
+    
+    # API de Capturas (públicas para desarrollo)
+    path('api/capturas/', views.capturas_api, name='capturas_api'),
+    path('api/capturas/<int:captura_id>/', views.captura_detalle_api, name='captura_detalle_api'),
+    path('api/capturas/estadisticas/', views.estadisticas_capturas_api, name='estadisticas_capturas_api'),
+    path('api/capturas/manual/', views.captura_manual_api, name='captura_manual_api'),
+    path('api/fuentes/<int:fuente_id>/procesar/', views.procesar_fuente_api, name='procesar_fuente_api'),
     
     # API REST (DRF)
     path('api/', include('api.urls')),

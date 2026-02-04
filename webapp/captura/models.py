@@ -11,11 +11,22 @@ class CapturaCruda(models.Model):
     """
     Representa una captura cruda del contenido HTML de una fuente web en un momento específico.
     """
-    ESTADO_CAPTURA_CHOICES = [
-        ('exito', 'Éxito'),
+    ESTADO_PROCESAMIENTO_CHOICES = [
+        ('pendiente', 'Pendiente'),
+        ('procesando', 'Procesando'),
+        ('texto_extraido_ok', 'Texto Extraído OK'),
+        ('requiere_ocr', 'Requiere OCR'),
+        ('completado', 'Completado'),
         ('error', 'Error'),
-        ('timeout', 'Timeout'),
-        ('bloqueado', 'Bloqueado'),
+    ]
+    
+    TIPO_DOCUMENTO_CHOICES = [
+        ('html', 'HTML'),
+        ('pdf_nativo', 'PDF Nativo'),
+        ('pdf_escaneado', 'PDF Escaneado'),
+        ('json', 'JSON'),
+        ('xml', 'XML'),
+        ('otro', 'Otro'),
     ]
     
     # Relación con la fuente
@@ -31,11 +42,22 @@ class CapturaCruda(models.Model):
         auto_now_add=True,
         verbose_name='Fecha de captura'
     )
-    estado = models.CharField(
-        max_length=10,
-        choices=ESTADO_CAPTURA_CHOICES,
+    estado_http = models.CharField(
+        max_length=15,
         default='exito',
-        verbose_name='Estado de la captura'
+        verbose_name='Estado HTTP de la descarga'
+    )
+    estado_procesamiento = models.CharField(
+        max_length=20,
+        choices=ESTADO_PROCESAMIENTO_CHOICES,
+        default='pendiente',
+        verbose_name='Estado de procesamiento'
+    )
+    tipo_documento = models.CharField(
+        max_length=20,
+        choices=TIPO_DOCUMENTO_CHOICES,
+        default='html',
+        verbose_name='Tipo de documento'
     )
     
     # Información de la respuesta HTTP
@@ -60,9 +82,22 @@ class CapturaCruda(models.Model):
         verbose_name='Codificación del contenido'
     )
     
-    # Contenido y hash
+    # Contenido crudo (HTML o texto extraído)
     contenido_html = models.TextField(
-        verbose_name='Contenido HTML crudo'
+        verbose_name='Contenido HTML/texto crudo',
+        blank=True,
+        null=True
+    )
+    # Para PDFs, almacenamos referencia a blob, no el binario en DB
+    contenido_binario_blob = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name='Nombre del blob con contenido binario'
+    )
+    texto_extraido = models.TextField(
+        verbose_name='Texto extraído del documento',
+        blank=True,
+        null=True
     )
     hash_sha256 = models.CharField(
         max_length=64,
@@ -73,6 +108,17 @@ class CapturaCruda(models.Model):
         max_length=64,
         db_index=True,
         verbose_name='Hash simplificado (sin whitespace)'
+    )
+    # URL del contenido en Azure Blob Storage (si se usa almacenamiento externo)
+    azure_blob_url = models.URLField(
+        max_length=500,
+        blank=True,
+        verbose_name='URL del blob en Azure Storage'
+    )
+    azure_blob_name = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name='Nombre del blob en Azure Storage'
     )
     
     # Estadísticas del contenido
@@ -114,14 +160,34 @@ class CapturaCruda(models.Model):
         verbose_name='Stack trace (si aplica)'
     )
     
+    # Metadatos técnicos adicionales
+    metadata_tecnica = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name='Metadatos técnicos (headers, etc.)'
+    )
+    
+    # Para detección de tipo PDF
+    pdf_tiene_texto = models.BooleanField(
+        null=True,
+        blank=True,
+        verbose_name='PDF tiene texto seleccionable'
+    )
+    pdf_num_paginas = models.IntegerField(
+        null=True,
+        blank=True,
+        verbose_name='Número de páginas (PDFs)'
+    )
+    
     class Meta:
         verbose_name = 'Captura Cruda'
         verbose_name_plural = 'Capturas Crudas'
         ordering = ['-fecha_captura']
         indexes = [
-            models.Index(fields=['fuente', '-fecha_captura']),
+            models.Index(fields=['fuente', 'fecha_captura']),
             models.Index(fields=['hash_sha256']),
-            models.Index(fields=['estado', 'fecha_captura']),
+            models.Index(fields=['estado_procesamiento', 'fecha_captura']),
+            models.Index(fields=['tipo_documento']),
         ]
         unique_together = [['fuente', 'hash_sha256']]
     
@@ -129,13 +195,49 @@ class CapturaCruda(models.Model):
         return f'Captura de {self.fuente.nombre} - {self.fecha_captura.strftime("%Y-%m-%d %H:%M")}'
     
     def save(self, *args, **kwargs):
-        """Calcula los hashes antes de guardar."""
-        if self.contenido_html and not self.hash_sha256:
-            self.hash_sha256 = self.calcular_hash_sha256(self.contenido_html)
-            self.hash_simplificado = self.calcular_hash_simplificado(self.contenido_html)
+        """Calcula los hashes antes de guardar y sube a Azure si está configurado."""
+        from django.conf import settings
+        from .azure_storage import upload_raw_content, AzureStorageError
+        
+        # Subir a Azure Blob Storage si está configurado
+        if (settings.RAW_HTML_STORAGE == 'blob_storage' and
+            not self.azure_blob_url and
+            self.estado_http == 'exito'):
+            try:
+                contenido_para_subir = self.contenido_html or self.texto_extraido
+                if contenido_para_subir:
+                    blob_info = upload_raw_content(
+                        contenido_para_subir,
+                        self.fuente.id,
+                        timestamp=self.fecha_captura,
+                        tipo_documento=self.tipo_documento,
+                        metadata={
+                            'content_type': self.content_type,
+                            'tipo_documento': self.tipo_documento,
+                            'fuente_url': self.fuente.url,
+                        }
+                    )
+                    if blob_info:
+                        self.azure_blob_url = blob_info['url']
+                        self.azure_blob_name = blob_info['nombre']
+                        # Opcional: limpiar contenido_html para ahorrar espacio en DB
+                        if settings.DEBUG is False:  # Solo en producción
+                            if len(contenido_para_subir) > 100000:  # > 100KB
+                                self.contenido_html = None
+            except (AzureStorageError, Exception) as e:
+                # Registrar error pero continuar con el guardado
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Error al subir a Azure Storage: {e}")
+        
+        # Calcular hashes si hay contenido
+        contenido_para_hash = self.texto_extraido or self.contenido_html
+        if contenido_para_hash and not self.hash_sha256:
+            self.hash_sha256 = self.calcular_hash_sha256(contenido_para_hash)
+            self.hash_simplificado = self.calcular_hash_simplificado(contenido_para_hash)
         
         # Calcular estadísticas básicas si no están definidas
-        if self.contenido_html and self.num_palabras is None:
+        if contenido_para_hash and self.num_palabras is None:
             self.calcular_estadisticas()
         
         super().save(*args, **kwargs)
@@ -158,22 +260,26 @@ class CapturaCruda(models.Model):
         return hashlib.sha256(contenido_simplificado.encode('utf-8')).hexdigest()
     
     def calcular_estadisticas(self):
-        """Calcula estadísticas básicas del contenido HTML."""
-        if not self.contenido_html:
+        """Calcula estadísticas básicas del contenido."""
+        contenido = self.texto_extraido or self.contenido_html
+        if not contenido:
             return
         
         # Número de palabras (aproximado)
-        palabras = self.contenido_html.split()
+        palabras = contenido.split()
         self.num_palabras = len(palabras)
         
         # Número de líneas
-        self.num_lineas = self.contenido_html.count('\n') + 1
+        self.num_lineas = contenido.count('\n') + 1
         
-        # Número de enlaces (contando href=)
-        self.num_links = self.contenido_html.count('href=') + self.contenido_html.count('src=')
+        # Número de enlaces (contando href= solo si es HTML)
+        if self.tipo_documento == 'html':
+            self.num_links = contenido.count('href=') + contenido.count('src=')
+        else:
+            self.num_links = 0
         
         # Tamaño en bytes
-        self.tamaño_bytes = len(self.contenido_html.encode('utf-8'))
+        self.tamaño_bytes = len(contenido.encode('utf-8'))
     
     def es_duplicado_de(self, otra_captura):
         """Verifica si esta captura es duplicado de otra captura."""
@@ -188,18 +294,31 @@ class CapturaCruda(models.Model):
     
     def generar_resumen(self, max_length=200):
         """Genera un resumen del contenido para visualización."""
-        if not self.contenido_html:
+        contenido = self.texto_extraido or self.contenido_html
+        if not contenido:
             return ''
         
-        # Extraer texto limpio (sin etiquetas HTML)
+        # Extraer texto limpio (sin etiquetas HTML si es HTML)
         import re
-        texto_limpio = re.sub(r'<[^>]+>', ' ', self.contenido_html)
-        texto_limpio = re.sub(r'\s+', ' ', texto_limpio).strip()
+        if self.tipo_documento == 'html':
+            texto_limpio = re.sub(r'<[^>]+>', ' ', contenido)
+            texto_limpio = re.sub(r'\s+', ' ', texto_limpio).strip()
+        else:
+            texto_limpio = contenido[:500]  # Primeros 500 caracteres para PDFs
+            texto_limpio = re.sub(r'\s+', ' ', texto_limpio).strip()
         
         if len(texto_limpio) <= max_length:
             return texto_limpio
         
         return texto_limpio[:max_length] + '...'
+    
+    def esta_listo_para_procesar(self):
+        """Verifica si el documento está listo para procesamiento posterior."""
+        return self.estado_procesamiento == 'texto_extraido_ok'
+    
+    def necesita_ocr(self):
+        """Verifica si el documento necesita OCR."""
+        return self.estado_procesamiento == 'requiere_ocr'
 
 
 class EventoDeteccion(models.Model):

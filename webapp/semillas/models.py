@@ -12,8 +12,10 @@ class FuenteWeb(models.Model):
     Puede ser semilla estática (configurada manualmente) o dinámica (descubierta automáticamente).
     """
     TIPO_FUENTE_CHOICES = [
-        ('estatica', 'Estática'),
-        ('dinamica', 'Dinámica'),
+        ('semilla_listado', 'Semilla Listado'),  # Página con múltiples links
+        ('documento_directo_html', 'Documento Directo HTML'),  # Artículo o página individual
+        ('documento_directo_pdf', 'Documento Directo PDF'),  # PDF individual
+        ('api_feed', 'API/Feed'),  # Fuente estructurada (RSS, JSON)
     ]
     
     ESTADO_CHOICES = [
@@ -77,9 +79,9 @@ class FuenteWeb(models.Model):
     
     # Configuración de monitoreo
     tipo = models.CharField(
-        max_length=10,
+        max_length=30,
         choices=TIPO_FUENTE_CHOICES,
-        default='estatica',
+        default='semilla_listado',
         verbose_name='Tipo de fuente'
     )
     estado = models.CharField(
@@ -161,11 +163,17 @@ class FuenteWeb(models.Model):
         blank=True,
         on_delete=models.SET_NULL,
         related_name='fuentes_descubiertas',
-        verbose_name='Descubierta por'
+        verbose_name='Descubierta por (fuente padre)'
     )
     profundidad_descubrimiento = models.IntegerField(
         default=0,
         verbose_name='Profundidad de descubrimiento'
+    )
+    
+    # Campos adicionales para gestión
+    es_semilla_activa = models.BooleanField(
+        default=True,
+        verbose_name='Es semilla activa (genera hijos)'
     )
     
     class Meta:

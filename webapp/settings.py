@@ -157,7 +157,7 @@ X_FRAME_OPTIONS = 'DENY'
 # CSRF_COOKIE_SECURE = True
 
 # Celery Configuration
-CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'sqla+sqlite:///celerydb.sqlite3')
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'memory://')
 CELERY_RESULT_BACKEND = 'django-db'
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
@@ -181,4 +181,10 @@ SCRAPING_MAX_RETRIES = 3
 SCRAPING_TIMEOUT = 30  # seconds
 
 # Storage for raw HTML (using database for simplicity, can be changed to Azure Blob Storage later)
-RAW_HTML_STORAGE = 'database'  # 'database' or 'blob_storage'
+RAW_HTML_STORAGE = 'blob_storage'  # 'database' or 'blob_storage'
+
+# Azure Blob Storage Configuration
+AZURE_STORAGE_CONNECTION_STRING = env('AZURE_STORAGE_CONNECTION_STRING', default='')
+AZURE_STORAGE_CONTAINER_NAME = env('AZURE_STORAGE_CONTAINER_NAME', default='documentos-crudos')
+AZURE_STORAGE_ACCOUNT_NAME = env('AZURE_STORAGE_ACCOUNT_NAME', default='')
+AZURE_STORAGE_ACCOUNT_KEY = env('AZURE_STORAGE_ACCOUNT_KEY', default='')

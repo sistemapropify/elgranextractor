@@ -21,7 +21,7 @@ app.config_from_object('django.conf:settings', namespace='CELERY')
 # Configuración específica para usar base de datos como backend
 app.conf.update(
     # Usar base de datos como broker (solución temporal)
-    broker_url='django-db://',
+    broker_url='memory://',
     result_backend='django-db',
     
     # Configuración de tareas

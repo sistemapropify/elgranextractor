@@ -1,0 +1,741 @@
+{% extends "base.html" %}
+
+{% block title %}Sistema de Capturas - El Gran Extractor{% endblock %}
+
+{% block extra_css %}
+<style>
+    .dashboard-header {
+        background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+        color: white;
+        padding: 2rem 0;
+        margin-bottom: 2rem;
+        border-radius: 10px;
+    }
+    
+    .card {
+        border: none;
+        border-radius: 15px;
+        box-shadow: 0 4px 6px rgba(99, 102, 241, 0.1);
+        margin-bottom: 1.5rem;
+        background-color: #ffffff;
+        border: 1px solid #e0e7ff;
+    }
+    
+    .btn-primary {
+        background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+        border: none;
+    }
+    
+    .btn-primary:hover {
+        background: linear-gradient(135deg, #818cf8 0%, #6366f1 100%);
+    }
+    
+    .stat-card {
+        text-align: center;
+        padding: 1.5rem;
+        background-color: #ffffff;
+    }
+    
+    .stat-number {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #6366f1;
+    }
+    
+    .capture-item {
+        padding: 15px;
+        border-bottom: 1px solid #e0e7ff;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+    
+    .capture-item:hover {
+        background-color: #f5f7ff;
+    }
+    
+    .badge-exito {
+        background-color: #10b981;
+    }
+    
+    .badge-texto {
+        background-color: #3b82f6;
+    }
+    
+    .badge-ocr {
+        background-color: #f59e0b;
+    }
+    
+    .badge-error {
+        background-color: #ef4444;
+    }
+    
+    .badge-pdf {
+        background-color: #8b5cf6;
+    }
+    
+    .modal-content {
+        border-radius: 15px;
+    }
+    
+    .code-preview {
+        background-color: #1e293b;
+        color: #e2e8f0;
+        padding: 1rem;
+        border-radius: 8px;
+        max-height: 400px;
+        overflow-y: auto;
+        font-family: 'Courier New', monospace;
+        font-size: 0.85rem;
+    }
+    
+    .filter-bar {
+        background-color: #f8fafc;
+        padding: 1rem;
+        border-radius: 10px;
+        margin-bottom: 1rem;
+    }
+    
+    .list-container {
+        max-height: 600px;
+        overflow-y: auto;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+    <div class="dashboard-header">
+        <div class="container">
+            <h1 class="display-5 fw-bold">
+                <i class="bi bi-archive me-2"></i>Sistema de Capturas
+            </h1>
+            <p class="lead">Visualiza y gestiona todas las capturas del sistema</p>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Estadísticas -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card stat-card">
+                    <div class="stat-number" id="total-capturas-stat">0</div>
+                    <div>Total Capturas</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stat-card">
+                    <div class="stat-number" id="capturas-recientes-stat">0</div>
+                    <div>Últimos 7 días</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stat-card">
+                    <div class="stat-number" id="tamaño-promedio-stat">0</div>
+                    <div>KB Promedio</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stat-card">
+                    <div class="stat-number" id="con-texto-stat">0</div>
+                    <div>Con Texto OK</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Panel izquierdo: Lista de capturas -->
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="bi bi-collection me-2"></i>Capturas Recientes
+                        </h5>
+                        
+                        <!-- Barra de filtros -->
+                        <div class="filter-bar">
+                            <div class="row g-2">
+                                <div class="col-md-4">
+                                    <select class="form-select form-select-sm" id="filtroFuente">
+                                        <option value="">Todas las fuentes</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <select class="form-select form-select-sm" id="filtroEstado">
+                                        <option value="">Todos los estados</option>
+                                        <option value="texto_extraido_ok">Texto OK</option>
+                                        <option value="requiere_ocr">Requiere OCR</option>
+                                        <option value="capturado">Capturado</option>
+                                        <option value="error">Error</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <select class="form-select form-select-sm" id="filtroLimite">
+                                        <option value="50">50 resultados</option>
+                                        <option value="100">100 resultados</option>
+                                        <option value="200">200 resultados</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <button class="btn btn-sm btn-primary w-100" id="btnAplicarFiltros">
+                                        <i class="bi bi-funnel me-1"></i>Filtrar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Lista de capturas -->
+                        <div class="list-container" id="capturasLista">
+                            <div class="text-center py-5">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Cargando...</span>
+                                </div>
+                                <p class="mt-2 text-muted">Cargando capturas...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panel derecho: Información y acciones -->
+            <div class="col-lg-4">
+                <!-- CAPTURA MANUAL - BOTÓN DESTACADO -->
+                <div class="card mb-3 border-success" style="border-width: 2px;">
+                    <div class="card-body bg-light">
+                        <h5 class="card-title text-success">
+                            <i class="bi bi-camera-fill me-2"></i>📸 Captura Manual
+                        </h5>
+                        <p class="text-muted small mb-3">Captura cualquier URL al instante</p>
+                        <div class="mb-3">
+                            <input type="url" class="form-control" id="urlCapturaManual"
+                                   placeholder="https://ejemplo.com/pagina"
+                                   style="border-color: #10b981;">
+                        </div>
+                        <button class="btn btn-success w-100 btn-lg" id="btnCapturaManual">
+                            <i class="bi bi-download me-2"></i>CAPTURAR AHORA
+                        </button>
+                        <div id="capturaManualEstado" class="mt-3"></div>
+                    </div>
+                </div>
+                
+                <!-- Acciones rápidas -->
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="bi bi-lightning me-2"></i>Acciones Rápidas
+                        </h5>
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-success" id="btnActualizarLista">
+                                <i class="bi bi-arrow-clockwise me-1"></i>Actualizar Lista
+                            </button>
+                            <button class="btn btn-info" id="btnVerEstadisticas">
+                                <i class="bi bi-graph-up me-1"></i>Ver Estadísticas
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Resumen por estado -->
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="bi bi-pie-chart me-2"></i>Por Estado
+                        </h5>
+                        <div id="estadoResumen">
+                            <small class="text-muted">Cargando...</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Resumen por tipo -->
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="bi bi-file-earmark me-2"></i>Por Tipo
+                        </h5>
+                        <div id="tipoResumen">
+                            <small class="text-muted">Cargando...</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para ver detalles de captura -->
+    <div class="modal fade" id="capturaModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-file-earmark-text me-2"></i>Detalle de Captura
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="capturaDetalle">
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-primary" role="status"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let capturasCache = [];
+    let fuentesCache = [];
+
+    document.addEventListener('DOMContentLoaded', function() {
+        cargarEstadisticas();
+        cargarFuentes();
+        cargarCapturas();
+        
+        // Event listeners
+        document.getElementById('btnAplicarFiltros').addEventListener('click', cargarCapturas);
+        document.getElementById('btnCapturaManual').addEventListener('click', realizarCapturaManual);
+        document.getElementById('btnActualizarLista').addEventListener('click', function() {
+            cargarCapturas();
+            cargarEstadisticas();
+        });
+        document.getElementById('btnVerEstadisticas').addEventListener('click', mostrarEstadisticasDetalladas);
+        
+        // Enter para captura manual
+        document.getElementById('urlCapturaManual').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                realizarCapturaManual();
+            }
+        });
+        
+        // Auto-refresh cada 30 segundos
+        setInterval(() => {
+            cargarEstadisticas();
+        }, 30000);
+    });
+    
+    function cargarEstadisticas() {
+        fetch('/api/capturas/estadisticas/')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('total-capturas-stat').textContent = data.total_capturas || 0;
+                document.getElementById('capturas-recientes-stat').textContent = data.capturas_ultimos_7_dias || 0;
+                document.getElementById('tamaño-promedio-stat').textContent = data.tamaño_promedio_kb?.toFixed(1) || 0;
+                
+                // Resumenes
+                mostrarResumenEstados(data.por_estado || []);
+                mostrarResumenTipos(data.por_tipo || []);
+                
+                // Calcular capturas con texto
+                const conTexto = data.por_estado.find(e => e.estado_procesamiento === 'texto_extraido_ok');
+                document.getElementById('con-texto-stat').textContent = conTexto?.count || 0;
+            })
+            .catch(error => {
+                console.error('Error cargando estadísticas:', error);
+            });
+    }
+    
+    function mostrarResumenEstados(estados) {
+        const container = document.getElementById('estadoResumen');
+        if (estados.length === 0) {
+            container.innerHTML = '<small class="text-muted">Sin datos</small>';
+            return;
+        }
+        
+        let html = '<ul class="list-unstyled mb-0">';
+        estados.forEach(item => {
+            const estado = item.estado_procesamiento || 'sin_estado';
+            const count = item.count || 0;
+            let badgeClass = 'bg-secondary';
+            
+            if (estado.includes('texto_extraido_ok')) badgeClass = 'badge-texto';
+            else if (estado.includes('requiere_ocr')) badgeClass = 'badge-ocr';
+            else if (estado.includes('error')) badgeClass = 'badge-error';
+            
+            html += `
+                <li class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="small">${estado}</span>
+                    <span class="badge ${badgeClass}">${count}</span>
+                </li>
+            `;
+        });
+        html += '</ul>';
+        container.innerHTML = html;
+    }
+    
+    function mostrarResumenTipos(tipos) {
+        const container = document.getElementById('tipoResumen');
+        if (tipos.length === 0) {
+            container.innerHTML = '<small class="text-muted">Sin datos</small>';
+            return;
+        }
+        
+        let html = '<ul class="list-unstyled mb-0">';
+        tipos.forEach(item => {
+            const tipo = item.tipo_documento || 'sin_tipo';
+            const count = item.count || 0;
+            let badgeClass = 'bg-info';
+            
+            if (tipo.includes('pdf')) badgeClass = 'badge-pdf';
+            else if (tipo.includes('html')) badgeClass = 'badge-exito';
+            
+            html += `
+                <li class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="small">${tipo}</span>
+                    <span class="badge ${badgeClass}">${count}</span>
+                </li>
+            `;
+        });
+        html += '</ul>';
+        container.innerHTML = html;
+    }
+    
+    function cargarFuentes() {
+        fetch('/api/fuentes/')
+            .then(response => response.json())
+            .then(data => {
+                fuentesCache = data;
+                const select = document.getElementById('filtroFuente');
+                select.innerHTML = '<option value="">Todas las fuentes</option>';
+                
+                data.forEach(fuente => {
+                    const option = document.createElement('option');
+                    option.value = fuente.id;
+                    option.textContent = fuente.nombre || fuente.url.substring(0, 50);
+                    select.appendChild(option);
+                });
+            })
+            .catch(error => {
+                console.error('Error cargando fuentes:', error);
+            });
+    }
+    
+    function cargarCapturas() {
+        const fuenteId = document.getElementById('filtroFuente').value;
+        const estado = document.getElementById('filtroEstado').value;
+        const limite = document.getElementById('filtroLimite').value;
+        
+        let url = `/api/capturas/?limite=${limite}`;
+        if (fuenteId) url += `&fuente_id=${fuenteId}`;
+        if (estado) url += `&estado=${estado}`;
+        
+        const lista = document.getElementById('capturasLista');
+        lista.innerHTML = `
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status"></div>
+                <p class="mt-2 text-muted">Cargando capturas...</p>
+            </div>
+        `;
+        
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                capturasCache = data.capturas || [];
+                mostrarCapturas(capturasCache);
+            })
+            .catch(error => {
+                console.error('Error cargando capturas:', error);
+                lista.innerHTML = `
+                    <div class="text-center py-5 text-danger">
+                        <i class="bi bi-exclamation-triangle" style="font-size: 3rem;"></i>
+                        <p class="mt-2">Error al cargar capturas</p>
+                    </div>
+                `;
+            });
+    }
+    
+    function mostrarCapturas(capturas) {
+        const container = document.getElementById('capturasLista');
+        
+        if (capturas.length === 0) {
+            container.innerHTML = `
+                <div class="text-center py-5 text-muted">
+                    <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                    <p class="mt-2">No hay capturas para mostrar</p>
+                </div>
+            `;
+            return;
+        }
+        
+        let html = '';
+        capturas.forEach(captura => {
+            const estadoBadge = getBadgeEstado(captura.estado);
+            const tipoBadge = getBadgeTipo(captura.tipo_documento);
+            
+            html += `
+                <div class="capture-item" onclick="verDetalle(${captura.id})">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div style="flex: 1;">
+                            <strong class="d-block">${captura.fuente_nombre}</strong>
+                            <small class="text-muted d-block">${captura.fuente_url.substring(0, 80)}...</small>
+                            <div class="mt-2">
+                                ${estadoBadge}
+                                ${tipoBadge}
+                                <span class="badge bg-secondary">${captura.tamaño_kb} KB</span>
+                                ${captura.tiene_texto ? '<span class="badge badge-texto"><i class="bi bi-file-text"></i> Texto</span>' : ''}
+                            </div>
+                        </div>
+                        <div class="text-end" style="min-width: 150px;">
+                            <small class="text-muted">${formatFecha(captura.fecha_captura)}</small>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        container.innerHTML = html;
+    }
+    
+    function getBadgeEstado(estado) {
+        let badgeClass = 'bg-secondary';
+        let icon = 'circle';
+        
+        if (estado.includes('texto_extraido_ok')) {
+            badgeClass = 'badge-texto';
+            icon = 'check-circle';
+        } else if (estado.includes('requiere_ocr')) {
+            badgeClass = 'badge-ocr';
+            icon = 'exclamation-triangle';
+        } else if (estado.includes('error')) {
+            badgeClass = 'badge-error';
+            icon = 'x-circle';
+        } else if (estado.includes('procesando')) {
+            badgeClass = 'bg-info';
+            icon = 'hourglass';
+        }
+        
+        return `<span class="badge ${badgeClass}"><i class="bi bi-${icon}"></i> ${estado}</span>`;
+    }
+    
+    function getBadgeTipo(tipo) {
+        let badgeClass = 'bg-info';
+        let icon = 'file-earmark';
+        
+        if (tipo.includes('pdf')) {
+            badgeClass = 'badge-pdf';
+            icon = 'file-pdf';
+        } else if (tipo.includes('html')) {
+            badgeClass = 'badge-exito';
+            icon = 'file-code';
+        }
+        
+        return `<span class="badge ${badgeClass}"><i class="bi bi-${icon}"></i> ${tipo}</span>`;
+    }
+    
+    function formatFecha(fechaStr) {
+        const fecha = new Date(fechaStr);
+        const ahora = new Date();
+        const diff = ahora - fecha;
+        const horas = Math.floor(diff / 3600000);
+        
+        if (horas < 1) return 'Hace menos de 1h';
+        if (horas < 24) return `Hace ${horas}h`;
+        const dias = Math.floor(horas / 24);
+        if (dias < 7) return `Hace ${dias}d`;
+        
+        return fecha.toLocaleDateString('es-PE', { 
+            day: '2-digit', 
+            month: 'short',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+    
+    function verDetalle(capturaId) {
+        const modal = new bootstrap.Modal(document.getElementById('capturaModal'));
+        const detailContainer = document.getElementById('capturaDetalle');
+        
+        detailContainer.innerHTML = `
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status"></div>
+                <p class="mt-2 text-muted">Cargando detalle...</p>
+            </div>
+        `;
+        
+        modal.show();
+        
+        fetch(`/api/capturas/${capturaId}/`)
+            .then(response => response.json())
+            .then(data => {
+                mostrarDetalleCapturaHTML(data, detailContainer);
+            })
+            .catch(error => {
+                console.error('Error cargando detalle:', error);
+                detailContainer.innerHTML = `
+                    <div class="alert alert-danger">
+                        Error al cargar el detalle de la captura
+                    </div>
+                `;
+            });
+    }
+    
+    function mostrarDetalleCapturaHTML(captura, container) {
+        const html = `
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <h6 class="text-muted">Fuente</h6>
+                    <p><strong>${captura.fuente.nombre}</strong></p>
+                    <p class="small"><a href="${captura.fuente.url}" target="_blank">${captura.fuente.url}</a></p>
+                </div>
+                <div class="col-md-6">
+                    <h6 class="text-muted">Información de Captura</h6>
+                    <p><strong>Fecha:</strong> ${captura.fecha_captura}</p>
+                    <p><strong>Estado:</strong> ${getBadgeEstado(captura.estado)}</p>
+                    <p><strong>Tipo:</strong> ${getBadgeTipo(captura.tipo_documento)}</p>
+                </div>
+            </div>
+            
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <h6 class="text-muted">Tamaño</h6>
+                    <p>${(captura.tamaño_bytes / 1024).toFixed(2)} KB</p>
+                </div>
+                <div class="col-md-4">
+                    <h6 class="text-muted">Tiempo Respuesta</h6>
+                    <p>${captura.tiempo_respuesta_ms || 0} ms</p>
+                </div>
+                <div class="col-md-4">
+                    <h6 class="text-muted">Status Code</h6>
+                    <p>${captura.status_code}</p>
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <h6 class="text-muted">Hash SHA256</h6>
+                <p class="font-monospace small">${captura.hash}</p>
+            </div>
+            
+            ${captura.azure_blob_name ? `
+                <div class="mb-3">
+                    <h6 class="text-muted">Azure Blob</h6>
+                    <p class="font-monospace small">${captura.azure_blob_name}</p>
+                </div>
+            ` : ''}
+            
+            ${captura.texto_extraido ? `
+                <div class="mb-3">
+                    <h6 class="text-muted">Texto Extraído (Primeros 5000 caracteres)</h6>
+                    <div class="code-preview">${escapeHtml(captura.texto_extraido.substring(0, 5000))}</div>
+                    ${captura.longitud_texto_completo > 5000 ? `<small class="text-muted">...Mostrando ${5000} de ${captura.longitud_texto_completo} caracteres</small>` : ''}
+                </div>
+            ` : '<p class="text-muted">Sin texto extraído</p>'}
+            
+            ${captura.eventos && captura.eventos.length > 0 ? `
+                <div class="mb-3">
+                    <h6 class="text-muted">Eventos de Detección (${captura.eventos.length})</h6>
+                    <ul class="list-group">
+                        ${captura.eventos.map(evento => `
+                            <li class="list-group-item">
+                                <div class="d-flex justify-content-between">
+                                    <span><strong>${evento.tipo_cambio}</strong>: ${evento.resumen}</span>
+                                    <span class="badge bg-info">${evento.similitud}%</span>
+                                </div>
+                                <small class="text-muted">${evento.fecha}</small>
+                            </li>
+                        `).join('')}
+                    </ul>
+                </div>
+            ` : ''}
+        `;
+        
+        container.innerHTML = html;
+    }
+    
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    function realizarCapturaManual() {
+        const urlInput = document.getElementById('urlCapturaManual');
+        const url = urlInput.value.trim();
+        const estadoDiv = document.getElementById('capturaManualEstado');
+        const btn = document.getElementById('btnCapturaManual');
+        
+        if (!url) {
+            estadoDiv.innerHTML = '<div class="alert alert-warning py-2 px-3 small mt-2"><i class="bi bi-exclamation-triangle me-1"></i>Por favor ingresa una URL</div>';
+            return;
+        }
+        
+        // Validación básica
+        if (!url.includes('.')) {
+            estadoDiv.innerHTML = '<div class="alert alert-warning py-2 px-3 small mt-2"><i class="bi bi-exclamation-triangle me-1"></i>URL no válida</div>';
+            return;
+        }
+        
+        // Deshabilitar botón
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Capturando...';
+        btn.disabled = true;
+        
+        estadoDiv.innerHTML = '<div class="alert alert-info py-2 px-3 small mt-2"><i class="bi bi-hourglass-split me-1"></i> Iniciando captura...</div>';
+        
+        fetch('/api/capturas/manual/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken') || ''
+            },
+            body: JSON.stringify({ url: url })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                estadoDiv.innerHTML = `
+                    <div class="alert alert-success py-2 px-3 small mt-2">
+                        <i class="bi bi-check-circle me-1"></i> <strong>¡Captura iniciada!</strong><br>
+                        <small>${data.message}</small>
+                        ${data.fuente_nueva ? '<br><small class="text-muted">✨ Nueva fuente creada</small>' : ''}
+                    </div>
+                `;
+                
+                // Limpiar input
+                urlInput.value = '';
+                
+                // Actualizar listas después de 3 segundos
+                setTimeout(() => {
+                    cargarCapturas();
+                    cargarEstadisticas();
+                    estadoDiv.innerHTML = '<div class="alert alert-info py-2 px-3 small mt-2"><i class="bi bi-info-circle me-1"></i> Captura completada. Revisa la lista abajo.</div>';
+                    
+                    // Limpiar mensaje después de 5 segundos más
+                    setTimeout(() => {
+                        estadoDiv.innerHTML = '';
+                    }, 5000);
+                }, 3000);
+            } else {
+                estadoDiv.innerHTML = `<div class="alert alert-danger py-2 px-3 small mt-2"><i class="bi bi-x-circle me-1"></i> ${data.error}</div>`;
+            }
+        })
+        .catch(error => {
+            console.error('Error en captura manual:', error);
+            estadoDiv.innerHTML = '<div class="alert alert-danger py-2 px-3 small mt-2"><i class="bi bi-x-circle me-1"></i> Error al realizar captura</div>';
+        })
+        .finally(() => {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        });
+    }
+    
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    
+    function mostrarEstadisticasDetalladas() {
+        alert('Funcionalidad de estadísticas detalladas en desarrollo');
+    }
+</script>
+{% endblock %}
