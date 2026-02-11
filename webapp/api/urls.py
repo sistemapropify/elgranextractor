@@ -13,6 +13,7 @@ from rest_framework_simplejwt.views import (
 )
 
 from . import views
+from . import views_mejoradas
 
 # Configurar router para ViewSets
 router = DefaultRouter()
@@ -35,6 +36,13 @@ urlpatterns = [
     path('estadisticas/', views.EstadisticasAPIView.as_view(), name='estadisticas'),
     path('tareas/', views.TareasAPIView.as_view(), name='tareas'),
     path('tareas/<str:task_id>/', views.TareasAPIView.as_view(), name='tarea_detalle'),
+    
+    # Endpoints mejorados para captura
+    path('captura-mejorada/', views_mejoradas.CapturaMejoradaAPIView.as_view(), name='captura-mejorada'),
+    path('reprocesamiento/', views_mejoradas.ReprocesamientoAPIView.as_view(), name='reprocesamiento'),
+    path('calidad-capturas/', views_mejoradas.CalidadCapturasAPIView.as_view(), name='calidad-capturas'),
+    path('comparacion-capturas/<int:fuente_id>/', views_mejoradas.ComparacionCapturasAPIView.as_view(), name='comparacion-capturas'),
+    path('captura-manual-mejorada/', views_mejoradas.CapturaManualMejoradaAPIView.as_view(), name='captura-manual-mejorada'),
     
     # Documentación de la API (solo en desarrollo)
     # path('docs/', include_docs_urls(title='API del Gran Extractor')),

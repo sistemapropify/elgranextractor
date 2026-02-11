@@ -324,6 +324,18 @@ def captura_detalle_api(request, captura_id):
                 'resumen': evento.resumen_cambio or 'Sin resumen',
             })
         
+        # Determinar si es PDF
+        es_pdf = captura.tipo_documento in ('pdf_nativo', 'pdf_escaneado') or \
+                 'pdf' in (captura.content_type or '').lower()
+        
+        # Texto extraído: para PDFs, no usar contenido_html (puede ser binario)
+        if es_pdf and not captura.texto_extraido:
+            texto_extraido = '[PDF sin texto extraído]'
+            longitud_texto_completo = 0
+        else:
+            texto_extraido = captura.texto_extraido or captura.contenido_html or ''
+            longitud_texto_completo = len(texto_extraido)
+        
         data = {
             'id': captura.id,
             'fuente': {
@@ -341,11 +353,12 @@ def captura_detalle_api(request, captura_id):
             'status_code': captura.status_code or 200,
             'tiempo_respuesta_ms': captura.tiempo_respuesta_ms or 0,
             'azure_blob_name': captura.azure_blob_name or '',
-            'texto_extraido': (captura.texto_extraido or captura.contenido_html or '')[:5000],
-            'longitud_texto_completo': len(captura.texto_extraido or captura.contenido_html or ''),
+            'texto_extraido': texto_extraido,
+            'longitud_texto_completo': longitud_texto_completo,
             'contenido_html': (captura.contenido_html or '')[:10000] if request.GET.get('incluir_html') else None,
             'metadatos': captura.metadata_tecnica if hasattr(captura, 'metadata_tecnica') else {},
             'eventos': eventos_data,
+            'es_pdf': es_pdf,
         }
         
         return JsonResponse(data)

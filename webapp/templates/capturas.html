@@ -99,6 +99,27 @@
         max-height: 600px;
         overflow-y: auto;
     }
+
+    .detalle-completo {
+        transition: all 0.3s ease;
+    }
+
+    .detalle-completo.collapsed {
+        max-height: 0;
+        overflow: hidden;
+        opacity: 0;
+        margin-bottom: 0;
+        padding: 0;
+    }
+
+    .detalle-completo.expanded {
+        max-height: 1000px;
+        opacity: 1;
+    }
+
+    #btnToggleDetalle {
+        transition: all 0.2s;
+    }
 </style>
 {% endblock %}
 
@@ -276,6 +297,9 @@
                     </div>
                 </div>
                 <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-primary" id="btnToggleDetalle">
+                        <i class="bi bi-arrows-expand"></i> Ver detalle completo
+                    </button>
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
                 </div>
             </div>
@@ -601,13 +625,13 @@
                 </div>
             </div>
             
-            <div class="mb-3">
+            <div class="mb-3 detalle-completo" style="display: none;">
                 <h6 class="text-muted">Hash SHA256</h6>
                 <p class="font-monospace small">${captura.hash}</p>
             </div>
             
             ${captura.azure_blob_name ? `
-                <div class="mb-3">
+                <div class="mb-3 detalle-completo" style="display: none;">
                     <h6 class="text-muted">Azure Blob</h6>
                     <p class="font-monospace small">${captura.azure_blob_name}</p>
                 </div>
@@ -615,14 +639,13 @@
             
             ${captura.texto_extraido ? `
                 <div class="mb-3">
-                    <h6 class="text-muted">Texto Extraído (Primeros 5000 caracteres)</h6>
-                    <div class="code-preview">${escapeHtml(captura.texto_extraido.substring(0, 5000))}</div>
-                    ${captura.longitud_texto_completo > 5000 ? `<small class="text-muted">...Mostrando ${5000} de ${captura.longitud_texto_completo} caracteres</small>` : ''}
+                    <h6 class="text-muted">Texto Extraído</h6>
+                    <div class="code-preview" id="texto-preview-${captura.id}">${escapeHtml(captura.texto_extraido)}</div>
                 </div>
             ` : '<p class="text-muted">Sin texto extraído</p>'}
             
             ${captura.eventos && captura.eventos.length > 0 ? `
-                <div class="mb-3">
+                <div class="mb-3 detalle-completo" style="display: none;">
                     <h6 class="text-muted">Eventos de Detección (${captura.eventos.length})</h6>
                     <ul class="list-group">
                         ${captura.eventos.map(evento => `
@@ -640,6 +663,32 @@
         `;
         
         container.innerHTML = html;
+        
+        // Configurar el botón de toggle
+        const toggleBtn = document.getElementById('btnToggleDetalle');
+        if (toggleBtn) {
+            toggleBtn.onclick = function() {
+                const isHidden = container.querySelector('.detalle-completo').style.display === 'none';
+                const detalles = container.querySelectorAll('.detalle-completo');
+                detalles.forEach(el => {
+                    el.style.display = isHidden ? 'block' : 'none';
+                });
+                // Cambiar texto e icono del botón
+                if (isHidden) {
+                    toggleBtn.innerHTML = '<i class="bi bi-arrows-collapse"></i> Ver resumen';
+                    toggleBtn.classList.remove('btn-outline-primary');
+                    toggleBtn.classList.add('btn-primary');
+                } else {
+                    toggleBtn.innerHTML = '<i class="bi bi-arrows-expand"></i> Ver detalle completo';
+                    toggleBtn.classList.remove('btn-primary');
+                    toggleBtn.classList.add('btn-outline-primary');
+                }
+            };
+            // Resetear estado del botón
+            toggleBtn.innerHTML = '<i class="bi bi-arrows-expand"></i> Ver detalle completo';
+            toggleBtn.classList.remove('btn-primary');
+            toggleBtn.classList.add('btn-outline-primary');
+        }
     }
     
     function escapeHtml(text) {
