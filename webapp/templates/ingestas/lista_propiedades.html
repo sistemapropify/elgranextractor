@@ -1,0 +1,342 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Propiedades Inmobiliarias{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="bi bi-house-door"></i> Catálogo de Propiedades
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <p class="lead">
+                        Explora todas las propiedades inmobiliarias importadas en el sistema. 
+                        Cada tarjeta muestra información clave e imágenes cuando están disponibles.
+                    </p>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle"></i> 
+                                <strong>{{ propiedades.count }}</strong> propiedades encontradas.
+                                {% if page_obj %}
+                                    Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}.
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <a href="{% url 'ingestas:index' %}" class="btn btn-outline-primary">
+                                <i class="bi bi-arrow-left"></i> Volver a Ingestas
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if propiedades %}
+    <div class="row">
+        {% for propiedad in propiedades %}
+        <div class="col-xl-3 col-lg-4 col-md-6 col-sm-12 mb-4">
+            <div class="card h-100 shadow-sm property-card">
+                <!-- Imagen de la propiedad -->
+                {% with atributos=propiedad.atributos_extras %}
+                {% if atributos %}
+                    {% if atributos.imagenes_de_la_propiedad %}
+                        {% comment %} Extraer la primera URL de la lista {% endcomment %}
+                        {% with primera_url=atributos.imagenes_de_la_propiedad %}
+                        <div class="property-image-container">
+                            <img src="{{ primera_url }}"
+                                 class="card-img-top property-image"
+                                 alt="Imagen de {{ propiedad.tipo_propiedad|default:'Propiedad' }}"
+                                 onerror="this.onerror=null; this.src='https://via.placeholder.com/400x300/6c757d/ffffff?text=Sin+Imagen'">
+                        </div>
+                        {% endwith %}
+                    {% elif atributos.imagen %}
+                        <div class="property-image-container">
+                            <img src="{{ atributos.imagen }}"
+                                 class="card-img-top property-image"
+                                 alt="Imagen de {{ propiedad.tipo_propiedad|default:'Propiedad' }}"
+                                 onerror="this.onerror=null; this.src='https://via.placeholder.com/400x300/6c757d/ffffff?text=Sin+Imagen'">
+                        </div>
+                    {% else %}
+                        <div class="property-image-container bg-light d-flex align-items-center justify-content-center">
+                            <div class="text-center p-4">
+                                <i class="bi bi-house display-4 text-muted"></i>
+                                <p class="mt-2 text-muted">Sin imagen</p>
+                            </div>
+                        </div>
+                    {% endif %}
+                {% else %}
+                    <div class="property-image-container bg-light d-flex align-items-center justify-content-center">
+                        <div class="text-center p-4">
+                            <i class="bi bi-house display-4 text-muted"></i>
+                            <p class="mt-2 text-muted">Sin imagen</p>
+                        </div>
+                    </div>
+                {% endif %}
+                {% endwith %}
+
+                <div class="card-body">
+                    <h5 class="card-title">
+                        {% if propiedad.tipo_propiedad %}
+                            {{ propiedad.tipo_propiedad }}
+                        {% else %}
+                            Propiedad Sin Tipo
+                        {% endif %}
+                    </h5>
+                    
+                    <h6 class="card-subtitle mb-2 text-muted">
+                        <i class="bi bi-geo-alt"></i>
+                        {% if propiedad.ubicacion %}
+                            {{ propiedad.ubicacion|truncatechars:30 }}
+                        {% else %}
+                            Ubicación no especificada
+                        {% endif %}
+                    </h6>
+                    
+                    <div class="property-details mb-3">
+                        {% if propiedad.precio_usd %}
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-muted">Precio:</span>
+                            <span class="badge bg-success fs-6">
+                                ${{ propiedad.precio_usd|floatformat:0 }} USD
+                            </span>
+                        </div>
+                        {% endif %}
+                        
+                        <div class="row text-center">
+                            {% if propiedad.metros_cuadrados %}
+                            <div class="col-4">
+                                <div class="property-stat">
+                                    <i class="bi bi-arrows-fullscreen"></i>
+                                    <div class="stat-value">{{ propiedad.metros_cuadrados|floatformat:0 }}</div>
+                                    <div class="stat-label">m²</div>
+                                </div>
+                            </div>
+                            {% endif %}
+                            
+                            {% if propiedad.habitaciones %}
+                            <div class="col-4">
+                                <div class="property-stat">
+                                    <i class="bi bi-door-closed"></i>
+                                    <div class="stat-value">{{ propiedad.habitaciones }}</div>
+                                    <div class="stat-label">Hab.</div>
+                                </div>
+                            </div>
+                            {% endif %}
+                            
+                            {% if propiedad.banos %}
+                            <div class="col-4">
+                                <div class="property-stat">
+                                    <i class="bi bi-droplet"></i>
+                                    <div class="stat-value">{{ propiedad.banos }}</div>
+                                    <div class="stat-label">Baños</div>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Atributos extras destacados -->
+                    {% if propiedad.atributos_extras %}
+                    <div class="property-extra-attributes mt-3">
+                        <h6 class="text-muted small mb-2">
+                            <i class="bi bi-tags"></i> Características adicionales:
+                        </h6>
+                        <div class="d-flex flex-wrap gap-1">
+                            {% for key, value in propiedad.atributos_extras.items %}
+                                {% if key != 'imagenes_de_la_propiedad' and key != 'imagen' and key != 'foto' and key != 'url_imagen' and key != 'image' %}
+                                    {% if value and value != 'None' and value != '' %}
+                                    <span class="badge bg-light text-dark border">
+                                        {{ key }}: {{ value|truncatechars:15 }}
+                                    </span>
+                                    {% endif %}
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <div class="card-footer bg-transparent border-top">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <small class="text-muted">
+                            <i class="bi bi-calendar"></i>
+                            {{ propiedad.fecha_ingesta|date:"d/m/Y" }}
+                        </small>
+                        <a href="#" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-eye"></i> Detalles
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Paginación -->
+    {% if is_paginated %}
+    <div class="row mt-4">
+        <div class="col-12">
+            <nav aria-label="Paginación de propiedades">
+                <ul class="pagination justify-content-center">
+                    {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page=1">
+                            <i class="bi bi-chevron-double-left"></i>
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}">
+                            <i class="bi bi-chevron-left"></i>
+                        </a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link"><i class="bi bi-chevron-double-left"></i></span>
+                    </li>
+                    <li class="page-item disabled">
+                        <span class="page-link"><i class="bi bi-chevron-left"></i></span>
+                    </li>
+                    {% endif %}
+
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                        <li class="page-item active">
+                            <span class="page-link">{{ num }}</span>
+                        </li>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                        </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}">
+                            <i class="bi bi-chevron-right"></i>
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">
+                            <i class="bi bi-chevron-double-right"></i>
+                        </a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link"><i class="bi bi-chevron-right"></i></span>
+                    </li>
+                    <li class="page-item disabled">
+                        <span class="page-link"><i class="bi bi-chevron-double-right"></i></span>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <i class="bi bi-house display-1 text-muted"></i>
+                    <h3 class="mt-4">No hay propiedades disponibles</h3>
+                    <p class="lead">No se han importado propiedades al sistema aún.</p>
+                    <a href="{% url 'ingestas:subir_excel' %}" class="btn btn-primary btn-lg mt-3">
+                        <i class="bi bi-upload"></i> Importar Propiedades
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.property-card {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.property-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important;
+}
+
+.property-image-container {
+    height: 200px;
+    overflow: hidden;
+    background-color: #f8f9fa;
+}
+
+.property-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.5s ease;
+}
+
+.property-card:hover .property-image {
+    transform: scale(1.05);
+}
+
+.property-stat {
+    padding: 8px 0;
+}
+
+.property-stat i {
+    font-size: 1.2rem;
+    color: #6c757d;
+}
+
+.stat-value {
+    font-weight: bold;
+    font-size: 1.1rem;
+    margin-top: 4px;
+}
+
+.stat-label {
+    font-size: 0.8rem;
+    color: #6c757d;
+    text-transform: uppercase;
+}
+
+.property-extra-attributes .badge {
+    font-size: 0.75rem;
+    padding: 4px 8px;
+}
+
+.card-title {
+    color: #2c3e50;
+    font-weight: 600;
+}
+
+.card-subtitle {
+    font-size: 0.9rem;
+}
+</style>
+
+<script>
+// Función para procesar URLs de imágenes que contienen múltiples URLs separadas por coma
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.property-image').forEach(function(img) {
+        var src = img.getAttribute('src');
+        if (src && src.includes(',')) {
+            // Tomar solo la primera URL antes de la coma
+            var firstUrl = src.split(',')[0].trim();
+            img.setAttribute('src', firstUrl);
+        }
+    });
+});
+</script>
+{% endblock %}

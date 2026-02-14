@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ title|default:"Confirmar borrado" }}</title>
+    <style>
+        .confirmation-box {
+            max-width: 600px;
+            margin: 40px auto;
+            padding: 30px;
+            border: 2px solid #dc3545;
+            border-radius: 10px;
+            background-color: #f8f9fa;
+        }
+        .warning-icon {
+            color: #dc3545;
+            font-size: 48px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .btn-danger {
+            background-color: #dc3545;
+            border-color: #dc3545;
+        }
+        .btn-secondary {
+            background-color: #6c757d;
+            border-color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <div class="confirmation-box">
+        <div class="warning-icon">⚠️</div>
+        <h2 style="text-align: center; color: #dc3545;">¡ADVERTENCIA!</h2>
+        <p style="font-size: 16px; text-align: center;">
+            Estás a punto de borrar <strong>TODOS</strong> los registros de la tabla <strong>PropiedadRaw</strong>.
+        </p>
+        <p style="text-align: center;">
+            Actualmente hay <strong>{{ total }}</strong> registros en la base de datos.
+        </p>
+        <p style="font-size: 14px; color: #6c757d;">
+            Esta acción es irreversible. Se eliminarán permanentemente todos los datos de la tabla.
+            Si necesitas conservar los datos, realiza una copia de seguridad antes de continuar.
+        </p>
+        <form method="post" style="text-align: center; margin-top: 30px;">
+            {% csrf_token %}
+            <input type="hidden" name="confirm" value="si">
+            <button type="submit" class="btn-danger" style="padding: 10px 30px; font-size: 18px; border-radius: 5px; cursor: pointer;">
+                SÍ, BORRAR TODO
+            </button>
+            <a href="{% url 'admin:ingestas_propiedadraw_changelist' %}" style="text-decoration: none;">
+                <button type="button" class="btn-secondary" style="padding: 10px 30px; font-size: 18px; border-radius: 5px; cursor: pointer; margin-left: 20px;">
+                    Cancelar
+                </button>
+            </a>
+        </form>
+        <p style="margin-top: 20px; font-size: 12px; color: #999; text-align: center;">
+            Esta operación utilizará el comando TRUNCATE para mayor eficiencia.
+        </p>
+    </div>
+</body>
+</html>

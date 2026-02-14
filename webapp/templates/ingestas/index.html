@@ -1,0 +1,184 @@
+{% extends 'base.html' %}
+
+{% block title %}Ingestas de Datos{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="bi bi-database"></i> Ingestas de Datos Inmobiliarios
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <p class="lead">
+                        Sistema de importación de archivos Excel/CSV para cargar propiedades inmobiliarias a la base de datos.
+                        Selecciona una opción para comenzar.
+                    </p>
+
+                    <div class="row mt-4">
+                        <div class="col-md-4 mb-4">
+                            <div class="card h-100 border-primary">
+                                <div class="card-header bg-primary text-white">
+                                    <h5 class="mb-0">
+                                        <i class="bi bi-upload"></i> Subir Archivo
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <p>
+                                        Carga un archivo Excel o CSV con datos de propiedades. El sistema detectará automáticamente las columnas.
+                                    </p>
+                                    <ul class="list-unstyled">
+                                        <li><i class="bi bi-check-circle text-success"></i> Soporta .xlsx, .xls, .csv</li>
+                                        <li><i class="bi bi-check-circle text-success"></i> Vista previa inmediata</li>
+                                        <li><i class="bi bi-check-circle text-success"></i> Validación de formato</li>
+                                    </ul>
+                                </div>
+                                <div class="card-footer bg-transparent">
+                                    <a href="{% url 'ingestas:subir_excel' %}" class="btn btn-primary w-100">
+                                        <i class="bi bi-arrow-right-circle"></i> Ir a Subir Archivo
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4 mb-4">
+                            <div class="card h-100 border-warning">
+                                <div class="card-header bg-warning text-dark">
+                                    <h5 class="mb-0">
+                                        <i class="bi bi-gear"></i> Validar Mapeo
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <p>
+                                        Revisa y ajusta el mapeo de columnas entre el archivo y la base de datos. Crea campos dinámicos si es necesario.
+                                    </p>
+                                    <ul class="list-unstyled">
+                                        <li><i class="bi bi-check-circle text-success"></i> Sugerencias automáticas</li>
+                                        <li><i class="bi bi-check-circle text-success"></i> Creación de campos</li>
+                                        <li><i class="bi bi-check-circle text-success"></i> Validación de tipos</li>
+                                    </ul>
+                                </div>
+                                <div class="card-footer bg-transparent">
+                                    <a href="{% url 'ingestas:validar_mapeo' %}" class="btn btn-warning w-100">
+                                        <i class="bi bi-arrow-right-circle"></i> Ir a Validar Mapeo
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4 mb-4">
+                            <div class="card h-100 border-success">
+                                <div class="card-header bg-success text-white">
+                                    <h5 class="mb-0">
+                                        <i class="bi bi-check-circle"></i> Resultados
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <p>
+                                        Consulta los resultados de ingestas anteriores, estadísticas y campos creados.
+                                    </p>
+                                    <ul class="list-unstyled">
+                                        <li><i class="bi bi-check-circle text-success"></i> Estadísticas de importación</li>
+                                        <li><i class="bi bi-check-circle text-success"></i> Lista de campos dinámicos</li>
+                                        <li><i class="bi bi-check-circle text-success"></i> Historial de migraciones</li>
+                                    </ul>
+                                </div>
+                                <div class="card-footer bg-transparent">
+                                    <a href="{% url 'ingestas:resultado_ingesta' %}" class="btn btn-success w-100">
+                                        <i class="bi bi-arrow-right-circle"></i> Ver Resultados
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mt-4">
+                        <div class="col-md-12">
+                            <div class="card border-info">
+                                <div class="card-header bg-info text-white">
+                                    <h5 class="mb-0">
+                                        <i class="bi bi-lightning"></i> Acciones Rápidas
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-3">
+                                            <a href="{% url 'ingestas:lista_propiedades' %}" class="btn btn-outline-primary w-100 mb-2">
+                                                <i class="bi bi-house-door"></i> Ver Propiedades
+                                            </a>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <a href="/admin/ingestas/propiedadraw/" class="btn btn-outline-dark w-100 mb-2" target="_blank">
+                                                <i class="bi bi-table"></i> Admin Propiedades
+                                            </a>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <a href="/admin/ingestas/campodinamico/" class="btn btn-outline-dark w-100 mb-2" target="_blank">
+                                                <i class="bi bi-database"></i> Campos Dinámicos
+                                            </a>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <a href="/admin/ingestas/migracionpendiente/" class="btn btn-outline-dark w-100 mb-2" target="_blank">
+                                                <i class="bi bi-clock-history"></i> Migraciones Pendientes
+                                            </a>
+                                        </div>
+                                    </div>
+                                    <div class="row mt-2">
+                                        <div class="col-md-3">
+                                            <a href="{% url 'ingestas:limpiar_sesion' %}" class="btn btn-outline-danger w-100 mb-2">
+                                                <i class="bi bi-trash"></i> Limpiar Sesión
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mt-4">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">
+                                        <i class="bi bi-info-circle"></i> Instrucciones
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <ol>
+                                        <li><strong>Sube un archivo</strong> Excel o CSV con los datos de propiedades.</li>
+                                        <li><strong>Valida el mapeo</strong> de columnas y crea los campos necesarios.</li>
+                                        <li><strong>Procesa el archivo</strong> para importar los datos a la base de datos.</li>
+                                        <li><strong>Revisa los resultados</strong> y verifica que los datos se hayan importado correctamente.</li>
+                                    </ol>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">
+                                        <i class="bi bi-question-circle"></i> Ayuda
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <p>
+                                        Si encuentras problemas, consulta la documentación o contacta al administrador.
+                                    </p>
+                                    <ul>
+                                        <li><a href="/admin/" target="_blank">Panel de Administración</a></li>
+                                        <li><a href="https://github.com/tu-repo" target="_blank">Documentación del Proyecto</a></li>
+                                        <li><a href="mailto:soporte@ejemplo.com">Soporte Técnico</a></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

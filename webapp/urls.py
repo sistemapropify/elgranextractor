@@ -49,4 +49,7 @@ urlpatterns = [
     
     # API REST (DRF)
     path('api/', include('api.urls')),
+    
+    # Ingestas de Excel Inmobiliario
+    path('ingestas/', include('ingestas.urls')),
 ]

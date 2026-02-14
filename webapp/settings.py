@@ -55,6 +55,7 @@ INSTALLED_APPS = [
     'captura',
     'colas',
     'api',
+    'ingestas',
 ]
 
 MIDDLEWARE = [
@@ -87,6 +88,10 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'webapp.wsgi.application'
 
+# Default primary key field type
+# https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
 
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
@@ -94,10 +99,10 @@ WSGI_APPLICATION = 'webapp.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'mssql',  # Usando mssql-django
-        'NAME': env('DB_NAME', default='db-granextractor'),
-        'USER': env('DB_USER', default='adminpropifai'),
-        'PASSWORD': env('DB_PASSWORD', default='Propifai12345@'),
-        'HOST': env('DB_HOST', default='granextrator.database.windows.net'),
+        'NAME': env('DB_NAME', default='propiextractor'),
+        'USER': env('DB_USER', default='adminpropify'),
+        'PASSWORD': env('DB_PASSWORD', default='Propify12345@'),
+        'HOST': env('DB_HOST', default='granextractor.database.windows.net'),
         'PORT': env('DB_PORT', default='1433'),
         'OPTIONS': {
             'driver': 'ODBC Driver 18 for SQL Server',

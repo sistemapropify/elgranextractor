@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+
+{% block title %}Cargar Excel Inmobiliario{% endblock %}
+
+{% block extra_css %}
+<style>
+    .preview-table {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+    .card {
+        margin-bottom: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">Cargar Archivo Excel/CSV</h4>
+                </div>
+                <div class="card-body">
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+
+                    <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label for="id_archivo" class="form-label">Archivo Excel/CSV</label>
+                            {{ form.archivo }}
+                            <div class="form-text">Formatos soportados: .xlsx, .xls, .csv (máx 10MB)</div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="id_nombre_fuente" class="form-label">Nombre de la fuente</label>
+                                    {{ form.nombre_fuente }}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="id_portal_origen" class="form-label">Portal de origen</label>
+                                    {{ form.portal_origen }}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="bi bi-upload"></i> Subir y Analizar
+                            </button>
+                            <a href="{% url 'ingestas:validar_mapeo' %}" class="btn btn-outline-secondary">
+                                Continuar con archivo existente
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            {% if preview %}
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">Vista Previa (primeras 5 filas)</h5>
+                </div>
+                <div class="card-body preview-table">
+                    <table class="table table-sm table-striped">
+                        <thead>
+                            <tr>
+                                {% for col in columnas %}
+                                <th>{{ col.nombre }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in preview %}
+                            <tr>
+                                {% for key, value in row.items %}
+                                <td>{{ value|default:"-" }}</td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="card-footer text-muted">
+                    <small>Total: {{ preview|length }} filas mostradas de {{ shape.0 }} totales.</small>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

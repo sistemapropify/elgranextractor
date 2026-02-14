@@ -1,0 +1,421 @@
+{% extends 'base.html' %}
+
+{% block title %}Validar Mapeo de Columnas{% endblock %}
+
+{% block extra_css %}
+<style>
+    .table-fixed {
+        table-layout: fixed;
+    }
+    .campo-migrado {
+        background-color: #d4edda !important;
+    }
+    .campo-pendiente {
+        background-color: #fff3cd !important;
+    }
+    .btn-column {
+        width: 100%;
+    }
+    .scrollable-table {
+        max-height: 500px;
+        overflow-y: auto;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-warning text-dark">
+                    <h4 class="mb-0">
+                        <i class="bi bi-gear"></i> Validar Mapeo de Columnas
+                    </h4>
+                </div>
+                <div class="card-body">
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+
+                    <div class="alert alert-info">
+                        <h5><i class="bi bi-info-circle"></i> Instrucciones</h5>
+                        <p class="mb-0">
+                            Revisa las columnas detectadas del archivo Excel. Para cada columna, se sugiere un nombre en BD (snake_case) y un título para mostrar.
+                            Si el campo ya está migrado (verde), puedes pasar a la siguiente. Si está pendiente (amarillo), debes crear el campo antes de procesar.
+                        </p>
+                    </div>
+
+                    <div class="row mb-4">
+                        <div class="col-md-4">
+                            <div class="card text-white bg-primary">
+                                <div class="card-body text-center">
+                                    <h6 class="card-title">Filas totales</h6>
+                                    <h2>{{ shape.0 }}</h2>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card text-white bg-success">
+                                <div class="card-body text-center">
+                                    <h6 class="card-title">Campos migrados</h6>
+                                    <h2>{{ columnas_info|length|add:"-pendientes" }}</h2>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card text-white bg-danger">
+                                <div class="card-body text-center">
+                                    <h6 class="card-title">Campos pendientes</h6>
+                                    <h2>
+                                        {% with pendientes=columnas_info|length %}
+                                            {{ pendientes }}
+                                        {% endwith %}
+                                    </h2>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="scrollable-table">
+                            <table class="table table-bordered table-hover table-fixed">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th style="width: 20%">Columna Original</th>
+                                        <th style="width: 20%">Nombre en BD</th>
+                                        <th style="width: 20%">Título para Mostrar</th>
+                                        <th style="width: 15%">Tipo de Dato</th>
+                                        <th style="width: 25%">Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for col in columnas_info %}
+                                    <tr class="{% if col.migrado %}campo-migrado{% else %}campo-pendiente{% endif %}">
+                                        <td>
+                                            <strong>{{ col.nombre_columna_origen }}</strong>
+                                            <br>
+                                            <small class="text-muted">
+                                                {{ col.valores_muestra.0|default:"Sin datos"|truncatechars:30 }}
+                                            </small>
+                                        </td>
+                                        <td>
+                                            <input type="text" 
+                                                   name="nombre_campo_bd_{{ forloop.counter0 }}" 
+                                                   value="{{ col.nombre_campo_bd }}"
+                                                   class="form-control form-control-sm"
+                                                   {% if col.migrado %}readonly{% endif %}>
+                                        </td>
+                                        <td>
+                                            <input type="text" 
+                                                   name="titulo_display_{{ forloop.counter0 }}" 
+                                                   value="{{ col.titulo_display }}"
+                                                   class="form-control form-control-sm"
+                                                   {% if col.migrado %}readonly{% endif %}>
+                                        </td>
+                                        <td>
+                                            <select name="tipo_dato_{{ forloop.counter0 }}" 
+                                                    class="form-select form-select-sm"
+                                                    {% if col.migrado %}disabled{% endif %}>
+                                                <option value="VARCHAR" {% if col.tipo_dato == 'VARCHAR' %}selected{% endif %}>Texto</option>
+                                                <option value="INTEGER" {% if col.tipo_dato == 'INTEGER' %}selected{% endif %}>Entero</option>
+                                                <option value="DECIMAL" {% if col.tipo_dato == 'DECIMAL' %}selected{% endif %}>Decimal</option>
+                                                <option value="BOOLEAN" {% if col.tipo_dato == 'BOOLEAN' %}selected{% endif %}>Booleano</option>
+                                                <option value="DATE" {% if col.tipo_dato == 'DATE' %}selected{% endif %}>Fecha</option>
+                                            </select>
+                                        </td>
+                                        <td class="text-center">
+                                            {% if col.migrado %}
+                                                <span class="badge bg-success">
+                                                    <i class="bi bi-check-circle"></i> Migrado
+                                                </span>
+                                                <br>
+                                                <small class="text-muted">
+                                                    {{ col.campo_existente.tipo_dato }}
+                                                </small>
+                                            {% else %}
+                                                <button type="submit" 
+                                                        name="crear_campo" 
+                                                        value="{{ forloop.counter0 }}"
+                                                        class="btn btn-sm btn-warning btn-column">
+                                                    <i class="bi bi-database-add"></i> Crear Campo
+                                                </button>
+                                                <div class="mt-1">
+                                                    <small class="text-danger">
+                                                        Pendiente de migración
+                                                    </small>
+                                                </div>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="card mt-4">
+                            <div class="card-header bg-dark text-white">
+                                <h5 class="mb-0">Procesar Todo el Archivo</h5>
+                            </div>
+                            <div class="card-body">
+                                <p>
+                                    Una vez que todos los campos estén migrados (verdes), puedes procesar todo el archivo.
+                                    Esto importará todas las filas a la base de datos.
+                                </p>
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input" type="checkbox" id="confirmar_procesar" required>
+                                    <label class="form-check-label" for="confirmar_procesar">
+                                        Confirmo que he revisado los mapeos y deseo procesar el archivo completo.
+                                    </label>
+                                </div>
+                                <button type="submit" 
+                                        name="procesar_todo" 
+                                        value="1"
+                                        class="btn btn-success btn-lg"
+                                        {% if pendientes > 0 %}disabled{% endif %}>
+                                    <i class="bi bi-play-circle"></i> Procesar Todo el Archivo
+                                </button>
+                                <div class="mt-2">
+                                    {% if pendientes > 0 %}
+                                    <div class="alert alert-warning">
+                                        <i class="bi bi-exclamation-triangle"></i>
+                                        Hay {{ pendientes }} campos pendientes de migrar. Debes crear todos los campos antes de procesar.
+                                    </div>
+                                    {% else %}
+                                    <div class="alert alert-success">
+                                        <i class="bi bi-check-circle"></i>
+                                        Todos los campos están migrados. Puedes procesar el archivo.
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+
+                    <!-- Botón de Importar Registros -->
+                    <div class="card mt-4">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0">
+                                <i class="bi bi-upload"></i> Importar Registros a Base de Datos
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <p>
+                                Una vez que todos los campos estén migrados (verdes), puedes importar los registros del Excel a la tabla PropiedadRaw.
+                                Esto insertará todas las filas del archivo en la base de datos.
+                            </p>
+                            <form method="post">
+                                {% csrf_token %}
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input" type="checkbox" id="confirmar_importar">
+                                    <label class="form-check-label" for="confirmar_importar">
+                                        Confirmo que he revisado los mapeos y deseo importar los registros a la base de datos.
+                                    </label>
+                                </div>
+                                <button type="submit"
+                                        name="importar_registros"
+                                        value="1"
+                                        class="btn btn-info btn-lg"
+                                        {% if campos_pendientes > 0 %}disabled{% endif %}>
+                                    <i class="bi bi-database-add"></i> Importar Registros del Excel
+                                </button>
+                                <div class="mt-2">
+                                    <small class="text-muted">Debug: campos_pendientes = {{ campos_pendientes }}</small>
+                                </div>
+                                <div class="mt-2">
+                                    {% if campos_pendientes > 0 %}
+                                    <div class="alert alert-warning">
+                                        <i class="bi bi-exclamation-triangle"></i>
+                                        Hay {{ campos_pendientes }} campos pendientes de migrar. Debes crear todos los campos antes de importar.
+                                    </div>
+                                    {% else %}
+                                    <div class="alert alert-success">
+                                        <i class="bi bi-check-circle"></i>
+                                        Todos los campos están migrados. Puedes importar los registros.
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 d-flex justify-content-between">
+                        <a href="{% url 'ingestas:subir_excel' %}" class="btn btn-outline-primary">
+                            <i class="bi bi-arrow-left"></i> Volver a Subir Archivo
+                        </a>
+                        <a href="{% url 'ingestas:resultado_ingesta' %}" class="btn btn-outline-info">
+                            Ver Resultados Previos <i class="bi bi-arrow-right"></i>
+                        </a>
+                    </div>
+                    
+                    <!-- Panel de Logs -->
+                    <div class="card mt-4">
+                        <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">
+                                <i class="bi bi-terminal"></i> Logs de Depuración
+                                <span class="badge bg-secondary ms-2">{{ logs|length }}</span>
+                            </h5>
+                            <div>
+                                <span class="badge bg-info me-2">Migrados: {{ campos_migrados }}</span>
+                                <span class="badge bg-warning">Pendientes: {{ campos_pendientes }}</span>
+                                <button type="button" class="btn btn-sm btn-outline-light ms-2" onclick="clearLogs()">
+                                    <i class="bi bi-trash"></i> Limpiar
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="log-container" style="background-color: #1a1a1a; color: #f8f9fa; max-height: 300px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 0.85rem;">
+                                {% if logs %}
+                                    {% for log in logs reversed %}
+                                    <div class="log-entry p-2 border-bottom border-secondary log-{{ log.nivel }}">
+                                        <div class="d-flex justify-content-between">
+                                            <div>
+                                                <span class="badge bg-{% if log.nivel == 'success' %}success{% elif log.nivel == 'error' %}danger{% elif log.nivel == 'warning' %}warning{% elif log.nivel == 'info' %}info{% else %}secondary{% endif %} me-2">
+                                                    {{ log.nivel|upper }}
+                                                </span>
+                                                <strong>[{{ log.timestamp }}]</strong>
+                                                <span>{{ log.mensaje }}</span>
+                                            </div>
+                                            {% if log.datos %}
+                                            <button type="button" class="btn btn-sm btn-outline-info" onclick="toggleData('log-data-{{ forloop.revcounter }}')">
+                                                <i class="bi bi-code"></i> Datos
+                                            </button>
+                                            {% endif %}
+                                        </div>
+                                        {% if log.datos %}
+                                        <pre id="log-data-{{ forloop.revcounter }}" class="mt-2 mb-0 p-2 bg-black text-light rounded" style="display: none; font-size: 0.75rem; max-height: 150px; overflow: auto;">
+{{ log.datos|json_script:""|safe }}
+{{ log.datos|pprint }}
+                                        </pre>
+                                        {% endif %}
+                                    </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <div class="p-3 text-center text-muted">
+                                        <i class="bi bi-info-circle"></i> No hay logs disponibles. Los eventos aparecerán aquí.
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="card-footer bg-dark text-muted py-1">
+                            <small>
+                                <i class="bi bi-info-circle"></i> Últimos {{ logs|length }} eventos. Los logs se mantienen en sesión.
+                            </small>
+                        </div>
+                    </div>
+                    <!-- Fin Panel de Logs -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+<style>
+    .log-success {
+        border-left: 4px solid #28a745 !important;
+    }
+    .log-error {
+        border-left: 4px solid #dc3545 !important;
+    }
+    .log-warning {
+        border-left: 4px solid #ffc107 !important;
+    }
+    .log-info {
+        border-left: 4px solid #17a2b8 !important;
+    }
+    .log-debug {
+        border-left: 4px solid #6c757d !important;
+    }
+    .log-container pre {
+        background-color: #000 !important;
+        color: #f8f9fa !important;
+        font-size: 0.75rem;
+        max-height: 150px;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+    }
+</style>
+
+{% block extra_js %}
+<script>
+    // Habilitar/deshabilitar botón de procesar según checkbox
+    const checkbox = document.getElementById('confirmar_procesar');
+    const procesarBtn = document.querySelector('button[name="procesar_todo"]');
+    
+    if (checkbox && procesarBtn) {
+        checkbox.addEventListener('change', function() {
+            if (this.checked && !procesarBtn.disabled) {
+                procesarBtn.disabled = false;
+            } else {
+                procesarBtn.disabled = true;
+            }
+        });
+    }
+
+    // Debug para botones "Crear campo"
+    document.querySelectorAll('button[name="crear_campo"]').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            console.log('Crear campo clickeado, valor:', this.value);
+        });
+    });
+
+    // Funciones para el panel de logs
+    function toggleData(logId) {
+        const element = document.getElementById(logId);
+        if (element) {
+            element.style.display = element.style.display === 'none' ? 'block' : 'none';
+        }
+    }
+
+    function clearLogs() {
+        if (confirm('¿Estás seguro de que quieres limpiar todos los logs? Esto no afecta los datos de la base de datos.')) {
+            // Enviar solicitud para limpiar logs
+            fetch('{% url "ingestas:limpiar_logs" %}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'Content-Type': 'application/json'
+                }
+            }).then(response => {
+                if (response.ok) {
+                    location.reload();
+                } else {
+                    alert('Error al limpiar logs');
+                }
+            });
+        }
+    }
+
+    // Función para obtener cookie CSRF
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    // Auto-scroll al final del contenedor de logs
+    document.addEventListener('DOMContentLoaded', function() {
+        const logContainer = document.querySelector('.log-container');
+        if (logContainer) {
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+    });
+</script>
+{% endblock %}

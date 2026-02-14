@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Importar registros desde Excel</title>
+    <style>
+        .upload-box {
+            max-width: 600px;
+            margin: 40px auto;
+            padding: 30px;
+            border: 2px solid #007bff;
+            border-radius: 10px;
+            background-color: #f8f9fa;
+        }
+        .info-icon {
+            color: #007bff;
+            font-size: 48px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .btn-primary {
+            background-color: #007bff;
+            border-color: #007bff;
+        }
+        .btn-secondary {
+            background-color: #6c757d;
+            border-color: #6c757d;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+        input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ced4da;
+            border-radius: 5px;
+        }
+        .help-text {
+            font-size: 14px;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="upload-box">
+        <div class="info-icon">📊</div>
+        <h2 style="text-align: center; color: #007bff;">Importar registros desde Excel</h2>
+        <p style="font-size: 16px; text-align: center;">
+            Sube un archivo Excel (.xlsx, .xls) con columnas que coincidan con los campos de PropiedadRaw.
+        </p>
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div class="form-group">
+                <label for="excel_file">Archivo Excel:</label>
+                <input type="file" name="excel_file" id="excel_file" accept=".xlsx,.xls" required>
+                <p class="help-text">El archivo debe tener columnas como: fuente_excel, tipo_propiedad, precio_usd, ubicación, etc.</p>
+            </div>
+            <div class="form-group">
+                <label for="hoja">Hoja (opcional):</label>
+                <input type="text" name="hoja" id="hoja" placeholder="Nombre o número de hoja (por defecto primera)">
+                <p class="help-text">Deja vacío para usar la primera hoja.</p>
+            </div>
+            <div class="form-group">
+                <label for="fuente">Fuente (opcional):</label>
+                <input type="text" name="fuente" id="fuente" placeholder="excel_importado">
+                <p class="help-text">Valor para el campo fuente_excel si no hay columna correspondiente.</p>
+            </div>
+            <div style="text-align: center; margin-top: 30px;">
+                <button type="submit" class="btn-primary" style="padding: 10px 30px; font-size: 18px; border-radius: 5px; cursor: pointer;">
+                    Subir e Importar
+                </button>
+                <a href="{% url 'admin:ingestas_propiedadraw_changelist' %}" style="text-decoration: none;">
+                    <button type="button" class="btn-secondary" style="padding: 10px 30px; font-size: 18px; border-radius: 5px; cursor: pointer; margin-left: 20px;">
+                        Cancelar
+                    </button>
+                </a>
+            </div>
+        </form>
+        {% if messages %}
+            <div style="margin-top: 30px;">
+                {% for message in messages %}
+                    {% if message.tags == 'success' %}
+                        <div style="padding: 10px; border-radius: 5px; background-color: #d4edda; color: #155724;">
+                            {{ message }}
+                        </div>
+                    {% else %}
+                        <div style="padding: 10px; border-radius: 5px; background-color: #f8d7da; color: #721c24;">
+                            {{ message }}
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        {% endif %}
+    </div>
+</body>
+</html>
