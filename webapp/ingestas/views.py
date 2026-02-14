@@ -57,6 +57,52 @@ def agregar_log(request, nivel, mensaje, datos=None):
     request.session.modified = True
 
 
+def cargar_dataframe_desde_json(df_json):
+    """
+    Carga un DataFrame desde JSON string de manera robusta.
+    Maneja casos donde pd.read_json falla con FileNotFoundError.
+    """
+    import json
+    import pandas as pd
+    
+    if not df_json:
+        return None
+    
+    # Si ya es un DataFrame (no debería pasar)
+    if isinstance(df_json, pd.DataFrame):
+        return df_json
+    
+    # Si es un dict, convertirlo a JSON string
+    if isinstance(df_json, dict):
+        df_json = json.dumps(df_json)
+    
+    # Intentar con pd.read_json primero
+    try:
+        return pd.read_json(df_json, orient='split')
+    except FileNotFoundError:
+        # pandas puede interpretar mal el JSON como ruta de archivo
+        # Intentar cargar manualmente
+        try:
+            data = json.loads(df_json)
+            if 'data' in data and 'columns' in data:
+                return pd.DataFrame(data['data'], columns=data['columns'])
+            else:
+                # Intentar otros formatos
+                return pd.read_json(df_json)
+        except Exception as e:
+            raise ValueError(f"No se pudo cargar DataFrame desde JSON: {e}")
+    except Exception as e:
+        # Otro error, intentar cargar manualmente
+        try:
+            data = json.loads(df_json)
+            if 'data' in data and 'columns' in data:
+                return pd.DataFrame(data['data'], columns=data['columns'])
+            else:
+                raise e
+        except:
+            raise e
+
+
 def obtener_logs(request):
     """Obtiene los logs de la sesión."""
     return request.session.get('logs', [])
@@ -84,20 +130,59 @@ class SubirExcelView(LoginRequiredMixin, FormView):
         nombre_fuente = form.cleaned_data['nombre_fuente']
         portal_origen = form.cleaned_data['portal_origen']
         
-        # Guardar archivo temporalmente
-        fs = FileSystemStorage(location=tempfile.gettempdir())
-        nombre_archivo = fs.save(archivo.name, archivo)
-        ruta_archivo = fs.path(nombre_archivo)
+        # Crear archivo temporal con nombre único
+        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(archivo.name)[1]) as tmp_file:
+            # Escribir contenido del archivo subido
+            for chunk in archivo.chunks():
+                tmp_file.write(chunk)
+            ruta_archivo = tmp_file.name
+        
+        # Verificar que el archivo existe
+        if not os.path.exists(ruta_archivo):
+            agregar_log(self.request, 'error', f'Archivo temporal no creado: {ruta_archivo}')
+            messages.error(self.request, 'Error al guardar archivo temporal.')
+            return self.form_invalid(form)
         
         # Leer archivo con pandas
         try:
-            if archivo.name.endswith('.csv'):
-                df = pd.read_csv(ruta_archivo, encoding='utf-8')
+            if archivo.name.lower().endswith('.csv'):
+                # Intentar diferentes codificaciones comunes
+                encodings = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252']
+                df = None
+                last_error = None
+                
+                for encoding in encodings:
+                    try:
+                        df = pd.read_csv(ruta_archivo, encoding=encoding)
+                        agregar_log(self.request, 'debug', f'CSV leído con codificación: {encoding}')
+                        break
+                    except UnicodeDecodeError as e:
+                        last_error = e
+                        continue
+                    except Exception as e:
+                        last_error = e
+                        continue
+                
+                if df is None:
+                    # Último intento con encoding=None (pandas intentará inferir)
+                    try:
+                        df = pd.read_csv(ruta_archivo, encoding=None)
+                    except Exception as e:
+                        agregar_log(self.request, 'error', f'Error al leer CSV con cualquier codificación: {last_error}')
+                        raise
             else:
+                # Para archivos Excel
                 df = pd.read_excel(ruta_archivo, engine='openpyxl')
+                
         except Exception as e:
+            # Limpiar archivo temporal
+            try:
+                os.unlink(ruta_archivo)
+            except:
+                pass
+                
             agregar_log(self.request, 'error', f'Error al leer archivo: {e}')
-            messages.error(self.request, f'Error al leer archivo: {e}')
+            messages.error(self.request, f'Error al leer archivo: {str(e)[:100]}')
             return self.form_invalid(form)
         
         # Guardar datos en sesión
@@ -110,7 +195,7 @@ class SubirExcelView(LoginRequiredMixin, FormView):
         limpiar_logs(self.request)
         
         agregar_log(self.request, 'info', f'Archivo {archivo.name} cargado exitosamente')
-        agregar_log(self.request, 'debug', f'DataFrame shape: {df.shape}')
+        agregar_log(self.request, 'debug', f'DataFrame shape: {df.shape}, columnas: {list(df.columns)}')
         
         messages.success(self.request, 'Archivo cargado exitosamente. Proceda a validar los mapeos.')
         return super().form_valid(form)
@@ -126,31 +211,53 @@ class ValidarMapeoView(LoginRequiredMixin, TemplateView):
         df_json = self.request.session.get('df')
         if not df_json:
             messages.error(self.request, 'No hay archivo cargado. Por favor, suba un archivo primero.')
+            agregar_log(self.request, 'error', 'Intento de acceder a validar sin archivo cargado')
             return context
         
-        df = pd.read_json(df_json, orient='split')
+        # Cargar DataFrame usando función robusta
+        try:
+            df = cargar_dataframe_desde_json(df_json)
+            agregar_log(self.request, 'debug', f'DataFrame cargado: {df.shape[0]} filas, {df.shape[1]} columnas')
+        except Exception as e:
+            agregar_log(self.request, 'error', f'Error al cargar DataFrame: {e}')
+            messages.error(self.request, f'Error al procesar datos del archivo: {str(e)[:100]}')
+            # Intentar limpiar la sesión para forzar nueva subida
+            if 'df' in self.request.session:
+                del self.request.session['df']
+            return context
+        
         nombre_fuente = self.request.session.get('nombre_fuente', 'Fuente desconocida')
         portal_origen = self.request.session.get('portal_origen', 'Portal desconocido')
         
         # Obtener sugerencias de campos
-        sugeridor = SugeridorCampos()
-        sugerencias = sugeridor.sugerir_campos(df)
+        try:
+            sugeridor = SugeridorCampos()
+            sugerencias = sugeridor.sugerir_campos(df)
+            agregar_log(self.request, 'debug', f'Sugerencias generadas: {len(sugerencias.get("sugerencias", {}))} columnas')
+        except Exception as e:
+            agregar_log(self.request, 'error', f'Error al generar sugerencias de campos: {e}')
+            sugerencias = {'sugerencias': {}, 'errores': [str(e)]}
         
         # Preparar formsets
-        formset = ValidarMapeoFormSet(
-            initial=[
-                {
-                    'columna_origen': col,
-                    'campo_bd': info['nombre_sugerido_bd'],
-                    'titulo_display': info['titulo_display'],
-                    'tipo_dato': info['tipo_dato_sugerido'],
-                    'es_campo_fijo': info.get('es_campo_fijo', False),
-                    'campo_existente': info.get('campo_existente'),
-                    'columna_existe_fisica': info.get('columna_existe_fisica', False),
-                }
-                for col, info in sugerencias['sugerencias'].items()
-            ]
-        )
+        try:
+            formset = ValidarMapeoFormSet(
+                initial=[
+                    {
+                        'columna_origen': col,
+                        'campo_bd': info['nombre_sugerido_bd'],
+                        'titulo_display': info['titulo_display'],
+                        'tipo_dato': info['tipo_dato_sugerido'],
+                        'es_campo_fijo': info.get('es_campo_fijo', False),
+                        'campo_existente': info.get('campo_existente'),
+                        'columna_existe_fisica': info.get('columna_existe_fisica', False),
+                    }
+                    for col, info in sugerencias.get('sugerencias', {}).items()
+                ]
+            )
+            agregar_log(self.request, 'debug', f'Formset creado con {len(sugerencias.get("sugerencias", {}))} formularios')
+        except Exception as e:
+            agregar_log(self.request, 'error', f'Error al crear formset: {e}')
+            formset = ValidarMapeoFormSet()
         
         context.update({
             'nombre_fuente': nombre_fuente,
@@ -159,6 +266,7 @@ class ValidarMapeoView(LoginRequiredMixin, TemplateView):
             'df_preview': df.head(10).to_html(classes='table table-striped'),
             'sugerencias': sugerencias,
             'logs': obtener_logs(self.request),
+            'df_shape': df.shape,
         })
         return context
 
@@ -181,7 +289,15 @@ class ValidarMapeoView(LoginRequiredMixin, TemplateView):
             messages.success(request, 'Mapeos validados exitosamente. Proceda a procesar.')
             return redirect('ingestas:resultado_ingesta')
         
-        messages.error(request, 'Error en la validación de mapeos.')
+        # Log detallado de errores de validación
+        errores = []
+        for i, form in enumerate(formset):
+            if not form.is_valid():
+                errores.append(f'Formulario {i}: {form.errors}')
+        
+        agregar_log(request, 'error', f'Formset no válido. Errores: {errores}')
+        agregar_log(request, 'debug', f'Datos POST recibidos: {dict(request.POST)}')
+        messages.error(request, 'Error en la validación de mapeos. Revise los logs para más detalles.')
         return self.get(request, *args, **kwargs)
 
 
@@ -223,6 +339,15 @@ class ResultadoView(LoginRequiredMixin, TemplateView):
 
 class LimpiarSesionView(View):
     def get(self, request, *args, **kwargs):
+        # Eliminar archivo temporal si existe
+        ruta_archivo = request.session.get('ruta_archivo')
+        if ruta_archivo and os.path.exists(ruta_archivo):
+            try:
+                os.unlink(ruta_archivo)
+                agregar_log(request, 'info', f'Archivo temporal eliminado: {ruta_archivo}')
+            except Exception as e:
+                agregar_log(request, 'warning', f'No se pudo eliminar archivo temporal: {e}')
+        
         keys_to_remove = ['df', 'nombre_fuente', 'portal_origen', 'ruta_archivo', 'mapeos']
         for key in keys_to_remove:
             if key in request.session:
