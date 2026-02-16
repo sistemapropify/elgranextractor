@@ -84,6 +84,7 @@
 
                     <form method="post">
                         {% csrf_token %}
+                        {{ formset.management_form }}
                         <div class="scrollable-table">
                             <table class="table table-bordered table-hover table-fixed">
                                 <thead class="table-dark">

@@ -294,7 +294,28 @@ class ValidarMapeoView(LoginRequiredMixin, TemplateView):
         return context
 
     def post(self, request, *args, **kwargs):
+        # Determinar qué acción se solicitó
+        if 'importar_registros' in request.POST:
+            # Importar registros directamente (sin validar formset)
+            mapeos = request.session.get('mapeos')
+            if not mapeos:
+                agregar_log(request, 'error', 'No hay mapeos guardados en sesión. Valide los mapeos primero.')
+                messages.error(request, 'No hay mapeos guardados. Valide los mapeos primero.')
+                return self.get(request, *args, **kwargs)
+            
+            # Redirigir a ResultadoView para procesar la importación
+            agregar_log(request, 'info', 'Redirigiendo a importación de registros con mapeos existentes.')
+            return redirect('ingestas:resultado_ingesta')
+        
+        # Validar formset (para procesar_todo o validación normal)
         formset = ValidarMapeoFormSet(request.POST)
+        
+        # Debug: verificar estado del formset
+        agregar_log(request, 'debug', f'Formset total forms: {formset.total_form_count()}')
+        agregar_log(request, 'debug', f'Formset initial forms: {formset.initial_form_count()}')
+        agregar_log(request, 'debug', f'Formset management form: {formset.management_form}')
+        if formset.management_form.errors:
+            agregar_log(request, 'error', f'Management form errors: {formset.management_form.errors}')
         
         if formset.is_valid():
             mapeos = {}
@@ -317,6 +338,11 @@ class ValidarMapeoView(LoginRequiredMixin, TemplateView):
         for i, form in enumerate(formset):
             if not form.is_valid():
                 errores.append(f'Formulario {i}: {form.errors}')
+        
+        # Agregar non_form_errors
+        non_form_errors = formset.non_form_errors()
+        if non_form_errors:
+            errores.append(f'Non form errors: {non_form_errors}')
         
         agregar_log(request, 'error', f'Formset no válido. Errores: {errores}')
         agregar_log(request, 'debug', f'Datos POST recibidos: {dict(request.POST)}')
@@ -344,11 +370,12 @@ class ResultadoView(LoginRequiredMixin, TemplateView):
         
         # Procesar Excel
         procesador = ProcesadorExcel()
-        resultado = procesador.importar_excel(
+        resultado = procesador.importar_datos(
             df=df,
+            mapeos=mapeos,
             nombre_fuente=nombre_fuente,
             portal_origen=portal_origen,
-            mapeos=mapeos
+            user=self.request.user
         )
         
         context.update({
