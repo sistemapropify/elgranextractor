@@ -506,6 +506,131 @@ def extraer_imagen_propiedad(propiedad):
     return None
 
 
+# Vista para listar propiedades con filtros avanzados
+class PropiedadesFiltradasView(ListView):
+    model = PropiedadRaw
+    template_name = 'ingestas/propiedades_filtros.html'
+    context_object_name = 'propiedades'
+    paginate_by = 12
+    
+    def get_queryset(self):
+        from django.db.models import Q
+        queryset = super().get_queryset()
+        
+        # Obtener parámetros de filtro de la URL
+        tipo_propiedad = self.request.GET.get('tipo_propiedad')
+        precio_min = self.request.GET.get('precio_min')
+        precio_max = self.request.GET.get('precio_max')
+        ubicacion = self.request.GET.get('ubicacion')
+        metros_min = self.request.GET.get('metros_min')
+        metros_max = self.request.GET.get('metros_max')
+        habitaciones = self.request.GET.get('habitaciones')
+        banos = self.request.GET.get('banos')
+        fuente_excel = self.request.GET.get('fuente_excel')
+        
+        # Aplicar filtros con soporte para atributos_extras
+        if tipo_propiedad:
+            queryset = queryset.filter(
+                Q(tipo_propiedad__icontains=tipo_propiedad) |
+                Q(atributos_extras__tipo_propiedad__icontains=tipo_propiedad) |
+                Q(atributos_extras__tipo__icontains=tipo_propiedad) |
+                Q(atributos_extras__property_type__icontains=tipo_propiedad)
+            )
+        if precio_min:
+            # Intentar convertir a número
+            try:
+                precio_min_float = float(precio_min)
+                queryset = queryset.filter(
+                    Q(precio_usd__gte=precio_min_float) |
+                    Q(atributos_extras__precio_usd__gte=precio_min_float) |
+                    Q(atributos_extras__precio__gte=precio_min_float) |
+                    Q(atributos_extras__price__gte=precio_min_float)
+                )
+            except ValueError:
+                pass
+        if precio_max:
+            try:
+                precio_max_float = float(precio_max)
+                queryset = queryset.filter(
+                    Q(precio_usd__lte=precio_max_float) |
+                    Q(atributos_extras__precio_usd__lte=precio_max_float) |
+                    Q(atributos_extras__precio__lte=precio_max_float) |
+                    Q(atributos_extras__price__lte=precio_max_float)
+                )
+            except ValueError:
+                pass
+        if ubicacion:
+            queryset = queryset.filter(
+                Q(ubicacion__icontains=ubicacion) |
+                Q(atributos_extras__ubicacion__icontains=ubicacion) |
+                Q(atributos_extras__location__icontains=ubicacion) |
+                Q(atributos_extras__direccion__icontains=ubicacion)
+            )
+        if metros_min:
+            try:
+                metros_min_float = float(metros_min)
+                queryset = queryset.filter(
+                    Q(metros_cuadrados__gte=metros_min_float) |
+                    Q(atributos_extras__metros_cuadrados__gte=metros_min_float) |
+                    Q(atributos_extras__metros__gte=metros_min_float) |
+                    Q(atributos_extras__area__gte=metros_min_float)
+                )
+            except ValueError:
+                pass
+        if metros_max:
+            try:
+                metros_max_float = float(metros_max)
+                queryset = queryset.filter(
+                    Q(metros_cuadrados__lte=metros_max_float) |
+                    Q(atributos_extras__metros_cuadrados__lte=metros_max_float) |
+                    Q(atributos_extras__metros__lte=metros_max_float) |
+                    Q(atributos_extras__area__lte=metros_max_float)
+                )
+            except ValueError:
+                pass
+        if habitaciones:
+            try:
+                habitaciones_int = int(habitaciones)
+                queryset = queryset.filter(
+                    Q(habitaciones=habitaciones_int) |
+                    Q(atributos_extras__habitaciones=habitaciones_int) |
+                    Q(atributos_extras__rooms=habitaciones_int) |
+                    Q(atributos_extras__bedrooms=habitaciones_int)
+                )
+            except ValueError:
+                pass
+        if banos:
+            try:
+                banos_int = int(banos)
+                queryset = queryset.filter(
+                    Q(banos=banos_int) |
+                    Q(atributos_extras__banos=banos_int) |
+                    Q(atributos_extras__bathrooms=banos_int) |
+                    Q(atributos_extras__banios=banos_int)
+                )
+            except ValueError:
+                pass
+        if fuente_excel:
+            queryset = queryset.filter(fuente_excel__icontains=fuente_excel)
+        
+        # Ordenar por fecha de ingesta descendente
+        queryset = queryset.order_by('-fecha_ingesta')
+        return queryset
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Agregar campos dinámicos para referencia
+        context['campos_dinamicos'] = CampoDinamico.objects.all()
+        # Obtener valores únicos para los dropdowns de filtros
+        context['tipos_propiedad'] = PropiedadRaw.objects.values_list('tipo_propiedad', flat=True).distinct().exclude(tipo_propiedad__isnull=True).exclude(tipo_propiedad='')
+        context['fuentes'] = PropiedadRaw.objects.values_list('fuente_excel', flat=True).distinct().exclude(fuente_excel__isnull=True).exclude(fuente_excel='')
+        # Pasar parámetros actuales para mantener filtros en la paginación
+        context['parametros_filtro'] = self.request.GET.copy()
+        if 'page' in context['parametros_filtro']:
+            del context['parametros_filtro']['page']
+        return context
+
+
 # Vista para detalle de propiedad
 class DetallePropiedadView(DetailView):
     model = PropiedadRaw
