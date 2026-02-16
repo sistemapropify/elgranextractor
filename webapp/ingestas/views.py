@@ -76,10 +76,20 @@ def cargar_dataframe_desde_json(df_json):
     if isinstance(df_json, dict):
         df_json = json.dumps(df_json)
     
+    # Debug: registrar tipo y primeros caracteres
+    import logging
+    logger = logging.getLogger(__name__)
+    try:
+        logger.debug(f"cargar_dataframe_desde_json: tipo={type(df_json)}, len={len(df_json) if isinstance(df_json, str) else 'N/A'}")
+        if isinstance(df_json, str) and len(df_json) > 200:
+            logger.debug(f"Primeros 200 chars: {df_json[:200]}")
+    except:
+        pass
+    
     # Intentar con pd.read_json primero
     try:
         return pd.read_json(df_json, orient='split')
-    except FileNotFoundError:
+    except FileNotFoundError as fnf:
         # pandas puede interpretar mal el JSON como ruta de archivo
         # Intentar cargar manualmente
         try:
@@ -90,7 +100,7 @@ def cargar_dataframe_desde_json(df_json):
                 # Intentar otros formatos
                 return pd.read_json(df_json)
         except Exception as e:
-            raise ValueError(f"No se pudo cargar DataFrame desde JSON: {e}")
+            raise ValueError(f"No se pudo cargar DataFrame desde JSON (FileNotFoundError): {fnf}, {e}")
     except Exception as e:
         # Otro error, intentar cargar manualmente
         try:
@@ -307,7 +317,13 @@ class ValidarMapeoView(LoginRequiredMixin, TemplateView):
             agregar_log(request, 'info', 'Redirigiendo a importación de registros con mapeos existentes.')
             return redirect('ingestas:resultado_ingesta')
         
-        # Validar formset (para procesar_todo o validación normal)
+        # Si se presionó "crear_campo", ignorar validación del formset (por ahora)
+        if 'crear_campo' in request.POST:
+            agregar_log(request, 'warning', 'Botón "Crear Campo" presionado, pero funcionalidad no implementada.')
+            messages.warning(request, 'La creación individual de campos no está implementada. Use "Confirmar Mapeos".')
+            return self.get(request, *args, **kwargs)
+        
+        # Validar formset (para confirmar_mapeos o cualquier otro submit dentro del formulario)
         formset = ValidarMapeoFormSet(request.POST)
         
         # Debug: verificar estado del formset
@@ -330,8 +346,9 @@ class ValidarMapeoView(LoginRequiredMixin, TemplateView):
             
             request.session['mapeos'] = mapeos
             agregar_log(request, 'info', f'Mapeos confirmados: {len(mapeos)} columnas')
-            messages.success(request, 'Mapeos validados exitosamente. Proceda a procesar.')
-            return redirect('ingestas:resultado_ingesta')
+            messages.success(request, 'Mapeos validados exitosamente. Ahora puede importar los registros.')
+            # No redirigimos, mostramos la misma página con mensaje de éxito
+            return self.get(request, *args, **kwargs)
         
         # Log detallado de errores de validación
         errores = []
@@ -362,11 +379,24 @@ class ResultadoView(LoginRequiredMixin, TemplateView):
         nombre_fuente = self.request.session.get('nombre_fuente', 'Fuente desconocida')
         portal_origen = self.request.session.get('portal_origen', 'Portal desconocido')
         
-        if not df_json or not mapeos:
-            messages.error(self.request, 'No hay datos suficientes para procesar.')
+        agregar_log(self.request, 'debug', f'ResultadoView: df_json tipo={type(df_json)}, mapeos={len(mapeos)}')
+        
+        if not df_json:
+            agregar_log(self.request, 'error', 'ResultadoView: No hay df_json en sesión')
+            messages.error(self.request, 'No hay datos suficientes para procesar (df_json faltante).')
+            return context
+        if not mapeos:
+            agregar_log(self.request, 'error', 'ResultadoView: No hay mapeos en sesión')
+            messages.error(self.request, 'No hay mapeos confirmados. Valide los mapeos primero.')
             return context
         
-        df = pd.read_json(df_json, orient='split')
+        try:
+            df = cargar_dataframe_desde_json(df_json)
+            agregar_log(self.request, 'debug', f'DataFrame cargado: {df.shape if df is not None else "None"}')
+        except Exception as e:
+            agregar_log(self.request, 'error', f'Error al cargar DataFrame en ResultadoView: {e}')
+            messages.error(self.request, f'Error al cargar datos del archivo: {str(e)[:100]}')
+            return context
         
         # Procesar Excel
         procesador = ProcesadorExcel()
