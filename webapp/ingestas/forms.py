@@ -22,11 +22,11 @@ class SubirExcelForm(forms.Form):
 
 class MapeoColumnaForm(forms.Form):
     """Formulario dinámico para mapear una columna del Excel."""
-    nombre_columna_origen = forms.CharField(
+    columna_origen = forms.CharField(
         widget=forms.HiddenInput(),
         required=False
     )
-    nombre_campo_bd = forms.CharField(
+    campo_bd = forms.CharField(
         label="Nombre en BD (snake_case)",
         max_length=100,
         help_text="Ej: tipo_propiedad, precio_usd, etc."
@@ -47,6 +47,12 @@ class MapeoColumnaForm(forms.Form):
             ('DATETIME', 'Fecha y hora (DATETIME)'),
         ],
         help_text="Selecciona el tipo de dato que almacenará este campo."
+    )
+    incluir = forms.BooleanField(
+        label="Incluir en importación",
+        required=False,
+        initial=True,
+        help_text="Marcar para incluir esta columna en la importación."
     )
     crear_campo = forms.BooleanField(
         label="Crear campo ahora",

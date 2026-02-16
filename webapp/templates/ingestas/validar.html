@@ -96,7 +96,8 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {% for col in columnas_info %}
+                                    {% for form in formset %}
+                                    {% with col=columnas_info|slice:forloop.counter0|last %}
                                     <tr class="{% if col.migrado %}campo-migrado{% else %}campo-pendiente{% endif %}">
                                         <td>
                                             <strong>{{ col.nombre_columna_origen }}</strong>
@@ -104,31 +105,16 @@
                                             <small class="text-muted">
                                                 {{ col.valores_muestra.0|default:"Sin datos"|truncatechars:30 }}
                                             </small>
+                                            {{ form.columna_origen }}
                                         </td>
                                         <td>
-                                            <input type="text" 
-                                                   name="nombre_campo_bd_{{ forloop.counter0 }}" 
-                                                   value="{{ col.nombre_campo_bd }}"
-                                                   class="form-control form-control-sm"
-                                                   {% if col.migrado %}readonly{% endif %}>
+                                            {{ form.campo_bd }}
                                         </td>
                                         <td>
-                                            <input type="text" 
-                                                   name="titulo_display_{{ forloop.counter0 }}" 
-                                                   value="{{ col.titulo_display }}"
-                                                   class="form-control form-control-sm"
-                                                   {% if col.migrado %}readonly{% endif %}>
+                                            {{ form.titulo_display }}
                                         </td>
                                         <td>
-                                            <select name="tipo_dato_{{ forloop.counter0 }}" 
-                                                    class="form-select form-select-sm"
-                                                    {% if col.migrado %}disabled{% endif %}>
-                                                <option value="VARCHAR" {% if col.tipo_dato == 'VARCHAR' %}selected{% endif %}>Texto</option>
-                                                <option value="INTEGER" {% if col.tipo_dato == 'INTEGER' %}selected{% endif %}>Entero</option>
-                                                <option value="DECIMAL" {% if col.tipo_dato == 'DECIMAL' %}selected{% endif %}>Decimal</option>
-                                                <option value="BOOLEAN" {% if col.tipo_dato == 'BOOLEAN' %}selected{% endif %}>Booleano</option>
-                                                <option value="DATE" {% if col.tipo_dato == 'DATE' %}selected{% endif %}>Fecha</option>
-                                            </select>
+                                            {{ form.tipo_dato }}
                                         </td>
                                         <td class="text-center">
                                             {% if col.migrado %}
@@ -140,8 +126,8 @@
                                                     {{ col.campo_existente.tipo_dato }}
                                                 </small>
                                             {% else %}
-                                                <button type="submit" 
-                                                        name="crear_campo" 
+                                                <button type="submit"
+                                                        name="crear_campo"
                                                         value="{{ forloop.counter0 }}"
                                                         class="btn btn-sm btn-warning btn-column">
                                                     <i class="bi bi-database-add"></i> Crear Campo
@@ -152,8 +138,10 @@
                                                     </small>
                                                 </div>
                                             {% endif %}
+                                            {{ form.incluir.as_hidden }}
                                         </td>
                                     </tr>
+                                    {% endwith %}
                                     {% endfor %}
                                 </tbody>
                             </table>

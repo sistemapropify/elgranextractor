@@ -247,9 +247,7 @@ class ValidarMapeoView(LoginRequiredMixin, TemplateView):
                         'campo_bd': info['nombre_sugerido_bd'],
                         'titulo_display': info['titulo_display'],
                         'tipo_dato': info['tipo_dato_sugerido'],
-                        'es_campo_fijo': info.get('es_campo_fijo', False),
-                        'campo_existente': info.get('campo_existente'),
-                        'columna_existe_fisica': info.get('columna_existe_fisica', False),
+                        'incluir': True,
                     }
                     for col, info in sugerencias.get('sugerencias', {}).items()
                 ]
@@ -259,6 +257,26 @@ class ValidarMapeoView(LoginRequiredMixin, TemplateView):
             agregar_log(self.request, 'error', f'Error al crear formset: {e}')
             formset = ValidarMapeoFormSet()
         
+        # Preparar columnas_info para el template (compatibilidad)
+        columnas_info = []
+        campos_migrados = 0
+        campos_pendientes = 0
+        for col, info in sugerencias.get('sugerencias', {}).items():
+            migrado = info.get('columna_existe_fisica', False)
+            if migrado:
+                campos_migrados += 1
+            else:
+                campos_pendientes += 1
+            columnas_info.append({
+                'nombre_columna_origen': col,
+                'nombre_campo_bd': info['nombre_sugerido_bd'],
+                'titulo_display': info['titulo_display'],
+                'tipo_dato': info['tipo_dato_sugerido'],
+                'migrado': migrado,
+                'campo_existente': info.get('campo_existente'),
+                'valores_muestra': df[col].dropna().head(3).tolist() if col in df.columns else [],
+            })
+        
         context.update({
             'nombre_fuente': nombre_fuente,
             'portal_origen': portal_origen,
@@ -267,6 +285,11 @@ class ValidarMapeoView(LoginRequiredMixin, TemplateView):
             'sugerencias': sugerencias,
             'logs': obtener_logs(self.request),
             'df_shape': df.shape,
+            'columnas_info': columnas_info,
+            'campos_migrados': campos_migrados,
+            'campos_pendientes': campos_pendientes,
+            'pendientes': campos_pendientes,
+            'shape': df.shape,
         })
         return context
 
