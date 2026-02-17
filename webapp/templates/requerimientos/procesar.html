@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+
+{% block title %}Procesar Requerimientos{% endblock %}
+
+{% block extra_css %}
+<style>
+    .preview-table {
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    .summary-card {
+        border-left: 4px solid #0d6efd;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h4 class="mb-0">Procesar Requerimientos</h4>
+                </div>
+                <div class="card-body">
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="card summary-card">
+                                <div class="card-body">
+                                    <h5 class="card-title">Resumen de Importación</h5>
+                                    <ul class="list-group list-group-flush">
+                                        <li class="list-group-item d-flex justify-content-between">
+                                            <span>Fuente:</span>
+                                            <strong>{{ nombre_fuente }}</strong>
+                                        </li>
+                                        <li class="list-group-item d-flex justify-content-between">
+                                            <span>Origen:</span>
+                                            <strong>{{ portal_origen }}</strong>
+                                        </li>
+                                        <li class="list-group-item d-flex justify-content-between">
+                                            <span>Total de filas:</span>
+                                            <strong>{{ total_filas }}</strong>
+                                        </li>
+                                        <li class="list-group-item d-flex justify-content-between">
+                                            <span>Campos a importar:</span>
+                                            <strong>{{ total_campos }}</strong>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card border-warning">
+                                <div class="card-body">
+                                    <h5 class="card-title text-warning">Confirmación Requerida</h5>
+                                    <p class="card-text">
+                                        Al confirmar, se importarán <strong>{{ total_filas }}</strong> requerimientos a la base de datos.
+                                        Esta acción no se puede deshacer.
+                                    </p>
+                                    <div class="alert alert-danger">
+                                        <i class="bi bi-exclamation-triangle"></i>
+                                        <strong>Advertencia:</strong> Asegúrese de que los mapeos son correctos antes de continuar.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if preview_rows %}
+                    <div class="card mb-4">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0">Vista Previa de Datos Mapeados (primeras 3 filas)</h5>
+                        </div>
+                        <div class="card-body preview-table">
+                            <table class="table table-sm table-striped">
+                                <thead>
+                                    <tr>
+                                        {% for key in preview_rows.0.keys %}
+                                        <th>{{ key }}</th>
+                                        {% endfor %}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for row in preview_rows %}
+                                    <tr>
+                                        {% for value in row.values %}
+                                        <td>{{ value|default:"-" }}</td>
+                                        {% endfor %}
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="form-check mb-4">
+                            {{ form.confirmar }}
+                            <label class="form-check-label" for="{{ form.confirmar.id_for_label }}">
+                                <strong>Confirmo que deseo importar {{ total_filas }} requerimientos a la base de datos.</strong>
+                            </label>
+                            <div class="form-text">{{ form.confirmar.help_text }}</div>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-success btn-lg">
+                                <i class="bi bi-database-add"></i> Ejecutar Importación
+                            </button>
+                            <a href="{% url 'requerimientos:validar_mapeo' %}" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-left"></i> Volver a validar mapeos
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
