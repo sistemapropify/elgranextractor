@@ -56,6 +56,9 @@ INSTALLED_APPS = [
     'colas',
     'api',
     'ingestas',
+    'requerimientos',
+    'cuadrantizacion',
+    'propifai',
 ]
 
 MIDDLEWARE = [
@@ -107,9 +110,22 @@ DATABASES = {
         'OPTIONS': {
             'driver': 'ODBC Driver 18 for SQL Server',
         },
+    },
+    'propifai': {
+        'ENGINE': 'mssql',
+        'NAME': env('PROPIFAI_DB_NAME', default='dbpropify'),
+        'USER': env('PROPIFAI_DB_USER', default='sqladmin'),
+        'PASSWORD': env('PROPIFAI_DB_PASS', default='Propify12345@'),
+        'HOST': env('PROPIFAI_DB_HOST', default='janis-server.database.windows.net'),
+        'PORT': env('PROPIFAI_DB_PORT', default='1433'),
+        'OPTIONS': {
+            'driver': 'ODBC Driver 18 for SQL Server',
+        },
     }
 }
 
+# Database routers for multiple databases
+DATABASE_ROUTERS = ['webapp.routers.PropifaiRouter', 'webapp.routers.DefaultRouter']
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
@@ -147,6 +163,9 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_DIRS = [
+    BASE_DIR / 'static',
+]
 
 # WhiteNoise configuration for static files
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
@@ -193,3 +212,8 @@ AZURE_STORAGE_CONNECTION_STRING = env('AZURE_STORAGE_CONNECTION_STRING', default
 AZURE_STORAGE_CONTAINER_NAME = env('AZURE_STORAGE_CONTAINER_NAME', default='documentos-crudos')
 AZURE_STORAGE_ACCOUNT_NAME = env('AZURE_STORAGE_ACCOUNT_NAME', default='')
 AZURE_STORAGE_ACCOUNT_KEY = env('AZURE_STORAGE_ACCOUNT_KEY', default='')
+
+# External API Configuration for Property Integration
+API_EXTERNA_URL = env('API_EXTERNA_URL', default='http://localhost/dashboard/api/properties/with-docs/')
+API_EXTERNA_KEY = env('API_EXTERNA_KEY', default='ItBJSnE6F7gIG5uhnPh0mtXmQ9yjE8ZgqtIjTU')
+API_EXTERNA_TIMEOUT = env.int('API_EXTERNA_TIMEOUT', default=10)
