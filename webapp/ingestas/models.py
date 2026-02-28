@@ -70,8 +70,40 @@ class PropiedadRaw(models.Model):
     email_agente = models.EmailField(max_length=100, null=True, blank=True, db_column='email_del_agente')
     telefono_agente = models.CharField(max_length=20, null=True, blank=True, db_column='telefono_del_agente')
     oficina_remax = models.CharField(max_length=200, null=True, blank=True)
+    # Campos de estado de venta
+    ESTADO_PROPIEDAD_CHOICES = [
+        ('en_publicacion', 'En publicación'),
+        ('vendido', 'Vendido'),
+        ('reservado', 'Reservado'),
+        ('retirado', 'Retirado'),
+    ]
+    estado_propiedad = models.CharField(
+        max_length=20,
+        choices=ESTADO_PROPIEDAD_CHOICES,
+        default='en_publicacion',
+        null=True,
+        blank=True,
+        verbose_name='Estado de la propiedad'
+    )
+    fecha_venta = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name='Fecha de venta',
+        help_text='Fecha en que se vendió la propiedad'
+    )
+    precio_final_venta = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name='Precio final de venta (USD)',
+        help_text='Precio final al que se vendió la propiedad'
+    )
     # Campos dinámicos se almacenan en JSON
-    atributos_extras = models.JSONField(default=dict)  # Para campos no migrados aún
+    def default_atributos_extras():
+        return {}
+    
+    atributos_extras = models.JSONField(default=default_atributos_extras, null=True, blank=True)  # Para campos no migrados aún
 
     class Meta:
         verbose_name = "Propiedad Raw"
@@ -97,6 +129,33 @@ class PropiedadRaw(models.Model):
         # Dividir por comas y tomar la primera
         partes = [p.strip() for p in self.imagenes_propiedad.split(',') if p.strip()]
         return partes[0] if partes else None
+
+    @property
+    def lat(self):
+        """Devuelve la latitud extraída del campo coordenadas."""
+        if not self.coordenadas:
+            return None
+        try:
+            # Formato esperado: "latitud, longitud" o "latitud,longitud"
+            parts = self.coordenadas.split(',')
+            if len(parts) >= 2:
+                return float(parts[0].strip())
+        except (ValueError, AttributeError):
+            pass
+        return None
+
+    @property
+    def lng(self):
+        """Devuelve la longitud extraída del campo coordenadas."""
+        if not self.coordenadas:
+            return None
+        try:
+            parts = self.coordenadas.split(',')
+            if len(parts) >= 2:
+                return float(parts[1].strip())
+        except (ValueError, AttributeError):
+            pass
+        return None
 
 
 class MigracionPendiente(models.Model):
