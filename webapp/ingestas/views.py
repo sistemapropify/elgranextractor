@@ -14,7 +14,9 @@ from django.http import JsonResponse
 
 from .forms import SubirExcelForm, ValidarMapeoFormSet, ProcesarTodoForm
 from .services import SugeridorCampos, EjecutorMigraciones, ProcesadorExcel
+from .services_api import obtener_propiedades_externas
 from .models import CampoDinamico, MapeoFuente, PropiedadRaw, MigracionPendiente
+from .procesamiento_ia import ProcesadorExcelIA, LoggerDetallado, CargadorArchivo
 
 
 # Utilidades de logging
@@ -303,6 +305,99 @@ class ValidarMapeoView(LoginRequiredMixin, TemplateView):
         })
         return context
 
+
+# Nueva vista para procesamiento con IA
+class ProcesarConIAView(LoginRequiredMixin, View):
+    """
+    Vista que procesa un archivo Excel/CSV con IA para extraer campos dinámicos.
+    """
+    template_name = 'ingestas/procesar_ia.html'
+    
+    def get(self, request, *args, **kwargs):
+        """Muestra formulario para subir archivo."""
+        form = SubirExcelForm()
+        logs = obtener_logs(request)
+        return render(request, self.template_name, {'form': form, 'logs': logs})
+    
+    def post(self, request, *args, **kwargs):
+        """Procesa el archivo subido con IA."""
+        form = SubirExcelForm(request.POST, request.FILES)
+        if not form.is_valid():
+            messages.error(request, 'Error en el formulario.')
+            return render(request, self.template_name, {'form': form})
+        
+        archivo = form.cleaned_data['archivo']
+        nombre_fuente = form.cleaned_data['nombre_fuente']
+        portal_origen = form.cleaned_data['portal_origen']
+        
+        # Guardar archivo temporalmente
+        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(archivo.name)[1]) as tmp_file:
+            for chunk in archivo.chunks():
+                tmp_file.write(chunk)
+            ruta_archivo = tmp_file.name
+        
+        try:
+            # Cargar archivo para diagnóstico
+            df_diagnostico = CargadorArchivo.cargar_archivo(ruta_archivo)
+            agregar_log(request, 'INFO', f'Archivo cargado para diagnóstico. Filas: {len(df_diagnostico)}, Columnas: {len(df_diagnostico.columns)}')
+            agregar_log(request, 'DEBUG', f'Columnas detectadas: {list(df_diagnostico.columns)}')
+            
+            # Detectar columnas estándar y de texto
+            mapeo_columnas = CargadorArchivo.detectar_columnas_estandar(df_diagnostico)
+            agregar_log(request, 'INFO', f'Columnas estándar detectadas: {mapeo_columnas}')
+            
+            columna_texto = CargadorArchivo.detectar_columna_texto_principal(df_diagnostico)
+            if columna_texto:
+                agregar_log(request, 'INFO', f'Columna de texto principal detectada: {columna_texto}')
+            else:
+                agregar_log(request, 'WARN', 'No se detectó columna de texto principal. Se intentará procesar con la primera columna de tipo texto.')
+                # Listar tipos de columnas
+                for col in df_diagnostico.columns:
+                    dtype = df_diagnostico[col].dtype
+                    agregar_log(request, 'DEBUG', f'Columna "{col}": tipo {dtype}, ejemplos: {df_diagnostico[col].dropna().head(2).tolist()}')
+            
+            # Inicializar procesador IA
+            procesador = ProcesadorExcelIA(debug_mode=True)
+            resultado = procesador.procesar_archivo(ruta_archivo, max_filas=50)
+            
+            # Guardar resultados en sesión para mostrar
+            request.session['resultado_ia'] = resultado
+            request.session['nombre_fuente'] = nombre_fuente
+            request.session['portal_origen'] = portal_origen
+            
+            # Limpiar archivo temporal
+            os.unlink(ruta_archivo)
+            
+            # Redirigir a página de resultados
+            return redirect('ingestas:resultado_ia')
+            
+        except Exception as e:
+            LoggerDetallado.error('VISTA_IA', f'Error procesando archivo: {str(e)}')
+            agregar_log(request, 'ERROR', f'Error en procesamiento con IA: {str(e)}')
+            messages.error(request, f'Error en procesamiento con IA: {str(e)}')
+            # Limpiar archivo temporal si existe
+            if os.path.exists(ruta_archivo):
+                os.unlink(ruta_archivo)
+            # Obtener logs para mostrar en template
+            logs = obtener_logs(request)
+            return render(request, self.template_name, {'form': form, 'logs': logs})
+
+
+class ResultadoIAView(LoginRequiredMixin, TemplateView):
+    """Muestra resultados del procesamiento con IA."""
+    template_name = 'ingestas/resultado_ia.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        resultado = self.request.session.get('resultado_ia')
+        if not resultado:
+            raise Http404('No hay resultados de procesamiento con IA.')
+        
+        context['resultado'] = resultado
+        context['nombre_fuente'] = self.request.session.get('nombre_fuente')
+        context['portal_origen'] = self.request.session.get('portal_origen')
+        return context
+
     def post(self, request, *args, **kwargs):
         # Determinar qué acción se solicitó
         if 'importar_registros' in request.POST:
@@ -417,6 +512,191 @@ class ResultadoView(LoginRequiredMixin, TemplateView):
         return context
 
 
+# Vista simple HTML para propiedades Propify (funciona sin reiniciar servidor)
+def vista_propiedades_propify_directa(request):
+    """Vista que genera HTML directamente para mostrar propiedades Propify."""
+    from django.http import HttpResponse
+    from propifai.models import PropifaiProperty
+    from datetime import datetime
+    
+    try:
+        # Obtener propiedades de Propifai
+        propiedades = PropifaiProperty.objects.all()
+        
+        # Construir HTML directamente
+        html = f'''
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Propiedades Propify - Vista Directa</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }}
+                .container {{ max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+                h1 {{ color: #28a745; border-bottom: 2px solid #28a745; padding-bottom: 10px; }}
+                .propify-badge {{ background: #28a745; color: white; padding: 3px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; }}
+                .property-list {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; margin-top: 20px; }}
+                .property-card {{ border: 1px solid #ddd; border-radius: 8px; padding: 15px; background: white; border-left: 4px solid #28a745; }}
+                .property-header {{ display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }}
+                .property-type {{ font-weight: bold; font-size: 1.1rem; }}
+                .property-price {{ color: #28a745; font-weight: bold; font-size: 1.2rem; }}
+                .property-location {{ color: #666; margin-bottom: 10px; font-size: 0.9rem; }}
+                .stats {{ background: #e9f7ef; padding: 15px; border-radius: 8px; margin-bottom: 20px; }}
+                .stat-item {{ display: inline-block; margin-right: 20px; font-size: 0.9rem; }}
+                .stat-value {{ font-weight: bold; color: #28a745; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>Propiedades Propify <span class="propify-badge">BASE DE DATOS PROPIFY</span></h1>
+                
+                <div class="stats">
+                    <div class="stat-item">Total propiedades: <span class="stat-value">{propiedades.count()}</span></div>
+                    <div class="stat-item">Con coordenadas: <span class="stat-value">{sum(1 for p in propiedades if p.latitude and p.longitude)}</span></div>
+                    <div class="stat-item">Fecha: <span class="stat-value">{datetime.now().strftime("%d/%m/%Y %H:%M")}</span></div>
+                </div>
+        '''
+        
+        if propiedades.count() == 0:
+            html += '''
+                <div style="text-align: center; padding: 40px; color: #666;">
+                    <h3>No se encontraron propiedades Propify</h3>
+                    <p>La base de datos Propify está vacía o hay un error de conexión.</p>
+                </div>
+            '''
+        else:
+            html += '<div class="property-list">'
+            for i, propiedad in enumerate(propiedades[:50]):  # Limitar a 50 para rendimiento
+                lat = propiedad.latitude
+                lng = propiedad.longitude
+                precio = float(propiedad.price) if propiedad.price else None
+                
+                html += f'''
+                    <div class="property-card">
+                        <div class="property-header">
+                            <div class="property-type">
+                                {propiedad.tipo_propiedad or "Propiedad"}
+                                {f"({propiedad.code})" if propiedad.code else ""}
+                            </div>
+                            <div class="property-price">
+                                {f"${precio:,.0f}" if precio else "Consultar"}
+                            </div>
+                        </div>
+                        <div class="property-location">
+                            {propiedad.real_address or propiedad.exact_address or propiedad.department or "Ubicación no especificada"}
+                        </div>
+                        <div style="font-size: 0.9rem; color: #555;">
+                            {f"{propiedad.bedrooms} hab." if propiedad.bedrooms else ""}
+                            {f" • {propiedad.bathrooms} baños" if propiedad.bathrooms else ""}
+                            {f" • {propiedad.built_area} m² const." if propiedad.built_area else ""}
+                            {f" • {propiedad.land_area} m² terreno" if propiedad.land_area else ""}
+                        </div>
+                        <div style="font-size: 0.8rem; color: #888; margin-top: 10px;">
+                            {f"Coordenadas: {lat}, {lng}" if lat and lng else "Sin coordenadas"}
+                        </div>
+                    </div>
+                '''
+            html += '</div>'
+        
+        html += f'''
+                <div style="margin-top: 30px; padding: 15px; background: #f8f9fa; border-radius: 8px; font-size: 0.9rem;">
+                    <h3>Información técnica:</h3>
+                    <p>Esta página muestra {propiedades.count()} propiedades directamente desde la base de datos Propify.</p>
+                    <p><strong>URL de prueba:</strong> <a href="/ingestas/propiedades/?fuente_propify=propify">/ingestas/propiedades/?fuente_propify=propify</a></p>
+                    <p><strong>Vista en el sistema principal:</strong> <a href="/ingestas/propiedades/">/ingestas/propiedades/</a> (deberían aparecer con badge verde "Propify")</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        '''
+        
+        return HttpResponse(html)
+        
+    except Exception as e:
+        # Si hay error, mostrar página de error
+        html = f'''
+        <!DOCTYPE html>
+        <html>
+        <head><title>Error Propify</title></head>
+        <body style="font-family: Arial; margin: 20px;">
+            <h1 style="color: #dc3545;">Error cargando propiedades Propify</h1>
+            <p><strong>Error:</strong> {str(e)}</p>
+            <p>Posibles causas:</p>
+            <ul>
+                <li>La base de datos Propify no está configurada correctamente</li>
+                <li>El modelo PropifaiProperty no existe o tiene errores</li>
+                <li>La conexión a la base de datos falló</li>
+            </ul>
+            <p>Verifique ejecutando: <code>python verificar_propify_directo.py</code></p>
+        </body>
+        </html>
+        '''
+        return HttpResponse(html, status=500)
+
+
+# Vista temporal para mostrar solo propiedades Propify
+def vista_propiedades_propify(request):
+    """Vista temporal para mostrar propiedades de la base de datos Propify."""
+    from propifai.models import PropifaiProperty
+    
+    # Obtener todas las propiedades Propify
+    propiedades = PropifaiProperty.objects.all()
+    
+    # Convertir a formato compatible
+    propiedades_compatibles = []
+    propiedades_con_coordenadas = 0
+    
+    for propiedad in propiedades:
+        # Extraer coordenadas
+        lat = propiedad.latitude
+        lng = propiedad.longitude
+        
+        if lat is not None and lng is not None:
+            propiedades_con_coordenadas += 1
+        
+        # Crear diccionario compatible
+        propiedad_dict = {
+            'id': propiedad.id,
+            'id_externo': propiedad.id,
+            'es_externo': True,
+            'es_propify': True,
+            'tipo_propiedad': propiedad.tipo_propiedad,
+            'precio_usd': float(propiedad.price) if propiedad.price else None,
+            'departamento': propiedad.department,
+            'provincia': propiedad.province,
+            'distrito': propiedad.district,
+            'lat': lat,
+            'lng': lng,
+            'habitaciones': propiedad.bedrooms,
+            'banios': propiedad.bathrooms,
+            'area_construida': float(propiedad.built_area) if propiedad.built_area else None,
+            'area_terreno': float(propiedad.land_area) if propiedad.land_area else None,
+            'primera_imagen': None,
+            'imagen_principal': None,
+            'url_propiedad': None,
+            'fuente': 'Propify DB',
+            'fecha_publicacion': propiedad.created_at,
+            'fecha_ingesta': propiedad.created_at,
+            'area': float(propiedad.built_area) if propiedad.built_area else float(propiedad.land_area) if propiedad.land_area else None,
+            'precio': float(propiedad.price) if propiedad.price else None,
+            'titulo': f"{propiedad.title or 'Propiedad'} en {propiedad.department or ''}",
+            'codigo': propiedad.code,
+            'direccion': propiedad.real_address or propiedad.exact_address,
+            'descripcion': propiedad.description,
+        }
+        propiedades_compatibles.append(propiedad_dict)
+    
+    context = {
+        'propiedades_compatibles': propiedades_compatibles,
+        'total_propiedades': len(propiedades_compatibles),
+        'propiedades_con_coordenadas': propiedades_con_coordenadas,
+        'titulo': 'Propiedades Propify - Vista Temporal',
+    }
+    
+    return render(request, 'propifai/lista_propiedades_propify_clonado.html', context)
+
+
 class LimpiarSesionView(View):
     def get(self, request, *args, **kwargs):
         # Eliminar archivo temporal si existe
@@ -445,32 +725,30 @@ class LimpiarLogsView(View):
         return redirect(request.META.get('HTTP_REFERER', 'ingestas:index'))
 
 
-# Nueva vista para listar propiedades en tarjetas
-class ListaPropiedadesView(ListView):
-    model = PropiedadRaw
-    template_name = 'ingestas/lista_propiedades.html'
-    context_object_name = 'propiedades'
-    paginate_by = 12
-    
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        # Ordenar por fecha de ingesta descendente
-        return queryset.order_by('-fecha_ingesta')
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        # Agregar campos dinámicos para referencia
-        context['campos_dinamicos'] = CampoDinamico.objects.all()
-        return context
-
-
 # Helper para extraer imagen de atributos_extras
 def extraer_imagen_propiedad(propiedad):
     """
-    Extrae la URL de imagen de los atributos_extras de una propiedad.
-    Busca campos que contengan 'imagen', 'foto', 'url_imagen', 'image', 'photo', 'img'.
+    Extrae la URL de imagen de una propiedad.
+    Busca en:
+    1. Campo imagenes_propiedad (texto con URLs separadas por comas)
+    2. Atributos extras (JSON) con campos que contengan 'imagen', 'foto', etc.
     Retorna la primera URL encontrada o None.
     """
+    # 1. Buscar en imagenes_propiedad (campo de texto con URLs separadas por comas)
+    if propiedad.imagenes_propiedad:
+        imagenes = propiedad.imagenes_propiedad.split(',')
+        for img in imagenes:
+            img = img.strip()
+            if img.startswith(('http://', 'https://', 'www.')):
+                # Verificar extensiones de imagen comunes
+                if any(ext in img.lower() for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp']):
+                    return img
+                # Si no tiene extensión pero es URL, igual devolverla
+                return img
+            elif img:  # Si no es URL pero tiene texto, podría ser una ruta relativa
+                return img
+    
+    # 2. Buscar en atributos_extras (JSON)
     atributos = propiedad.atributos_extras
     if not isinstance(atributos, dict):
         return None
@@ -493,7 +771,7 @@ def extraer_imagen_propiedad(propiedad):
                 # En ese caso retornamos el valor para que el template decida
                 return valor_str
     
-    # Si no se encuentra, buscar cualquier valor que parezca URL
+    # 3. Si no se encuentra, buscar cualquier valor que parezca URL en atributos_extras
     for valor in atributos.values():
         if not valor:
             continue
@@ -506,10 +784,521 @@ def extraer_imagen_propiedad(propiedad):
     return None
 
 
+# Nueva vista para listar propiedades en tarjetas
+class ListaPropiedadesView(ListView):
+    model = PropiedadRaw
+    template_name = 'ingestas/lista_propiedades_rediseno.html'
+    context_object_name = 'propiedades'
+    paginate_by = 12
+    
+    def get_queryset(self):
+        from django.db.models import Q
+        queryset = super().get_queryset()
+        
+        # Obtener parámetros de filtro de la URL
+        tipo_propiedad = self.request.GET.get('tipo_propiedad')
+        precio_min = self.request.GET.get('precio_min')
+        precio_max = self.request.GET.get('precio_max')
+        departamento = self.request.GET.get('departamento')
+        habitaciones = self.request.GET.get('habitaciones')
+        banios = self.request.GET.get('banios')
+        
+        # Aplicar filtros con soporte para atributos_extras
+        if tipo_propiedad:
+            queryset = queryset.filter(
+                Q(tipo_propiedad__icontains=tipo_propiedad) |
+                Q(atributos_extras__tipo_propiedad__icontains=tipo_propiedad) |
+                Q(atributos_extras__tipo__icontains=tipo_propiedad) |
+                Q(atributos_extras__property_type__icontains=tipo_propiedad)
+            )
+        if precio_min:
+            # Intentar convertir a número
+            try:
+                precio_min_float = float(precio_min)
+                queryset = queryset.filter(
+                    Q(precio_usd__gte=precio_min_float) |
+                    Q(atributos_extras__precio_usd__gte=precio_min_float) |
+                    Q(atributos_extras__precio__gte=precio_min_float) |
+                    Q(atributos_extras__price__gte=precio_min_float)
+                )
+            except ValueError:
+                pass
+        if precio_max:
+            try:
+                precio_max_float = float(precio_max)
+                queryset = queryset.filter(
+                    Q(precio_usd__lte=precio_max_float) |
+                    Q(atributos_extras__precio_usd__lte=precio_max_float) |
+                    Q(atributos_extras__precio__lte=precio_max_float) |
+                    Q(atributos_extras__price__lte=precio_max_float)
+                )
+            except ValueError:
+                pass
+        if departamento:
+            queryset = queryset.filter(
+                Q(departamento__icontains=departamento) |
+                Q(atributos_extras__departamento__icontains=departamento) |
+                Q(atributos_extras__department__icontains=departamento) |
+                Q(atributos_extras__location__icontains=departamento)
+            )
+        if habitaciones:
+            try:
+                habitaciones_int = int(habitaciones)
+                queryset = queryset.filter(
+                    Q(numero_habitaciones__gte=habitaciones_int) |
+                    Q(atributos_extras__numero_habitaciones__gte=habitaciones_int) |
+                    Q(atributos_extras__habitaciones__gte=habitaciones_int) |
+                    Q(atributos_extras__bedrooms__gte=habitaciones_int)
+                )
+            except ValueError:
+                pass
+        if banios:
+            try:
+                banios_int = int(banios)
+                queryset = queryset.filter(
+                    Q(numero_banos__gte=banios_int) |
+                    Q(atributos_extras__numero_banos__gte=banios_int) |
+                    Q(atributos_extras__banos__gte=banios_int) |
+                    Q(atributos_extras__bathrooms__gte=banios_int)
+                )
+            except ValueError:
+                pass
+        
+        # Ordenar por fecha de ingesta descendente
+        return queryset.order_by('-fecha_ingesta')
+    
+    def paginate_queryset(self, queryset, page_size):
+        """
+        Sobrescribir la paginación para manejar todas_propiedades en lugar del queryset original.
+        """
+        from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+        
+        # Obtener propiedades de todas las fuentes
+        todas_propiedades = self._obtener_todas_propiedades()
+        
+        # Crear paginador para todas_propiedades
+        paginator = Paginator(todas_propiedades, page_size)
+        page_number = self.request.GET.get('page') or 1
+        
+        try:
+            page = paginator.page(page_number)
+        except PageNotAnInteger:
+            page = paginator.page(1)
+        except EmptyPage:
+            page = paginator.page(paginator.num_pages)
+        
+        # Guardar el paginador, la página y object_list en la instancia para usar en get_context_data
+        self.paginator = paginator
+        self.page = page
+        self.object_list = list(page)  # ¡IMPORTANTE! Establecer object_list
+        
+        # Retornar la tupla requerida por Django: (paginator, page, object_list, is_paginated)
+        return (paginator, page, self.object_list, page.has_other_pages())
+    
+    def _calcular_checkboxes(self):
+        """
+        Calcula los valores de los checkboxes basados en los parámetros GET.
+        Devuelve una tupla (fuente_local, fuente_externa, fuente_propify)
+        """
+        # Obtener parámetros de filtro de checkboxes
+        has_any_checkbox_param = any(
+            key in self.request.GET
+            for key in ['fuente_local', 'fuente_externa', 'fuente_propify']
+        )
+        
+        if not has_any_checkbox_param:
+            # No hay parámetros de checkbox - mostrar todos por defecto
+            fuente_local = True
+            fuente_externa = True
+            fuente_propify = True
+        else:
+            # Hay al menos un parámetro de checkbox - respetar solo los presentes
+            fuente_local = 'fuente_local' in self.request.GET
+            fuente_externa = 'fuente_externa' in self.request.GET
+            fuente_propify = 'fuente_propify' in self.request.GET
+        
+        # FORZAR SIEMPRE mostrar Propify para debugging
+        fuente_propify = True
+        
+        # DEBUG
+        print(f"DEBUG _calcular_checkboxes:")
+        print(f"  Parámetros GET: {dict(self.request.GET)}")
+        print(f"  has_any_checkbox_param: {has_any_checkbox_param}")
+        print(f"  Resultado - Local: {fuente_local}, Externa: {fuente_externa}, Propify: {fuente_propify} (FORZADO)")
+        
+        return fuente_local, fuente_externa, fuente_propify
+    
+    def _obtener_todas_propiedades(self):
+        """
+        Obtiene todas las propiedades de todas las fuentes según los filtros de checkbox.
+        OPTIMIZADO: Solo obtiene las fuentes necesarias basadas en los checkboxes seleccionados.
+        Aplica filtros de tipo, departamento, precio, habitaciones, baños, etc.
+        """
+        # Calcular checkboxes PRIMERO para saber qué fuentes necesitamos
+        fuente_local, fuente_externa, fuente_propify = self._calcular_checkboxes()
+        
+        print(f"DEBUG _obtener_todas_propiedades: Checkboxes - Local: {fuente_local}, Externa: {fuente_externa}, Propify: {fuente_propify}")
+        
+        # Obtener parámetros de filtro
+        tipo_propiedad = self.request.GET.get('tipo_propiedad', '').strip()
+        departamento = self.request.GET.get('departamento', '').strip()
+        precio_min = self.request.GET.get('precio_min', '').strip()
+        precio_max = self.request.GET.get('precio_max', '').strip()
+        habitaciones = self.request.GET.get('habitaciones', '').strip()
+        banios = self.request.GET.get('banios', '').strip()
+        
+        print(f"DEBUG _obtener_todas_propiedades: Filtros - tipo: '{tipo_propiedad}', depto: '{departamento}', precio_min: '{precio_min}', precio_max: '{precio_max}', hab: '{habitaciones}', baños: '{banios}'")
+        
+        # Función para aplicar filtros a una lista de propiedades (diccionarios)
+        def _aplicar_filtros(propiedades):
+            if not propiedades:
+                return propiedades
+            
+            filtradas = []
+            for prop in propiedades:
+                # Filtro por tipo de propiedad
+                if tipo_propiedad:
+                    prop_tipo = prop.get('tipo_propiedad', '')
+                    if not prop_tipo or tipo_propiedad.lower() not in prop_tipo.lower():
+                        continue
+                
+                # Filtro por departamento
+                if departamento:
+                    prop_depto = prop.get('departamento', '')
+                    if not prop_depto or departamento.lower() not in prop_depto.lower():
+                        continue
+                
+                # Filtro por precio mínimo
+                if precio_min:
+                    try:
+                        precio_min_val = float(precio_min)
+                        prop_precio = prop.get('precio_usd') or prop.get('precio')
+                        if prop_precio is None or float(prop_precio) < precio_min_val:
+                            continue
+                    except (ValueError, TypeError):
+                        pass
+                
+                # Filtro por precio máximo
+                if precio_max:
+                    try:
+                        precio_max_val = float(precio_max)
+                        prop_precio = prop.get('precio_usd') or prop.get('precio')
+                        if prop_precio is None or float(prop_precio) > precio_max_val:
+                            continue
+                    except (ValueError, TypeError):
+                        pass
+                
+                # Filtro por habitaciones (mínimo)
+                if habitaciones:
+                    try:
+                        hab_min = int(habitaciones)
+                        prop_hab = prop.get('habitaciones')
+                        if prop_hab is None or int(prop_hab) < hab_min:
+                            continue
+                    except (ValueError, TypeError):
+                        pass
+                
+                # Filtro por baños (mínimo)
+                if banios:
+                    try:
+                        banios_min = int(banios)
+                        prop_banios = prop.get('banios')
+                        if prop_banios is None or int(prop_banios) < banios_min:
+                            continue
+                    except (ValueError, TypeError):
+                        pass
+                
+                filtradas.append(prop)
+            
+            return filtradas
+        
+        # Inicializar listas vacías
+        propiedades_externas = []
+        propiedades_propifai_dict = []
+        propiedades_locales_dict = []
+        
+        # Obtener solo las fuentes necesarias
+        if fuente_externa:
+            # Obtener propiedades externas de la API
+            from ingestas.services_api import obtener_propiedades_externas
+            propiedades_externas = obtener_propiedades_externas()
+            print(f"DEBUG _obtener_todas_propiedades: Obtenidas {len(propiedades_externas)} propiedades externas")
+            # Aplicar filtros
+            propiedades_externas = _aplicar_filtros(propiedades_externas)
+            print(f"DEBUG _obtener_todas_propiedades: Después de filtros externas: {len(propiedades_externas)}")
+        
+        if fuente_propify:
+            # Obtener propiedades de Propifai (segunda base de datos)
+            try:
+                from propifai.models import PropifaiProperty
+                print(f"DEBUG _obtener_todas_propiedades: Obteniendo propiedades de Propifai...")
+                
+                # Usar la base de datos 'propifai' explícitamente
+                propiedades_propifai = list(PropifaiProperty.objects.using('propifai').all()[:100])  # Limitar a 100 para rendimiento
+                print(f"DEBUG _obtener_todas_propiedades: Obtenidas {len(propiedades_propifai)} propiedades de la BD propifai")
+                
+                # Convertir a diccionarios
+                for i, prop in enumerate(propiedades_propifai):
+                    try:
+                        prop_dict = self._convertir_propiedad_propifai_a_dict(prop)
+                        propiedades_propifai_dict.append(prop_dict)
+                        if i < 3:  # Log solo para las primeras 3
+                            print(f"DEBUG _obtener_todas_propiedades: Propiedad {i+1} convertida - es_propify: {prop_dict.get('es_propify')}")
+                    except Exception as e2:
+                        print(f"DEBUG _obtener_todas_propiedades: Error convirtiendo propiedad {i+1}: {e2}")
+                
+                print(f"DEBUG _obtener_todas_propiedades: Total convertidas Propify: {len(propiedades_propifai_dict)}")
+                # Aplicar filtros
+                propiedades_propifai_dict = _aplicar_filtros(propiedades_propifai_dict)
+                print(f"DEBUG _obtener_todas_propiedades: Después de filtros Propify: {len(propiedades_propifai_dict)}")
+                
+            except Exception as e:
+                print(f"Error obteniendo propiedades de Propifai: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        if fuente_local:
+            # Obtener propiedades locales con filtros aplicados al queryset
+            propiedades_locales = list(self.get_queryset())
+            propiedades_locales_dict = [self._convertir_propiedad_local_a_dict(prop) for prop in propiedades_locales]
+            print(f"DEBUG _obtener_todas_propiedades: Obtenidas {len(propiedades_locales_dict)} propiedades locales")
+            # Aplicar filtros
+            propiedades_locales_dict = _aplicar_filtros(propiedades_locales_dict)
+            print(f"DEBUG _obtener_todas_propiedades: Después de filtros locales: {len(propiedades_locales_dict)}")
+        
+        # Preparar listas para intercalar
+        listas_propiedades = []
+        
+        if fuente_local and propiedades_locales_dict:
+            listas_propiedades.append(('local', propiedades_locales_dict))
+        
+        if fuente_externa and propiedades_externas:
+            listas_propiedades.append(('externa', propiedades_externas))
+        
+        if fuente_propify and propiedades_propifai_dict:
+            listas_propiedades.append(('propify', propiedades_propifai_dict))
+        
+        # Si solo hay una fuente, devolverla directamente (sin intercalar)
+        if len(listas_propiedades) == 1:
+            fuente, propiedades = listas_propiedades[0]
+            print(f"DEBUG _obtener_todas_propiedades: Solo una fuente ({fuente}), devolviendo {len(propiedades)} propiedades directamente")
+            
+            # Agregar indicador de fuente
+            todas_propiedades = []
+            for prop in propiedades:
+                prop_copy = prop.copy() if hasattr(prop, 'copy') else dict(prop)
+                prop_copy['_fuente_original'] = fuente
+                todas_propiedades.append(prop_copy)
+            
+            return todas_propiedades
+        
+        # Intercalar propiedades de diferentes fuentes (si hay más de una)
+        todas_propiedades = []
+        
+        if listas_propiedades:
+            # Encontrar la lista más larga
+            max_len = max(len(propiedades) for _, propiedades in listas_propiedades)
+            
+            print(f"DEBUG _obtener_todas_propiedades: Intercalando {len(listas_propiedades)} fuentes, max_len: {max_len}")
+            print(f"DEBUG _obtener_todas_propiedades: Listas a intercalar: {[(fuente, len(props)) for fuente, props in listas_propiedades]}")
+            
+            # Intercalar propiedades
+            for i in range(max_len):
+                for fuente, propiedades in listas_propiedades:
+                    if i < len(propiedades):
+                        # Agregar un indicador de fuente para debugging
+                        prop = propiedades[i].copy() if hasattr(propiedades[i], 'copy') else dict(propiedades[i])
+                        prop['_fuente_original'] = fuente
+                        todas_propiedades.append(prop)
+        
+        print(f"DEBUG _obtener_todas_propiedades: Total propiedades a devolver: {len(todas_propiedades)}")
+        return todas_propiedades
+    
+    def _convertir_propiedad_local_a_dict(self, propiedad):
+        """Convierte una instancia de PropiedadRaw a diccionario con campos compatibles."""
+        # Extraer imagen principal usando la función helper
+        primera_imagen = extraer_imagen_propiedad(propiedad)
+        
+        # Si no hay imagen de la función helper, usar el campo imagenes_propiedad
+        if not primera_imagen and propiedad.imagenes_propiedad:
+            # El campo imagenes_propiedad es un texto con URLs separadas por comas
+            imagenes = propiedad.imagenes_propiedad.split(',')
+            if imagenes:
+                primera_imagen = imagenes[0].strip()
+        
+        # Extraer coordenadas del campo coordenadas (formato "lat,lng")
+        lat = None
+        lng = None
+        if propiedad.coordenadas:
+            try:
+                coords = propiedad.coordenadas.split(',')
+                if len(coords) >= 2:
+                    lat = float(coords[0].strip())
+                    lng = float(coords[1].strip())
+            except (ValueError, AttributeError):
+                pass
+        
+        # Determinar si es una propiedad Remax (tiene oficina_remax o fuente_excel contiene "remax")
+        es_remax = (
+            (propiedad.oficina_remax and propiedad.oficina_remax.strip()) or
+            (propiedad.fuente_excel and 'remax' in propiedad.fuente_excel.lower())
+        )
+        
+        # Crear diccionario con todos los campos necesarios para la plantilla
+        propiedad_dict = {
+            'id': propiedad.id,
+            'id_externo': propiedad.id,  # Para compatibilidad con propiedades externas
+            'es_externo': False,
+            'es_remax': es_remax,  # Nuevo campo para identificar propiedades Remax
+            'tipo_propiedad': propiedad.tipo_propiedad,
+            'precio_usd': propiedad.precio_usd,
+            'departamento': propiedad.departamento,
+            'provincia': propiedad.provincia,
+            'distrito': propiedad.distrito,
+            'lat': lat,
+            'lng': lng,
+            'habitaciones': propiedad.numero_habitaciones,  # Mapear a numero_habitaciones
+            'banios': propiedad.numero_banos,  # Mapear a numero_banos
+            'area_construida': propiedad.area_construida,
+            'area_terreno': propiedad.area_terreno,
+            'primera_imagen': primera_imagen,
+            'imagen_principal': primera_imagen,
+            'url_propiedad': propiedad.url_propiedad,
+            'fuente': propiedad.fuente_excel or 'Local',  # Usar fuente_excel en lugar de fuente
+            'fecha_publicacion': propiedad.fecha_publicacion,
+            'fecha_ingesta': propiedad.fecha_ingesta,
+            # Campos adicionales para compatibilidad
+            'area': propiedad.area_construida or propiedad.area_terreno,
+            'precio': propiedad.precio_usd,
+            'titulo': f"{propiedad.tipo_propiedad or 'Propiedad'} en {propiedad.departamento or ''}",
+        }
+        return propiedad_dict
+    
+    def _convertir_propiedad_propifai_a_dict(self, propiedad):
+        """Convierte una instancia de PropifaiProperty a diccionario con campos compatibles."""
+        # Extraer coordenadas
+        lat = propiedad.latitude
+        lng = propiedad.longitude
+        
+        # Crear diccionario con todos los campos necesarios para la plantilla
+        propiedad_dict = {
+            'id': propiedad.id,
+            'id_externo': propiedad.id,
+            'es_externo': True,
+            'es_propify': True,  # Nueva bandera para identificar propiedades de Propifai
+            'tipo_propiedad': propiedad.tipo_propiedad,
+            'precio_usd': float(propiedad.price) if propiedad.price else None,
+            'departamento': propiedad.department,
+            'provincia': propiedad.province,
+            'distrito': propiedad.district,
+            'lat': lat,
+            'lng': lng,
+            'habitaciones': propiedad.bedrooms,
+            'banios': propiedad.bathrooms,
+            'area_construida': float(propiedad.built_area) if propiedad.built_area else None,
+            'area_terreno': float(propiedad.land_area) if propiedad.land_area else None,
+            'primera_imagen': None,  # Propifai no tiene imágenes en este modelo básico
+            'imagen_principal': None,
+            'url_propiedad': None,
+            'fuente': 'Propify DB',
+            'fecha_publicacion': propiedad.created_at,
+            'fecha_ingesta': propiedad.created_at,
+            # Campos adicionales para compatibilidad
+            'area': float(propiedad.built_area) if propiedad.built_area else float(propiedad.land_area) if propiedad.land_area else None,
+            'precio': float(propiedad.price) if propiedad.price else None,
+            'titulo': f"{propiedad.title or 'Propiedad'} en {propiedad.department or ''}",
+            'codigo': propiedad.code,
+            'direccion': propiedad.real_address or propiedad.exact_address,
+            'descripcion': propiedad.description,
+        }
+        return propiedad_dict
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Agregar campos dinámicos para referencia
+        context['campos_dinamicos'] = CampoDinamico.objects.all()
+        
+        # Obtener todas las propiedades según los filtros
+        todas_propiedades = self._obtener_todas_propiedades()
+        
+        # Obtener propiedades externas y Propifai para los filtros
+        from ingestas.services_api import obtener_propiedades_externas
+        propiedades_externas = obtener_propiedades_externas()
+        
+        try:
+            from propifai.models import PropifaiProperty
+            propiedades_propifai = list(PropifaiProperty.objects.all()[:100])
+            propiedades_propifai_dict = [self._convertir_propiedad_propifai_a_dict(prop) for prop in propiedades_propifai]
+        except Exception as e:
+            print(f"Error obteniendo propiedades de Propifai: {e}")
+            propiedades_propifai_dict = []
+        
+        # Calcular conteos
+        conteo_locales = sum(1 for p in todas_propiedades if not p.get('es_externo') and not p.get('es_propify'))
+        conteo_externas = sum(1 for p in todas_propiedades if p.get('es_externo') and not p.get('es_propify'))
+        conteo_propify = sum(1 for p in todas_propiedades if p.get('es_propify'))
+        
+        # Obtener valores de checkboxes usando el método común
+        fuente_local, fuente_externa, fuente_propify = self._calcular_checkboxes()
+        
+        # DEBUG: Imprimir valores para diagnóstico (directo a consola)
+        print(f"\n=== DEBUG get_context_data ===")
+        print(f"  Parámetros GET: {dict(self.request.GET)}")
+        print(f"  Checkboxes calculados - Local: {fuente_local}, Externa: {fuente_externa}, Propify: {fuente_propify}")
+        print(f"  Conteos - Locales: {conteo_locales}, Externas: {conteo_externas}, Propify: {conteo_propify}")
+        
+        # Usar object_list (que ya está paginado) en lugar de todas_propiedades
+        # object_list contiene la página actual de todas_propiedades gracias a paginate_queryset
+        context['todas_propiedades'] = self.object_list  # Ya paginado
+        context['todas_propiedades_completas'] = todas_propiedades  # Todas sin paginar
+        context['total_propiedades'] = len(todas_propiedades)  # Total sin paginar
+        context['conteo_locales'] = conteo_locales
+        context['conteo_externas'] = conteo_externas
+        context['conteo_propify'] = conteo_propify
+        
+        # Pasar todas las propiedades (sin serializar) para que json_script las serialice correctamente
+        context['todas_propiedades_json'] = todas_propiedades
+        
+        # DEBUG: Verificar que las propiedades Propify estén en object_list
+        propify_in_object_list = sum(1 for p in self.object_list if isinstance(p, dict) and p.get('es_propify'))
+        print(f"  Propify en object_list: {propify_in_object_list} de {len(self.object_list)}")
+        print(f"=== FIN DEBUG ===\n")
+        
+        # Agregar opciones para filtros (combinando fuentes)
+        queryset = self.get_queryset()
+        
+        # Tipos de propiedad (locales + externas + propifai)
+        tipos_locales = queryset.exclude(tipo_propiedad__isnull=True).exclude(tipo_propiedad='').values_list('tipo_propiedad', flat=True).distinct()
+        tipos_externos = {prop.get('tipo_propiedad') for prop in propiedades_externas if prop.get('tipo_propiedad')}
+        tipos_propifai = {prop.get('tipo_propiedad') for prop in propiedades_propifai_dict if prop.get('tipo_propiedad')}
+        todos_tipos = sorted(set(list(tipos_locales) + list(tipos_externos) + list(tipos_propifai)))
+        context['tipos_propiedad'] = todos_tipos
+        
+        # Departamentos (locales + externas + propifai)
+        deptos_locales = queryset.exclude(departamento__isnull=True).exclude(departamento='').values_list('departamento', flat=True).distinct()
+        deptos_externos = {prop.get('departamento') for prop in propiedades_externas if prop.get('departamento')}
+        deptos_propifai = {prop.get('departamento') for prop in propiedades_propifai_dict if prop.get('departamento')}
+        todos_deptos = sorted(set(list(deptos_locales) + list(deptos_externos) + list(deptos_propifai)))
+        context['departamentos'] = todos_deptos
+        
+        # Fuentes disponibles para filtro
+        context['fuentes_disponibles'] = ['Local', 'Externa', 'Propify']
+        context['fuente_local_checked'] = fuente_local
+        context['fuente_externa_checked'] = fuente_externa
+        context['fuente_propify_checked'] = fuente_propify
+        
+        # DEBUG: Verificar que las variables se están agregando al contexto
+        print(f"  Contexto DEBUG - fuente_local_checked: {context.get('fuente_local_checked')}")
+        print(f"  Contexto DEBUG - fuente_externa_checked: {context.get('fuente_externa_checked')}")
+        print(f"  Contexto DEBUG - fuente_propify_checked: {context.get('fuente_propify_checked')}")
+        
+        return context
+
+
 # Vista para listar propiedades con filtros avanzados
 class PropiedadesFiltradasView(ListView):
     model = PropiedadRaw
-    template_name = 'ingestas/propiedades_filtros.html'
+    template_name = 'ingestas/lista_propiedades_rediseno.html'
     context_object_name = 'propiedades'
     paginate_by = 12
     
@@ -653,3 +1442,87 @@ class DetallePropiedadView(DetailView):
             context['atributos_ordenados'] = []
         
         return context
+
+
+# API para crear propiedad desde el formulario modal
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+from django.views import View
+import json
+
+@method_decorator(csrf_exempt, name='dispatch')
+class CrearPropiedadAPIView(View):
+    """API para crear una nueva propiedad desde el formulario modal."""
+    
+    def _parse_decimal(self, value):
+        """Convierte un valor a Decimal o None si está vacío."""
+        if value is None or value == '':
+            return None
+        try:
+            from decimal import Decimal
+            return Decimal(str(value))
+        except:
+            return None
+    
+    def _parse_int(self, value):
+        """Convierte un valor a entero o None si está vacío."""
+        if value is None or value == '':
+            return None
+        try:
+            return int(value)
+        except:
+            return None
+    
+    def post(self, request):
+        try:
+            data = json.loads(request.body)
+            
+            # Mapear campos del formulario al modelo PropiedadRaw
+            propiedad = PropiedadRaw()
+            
+            # Campos básicos
+            propiedad.tipo_propiedad = data.get('tipo_propiedad')
+            propiedad.descripcion = data.get('descripcion')
+            propiedad.precio_usd = self._parse_decimal(data.get('precio_usd'))
+            propiedad.coordenadas = f"{data.get('lat')}, {data.get('lng')}" if data.get('lat') and data.get('lng') else None
+            propiedad.departamento = data.get('departamento')
+            propiedad.provincia = data.get('provincia')
+            propiedad.distrito = data.get('distrito')
+            propiedad.area_construida = self._parse_decimal(data.get('area_construida'))
+            propiedad.area_terreno = self._parse_decimal(data.get('area_terreno'))
+            propiedad.numero_pisos = self._parse_int(data.get('numero_pisos'))
+            propiedad.numero_habitaciones = self._parse_int(data.get('numero_habitaciones'))
+            propiedad.numero_banos = self._parse_int(data.get('numero_banos'))
+            propiedad.numero_cocheras = self._parse_int(data.get('numero_cocheras'))
+            propiedad.agente_inmobiliario = data.get('agente_inmobiliario')
+            propiedad.imagenes_propiedad = data.get('imagenes_propiedad')
+            propiedad.id_propiedad = data.get('id_propiedad')
+            propiedad.fecha_publicacion = data.get('fecha_publicacion') or None
+            propiedad.antiguedad = data.get('antiguedad')
+            propiedad.servicio_agua = 'Sí' if data.get('servicio_agua') else 'No'
+            propiedad.energia_electrica = 'Sí' if data.get('energia_electrica') else 'No'
+            propiedad.servicio_drenaje = 'Sí' if data.get('servicio_drenaje') else 'No'
+            propiedad.servicio_gas = 'Sí' if data.get('servicio_gas') else 'No'
+            propiedad.email_agente = data.get('email_agente')
+            propiedad.telefono_agente = data.get('telefono_agente')
+            propiedad.oficina_remax = data.get('oficina_remax')
+            propiedad.estado_propiedad = data.get('estado_propiedad')
+            propiedad.fecha_venta = data.get('fecha_venta') or None
+            propiedad.precio_final_venta = self._parse_decimal(data.get('precio_final_venta'))
+            propiedad.portal = data.get('portal')
+            propiedad.fuente_excel = 'manual'  # Fuente manual desde formulario
+            
+            # Guardar la propiedad
+            propiedad.save()
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'Propiedad creada exitosamente',
+                'id': propiedad.id
+            }, status=201)
+            
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=400)
