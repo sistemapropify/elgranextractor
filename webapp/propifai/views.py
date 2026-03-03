@@ -98,6 +98,12 @@ class ListaPropiedadesPropifyView(ListView):
                 except (ValueError, AttributeError):
                     pass
             
+            # Obtener nombres mapeados de ubicación
+            departamento_nombre = propiedad.departamento_nombre if hasattr(propiedad, 'departamento_nombre') else propiedad.department
+            provincia_nombre = propiedad.provincia_nombre if hasattr(propiedad, 'provincia_nombre') else propiedad.province
+            distrito_nombre = propiedad.distrito_nombre if hasattr(propiedad, 'distrito_nombre') else propiedad.district
+            ubicacion_completa = propiedad.ubicacion_completa if hasattr(propiedad, 'ubicacion_completa') else f"{distrito_nombre}, {provincia_nombre}, {departamento_nombre}"
+            
             # Crear diccionario compatible con el nuevo template
             propiedad_dict = {
                 'id': propiedad.id,
@@ -108,9 +114,13 @@ class ListaPropiedadesPropifyView(ListView):
                 'tipo_propiedad': 'Propiedad',  # Para filtros
                 'precio': float(propiedad.price) if propiedad.price else None,
                 'precio_usd': float(propiedad.price) if propiedad.price else None,
-                'departamento': propiedad.department,
-                'provincia': propiedad.province,
-                'distrito': propiedad.district,
+                'departamento': propiedad.department,  # Índice original
+                'departamento_nombre': departamento_nombre,  # Nombre mapeado
+                'provincia': propiedad.province,  # Índice original
+                'provincia_nombre': provincia_nombre,  # Nombre mapeado
+                'distrito': propiedad.district,  # Índice original
+                'distrito_nombre': distrito_nombre,  # Nombre mapeado
+                'ubicacion_completa': ubicacion_completa,  # Ubicación completa formateada
                 'latitud': lat,
                 'longitud': lng,
                 'lat': lat,
@@ -127,7 +137,7 @@ class ListaPropiedadesPropifyView(ListView):
                 'fecha_publicacion': propiedad.created_at,
                 'fecha_ingesta': propiedad.created_at,
                 'area': float(propiedad.built_area) if propiedad.built_area else float(propiedad.land_area) if propiedad.land_area else None,
-                'titulo': f"{propiedad.title or 'Propiedad'} en {propiedad.department or ''}",
+                'titulo': f"{propiedad.title or 'Propiedad'} en {departamento_nombre or propiedad.department or ''}",
                 'codigo': propiedad.code,
                 'direccion': propiedad.real_address or propiedad.exact_address,
                 'descripcion': propiedad.description,
@@ -149,6 +159,12 @@ class ListaPropiedadesPropifyView(ListView):
                 except (ValueError, AttributeError):
                     pass
             
+            # Obtener nombres mapeados de ubicación
+            departamento_nombre = propiedad.departamento_nombre if hasattr(propiedad, 'departamento_nombre') else propiedad.department
+            provincia_nombre = propiedad.provincia_nombre if hasattr(propiedad, 'provincia_nombre') else propiedad.province
+            distrito_nombre = propiedad.distrito_nombre if hasattr(propiedad, 'distrito_nombre') else propiedad.district
+            ubicacion_completa = propiedad.ubicacion_completa if hasattr(propiedad, 'ubicacion_completa') else f"{distrito_nombre}, {provincia_nombre}, {departamento_nombre}"
+            
             propiedad_dict = {
                 'id': propiedad.id,
                 'id_externo': propiedad.id,
@@ -158,9 +174,13 @@ class ListaPropiedadesPropifyView(ListView):
                 'tipo_propiedad': 'Propiedad',
                 'precio': float(propiedad.price) if propiedad.price else None,
                 'precio_usd': float(propiedad.price) if propiedad.price else None,
-                'departamento': propiedad.department,
-                'provincia': propiedad.province,
-                'distrito': propiedad.district,
+                'departamento': propiedad.department,  # Índice original
+                'departamento_nombre': departamento_nombre,  # Nombre mapeado
+                'provincia': propiedad.province,  # Índice original
+                'provincia_nombre': provincia_nombre,  # Nombre mapeado
+                'distrito': propiedad.district,  # Índice original
+                'distrito_nombre': distrito_nombre,  # Nombre mapeado
+                'ubicacion_completa': ubicacion_completa,  # Ubicación completa formateada
                 'latitud': lat,
                 'longitud': lng,
                 'lat': lat,
@@ -177,7 +197,7 @@ class ListaPropiedadesPropifyView(ListView):
                 'fecha_publicacion': propiedad.created_at,
                 'fecha_ingesta': propiedad.created_at,
                 'area': float(propiedad.built_area) if propiedad.built_area else float(propiedad.land_area) if propiedad.land_area else None,
-                'titulo': f"{propiedad.title or 'Propiedad'} en {propiedad.department or ''}",
+                'titulo': f"{propiedad.title or 'Propiedad'} en {departamento_nombre or propiedad.department or ''}",
                 'codigo': propiedad.code,
                 'direccion': propiedad.real_address or propiedad.exact_address,
                 'descripcion': propiedad.description,

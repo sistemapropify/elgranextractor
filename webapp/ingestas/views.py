@@ -942,12 +942,13 @@ class ListaPropiedadesView(ListView):
         # Obtener parámetros de filtro
         tipo_propiedad = self.request.GET.get('tipo_propiedad', '').strip()
         departamento = self.request.GET.get('departamento', '').strip()
+        distrito = self.request.GET.get('distrito', '').strip()
         precio_min = self.request.GET.get('precio_min', '').strip()
         precio_max = self.request.GET.get('precio_max', '').strip()
         habitaciones = self.request.GET.get('habitaciones', '').strip()
         banios = self.request.GET.get('banios', '').strip()
         
-        print(f"DEBUG _obtener_todas_propiedades: Filtros - tipo: '{tipo_propiedad}', depto: '{departamento}', precio_min: '{precio_min}', precio_max: '{precio_max}', hab: '{habitaciones}', baños: '{banios}'")
+        print(f"DEBUG _obtener_todas_propiedades: Filtros - tipo: '{tipo_propiedad}', depto: '{departamento}', distrito: '{distrito}', precio_min: '{precio_min}', precio_max: '{precio_max}', hab: '{habitaciones}', baños: '{banios}'")
         
         # Función para aplicar filtros a una lista de propiedades (diccionarios)
         def _aplicar_filtros(propiedades):
@@ -962,10 +963,34 @@ class ListaPropiedadesView(ListView):
                     if not prop_tipo or tipo_propiedad.lower() not in prop_tipo.lower():
                         continue
                 
-                # Filtro por departamento
+                # Filtro por departamento - busca tanto en índice como en nombre mapeado
                 if departamento:
                     prop_depto = prop.get('departamento', '')
-                    if not prop_depto or departamento.lower() not in prop_depto.lower():
+                    prop_depto_nombre = prop.get('departamento_nombre', '')
+                    
+                    # Verificar si el filtro coincide con el índice o con el nombre
+                    depto_coincide = False
+                    if prop_depto and departamento.lower() in str(prop_depto).lower():
+                        depto_coincide = True
+                    elif prop_depto_nombre and departamento.lower() in str(prop_depto_nombre).lower():
+                        depto_coincide = True
+                    
+                    if not depto_coincide:
+                        continue
+                
+                # Filtro por distrito - busca tanto en índice como en nombre mapeado
+                if distrito:
+                    prop_distrito = prop.get('distrito', '')
+                    prop_distrito_nombre = prop.get('distrito_nombre', '')
+                    
+                    # Verificar si el filtro coincide con el índice o con el nombre
+                    distrito_coincide = False
+                    if prop_distrito and distrito.lower() in str(prop_distrito).lower():
+                        distrito_coincide = True
+                    elif prop_distrito_nombre and distrito.lower() in str(prop_distrito_nombre).lower():
+                        distrito_coincide = True
+                    
+                    if not distrito_coincide:
                         continue
                 
                 # Filtro por precio mínimo
@@ -1180,6 +1205,11 @@ class ListaPropiedadesView(ListView):
         lat = propiedad.latitude
         lng = propiedad.longitude
         
+        # Obtener nombres mapeados de ubicación
+        departamento_nombre = propiedad.departamento_nombre if hasattr(propiedad, 'departamento_nombre') else propiedad.department
+        provincia_nombre = propiedad.provincia_nombre if hasattr(propiedad, 'provincia_nombre') else propiedad.province
+        distrito_nombre = propiedad.distrito_nombre if hasattr(propiedad, 'distrito_nombre') else propiedad.district
+        
         # Crear diccionario con todos los campos necesarios para la plantilla
         propiedad_dict = {
             'id': propiedad.id,
@@ -1188,9 +1218,12 @@ class ListaPropiedadesView(ListView):
             'es_propify': True,  # Nueva bandera para identificar propiedades de Propifai
             'tipo_propiedad': propiedad.tipo_propiedad,
             'precio_usd': float(propiedad.price) if propiedad.price else None,
-            'departamento': propiedad.department,
-            'provincia': propiedad.province,
-            'distrito': propiedad.district,
+            'departamento': propiedad.department,  # Índice original
+            'departamento_nombre': departamento_nombre,  # Nombre mapeado
+            'provincia': propiedad.province,  # Índice original
+            'provincia_nombre': provincia_nombre,  # Nombre mapeado
+            'distrito': propiedad.district,  # Índice original
+            'distrito_nombre': distrito_nombre,  # Nombre mapeado
             'lat': lat,
             'lng': lng,
             'habitaciones': propiedad.bedrooms,
@@ -1206,10 +1239,11 @@ class ListaPropiedadesView(ListView):
             # Campos adicionales para compatibilidad
             'area': float(propiedad.built_area) if propiedad.built_area else float(propiedad.land_area) if propiedad.land_area else None,
             'precio': float(propiedad.price) if propiedad.price else None,
-            'titulo': f"{propiedad.title or 'Propiedad'} en {propiedad.department or ''}",
+            'titulo': f"{propiedad.title or 'Propiedad'} en {departamento_nombre or propiedad.department or ''}",
             'codigo': propiedad.code,
             'direccion': propiedad.real_address or propiedad.exact_address,
             'descripcion': propiedad.description,
+            'ubicacion_completa': propiedad.ubicacion_completa if hasattr(propiedad, 'ubicacion_completa') else f"{distrito_nombre}, {provincia_nombre}, {departamento_nombre}",
         }
         return propiedad_dict
     
@@ -1277,9 +1311,38 @@ class ListaPropiedadesView(ListView):
         # Departamentos (locales + externas + propifai)
         deptos_locales = queryset.exclude(departamento__isnull=True).exclude(departamento='').values_list('departamento', flat=True).distinct()
         deptos_externos = {prop.get('departamento') for prop in propiedades_externas if prop.get('departamento')}
-        deptos_propifai = {prop.get('departamento') for prop in propiedades_propifai_dict if prop.get('departamento')}
+        
+        # Para Propifai, usar nombres mapeados en lugar de índices
+        deptos_propifai = set()
+        for prop in propiedades_propifai_dict:
+            depto = prop.get('departamento')
+            depto_nombre = prop.get('departamento_nombre')
+            # Preferir el nombre mapeado, pero si no existe, usar el índice
+            if depto_nombre and depto_nombre != str(depto):
+                deptos_propifai.add(depto_nombre)
+            elif depto:
+                deptos_propifai.add(str(depto))
+        
         todos_deptos = sorted(set(list(deptos_locales) + list(deptos_externos) + list(deptos_propifai)))
         context['departamentos'] = todos_deptos
+        
+        # Distritos (locales + externas + propifai)
+        distritos_locales = queryset.exclude(distrito__isnull=True).exclude(distrito='').values_list('distrito', flat=True).distinct()
+        distritos_externos = {prop.get('distrito') for prop in propiedades_externas if prop.get('distrito')}
+        
+        # Para Propifai, usar nombres mapeados en lugar de índices
+        distritos_propifai = set()
+        for prop in propiedades_propifai_dict:
+            distrito = prop.get('distrito')
+            distrito_nombre = prop.get('distrito_nombre')
+            # Preferir el nombre mapeado, pero si no existe, usar el índice
+            if distrito_nombre and distrito_nombre != str(distrito):
+                distritos_propifai.add(distrito_nombre)
+            elif distrito:
+                distritos_propifai.add(str(distrito))
+        
+        todos_distritos = sorted(set(list(distritos_locales) + list(distritos_externos) + list(distritos_propifai)))
+        context['distritos'] = todos_distritos
         
         # Fuentes disponibles para filtro
         context['fuentes_disponibles'] = ['Local', 'Externa', 'Propify']
@@ -1441,6 +1504,28 @@ class DetallePropiedadView(DetailView):
         else:
             context['atributos_ordenados'] = []
         
+        return context
+
+
+# Vista para editar propiedad
+from django.views.generic.edit import UpdateView
+from .forms import PropiedadRawForm
+
+class EditarPropiedadView(UpdateView):
+    model = PropiedadRaw
+    form_class = PropiedadRawForm
+    template_name = 'ingestas/editar_propiedad.html'
+    context_object_name = 'propiedad'
+    
+    def get_success_url(self):
+        from django.urls import reverse
+        return reverse('ingestas:detalle_propiedad', kwargs={'pk': self.object.id})
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        propiedad = self.object
+        # Extraer imagen para mostrar en el template
+        context['imagen_url'] = extraer_imagen_propiedad(propiedad)
         return context
 
 

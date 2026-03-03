@@ -526,6 +526,16 @@
             </div>
 
             <div class="filter-group">
+                <label for="filter-distrito">Distrito</label>
+                <select class="form-select" id="filter-distrito" name="distrito">
+                    <option value="">Todos</option>
+                    {% for distrito in distritos %}
+                        <option value="{{ distrito }}">{{ distrito }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="filter-group">
                 <label>Fuentes</label>
                 <div class="filter-checkboxes">
                     <div class="form-check">
@@ -689,7 +699,11 @@
                             <div class="property-location">
                                 <i class="fas fa-map-marker-alt"></i>
                                 <span>
-                                    {% if propiedad.departamento or propiedad.provincia %}
+                                    {% if propiedad.ubicacion_completa %}
+                                        {{ propiedad.ubicacion_completa }}
+                                    {% elif propiedad.departamento_nombre or propiedad.provincia_nombre %}
+                                        {{ propiedad.departamento_nombre|default:"" }}{% if propiedad.provincia_nombre %}, {{ propiedad.provincia_nombre }}{% endif %}
+                                    {% elif propiedad.departamento or propiedad.provincia %}
                                         {{ propiedad.departamento|default:"" }}{% if propiedad.provincia %}, {{ propiedad.provincia }}{% endif %}
                                     {% else %}
                                         Ubicación no especificada
@@ -756,7 +770,7 @@
                                             <i class="fas fa-eye"></i>
                                             <span class="btn-text">Detalles</span>
                                         </a>
-                                        <a href="{% url 'admin:ingestas_propiedadraw_change' propiedad.id %}" class="btn btn-edit btn-sm" title="Editar propiedad">
+                                        <a href="{% url 'ingestas:editar_propiedad' propiedad.id %}" class="btn btn-edit btn-sm" title="Editar propiedad">
                                             <i class="fas fa-edit"></i>
                                             <span class="btn-text">Editar</span>
                                         </a>
