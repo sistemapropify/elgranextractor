@@ -498,68 +498,71 @@ function actualizarResumenACM() {
         return `US$ ${valor.toLocaleString('es-PE', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     }
     
-    // Generar HTML del resumen
+    // Generar HTML del resumen compacto - 2 filas: métricas + 3 tarjetas
     document.getElementById('resumenACM').innerHTML = `
-        <div class="col-md-3 col-6 mb-3">
-            <div class="estadistica-item">
-                <div class="estadistica-valor">${propiedades.length}</div>
-                <div class="estadistica-label">Propiedades Analizadas</div>
+        <!-- Fila 1: Métricas -->
+        <div class="row g-2 mb-3">
+            <div class="col-md-3 col-6">
+                <div class="estadistica-item p-2">
+                    <div class="estadistica-valor small">${propiedades.length}</div>
+                    <div class="estadistica-label small">Propiedades Analizadas</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-6">
+                <div class="estadistica-item p-2">
+                    <div class="estadistica-valor small">${formatearMoneda(min)}</div>
+                    <div class="estadistica-label small">Precio/m² Mínimo</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-6">
+                <div class="estadistica-item p-2">
+                    <div class="estadistica-valor small">${formatearMoneda(promedioPonderado)}</div>
+                    <div class="estadistica-label small">Precio/m² Promedio</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-6">
+                <div class="estadistica-item p-2">
+                    <div class="estadistica-valor small">${formatearMoneda(max)}</div>
+                    <div class="estadistica-label small">Precio/m² Máximo</div>
+                </div>
             </div>
         </div>
-        <div class="col-md-3 col-6 mb-3">
-            <div class="estadistica-item">
-                <div class="estadistica-valor">${formatearMoneda(min)}</div>
-                <div class="estadistica-label">Precio/m² Mínimo</div>
-            </div>
-        </div>
-        <div class="col-md-3 col-6 mb-3">
-            <div class="estadistica-item">
-                <div class="estadistica-valor">${formatearMoneda(promedioPonderado)}</div>
-                <div class="estadistica-label">Precio/m² Promedio</div>
-            </div>
-        </div>
-        <div class="col-md-3 col-6 mb-3">
-            <div class="estadistica-item">
-                <div class="estadistica-valor">${formatearMoneda(max)}</div>
-                <div class="estadistica-label">Precio/m² Máximo</div>
-            </div>
-        </div>
-        <div class="col-12 mt-3">
-            <div class="valor-estimado">
-                <div class="mb-2">ESTIMACIÓN PARA TU PROPIEDAD</div>
-                <div class="h4 mb-1">${formatearMoneda(valorComercial)}</div>
-                <div class="text-muted small mb-2">Valor Comercial (100%)</div>
-                
-                <div class="row mt-3">
-                    <div class="col-md-4">
-                        <div class="card border-0 bg-light">
-                            <div class="card-body text-center">
-                                <div class="h5 text-primary">${formatearMoneda(precioVentaSugerido)}</div>
-                                <div class="text-muted small">Precio Venta Sugerido</div>
-                                <div class="text-success small">94.99% del comercial</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="card border-0 bg-light">
-                            <div class="card-body text-center">
-                                <div class="h5 text-primary">${formatearMoneda(valorComercial)}</div>
-                                <div class="text-muted small">Valor Comercial</div>
-                                <div class="text-success small">100% (base)</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="card border-0 bg-light">
-                            <div class="card-body text-center">
-                                <div class="h5 text-primary">${formatearMoneda(valorRealizacionInmediata)}</div>
-                                <div class="text-muted small">Valor Realización Inmediata</div>
-                                <div class="text-success small">90.00% del comercial</div>
-                            </div>
-                        </div>
+        
+        <!-- Fila 2: 3 tarjetas (izquierda: precio venta sugerido, centro: estimación principal, derecha: valor realización inmediata) -->
+        <div class="row g-2">
+            <div class="col-md-4">
+                <div class="card border-0 bg-light h-100">
+                    <div class="card-body p-2 text-center d-flex flex-column justify-content-center">
+                        <div class="h6 text-primary mb-1">${formatearMoneda(precioVentaSugerido)}</div>
+                        <div class="small text-muted mb-1">Precio Venta Sugerido</div>
+                        <div class="small text-success">94.99% del comercial</div>
                     </div>
                 </div>
-                <div class="mt-3 text-muted small">
+            </div>
+            <div class="col-md-4">
+                <div class="card border-0 bg-success bg-opacity-90 text-white h-100">
+                    <div class="card-body p-3 text-center d-flex flex-column justify-content-center">
+                        <div class="small mb-1">ESTIMACIÓN PARA TU PROPIEDAD</div>
+                        <div class="h4 mb-1">${formatearMoneda(valorComercial)}</div>
+                        <div class="small opacity-75">Valor Comercial (100%)</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card border-0 bg-light h-100">
+                    <div class="card-body p-2 text-center d-flex flex-column justify-content-center">
+                        <div class="h6 text-primary mb-1">${formatearMoneda(valorRealizacionInmediata)}</div>
+                        <div class="small text-muted mb-1">Valor Realización Inmediata</div>
+                        <div class="small text-success">90.00% del comercial</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Nota al pie -->
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="text-muted small">
                     Basado en ${metros.toFixed(0)} m² y ${propiedades.length} propiedades comparables.
                 </div>
             </div>
