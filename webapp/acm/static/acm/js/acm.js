@@ -8,12 +8,13 @@ let marcadoresComparables = new Map(); // id -> {marker, data, seleccionado}
 let propiedadesSeleccionadas = new Map(); // id -> data
 let propiedadesEncontradas = []; // Todas las propiedades encontradas en la búsqueda
 
-// URLs de iconos (reutilizar del proyecto existente)
+// URLs de iconos - usar iconos más distintivos para diferenciar fuentes
 const ICONO_PRINCIPAL = 'https://maps.google.com/mapfiles/ms/icons/yellow-dot.png';
 const ICONO_COMPARABLE = 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png';
 const ICONO_SELECCIONADO = 'https://maps.google.com/mapfiles/ms/icons/red-dot.png';
-const ICONO_PROPIFAI = 'https://maps.google.com/mapfiles/ms/icons/green-dot.png';
-const ICONO_PROPIFAI_SELECCIONADO = 'https://maps.google.com/mapfiles/ms/icons/orange-dot.png';
+// Para Propifai usar iconos diferentes: morado y rosa para mejor contraste
+const ICONO_PROPIFAI = 'https://maps.google.com/mapfiles/ms/icons/purple-dot.png';
+const ICONO_PROPIFAI_SELECCIONADO = 'https://maps.google.com/mapfiles/ms/icons/pink-dot.png';
 
 // Inicializar mapa ACM
 function initACMMap() {
@@ -280,36 +281,52 @@ function crearMarcadorComparable(propiedad) {
     // Determinar icono según la fuente
     let iconoUrl = ICONO_COMPARABLE;
     let iconoSeleccionadoUrl = ICONO_SELECCIONADO;
+    let esPropifai = propiedad.es_propify || propiedad.fuente === 'propifai';
     
-    if (propiedad.es_propify || propiedad.fuente === 'propifai') {
+    if (esPropifai) {
         iconoUrl = ICONO_PROPIFAI;
         iconoSeleccionadoUrl = ICONO_PROPIFAI_SELECCIONADO;
     }
     
+    // Tamaño diferente para Propifai (más grande para destacar)
+    const tamanoIcono = esPropifai ? 36 : 32;
+    
     const marker = new google.maps.Marker({
         position: { lat: propiedad.lat, lng: propiedad.lng },
         map: acmMap,
-        title: `${propiedad.tipo} - ${propiedad.distrito}${propiedad.es_propify ? ' (Propifai)' : ''}`,
+        title: `${propiedad.tipo} - ${propiedad.distrito}${esPropifai ? ' (PROPIFAI)' : ' (Local)'}`,
         icon: {
             url: iconoUrl,
-            scaledSize: new google.maps.Size(32, 32)
+            scaledSize: new google.maps.Size(tamanoIcono, tamanoIcono)
         },
+        // Agregar etiqueta visual para Propifai
+        label: esPropifai ? {
+            text: "P",
+            color: "white",
+            fontSize: "12px",
+            fontWeight: "bold"
+        } : null
     });
 
-    // InfoWindow al hacer clic
-    const fuenteTexto = propiedad.es_propify ? ' (Propifai)' : '';
+    // InfoWindow al hacer clic - hacer más claro la fuente
+    const fuenteTexto = esPropifai ? '<span style="color: purple; font-weight: bold;">PROPIFAI</span>' : '<span style="color: blue; font-weight: bold;">Local</span>';
     const infoWindow = new google.maps.InfoWindow({
         content: `
             <div class="map-info-window">
-                <h6>${propiedad.tipo}${fuenteTexto}</h6>
-                <p class="mb-1"><strong>${formatearPrecio(propiedad.precio)}</strong></p>
-                <p class="mb-1">${propiedad.metros_construccion ? 'Construcción: ' + propiedad.metros_construccion + ' m²' : ''}</p>
-                <p class="mb-1">${propiedad.metros_terreno ? 'Terreno: ' + propiedad.metros_terreno + ' m²' : ''}</p>
-                <p class="mb-1">Distancia: ${propiedad.distancia_metros} m</p>
-                <p class="mb-1 small text-muted">${propiedad.distrito}, ${propiedad.provincia}</p>
-                <button class="btn btn-sm btn-primary mt-1" onclick="toggleSeleccionarPropiedad(${propiedad.id})">
-                    ${propiedadesSeleccionadas.has(propiedad.id) ? 'Deseleccionar' : 'Seleccionar'}
-                </button>
+                <div style="border-left: 4px solid ${esPropifai ? 'purple' : 'blue'}; padding-left: 8px;">
+                    <h6 style="margin: 0 0 5px 0;">${propiedad.tipo}</h6>
+                    <div style="font-size: 12px; color: #666; margin-bottom: 8px;">
+                        Fuente: ${fuenteTexto}
+                    </div>
+                    <p class="mb-1"><strong>${formatearPrecio(propiedad.precio)}</strong></p>
+                    <p class="mb-1">${propiedad.metros_construccion ? 'Construcción: ' + propiedad.metros_construccion + ' m²' : ''}</p>
+                    <p class="mb-1">${propiedad.metros_terreno ? 'Terreno: ' + propiedad.metros_terreno + ' m²' : ''}</p>
+                    <p class="mb-1">Distancia: ${propiedad.distancia_metros} m</p>
+                    <p class="mb-1 small text-muted">${propiedad.distrito}, ${propiedad.provincia}</p>
+                    <button class="btn btn-sm btn-primary mt-1" onclick="toggleSeleccionarPropiedad(${propiedad.id})">
+                        ${propiedadesSeleccionadas.has(propiedad.id) ? 'Deseleccionar' : 'Seleccionar'}
+                    </button>
+                </div>
             </div>
         `,
     });
@@ -326,6 +343,8 @@ function crearMarcadorComparable(propiedad) {
         infoWindow,
         iconoUrl,
         iconoSeleccionadoUrl,
+        esPropifai,
+        tamanoIcono,
     });
 
     // Doble clic para seleccionar/deseleccionar
@@ -339,12 +358,25 @@ function toggleSeleccionarPropiedad(id) {
     const marcadorInfo = marcadoresComparables.get(id);
     if (!marcadorInfo) return;
 
+    // Determinar tamaño del icono según si es Propifai
+    const tamanoIcono = marcadorInfo.tamanoIcono || 32;
+    const tamanoIconoSeleccionado = marcadorInfo.esPropifai ? 40 : 36; // Más grande cuando está seleccionado
+
     if (marcadorInfo.seleccionado) {
         // Deseleccionar - usar icono normal según la fuente
         marcadorInfo.marker.setIcon({
             url: marcadorInfo.iconoUrl || ICONO_COMPARABLE,
-            scaledSize: new google.maps.Size(32, 32)
+            scaledSize: new google.maps.Size(tamanoIcono, tamanoIcono)
         });
+        // Restaurar etiqueta si es Propifai
+        if (marcadorInfo.esPropifai) {
+            marcadorInfo.marker.setLabel({
+                text: "P",
+                color: "white",
+                fontSize: "12px",
+                fontWeight: "bold"
+            });
+        }
         marcadorInfo.seleccionado = false;
         propiedadesSeleccionadas.delete(id);
         
@@ -357,8 +389,10 @@ function toggleSeleccionarPropiedad(id) {
         // Seleccionar - usar icono de seleccionado según la fuente
         marcadorInfo.marker.setIcon({
             url: marcadorInfo.iconoSeleccionadoUrl || ICONO_SELECCIONADO,
-            scaledSize: new google.maps.Size(32, 32)
+            scaledSize: new google.maps.Size(tamanoIconoSeleccionado, tamanoIconoSeleccionado)
         });
+        // Quitar etiqueta cuando está seleccionado (el icono más grande ya indica selección)
+        marcadorInfo.marker.setLabel(null);
         marcadorInfo.seleccionado = true;
         propiedadesSeleccionadas.set(id, marcadorInfo.data);
         
