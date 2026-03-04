@@ -12,6 +12,8 @@ let propiedadesEncontradas = []; // Todas las propiedades encontradas en la bús
 const ICONO_PRINCIPAL = 'https://maps.google.com/mapfiles/ms/icons/yellow-dot.png';
 const ICONO_COMPARABLE = 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png';
 const ICONO_SELECCIONADO = 'https://maps.google.com/mapfiles/ms/icons/red-dot.png';
+const ICONO_PROPIFAI = 'https://maps.google.com/mapfiles/ms/icons/green-dot.png';
+const ICONO_PROPIFAI_SELECCIONADO = 'https://maps.google.com/mapfiles/ms/icons/orange-dot.png';
 
 // Inicializar mapa ACM
 function initACMMap() {
@@ -275,25 +277,36 @@ async function buscarComparables() {
 
 // Crear marcador para propiedad comparable
 function crearMarcadorComparable(propiedad) {
+    // Determinar icono según la fuente
+    let iconoUrl = ICONO_COMPARABLE;
+    let iconoSeleccionadoUrl = ICONO_SELECCIONADO;
+    
+    if (propiedad.es_propify || propiedad.fuente === 'propifai') {
+        iconoUrl = ICONO_PROPIFAI;
+        iconoSeleccionadoUrl = ICONO_PROPIFAI_SELECCIONADO;
+    }
+    
     const marker = new google.maps.Marker({
         position: { lat: propiedad.lat, lng: propiedad.lng },
         map: acmMap,
-        title: `${propiedad.tipo} - ${propiedad.distrito}`,
+        title: `${propiedad.tipo} - ${propiedad.distrito}${propiedad.es_propify ? ' (Propifai)' : ''}`,
         icon: {
-            url: ICONO_COMPARABLE,
+            url: iconoUrl,
             scaledSize: new google.maps.Size(32, 32)
         },
     });
 
     // InfoWindow al hacer clic
+    const fuenteTexto = propiedad.es_propify ? ' (Propifai)' : '';
     const infoWindow = new google.maps.InfoWindow({
         content: `
             <div class="map-info-window">
-                <h6>${propiedad.tipo}</h6>
+                <h6>${propiedad.tipo}${fuenteTexto}</h6>
                 <p class="mb-1"><strong>${formatearPrecio(propiedad.precio)}</strong></p>
                 <p class="mb-1">${propiedad.metros_construccion ? 'Construcción: ' + propiedad.metros_construccion + ' m²' : ''}</p>
                 <p class="mb-1">${propiedad.metros_terreno ? 'Terreno: ' + propiedad.metros_terreno + ' m²' : ''}</p>
                 <p class="mb-1">Distancia: ${propiedad.distancia_metros} m</p>
+                <p class="mb-1 small text-muted">${propiedad.distrito}, ${propiedad.provincia}</p>
                 <button class="btn btn-sm btn-primary mt-1" onclick="toggleSeleccionarPropiedad(${propiedad.id})">
                     ${propiedadesSeleccionadas.has(propiedad.id) ? 'Deseleccionar' : 'Seleccionar'}
                 </button>
@@ -311,6 +324,8 @@ function crearMarcadorComparable(propiedad) {
         data: propiedad,
         seleccionado: false,
         infoWindow,
+        iconoUrl,
+        iconoSeleccionadoUrl,
     });
 
     // Doble clic para seleccionar/deseleccionar
@@ -325,9 +340,9 @@ function toggleSeleccionarPropiedad(id) {
     if (!marcadorInfo) return;
 
     if (marcadorInfo.seleccionado) {
-        // Deseleccionar
+        // Deseleccionar - usar icono normal según la fuente
         marcadorInfo.marker.setIcon({
-            url: ICONO_COMPARABLE,
+            url: marcadorInfo.iconoUrl || ICONO_COMPARABLE,
             scaledSize: new google.maps.Size(32, 32)
         });
         marcadorInfo.seleccionado = false;
@@ -339,9 +354,9 @@ function toggleSeleccionarPropiedad(id) {
         // Eliminar tarjeta
         eliminarTarjetaPropiedad(id);
     } else {
-        // Seleccionar
+        // Seleccionar - usar icono de seleccionado según la fuente
         marcadorInfo.marker.setIcon({
-            url: ICONO_SELECCIONADO,
+            url: marcadorInfo.iconoSeleccionadoUrl || ICONO_SELECCIONADO,
             scaledSize: new google.maps.Size(32, 32)
         });
         marcadorInfo.seleccionado = true;
