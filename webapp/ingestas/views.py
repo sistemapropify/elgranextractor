@@ -672,8 +672,8 @@ def vista_propiedades_propify(request):
             'banios': propiedad.bathrooms,
             'area_construida': float(propiedad.built_area) if propiedad.built_area else None,
             'area_terreno': float(propiedad.land_area) if propiedad.land_area else None,
-            'primera_imagen': None,
-            'imagen_principal': None,
+            'primera_imagen': propiedad.imagen_url,  # Usar la propiedad imagen_url del modelo
+            'imagen_principal': propiedad.primera_imagen_url,  # Usar primera_imagen_url para imagen principal
             'url_propiedad': None,
             'fuente': 'Propify DB',
             'fecha_publicacion': propiedad.created_at,
@@ -1230,8 +1230,8 @@ class ListaPropiedadesView(ListView):
             'banios': propiedad.bathrooms,
             'area_construida': float(propiedad.built_area) if propiedad.built_area else None,
             'area_terreno': float(propiedad.land_area) if propiedad.land_area else None,
-            'primera_imagen': None,  # Propifai no tiene imágenes en este modelo básico
-            'imagen_principal': None,
+            'primera_imagen': propiedad.imagen_url,  # Usar la propiedad imagen_url del modelo
+            'imagen_principal': propiedad.primera_imagen_url,  # Usar primera_imagen_url para imagen principal
             'url_propiedad': None,
             'fuente': 'Propify DB',
             'fecha_publicacion': propiedad.created_at,

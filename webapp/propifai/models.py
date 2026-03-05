@@ -157,9 +157,149 @@ class PropifaiProperty(models.Model):
         # Si no hay nombres mapeados, mostrar los índices
         return f"Distrito {self.district}, Provincia {self.province}, Departamento {self.department}"
     
+    @property
+    def imagen_url(self):
+        """
+        Devuelve la URL de la imagen de la propiedad desde Azure Storage.
+        Las imágenes se almacenan en: https://propifymedia01.blob.core.windows.net/media/{code}.jpg
+        """
+        if not self.code:
+            return None
+        
+        # Formato de URL base proporcionado por el usuario
+        base_url = "https://propifymedia01.blob.core.windows.net/media"
+        
+        # Intentar con diferentes extensiones comunes
+        extensions = ['.jpg', '.jpeg', '.png', '.webp']
+        
+        # Primero intentar con el código exacto
+        for ext in extensions:
+            # Si el código ya tiene extensión, usarlo directamente
+            if self.code.lower().endswith(tuple(extensions)):
+                return f"{base_url}/{self.code}"
+        
+        # Si no tiene extensión, probar con extensiones
+        for ext in extensions:
+            potential_url = f"{base_url}/{self.code}{ext}"
+            # Nota: En una implementación real, podríamos verificar si el blob existe
+            # pero para el template basta con devolver la URL
+            return potential_url
+        
+        # Si no hay código válido, devolver None
+        return None
+    
+    @property
+    def imagenes_relacionadas(self):
+        """
+        Devuelve las imágenes relacionadas con esta propiedad.
+        """
+        # Importar aquí para evitar import circular
+        from .models import PropertyImage
+        return PropertyImage.objects.filter(property_id=self.id).order_by('id')
+    
+    @property
+    def primera_imagen_url(self):
+        """
+        Devuelve la URL de la primera imagen asociada a esta propiedad.
+        Usa la tabla property_images relacionada.
+        """
+        # Obtener la primera imagen relacionada
+        primera_imagen = self.imagenes_relacionadas.first()
+        if primera_imagen and primera_imagen.image:
+            # Convertir ruta relativa a URL completa de Azure Storage
+            return self._convertir_a_url_azure(primera_imagen.image)
+        return None
+    
+    def _convertir_a_url_azure(self, ruta_relativa):
+        """
+        Convierte una ruta relativa de imagen a URL completa de Azure Storage.
+        Ejemplo: 'properties/images/archivo.jpg' ->
+                 'https://propifymedia01.blob.core.windows.net/media/properties/images/archivo.jpg'
+        """
+        if not ruta_relativa:
+            return None
+        
+        # Si ya es una URL completa, devolverla tal cual
+        if ruta_relativa.startswith(('http://', 'https://')):
+            return ruta_relativa
+        
+        # Base URL de Azure Storage proporcionada por el usuario
+        base_url = "https://propifymedia01.blob.core.windows.net/media"
+        
+        # Asegurar que la ruta no comience con /
+        if ruta_relativa.startswith('/'):
+            ruta_relativa = ruta_relativa[1:]
+        
+        # Codificar cada segmento de la ruta para manejar caracteres especiales
+        import urllib.parse
+        parts = ruta_relativa.split('/')
+        encoded_parts = [urllib.parse.quote(part) for part in parts]
+        encoded_path = '/'.join(encoded_parts)
+        
+        # Construir URL completa
+        return f"{base_url}/{encoded_path}"
+    
+    # Sobrescribir la propiedad imagen_url para usar la primera imagen real
+    @property
+    def imagen_url(self):
+        """
+        Devuelve la URL de la imagen de la propiedad.
+        Prioridad: 1) Imagen de property_images, 2) URL generada desde código.
+        """
+        # Primero intentar con la imagen real de la tabla property_images
+        url_real = self.primera_imagen_url
+        if url_real:
+            return url_real
+        
+        # Si no hay imagen real, usar la URL generada desde el código
+        return self._imagen_url_generada()
+    
+    def _imagen_url_generada(self):
+        """Método privado para generar URL desde código (lógica anterior)."""
+        if not self.code:
+            return None
+        
+        base_url = "https://propifymedia01.blob.core.windows.net/media"
+        extensions = ['.jpg', '.jpeg', '.png', '.webp']
+        
+        # Primero intentar con el código exacto
+        for ext in extensions:
+            if self.code.lower().endswith(tuple(extensions)):
+                return f"{base_url}/{self.code}"
+        
+        # Si no tiene extensión, probar con extensiones
+        for ext in extensions:
+            potential_url = f"{base_url}/{self.code}{ext}"
+            return potential_url
+        
+        return None
+    
     class Meta:
         db_table = 'properties'
         managed = False  # La tabla ya existe en la base de datos
         
     def __str__(self):
         return f"{self.code} - {self.real_address or 'Sin dirección'}"
+
+
+class PropertyImage(models.Model):
+    """
+    Modelo para imágenes de propiedades en la base de datos Propifai.
+    Tabla: property_images
+    """
+    # Campos principales - basados en la información del usuario
+    id = models.BigIntegerField(primary_key=True)
+    property_id = models.BigIntegerField(db_column='property_id')  # Columna para relación con properties
+    image = models.CharField(max_length=500, blank=True, null=True, db_column='image')  # URL de la imagen
+    
+    # Otros campos comunes (ajustar si existen)
+    # order = models.IntegerField(default=0, blank=True, null=True, db_column='order')
+    # created_at = models.DateTimeField(blank=True, null=True, db_column='created_at')
+    # updated_at = models.DateTimeField(blank=True, null=True, db_column='updated_at')
+    
+    class Meta:
+        db_table = 'property_images'
+        managed = False  # La tabla ya existe en la base de datos
+        
+    def __str__(self):
+        return f"Imagen {self.id} para propiedad {self.property_id}"

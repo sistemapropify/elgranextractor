@@ -93,25 +93,104 @@ def buscar_comparables(request):
             from propifai.models import PropifaiProperty
             from propifai.mapeo_ubicaciones import DEPARTAMENTOS, PROVINCIAS, DISTRITOS
             
-            # Obtener propiedades de Propifai con coordenadas
-            propiedades_propifai = PropifaiProperty.objects.using('propifai').exclude(
-                latitude__isnull=True
-            ).exclude(
-                longitude__isnull=True
-            )
+            # Diccionario de coordenadas aproximadas por distrito (para Arequipa y Lima principalmente)
+            # Estas son coordenadas centrales aproximadas de distritos comunes
+            COORDENADAS_APROXIMADAS = {
+                # Arequipa
+                'Yanahuara': (-16.3889, -71.5350),
+                'Cayma': (-16.4000, -71.5300),
+                'Cerro Colorado': (-16.3800, -71.5200),
+                'Sachaca': (-16.4200, -71.5400),
+                'Hunter': (-16.4100, -71.5250),
+                'Mariano Melgar': (-16.4050, -71.5150),
+                'Miraflores': (-16.3950, -71.5450),
+                'Paucarpata': (-16.4300, -71.5100),
+                'Sabandia': (-16.4400, -71.5500),
+                'Socabaya': (-16.4500, -71.5200),
+                'Tiabaya': (-16.4600, -71.5300),
+                'Alto Selva Alegre': (-16.3850, -71.5100),
+                'Jacobo Hunter': (-16.4150, -71.5200),
+                'Jose Luis Bustamante y Rivero': (-16.3900, -71.5000),
+                # Lima
+                'Miraflores': (-12.1189, -77.0339),
+                'San Isidro': (-12.0975, -77.0428),
+                'San Borja': (-12.1000, -77.0083),
+                'Surco': (-12.1333, -77.0000),
+                'La Molina': (-12.0833, -76.9500),
+                'Jesus Maria': (-12.0833, -77.0500),
+                'Lince': (-12.0833, -77.0333),
+                'Magdalena': (-12.1000, -77.0667),
+                'Pueblo Libre': (-12.0667, -77.0667),
+                'San Miguel': (-12.0833, -77.1000),
+                'Callao': (-12.0500, -77.1333),
+            }
+            
+            # Obtener TODAS las propiedades de Propifai primero
+            # No podemos filtrar por latitude/longitude en la consulta porque son propiedades Python
+            propiedades_propifai = PropifaiProperty.objects.using('propifai').all()
             
             # Filtrar por tipo si se especifica
+            # Nota: PropifaiProperty no tiene campo property_type, usamos title
             if tipo_propiedad:
                 propiedades_propifai = propiedades_propifai.filter(
-                    Q(property_type__icontains=tipo_propiedad) |
                     Q(title__icontains=tipo_propiedad)
                 )
             
-            propiedades_propifai_list = list(propiedades_propifai)
-            print(f"DEBUG ACM: Obtenidas {len(propiedades_propifai_list)} propiedades de Propifai")
+            # Convertir a lista y procesar
+            todas_propifai = list(propiedades_propifai)
+            propiedades_propifai_list = []
+            propiedades_sin_coordenadas = []
+            
+            for prop in todas_propifai:
+                # Verificar si tiene coordenadas válidas usando las propiedades latitude/longitude
+                if prop.latitude is not None and prop.longitude is not None:
+                    propiedades_propifai_list.append(prop)
+                else:
+                    # Intentar obtener coordenadas aproximadas por distrito
+                    distrito_nombre = None
+                    if prop.district:
+                        # Obtener nombre del distrito desde el mapeo
+                        distrito_id = str(prop.district)
+                        distrito_nombre = DISTRITOS.get(distrito_id, distrito_id)
+                    
+                    # Buscar coordenadas aproximadas para este distrito
+                    if distrito_nombre and distrito_nombre in COORDENADAS_APROXIMADAS:
+                        # Asignar coordenadas aproximadas temporalmente (no modificar el objeto original)
+                        prop_lat, prop_lng = COORDENADAS_APROXIMADAS[distrito_nombre]
+                        # Crear una copia del objeto con coordenadas aproximadas
+                        # Usamos un objeto simple con los atributos necesarios
+                        class PropiedadConCoordenadas:
+                            def __init__(self, original, lat, lng):
+                                self.__dict__ = original.__dict__.copy()
+                                self._latitude = lat
+                                self._longitude = lng
+                            
+                            @property
+                            def latitude(self):
+                                return self._latitude
+                            
+                            @property
+                            def longitude(self):
+                                return self._longitude
+                        
+                        prop_con_coords = PropiedadConCoordenadas(prop, prop_lat, prop_lng)
+                        propiedades_propifai_list.append(prop_con_coords)
+                        propiedades_sin_coordenadas.append((prop.id, distrito_nombre))
+                    else:
+                        # No podemos asignar coordenadas, omitir esta propiedad
+                        pass
+            
+            print(f"DEBUG ACM: Obtenidas {len(todas_propifai)} propiedades de Propifai")
+            print(f"DEBUG ACM: {len(propiedades_propifai_list)} con coordenadas (reales o aproximadas)")
+            if propiedades_sin_coordenadas:
+                print(f"DEBUG ACM: {len(propiedades_sin_coordenadas)} propiedades con coordenadas aproximadas por distrito")
+                for prop_id, distrito in propiedades_sin_coordenadas[:3]:  # Mostrar solo 3
+                    print(f"  Propiedad {prop_id}: coordenadas aproximadas para distrito '{distrito}'")
             
         except Exception as e:
             print(f"Error obteniendo propiedades de Propifai para ACM: {e}")
+            import traceback
+            traceback.print_exc()
         
         # Combinar ambas listas
         todas_propiedades = propiedades_list + propiedades_propifai_list
@@ -188,18 +267,43 @@ def buscar_comparables(request):
                 # Calcular precio por m² aproximado para Propifai
                 precio_m2 = None
                 precio_m2_final = None
-                if prop.price and prop.built_area:
+                
+                # Intentar calcular con built_area primero, luego land_area como alternativa
+                area_para_calculo = None
+                if prop.built_area and float(prop.built_area) > 0:
+                    area_para_calculo = float(prop.built_area)
+                elif prop.land_area and float(prop.land_area) > 0:
+                    area_para_calculo = float(prop.land_area)
+                
+                if prop.price and area_para_calculo:
                     try:
-                        precio_m2 = float(prop.price) / float(prop.built_area)
+                        precio_m2 = float(prop.price) / area_para_calculo
+                        precio_m2_final = precio_m2  # Para Propifai, precio_m2_final es igual
                     except (ValueError, ZeroDivisionError):
                         pass
                 
                 # Crear diccionario para propiedad Propifai
+                # Determinar tipo de propiedad: usar título o valor por defecto
+                tipo_propiedad_valor = 'Propiedad'
+                if hasattr(prop, 'tipo_propiedad'):
+                    tipo_propiedad_valor = prop.tipo_propiedad or 'Propiedad'
+                elif prop.title:
+                    # Intentar extraer tipo del título
+                    titulo_lower = prop.title.lower()
+                    if any(tipo in titulo_lower for tipo in ['casa', 'house']):
+                        tipo_propiedad_valor = 'Casa'
+                    elif any(tipo in titulo_lower for tipo in ['departamento', 'apartamento', 'apartment']):
+                        tipo_propiedad_valor = 'Departamento'
+                    elif any(tipo in titulo_lower for tipo in ['terreno', 'land', 'lote']):
+                        tipo_propiedad_valor = 'Terreno'
+                    elif any(tipo in titulo_lower for tipo in ['oficina', 'office', 'local']):
+                        tipo_propiedad_valor = 'Oficina'
+                
                 propiedad_dict = {
                     'id': prop.id,
                     'lat': prop_lat,
                     'lng': prop_lng,
-                    'tipo': prop.property_type or 'No especificado',
+                    'tipo': tipo_propiedad_valor,
                     'precio': float(prop.price) if prop.price else None,
                     'precio_final': float(prop.price) if prop.price else None,  # Mismo precio
                     'metros_construccion': float(prop.built_area) if prop.built_area else None,
@@ -210,7 +314,7 @@ def buscar_comparables(request):
                     'distrito': distrito_nombre,
                     'provincia': provincia_nombre,
                     'departamento': departamento_nombre,
-                    'imagen_url': None,  # Propifai no tiene imágenes en este modelo básico
+                    'imagen_url': prop.imagen_url,  # Usar la propiedad imagen_url del modelo
                     'precio_m2': precio_m2,
                     'precio_m2_final': precio_m2_final,
                     'distancia_metros': round(distancia, 2),
