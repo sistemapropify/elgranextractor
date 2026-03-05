@@ -39,10 +39,33 @@ class MapeoFuente(models.Model):
 
 class PropiedadRaw(models.Model):
     """Modelo base para propiedades inmobiliarias con campos fijos y dinámicos."""
+    
+    # Opciones para tipo de propiedad (estandarizadas)
+    TIPO_PROPIEDAD_CHOICES = [
+        ('Terreno', 'Terreno'),
+        ('Casa', 'Casa'),
+        ('Departamento', 'Departamento'),
+        ('Oficina', 'Oficina'),
+        ('Otros', 'Otros'),
+    ]
+    
     # Campos base fijos
     fuente_excel = models.CharField(max_length=100)
     fecha_ingesta = models.DateTimeField(auto_now_add=True)
-    tipo_propiedad = models.CharField(max_length=100, null=True, blank=True)
+    tipo_propiedad = models.CharField(
+        max_length=20,
+        choices=TIPO_PROPIEDAD_CHOICES,
+        null=True,
+        blank=True,
+        verbose_name='Tipo de propiedad'
+    )
+    subtipo_propiedad = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        verbose_name='Subtipo de propiedad',
+        help_text='Ej: Casa de campo, Departamento dúplex, Oficina ejecutiva, etc.'
+    )
     precio_usd = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
     descripcion = models.TextField(null=True, blank=True)
     # Campos según Excel inmobiliaria-remax-10-febrero-2026
@@ -61,6 +84,13 @@ class PropiedadRaw(models.Model):
     agente_inmobiliario = models.CharField(max_length=200, null=True, blank=True)
     imagenes_propiedad = models.TextField(null=True, blank=True, verbose_name='Imágenes de la Propiedad', db_column='imagenes_de_la_propiedad')
     id_propiedad = models.CharField(max_length=50, null=True, blank=True, verbose_name='ID de la Propiedad', db_column='id_de_la_propiedad')
+    identificador_externo = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        verbose_name='Identificador Externo',
+        help_text='ID de la propiedad en la base de datos original de la fuente'
+    )
     fecha_publicacion = models.DateField(null=True, blank=True, verbose_name='Fecha de Publicación', db_column='fecha_de_publicacion')
     antiguedad = models.CharField(max_length=50, null=True, blank=True, verbose_name='Antigüedad')
     servicio_agua = models.CharField(max_length=50, null=True, blank=True, db_column='servicio_de_agua')
