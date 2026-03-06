@@ -22,6 +22,8 @@ function initACMMap() {
     acmMap = new google.maps.Map(document.getElementById('acmMap'), {
         center: defaultCenter,
         zoom: 13,
+        scrollwheel: true,
+        gestureHandling: 'greedy', // Permite scroll y gestos incluso con marcadores/interacciones
         styles: [
             {
                 featureType: "poi",
@@ -368,7 +370,7 @@ function toggleSeleccionarPropiedad(id) {
             url: marcadorInfo.iconoUrl || ICONO_COMPARABLE,
             scaledSize: new google.maps.Size(tamanoIcono, tamanoIcono)
         });
-        // Restaurar etiqueta si es Propifai
+        // Restaurar etiqueta original: para Propifai "P", para locales null
         if (marcadorInfo.esPropifai) {
             marcadorInfo.marker.setLabel({
                 text: "P",
@@ -376,6 +378,8 @@ function toggleSeleccionarPropiedad(id) {
                 fontSize: "12px",
                 fontWeight: "bold"
             });
+        } else {
+            marcadorInfo.marker.setLabel(null);
         }
         marcadorInfo.seleccionado = false;
         propiedadesSeleccionadas.delete(id);
@@ -391,8 +395,7 @@ function toggleSeleccionarPropiedad(id) {
             url: marcadorInfo.iconoSeleccionadoUrl || ICONO_SELECCIONADO,
             scaledSize: new google.maps.Size(tamanoIconoSeleccionado, tamanoIconoSeleccionado)
         });
-        // Quitar etiqueta cuando está seleccionado (el icono más grande ya indica selección)
-        marcadorInfo.marker.setLabel(null);
+        // Mantener etiqueta (será actualizada con número por actualizarNumerosSeleccionados)
         marcadorInfo.seleccionado = true;
         propiedadesSeleccionadas.set(id, marcadorInfo.data);
         
@@ -400,8 +403,9 @@ function toggleSeleccionarPropiedad(id) {
         crearTarjetaPropiedad(marcadorInfo.data);
     }
 
-    // Actualizar contadores y resumen
+    // Actualizar contadores, números y resumen
     actualizarContadores();
+    actualizarNumerosSeleccionados();
     actualizarResumenACM();
 }
 
@@ -451,6 +455,12 @@ function crearTarjetaPropiedad(propiedad) {
         toggleSeleccionarPropiedad(propiedad.id);
     });
     
+    // Botón para ver detalles
+    const btnDetalle = clone.querySelector('.btn-detalle');
+    btnDetalle.addEventListener('click', () => {
+        mostrarDetallePropiedad(propiedad);
+    });
+    
     // Insertar en contenedor
     const container = document.getElementById('comparablesContainer');
     const sinSeleccionados = document.getElementById('sinSeleccionados');
@@ -481,6 +491,32 @@ function eliminarTarjetaPropiedad(id) {
 // Actualizar contadores
 function actualizarContadores() {
     document.getElementById('contadorSeleccionados').textContent = propiedadesSeleccionadas.size;
+}
+
+// Actualizar números secuenciales en marcadores y tarjetas
+function actualizarNumerosSeleccionados() {
+    let index = 1;
+    for (const [id, data] of propiedadesSeleccionadas) {
+        const marcadorInfo = marcadoresComparables.get(id);
+        if (marcadorInfo) {
+            // Actualizar etiqueta del marcador con el número
+            marcadorInfo.marker.setLabel({
+                text: index.toString(),
+                color: "white",
+                fontSize: "14px",
+                fontWeight: "bold"
+            });
+        }
+        // Actualizar tarjeta (si existe)
+        const tarjeta = document.getElementById(`propiedad-${id}`);
+        if (tarjeta) {
+            const numeroElement = tarjeta.querySelector('.propiedad-numero');
+            if (numeroElement) {
+                numeroElement.textContent = `#${index}`;
+            }
+        }
+        index++;
+    }
 }
 
 // Actualizar resumen ACM
@@ -735,6 +771,63 @@ function mostrarToast(tipo, mensaje) {
     toastElement.addEventListener('hidden.bs.toast', () => {
         toastElement.remove();
     });
+}
+
+// Mostrar detalles de propiedad en modal
+function mostrarDetallePropiedad(propiedad) {
+    // Llenar imagen
+    const imagen = document.getElementById('detalle-imagen');
+    if (imagen) {
+        imagen.src = propiedad.imagen_url || '/static/acm/img/no-image.svg';
+    }
+    
+    // Llenar información básica
+    document.getElementById('detalle-tipo').textContent = propiedad.tipo || 'No especificado';
+    document.getElementById('detalle-estado').textContent = propiedad.estado || 'En Publicación';
+    document.getElementById('detalle-ubicacion').textContent =
+        `${propiedad.distrito || ''}, ${propiedad.provincia || ''}, ${propiedad.departamento || ''}`.trim();
+    document.getElementById('detalle-distancia').textContent =
+        propiedad.distancia_metros ? `${propiedad.distancia_metros.toFixed(0)} metros` : 'No disponible';
+    document.getElementById('detalle-fuente').textContent = propiedad.fuente === 'propifai' ? 'Propifai' : 'Local';
+    
+    // Llenar características
+    document.getElementById('detalle-precio').textContent = formatearPrecio(propiedad.precio);
+    document.getElementById('detalle-precio-final').textContent = formatearPrecio(propiedad.precio_final);
+    document.getElementById('detalle-precio-m2').textContent =
+        propiedad.precio_m2_final || propiedad.precio_m2 ?
+        `US$ ${(propiedad.precio_m2_final || propiedad.precio_m2).toFixed(2)}/m²` : 'No disponible';
+    
+    document.getElementById('detalle-area-construccion').textContent =
+        propiedad.metros_construccion ? `${propiedad.metros_construccion} m²` : 'No disponible';
+    document.getElementById('detalle-area-terreno').textContent =
+        propiedad.metros_terreno ? `${propiedad.metros_terreno} m²` : 'No disponible';
+    document.getElementById('detalle-habitaciones').textContent =
+        propiedad.habitaciones ? propiedad.habitaciones : 'No disponible';
+    document.getElementById('detalle-banos').textContent =
+        propiedad.baños ? propiedad.baños : 'No disponible';
+    
+    // Llenar información adicional
+    const adicionalDiv = document.getElementById('detalle-adicional');
+    if (adicionalDiv) {
+        let html = '';
+        if (propiedad.codigo) {
+            html += `<p><strong>Código:</strong> ${propiedad.codigo}</p>`;
+        }
+        if (propiedad.titulo) {
+            html += `<p><strong>Título:</strong> ${propiedad.titulo}</p>`;
+        }
+        if (propiedad.es_propify) {
+            html += `<p><strong>Fuente:</strong> Propifai</p>`;
+        }
+        if (propiedad.fuente === 'local') {
+            html += `<p><strong>Fuente:</strong> Base de datos local</p>`;
+        }
+        adicionalDiv.innerHTML = html || '<p>No hay información adicional disponible.</p>';
+    }
+    
+    // Mostrar modal
+    const modal = new bootstrap.Modal(document.getElementById('modalDetallePropiedad'));
+    modal.show();
 }
 
 // Formatear precio en dólares
