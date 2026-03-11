@@ -96,8 +96,68 @@ class Command(BaseCommand):
 
         # Crear mapeo: columna -> campo (insensible a mayúsculas y espacios)
         mapeo = {}
+        # Mapeo manual específico para el Excel de Remax
+        mapeo_manual = {
+            'fuente-excel': 'fuente_excel',
+            'identificador-externo': 'identificador_externo',
+            'Tipo de Propiedad': 'tipo_propiedad',
+            'Subtipo de propiedad': 'subtipo_propiedad',
+            'URL de la Propiedad': 'url_propiedad',
+            'Precio (USD)': 'precio_usd',
+            'Área de Terreno (m²)': 'area_terreno',
+            'Área Construida (m²)': 'area_construida',
+            'Número de Pisos': 'numero_pisos',
+            'Número de Habitaciones': 'numero_habitaciones',
+            'Número de Baños': 'numero_banos',
+            'Número de Cocheras': 'numero_cocheras',
+            'Imágenes de la Propiedad': 'imagenes_propiedad',
+            'ID de la Propiedad': 'id_propiedad',
+            'Fecha de Publicación': 'fecha_publicacion',
+            'Descripción Detallada': 'descripcion',
+            'Antigüedad': 'antiguedad',
+            'Servicio de Agua': 'servicio_agua',
+            'Energía Eléctrica': 'energia_electrica',
+            'Servicio de Drenaje': 'servicio_drenaje',
+            'Servicio de Gas': 'servicio_gas',
+            'Email del Agente': 'email_agente',
+            'Teléfono del Agente': 'telefono_agente',
+            'Oficina RE/MAX': 'oficina_remax',
+        }
+        # También mapear variantes con caracteres especiales
+        mapeo_manual_variantes = {
+            'Tipo de propiedad': 'tipo_propiedad',
+            'Subtipo de propiedad': 'subtipo_propiedad',
+            '�rea de Terreno (m�)': 'area_terreno',
+            '�rea Construida (m�)': 'area_construida',
+            'N�mero de Pisos': 'numero_pisos',
+            'N�mero de Habitaciones': 'numero_habitaciones',
+            'N�mero de Ba�os': 'numero_banos',
+            'N�mero de Cocheras': 'numero_cocheras',
+            'Im�genes de la Propiedad': 'imagenes_propiedad',
+            'ID de la Propiedad': 'id_propiedad',
+            'Fecha de Publicaci�n': 'fecha_publicacion',
+            'Descripci�n Detallada': 'descripcion',
+            'Antig�edad': 'antiguedad',
+            'Servicio de Agua': 'servicio_agua',
+            'Energ�a El�ctrica': 'energia_electrica',
+            'Servicio de Drenaje': 'servicio_drenaje',
+            'Servicio de Gas': 'servicio_gas',
+            'Email del Agente': 'email_agente',
+            'Tel�fono del Agente': 'telefono_agente',
+            'Oficina RE/MAX': 'oficina_remax',
+        }
+        
         for col in columnas_excel:
-            col_clean = str(col).strip().lower().replace(' ', '_')
+            col_str = str(col)
+            # Primero intentar mapeo manual
+            if col_str in mapeo_manual:
+                mapeo[col] = mapeo_manual[col_str]
+                continue
+            if col_str in mapeo_manual_variantes:
+                mapeo[col] = mapeo_manual_variantes[col_str]
+                continue
+            # Limpiar nombre de columna para comparación
+            col_clean = col_str.strip().lower().replace(' ', '_').replace('�', '').replace('(', '').replace(')', '').replace('m�', 'm2')
             for campo in campos_modelo:
                 if campo.lower() == col_clean:
                     mapeo[col] = campo
@@ -160,6 +220,36 @@ class Command(BaseCommand):
                                 self.stdout.write(
                                     self.style.WARNING(
                                         f'Fila {fila_num}: valor "{valor}" no válido para {campo}. Se guardará como None.'
+                                    )
+                                )
+                                datos[campo] = None
+                        elif field.get_internal_type() == 'DateField':
+                            try:
+                                # Si es Timestamp de pandas, convertirlo a date
+                                if hasattr(valor, 'date'):
+                                    datos[campo] = valor.date()
+                                elif isinstance(valor, str):
+                                    # Limpiar caracteres extraños (como �)
+                                    valor_limpio = valor.strip().replace('�', '').replace('"', '').replace("'", '')
+                                    # Intentar parsear como fecha
+                                    from datetime import datetime
+                                    # Puede estar en formato YYYY-MM-DD HH:MM:SS
+                                    for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y'):
+                                        try:
+                                            dt = datetime.strptime(valor_limpio, fmt)
+                                            datos[campo] = dt.date()
+                                            break
+                                        except ValueError:
+                                            continue
+                                    else:
+                                        raise ValueError(f'Formato de fecha no reconocido: {valor_limpio}')
+                                else:
+                                    # Asumir que es datetime.date o similar
+                                    datos[campo] = valor
+                            except Exception as e:
+                                self.stdout.write(
+                                    self.style.WARNING(
+                                        f'Fila {fila_num}: valor "{valor}" no válido para {campo} ({e}). Se guardará como None.'
                                     )
                                 )
                                 datos[campo] = None

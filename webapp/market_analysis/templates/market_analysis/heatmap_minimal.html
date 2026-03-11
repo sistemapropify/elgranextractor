@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+
+{% block title %}Heatmap Minimal - El Gran Extractor{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <h1>Heatmap Minimal Test</h1>
+    <p>Este es un test mínimo.</p>
+    
+    <div id="testDiv" style="height: 200px; background: #f0f0f0; padding: 20px;">
+        <p id="testMessage">Esperando JavaScript...</p>
+    </div>
+</div>
+
+<script>
+console.log("Script mínimo cargado");
+document.addEventListener('DOMContentLoaded', function() {
+    console.log("DOM cargado en template mínimo");
+    document.getElementById('testMessage').textContent = 'JavaScript funciona correctamente!';
+    document.getElementById('testMessage').style.color = 'green';
+    document.getElementById('testMessage').style.fontWeight = 'bold';
+});
+</script>
+{% endblock %}

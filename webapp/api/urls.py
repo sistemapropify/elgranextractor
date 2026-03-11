@@ -46,7 +46,10 @@ urlpatterns = [
     
     # Documentación de la API (solo en desarrollo)
     # path('docs/', include_docs_urls(title='API del Gran Extractor')),
+    
+    # Endpoint simulado para propiedades externas (para pruebas)
+    path('propiedades-externas-simuladas/', views.PropiedadesExternasSimuladasAPIView.as_view(), name='propiedades-externas-simuladas'),
 ]
 
-# Agregar prefijo de versión
-urlpatterns = [path('api/v1/', include(urlpatterns))]
+# Agregar prefijo de versión (comentado porque ya hay prefijo en webapp/urls.py)
+# urlpatterns = [path('api/v1/', include(urlpatterns))]

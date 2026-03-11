@@ -1,0 +1,454 @@
+[2026-02-16 22:15:44] [INFO] [SISTEMA] Sistema iniciado, esperando archivo...
+[2026-02-16 22:15:44] [INFO] [CARGA] Archivo 'test_requerimientos.csv' cargado
+[2026-02-16 22:15:44] [INFO] [CARGA] Cargando archivo: test_requerimientos.csv
+[2026-02-16 22:15:44] [INFO] [CARGA] Archivo cargado. Filas: 5, Columnas: 14
+[2026-02-16 22:15:44] [DEBUG] [CARGA] Columnas detectadas: ['Cliente Nombre', 'Cliente Email', 'Telefono', 'Tipo Requerimiento', 'Ubicacion', 'Presupuesto Min', 'Presupuesto Max', 'Moneda', 'Metros Cuadrados Min', 'Habitaciones Min', 'Banos Min', 'Estado', 'Prioridad', 'Observaciones']
+[2026-02-16 22:15:44] [INFO] [DETECCION] Columnas estándar detectadas: {'fuente': None, 'fecha': None, 'hora': None, 'agente': None, 'requerimiento': 'Tipo Requerimiento', 'tipo': 'Tipo Requerimiento'}
+[2026-02-16 22:15:44] [INFO] [VALIDACION] Columna requerimiento: 0 vacíos de 5 filas
+[2026-02-16 22:15:44] [INFO] [VALIDACION] Columnas base encontradas: {'fuente': None, 'fecha': None, 'hora': None, 'agente': None, 'requerimiento': 'Tipo Requerimiento', 'tipo': 'Tipo Requerimiento'}. Columna 'requerimiento': OK
+[2026-02-16 22:15:44] [INFO] [PROCESAMIENTO] Total de filas a procesar: 5
+[2026-02-16 22:15:44] [DEBUG] [IA] Iniciando análisis de fila 1/5
+[2026-02-16 22:15:44] [DEBUG] [IA] Analizando fila 1
+[2026-02-16 22:15:44] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-16 22:15:44] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-16 22:15:44] [DEBUG] [IA] Iniciando análisis de fila 2/5
+[2026-02-16 22:15:44] [DEBUG] [IA] Analizando fila 2
+[2026-02-16 22:15:44] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-16 22:15:44] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-16 22:15:44] [DEBUG] [IA] Iniciando análisis de fila 3/5
+[2026-02-16 22:15:44] [DEBUG] [IA] Analizando fila 3
+[2026-02-16 22:15:44] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-16 22:15:44] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-16 22:15:44] [DEBUG] [IA] Iniciando análisis de fila 4/5
+[2026-02-16 22:15:44] [DEBUG] [IA] Analizando fila 4
+[2026-02-16 22:15:44] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-16 22:15:44] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-16 22:15:44] [DEBUG] [IA] Iniciando análisis de fila 5/5
+[2026-02-16 22:15:44] [DEBUG] [IA] Analizando fila 5
+[2026-02-16 22:15:44] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-16 22:15:44] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-16 22:15:44] [INFO] [NORMALIZACION] Campos dinámicos únicos detectados: 1
+[2026-02-16 22:15:44] [INFO] [SISTEMA] Proceso completado. Éxitos: 5/5. Errores: 0
+[2026-02-16 22:40:36] [INFO] [SISTEMA] Sistema iniciado, esperando archivo...
+[2026-02-16 22:40:36] [INFO] [CARGA] Archivo 'C:\Users\USUARIO\AppData\Local\Temp\tmp6w5ly0fj.xlsx' cargado
+[2026-02-16 22:40:36] [INFO] [CARGA] Cargando archivo: C:\Users\USUARIO\AppData\Local\Temp\tmp6w5ly0fj.xlsx
+[2026-02-16 22:40:36] [DEBUG] [CARGA] Columnas sin nombre eliminadas: ['Unnamed: 0', 'Unnamed: 1', 'Unnamed: 2', 'Unnamed: 3', 'Unnamed: 4', 'Unnamed: 5']
+[2026-02-16 22:40:36] [INFO] [CARGA] Archivo cargado. Filas: 1461, Columnas: 0
+[2026-02-16 22:40:36] [DEBUG] [CARGA] Columnas detectadas: []
+[2026-02-16 22:40:36] [INFO] [DETECCION] Columnas estándar detectadas: {'fuente': None, 'fecha': None, 'hora': None, 'agente': None, 'requerimiento': None, 'tipo': None}
+[2026-02-16 22:40:36] [ERROR] [VISTA_IA] Error procesando archivo: No se detectó columna de requerimiento
+[2026-02-16 22:42:57] [INFO] [SISTEMA] Sistema iniciado, esperando archivo...
+[2026-02-16 22:42:57] [INFO] [CARGA] Archivo 'C:\Users\USUARIO\AppData\Local\Temp\tmpzojmstf_.xlsx' cargado
+[2026-02-16 22:42:57] [INFO] [CARGA] Cargando archivo: C:\Users\USUARIO\AppData\Local\Temp\tmpzojmstf_.xlsx
+[2026-02-16 22:42:57] [DEBUG] [CARGA] Columnas sin nombre eliminadas: ['Unnamed: 0', 'Unnamed: 1', 'Unnamed: 2', 'Unnamed: 3', 'Unnamed: 4', 'Unnamed: 5']
+[2026-02-16 22:42:57] [INFO] [CARGA] Archivo cargado. Filas: 1461, Columnas: 0
+[2026-02-16 22:42:57] [DEBUG] [CARGA] Columnas detectadas: []
+[2026-02-16 22:42:57] [INFO] [DETECCION] Columnas estándar detectadas: {'fuente': None, 'fecha': None, 'hora': None, 'agente': None, 'requerimiento': None, 'tipo': None}
+[2026-02-16 22:42:57] [ERROR] [VISTA_IA] Error procesando archivo: No se detectó columna de requerimiento
+[2026-02-16 22:43:39] [INFO] [SISTEMA] Sistema iniciado, esperando archivo...
+[2026-02-16 22:43:39] [INFO] [CARGA] Archivo 'C:\Users\USUARIO\AppData\Local\Temp\tmpb3x6uayp.xlsx' cargado
+[2026-02-16 22:43:39] [INFO] [CARGA] Cargando archivo: C:\Users\USUARIO\AppData\Local\Temp\tmpb3x6uayp.xlsx
+[2026-02-16 22:43:39] [DEBUG] [CARGA] Columnas sin nombre eliminadas: ['Unnamed: 0', 'Unnamed: 1', 'Unnamed: 2', 'Unnamed: 3', 'Unnamed: 4', 'Unnamed: 5']
+[2026-02-16 22:43:39] [INFO] [CARGA] Archivo cargado. Filas: 1461, Columnas: 0
+[2026-02-16 22:43:39] [DEBUG] [CARGA] Columnas detectadas: []
+[2026-02-16 22:43:39] [INFO] [DETECCION] Columnas estándar detectadas: {'fuente': None, 'fecha': None, 'hora': None, 'agente': None, 'requerimiento': None, 'tipo': None}
+[2026-02-16 22:43:39] [ERROR] [VISTA_IA] Error procesando archivo: No se detectó columna de requerimiento
+[2026-02-16 23:12:51] [INFO] [SISTEMA] Sistema iniciado, esperando archivo...
+[2026-02-16 23:12:51] [INFO] [CARGA] Archivo 'test_requerimientos.csv' cargado
+[2026-02-16 23:12:51] [INFO] [CARGA] Cargando archivo: test_requerimientos.csv
+[2026-02-16 23:12:51] [INFO] [CARGA] Archivo cargado. Filas: 5, Columnas: 14
+[2026-02-16 23:12:51] [DEBUG] [CARGA] Columnas detectadas: ['Cliente Nombre', 'Cliente Email', 'Telefono', 'Tipo Requerimiento', 'Ubicacion', 'Presupuesto Min', 'Presupuesto Max', 'Moneda', 'Metros Cuadrados Min', 'Habitaciones Min', 'Banos Min', 'Estado', 'Prioridad', 'Observaciones']
+[2026-02-16 23:12:51] [INFO] [DETECCION] Columnas estándar detectadas: {'fuente': None, 'fecha': None, 'hora': None, 'agente': None, 'requerimiento': 'Tipo Requerimiento', 'tipo': 'Tipo Requerimiento'}
+[2026-02-16 23:12:51] [INFO] [VALIDACION] Columna de texto: Tipo Requerimiento (0 vacíos de 5 filas)
+[2026-02-16 23:12:51] [INFO] [VALIDACION] Columnas base encontradas: {'fuente': None, 'fecha': None, 'hora': None, 'agente': None, 'requerimiento': 'Tipo Requerimiento', 'tipo': 'Tipo Requerimiento'}. Columna de texto: Tipo Requerimiento
+[2026-02-16 23:12:51] [INFO] [PROCESAMIENTO] Total de filas a procesar: 5
+[2026-02-16 23:12:51] [DEBUG] [IA] Iniciando análisis de fila 1/5
+[2026-02-16 23:12:51] [DEBUG] [IA] Analizando fila 1
+[2026-02-16 23:12:51] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-16 23:12:51] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-16 23:12:51] [DEBUG] [IA] Iniciando análisis de fila 2/5
+[2026-02-16 23:12:51] [DEBUG] [IA] Analizando fila 2
+[2026-02-16 23:12:51] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-16 23:12:51] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-16 23:12:51] [DEBUG] [IA] Iniciando análisis de fila 3/5
+[2026-02-16 23:12:51] [DEBUG] [IA] Analizando fila 3
+[2026-02-16 23:12:51] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-16 23:12:51] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-16 23:12:51] [DEBUG] [IA] Iniciando análisis de fila 4/5
+[2026-02-16 23:12:51] [DEBUG] [IA] Analizando fila 4
+[2026-02-16 23:12:51] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-16 23:12:51] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-16 23:12:51] [DEBUG] [IA] Iniciando análisis de fila 5/5
+[2026-02-16 23:12:51] [DEBUG] [IA] Analizando fila 5
+[2026-02-16 23:12:51] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-16 23:12:51] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-16 23:12:51] [INFO] [NORMALIZACION] Campos dinámicos únicos detectados: 1
+[2026-02-16 23:12:51] [INFO] [SISTEMA] Proceso completado. Éxitos: 5/5. Errores: 0
+[2026-02-16 23:14:50] [INFO] [SISTEMA] Sistema iniciado, esperando archivo...
+[2026-02-16 23:14:50] [INFO] [CARGA] Archivo 'C:\Users\USUARIO\AppData\Local\Temp\tmpvz1kbv3l.xlsx' cargado
+[2026-02-16 23:14:50] [INFO] [CARGA] Cargando archivo: C:\Users\USUARIO\AppData\Local\Temp\tmpvz1kbv3l.xlsx
+[2026-02-16 23:14:50] [DEBUG] [CARGA] Columnas sin nombre eliminadas: ['Unnamed: 0', 'Unnamed: 1', 'Unnamed: 2', 'Unnamed: 3', 'Unnamed: 4', 'Unnamed: 5']
+[2026-02-16 23:14:50] [INFO] [CARGA] Archivo cargado. Filas: 1461, Columnas: 0
+[2026-02-16 23:14:50] [DEBUG] [CARGA] Columnas detectadas: []
+[2026-02-16 23:14:50] [INFO] [DETECCION] Columnas estándar detectadas: {'fuente': None, 'fecha': None, 'hora': None, 'agente': None, 'requerimiento': None, 'tipo': None}
+[2026-02-16 23:14:50] [WARN] [DETECCION] No se detectó columna de texto principal
+[2026-02-16 23:14:50] [ERROR] [VISTA_IA] Error procesando archivo: No se detectó columna de texto para análisis. Asegúrese de que el archivo contenga una columna con descripciones textuales.
+[2026-02-16 23:48:52] [INFO] [CARGA] Cargando archivo: C:\Users\USUARIO\AppData\Local\Temp\tmp6hxi_7z9.xlsx
+[2026-02-16 23:48:52] [DEBUG] [CARGA] Columnas sin nombre eliminadas: ['Unnamed: 0', 'Unnamed: 1', 'Unnamed: 2', 'Unnamed: 3', 'Unnamed: 4', 'Unnamed: 5']
+[2026-02-16 23:48:52] [INFO] [CARGA] Archivo cargado. Filas: 1461, Columnas: 0
+[2026-02-16 23:48:52] [DEBUG] [CARGA] Columnas detectadas: []
+[2026-02-16 23:48:52] [INFO] [DETECCION] Columnas estándar detectadas: {'fuente': None, 'fecha': None, 'hora': None, 'agente': None, 'requerimiento': None, 'tipo': None}
+[2026-02-16 23:48:52] [WARN] [DETECCION] No se detectó columna de texto principal
+[2026-02-16 23:48:52] [INFO] [SISTEMA] Sistema iniciado, esperando archivo...
+[2026-02-16 23:48:52] [INFO] [CARGA] Archivo 'C:\Users\USUARIO\AppData\Local\Temp\tmp6hxi_7z9.xlsx' cargado
+[2026-02-16 23:48:52] [INFO] [CARGA] Cargando archivo: C:\Users\USUARIO\AppData\Local\Temp\tmp6hxi_7z9.xlsx
+[2026-02-16 23:48:53] [DEBUG] [CARGA] Columnas sin nombre eliminadas: ['Unnamed: 0', 'Unnamed: 1', 'Unnamed: 2', 'Unnamed: 3', 'Unnamed: 4', 'Unnamed: 5']
+[2026-02-16 23:48:53] [INFO] [CARGA] Archivo cargado. Filas: 1461, Columnas: 0
+[2026-02-16 23:48:53] [DEBUG] [CARGA] Columnas detectadas: []
+[2026-02-16 23:48:53] [INFO] [DETECCION] Columnas estándar detectadas: {'fuente': None, 'fecha': None, 'hora': None, 'agente': None, 'requerimiento': None, 'tipo': None}
+[2026-02-16 23:48:53] [WARN] [DETECCION] No se detectó columna de texto principal
+[2026-02-16 23:48:53] [ERROR] [VISTA_IA] Error procesando archivo: No se detectó columna de texto para análisis. Asegúrese de que el archivo contenga una columna con descripciones textuales.
+[2026-02-17 02:17:13] [INFO] [CARGA] Cargando archivo: C:\Users\USUARIO\AppData\Local\Temp\tmpdwexc_26.xlsx
+[2026-02-17 02:17:13] [DEBUG] [CARGA] Columnas originales: ['Unnamed: 0', 'Unnamed: 1', 'Unnamed: 2', 'Unnamed: 3', 'Unnamed: 4', 'Unnamed: 5']
+[2026-02-17 02:17:13] [DEBUG] [CARGA] Shape original: (1461, 6)
+[2026-02-17 02:17:13] [WARN] [CARGA] Todas las columnas son "Unnamed". Se mantendrán como columnas de datos.
+[2026-02-17 02:17:13] [INFO] [CARGA] Archivo cargado. Filas: 1461, Columnas: 6
+[2026-02-17 02:17:13] [DEBUG] [CARGA] Columnas detectadas: ['col_0', 'col_1', 'col_2', 'col_3', 'col_4', 'col_5']
+[2026-02-17 02:17:13] [INFO] [DETECCION] Columnas estándar detectadas: {'fuente': None, 'fecha': None, 'hora': None, 'agente': None, 'requerimiento': None, 'tipo': None}
+[2026-02-17 02:17:13] [INFO] [DETECCION] Columna de texto detectada por tipo: col_0 (1461 no vacíos)
+[2026-02-17 02:17:13] [INFO] [SISTEMA] Sistema iniciado, esperando archivo...
+[2026-02-17 02:17:13] [INFO] [CARGA] Archivo 'C:\Users\USUARIO\AppData\Local\Temp\tmpdwexc_26.xlsx' cargado
+[2026-02-17 02:17:13] [INFO] [CARGA] Cargando archivo: C:\Users\USUARIO\AppData\Local\Temp\tmpdwexc_26.xlsx
+[2026-02-17 02:17:13] [DEBUG] [CARGA] Columnas originales: ['Unnamed: 0', 'Unnamed: 1', 'Unnamed: 2', 'Unnamed: 3', 'Unnamed: 4', 'Unnamed: 5']
+[2026-02-17 02:17:13] [DEBUG] [CARGA] Shape original: (1461, 6)
+[2026-02-17 02:17:13] [WARN] [CARGA] Todas las columnas son "Unnamed". Se mantendrán como columnas de datos.
+[2026-02-17 02:17:13] [INFO] [CARGA] Archivo cargado. Filas: 1461, Columnas: 6
+[2026-02-17 02:17:13] [DEBUG] [CARGA] Columnas detectadas: ['col_0', 'col_1', 'col_2', 'col_3', 'col_4', 'col_5']
+[2026-02-17 02:17:13] [INFO] [DETECCION] Columnas estándar detectadas: {'fuente': None, 'fecha': None, 'hora': None, 'agente': None, 'requerimiento': None, 'tipo': None}
+[2026-02-17 02:17:13] [INFO] [DETECCION] Columna de texto detectada por tipo: col_0 (1461 no vacíos)
+[2026-02-17 02:17:13] [INFO] [VALIDACION] Columna de texto: col_0 (0 vacíos de 1461 filas)
+[2026-02-17 02:17:13] [INFO] [VALIDACION] Columnas base encontradas: {'fuente': None, 'fecha': None, 'hora': None, 'agente': None, 'requerimiento': None, 'tipo': None}. Columna de texto: col_0
+[2026-02-17 02:17:13] [WARN] [PROCESAMIENTO] Se limitará el procesamiento a 50 filas por lote
+[2026-02-17 02:17:13] [INFO] [PROCESAMIENTO] Total de filas a procesar: 50
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 1/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 1
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 2/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 2
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 3/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 3
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 4/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 4
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 5/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 5
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 6/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 6
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 7/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 7
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 8/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 8
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 9/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 9
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 10/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 10
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 11/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 11
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 12/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 12
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 13/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 13
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 14/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 14
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 15/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 15
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 16/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 16
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 17/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 17
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 18/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 18
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 19/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 19
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 20/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 20
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 21/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 21
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 22/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 22
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 23/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 23
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 24/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 24
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 25/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 25
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 26/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 26
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 27/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 27
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 28/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 28
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 29/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 29
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 30/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 30
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 31/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 31
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 32/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 32
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 33/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 33
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 34/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 34
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 35/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 35
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 36/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 36
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 37/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 37
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 38/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 38
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 39/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 39
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 40/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 40
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 41/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 41
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 42/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 42
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 43/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 43
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 44/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 44
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 45/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 45
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 46/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 46
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 47/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 47
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 48/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 48
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 49/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 49
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [DEBUG] [IA] Iniciando análisis de fila 50/50
+[2026-02-17 02:17:13] [DEBUG] [IA] Analizando fila 50
+[2026-02-17 02:17:13] [DEBUG] [IA] Prompt enviado (truncado): Analiza el siguiente texto en español que describe un requerimiento inmobiliario.
+Identifica la intención: ¿es VENTA, ALQUILER, REQUERIMIENTO, ANTICRESIS?
+Extrae datos estructurados incluso si están e...
+[2026-02-17 02:17:13] [DEBUG] [IA] Respuesta cruda: {'intencion': 'VENTA', 'campos_detectados': {'dormitorios': 1}, 'confianza': 0.7}
+[2026-02-17 02:17:13] [INFO] [NORMALIZACION] Campos dinámicos únicos detectados: 1
+[2026-02-17 02:17:13] [INFO] [SISTEMA] Proceso completado. Éxitos: 50/50. Errores: 0

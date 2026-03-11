@@ -1,0 +1,180 @@
+/* Estilos específicos para el módulo ACM */
+
+.acm-container {
+    min-height: calc(100vh - 120px);
+}
+
+/* Tarjetas de propiedades comparables */
+.propiedad-card {
+    transition: all 0.2s ease;
+    border-left: 4px solid #0d6efd !important;
+}
+
+.propiedad-card:hover {
+    background-color: #f8f9fa;
+}
+
+.propiedad-card .propiedad-imagen {
+    height: 80px;
+    width: 100%;
+    object-fit: cover;
+    border-radius: 4px;
+}
+
+.propiedad-card .propiedad-tipo {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #212529;
+}
+
+.propiedad-card .propiedad-estado {
+    font-size: 0.75rem;
+    color: #6c757d;
+}
+
+.propiedad-card .propiedad-ubicacion {
+    font-size: 0.8rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.propiedad-card .propiedad-precio {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #198754;
+}
+
+.propiedad-card .propiedad-precio-final {
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+
+.propiedad-card .propiedad-precio-m2 {
+    font-size: 0.8rem;
+    padding: 0.25rem 0.5rem;
+}
+
+/* Marcadores del mapa */
+.marcador-principal {
+    /* Estilo para el marcador principal (amarillo/estrella) */
+}
+
+.marcador-comparable {
+    /* Estilo para marcadores comparables (azul) */
+}
+
+.marcador-seleccionado {
+    /* Estilo para marcadores seleccionados (rojo) */
+}
+
+/* Resumen ACM */
+.resumen-acm {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 8px;
+    padding: 1.5rem;
+}
+
+.resumen-acm .valor-estimado {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #198754;
+    background-color: white;
+    padding: 1rem;
+    border-radius: 8px;
+    border: 2px solid #198754;
+    text-align: center;
+}
+
+.resumen-acm .estadistica-item {
+    text-align: center;
+    padding: 1rem;
+    border-radius: 8px;
+    background-color: white;
+    border: 1px solid #dee2e6;
+}
+
+.resumen-acm .estadistica-valor {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #0d6efd;
+}
+
+.resumen-acm .estadistica-label {
+    font-size: 0.85rem;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Contenedor de comparables */
+.comparables-container {
+    scrollbar-width: thin;
+    scrollbar-color: #adb5bd #f8f9fa;
+}
+
+.comparables-container::-webkit-scrollbar {
+    width: 6px;
+}
+
+.comparables-container::-webkit-scrollbar-track {
+    background: #f8f9fa;
+}
+
+.comparables-container::-webkit-scrollbar-thumb {
+    background-color: #adb5bd;
+    border-radius: 3px;
+}
+
+/* Responsive */
+@media (max-width: 992px) {
+    .acm-container .row {
+        flex-direction: column;
+    }
+    
+    .acm-container .col-lg-3,
+    .acm-container .col-lg-6 {
+        width: 100%;
+        margin-bottom: 1rem;
+    }
+    
+    #acmMap {
+        height: 400px !important;
+    }
+}
+
+/* Animaciones */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.propiedad-card {
+    animation: fadeIn 0.3s ease;
+}
+
+/* Botones */
+.btn-quitar {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+}
+
+.btn-quitar:hover {
+    background-color: #dc3545;
+    color: white;
+}
+
+/* Alertas */
+#puntoSeleccionadoAlert {
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from { opacity: 0; transform: translateX(-10px); }
+    to { opacity: 1; transform: translateX(0); }
+}

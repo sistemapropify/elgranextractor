@@ -1,0 +1,623 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Matching Masivo - Sistema de Compatibilidad{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
+<style>
+    /* Estilos específicos para matching masivo */
+    .matching-masivo-header {
+        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+        color: white;
+        padding: 1.5rem;
+        border-radius: 10px;
+        margin-bottom: 1.5rem;
+    }
+    
+    .stat-card-masivo {
+        transition: transform 0.3s ease;
+        border: none;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    
+    .stat-card-masivo:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 12px rgba(0, 0, 0, 0.15);
+    }
+    
+    .progress-match {
+        height: 20px;
+        border-radius: 10px;
+        overflow: hidden;
+        background-color: #e9ecef;
+    }
+    
+    .progress-match .progress-bar {
+        transition: width 1s ease-in-out;
+    }
+    
+    .match-high {
+        background-color: #dc3545 !important; /* Rojo para >80% */
+        font-weight: bold;
+    }
+    
+    .match-medium {
+        background-color: #ffc107 !important; /* Amarillo para 50-80% */
+    }
+    
+    .match-low {
+        background-color: #28a745 !important; /* Verde para <50% */
+    }
+    
+    .requerimiento-row {
+        transition: all 0.2s ease;
+        border-left: 4px solid transparent;
+    }
+    
+    .requerimiento-row:hover {
+        background-color: #f8f9fa;
+        transform: translateX(3px);
+    }
+    
+    .requerimiento-row.match-high-row {
+        border-left-color: #dc3545;
+        background-color: rgba(220, 53, 69, 0.05);
+    }
+    
+    .requerimiento-row.match-medium-row {
+        border-left-color: #ffc107;
+        background-color: rgba(255, 193, 7, 0.05);
+    }
+    
+    .requerimiento-row.match-low-row {
+        border-left-color: #28a745;
+        background-color: rgba(40, 167, 69, 0.05);
+    }
+    
+    .badge-match {
+        font-size: 0.85rem;
+        padding: 0.3rem 0.6rem;
+        border-radius: 20px;
+        font-weight: 600;
+    }
+    
+    .badge-match-high {
+        background-color: #dc3545;
+        color: white;
+    }
+    
+    .badge-match-medium {
+        background-color: #ffc107;
+        color: #212529;
+    }
+    
+    .badge-match-low {
+        background-color: #28a745;
+        color: white;
+    }
+    
+    .action-buttons {
+        position: sticky;
+        top: 20px;
+        z-index: 100;
+    }
+    
+    .table-responsive {
+        max-height: 600px;
+        overflow-y: auto;
+    }
+    
+    .filter-controls {
+        background-color: #f8f9fa;
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1.5rem;
+        border: 1px solid #dee2e6;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header del matching masivo -->
+    <div class="matching-masivo-header">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h1 class="h3 mb-2">
+                    <i class="bi bi-lightning-charge-fill me-2"></i>
+                    Matching Masivo de Requerimientos
+                </h1>
+                <p class="mb-0 opacity-75">
+                    Sistema automático que cruza todas las propiedades con todos los requerimientos. 
+                    Visualiza el porcentaje de match al costado de cada requerimiento.
+                </p>
+            </div>
+            <div class="col-md-4 text-end">
+                <a href="{% url 'matching:dashboard' %}" class="btn btn-outline-light me-2">
+                    <i class="bi bi-arrow-left me-1"></i> Volver al Dashboard
+                </a>
+                <button id="btnEjecutarMatching" class="btn btn-light">
+                    <i class="bi bi-play-circle me-1"></i> Ejecutar Matching Masivo
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Panel de estadísticas -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card stat-card-masivo">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-subtitle mb-2 text-muted">Total Requerimientos</h6>
+                            <h3 class="card-title mb-0">{{ total_requerimientos }}</h3>
+                        </div>
+                        <div class="text-primary">
+                            <i class="bi bi-people-fill fs-1"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card-masivo">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-subtitle mb-2 text-muted">Total Propiedades</h6>
+                            <h3 class="card-title mb-0">{{ total_propiedades }}</h3>
+                        </div>
+                        <div class="text-success">
+                            <i class="bi bi-house-fill fs-1"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card-masivo">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-subtitle mb-2 text-muted">Matches Altos (>80%)</h6>
+                            <h3 class="card-title mb-0">{{ match_alto_count }}</h3>
+                        </div>
+                        <div class="text-danger">
+                            <i class="bi bi-fire fs-1"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card-masivo">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-subtitle mb-2 text-muted">Última Ejecución</h6>
+                            <h5 class="card-title mb-0">
+                                {% if resumen.0.fecha_ultimo_matching %}
+                                    {{ resumen.0.fecha_ultimo_matching|date:"d/m/Y H:i" }}
+                                {% else %}
+                                    No ejecutado
+                                {% endif %}
+                            </h5>
+                        </div>
+                        <div class="text-warning">
+                            <i class="bi bi-clock-history fs-1"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Controles de filtro -->
+    <div class="filter-controls">
+        <div class="row">
+            <div class="col-md-8">
+                <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                    <input type="text" id="searchRequerimientos" class="form-control" placeholder="Buscar requerimientos...">
+                    <button class="btn btn-outline-secondary" type="button" id="btnFiltrarMatchAlto">
+                        <i class="bi bi-filter-circle"></i> Solo Match Alto
+                    </button>
+                </div>
+            </div>
+            <div class="col-md-4 text-end">
+                <div class="btn-group" role="group">
+                    <button type="button" class="btn btn-outline-primary active" data-filter="all">Todos</button>
+                    <button type="button" class="btn btn-outline-primary" data-filter="high">Alto (>80%)</button>
+                    <button type="button" class="btn btn-outline-primary" data-filter="medium">Medio (50-80%)</button>
+                    <button type="button" class="btn btn-outline-primary" data-filter="low">Bajo (<50%)</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla de requerimientos con porcentajes -->
+    <div class="card">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="bi bi-table me-2"></i>
+                Grilla de Requerimientos con Porcentaje de Match
+            </h5>
+            <div>
+                <span class="badge bg-primary me-2">Total: {{ page_obj.paginator.count }}</span>
+                <span class="badge bg-danger">Match Alto: {{ match_alto_count }}</span>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0" id="tablaRequerimientos">
+                    <thead class="table-light">
+                        <tr>
+                            <th width="50">ID</th>
+                            <th>Cliente / Contacto</th>
+                            <th>Tipo Propiedad</th>
+                            <th>Presupuesto</th>
+                            <th>Distritos</th>
+                            <th width="150">Porcentaje Match</th>
+                            <th width="180">Propiedad Match</th>
+                            <th width="120">Estado</th>
+                            <th width="100">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in requerimientos_con_porcentajes %}
+                            {% with req=item.requerimiento porcentaje=item.porcentaje row_class=item.row_class badge_class=item.badge_class progress_class=item.progress_class estado_text=item.estado_text %}
+                                <tr class="requerimiento-row {{ row_class }}" data-porcentaje="{{ porcentaje }}">
+                                    <td class="fw-bold">#{{ req.id }}</td>
+                                    <td>
+                                        <div class="fw-semibold">{{ req.nombre_cliente|default:"Sin nombre" }}</div>
+                                        <small class="text-muted">{{ req.telefono|default:"Sin teléfono" }}</small>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info">{{ req.get_tipo_propiedad_display|default:"No especificado" }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="fw-semibold">{{ req.presupuesto_display }}</span>
+                                    </td>
+                                    <td>
+                                        {% if req.distritos_lista %}
+                                            <small>{{ req.distritos_lista|join:", "|truncatechars:30 }}</small>
+                                        {% else %}
+                                            <span class="text-muted">No especificado</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="progress-match flex-grow-1 me-2">
+                                                <div class="progress-bar {{ progress_class }}"
+                                                     role="progressbar"
+                                                     style="width: {{ porcentaje }}%;"
+                                                     aria-valuenow="{{ porcentaje }}"
+                                                     aria-valuemin="0"
+                                                     aria-valuemax="100">
+                                                </div>
+                                            </div>
+                                            <span class="fw-bold">{{ porcentaje }}%</span>
+                                        </div>
+                                        {% if item.total_compatibles > 0 %}
+                                        <small class="text-muted d-block mt-1">{{ item.total_compatibles }} propiedad(es) compatible(s)</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if item.tiene_propiedad_match %}
+                                            <div class="propiedad-match-info">
+                                                <div class="fw-semibold small">
+                                                    <i class="bi bi-house-check text-success"></i>
+                                                    {{ item.mejor_propiedad_codigo|default:"Propiedad" }}
+                                                </div>
+                                                <div class="text-muted small">
+                                                    Distrito: {{ item.mejor_propiedad_distrito|default:"N/A" }}
+                                                </div>
+                                                <div class="text-muted small">
+                                                    Precio: ${{ item.mejor_propiedad_precio|floatformat:0|default:"N/A" }}
+                                                </div>
+                                                <small class="text-muted d-block">ID: {{ item.mejor_propiedad_id }}</small>
+                                            </div>
+                                        {% else %}
+                                            <span class="text-muted small">Sin match</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge-match {{ badge_class }}">{{ estado_text }}</span>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <a href="{% url 'matching:dashboard' %}?requerimiento_id={{ req.id }}"
+                                               class="btn btn-outline-primary"
+                                               title="Ver detalles">
+                                                <i class="bi bi-eye"></i>
+                                            </a>
+                                            <button class="btn btn-outline-success btn-ejecutar-individual"
+                                                    data-id="{{ req.id }}"
+                                                    title="Ejecutar matching individual">
+                                                <i class="bi bi-play"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endwith %}
+                        {% empty %}
+                            <tr>
+                                <td colspan="8" class="text-center py-4">
+                                    <div class="text-muted">
+                                        <i class="bi bi-inbox fs-1"></i>
+                                        <p class="mt-2">No hay requerimientos para mostrar.</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer bg-white">
+            <!-- Paginación -->
+            {% if page_obj.has_other_pages %}
+            <nav aria-label="Paginación de requerimientos">
+                <ul class="pagination justify-content-center mb-0">
+                    {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Anterior</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">Anterior</span>
+                        </li>
+                    {% endif %}
+                    
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ num }}</span>
+                            </li>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}">Siguiente</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">Siguiente</span>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Panel de acciones masivas -->
+    <div class="row mt-4">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-gear-wide-connected me-2"></i> Configuración del Matching Masivo</h5>
+                </div>
+                <div class="card-body">
+                    <form id="formMatchingMasivo">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="limitePorRequerimiento" class="form-label">Límite de propiedades por requerimiento</label>
+                                    <input type="number" class="form-control" id="limitePorRequerimiento" value="10" min="1" max="100">
+                                    <div class="form-text">Número máximo de propiedades a evaluar por cada requerimiento.</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Opciones de ejecución</label>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="soloNuevos" checked>
+                                        <label class="form-check-label" for="soloNuevos">
+                                            Solo requerimientos sin matching previo
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="forzarReejecucion">
+                                        <label class="form-check-label" for="forzarReejecucion">
+                                            Forzar re-ejecución (sobrescribir resultados existentes)
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="d-grid">
+                            <button type="button" id="btnEjecutarConfigurado" class="btn btn-primary btn-lg">
+                                <i class="bi bi-play-fill me-2"></i> Ejecutar Matching Masivo con Configuración
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i> Información del Sistema</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <h6 class="alert-heading"><i class="bi bi-lightbulb me-2"></i> ¿Cómo funciona?</h6>
+                        <p class="mb-0 small">
+                            El sistema cruza automáticamente <strong>todas las propiedades</strong> con <strong>todos los requerimientos</strong>.
+                            El porcentaje de match se calcula basado en filtros discriminatorios y scoring ponderado.
+                        </p>
+                    </div>
+                    <div class="alert alert-warning">
+                        <h6 class="alert-heading"><i class="bi bi-exclamation-triangle me-2"></i> Notas importantes</h6>
+                        <ul class="mb-0 small">
+                            <li>Match Alto (>80%): Se muestra en <span class="text-danger">rojo</span> - Propiedades muy compatibles</li>
+                            <li>Match Medio (50-80%): Se muestra en <span class="text-warning">amarillo</span> - Compatibilidad moderada</li>
+                            <li>Match Bajo (<50%): Se muestra en <span class="text-success">verde</span> - Baja compatibilidad</li>
+                            <li>El matching masivo puede tomar varios minutos dependiendo del volumen de datos</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de progreso -->
+<div class="modal fade" id="modalProgreso" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-hourglass-split me-2"></i> Ejecutando Matching Masivo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="text-center mb-3">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                </div>
+                <p class="text-center">Procesando matching masivo. Esto puede tomar varios minutos...</p>
+                <div class="progress">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%"></div>
+                </div>
+                <div class="mt-3 text-center text-muted small" id="progresoDetalle">
+                    Iniciando proceso...
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script src="{% static 'matching/matching.js' %}"></script>
+<script>
+    $(document).ready(function() {
+        // Filtro de búsqueda
+        $('#searchRequerimientos').on('keyup', function() {
+            var value = $(this).val().toLowerCase();
+            $('#tablaRequerimientos tbody tr').filter(function() {
+                $(this).toggle($(this).text().toLowerCase().indexOf(value) > -1);
+            });
+        });
+        
+        // Filtro por nivel de match
+        $('.btn-group button[data-filter]').on('click', function() {
+            var filter = $(this).data('filter');
+            $('.btn-group button').removeClass('active');
+            $(this).addClass('active');
+            
+            $('#tablaRequerimientos tbody tr').show();
+            
+            if (filter !== 'all') {
+                $('#tablaRequerimientos tbody tr').each(function() {
+                    var porcentaje = parseFloat($(this).data('porcentaje') || 0);
+                    var show = false;
+                    
+                    if (filter === 'high' && porcentaje >= 80) show = true;
+                    else if (filter === 'medium' && porcentaje >= 50 && porcentaje < 80) show = true;
+                    else if (filter === 'low' && porcentaje < 50) show = true;
+                    
+                    $(this).toggle(show);
+                });
+            }
+        });
+        
+        // Botón solo match alto
+        $('#btnFiltrarMatchAlto').on('click', function() {
+            $('.btn-group button[data-filter="high"]').click();
+        });
+        
+        // Ejecutar matching masivo
+        $('#btnEjecutarMatching').on('click', function() {
+            ejecutarMatchingMasivo();
+        });
+        
+        $('#btnEjecutarConfigurado').on('click', function() {
+            ejecutarMatchingMasivoConfigurado();
+        });
+        
+        // Ejecutar matching individual
+        $('.btn-ejecutar-individual').on('click', function() {
+            var requerimientoId = $(this).data('id');
+            ejecutarMatchingIndividual(requerimientoId);
+        });
+        
+        function ejecutarMatchingMasivo() {
+            $('#modalProgreso').modal('show');
+            
+            $.ajax({
+                url: '{% url "matching:ejecutar_masivo" %}',
+                type: 'POST',
+                data: {
+                    'limite_por_requerimiento': 10,
+                    'solo_nuevos': true,
+                    'csrfmiddlewaretoken': '{{ csrf_token }}'
+                },
+                success: function(response) {
+                    $('#modalProgreso').modal('hide');
+                    if (response.success) {
+                        alert('Éxito: ' + response.message);
+                        location.reload();
+                    } else {
+                        alert('Error: ' + response.error);
+                    }
+                },
+                error: function(xhr) {
+                    $('#modalProgreso').modal('hide');
+                    alert('Error en la solicitud: ' + xhr.responseText);
+                }
+            });
+        }
+        
+        function ejecutarMatchingMasivoConfigurado() {
+            var limite = $('#limitePorRequerimiento').val();
+            var soloNuevos = $('#soloNuevos').is(':checked');
+            var forzarReejecucion = $('#forzarReejecucion').is(':checked');
+            
+            $('#modalProgreso').modal('show');
+            $('#progresoDetalle').text('Configuración: límite=' + limite + ', solo nuevos=' + soloNuevos);
+            
+            $.ajax({
+                url: '{% url "matching:ejecutar_masivo" %}',
+                type: 'POST',
+                data: {
+                    'limite_por_requerimiento': limite,
+                    'solo_nuevos': soloNuevos,
+                    'forzar_reejecucion': forzarReejecucion,
+                    'csrfmiddlewaretoken': '{{ csrf_token }}'
+                },
+                success: function(response) {
+                    $('#modalProgreso').modal('hide');
+                    if (response.success) {
+                        alert('Éxito: ' + response.message);
+                        location.reload();
+                    } else {
+                        alert('Error: ' + response.error);
+                    }
+                },
+                error: function(xhr) {
+                    $('#modalProgreso').modal('hide');
+                    alert('Error en la solicitud: ' + xhr.responseText);
+                }
+            });
+        }
+        
+        function ejecutarMatchingIndividual(requerimientoId) {
+            if (confirm('¿Ejecutar matching para el requerimiento #' + requerimientoId + '?')) {
+                window.location.href = '{% url "matching:dashboard" %}?requerimiento_id=' + requerimientoId;
+            }
+        }
+    });
+</script>
+{% endblock %}

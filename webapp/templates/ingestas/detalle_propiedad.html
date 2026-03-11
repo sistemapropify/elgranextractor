@@ -1,0 +1,378 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Detalle de Propiedad - {{ propiedad.tipo_propiedad|default:"Propiedad" }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Botón de regreso -->
+    <div class="mb-4">
+        <a href="{% url 'ingestas:lista_propiedades' %}" class="btn btn-outline-primary btn-sm">
+            <i class="fas fa-arrow-left"></i> Volver a Propiedades
+        </a>
+    </div>
+
+    <div class="row">
+        <!-- Columna izquierda: Imágenes y detalles principales -->
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white border-bottom">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4 class="mb-0">Detalles de la Propiedad</h4>
+                        <div class="property-actions">
+                            <a href="{% url 'ingestas:editar_propiedad' propiedad.id %}" class="btn btn-edit btn-sm" title="Editar propiedad">
+                                <i class="fas fa-edit"></i> Editar
+                            </a>
+                            <a href="{{ propiedad.url_propiedad|default:'#' }}" target="_blank" class="btn btn-external btn-sm" title="Ver en portal original">
+                                <i class="fas fa-external-link-alt"></i> Portal
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card-body">
+                    <!-- Imagen principal -->
+                    <div class="property-image-container mb-4">
+                        {% if imagen_url %}
+                            <img src="{{ imagen_url }}" alt="{{ propiedad.tipo_propiedad|default:'Propiedad' }}" class="img-fluid rounded" style="max-height: 400px; width: 100%; object-fit: cover;">
+                        {% else %}
+                            <div class="property-image-placeholder text-center py-5 bg-light rounded">
+                                <i class="fas fa-home fa-4x text-muted"></i>
+                                <p class="mt-3 text-muted">No hay imagen disponible</p>
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Información básica -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <h5 class="text-primary">{{ propiedad.tipo_propiedad|default:"Tipo no especificado" }}</h5>
+                            {% if propiedad.precio_usd %}
+                                <h3 class="text-success fw-bold">${{ propiedad.precio_usd|floatformat:0 }} USD</h3>
+                            {% else %}
+                                <h4 class="text-muted">Precio no disponible</h4>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <div class="property-features">
+                                <div class="row g-3">
+                                    {% if propiedad.area_construida %}
+                                    <div class="col-6">
+                                        <div class="feature-item text-center p-2 border rounded">
+                                            <i class="fas fa-ruler-combined text-primary"></i>
+                                            <div class="mt-1">
+                                                <small class="text-muted">Área</small>
+                                                <div class="fw-bold">{{ propiedad.area_construida|floatformat:0 }} m²</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                    
+                                    {% if propiedad.numero_habitaciones %}
+                                    <div class="col-6">
+                                        <div class="feature-item text-center p-2 border rounded">
+                                            <i class="fas fa-bed text-primary"></i>
+                                            <div class="mt-1">
+                                                <small class="text-muted">Habitaciones</small>
+                                                <div class="fw-bold">{{ propiedad.numero_habitaciones }}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                    
+                                    {% if propiedad.numero_banos %}
+                                    <div class="col-6">
+                                        <div class="feature-item text-center p-2 border rounded">
+                                            <i class="fas fa-bath text-primary"></i>
+                                            <div class="mt-1">
+                                                <small class="text-muted">Baños</small>
+                                                <div class="fw-bold">{{ propiedad.numero_banos }}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                    
+                                    {% if propiedad.numero_cocheras %}
+                                    <div class="col-6">
+                                        <div class="feature-item text-center p-2 border rounded">
+                                            <i class="fas fa-car text-primary"></i>
+                                            <div class="mt-1">
+                                                <small class="text-muted">Cocheras</small>
+                                                <div class="fw-bold">{{ propiedad.numero_cocheras }}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Descripción -->
+                    {% if propiedad.descripcion %}
+                    <div class="mb-4">
+                        <h5 class="border-bottom pb-2">Descripción</h5>
+                        <p class="text-muted">{{ propiedad.descripcion|linebreaks }}</p>
+                    </div>
+                    {% endif %}
+
+                    <!-- Ubicación -->
+                    <div class="mb-4">
+                        <h5 class="border-bottom pb-2">Ubicación</h5>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p class="mb-1">
+                                    <i class="fas fa-map-marker-alt text-primary me-2"></i>
+                                    <strong>Departamento:</strong> {{ propiedad.departamento|default:"No especificado" }}
+                                </p>
+                                <p class="mb-1">
+                                    <i class="fas fa-map-marker-alt text-primary me-2"></i>
+                                    <strong>Provincia:</strong> {{ propiedad.provincia|default:"No especificado" }}
+                                </p>
+                                <p class="mb-1">
+                                    <i class="fas fa-map-marker-alt text-primary me-2"></i>
+                                    <strong>Distrito:</strong> {{ propiedad.distrito|default:"No especificado" }}
+                                </p>
+                            </div>
+                            <div class="col-md-6">
+                                {% if propiedad.coordenadas %}
+                                <p class="mb-1">
+                                    <i class="fas fa-globe-americas text-primary me-2"></i>
+                                    <strong>Coordenadas:</strong> {{ propiedad.coordenadas }}
+                                </p>
+                                {% endif %}
+                                {% if propiedad.lat and propiedad.lng %}
+                                <p class="mb-1">
+                                    <i class="fas fa-map-pin text-primary me-2"></i>
+                                    <strong>Latitud:</strong> {{ propiedad.lat|floatformat:6 }}, 
+                                    <strong>Longitud:</strong> {{ propiedad.lng|floatformat:6 }}
+                                </p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Columna derecha: Información adicional -->
+        <div class="col-lg-4">
+            <!-- Información de contacto -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white border-bottom">
+                    <h5 class="mb-0">Información de Contacto</h5>
+                </div>
+                <div class="card-body">
+                    {% if propiedad.agente_inmobiliario %}
+                    <p class="mb-2">
+                        <i class="fas fa-user-tie text-primary me-2"></i>
+                        <strong>Agente:</strong> {{ propiedad.agente_inmobiliario }}
+                    </p>
+                    {% endif %}
+                    
+                    {% if propiedad.telefono_agente %}
+                    <p class="mb-2">
+                        <i class="fas fa-phone text-primary me-2"></i>
+                        <strong>Teléfono:</strong> {{ propiedad.telefono_agente }}
+                    </p>
+                    {% endif %}
+                    
+                    {% if propiedad.email_agente %}
+                    <p class="mb-2">
+                        <i class="fas fa-envelope text-primary me-2"></i>
+                        <strong>Email:</strong> 
+                        <a href="mailto:{{ propiedad.email_agente }}">{{ propiedad.email_agente }}</a>
+                    </p>
+                    {% endif %}
+                    
+                    {% if propiedad.oficina_remax %}
+                    <p class="mb-2">
+                        <i class="fas fa-building text-primary me-2"></i>
+                        <strong>Oficina:</strong> {{ propiedad.oficina_remax }}
+                    </p>
+                    {% endif %}
+                    
+                    {% if propiedad.portal %}
+                    <p class="mb-2">
+                        <i class="fas fa-link text-primary me-2"></i>
+                        <strong>Portal:</strong> {{ propiedad.portal }}
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Información técnica -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white border-bottom">
+                    <h5 class="mb-0">Información Técnica</h5>
+                </div>
+                <div class="card-body">
+                    {% if propiedad.area_terreno %}
+                    <p class="mb-2">
+                        <i class="fas fa-mountain text-primary me-2"></i>
+                        <strong>Área de terreno:</strong> {{ propiedad.area_terreno|floatformat:0 }} m²
+                    </p>
+                    {% endif %}
+                    
+                    {% if propiedad.numero_pisos %}
+                    <p class="mb-2">
+                        <i class="fas fa-building text-primary me-2"></i>
+                        <strong>Número de pisos:</strong> {{ propiedad.numero_pisos }}
+                    </p>
+                    {% endif %}
+                    
+                    {% if propiedad.antiguedad %}
+                    <p class="mb-2">
+                        <i class="fas fa-calendar-alt text-primary me-2"></i>
+                        <strong>Antigüedad:</strong> {{ propiedad.antiguedad }}
+                    </p>
+                    {% endif %}
+                    
+                    {% if propiedad.fecha_publicacion %}
+                    <p class="mb-2">
+                        <i class="fas fa-calendar text-primary me-2"></i>
+                        <strong>Fecha de publicación:</strong> {{ propiedad.fecha_publicacion }}
+                    </p>
+                    {% endif %}
+                    
+                    {% if propiedad.id_propiedad %}
+                    <p class="mb-2">
+                        <i class="fas fa-id-card text-primary me-2"></i>
+                        <strong>ID de propiedad:</strong> {{ propiedad.id_propiedad }}
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Atributos extras -->
+            {% if atributos_ordenados %}
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-bottom">
+                    <h5 class="mb-0">Atributos Adicionales</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for key, value in atributos_ordenados %}
+                        <div class="col-12 mb-2">
+                            <small class="text-muted d-block">{{ key|title }}:</small>
+                            <span class="fw-medium">{{ value|default:"-" }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Servicios -->
+    {% if propiedad.servicio_agua or propiedad.energia_electrica or propiedad.servicio_drenaje or propiedad.servicio_gas %}
+    <div class="card border-0 shadow-sm mt-4">
+        <div class="card-header bg-white border-bottom">
+            <h5 class="mb-0">Servicios</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                {% if propiedad.servicio_agua %}
+                <div class="col-md-3 col-6 mb-2">
+                    <div class="text-center">
+                        <i class="fas fa-tint fa-2x text-primary mb-2"></i>
+                        <div class="small">Agua</div>
+                        <div class="fw-medium">{{ propiedad.servicio_agua }}</div>
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% if propiedad.energia_electrica %}
+                <div class="col-md-3 col-6 mb-2">
+                    <div class="text-center">
+                        <i class="fas fa-bolt fa-2x text-warning mb-2"></i>
+                        <div class="small">Energía</div>
+                        <div class="fw-medium">{{ propiedad.energia_electrica }}</div>
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% if propiedad.servicio_drenaje %}
+                <div class="col-md-3 col-6 mb-2">
+                    <div class="text-center">
+                        <i class="fas fa-water fa-2x text-info mb-2"></i>
+                        <div class="small">Drenaje</div>
+                        <div class="fw-medium">{{ propiedad.servicio_drenaje }}</div>
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% if propiedad.servicio_gas %}
+                <div class="col-md-3 col-6 mb-2">
+                    <div class="text-center">
+                        <i class="fas fa-fire fa-2x text-danger mb-2"></i>
+                        <div class="small">Gas</div>
+                        <div class="fw-medium">{{ propiedad.servicio_gas }}</div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.property-actions .btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+}
+
+.property-actions .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.property-actions .btn-edit {
+    background-color: #5ab0ae;
+    color: white;
+    border: 1px solid #5ab0ae;
+}
+
+.property-actions .btn-edit:hover {
+    background-color: #4a9c9a;
+    border-color: #4a9c9a;
+    color: white;
+}
+
+.property-actions .btn-external {
+    background-color: transparent;
+    color: var(--color-primary);
+    border: 1px solid var(--color-primary);
+}
+
+.property-actions .btn-external:hover {
+    background-color: var(--color-primary);
+    color: white;
+    border-color: var(--color-primary);
+}
+
+.property-image-placeholder {
+    padding: 3rem;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    color: #6c757d;
+}
+
+.feature-item {
+    transition: all 0.2s ease;
+}
+
+.feature-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+</style>
+{% endblock %}

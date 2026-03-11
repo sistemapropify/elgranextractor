@@ -96,6 +96,85 @@ class SugeridorCampos:
             'similares_existentes': similares_existentes,
         }
 
+    @staticmethod
+    def sugerir_campos(df):
+        """
+        Analiza un DataFrame completo y sugiere mapeos para todas sus columnas.
+        
+        Args:
+            df: DataFrame de pandas
+            
+        Returns:
+            dict con estructura:
+            {
+                'sugerencias': {
+                    'nombre_columna': {
+                        'nombre_sugerido_bd': str,
+                        'titulo_display': str,
+                        'tipo_dato_sugerido': str,
+                        'es_campo_fijo': bool,
+                        'campo_existente': dict or None,
+                        'columna_existe_fisica': bool,
+                    },
+                    ...
+                },
+                'errores': list
+            }
+        """
+        from .models import CampoDinamico
+        import pandas as pd
+        
+        sugerencias = {}
+        errores = []
+        
+        for columna in df.columns:
+            try:
+                # Tomar muestra de valores (primeros 20 no nulos)
+                valores_muestra = df[columna].dropna().head(20).tolist()
+                if not valores_muestra:
+                    valores_muestra = df[columna].head(20).tolist()
+                
+                # Analizar columna individual
+                analisis = SugeridorCampos.analizar_columna(columna, valores_muestra)
+                
+                # Verificar si ya existe un campo dinámico con este nombre
+                campo_existente = CampoDinamico.objects.filter(
+                    nombre_campo_bd=analisis['nombre_sugerido_bd']
+                ).first()
+                
+                # Verificar si la columna existe físicamente en la tabla
+                from .services import EjecutorMigraciones
+                columna_existe_fisica = EjecutorMigraciones.columna_existe_en_tabla(
+                    analisis['nombre_sugerido_bd']
+                )
+                
+                # Determinar si es campo fijo (basado en nombre)
+                campos_fijos = ['portal', 'tipo_propiedad', 'url_fuente', 'precio_usd',
+                               'departamento', 'provincia', 'distrito', 'area_terreno',
+                               'area_construida', 'habitaciones', 'banos', 'cocheras']
+                es_campo_fijo = analisis['nombre_sugerido_bd'] in campos_fijos
+                
+                sugerencias[columna] = {
+                    'nombre_sugerido_bd': analisis['nombre_sugerido_bd'],
+                    'titulo_display': analisis['titulo_sugerido_display'],
+                    'tipo_dato_sugerido': analisis['tipo_sugerido'],
+                    'es_campo_fijo': es_campo_fijo,
+                    'campo_existente': {
+                        'nombre_campo_bd': campo_existente.nombre_campo_bd,
+                        'titulo_display': campo_existente.titulo_display,
+                        'tipo_dato': campo_existente.tipo_dato,
+                    } if campo_existente else None,
+                    'columna_existe_fisica': columna_existe_fisica,
+                }
+            except Exception as e:
+                errores.append(f"Error analizando columna '{columna}': {str(e)}")
+                continue
+        
+        return {
+            'sugerencias': sugerencias,
+            'errores': errores
+        }
+
 
 class EjecutorMigraciones:
     """Clase para ejecutar migraciones de campos dinámicos en la base de datos."""
@@ -272,9 +351,13 @@ class ProcesadorExcel:
         """Lee archivo Excel o CSV y retorna DataFrame."""
         import pandas as pd
         if archivo.name.endswith('.csv'):
-            df = pd.read_csv(archivo)
+            df = pd.read_csv(archivo, index_col=False)
         else:
             df = pd.read_excel(archivo, engine='openpyxl')
+        # Eliminar columnas que comiencen con 'Unnamed' (columnas sin nombre)
+        columnas_unnamed = [col for col in df.columns if isinstance(col, str) and col.startswith('Unnamed')]
+        if columnas_unnamed:
+            df = df.drop(columns=columnas_unnamed)
         return df
     
     @staticmethod

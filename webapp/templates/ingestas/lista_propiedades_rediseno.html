@@ -1,0 +1,1687 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Portal Inmobiliario - Catálogo de Propiedades{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --color-primary: #047d7d;
+        --color-secondary: #5ab0ae;
+        --color-accent: #2ea44f;
+        --navbar-height: 60px;
+    }
+
+    /* Contenedor principal */
+    .portal-container {
+        display: flex;
+        flex-direction: column;
+        height: calc(100vh - var(--navbar-height));
+        overflow: hidden;
+        background: #fff;
+    }
+
+    /* Barra de filtros superior */
+    .filters-bar {
+        background: #fff;
+        border-bottom: 1px solid rgba(4, 125, 125, 0.1);
+        padding: 0.75rem 1rem;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+        z-index: 100;
+        flex-shrink: 0;
+    }
+
+    .filters-bar form {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        align-items: flex-end;
+    }
+
+    .filter-group {
+        display: flex;
+        flex-direction: column;
+        min-width: 150px;
+    }
+
+    .filter-group label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #4a5a5a;
+        margin-bottom: 0.25rem;
+    }
+
+    .filter-group .form-control,
+    .filter-group .form-select {
+        padding: 0.375rem 0.5rem;
+        font-size: 0.85rem;
+        border-color: rgba(4, 125, 125, 0.2);
+        border-radius: 4px;
+        height: 32px;
+    }
+
+    .filter-actions {
+        display: flex;
+        gap: 0.5rem;
+        margin-left: auto;
+    }
+
+    .filter-checkboxes {
+        background: #f8f9fa;
+        padding: 8px;
+        border-radius: 4px;
+        border: 1px solid rgba(4, 125, 125, 0.1);
+    }
+
+    .filter-checkboxes .form-check {
+        margin-bottom: 4px;
+    }
+
+    .filter-checkboxes .form-check:last-child {
+        margin-bottom: 0;
+    }
+
+    .filter-checkboxes .form-check-label {
+        font-size: 0.8rem;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .filter-checkboxes .form-check-input {
+        margin-top: 0;
+        margin-right: 6px;
+    }
+
+    /* Contenido principal: Mapa + Propiedades */
+    .main-content {
+        display: flex;
+        flex: 1;
+        overflow: hidden;
+    }
+
+    /* Mapa a la izquierda (50%) */
+    .map-section {
+        flex: 0 0 50%;
+        display: flex;
+        flex-direction: column;
+        border-right: 1px solid rgba(4, 125, 125, 0.1);
+        background: #f8fafa;
+    }
+
+    .map-header {
+        padding: 0.75rem 1rem;
+        background: #fff;
+        border-bottom: 1px solid rgba(4, 125, 125, 0.1);
+        font-weight: 600;
+        color: var(--color-primary);
+        font-size: 0.9rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .map-container {
+        flex: 1;
+        position: relative;
+        min-height: 0;
+    }
+
+    #propertyMap {
+        width: 100%;
+        height: 100%;
+        min-height: 300px;
+    }
+
+    /* Propiedades a la derecha (50%) */
+    .properties-section {
+        flex: 0 0 50%;
+        display: flex;
+        flex-direction: column;
+        background: #fff;
+    }
+
+    .properties-header {
+        padding: 0.75rem 1rem;
+        background: #fff;
+        border-bottom: 1px solid rgba(4, 125, 125, 0.1);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .properties-title {
+        font-weight: 600;
+        color: var(--color-primary);
+        font-size: 0.9rem;
+        margin: 0;
+    }
+
+    .properties-count {
+        font-size: 0.8rem;
+        color: #6c757d;
+        background: rgba(4, 125, 125, 0.08);
+        padding: 0.25rem 0.5rem;
+        border-radius: 12px;
+    }
+
+    /* Contenedor de tarjetas con scroll */
+    .properties-container {
+        flex: 1;
+        overflow-y: auto;
+        padding: 0.75rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    /* Tarjetas de propiedades compactas */
+    .property-card {
+        background: #fff;
+        border-radius: 6px;
+        border: 1px solid rgba(4, 125, 125, 0.1);
+        padding: 0.75rem;
+        display: flex;
+        gap: 0.75rem;
+        transition: all 0.15s ease;
+        cursor: pointer;
+        position: relative;
+    }
+
+    .property-card:hover {
+        border-color: rgba(4, 125, 125, 0.3);
+        box-shadow: 0 2px 6px rgba(4, 125, 125, 0.1);
+        transform: translateY(-1px);
+    }
+
+    .property-card.active {
+        background-color: rgba(243, 253, 253, 0.95);
+        border-color: var(--color-primary);
+    }
+
+    /* Imagen de la propiedad */
+    .property-image-container {
+        flex-shrink: 0;
+        width: 80px;
+        height: 80px;
+        border-radius: 4px;
+        overflow: hidden;
+        background: #f0f4f4;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(4, 125, 125, 0.08);
+    }
+
+    .property-image {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .property-image-placeholder {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #8a9a9a;
+        font-size: 1.25rem;
+    }
+
+    /* Contenido de la tarjeta */
+    .property-content {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .property-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 0.25rem;
+    }
+
+    .property-type {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--color-primary);
+        background: rgba(4, 125, 125, 0.08);
+        padding: 0.125rem 0.375rem;
+        border-radius: 3px;
+    }
+
+    .property-price {
+        font-size: 0.9rem;
+        font-weight: 700;
+        color: var(--color-primary);
+        text-align: right;
+    }
+
+    .property-description {
+        font-size: 0.8rem;
+        color: #3b5454;
+        line-height: 1.2;
+        margin-bottom: 0.375rem;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .property-location {
+        font-size: 0.75rem;
+        color: #6c757d;
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        margin-bottom: 0.375rem;
+    }
+
+    .property-location i {
+        color: var(--color-secondary);
+        font-size: 0.7rem;
+    }
+
+    .property-features {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        margin-bottom: 0.375rem;
+    }
+
+    .feature-item {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        font-size: 0.7rem;
+        color: #5a6c6c;
+    }
+
+    .feature-item i {
+        color: var(--color-secondary);
+        font-size: 0.75rem;
+    }
+
+    .property-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: auto;
+        padding-top: 0.375rem;
+        border-top: 1px solid rgba(4, 125, 125, 0.05);
+    }
+
+    .property-source {
+        font-size: 0.7rem;
+        color: #8a9a9a;
+    }
+
+    .property-actions {
+        display: flex;
+        gap: 0.25rem;
+    }
+
+    .property-actions .btn {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+        border-radius: 4px;
+        transition: all 0.2s ease;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.25rem;
+    }
+    
+    .property-actions .btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    
+    .property-actions .btn-details {
+        background-color: var(--color-primary);
+        color: white;
+        border: 1px solid var(--color-primary);
+    }
+    
+    .property-actions .btn-details:hover {
+        background-color: #036a6a;
+        border-color: #036a6a;
+        color: white;
+    }
+    
+    .property-actions .btn-edit {
+        background-color: #5ab0ae;
+        color: white;
+        border: 1px solid #5ab0ae;
+    }
+    
+    .property-actions .btn-edit:hover {
+        background-color: #4a9c9a;
+        border-color: #4a9c9a;
+        color: white;
+    }
+    
+    .property-actions .btn-external {
+        background-color: transparent;
+        color: var(--color-primary);
+        border: 1px solid var(--color-primary);
+    }
+    
+    .property-actions .btn-external:hover {
+        background-color: var(--color-primary);
+        color: white;
+    }
+
+    /* Paginación */
+    .pagination-container {
+        padding: 0.75rem 1rem;
+        border-top: 1px solid rgba(4, 125, 125, 0.1);
+        background: #fff;
+        flex-shrink: 0;
+    }
+
+    .pagination {
+        margin: 0;
+        justify-content: center;
+    }
+
+    .page-link {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.8rem;
+        color: var(--color-primary);
+        border-color: rgba(4, 125, 125, 0.1);
+    }
+
+    .page-item.active .page-link {
+        background-color: var(--color-primary);
+        border-color: var(--color-primary);
+    }
+
+    /* Estados vacíos */
+    .empty-state {
+        padding: 2rem 1rem;
+        text-align: center;
+        color: #6c757d;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .empty-state i {
+        font-size: 2.5rem;
+        margin-bottom: 1rem;
+        color: #ced4da;
+    }
+
+    /* Responsive */
+    @media (max-width: 992px) {
+        .main-content {
+            flex-direction: column;
+        }
+
+        .map-section,
+        .properties-section {
+            flex: 0 0 50%;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .filters-bar form {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .filter-group {
+            min-width: 100%;
+        }
+
+        .filter-actions {
+            margin-left: 0;
+            width: 100%;
+        }
+
+        .main-content {
+            flex-direction: column;
+        }
+
+        .map-section,
+        .properties-section {
+            flex: 0 0 100%;
+            min-height: 300px;
+        }
+    }
+
+    /* Estilos para el modal de agregar propiedad */
+    #propertyMapModal {
+        width: 100%;
+        height: 300px;
+    }
+    
+    .modal-lg {
+        max-width: 900px;
+    }
+    
+    .modal-body .form-label {
+        font-weight: 600;
+        font-size: 0.9rem;
+        color: #4a5a5a;
+    }
+    
+    .modal-body .form-control:read-only {
+        background-color: #f8f9fa;
+        cursor: not-allowed;
+    }
+    
+    .modal-body .input-group .btn {
+        border-color: #ced4da;
+    }
+    
+    /* Spinner para botón de guardar */
+    .btn-spinner {
+        display: inline-block;
+        width: 1rem;
+        height: 1rem;
+        border: 2px solid rgba(255,255,255,0.3);
+        border-radius: 50%;
+        border-top-color: #fff;
+        animation: spin 1s ease-in-out infinite;
+        margin-right: 0.5rem;
+    }
+    
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="portal-container">
+    <!-- Barra de filtros superior -->
+    <div class="filters-bar">
+        <form method="get" id="filter-form">
+            <div class="filter-group">
+                <label for="filter-type">Tipo</label>
+                <select class="form-select" id="filter-type" name="tipo_propiedad">
+                    <option value="">Todos</option>
+                    {% for tipo in tipos_propiedad %}
+                        <option value="{{ tipo }}">{{ tipo }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label for="filter-departamento">Departamento</label>
+                <select class="form-select" id="filter-departamento" name="departamento">
+                    <option value="">Todos</option>
+                    {% for depto in departamentos %}
+                        <option value="{{ depto }}">{{ depto }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label for="filter-distrito">Distrito</label>
+                <select class="form-select" id="filter-distrito" name="distrito">
+                    <option value="">Todos</option>
+                    {% for distrito in distritos %}
+                        <option value="{{ distrito }}">{{ distrito }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label>Fuentes</label>
+                <div class="filter-checkboxes">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="filter-fuente-local" name="fuente_local" value="local" {% if fuente_local_checked %}checked{% endif %}>
+                        <label class="form-check-label" for="filter-fuente-local">
+                            <i class="fas fa-database text-primary"></i> Locales
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="filter-fuente-externa" name="fuente_externa" value="externa" {% if fuente_externa_checked %}checked{% endif %}>
+                        <label class="form-check-label" for="filter-fuente-externa">
+                            <i class="fas fa-external-link-alt text-warning"></i> Externas
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="filter-fuente-propify" name="fuente_propify" value="propify" {% if fuente_propify_checked %}checked{% endif %}>
+                        <label class="form-check-label" for="filter-fuente-propify">
+                            <i class="fas fa-home text-success"></i> Propify
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="filter-group">
+                <label for="filter-precio-min">Precio Mín</label>
+                <input type="number" class="form-control" id="filter-precio-min" name="precio_min" placeholder="0" min="0" step="1000">
+            </div>
+
+            <div class="filter-group">
+                <label for="filter-precio-max">Precio Máx</label>
+                <input type="number" class="form-control" id="filter-precio-max" name="precio_max" placeholder="Sin límite" min="0" step="1000">
+            </div>
+
+            <div class="filter-group">
+                <label for="filter-habitaciones">Hab.</label>
+                <select class="form-select" id="filter-habitaciones" name="habitaciones">
+                    <option value="">Cualquiera</option>
+                    <option value="1">1+</option>
+                    <option value="2">2+</option>
+                    <option value="3">3+</option>
+                    <option value="4">4+</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label for="filter-banios">Baños</label>
+                <select class="form-select" id="filter-banios" name="banios">
+                    <option value="">Cualquiera</option>
+                    <option value="1">1+</option>
+                    <option value="2">2+</option>
+                    <option value="3">3+</option>
+                </select>
+            </div>
+
+            <div class="filter-actions">
+                <button type="submit" class="btn btn-primary btn-sm">
+                    <i class="fas fa-filter"></i> Filtrar
+                </button>
+                <a href="{% url 'ingestas:lista_propiedades' %}" class="btn btn-outline-secondary btn-sm">
+                    <i class="fas fa-times"></i> Limpiar
+                </a>
+                <button type="button" class="btn btn-success btn-sm" id="btn-add-property" data-bs-toggle="modal" data-bs-target="#addPropertyModal">
+                    <i class="fas fa-plus"></i> Agregar Propiedad
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Contenido principal: Mapa + Propiedades -->
+    <div class="main-content">
+        <!-- Mapa a la izquierda -->
+        <div class="map-section">
+            <div class="map-header">
+                <i class="fas fa-map"></i> Mapa de Propiedades
+            </div>
+            <div class="map-container">
+                <div id="propertyMap"></div>
+            </div>
+        </div>
+
+        <!-- Propiedades a la derecha -->
+        <div class="properties-section">
+            <div class="properties-header">
+                <h3 class="properties-title">Propiedades Disponibles</h3>
+                <span class="properties-count">{{ total_propiedades }} propiedades ({{ conteo_locales }} locales + {{ conteo_externas }} externas + {{ conteo_propify }} propify)</span>
+                {% if conteo_propify and conteo_propify > 0 %}
+                <div class="alert alert-success alert-dismissible fade show mt-2" style="padding: 5px 10px; font-size: 0.9rem; margin-top: 5px !important;">
+                    <i class="fas fa-check-circle"></i> <strong>PROPIFY FUNCIONANDO:</strong> Se encontraron {{ conteo_propify }} propiedades de la base de datos Propify.
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close" style="padding: 5px; font-size: 0.7rem;"></button>
+                </div>
+                {% endif %}
+                
+                <!-- BOTÓN PARA ACCEDER AL NUEVO DISEÑO PROPIFY -->
+                <div class="mt-3">
+                    <a href="/propifai/propiedades/" class="btn btn-success btn-lg">
+                        <i class="bi bi-house-door-fill me-2"></i>
+                        Ver Propiedades Propify (Nuevo Diseño)
+                    </a>
+                    <small class="text-muted d-block mt-1">Accede al catálogo mejorado de propiedades Propify con mapa interactivo</small>
+                </div>
+            </div>
+
+            <div class="properties-container" id="propertiesContainer">
+                {% if todas_propiedades %}
+                    {% for propiedad in todas_propiedades %}
+                    <div class="property-card" data-property-id="{{ propiedad.id|default:propiedad.id_externo }}" data-lat="{{ propiedad.lat|default:'' }}" data-lng="{{ propiedad.lng|default:'' }}" data-es-externo="{{ propiedad.es_externo|default:'false' }}" data-es-propify="{{ propiedad.es_propify|default:'false' }}">
+                        <!-- Imagen -->
+                        <div class="property-image-container">
+                            {% if propiedad.primera_imagen or propiedad.imagen_principal %}
+                                <img src="{{ propiedad.primera_imagen|default:propiedad.imagen_principal }}" alt="{{ propiedad.tipo_propiedad|default:'Propiedad' }}" class="property-image" onerror="handleImageError(this)">
+                            {% else %}
+                                <div class="property-image-placeholder">
+                                    <i class="fas fa-home"></i>
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Contenido -->
+                        <div class="property-content">
+                            <div class="property-header">
+                                <span class="property-type">
+                                    {{ propiedad.tipo_propiedad|default:"Propiedad" }}
+                                    {% if propiedad.es_externo and not propiedad.es_propify %}
+                                        <span class="badge bg-warning text-dark ms-1" style="font-size: 0.6rem; padding: 0.1rem 0.3rem;">Externa</span>
+                                    {% endif %}
+                                    {% if propiedad.es_propify %}
+                                        <span class="badge bg-success text-white ms-1" style="font-size: 0.6rem; padding: 0.1rem 0.3rem;">Propify</span>
+                                    {% endif %}
+                                </span>
+                                <div class="property-price">
+                                    {% if propiedad.precio_usd %}
+                                        ${{ propiedad.precio_usd|floatformat:0 }}
+                                    {% else %}
+                                        Consultar
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            {% if propiedad.es_propify %}
+                                <!-- Diseño especial para Propify -->
+                                <div class="property-description">
+                                    {% if propiedad.codigo %}
+                                        <div class="mb-1"><strong>Código:</strong> {{ propiedad.codigo }}</div>
+                                    {% endif %}
+                                    {% if propiedad.direccion %}
+                                        <div class="mb-1"><strong>Dirección:</strong> {{ propiedad.direccion|truncatechars:60 }}</div>
+                                    {% endif %}
+                                    {% if propiedad.descripcion %}
+                                        <div>{{ propiedad.descripcion|truncatechars:80 }}</div>
+                                    {% else %}
+                                        Propiedad de Propify
+                                    {% endif %}
+                                </div>
+                            {% else %}
+                                <!-- Diseño normal para locales y externas -->
+                                <div class="property-description">
+                                    {{ propiedad.descripcion|truncatechars:80|default:"Propiedad sin descripción" }}
+                                </div>
+                            {% endif %}
+
+                            <div class="property-location">
+                                <i class="fas fa-map-marker-alt"></i>
+                                <span>
+                                    {% if propiedad.ubicacion_completa %}
+                                        {{ propiedad.ubicacion_completa }}
+                                    {% elif propiedad.departamento_nombre or propiedad.provincia_nombre %}
+                                        {{ propiedad.departamento_nombre|default:"" }}{% if propiedad.provincia_nombre %}, {{ propiedad.provincia_nombre }}{% endif %}
+                                    {% elif propiedad.departamento or propiedad.provincia %}
+                                        {{ propiedad.departamento|default:"" }}{% if propiedad.provincia %}, {{ propiedad.provincia }}{% endif %}
+                                    {% else %}
+                                        Ubicación no especificada
+                                    {% endif %}
+                                </span>
+                            </div>
+
+                            <div class="property-features">
+                                {% if propiedad.area_construida %}
+                                <div class="feature-item">
+                                    <i class="fas fa-ruler-combined"></i>
+                                    <span>{{ propiedad.area_construida|floatformat:0 }} m²</span>
+                                </div>
+                                {% endif %}
+
+                                {% if propiedad.habitaciones %}
+                                <div class="feature-item">
+                                    <i class="fas fa-bed"></i>
+                                    <span>{{ propiedad.habitaciones }} hab.</span>
+                                </div>
+                                {% elif propiedad.numero_habitaciones %}
+                                <div class="feature-item">
+                                    <i class="fas fa-bed"></i>
+                                    <span>{{ propiedad.numero_habitaciones }} hab.</span>
+                                </div>
+                                {% endif %}
+
+                                {% if propiedad.banios %}
+                                <div class="feature-item">
+                                    <i class="fas fa-bath"></i>
+                                    <span>{{ propiedad.banios }} baños</span>
+                                </div>
+                                {% elif propiedad.numero_banos %}
+                                <div class="feature-item">
+                                    <i class="fas fa-bath"></i>
+                                    <span>{{ propiedad.numero_banos }} baños</span>
+                                </div>
+                                {% endif %}
+                            </div>
+
+                            <div class="property-footer">
+                                <div class="property-source">
+                                    {% if propiedad.es_propify %}
+                                        <span class="text-success">Propify DB</span>
+                                    {% elif propiedad.es_externo %}
+                                        <span class="text-info">API Externa</span>
+                                    {% else %}
+                                        {{ propiedad.fuente_excel|truncatechars:20|default:"Fuente Local" }}
+                                    {% endif %}
+                                </div>
+                                <div class="property-actions">
+                                    {% if propiedad.es_propify %}
+                                        <!-- Para propiedades Propify, mostrar solo código y sin acciones -->
+                                        <span class="text-muted small">Código: {{ propiedad.codigo|default:"N/A" }}</span>
+                                    {% elif propiedad.es_externo %}
+                                        <!-- Para propiedades externas, solo mostrar enlace al portal -->
+                                        <a href="{{ propiedad.url_propiedad|default:'#' }}" target="_blank" class="btn btn-external btn-sm" title="Ver en portal original">
+                                            <i class="fas fa-external-link-alt"></i>
+                                            <span class="btn-text">Portal</span>
+                                        </a>
+                                    {% else %}
+                                        <!-- Para propiedades locales, mostrar detalles y edición -->
+                                        <a href="{% url 'ingestas:detalle_propiedad' propiedad.id %}" class="btn btn-details btn-sm" title="Ver detalles">
+                                            <i class="fas fa-eye"></i>
+                                            <span class="btn-text">Detalles</span>
+                                        </a>
+                                        <a href="{% url 'ingestas:editar_propiedad' propiedad.id %}" class="btn btn-edit btn-sm" title="Editar propiedad">
+                                            <i class="fas fa-edit"></i>
+                                            <span class="btn-text">Editar</span>
+                                        </a>
+                                        <a href="{{ propiedad.url_propiedad|default:'#' }}" target="_blank" class="btn btn-external btn-sm" title="Ver en portal original">
+                                            <i class="fas fa-external-link-alt"></i>
+                                            <span class="btn-text">Portal</span>
+                                        </a>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="empty-state">
+                        <i class="fas fa-home"></i>
+                        <h4>No hay propiedades disponibles</h4>
+                        <p>Prueba ajustando los filtros de búsqueda</p>
+                        <a href="{% url 'ingestas:subir_excel' %}" class="btn btn-primary btn-sm mt-2">
+                            <i class="fas fa-upload"></i> Importar Propiedades
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+
+            <!-- Paginación -->
+            {% if is_paginated %}
+            <div class="pagination-container">
+                <nav aria-label="Paginación de propiedades">
+                    <ul class="pagination">
+                        {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                <i class="fas fa-chevron-left"></i>
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {% for num in page_obj.paginator.page_range %}
+                            {% if page_obj.number == num %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ num }}</span>
+                            </li>
+                            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a>
+                            </li>
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                <i class="fas fa-chevron-right"></i>
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal para agregar propiedad -->
+<div class="modal fade" id="addPropertyModal" tabindex="-1" aria-labelledby="addPropertyModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="addPropertyModalLabel">
+                    <i class="fas fa-plus me-2"></i>Agregar Nueva Propiedad
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addPropertyForm">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="propertyType" class="form-label">Tipo de Propiedad</label>
+                                <select class="form-select" id="propertyType" required>
+                                    <option value="">Seleccionar tipo</option>
+                                    <option value="casa">Casa</option>
+                                    <option value="departamento">Departamento</option>
+                                    <option value="oficina">Oficina</option>
+                                    <option value="local">Local Comercial</option>
+                                    <option value="terreno">Terreno</option>
+                                    <option value="casa_playa">Casa de Playa</option>
+                                    <option value="casa_campo">Casa de Campo</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="propertyDescription" class="form-label">Descripción</label>
+                                <textarea class="form-control" id="propertyDescription" rows="3" placeholder="Descripción de la propiedad" required></textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label for="propertyPrice" class="form-label">Precio (USD)</label>
+                                <input type="number" class="form-control" id="propertyPrice" placeholder="Ej: 150000" min="0" step="1000" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="propertyArea" class="form-label">Área Construida (m²)</label>
+                                <input type="number" class="form-control" id="propertyArea" placeholder="Ej: 120" min="0" step="1">
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="propertyBedrooms" class="form-label">Habitaciones</label>
+                                        <input type="number" class="form-control" id="propertyBedrooms" placeholder="Ej: 3" min="0" step="1">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="propertyBathrooms" class="form-label">Baños</label>
+                                        <input type="number" class="form-control" id="propertyBathrooms" placeholder="Ej: 2" min="0" step="1">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="propertyAddress" class="form-label">Dirección</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="propertyAddress" placeholder="Ej: Av. Ejemplo 123, Arequipa">
+                                    <button class="btn btn-outline-secondary" type="button" id="btnSearchAddress">
+                                        <i class="fas fa-search"></i>
+                                    </button>
+                                </div>
+                                <small class="text-muted">Ingresa una dirección para centrar el mapa</small>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Ubicación en el Mapa</label>
+                                <div id="propertyMapContainer" style="height: 300px; border: 1px solid #ddd; border-radius: 4px; overflow: hidden;">
+                                    <div id="propertyMapModal"></div>
+                                </div>
+                                <small class="text-muted">Haz clic en el mapa para colocar el marcador de la propiedad</small>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="propertyLat" class="form-label">Latitud</label>
+                                        <input type="text" class="form-control" id="propertyLat" readonly>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="propertyLng" class="form-label">Longitud</label>
+                                        <input type="text" class="form-control" id="propertyLng" readonly>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="propertyDepartment" class="form-label">Departamento</label>
+                                <input type="text" class="form-control" id="propertyDepartment" placeholder="Ej: Arequipa">
+                            </div>
+                            <div class="mb-3">
+                                <label for="propertyProvince" class="form-label">Provincia</label>
+                                <input type="text" class="form-control" id="propertyProvince" placeholder="Ej: Arequipa">
+                            </div>
+                            <div class="mb-3">
+                                <label for="propertyDistrict" class="form-label">Distrito</label>
+                                <input type="text" class="form-control" id="propertyDistrict" placeholder="Ej: Cayma">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Segunda fila: Campos adicionales -->
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="propertyLandArea" class="form-label">Área de Terreno (m²)</label>
+                                <input type="number" class="form-control" id="propertyLandArea" placeholder="Ej: 200" min="0" step="1">
+                            </div>
+                            <div class="mb-3">
+                                <label for="propertyFloors" class="form-label">Número de Pisos</label>
+                                <input type="number" class="form-control" id="propertyFloors" placeholder="Ej: 2" min="0" step="1">
+                            </div>
+                            <div class="mb-3">
+                                <label for="propertyParking" class="form-label">Número de Cocheras</label>
+                                <input type="number" class="form-control" id="propertyParking" placeholder="Ej: 1" min="0" step="1">
+                            </div>
+                            <div class="mb-3">
+                                <label for="propertyAgent" class="form-label">Agente Inmobiliario</label>
+                                <input type="text" class="form-control" id="propertyAgent" placeholder="Nombre del agente">
+                            </div>
+                            <div class="mb-3">
+                                <label for="propertyImages" class="form-label">Imágenes (URLs separadas por comas)</label>
+                                <textarea class="form-control" id="propertyImages" rows="2" placeholder="https://ejemplo.com/imagen1.jpg, https://ejemplo.com/imagen2.jpg"></textarea>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="propertyId" class="form-label">ID de Propiedad</label>
+                                <input type="text" class="form-control" id="propertyId" placeholder="Ej: PRO-001">
+                            </div>
+                            <div class="mb-3">
+                                <label for="propertyPublicationDate" class="form-label">Fecha de Publicación</label>
+                                <input type="date" class="form-control" id="propertyPublicationDate">
+                            </div>
+                            <div class="mb-3">
+                                <label for="propertyAge" class="form-label">Antigüedad</label>
+                                <input type="text" class="form-control" id="propertyAge" placeholder="Ej: 5 años">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Servicios</label>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="serviceWater">
+                                    <label class="form-check-label" for="serviceWater">Agua</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="serviceElectricity">
+                                    <label class="form-check-label" for="serviceElectricity">Energía Eléctrica</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="serviceDrainage">
+                                    <label class="form-check-label" for="serviceDrainage">Drenaje</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="serviceGas">
+                                    <label class="form-check-label" for="serviceGas">Gas</label>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="propertyAgentEmail" class="form-label">Email del Agente</label>
+                                <input type="email" class="form-control" id="propertyAgentEmail" placeholder="agente@ejemplo.com">
+                            </div>
+                            <div class="mb-3">
+                                <label for="propertyAgentPhone" class="form-label">Teléfono del Agente</label>
+                                <input type="text" class="form-control" id="propertyAgentPhone" placeholder="+51 999 999 999">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Tercera fila: Campos de estado, portal y fecha de venta -->
+                    <div class="row mt-3">
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label for="propertyOffice" class="form-label">Oficina (Remax/Propify)</label>
+                                <input type="text" class="form-control" id="propertyOffice" placeholder="Ej: Remax Arequipa">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label for="propertyStatus" class="form-label">Estado</label>
+                                <select class="form-select" id="propertyStatus">
+                                    <option value="en_publicacion">En publicación</option>
+                                    <option value="vendido">Vendido</option>
+                                    <option value="reservado">Reservado</option>
+                                    <option value="retirado">Retirado</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label for="propertyPortal" class="form-label">Portal</label>
+                                <select class="form-select" id="propertyPortal">
+                                    <option value="Propify">Propify</option>
+                                    <option value="Remax">Remax</option>
+                                    <option value="Manual">Manual</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label for="propertySaleDate" class="form-label">Fecha de Venta</label>
+                                <input type="date" class="form-control" id="propertySaleDate">
+                                <small class="text-muted">Solo si el estado es "Vendido"</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Cuarta fila: Precio final de venta -->
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="propertyFinalSalePrice" class="form-label">Precio Final de Venta (USD)</label>
+                                <input type="number" class="form-control" id="propertyFinalSalePrice" placeholder="Ej: 145000" min="0" step="1000">
+                                <small class="text-muted">Solo si el estado es "Vendido"</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <!-- Espacio para futuro campo adicional -->
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnSaveProperty">
+                    <i class="fas fa-save me-1"></i>Guardar Propiedad
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% load static %}
+<!-- Google Maps API -->
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBrL1QF7vTl9zF8FmCUumfRpFJcaYokO7Q&libraries=places&callback=initMap" async defer></script>
+
+{{ todas_propiedades_json|json_script:"todas-propiedades-data" }}
+
+<script>
+    // Datos de todas las propiedades (sin paginar) para el mapa
+    const todasPropiedadesJSON = JSON.parse(document.getElementById('todas-propiedades-data').textContent);
+    
+    // URLs de iconos
+    const ICONO_PROPIFFY = '{% static "requerimientos/data/Pin-propify.png" %}';
+    const ICONO_REMAX = '{% static "requerimientos/data/pin-remax.png" %}';
+    const ICONO_LOCAL = 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png';
+    console.log('Icono Propify:', ICONO_PROPIFFY);
+    console.log('Icono Remax:', ICONO_REMAX);
+    
+    let map;
+    let markers = [];
+    let infoWindow;
+    let zonePolygons = [];
+    let zoneLabels = []; // Etiquetas de zonas
+    const ZONAS_API = '/cuadrantizacion/zonas/';
+    
+    /**
+     * Calcula el centro (centroide) de un polígono.
+     * @param {Array} coordinates - Array de coordenadas [[lat, lng], ...]
+     * @returns {Object} Centro {lat, lng}
+     */
+    function calculatePolygonCenter(coordinates) {
+        if (!coordinates || coordinates.length === 0) {
+            return null;
+        }
+        
+        let latSum = 0;
+        let lngSum = 0;
+        
+        coordinates.forEach(coord => {
+            latSum += coord[0];
+            lngSum += coord[1];
+        });
+        
+        return {
+            lat: latSum / coordinates.length,
+            lng: lngSum / coordinates.length
+        };
+    }
+    
+    /**
+     * Crea una etiqueta (label) en el centro de un polígono.
+     * @param {Object} center - Centro {lat, lng}
+     * @param {string} text - Texto a mostrar
+     * @param {Object} zone - Datos de la zona
+     * @returns {google.maps.Marker} Marcador de etiqueta
+     */
+    function createZoneLabel(center, text, zone) {
+        if (!center) return null;
+        
+        // Determinar color basado en el nivel
+        const levelColors = {
+            'pais': '#FF0000',
+            'departamento': '#FF6600',
+            'provincia': '#FFCC00',
+            'distrito': '#33CC33',
+            'zona': '#3366FF',
+            'subzona': '#9900CC'
+        };
+        
+        const color = levelColors[zone.nivel] || '#000000';
+        
+        const label = new google.maps.Marker({
+            position: center,
+            map: map,
+            icon: {
+                path: google.maps.SymbolPath.CIRCLE,
+                scale: 0, // Círculo invisible
+                fillOpacity: 0,
+                strokeOpacity: 0
+            },
+            label: {
+                text: text,
+                color: color,
+                fontSize: '12px',
+                fontWeight: 'bold',
+                className: 'zone-label'
+            },
+            zIndex: 1000
+        });
+        
+        return label;
+    }
+
+    // Inicializar mapa
+    function initMap() {
+        const defaultCenter = { lat: -16.4090, lng: -71.5375 }; // Arequipa, Perú
+        map = new google.maps.Map(document.getElementById('propertyMap'), {
+            center: defaultCenter,
+            zoom: 13,
+            styles: [
+                {
+                    featureType: "poi",
+                    elementType: "labels",
+                    stylers: [{ visibility: "off" }]
+                }
+            ]
+        });
+
+        infoWindow = new google.maps.InfoWindow();
+
+        // Agregar marcadores para propiedades con coordenadas (usando JSON de todas las propiedades)
+        console.log('Total propiedades en JSON:', todasPropiedadesJSON.length);
+        let marcadoresAgregados = 0;
+        let propifyCount = 0;
+        todasPropiedadesJSON.forEach(prop => {
+            const lat = prop.lat;
+            const lng = prop.lng;
+            const propertyId = prop.id || prop.id_externo;
+            const esExterno = prop.es_externo || false;
+            const esPropify = prop.es_propify || false;
+            const esRemax = prop.es_remax || false;
+            
+            if (esPropify) {
+                propifyCount++;
+                console.log('Propify encontrada:', prop.id, 'lat:', lat, 'lng:', lng);
+            }
+            
+            if (lat && lng && lat !== 0 && lng !== 0) {
+                const type = prop.tipo_propiedad || 'Propiedad';
+                const title = prop.descripcion || prop.titulo || 'Sin descripción';
+                const price = prop.precio_usd ? '$' + prop.precio_usd.toLocaleString() : 'Consultar';
+                
+                addMarker(lat, lng, type, title, price, propertyId, esExterno, esPropify, esRemax);
+                marcadoresAgregados++;
+            } else {
+                console.log('Propiedad sin coordenadas válidas:', prop.id, prop.tipo_propiedad);
+            }
+        });
+        console.log('Propify totales:', propifyCount);
+        console.log('Marcadores agregados:', marcadoresAgregados);
+
+        // Ajustar vista para mostrar todos los marcadores
+        if (markers.length > 0) {
+            const bounds = new google.maps.LatLngBounds();
+            markers.forEach(marker => bounds.extend(marker.getPosition()));
+            map.fitBounds(bounds);
+        } else {
+            // Si no hay marcadores, mantener vista por defecto
+            map.setZoom(13);
+        }
+        
+        // Cargar zonas de cuadrantización
+        loadZones();
+    }
+
+    function addMarker(lat, lng, type, description, price, propertyId, esExterno = false, esPropify = false, esRemax = false) {
+        // Determinar el icono según el tipo de propiedad
+        let iconUrl;
+        if (esPropify) {
+            // Icono personalizado de Propify
+            iconUrl = ICONO_PROPIFFY;
+        } else if (esExterno || esRemax) {
+            // Icono personalizado de Remax para propiedades externas o locales de Remax
+            iconUrl = ICONO_REMAX;
+        } else {
+            // Icono azul para propiedades locales no Remax
+            iconUrl = ICONO_LOCAL;
+        }
+        console.log(`addMarker: id=${propertyId}, esExterno=${esExterno}, esPropify=${esPropify}, esRemax=${esRemax}, icon=${iconUrl}`);
+
+        const marker = new google.maps.Marker({
+            position: { lat: lat, lng: lng },
+            map: map,
+            title: description,
+            icon: {
+                url: iconUrl,
+                scaledSize: new google.maps.Size(32, 32)
+            }
+        });
+
+        // Determinar el tipo de fuente para mostrar en la ventana de información
+        let fuente = 'Local';
+        if (esPropify) {
+            fuente = 'Propify DB';
+        } else if (esExterno) {
+            fuente = 'API Externa';
+        } else if (esRemax) {
+            fuente = 'Remax Local';
+        }
+
+        const contentString = `
+            <div class="map-info-window">
+                <h6>${type}</h6>
+                <p class="mb-1">${description}</p>
+                <p class="mb-1"><strong>${price}</strong></p>
+                <p class="mb-1"><small>Fuente: ${fuente}</small></p>
+                <button class="btn btn-sm btn-primary mt-1" onclick="focusPropertyCard('${propertyId}')">
+                    Ver detalles
+                </button>
+            </div>
+        `;
+
+        marker.addListener('click', () => {
+            infoWindow.setContent(contentString);
+            infoWindow.open(map, marker);
+        });
+
+        markers.push(marker);
+    }
+
+    // Cargar y mostrar zonas de cuadrantización
+    function loadZones() {
+        fetch(ZONAS_API)
+            .then(response => response.json())
+            .then(data => {
+                // Limpiar polígonos y etiquetas anteriores
+                zonePolygons.forEach(polygon => polygon.setMap(null));
+                zonePolygons = [];
+                zoneLabels.forEach(label => label.setMap(null));
+                zoneLabels = [];
+                
+                // Extraer resultados de la paginación (si existe)
+                const zones = data.results || data;
+                
+                // Crear polígonos para cada zona
+                zones.forEach(zone => {
+                    if (zone.coordenadas && zone.coordenadas.length > 0) {
+                        const polygon = new google.maps.Polygon({
+                            paths: zone.coordenadas.map(coord => ({ lat: coord[0], lng: coord[1] })),
+                            strokeColor: zone.color_borde || '#1976D2',
+                            strokeOpacity: 0.8,
+                            strokeWeight: 2,
+                            fillColor: zone.color_fill || '#2196F3',
+                            fillOpacity: zone.opacidad || 0.2,
+                            editable: false,
+                            draggable: false
+                        });
+                        
+                        polygon.setMap(map);
+                        polygon.zoneData = zone;
+                        
+                        // Configurar evento de clic para mostrar información
+                        google.maps.event.addListener(polygon, 'click', function() {
+                            const contentString = `
+                                <div class="map-info-window">
+                                    <h6>${zone.nombre_zona}</h6>
+                                    <p class="mb-1">${zone.descripcion || 'Sin descripción'}</p>
+                                    <p class="mb-1"><strong>Nivel:</strong> ${zone.nivel || 'No especificado'}</p>
+                                    <p class="mb-1"><strong>Área:</strong> ${zone.area_total ? zone.area_total.toFixed(2) + ' m²' : 'No calculada'}</p>
+                                    <p class="mb-1"><strong>Precio promedio m²:</strong> ${zone.precio_promedio_m2 ? '$' + zone.precio_promedio_m2.toFixed(2) : 'No disponible'}</p>
+                                </div>
+                            `;
+                            
+                            infoWindow.setContent(contentString);
+                            infoWindow.open(map);
+                            infoWindow.setPosition(this.getPath().getAt(0));
+                        });
+                        
+                        zonePolygons.push(polygon);
+                        
+                        // Crear etiqueta en el centro del polígono
+                        const center = calculatePolygonCenter(zone.coordenadas);
+                        if (center) {
+                            // Texto de la etiqueta: nombre de la zona
+                            const labelText = zone.nombre_zona || `Zona ${zone.id}`;
+                            const label = createZoneLabel(center, labelText, zone);
+                            if (label) {
+                                zoneLabels.push(label);
+                            }
+                        }
+                    }
+                });
+                
+                console.log(`Cargadas ${zonePolygons.length} zonas de cuadrantización con ${zoneLabels.length} etiquetas`);
+            })
+            .catch(error => {
+                console.error('Error al cargar zonas:', error);
+            });
+    }
+
+    // Enfocar tarjeta de propiedad
+    function focusPropertyCard(propertyId) {
+        const card = document.querySelector(`[data-property-id="${propertyId}"]`);
+        if (card) {
+            card.scrollIntoView({ behavior: 'smooth', 'block': 'center' });
+            card.classList.add('active');
+            setTimeout(() => card.classList.remove('active'), 2000);
+        }
+    }
+
+    // Manejar error de imagen
+    function handleImageError(img) {
+        img.onerror = null;
+        const placeholder = document.createElement('div');
+        placeholder.className = 'property-image-placeholder';
+        placeholder.innerHTML = '<i class="fas fa-home"></i>';
+        img.parentNode.replaceChild(placeholder, img);
+    }
+
+    // Inicializar filtros desde URL
+    document.addEventListener('DOMContentLoaded', function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        document.getElementById('filter-type').value = urlParams.get('tipo_propiedad') || '';
+        document.getElementById('filter-departamento').value = urlParams.get('departamento') || '';
+        document.getElementById('filter-precio-min').value = urlParams.get('precio_min') || '';
+        document.getElementById('filter-precio-max').value = urlParams.get('precio_max') || '';
+        document.getElementById('filter-habitaciones').value = urlParams.get('habitaciones') || '';
+        document.getElementById('filter-banios').value = urlParams.get('banios') || '';
+    });
+
+    // ============================================
+    // Funcionalidad para agregar propiedad (modal)
+    // ============================================
+    
+    let modalMap;
+    let modalMarker = null;
+    let geocoder;
+    
+    // Inicializar mapa del modal cuando se muestra
+    document.getElementById('addPropertyModal').addEventListener('shown.bs.modal', function() {
+        initModalMap();
+    });
+    
+    // Limpiar cuando se cierra el modal
+    document.getElementById('addPropertyModal').addEventListener('hidden.bs.modal', function() {
+        resetModalForm();
+    });
+    
+    function initModalMap() {
+        const defaultCenter = { lat: -16.4090, lng: -71.5375 }; // Arequipa
+        
+        modalMap = new google.maps.Map(document.getElementById('propertyMapModal'), {
+            center: defaultCenter,
+            zoom: 14,
+            styles: [
+                {
+                    featureType: "poi",
+                    elementType: "labels",
+                    stylers: [{ visibility: "off" }]
+                }
+            ]
+        });
+        
+        geocoder = new google.maps.Geocoder();
+        
+        // Permitir clic en el mapa para colocar marcador
+        google.maps.event.addListener(modalMap, 'click', function(event) {
+            placeModalMarker(event.latLng);
+        });
+        
+        // Si ya hay coordenadas en los campos, colocar marcador
+        const lat = document.getElementById('propertyLat').value;
+        const lng = document.getElementById('propertyLng').value;
+        if (lat && lng) {
+            placeModalMarker(new google.maps.LatLng(parseFloat(lat), parseFloat(lng)));
+        }
+    }
+    
+    function placeModalMarker(location) {
+        if (modalMarker) {
+            modalMarker.setMap(null);
+        }
+        
+        modalMarker = new google.maps.Marker({
+            position: location,
+            map: modalMap,
+            draggable: true,
+            animation: google.maps.Animation.DROP,
+            icon: {
+                url: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
+                scaledSize: new google.maps.Size(32, 32)
+            }
+        });
+        
+        // Actualizar campos de coordenadas
+        document.getElementById('propertyLat').value = location.lat().toFixed(6);
+        document.getElementById('propertyLng').value = location.lng().toFixed(6);
+        
+        // Centrar mapa en el marcador
+        modalMap.panTo(location);
+        
+        // Permitir arrastrar marcador y actualizar coordenadas
+        google.maps.event.addListener(modalMarker, 'dragend', function() {
+            const newLocation = modalMarker.getPosition();
+            document.getElementById('propertyLat').value = newLocation.lat().toFixed(6);
+            document.getElementById('propertyLng').value = newLocation.lng().toFixed(6);
+        });
+    }
+    
+    // Buscar dirección y centrar mapa
+    document.getElementById('btnSearchAddress').addEventListener('click', function() {
+        searchAddressInModal();
+    });
+    
+    document.getElementById('propertyAddress').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            searchAddressInModal();
+        }
+    });
+    
+    function searchAddressInModal() {
+        const address = document.getElementById('propertyAddress').value;
+        if (!address.trim()) {
+            alert('Por favor ingresa una dirección');
+            return;
+        }
+        
+        geocoder.geocode({ 'address': address }, function(results, status) {
+            if (status === 'OK') {
+                const location = results[0].geometry.location;
+                modalMap.setCenter(location);
+                modalMap.setZoom(16);
+                placeModalMarker(location);
+                
+                // Intentar extraer departamento y provincia de los componentes
+                extractLocationDetails(results[0]);
+            } else {
+                alert('No se pudo encontrar la dirección: ' + status);
+            }
+        });
+    }
+    
+    function extractLocationDetails(geocodeResult) {
+        const components = geocodeResult.address_components;
+        let department = '';
+        let province = '';
+        
+        components.forEach(component => {
+            if (component.types.includes('administrative_area_level_1')) {
+                department = component.long_name;
+            }
+            if (component.types.includes('administrative_area_level_2')) {
+                province = component.long_name;
+            }
+        });
+        
+        if (department) {
+            document.getElementById('propertyDepartment').value = department;
+        }
+        if (province) {
+            document.getElementById('propertyProvince').value = province;
+        }
+    }
+    
+    // Guardar propiedad (versión simulada para demostración)
+    document.getElementById('btnSaveProperty').addEventListener('click', function() {
+        saveProperty();
+    });
+    
+    function saveProperty() {
+        // Validar campos requeridos
+        const type = document.getElementById('propertyType').value;
+        const description = document.getElementById('propertyDescription').value;
+        const price = document.getElementById('propertyPrice').value;
+        const lat = document.getElementById('propertyLat').value;
+        const lng = document.getElementById('propertyLng').value;
+        
+        if (!type) {
+            alert('Por favor selecciona el tipo de propiedad');
+            return;
+        }
+        if (!description.trim()) {
+            alert('Por favor ingresa una descripción');
+            return;
+        }
+        if (!price || parseFloat(price) <= 0) {
+            alert('Por favor ingresa un precio válido');
+            return;
+        }
+        if (!lat || !lng) {
+            alert('Por favor coloca un marcador en el mapa para definir la ubicación');
+            return;
+        }
+        
+        // Capturar todos los campos adicionales
+        const area = document.getElementById('propertyArea').value;
+        const bedrooms = document.getElementById('propertyBedrooms').value;
+        const bathrooms = document.getElementById('propertyBathrooms').value;
+        const address = document.getElementById('propertyAddress').value;
+        const department = document.getElementById('propertyDepartment').value;
+        const province = document.getElementById('propertyProvince').value;
+        const district = document.getElementById('propertyDistrict').value;
+        const landArea = document.getElementById('propertyLandArea').value;
+        const floors = document.getElementById('propertyFloors').value;
+        const parking = document.getElementById('propertyParking').value;
+        const agent = document.getElementById('propertyAgent').value;
+        const images = document.getElementById('propertyImages').value;
+        const propertyId = document.getElementById('propertyId').value;
+        const publicationDate = document.getElementById('propertyPublicationDate').value;
+        const age = document.getElementById('propertyAge').value;
+        const serviceWater = document.getElementById('serviceWater').checked;
+        const serviceElectricity = document.getElementById('serviceElectricity').checked;
+        const serviceDrainage = document.getElementById('serviceDrainage').checked;
+        const serviceGas = document.getElementById('serviceGas').checked;
+        const agentEmail = document.getElementById('propertyAgentEmail').value;
+        const agentPhone = document.getElementById('propertyAgentPhone').value;
+        const office = document.getElementById('propertyOffice').value;
+        const status = document.getElementById('propertyStatus').value;
+        const portal = document.getElementById('propertyPortal').value;
+        const saleDate = document.getElementById('propertySaleDate').value;
+        const finalSalePrice = document.getElementById('propertyFinalSalePrice').value;
+        
+        // Mostrar spinner en el botón
+        const saveBtn = document.getElementById('btnSaveProperty');
+        const originalText = saveBtn.innerHTML;
+        saveBtn.innerHTML = '<span class="btn-spinner"></span> Guardando...';
+        saveBtn.disabled = true;
+        
+        // Preparar datos para enviar a la API
+        const data = {
+            tipo_propiedad: type,
+            descripcion: description,
+            precio_usd: price,
+            lat: lat,
+            lng: lng,
+            area_construida: area,
+            numero_habitaciones: bedrooms,
+            numero_banos: bathrooms,
+            direccion: address,
+            departamento: department,
+            provincia: province,
+            distrito: district,
+            area_terreno: landArea,
+            numero_pisos: floors,
+            numero_cocheras: parking,
+            agente_inmobiliario: agent,
+            imagenes_propiedad: images,
+            id_propiedad: propertyId,
+            fecha_publicacion: publicationDate,
+            antiguedad: age,
+            servicio_agua: serviceWater,
+            energia_electrica: serviceElectricity,
+            servicio_drenaje: serviceDrainage,
+            servicio_gas: serviceGas,
+            email_agente: agentEmail,
+            telefono_agente: agentPhone,
+            oficina_remax: office,
+            estado_propiedad: status,
+            fecha_venta: saleDate,
+            precio_final_venta: finalSalePrice,
+            portal: portal
+        };
+        
+        // Enviar datos a la API real
+        fetch('/ingestas/api/crear-propiedad/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(result => {
+            // Restaurar botón
+            saveBtn.innerHTML = originalText;
+            saveBtn.disabled = false;
+            
+            if (result.success) {
+                alert('¡Propiedad creada exitosamente y guardada en la base de datos!');
+                
+                // Cerrar modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('addPropertyModal'));
+                modal.hide();
+                
+                // Resetear formulario
+                resetModalForm();
+                
+                // Opcional: recargar la página o agregar propiedad a la lista
+                // location.reload();
+            } else {
+                alert('Error al crear la propiedad: ' + result.error);
+            }
+        })
+        .catch(error => {
+            // Restaurar botón
+            saveBtn.innerHTML = originalText;
+            saveBtn.disabled = false;
+            alert('Error de conexión: ' + error.message);
+        });
+    }
+    
+    function resetModalForm() {
+        document.getElementById('addPropertyForm').reset();
+        document.getElementById('propertyLat').value = '';
+        document.getElementById('propertyLng').value = '';
+        
+        // Resetear checkboxes manualmente (no se resetean con form.reset() en algunos navegadores)
+        document.getElementById('serviceWater').checked = false;
+        document.getElementById('serviceElectricity').checked = false;
+        document.getElementById('serviceDrainage').checked = false;
+        document.getElementById('serviceGas').checked = false;
+        
+        if (modalMarker) {
+            modalMarker.setMap(null);
+            modalMarker = null;
+        }
+    }
+    
+    // Función auxiliar para obtener token CSRF
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+</script>
+{% endblock %}

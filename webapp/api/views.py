@@ -555,3 +555,148 @@ class TareasAPIView(APIView):
                 'mensaje': 'Para listar tareas, use un sistema de monitoreo como Flower',
                 'endpoint_monitoreo': '/flower/' if settings.DEBUG else 'No disponible en producción',
             })
+
+
+class PropiedadesExternasSimuladasAPIView(APIView):
+    """
+    Endpoint que simula la API externa de propiedades.
+    Devuelve datos de prueba en el formato esperado por services_api.py.
+    """
+    permission_classes = [AllowAny]
+    
+    def get(self, request):
+        """Devuelve propiedades simuladas con validación de token Bearer."""
+        from django.conf import settings
+        
+        # Obtener el token del header Authorization
+        auth_header = request.headers.get('Authorization', '')
+        expected_token = getattr(settings, 'API_EXTERNA_KEY', 'test-key-simulada')
+        
+        # Verificar si el token es válido
+        if not auth_header.startswith('Bearer '):
+            # Si no hay token Bearer, devolver 401
+            return Response(
+                {
+                    "detail": "Given token not valid for any token type",
+                    "code": "token_not_valid",
+                    "messages": [
+                        {
+                            "token_class": "AccessToken",
+                            "token_type": "access",
+                            "message": "Token is invalid or expired"
+                        }
+                    ]
+                },
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        token = auth_header.split('Bearer ')[1].strip()
+        
+        # Validar el token (en este caso simulado, comparamos con API_EXTERNA_KEY)
+        if token != expected_token:
+            return Response(
+                {
+                    "detail": "Given token not valid for any token type",
+                    "code": "token_not_valid",
+                    "messages": [
+                        {
+                            "token_class": "AccessToken",
+                            "token_type": "access",
+                            "message": "Token is invalid or expired"
+                        }
+                    ]
+                },
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        # Si el token es válido, devolver las propiedades simuladas
+        propiedades_simuladas = [
+            {
+                "id": 1001,
+                "title": "Casa en Miraflores con jardín y piscina",
+                "property_id": "EXT-1001",
+                "property_type": "Casa",
+                "description": "Hermosa casa en zona residencial con jardín amplio y piscina.",
+                "price_usd": 250000,
+                "department": "Lima",
+                "province": "Lima",
+                "district": "Miraflores",
+                "address": "Av. Larco 123",
+                "built_area": 180,
+                "land_area": 300,
+                "bedrooms": 4,
+                "bathrooms": 3,
+                "parking": 2,
+                "latitude": -12.120,
+                "longitude": -77.030,
+                "url": "https://www.ejemplo.com/propiedad/1001",
+                "main_image": "https://images.unsplash.com/photo-1518780664697-55e3ad937233",
+                "publication_date": "2026-02-20",
+                "docs": [
+                    {"id": 1, "name": "Plano arquitectónico", "url": "https://ejemplo.com/docs/1.pdf"},
+                    {"id": 2, "name": "Certificado de propiedad", "url": "https://ejemplo.com/docs/2.pdf"}
+                ]
+            },
+            {
+                "id": 1002,
+                "title": "Departamento moderno en San Isidro con vista al mar",
+                "property_id": "EXT-1002",
+                "property_type": "Departamento",
+                "description": "Departamento moderno en edificio con amenities, vista al mar.",
+                "price_usd": 150000,
+                "department": "Lima",
+                "province": "Lima",
+                "district": "San Isidro",
+                "address": "Calle Los Pinos 456",
+                "built_area": 95,
+                "land_area": 0,
+                "bedrooms": 3,
+                "bathrooms": 2,
+                "parking": 1,
+                "latitude": -12.098,
+                "longitude": -77.050,
+                "url": "https://www.ejemplo.com/propiedad/1002",
+                "main_image": "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00",
+                "publication_date": "2026-02-18",
+                "docs": [
+                    {"id": 3, "name": "Reglamento interno", "url": "https://ejemplo.com/docs/3.pdf"},
+                    {"id": 4, "name": "Estado de cuenta", "url": "https://ejemplo.com/docs/4.pdf"}
+                ]
+            },
+            {
+                "id": 1003,
+                "title": "Terreno plano en Cayma para proyecto residencial",
+                "property_id": "EXT-1003",
+                "property_type": "Terreno",
+                "description": "Terreno plano ideal para proyecto residencial o comercial.",
+                "price_usd": 80000,
+                "department": "Arequipa",
+                "province": "Arequipa",
+                "district": "Cayma",
+                "address": "Carretera a Yura Km 5",
+                "built_area": 0,
+                "land_area": 500,
+                "bedrooms": 0,
+                "bathrooms": 0,
+                "parking": 0,
+                "latitude": -16.398,
+                "longitude": -71.535,
+                "url": "https://www.ejemplo.com/propiedad/1003",
+                "main_image": "https://images.unsplash.com/photo-1542601906990-b4d3fb778b09",
+                "publication_date": "2026-02-15",
+                "docs": [
+                    {"id": 5, "name": "Estudio de suelos", "url": "https://ejemplo.com/docs/5.pdf"},
+                    {"id": 6, "name": "Permiso municipal", "url": "https://ejemplo.com/docs/6.pdf"}
+                ]
+            },
+        ]
+        
+        # Formato de respuesta esperado por services_api.py (con clave 'results')
+        response_data = {
+            "results": propiedades_simuladas,
+            "count": len(propiedades_simuladas),
+            "next": None,
+            "previous": None,
+        }
+        
+        return Response(response_data)

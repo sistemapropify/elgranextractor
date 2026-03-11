@@ -25,22 +25,32 @@ class MapeoFuenteAdmin(admin.ModelAdmin):
 @admin.register(PropiedadRaw)
 class PropiedadRawAdmin(admin.ModelAdmin):
     list_display = (
-        'tipo_propiedad', 'precio_usd', 'moneda', 'ubicacion',
-        'metros_cuadrados', 'habitaciones', 'banos', 'estacionamientos',
+        'tipo_propiedad', 'precio_usd', 'departamento', 'provincia', 'distrito',
+        'numero_habitaciones', 'numero_banos', 'numero_cocheras',
         'fuente_excel', 'fecha_ingesta'
     )
-    list_filter = ('tipo_propiedad', 'moneda', 'fuente_excel', 'fecha_ingesta')
-    search_fields = ('ubicacion', 'descripcion', 'fuente_excel')
+    list_filter = ('tipo_propiedad', 'fuente_excel', 'fecha_ingesta', 'departamento', 'provincia')
+    search_fields = ('descripcion', 'fuente_excel', 'departamento', 'provincia', 'distrito')
     readonly_fields = ('fecha_ingesta',)
     fieldsets = (
         ('Información Básica', {
-            'fields': ('fuente_excel', 'fecha_ingesta', 'tipo_propiedad', 'precio_usd', 'moneda')
+            'fields': ('fuente_excel', 'fecha_ingesta', 'tipo_propiedad', 'precio_usd', 'descripcion')
+        }),
+        ('Ubicación', {
+            'fields': ('departamento', 'provincia', 'distrito', 'coordenadas')
         }),
         ('Características', {
-            'fields': ('ubicacion', 'metros_cuadrados', 'habitaciones', 'banos', 'estacionamientos')
+            'fields': ('area_terreno', 'area_construida', 'numero_pisos', 'numero_habitaciones', 'numero_banos', 'numero_cocheras')
         }),
-        ('Detalles', {
-            'fields': ('descripcion', 'url_fuente', 'atributos_extras')
+        ('Agente y Contacto', {
+            'fields': ('agente_inmobiliario', 'email_agente', 'telefono_agente', 'oficina_remax')
+        }),
+        ('Detalles Adicionales', {
+            'fields': ('portal', 'url_propiedad', 'imagenes_propiedad', 'id_propiedad', 'fecha_publicacion', 'antiguedad',
+                       'servicio_agua', 'energia_electrica', 'servicio_drenaje', 'servicio_gas')
+        }),
+        ('Campos Dinámicos', {
+            'fields': ('atributos_extras',)
         }),
     )
     actions = ['borrar_todos', 'borrar_seleccionados', 'importar_desde_excel']

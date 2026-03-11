@@ -52,4 +52,22 @@ urlpatterns = [
     
     # Ingestas de Excel Inmobiliario
     path('ingestas/', include('ingestas.urls')),
+    
+    # Requerimientos de clientes
+    path('requerimientos/', include('requerimientos.urls')),
+    
+    # Cuadrantización Inmobiliaria
+    path('cuadrantizacion/', include('cuadrantizacion.urls')),
+    
+    # Propiedades de la base de datos Propifai/Propify
+    path('propifai/', include('propifai.urls')),
+    
+    # Matching inmobiliario
+    path('matching/', include(('matching.urls', 'matching'), namespace='matching')),
+    
+    # ACM - Análisis Comparativo de Mercado
+    path('acm/', include('acm.urls')),
+    
+    # Market Analysis - Análisis de Mercado (Heatmap + Dashboard)
+    path('market-analysis/', include('market_analysis.urls')),
 ]
