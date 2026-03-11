@@ -9,8 +9,10 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction, connection
 from django.db.models import Q
 from ingestas.models import PropiedadRaw, CampoDinamico
+from ingestas.services import EjecutorMigraciones, SugeridorCampos
 from decimal import Decimal, InvalidOperation
 import json
+import re
 
 
 class Command(BaseCommand):
@@ -38,18 +40,45 @@ class Command(BaseCommand):
             action='store_true',
             help='Mostrar detalles de cada propiedad procesada'
         )
+        parser.add_argument(
+            '--crear-campos-dinamicos',
+            action='store_true',
+            help='Crear campos dinámicos (CampoDinamico) y columnas físicas para keys únicas en atributos_extras'
+        )
+        parser.add_argument(
+            '--limitar-keys',
+            type=int,
+            default=0,
+            help='Límite de keys a procesar para creación de campos dinámicos (0 para todas)'
+        )
+        parser.add_argument(
+            '--migrar-datos-dinamicos',
+            action='store_true',
+            help='Migrar datos desde atributos_extras a las columnas dinámicas creadas'
+        )
 
     def handle(self, *args, **options):
         dry_run = options['dry_run']
         campo_especifico = options['campo']
         batch_size = options['batch_size']
-        verbose = options['verbose']
+        self.verbose = options['verbose']
+        crear_campos_dinamicos = options['crear_campos_dinamicos']
+        limitar_keys = options['limitar_keys']
+        migrar_datos_dinamicos = options['migrar_datos_dinamicos']
 
         self.stdout.write(self.style.NOTICE(
             'Iniciando migración de atributos_extras a campos...'
         ))
         if dry_run:
             self.stdout.write(self.style.WARNING('MODO SIMULACIÓN - No se guardarán cambios.'))
+        
+        # Si se solicita crear campos dinámicos, hacerlo primero
+        if crear_campos_dinamicos:
+            self.crear_campos_dinamicos_desde_atributos(dry_run, limitar_keys)
+        
+        # Si se solicita migrar datos a campos dinámicos
+        if migrar_datos_dinamicos:
+            self.migrar_datos_a_campos_dinamicos(dry_run)
 
         # Mapeo de campos fijos conocidos
         campos_fijos = {
@@ -168,3 +197,162 @@ class Command(BaseCommand):
             return str(valor).strip()
         else:
             return valor
+
+    def crear_campos_dinamicos_desde_atributos(self, dry_run, limitar_keys=0):
+        """
+        Detecta keys únicas en atributos_extras y crea campos dinámicos (CampoDinamico)
+        y columnas físicas en la tabla PropiedadRaw.
+        """
+        self.stdout.write(self.style.NOTICE('Buscando keys únicas en atributos_extras...'))
+        
+        # Obtener todas las keys únicas de atributos_extras
+        from django.db.models import Count
+        import pandas as pd
+        
+        # Usamos raw SQL para extraer keys de JSON (SQL Server)
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT DISTINCT [key]
+                FROM [dbo].[ingestas_propiedadraw]
+                CROSS APPLY OPENJSON(atributos_extras) WITH ([key] NVARCHAR(200) '$')
+                ORDER BY [key]
+            """)
+            rows = cursor.fetchall()
+            all_keys = [row[0] for row in rows if row[0]]
+        
+        self.stdout.write(f'Encontradas {len(all_keys)} keys únicas.')
+        
+        # Filtrar keys que ya son campos fijos
+        campos_fijos = ['tipo_propiedad', 'precio_usd', 'moneda', 'ubicacion', 'metros_cuadrados',
+                       'habitaciones', 'banos', 'estacionamientos', 'descripcion', 'url_fuente', 'fuente_excel']
+        # También considerar variantes de campos fijos (snake_case vs camel)
+        keys_a_ignorar = set()
+        for key in all_keys:
+            key_lower = key.lower().replace(' ', '_')
+            for campo in campos_fijos:
+                if campo in key_lower or key_lower in campo:
+                    keys_a_ignorar.add(key)
+                    break
+        
+        # Filtrar keys que ya tienen CampoDinamico
+        campos_dinamicos_existentes = CampoDinamico.objects.values_list('nombre_campo_bd', flat=True)
+        keys_a_ignorar.update(campos_dinamicos_existentes)
+        
+        keys_a_procesar = [k for k in all_keys if k not in keys_a_ignorar]
+        
+        if limitar_keys > 0:
+            keys_a_procesar = keys_a_procesar[:limitar_keys]
+        
+        self.stdout.write(f'Keys a procesar para creación de campos dinámicos: {len(keys_a_procesar)}')
+        if self.verbose:
+            for key in keys_a_procesar:
+                self.stdout.write(f'  - {key}')
+        
+        # Para cada key, inferir tipo de dato y crear campo dinámico
+        campos_creados = 0
+        for key in keys_a_procesar:
+            # Inferir tipo de dato basado en valores muestrales
+            tipo_inferido = self.inferir_tipo_dato_key(key)
+            
+            # Convertir key a snake_case para nombre de columna
+            nombre_campo_bd = SugeridorCampos.convertir_a_snake_case(key)
+            titulo_display = key.replace('_', ' ').title()
+            
+            self.stdout.write(f'Creando campo dinámico: {nombre_campo_bd} ({tipo_inferido})')
+            
+            if dry_run:
+                self.stdout.write(self.style.WARNING(f'  (dry-run) No se creará.'))
+                continue
+            
+            # Ejecutar migración
+            from django.contrib.auth.models import User
+            user_admin = User.objects.filter(is_superuser=True).first()
+            if not user_admin:
+                user_admin = User.objects.first()
+            
+            resultado = EjecutorMigraciones.ejecutar_migracion(
+                nombre_campo_bd=nombre_campo_bd,
+                titulo_display=titulo_display,
+                tipo_dato=tipo_inferido,
+                user=user_admin
+            )
+            
+            if resultado['success']:
+                self.stdout.write(self.style.SUCCESS(f'  Campo creado exitosamente.'))
+                campos_creados += 1
+            else:
+                self.stdout.write(self.style.ERROR(f'  Error: {resultado["message"]}'))
+        
+        self.stdout.write(self.style.SUCCESS(
+            f'Proceso completado. Campos dinámicos creados: {campos_creados}'
+        ))
+    
+    def inferir_tipo_dato_key(self, key):
+        """
+        Infiere el tipo de dato (VARCHAR, INTEGER, DECIMAL, BOOLEAN, DATE) basado en
+        una muestra de valores para la key dada.
+        """
+        # Obtener una muestra de valores para esta key
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT TOP 20 [value]
+                FROM [dbo].[ingestas_propiedadraw]
+                CROSS APPLY OPENJSON(atributos_extras) WITH ([key] NVARCHAR(200) '$', [value] NVARCHAR(MAX) '$') AS kv
+                WHERE kv.[key] = %s AND kv.[value] IS NOT NULL
+            """, [key])
+            rows = cursor.fetchall()
+            valores = [row[0] for row in rows]
+        
+        if not valores:
+            return 'VARCHAR'  # default
+        
+        # Usar SugeridorCampos para inferir tipo
+        tipo = SugeridorCampos.inferir_tipo_dato(valores)
+        return tipo
+
+    def migrar_datos_a_campos_dinamicos(self, dry_run):
+        """
+        Migra datos desde atributos_extras a las columnas dinámicas creadas.
+        Para cada campo dinámico existente, actualiza la columna con el valor de atributos_extras.
+        """
+        from ingestas.models import CampoDinamico
+        self.stdout.write(self.style.NOTICE('Migrando datos a campos dinámicos...'))
+        
+        campos = CampoDinamico.objects.all()
+        if not campos.exists():
+            self.stdout.write(self.style.WARNING('No hay campos dinámicos creados. Ejecute --crear-campos-dinamicos primero.'))
+            return
+        
+        total_campos = campos.count()
+        self.stdout.write(f'Procesando {total_campos} campos dinámicos.')
+        
+        for campo in campos:
+            self.stdout.write(f'  Campo: {campo.nombre_campo_bd} ({campo.tipo_dato})')
+            
+            # Construir consulta UPDATE usando SQL dinámico
+            # SQL Server: UPDATE tabla SET columna = JSON_VALUE(atributos_extras, '$."key"')
+            # Pero necesitamos extraer el valor para cada propiedad donde la key existe.
+            # Usaremos OPENJSON para unir.
+            sql = f"""
+                UPDATE p
+                SET p.{campo.nombre_campo_bd} = kv.value
+                FROM [dbo].[ingestas_propiedadraw] p
+                CROSS APPLY OPENJSON(p.atributos_extras) WITH (
+                    [key] NVARCHAR(200) '$',
+                    value NVARCHAR(MAX) '$'
+                ) kv
+                WHERE kv.[key] = %s
+            """
+            if dry_run:
+                self.stdout.write(self.style.WARNING(f'    (dry-run) Se ejecutaría: {sql[:100]}...'))
+                continue
+            
+            with connection.cursor() as cursor:
+                try:
+                    cursor.execute(sql, [campo.nombre_campo_bd])
+                    updated = cursor.rowcount
+                    self.stdout.write(self.style.SUCCESS(f'    Actualizadas {updated} filas.'))
+                except Exception as e:
+                    self.stdout.write(self.style.ERROR(f'    Error: {e}'))
+        
+        self.stdout.write(self.style.SUCCESS('Migración de datos completada.'))

@@ -431,7 +431,11 @@
                             <div class="property-location">
                                 <i class="fas fa-map-marker-alt"></i>
                                 <span>
-                                    {% if propiedad.departamento or propiedad.provincia %}
+                                    {% if propiedad.ubicacion_completa %}
+                                        {{ propiedad.ubicacion_completa }}
+                                    {% elif propiedad.departamento_nombre or propiedad.provincia_nombre %}
+                                        {{ propiedad.departamento_nombre|default:"" }}{% if propiedad.provincia_nombre %}, {{ propiedad.provincia_nombre }}{% endif %}
+                                    {% elif propiedad.departamento or propiedad.provincia %}
                                         {{ propiedad.departamento|default:"" }}{% if propiedad.provincia %}, {{ propiedad.provincia }}{% endif %}
                                     {% else %}
                                         Ubicación no especificada

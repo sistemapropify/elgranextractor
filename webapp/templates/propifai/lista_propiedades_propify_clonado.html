@@ -1,0 +1,526 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Propiedades Propify - Catálogo Exclusivo{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --color-primary: #047d7d;
+        --color-secondary: #5ab0ae;
+        --color-accent: #2ea44f;
+        --navbar-height: 60px;
+    }
+
+    /* Contenedor principal */
+    .portal-container {
+        display: flex;
+        flex-direction: column;
+        height: calc(100vh - var(--navbar-height));
+        overflow: hidden;
+        background: #fff;
+    }
+
+    /* Barra de filtros superior - Simplificada */
+    .filters-bar {
+        background: #fff;
+        border-bottom: 1px solid rgba(4, 125, 125, 0.1);
+        padding: 0.75rem 1rem;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+        z-index: 100;
+        flex-shrink: 0;
+    }
+
+    .filters-bar .header-info {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .header-info h3 {
+        margin: 0;
+        color: var(--color-primary);
+        font-size: 1.2rem;
+    }
+
+    .propify-badge-header {
+        background-color: #28a745;
+        color: white;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.9rem;
+        font-weight: bold;
+    }
+
+    /* Contenido principal: Mapa + Propiedades */
+    .main-content {
+        display: flex;
+        flex: 1;
+        overflow: hidden;
+    }
+
+    /* Sección del mapa */
+    .map-section {
+        flex: 1;
+        position: relative;
+        background: #f8f9fa;
+        border-right: 1px solid rgba(4, 125, 125, 0.1);
+    }
+
+    #map {
+        width: 100%;
+        height: 100%;
+    }
+
+    /* Sección de propiedades */
+    .properties-section {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        background: #fff;
+    }
+
+    .properties-header {
+        padding: 1rem;
+        border-bottom: 1px solid rgba(4, 125, 125, 0.1);
+        background: #f8f9fa;
+        flex-shrink: 0;
+    }
+
+    .properties-header h4 {
+        margin: 0 0 0.5rem 0;
+        color: #333;
+    }
+
+    .properties-stats {
+        display: flex;
+        gap: 1rem;
+        font-size: 0.9rem;
+        color: #666;
+    }
+
+    .stat-item {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .properties-container {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1rem;
+    }
+
+    /* Tarjetas de propiedades - Estilo Propify */
+    .property-card {
+        background: #fff;
+        border: 1px solid rgba(4, 125, 125, 0.1);
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        transition: all 0.2s ease;
+        position: relative;
+        border-left: 4px solid #28a745;
+    }
+
+    .property-card:hover {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        transform: translateY(-2px);
+    }
+
+    .propify-badge {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background-color: #28a745;
+        color: white;
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 0.7rem;
+        font-weight: bold;
+        text-transform: uppercase;
+    }
+
+    .property-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 0.75rem;
+    }
+
+    .property-type {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #333;
+    }
+
+    .property-price {
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: #28a745;
+    }
+
+    .property-location {
+        color: #666;
+        margin-bottom: 0.75rem;
+        font-size: 0.9rem;
+    }
+
+    .property-features {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .feature-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: #555;
+        font-size: 0.85rem;
+    }
+
+    .feature-item i {
+        color: var(--color-primary);
+        width: 16px;
+    }
+
+    .property-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-top: 0.75rem;
+        border-top: 1px solid rgba(4, 125, 125, 0.1);
+        font-size: 0.8rem;
+    }
+
+    .property-source {
+        color: #888;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .property-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .btn-ver-mapa {
+        background-color: var(--color-primary);
+        color: white;
+        border: none;
+        padding: 0.25rem 0.75rem;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        cursor: pointer;
+    }
+
+    .btn-ver-mapa:hover {
+        background-color: #036666;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: #6c757d;
+    }
+
+    .empty-state i {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        color: #28a745;
+    }
+
+    .alert-success {
+        background-color: #d4edda;
+        border-color: #c3e6cb;
+        color: #155724;
+        padding: 0.75rem;
+        border-radius: 4px;
+        margin-bottom: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="portal-container">
+    <!-- Barra superior simplificada -->
+    <div class="filters-bar">
+        <div class="header-info">
+            <h3>Catálogo Exclusivo Propify</h3>
+            <div class="propify-badge-header">
+                <i class="fas fa-database"></i> Base de datos Propify
+            </div>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <!-- Mapa -->
+        <div class="map-section">
+            <div id="map"></div>
+        </div>
+
+        <!-- Lista de propiedades -->
+        <div class="properties-section">
+            <div class="properties-header">
+                <h4>Propiedades Disponibles</h4>
+                <div class="properties-stats">
+                    <div class="stat-item">
+                        <i class="fas fa-home"></i>
+                        <span>Total: <strong>{{ total_propiedades }}</strong> propiedades</span>
+                    </div>
+                    <div class="stat-item">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <span>Con coordenadas: <strong>{{ propiedades_con_coordenadas }}</strong></span>
+                    </div>
+                </div>
+                
+                {% if total_propiedades > 0 %}
+                <div class="alert alert-success mt-2">
+                    <i class="fas fa-check-circle"></i>
+                    <strong>¡Propiedades Propify encontradas!</strong> Se cargaron {{ total_propiedades }} propiedades desde la base de datos Propify.
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="properties-container" id="propertiesContainer">
+                {% if propiedades_compatibles %}
+                    {% for propiedad in propiedades_compatibles %}
+                    <div class="property-card" 
+                         data-property-id="{{ propiedad.id|default:propiedad.id_externo }}" 
+                         data-lat="{{ propiedad.lat|default:'' }}" 
+                         data-lng="{{ propiedad.lng|default:'' }}"
+                         data-es-externo="true"
+                         data-es-propify="true">
+                        
+                        <div class="propify-badge">PROPIFY</div>
+                        
+                        <div class="property-header">
+                            <span class="property-type">
+                                {{ propiedad.tipo_propiedad|default:"Propiedad" }}
+                                {% if propiedad.codigo %}
+                                <small class="text-muted">({{ propiedad.codigo }})</small>
+                                {% endif %}
+                            </span>
+                            <div class="property-price">
+                                {% if propiedad.precio_usd %}
+                                    ${{ propiedad.precio_usd|floatformat:0 }} USD
+                                {% elif propiedad.precio %}
+                                    ${{ propiedad.precio|floatformat:0 }}
+                                {% else %}
+                                    Precio no disponible
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="property-location">
+                            <i class="fas fa-map-marker-alt"></i>
+                            <span>
+                                {% if propiedad.direccion %}
+                                    {{ propiedad.direccion }}
+                                {% elif propiedad.departamento or propiedad.provincia %}
+                                    {{ propiedad.departamento|default:"" }} 
+                                    {% if propiedad.provincia %} - {{ propiedad.provincia }}{% endif %}
+                                    {% if propiedad.distrito %} - {{ propiedad.distrito }}{% endif %}
+                                {% else %}
+                                    Ubicación no especificada
+                                {% endif %}
+                            </span>
+                        </div>
+                        
+                        {% if propiedad.descripcion %}
+                        <div class="property-description mb-2">
+                            <small class="text-muted">{{ propiedad.descripcion|truncatechars:150 }}</small>
+                        </div>
+                        {% endif %}
+                        
+                        <div class="property-features">
+                            {% if propiedad.habitaciones %}
+                            <div class="feature-item">
+                                <i class="fas fa-bed"></i>
+                                <span>{{ propiedad.habitaciones }} hab.</span>
+                            </div>
+                            {% endif %}
+                            
+                            {% if propiedad.banios %}
+                            <div class="feature-item">
+                                <i class="fas fa-bath"></i>
+                                <span>{{ propiedad.banios }} baños</span>
+                            </div>
+                            {% endif %}
+                            
+                            {% if propiedad.area_construida %}
+                            <div class="feature-item">
+                                <i class="fas fa-ruler-combined"></i>
+                                <span>{{ propiedad.area_construida|floatformat:0 }} m² const.</span>
+                            </div>
+                            {% endif %}
+                            
+                            {% if propiedad.area_terreno %}
+                            <div class="feature-item">
+                                <i class="fas fa-vector-square"></i>
+                                <span>{{ propiedad.area_terreno|floatformat:0 }} m² terreno</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="property-footer">
+                            <div class="property-source">
+                                <i class="fas fa-database"></i> Base de datos Propify
+                                {% if propiedad.fecha_publicacion %}
+                                <span class="text-muted">| {{ propiedad.fecha_publicacion|date:"d/m/Y" }}</span>
+                                {% endif %}
+                            </div>
+                            <div class="property-actions">
+                                {% if propiedad.lat and propiedad.lng %}
+                                <button class="btn-ver-mapa" 
+                                        data-lat="{{ propiedad.lat }}" 
+                                        data-lng="{{ propiedad.lng }}"
+                                        data-title="{{ propiedad.titulo|default:'Propiedad Propify' }}">
+                                    <i class="fas fa-map-marker-alt"></i> Ver en mapa
+                                </button>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="empty-state">
+                        <i class="fas fa-database"></i>
+                        <h4>No se encontraron propiedades Propify</h4>
+                        <p>No hay propiedades disponibles en la base de datos Propify en este momento.</p>
+                        <p class="text-muted small">Verifique la conexión a la base de datos o intente más tarde.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Inicializar mapa
+    let map;
+    let markers = [];
+    
+    function initMap() {
+        // Centro por defecto (Lima, Perú)
+        const defaultCenter = { lat: -12.046374, lng: -77.042793 };
+        
+        map = new google.maps.Map(document.getElementById('map'), {
+            center: defaultCenter,
+            zoom: 12,
+            mapTypeControl: true,
+            streetViewControl: false,
+            fullscreenControl: true,
+            styles: [
+                {
+                    featureType: "poi",
+                    elementType: "labels",
+                    stylers: [{ visibility: "off" }]
+                }
+            ]
+        });
+        
+        // Agregar marcadores para todas las propiedades
+        const propertyCards = document.querySelectorAll('.property-card[data-lat][data-lng]');
+        let bounds = new google.maps.LatLngBounds();
+        let hasValidMarkers = false;
+        
+        propertyCards.forEach(card => {
+            const lat = parseFloat(card.dataset.lat);
+            const lng = parseFloat(card.dataset.lng);
+            const propertyId = card.dataset.propertyId;
+            const isPropify = card.dataset.esPropify === 'true';
+            
+            if (!isNaN(lat) && !isNaN(lng)) {
+                addMarker(lat, lng, propertyId, isPropify);
+                bounds.extend({ lat, lng });
+                hasValidMarkers = true;
+            }
+        });
+        
+        // Ajustar vista para mostrar todos los marcadores
+        if (hasValidMarkers) {
+            map.fitBounds(bounds);
+            
+            // Si solo hay un marcador, hacer zoom más cercano
+            if (propertyCards.length === 1) {
+                setTimeout(() => {
+                    map.setZoom(15);
+                }, 500);
+            }
+        }
+        
+        // Botones "Ver en mapa"
+        const verEnMapaButtons = document.querySelectorAll('.btn-ver-mapa');
+        verEnMapaButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const lat = parseFloat(this.dataset.lat);
+                const lng = parseFloat(this.dataset.lng);
+                const title = this.dataset.title;
+                
+                if (!isNaN(lat) && !isNaN(lng)) {
+                    // Centrar y hacer zoom
+                    map.setCenter({ lat, lng });
+                    map.setZoom(16);
+                    
+                    // Crear marcador temporal con animación
+                    const tempMarker = new google.maps.Marker({
+                        position: { lat, lng },
+                        map: map,
+                        title: title,
+                        animation: google.maps.Animation.BOUNCE,
+                        icon: {
+                            url: '{% static "requerimientos/data/Pin-propify.svg" %}',
+                            scaledSize: new google.maps.Size(50, 50)
+                        }
+                    });
+                    
+                    // Detener animación después de 2 segundos
+                    setTimeout(() => {
+                        tempMarker.setAnimation(null);
+                    }, 2000);
+                }
+            });
+        });
+    }
+    
+    function addMarker(lat, lng, propertyId, isPropify) {
+        // Usar icono verde para Propify
+        const iconUrl = '{% static "requerimientos/data/Pin-propify.svg" %}';
+        
+        const marker = new google.maps.Marker({
+            position: { lat, lng },
+            map: map,
+            title: `Propiedad ${propertyId}`,
+            icon: {
+                url: iconUrl,
+                scaledSize: new google.maps.Size(40, 40)
+            }
+        });
+        
+        markers.push(marker);
+        
+        // Agregar evento click para centrar en el marcador
+        marker.addListener('click', () => {
+            map.setCenter(marker.getPosition());
+            map.setZoom(15);
+        });
+    }
+    
+    // Cargar Google Maps API
+    function loadGoogleMaps() {
+        const script = document.createElement('script');
+        script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyDummyKeyReplaceWithRealKey&callback=initMap`;
+        script.async = true;
+        script.defer = true;
+        document.head.appendChild(script);
+    }
+    
+    // Iniciar cuando la página cargue
+    window.onload = loadGoogleMaps;
+</script>
+{% endblock %}

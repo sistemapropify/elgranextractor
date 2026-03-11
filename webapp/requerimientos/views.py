@@ -1,530 +1,593 @@
-import os
-import tempfile
-import pandas as pd
-import json
-from datetime import datetime
-from django.shortcuts import render, redirect
-from django.views.generic import FormView, View, TemplateView, ListView, DetailView
-from django.contrib import messages
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.views.generic import ListView, DetailView, RedirectView, TemplateView
+from django.shortcuts import render
 from django.http import JsonResponse
-
-from .forms import SubirExcelRequerimientoForm, ValidarMapeoRequerimientoFormSet, ProcesarTodoRequerimientoForm
-from .models import CampoDinamicoRequerimiento, MapeoFuenteRequerimiento, RequerimientoRaw, MigracionPendienteRequerimiento
-
-
-# Utilidades de logging
-def agregar_log_requerimiento(request, nivel, mensaje, datos=None):
-    """Agrega un mensaje de log a la sesión para mostrar en la interfaz."""
-    if 'logs_requerimiento' not in request.session:
-        request.session['logs_requerimiento'] = []
-    
-    # Convertir datos a formato serializable
-    datos_serializable = {}
-    if datos:
-        if isinstance(datos, dict):
-            for key, value in datos.items():
-                if hasattr(value, 'pk'):  # Es un objeto de modelo Django
-                    datos_serializable[key] = {
-                        'model': value.__class__.__name__,
-                        'id': value.pk,
-                        'str': str(value)
-                    }
-                elif isinstance(value, (list, tuple)):
-                    datos_serializable[key] = [
-                        {
-                            'model': item.__class__.__name__,
-                            'id': item.pk,
-                            'str': str(item)
-                        } if hasattr(item, 'pk') else item
-                        for item in value
-                    ]
-                else:
-                    datos_serializable[key] = value
-        else:
-            datos_serializable = str(datos)
-    
-    request.session['logs_requerimiento'].append({
-        'nivel': nivel,
-        'mensaje': mensaje,
-        'datos': datos_serializable,
-        'timestamp': datetime.now().isoformat()
-    })
-    request.session.modified = True
-
-
-def cargar_dataframe_desde_json(df_json):
-    """
-    Carga un DataFrame desde JSON string de manera robusta.
-    Maneja casos donde pd.read_json falla con FileNotFoundError.
-    """
-    import json
-    import pandas as pd
-    
-    if not df_json:
-        return None
-    
-    # Si ya es un DataFrame (no debería pasar)
-    if isinstance(df_json, pd.DataFrame):
-        return df_json
-    
-    # Si es un dict, convertirlo a JSON string
-    if isinstance(df_json, dict):
-        df_json = json.dumps(df_json)
-    
-    # Intentar con pd.read_json primero
-    try:
-        return pd.read_json(df_json, orient='split')
-    except FileNotFoundError as fnf:
-        # pandas puede interpretar mal el JSON como ruta de archivo
-        # Intentar cargar manualmente
-        try:
-            data = json.loads(df_json)
-            if 'data' in data and 'columns' in data:
-                return pd.DataFrame(data['data'], columns=data['columns'])
-            else:
-                # Intentar otros formatos
-                return pd.DataFrame(data)
-        except Exception as e:
-            raise ValueError(f"No se pudo cargar DataFrame desde JSON: {e}")
-    except Exception as e:
-        raise ValueError(f"Error al leer JSON: {e}")
-
-
-def limpiar_logs_requerimiento(request):
-    """Limpia los logs de requerimiento de la sesión."""
-    if 'logs_requerimiento' in request.session:
-        del request.session['logs_requerimiento']
-        request.session.modified = True
-
-
-class SubirExcelRequerimientoView(LoginRequiredMixin, FormView):
-    template_name = 'requerimientos/subir.html'
-    form_class = SubirExcelRequerimientoForm
-    success_url = '/requerimientos/validar/'
-
-    def form_valid(self, form):
-        archivo = form.cleaned_data['archivo']
-        nombre_fuente = form.cleaned_data['nombre_fuente']
-        portal_origen = form.cleaned_data['portal_origen']
-        
-        # Crear archivo temporal con nombre único
-        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(archivo.name)[1]) as tmp_file:
-            # Escribir contenido del archivo subido
-            for chunk in archivo.chunks():
-                tmp_file.write(chunk)
-            ruta_archivo = tmp_file.name
-        
-        # Verificar que el archivo existe
-        if not os.path.exists(ruta_archivo):
-            agregar_log_requerimiento(self.request, 'error', f'Archivo temporal no creado: {ruta_archivo}')
-            messages.error(self.request, 'Error al guardar archivo temporal.')
-            return self.form_invalid(form)
-        
-        # Leer archivo con pandas
-        try:
-            if archivo.name.lower().endswith('.csv'):
-                # Intentar diferentes codificaciones comunes
-                encodings = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252']
-                df = None
-                last_error = None
-                
-                for encoding in encodings:
-                    try:
-                        df = pd.read_csv(ruta_archivo, encoding=encoding)
-                        agregar_log_requerimiento(self.request, 'debug', f'CSV leído con codificación: {encoding}')
-                        break
-                    except UnicodeDecodeError as e:
-                        last_error = e
-                        continue
-                    except Exception as e:
-                        last_error = e
-                        continue
-                
-                if df is None:
-                    # Último intento con encoding=None (pandas intentará inferir)
-                    try:
-                        df = pd.read_csv(ruta_archivo, encoding=None)
-                    except Exception as e:
-                        agregar_log_requerimiento(self.request, 'error', f'Error al leer CSV con cualquier codificación: {last_error}')
-                        raise
-            else:
-                # Para archivos Excel
-                df = pd.read_excel(ruta_archivo, engine='openpyxl')
-                
-        except Exception as e:
-            # Limpiar archivo temporal
-            try:
-                os.unlink(ruta_archivo)
-            except:
-                pass
-                
-            agregar_log_requerimiento(self.request, 'error', f'Error al leer archivo: {e}')
-            messages.error(self.request, f'Error al leer archivo: {str(e)[:100]}')
-            return self.form_invalid(form)
-        
-        # Guardar datos en sesión
-        self.request.session['df_requerimiento'] = df.to_json(orient='split')
-        self.request.session['nombre_fuente_requerimiento'] = nombre_fuente
-        self.request.session['portal_origen_requerimiento'] = portal_origen
-        self.request.session['ruta_archivo_requerimiento'] = ruta_archivo
-        
-        # Limpiar logs anteriores
-        limpiar_logs_requerimiento(self.request)
-        
-        agregar_log_requerimiento(self.request, 'info', f'Archivo {archivo.name} cargado exitosamente')
-        agregar_log_requerimiento(self.request, 'debug', f'DataFrame shape: {df.shape}, columnas: {list(df.columns)}')
-        
-        messages.success(self.request, 'Archivo cargado exitosamente. Proceda a validar los mapeos.')
-        return super().form_valid(form)
-
-
-class ValidarMapeoRequerimientoView(LoginRequiredMixin, TemplateView):
-    template_name = 'requerimientos/validar.html'
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        
-        # Recuperar datos de sesión
-        df_json = self.request.session.get('df_requerimiento')
-        if not df_json:
-            messages.error(self.request, 'No hay archivo cargado. Por favor, suba un archivo primero.')
-            agregar_log_requerimiento(self.request, 'error', 'Intento de acceder a validar sin archivo cargado')
-            return context
-        
-        # Cargar DataFrame usando función robusta
-        try:
-            df = cargar_dataframe_desde_json(df_json)
-        except Exception as e:
-            messages.error(self.request, f'Error al cargar datos: {e}')
-            agregar_log_requerimiento(self.request, 'error', f'Error al cargar DataFrame: {e}')
-            return context
-        
-        # Obtener sugerencias de campos
-        from .services import SugeridorCamposRequerimiento
-        sugerencias = SugeridorCamposRequerimiento.sugerir_campos(df)
-        
-        # Preparar datos para el template
-        preview = df.head(5).to_dict('records')
-        columnas = []
-        for col in df.columns:
-            sugerencia = next((s for s in sugerencias if s['nombre_columna'] == col), None)
-            columnas.append({
-                'nombre': col,
-                'sugerencia_bd': sugerencia['nombre_sugerido'] if sugerencia else col.lower().replace(' ', '_'),
-                'sugerencia_titulo': sugerencia['titulo_display'] if sugerencia else col,
-                'sugerencia_tipo': sugerencia['tipo_dato'] if sugerencia else 'VARCHAR'
-            })
-        
-        context.update({
-            'preview': preview,
-            'columnas': columnas,
-            'shape': df.shape,
-            'formset': ValidarMapeoRequerimientoFormSet(initial=[
-                {
-                    'columna_origen': col['nombre'],
-                    'campo_bd': col['sugerencia_bd'],
-                    'titulo_display': col['sugerencia_titulo'],
-                    'tipo_dato': col['sugerencia_tipo'],
-                    'incluir': True,
-                    'crear_campo': False
-                }
-                for col in columnas
-            ])
-        })
-        return context
-
-    def post(self, request, *args, **kwargs):
-        formset = ValidarMapeoRequerimientoFormSet(request.POST)
-        
-        if formset.is_valid():
-            mapeos = {}
-            campos_a_crear = []
-            
-            for form in formset:
-                if form.cleaned_data.get('incluir', False):
-                    columna_origen = form.cleaned_data['columna_origen']
-                    campo_bd = form.cleaned_data['campo_bd']
-                    titulo_display = form.cleaned_data['titulo_display']
-                    tipo_dato = form.cleaned_data['tipo_dato']
-                    crear_campo = form.cleaned_data.get('crear_campo', False)
-                    
-                    mapeos[columna_origen] = {
-                        'campo_bd': campo_bd,
-                        'titulo_display': titulo_display,
-                        'tipo_dato': tipo_dato
-                    }
-                    
-                    if crear_campo:
-                        campos_a_crear.append({
-                            'nombre_campo_bd': campo_bd,
-                            'titulo_display': titulo_display,
-                            'tipo_dato': tipo_dato
-                        })
-            
-            # Guardar mapeos en sesión
-            request.session['mapeos_requerimiento'] = mapeos
-            request.session['campos_a_crear_requerimiento'] = campos_a_crear
-            
-            # Crear campos dinámicos si se solicitó
-            if campos_a_crear:
-                from .services import EjecutorMigracionesRequerimiento
-                for campo in campos_a_crear:
-                    try:
-                        EjecutorMigracionesRequerimiento.ejecutar_migracion(
-                            campo['nombre_campo_bd'],
-                            campo['titulo_display'],
-                            campo['tipo_dato'],
-                            request.user
-                        )
-                        agregar_log_requerimiento(request, 'success', f'Campo dinámico creado: {campo["nombre_campo_bd"]}')
-                    except Exception as e:
-                        agregar_log_requerimiento(request, 'error', f'Error al crear campo {campo["nombre_campo_bd"]}: {e}')
-            
-            messages.success(request, 'Mapeos validados exitosamente. Proceda a procesar los datos.')
-            return redirect('requerimientos:procesar')
-        else:
-            messages.error(request, 'Error en el formulario. Revise los datos.')
-            return self.get(request, *args, **kwargs)
-
-
-class ProcesarRequerimientoView(LoginRequiredMixin, TemplateView):
-    template_name = 'requerimientos/procesar.html'
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        
-        # Recuperar datos de sesión
-        df_json = self.request.session.get('df_requerimiento')
-        nombre_fuente = self.request.session.get('nombre_fuente_requerimiento')
-        portal_origen = self.request.session.get('portal_origen_requerimiento')
-        mapeos = self.request.session.get('mapeos_requerimiento', {})
-        
-        if not df_json or not mapeos:
-            messages.error(self.request, 'No hay datos para procesar. Complete la validación primero.')
-            return context
-        
-        # Cargar DataFrame
-        try:
-            df = cargar_dataframe_desde_json(df_json)
-        except Exception as e:
-            messages.error(self.request, f'Error al cargar datos: {e}')
-            return context
-        
-        # Preparar vista previa de procesamiento
-        preview_rows = []
-        for idx, row in df.head(3).iterrows():
-            preview_row = {}
-            for col_orig, mapeo in mapeos.items():
-                if col_orig in df.columns:
-                    preview_row[mapeo['campo_bd']] = row[col_orig]
-            preview_rows.append(preview_row)
-        
-        context.update({
-            'nombre_fuente': nombre_fuente,
-            'portal_origen': portal_origen,
-            'total_filas': len(df),
-            'total_campos': len(mapeos),
-            'preview_rows': preview_rows,
-            'form': ProcesarTodoRequerimientoForm()
-        })
-        return context
-
-    def post(self, request, *args, **kwargs):
-        form = ProcesarTodoRequerimientoForm(request.POST)
-        
-        if form.is_valid() and form.cleaned_data['confirmar']:
-            # Importar datos a la base de datos
-            from .services import ProcesadorExcelRequerimiento
-            
-            df_json = request.session.get('df_requerimiento')
-            nombre_fuente = request.session.get('nombre_fuente_requerimiento')
-            portal_origen = request.session.get('portal_origen_requerimiento')
-            mapeos = request.session.get('mapeos_requerimiento', {})
-            
-            try:
-                df = cargar_dataframe_desde_json(df_json)
-                resultado = ProcesadorExcelRequerimiento.importar_datos(
-                    df, mapeos, nombre_fuente, portal_origen, request.user
-                )
-                
-                messages.success(request, f'Importación completada: {resultado["importados"]} requerimientos importados.')
-                agregar_log_requerimiento(request, 'success', f'Importación completada: {resultado}')
-                
-                # Limpiar sesión
-                for key in ['df_requerimiento', 'nombre_fuente_requerimiento', 
-                           'portal_origen_requerimiento', 'mapeos_requerimiento',
-                           'campos_a_crear_requerimiento']:
-                    if key in request.session:
-                        del request.session[key]
-                
-                return redirect('requerimientos:lista')
-                
-            except Exception as e:
-                messages.error(request, f'Error durante la importación: {e}')
-                agregar_log_requerimiento(request, 'error', f'Error en importación: {e}')
-                return self.get(request, *args, **kwargs)
-        else:
-            messages.error(request, 'Debe confirmar el procesamiento.')
-            return self.get(request, *args, **kwargs)
+from django.utils import timezone
+from datetime import datetime, timedelta
+import json
+from .models import Requerimiento, FuenteChoices, CondicionChoices, TipoPropiedadChoices
+from .analytics import (
+    obtener_requerimientos_por_mes,
+    calcular_crecimiento_porcentual,
+    obtener_distritos_por_mes,
+    obtener_tipos_propiedad_por_mes,
+    obtener_presupuesto_por_mes,
+    obtener_caracteristicas_demandadas,
+    detectar_picos_y_valles,
+    calcular_tendencia
+)
+from .tasks import generar_analisis_temporal, obtener_progreso_tarea
 
 
 class ListaRequerimientosView(ListView):
-    model = RequerimientoRaw
+    model = Requerimiento
     template_name = 'requerimientos/lista.html'
     paginate_by = 20
     context_object_name = 'requerimientos'
+    ordering = ['-fecha', '-hora']
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        # Aquí se pueden agregar filtros si es necesario
+        
+        # Filtros básicos
+        fuente = self.request.GET.get('fuente')
+        condicion = self.request.GET.get('condicion')
+        tipo_propiedad = self.request.GET.get('tipo_propiedad')
+        distrito = self.request.GET.get('distrito')
+        presupuesto_min = self.request.GET.get('presupuesto_min')
+        presupuesto_max = self.request.GET.get('presupuesto_max')
+        
+        if fuente:
+            queryset = queryset.filter(fuente=fuente)
+        if condicion:
+            queryset = queryset.filter(condicion=condicion)
+        if tipo_propiedad:
+            queryset = queryset.filter(tipo_propiedad=tipo_propiedad)
+        if distrito:
+            queryset = queryset.filter(distritos__icontains=distrito)
+        
+        # Filtro por presupuesto mínimo
+        if presupuesto_min:
+            try:
+                min_val = float(presupuesto_min)
+                queryset = queryset.filter(presupuesto_monto__gte=min_val)
+            except (ValueError, TypeError):
+                pass
+        
+        # Filtro por presupuesto máximo
+        if presupuesto_max:
+            try:
+                max_val = float(presupuesto_max)
+                queryset = queryset.filter(presupuesto_monto__lte=max_val)
+            except (ValueError, TypeError):
+                pass
+        
         return queryset
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['total'] = RequerimientoRaw.objects.count()
+        # Agregar opciones de filtro como listas de tuplas (value, label)
+        context['fuentes'] = FuenteChoices.choices
+        context['condiciones'] = CondicionChoices.choices
+        context['tipos_propiedad'] = TipoPropiedadChoices.choices
         return context
 
 
 class DetalleRequerimientoView(DetailView):
-    model = RequerimientoRaw
+    model = Requerimiento
     template_name = 'requerimientos/detalle.html'
     context_object_name = 'requerimiento'
 
 
-class AnalisisInteligenteView(LoginRequiredMixin, View):
-    """Vista para análisis inteligente de columnas de texto usando DeepSeek API."""
+class SubirExcelView(RedirectView):
+    """Redirige a la subida de Excel de la app ingestas."""
+    pattern_name = 'ingestas:subir_excel'
+
+
+# ─────────────────────────────────────────────
+#  VISTAS DE ANÁLISIS TEMPORAL
+# ─────────────────────────────────────────────
+
+class DashboardAnalisisTemporalView(TemplateView):
+    """Vista principal del dashboard de análisis temporal."""
+    template_name = 'requerimientos/dashboard_analisis.html'
     
-    def post(self, request, *args, **kwargs):
-        import json
-        import traceback
-        from django.http import JsonResponse
-        from .services import ExtractorInteligenteRequerimientos
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
         
+        # Obtener filtros de la URL
+        fecha_inicio = self.request.GET.get('fecha_inicio')
+        fecha_fin = self.request.GET.get('fecha_fin')
+        condicion = self.request.GET.get('condicion')
+        tipo_propiedad = self.request.GET.get('tipo_propiedad')
+        distrito = self.request.GET.get('distrito')
+        fuente = self.request.GET.get('fuente')
+        
+        # Convertir fechas
+        if fecha_inicio:
+            fecha_inicio = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
+        if fecha_fin:
+            fecha_fin = datetime.strptime(fecha_fin, '%Y-%m-%d').date()
+        
+        filtros = {
+            'condicion': condicion,
+            'tipo_propiedad': tipo_propiedad,
+            'distrito': distrito,
+            'fuente': fuente,
+        }
+        
+        # Obtener datos para el dashboard
+        context['filtros'] = filtros
+        context['fecha_inicio'] = fecha_inicio
+        context['fecha_fin'] = fecha_fin
+        
+        # Opciones para filtros
+        context['fuentes'] = FuenteChoices.choices
+        context['condiciones'] = CondicionChoices.choices
+        context['tipos_propiedad'] = TipoPropiedadChoices.choices
+        
+        return context
+
+
+class ApiAnalisisTemporalView(TemplateView):
+    """API que retorna datos JSON para el dashboard (modo síncrono o asíncrono)."""
+    
+    def get(self, request, *args, **kwargs):
+        # Verificar si se solicita modo asíncrono
+        async_mode = request.GET.get('async', 'false').lower() == 'true'
+        
+        if async_mode:
+            return self._iniciar_analisis_asincrono(request)
+        else:
+            return self._obtener_analisis_sincrono(request)
+    
+    def _obtener_analisis_sincrono(self, request):
+        """Retorna análisis inmediato (para datasets pequeños)."""
         try:
-            # Intentar parsear JSON si existe
-            if request.content_type == 'application/json':
-                try:
-                    data = json.loads(request.body)
-                    columna = data.get('columna')
-                    datos_muestra = data.get('datos_muestra', [])
-                    campo_bd = data.get('campo_bd', '')
-                except json.JSONDecodeError:
-                    return JsonResponse({'estado': 'error', 'mensaje': 'JSON inválido'}, status=400)
-            else:
-                # Fallback a POST tradicional
-                columna = request.POST.get('columna')
-                datos_muestra = request.POST.getlist('datos_muestra[]')
-                campo_bd = request.POST.get('campo_bd', '')
+            # Obtener filtros
+            fecha_inicio = request.GET.get('fecha_inicio')
+            fecha_fin = request.GET.get('fecha_fin')
+            condicion = request.GET.get('condicion')
+            tipo_propiedad = request.GET.get('tipo_propiedad')
+            distrito = request.GET.get('distrito')
+            fuente = request.GET.get('fuente')
             
-            if not columna and not datos_muestra:
-                return JsonResponse({'estado': 'error', 'mensaje': 'Se requiere columna o datos de muestra'}, status=400)
+            # Convertir fechas
+            if fecha_inicio:
+                fecha_inicio = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
+            if fecha_fin:
+                fecha_fin = datetime.strptime(fecha_fin, '%Y-%m-%d').date()
             
-            # Si hay datos de muestra, analizar con IA
-            if datos_muestra:
-                # Unir muestras para análisis
-                texto_ejemplo = ' '.join([str(d) for d in datos_muestra if d])
-                if not texto_ejemplo.strip():
-                    return JsonResponse({'estado': 'error', 'mensaje': 'Los datos de muestra están vacíos'})
-                
-                try:
-                    datos_extraidos = ExtractorInteligenteRequerimientos.extraer_datos_requerimiento(texto_ejemplo)
-                    sugerencia = "Se detectaron los siguientes campos en el texto: " + ", ".join(datos_extraidos.keys()) if datos_extraidos else "No se detectaron campos estructurados."
-                    
-                    # Generar lista de campos dinámicos sugeridos
-                    campos_dinamicos = []
-                    for key, value in datos_extraidos.items():
-                        tipo = 'texto' if isinstance(value, str) else 'numero' if isinstance(value, (int, float)) else 'booleano' if isinstance(value, bool) else 'texto'
-                        campos_dinamicos.append({
-                            'nombre': key,
-                            'tipo': tipo,
-                            'descripcion': f'Extraído del texto: {value[:50]}...' if isinstance(value, str) and len(value) > 50 else f'Valor: {value}'
-                        })
-                    
-                    return JsonResponse({
-                        'estado': 'ok',
-                        'sugerencia': sugerencia,
-                        'datos_extraidos': datos_extraidos,
-                        'campos_dinamicos': campos_dinamicos,
-                        'columna': columna,
-                        'campo_bd': campo_bd
-                    })
-                except Exception as e:
-                    return JsonResponse({'estado': 'error', 'mensaje': f'Error en análisis IA: {str(e)}', 'traceback': traceback.format_exc()}, status=500)
+            filtros = {
+                'condicion': condicion,
+                'tipo_propiedad': tipo_propiedad,
+                'distrito': distrito,
+                'fuente': fuente,
+            }
             
-            # Si hay columna pero no hay DataFrame en sesión, error
-            if 'df_requerimiento' not in request.session:
-                return JsonResponse({'estado': 'error', 'mensaje': 'No hay datos cargados para analizar'}, status=400)
+            # Obtener todos los datos
+            datos_mes = list(obtener_requerimientos_por_mes(fecha_inicio, fecha_fin, filtros))
+            distritos_mes = obtener_distritos_por_mes(fecha_inicio, fecha_fin)
+            tipos_mes = obtener_tipos_propiedad_por_mes(fecha_inicio, fecha_fin)
+            presupuesto_mes = obtener_presupuesto_por_mes(fecha_inicio, fecha_fin)
+            caracteristicas_mes = obtener_caracteristicas_demandadas(fecha_inicio, fecha_fin)
             
-            # Recuperar DataFrame de la sesión usando la función robusta
-            df = cargar_dataframe_desde_json(request.session['df_requerimiento'])
-            if df is None:
-                return JsonResponse({'estado': 'error', 'mensaje': 'No se pudo cargar los datos desde la sesión'}, status=400)
+            # Calcular crecimiento y tendencias
+            totales = [item['total'] for item in datos_mes]
+            crecimiento = calcular_crecimiento_porcentual(totales)
+            picos, valles = detectar_picos_y_valles(totales)
+            tendencia = calcular_tendencia(totales)
             
-            if columna not in df.columns:
-                return JsonResponse({'estado': 'error', 'mensaje': f'Columna "{columna}" no encontrada'}, status=400)
+            # Generar insights
+            insights = self._generar_insights(
+                datos_mes, distritos_mes, tipos_mes, presupuesto_mes
+            )
             
-            # Procesar la columna
-            try:
-                resultado = ExtractorInteligenteRequerimientos.procesar_columna_texto(df, columna)
-                return JsonResponse({
-                    'estado': 'ok',
-                    'tipo': 'columna',
-                    'columna': columna,
-                    'resultado': resultado,
-                    'mensaje': 'Análisis de columna completado'
+            # Preparar respuesta
+            response_data = {
+                'success': True,
+                'mode': 'sync',
+                'datos_mes': datos_mes,
+                'distritos_mes': distritos_mes,
+                'tipos_mes': tipos_mes,
+                'presupuesto_mes': presupuesto_mes,
+                'caracteristicas_mes': caracteristicas_mes,
+                'metricas': {
+                    'totales': totales,
+                    'crecimiento': crecimiento,
+                    'picos': picos,
+                    'valles': valles,
+                    'tendencia': tendencia,
+                },
+                'insights': insights,
+            }
+            
+            return JsonResponse(response_data, safe=False)
+            
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e),
+                'mode': 'sync'
+            }, status=500)
+    
+    def _iniciar_analisis_asincrono(self, request):
+        """Inicia análisis asíncrono y retorna ID de tarea."""
+        try:
+            # Obtener filtros
+            fecha_inicio = request.GET.get('fecha_inicio')
+            fecha_fin = request.GET.get('fecha_fin')
+            condicion = request.GET.get('condicion')
+            tipo_propiedad = request.GET.get('tipo_propiedad')
+            distrito = request.GET.get('distrito')
+            fuente = request.GET.get('fuente')
+            
+            filtros = {
+                'condicion': condicion,
+                'tipo_propiedad': tipo_propiedad,
+                'distrito': distrito,
+                'fuente': fuente,
+            }
+            
+            # Lanzar tarea asíncrona
+            task = generar_analisis_temporal.delay(
+                filtros=filtros,
+                fecha_inicio=fecha_inicio,
+                fecha_fin=fecha_fin
+            )
+            
+            return JsonResponse({
+                'success': True,
+                'mode': 'async',
+                'task_id': task.id,
+                'status_url': f'/requerimientos/api/analisis-progreso/{task.id}/',
+                'message': 'Análisis iniciado en segundo plano'
+            })
+            
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e),
+                'mode': 'async'
+            }, status=500)
+    
+    def _generar_insights(self, datos_mes, distritos_mes, tipos_mes, presupuesto_mes):
+        """Genera insights automáticos en lenguaje natural."""
+        insights = []
+        
+        if not datos_mes:
+            return insights
+        
+        # Insight 1: Mes con más demanda
+        max_mes = max(datos_mes, key=lambda x: x['total'])
+        min_mes = min(datos_mes, key=lambda x: x['total'])
+        
+        insights.append({
+            'icono': '🔥',
+            'titulo': f'Mes pico: {max_mes["mes"].strftime("%B %Y")}',
+            'descripcion': f'{max_mes["total"]} requerimientos (+{max_mes["total"] - min_mes["total"]} vs mes más bajo)',
+            'tipo': 'destacado'
+        })
+        
+        # Insight 2: Crecimiento total
+        if len(datos_mes) >= 2:
+            primer_mes = datos_mes[0]['total']
+            ultimo_mes = datos_mes[-1]['total']
+            if primer_mes > 0:
+                crecimiento_total = ((ultimo_mes - primer_mes) / primer_mes) * 100
+                tendencia = '📈' if crecimiento_total > 0 else '📉'
+                insights.append({
+                    'icono': tendencia,
+                    'titulo': f'Crecimiento total: {crecimiento_total:.1f}%',
+                    'descripcion': f'De {primer_mes} a {ultimo_mes} requerimientos',
+                    'tipo': 'tendencia'
                 })
-            except Exception as e:
-                return JsonResponse({'estado': 'error', 'mensaje': f'Error procesando columna: {str(e)}', 'traceback': traceback.format_exc()}, status=500)
         
-        except Exception as e:
-            # Capturar cualquier excepción no manejada
-            return JsonResponse({
-                'estado': 'error',
-                'mensaje': f'Error interno del servidor: {str(e)}',
-                'traceback': traceback.format_exc()
-            }, status=500)
+        # Insight 3: Distrito líder
+        if distritos_mes['distritos']:
+            # Calcular total por distrito
+            distrito_totales = {}
+            for distrito in distritos_mes['distritos']:
+                total = sum(distritos_mes['data'][distrito].values())
+                distrito_totales[distrito] = total
+            
+            top_distrito = max(distrito_totales.items(), key=lambda x: x[1])
+            insights.append({
+                'icono': '🏆',
+                'titulo': f'Distrito líder: {top_distrito[0]}',
+                'descripcion': f'{top_distrito[1]} requerimientos en el período',
+                'tipo': 'liderazgo'
+            })
+        
+        # Insight 4: Tipo de propiedad más buscado
+        if tipos_mes['tipos']:
+            tipo_totales = {}
+            for tipo in tipos_mes['tipos']:
+                total = sum(tipos_mes['data'][tipo])
+                tipo_totales[tipo] = total
+            
+            top_tipo = max(tipo_totales.items(), key=lambda x: x[1])
+            tipo_display = dict(TipoPropiedadChoices.choices).get(top_tipo[0], top_tipo[0])
+            insights.append({
+                'icono': '🏠',
+                'titulo': f'Tipo más buscado: {tipo_display}',
+                'descripcion': f'{top_tipo[1]} requerimientos ({top_tipo[1]/sum(tipo_totales.values())*100:.1f}%)',
+                'tipo': 'preferencia'
+            })
+        
+        return insights
 
 
-class AnalisisCompletoView(LoginRequiredMixin, View):
-    """Vista para análisis inteligente de TODO el archivo Excel usando DeepSeek API."""
+class ApiAnalisisProgresoView(TemplateView):
+    """API para consultar progreso de análisis asíncrono."""
     
-    def post(self, request, *args, **kwargs):
-        import json
-        import traceback
-        from django.http import JsonResponse
-        from .services import ExtractorInteligenteRequerimientos
+    def get(self, request, task_id, *args, **kwargs):
+        progreso = obtener_progreso_tarea(task_id)
         
+        # Mapear estados para compatibilidad con frontend
+        status_map = {
+            'processing': 'PROGRESS',
+            'completed': 'SUCCESS',
+            'failed': 'FAILURE',
+            'pending': 'PENDING',
+            'unknown': 'PENDING'
+        }
+        
+        status = progreso.get('status', 'unknown')
+        mapped_status = status_map.get(status, 'PENDING')
+        
+        response_data = {
+            'task_id': task_id,
+            'status': mapped_status,
+            'progress': progreso.get('progress', 0),
+            'message': progreso.get('message', ''),
+            'current_step': progreso.get('current_step', 'Procesando'),
+            'generated_at': progreso.get('generated_at')
+        }
+        
+        # Si la tarea está completada, incluir los datos en 'result'
+        if mapped_status == 'SUCCESS' and 'data' in progreso:
+            response_data['result'] = progreso['data']
+        
+        # Si hay error, incluir detalles
+        if mapped_status == 'FAILURE':
+            response_data['error'] = progreso.get('error', 'Error desconocido')
+        
+        return JsonResponse(response_data)
+
+
+class ExportarAnalisisExcelView(TemplateView):
+    """Exporta el análisis a Excel."""
+    
+    def get(self, request, *args, **kwargs):
         try:
-            # Verificar que hay DataFrame en sesión
-            if 'df_requerimiento' not in request.session:
-                return JsonResponse({'estado': 'error', 'mensaje': 'No hay datos cargados para analizar'}, status=400)
+            import openpyxl
+            from openpyxl import Workbook
+            from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+            from django.http import HttpResponse
+            import io
             
-            # Recuperar DataFrame de la sesión usando la función robusta
-            df = cargar_dataframe_desde_json(request.session['df_requerimiento'])
-            if df is None:
-                return JsonResponse({'estado': 'error', 'mensaje': 'No se pudo cargar los datos desde la sesión'}, status=400)
+            # Crear libro de trabajo
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Análisis Temporal"
             
-            # Limitar el tamaño para no sobrecargar la API
-            if len(df) > 100:
-                df = df.head(100)
-                mensaje_limit = "Se analizarán solo las primeras 100 filas por rendimiento."
-            else:
-                mensaje_limit = ""
+            # Estilos
+            header_font = Font(bold=True, color="FFFFFF")
+            header_fill = PatternFill(start_color="2C3E50", end_color="2C3E50", fill_type="solid")
+            header_alignment = Alignment(horizontal="center", vertical="center")
+            thin_border = Border(
+                left=Side(style='thin'),
+                right=Side(style='thin'),
+                top=Side(style='thin'),
+                bottom=Side(style='thin')
+            )
             
-            try:
-                # Llamar al método de análisis completo
-                resultado = ExtractorInteligenteRequerimientos.analizar_dataframe_completo(df)
-                resultado['mensaje_limit'] = mensaje_limit
-                resultado['estado'] = 'ok'
-                return JsonResponse(resultado)
-            except Exception as e:
-                return JsonResponse({'estado': 'error', 'mensaje': f'Error en análisis completo: {str(e)}', 'traceback': traceback.format_exc()}, status=500)
-        
+            # Título
+            ws.merge_cells('A1:G1')
+            title_cell = ws['A1']
+            title_cell.value = "ANÁLISIS TEMPORAL DE REQUERIMIENTOS INMOBILIARIOS"
+            title_cell.font = Font(bold=True, size=16)
+            title_cell.alignment = Alignment(horizontal="center")
+            
+            # Subtítulo con filtros aplicados
+            ws.merge_cells('A2:G2')
+            subtitle = f"Generado el {timezone.now().strftime('%d/%m/%Y %H:%M')}"
+            ws['A2'].value = subtitle
+            ws['A2'].alignment = Alignment(horizontal="center")
+            ws['A2'].font = Font(italic=True)
+            
+            # Encabezados de sección
+            headers = ['Mes', 'Total Requerimientos', 'Compra', 'Alquiler',
+                      'Departamento', 'Casa', 'Terreno', 'Presupuesto Promedio']
+            
+            for col, header in enumerate(headers, 1):
+                cell = ws.cell(row=4, column=col, value=header)
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.alignment = header_alignment
+                cell.border = thin_border
+            
+            # Obtener datos (similar a la API)
+            fecha_inicio = request.GET.get('fecha_inicio')
+            fecha_fin = request.GET.get('fecha_fin')
+            filtros = {
+                'condicion': request.GET.get('condicion'),
+                'tipo_propiedad': request.GET.get('tipo_propiedad'),
+                'distrito': request.GET.get('distrito'),
+                'fuente': request.GET.get('fuente'),
+            }
+            
+            datos_mes = list(obtener_requerimientos_por_mes(fecha_inicio, fecha_fin, filtros))
+            
+            # Llenar datos
+            for row, dato in enumerate(datos_mes, 5):
+                ws.cell(row=row, column=1, value=dato['mes'].strftime('%B %Y') if dato['mes'] else '')
+                ws.cell(row=row, column=2, value=dato['total'])
+                ws.cell(row=row, column=3, value=dato['compra'])
+                ws.cell(row=row, column=4, value=dato['alquiler'])
+                ws.cell(row=row, column=5, value=dato['departamento'])
+                ws.cell(row=row, column=6, value=dato['casa'])
+                ws.cell(row=row, column=7, value=dato['terreno'])
+                ws.cell(row=row, column=8, value=float(dato['presupuesto_promedio']) if dato['presupuesto_promedio'] else 0)
+            
+            # Ajustar anchos de columna
+            for column in ws.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = min(max_length + 2, 30)
+                ws.column_dimensions[column_letter].width = adjusted_width
+            
+            # Preparar respuesta
+            output = io.BytesIO()
+            wb.save(output)
+            output.seek(0)
+            
+            response = HttpResponse(
+                output.getvalue(),
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            response['Content-Disposition'] = 'attachment; filename="analisis_temporal_requerimientos.xlsx"'
+            return response
+            
+        except ImportError:
+            from django.http import HttpResponse
+            return HttpResponse("Error: openpyxl no está instalado. Ejecute 'pip install openpyxl'", status=500)
         except Exception as e:
-            # Capturar cualquier excepción no manejada
-            return JsonResponse({
-                'estado': 'error',
-                'mensaje': f'Error interno del servidor: {str(e)}',
-                'traceback': traceback.format_exc()
-            }, status=500)
+            from django.http import HttpResponse
+            return HttpResponse(f"Error al generar Excel: {str(e)}", status=500)
+
+
+class ExportarAnalisisPDFView(TemplateView):
+    """Exporta el análisis a PDF."""
+    
+    def get(self, request, *args, **kwargs):
+        try:
+            from reportlab.lib.pagesizes import letter, landscape
+            from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.lib import colors
+            from reportlab.lib.units import inch
+            from django.http import HttpResponse
+            import io
+            
+            # Crear buffer para PDF
+            buffer = io.BytesIO()
+            doc = SimpleDocTemplate(buffer, pagesize=landscape(letter))
+            elements = []
+            styles = getSampleStyleSheet()
+            
+            # Título
+            title_style = ParagraphStyle(
+                'CustomTitle',
+                parent=styles['Heading1'],
+                fontSize=18,
+                spaceAfter=12,
+                alignment=1  # Centrado
+            )
+            title = Paragraph("ANÁLISIS TEMPORAL DE REQUERIMIENTOS INMOBILIARIOS", title_style)
+            elements.append(title)
+            
+            # Subtítulo
+            subtitle_style = ParagraphStyle(
+                'CustomSubtitle',
+                parent=styles['Normal'],
+                fontSize=10,
+                spaceAfter=24,
+                alignment=1,
+                textColor=colors.grey
+            )
+            subtitle = Paragraph(
+                f"Generado el {timezone.now().strftime('%d/%m/%Y %H:%M')} | "
+                f"Sistema de Análisis Inmobiliario",
+                subtitle_style
+            )
+            elements.append(subtitle)
+            
+            # Obtener datos
+            fecha_inicio = request.GET.get('fecha_inicio')
+            fecha_fin = request.GET.get('fecha_fin')
+            filtros = {
+                'condicion': request.GET.get('condicion'),
+                'tipo_propiedad': request.GET.get('tipo_propiedad'),
+                'distrito': request.GET.get('distrito'),
+                'fuente': request.GET.get('fuente'),
+            }
+            
+            datos_mes = list(obtener_requerimientos_por_mes(fecha_inicio, fecha_fin, filtros))
+            
+            # Crear tabla de datos
+            if datos_mes:
+                table_data = []
+                # Encabezados
+                headers = ['Mes', 'Total', 'Compra', 'Alquiler', 'Depto.', 'Casa', 'Terreno', 'Presupuesto']
+                table_data.append(headers)
+                
+                # Filas de datos
+                for dato in datos_mes:
+                    row = [
+                        dato['mes'].strftime('%b %Y') if dato['mes'] else '',
+                        str(dato['total']),
+                        str(dato['compra']),
+                        str(dato['alquiler']),
+                        str(dato['departamento']),
+                        str(dato['casa']),
+                        str(dato['terreno']),
+                        f"${dato['presupuesto_promedio']:,.0f}" if dato['presupuesto_promedio'] else '$0'
+                    ]
+                    table_data.append(row)
+                
+                # Crear tabla
+                table = Table(table_data, colWidths=[1.2*inch, 0.7*inch, 0.7*inch, 0.7*inch,
+                                                     0.7*inch, 0.7*inch, 0.7*inch, 1*inch])
+                table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2C3E50')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 10),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                    ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+                    ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+                    ('FONTSIZE', (0, 1), (-1, -1), 9),
+                ]))
+                
+                elements.append(Spacer(1, 0.25*inch))
+                elements.append(table)
+            
+            # Nota al pie
+            elements.append(Spacer(1, 0.5*inch))
+            note_style = ParagraphStyle(
+                'NoteStyle',
+                parent=styles['Normal'],
+                fontSize=8,
+                textColor=colors.grey,
+                alignment=1
+            )
+            note = Paragraph(
+                "Este reporte fue generado automáticamente por el Sistema de Análisis Temporal. "
+                "Los datos están sujetos a actualizaciones periódicas.",
+                note_style
+            )
+            elements.append(note)
+            
+            # Construir PDF
+            doc.build(elements)
+            
+            # Preparar respuesta
+            buffer.seek(0)
+            response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+            response['Content-Disposition'] = 'attachment; filename="analisis_temporal_requerimientos.pdf"'
+            return response
+            
+        except ImportError:
+            from django.http import HttpResponse
+            return HttpResponse("Error: reportlab no está instalado. Ejecute 'pip install reportlab'", status=500)
+        except Exception as e:
+            from django.http import HttpResponse
+            return HttpResponse(f"Error al generar PDF: {str(e)}", status=500)

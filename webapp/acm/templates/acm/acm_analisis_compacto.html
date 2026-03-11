@@ -1,0 +1,230 @@
+{% extends 'acm/acm_base.html' %}
+{% load static %}
+
+{% block acm_content %}
+<div class="container-fluid py-3">
+    <!-- Header compacto -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <h1 class="h3 mb-1">
+                <i class="bi bi-graph-up me-2"></i>Análisis Comparativo de Mercado (ACM)
+            </h1>
+            <p class="text-muted small mb-0">
+                Selecciona un punto en el mapa y configura los filtros para encontrar propiedades comparables.
+            </p>
+        </div>
+    </div>
+
+    <!-- Layout principal de 2 columnas -->
+    <div class="row g-3">
+        <!-- Columna izquierda: Formulario y comparables -->
+        <div class="col-lg-4">
+            <!-- Card de parámetros con tabs -->
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-white border-bottom p-2">
+                    <ul class="nav nav-tabs card-header-tabs" id="acmTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="params-tab" data-bs-toggle="tab" data-bs-target="#params" type="button" role="tab">
+                                <i class="bi bi-sliders me-1"></i>Parámetros
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="comparables-tab" data-bs-toggle="tab" data-bs-target="#comparables" type="button" role="tab">
+                                <i class="bi bi-list-check me-1"></i>Comparables
+                                <span class="badge bg-primary ms-1" id="contadorSeleccionadosTab">0</span>
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+                <div class="card-body p-3">
+                    <div class="tab-content" id="acmTabContent">
+                        <!-- Tab de parámetros -->
+                        <div class="tab-pane fade show active" id="params" role="tabpanel">
+                            <form id="acmForm">
+                                <!-- Fila compacta para tipo y radio -->
+                                <div class="row g-2 mb-3">
+                                    <div class="col-md-6">
+                                        <label for="tipoPropiedad" class="form-label small">Tipo propiedad</label>
+                                        <select class="form-select form-select-sm" id="tipoPropiedad" name="tipo_propiedad" required>
+                                            <option value="">Todos</option>
+                                            {% for tipo in tipos_propiedad %}
+                                            <option value="{{ tipo }}">{{ tipo }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="radioBusqueda" class="form-label small">Radio (metros)</label>
+                                        <div class="d-flex align-items-center">
+                                            <input type="range" class="form-range flex-grow-1 me-2" id="radioBusqueda" min="100" max="2000" step="100" value="500">
+                                            <span class="badge bg-secondary" id="radioValue">500</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Metros construcción y terreno en fila -->
+                                <div class="row g-2 mb-3">
+                                    <div class="col-md-6">
+                                        <label for="metrosConstruccion" class="form-label small">m² construcción</label>
+                                        <input type="number" class="form-control form-control-sm" id="metrosConstruccion" 
+                                               name="metros_construccion" min="0" step="0.1" placeholder="Ej: 120">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="metrosTerreno" class="form-label small">m² terreno</label>
+                                        <input type="number" class="form-control form-control-sm" id="metrosTerreno" 
+                                               name="metros_terreno" min="0" step="0.1" placeholder="Ej: 200">
+                                    </div>
+                                </div>
+
+                                <!-- Piso y antigüedad en fila -->
+                                <div class="row g-2 mb-3">
+                                    <div class="col-md-6">
+                                        <label for="piso" class="form-label small">Piso</label>
+                                        <input type="number" class="form-control form-control-sm" id="piso" 
+                                               name="piso" min="0" placeholder="Ej: 3">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="antiguedad" class="form-label small">Antigüedad (años)</label>
+                                        <input type="number" class="form-control form-control-sm" id="antiguedad" 
+                                               name="antiguedad" min="0" placeholder="Ej: 5">
+                                    </div>
+                                </div>
+
+                                <!-- Botón de búsqueda -->
+                                <div class="d-grid">
+                                    <button type="button" class="btn btn-primary btn-sm" id="btnBuscar">
+                                        <i class="bi bi-search me-1"></i>Buscar Comparables
+                                    </button>
+                                </div>
+
+                                <!-- Indicador de punto seleccionado -->
+                                <div class="alert alert-info mt-3 py-2 d-none" id="puntoSeleccionadoAlert">
+                                    <div class="d-flex align-items-center">
+                                        <i class="bi bi-geo-alt-fill me-2"></i>
+                                        <div class="small">
+                                            <strong class="d-block">Punto seleccionado</strong>
+                                            <span id="coordenadasTexto">Lat: --, Lng: --</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- Tab de comparables seleccionados -->
+                        <div class="tab-pane fade" id="comparables" role="tabpanel">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h6 class="mb-0">Propiedades seleccionadas</h6>
+                                <div>
+                                    <span class="badge bg-primary me-1" id="contadorSeleccionados">0</span>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" id="btnEliminarTodos" title="Eliminar todos">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="comparables-container" id="comparablesContainer" 
+                                 style="max-height: 300px; overflow-y: auto;">
+                                <div class="text-center py-4 text-muted" id="sinSeleccionados">
+                                    <i class="bi bi-house-door display-5 mb-2"></i>
+                                    <p class="mb-1 small">No hay propiedades seleccionadas</p>
+                                    <small class="text-muted">Haz clic en los marcadores azules del mapa</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Columna derecha: Mapa y resumen -->
+        <div class="col-lg-8">
+            <!-- Mapa compacto -->
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-white border-bottom py-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0">
+                            <i class="bi bi-map me-1"></i>Mapa de Propiedades
+                        </h6>
+                        <div class="text-muted small">
+                            <span id="contadorPropiedades">0</span> propiedades encontradas
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div id="acmMap" style="height: 400px; width: 100%;"></div>
+                </div>
+            </div>
+
+            <!-- Resumen ACM compacto -->
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-bottom py-2">
+                    <h6 class="mb-0">
+                        <i class="bi bi-bar-chart-line me-1"></i>Resumen del Análisis
+                    </h6>
+                </div>
+                <div class="card-body p-3">
+                    <div class="row" id="resumenACM">
+                        <!-- Estado inicial -->
+                        <div class="col-12 text-center py-3 text-muted">
+                            <i class="bi bi-graph-up display-5 mb-2"></i>
+                            <p class="mb-0 small">Selecciona propiedades comparables para ver el análisis</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Google Maps API -->
+<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&libraries=places,geometry&callback=initACMMap" async defer></script>
+
+<!-- Template para tarjeta de propiedad -->
+<template id="templatePropiedad">
+    <div class="propiedad-card border-bottom p-2">
+        <div class="row g-2">
+            <div class="col-4">
+                <img src="" class="img-fluid rounded propiedad-imagen" alt="Imagen propiedad" 
+                     onerror="this.onerror=null; this.src='/static/acm/img/no-image.svg'">
+            </div>
+            <div class="col-8">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="mb-1 propiedad-tipo small"></h6>
+                        <p class="mb-1 propiedad-estado small text-muted"></p>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-danger btn-quitar">
+                        <i class="bi bi-x"></i>
+                    </button>
+                </div>
+                <p class="mb-1 propiedad-ubicacion small text-muted"></p>
+                <p class="mb-1 propiedad-precio small"></p>
+                <div class="mt-1">
+                    <div class="badge bg-info text-white propiedad-precio-m2 small"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+
+<!-- Script para manejar tabs -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Actualizar contador en tab cuando cambie
+    function actualizarContadorTab() {
+        const contador = document.getElementById('contadorSeleccionados').textContent;
+        document.getElementById('contadorSeleccionadosTab').textContent = contador;
+    }
+    
+    // Observar cambios en el contador
+    const observer = new MutationObserver(actualizarContadorTab);
+    const contadorElement = document.getElementById('contadorSeleccionados');
+    if (contadorElement) {
+        observer.observe(contadorElement, { childList: true, characterData: true });
+    }
+    
+    // Inicializar contador tab
+    actualizarContadorTab();
+});
+</script>
+
+{% endblock %}

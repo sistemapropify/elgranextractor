@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}ACM - Análisis Comparativo de Mercado{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'acm/css/acm.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="acm-container">
+    {% block acm_content %}
+    {% endblock %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'acm/js/acm.js' %}"></script>
+{% endblock %}

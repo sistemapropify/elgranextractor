@@ -93,6 +93,31 @@
                                 </div>
                             </div>
                         </div>
+
+                        <div class="col-md-4 mb-4">
+                            <div class="card h-100 border-info">
+                                <div class="card-header bg-info text-white">
+                                    <h5 class="mb-0">
+                                        <i class="bi bi-robot"></i> Procesar con IA
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <p>
+                                        Extrae campos dinámicos automáticamente de descripciones textuales usando inteligencia artificial.
+                                    </p>
+                                    <ul class="list-unstyled">
+                                        <li><i class="bi bi-check-circle text-success"></i> Análisis de texto con IA</li>
+                                        <li><i class="bi bi-check-circle text-success"></i> Detección de campos personalizados</li>
+                                        <li><i class="bi bi-check-circle text-success"></i> Normalización y deduplicación</li>
+                                    </ul>
+                                </div>
+                                <div class="card-footer bg-transparent">
+                                    <a href="{% url 'ingestas:procesar_ia' %}" class="btn btn-info w-100">
+                                        <i class="bi bi-arrow-right-circle"></i> Procesar con IA
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="row mt-4">
@@ -132,6 +157,11 @@
                                                 <i class="bi bi-trash"></i> Limpiar Sesión
                                             </a>
                                         </div>
+                                        <div class="col-md-3">
+                                            <a href="{% url 'ingestas:procesar_ia' %}" class="btn btn-outline-info w-100 mb-2">
+                                                <i class="bi bi-robot"></i> Procesar con IA
+                                            </a>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -150,6 +180,7 @@
                                     <ol>
                                         <li><strong>Sube un archivo</strong> Excel o CSV con los datos de propiedades.</li>
                                         <li><strong>Valida el mapeo</strong> de columnas y crea los campos necesarios.</li>
+                                        <li><strong>Usa Procesamiento con IA</strong> para extraer campos dinámicos de descripciones textuales.</li>
                                         <li><strong>Procesa el archivo</strong> para importar los datos a la base de datos.</li>
                                         <li><strong>Revisa los resultados</strong> y verifica que los datos se hayan importado correctamente.</li>
                                     </ol>

@@ -1,0 +1,714 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Dashboard de Matching Inmobiliario{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.min.css" rel="stylesheet">
+<style>
+    /* Estilos específicos para el dashboard de matching */
+    .matching-header {
+        background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+        color: white;
+        padding: 1.5rem;
+        border-radius: 10px;
+        margin-bottom: 1.5rem;
+    }
+    
+    .stat-card {
+        transition: transform 0.3s ease;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-5px);
+    }
+    
+    .progress-score {
+        height: 25px;
+        border-radius: 12px;
+        overflow: hidden;
+    }
+    
+    .progress-score .progress-bar {
+        transition: width 1s ease-in-out;
+    }
+    
+    .score-high { background-color: #10b981; }
+    .score-medium { background-color: #f59e0b; }
+    .score-low { background-color: #ef4444; }
+    
+    .property-card {
+        border-left: 4px solid var(--primary-color);
+        transition: all 0.3s ease;
+    }
+    
+    .property-card:hover {
+        box-shadow: 0 6px 12px rgba(3, 94, 94, 0.15);
+        transform: translateY(-3px);
+    }
+    
+    .chart-container {
+        position: relative;
+        height: 300px;
+        margin-bottom: 1.5rem;
+    }
+    
+    .collapse-toggle {
+        cursor: pointer;
+        color: var(--primary-color);
+    }
+    
+    .collapse-toggle:hover {
+        color: var(--secondary-color);
+        text-decoration: underline;
+    }
+    
+    .modal-xl {
+        max-width: 90%;
+    }
+    
+    .score-breakdown {
+        border-left: 3px solid var(--light-teal);
+        padding-left: 1rem;
+        margin-bottom: 1rem;
+    }
+    
+    .badge-score {
+        font-size: 0.9rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 10px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header del dashboard -->
+    <div class="matching-header">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h1 class="h3 mb-2">
+                    <i class="bi bi-graph-up-arrow me-2"></i>
+                    Dashboard de Matching Inmobiliario
+                </h1>
+                <p class="mb-0 opacity-75">
+                    Sistema inteligente de compatibilidad entre requerimientos de clientes y propiedades disponibles.
+                </p>
+            </div>
+            <div class="col-md-4 text-end">
+                <div class="btn-group">
+                    <button class="btn btn-light" id="btnExportPDF">
+                        <i class="bi bi-file-earmark-pdf"></i> Exportar PDF
+                    </button>
+                    <button class="btn btn-light" id="btnExportExcel">
+                        <i class="bi bi-file-earmark-excel"></i> Exportar Excel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SECCIÓN 1: Selector de requerimiento -->
+    <div class="card mb-4">
+        <div class="card-header bg-white">
+            <h5 class="mb-0">
+                <i class="bi bi-search me-2"></i>
+                Seleccionar Requerimiento a Evaluar
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="mb-3">
+                        <label for="selectRequerimiento" class="form-label">Requerimiento</label>
+                        <select id="selectRequerimiento" class="form-select select2">
+                            <option value="">Seleccione un requerimiento...</option>
+                            {% for req in requerimientos %}
+                            <option value="{{ req.id }}" 
+                                    data-distritos="{{ req.distritos|default:'Sin especificar' }}"
+                                    data-presupuesto="{{ req.presupuesto_display }}"
+                                    data-tipo="{{ req.get_tipo_propiedad_display }}"
+                                    data-condicion="{{ req.get_condicion_display }}"
+                                    {% if requerimiento_seleccionado and requerimiento_seleccionado.id == req.id %}selected{% endif %}>
+                                {{ req.agente|default:'Sin agente' }} - {{ req.get_tipo_propiedad_display }} en {{ req.distritos|default:'Sin distrito' }} ({{ req.presupuesto_display }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <button class="btn btn-primary w-100" id="btnEjecutarMatching">
+                        <i class="bi bi-lightning-charge me-2"></i>
+                        Ejecutar Matching
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Resumen del requerimiento seleccionado -->
+            <div id="resumenRequerimiento" class="mt-3" style="display: none;">
+                {% include "matching/partials/resumen_requerimiento.html" %}
+            </div>
+        </div>
+    </div>
+
+    <!-- SECCIÓN 2: Panel de estadísticas generales -->
+    <div id="panelEstadisticas" class="row mb-4" style="display: none;">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-bar-chart-line me-2"></i>
+                        Estadísticas del Matching
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row" id="estadisticasCards">
+                        <!-- Las tarjetas se cargarán dinámicamente via AJAX -->
+                        <div class="col-md-3">
+                            <div class="stat-card card text-center">
+                                <div class="card-body">
+                                    <div class="stat-number" id="totalEvaluadas">0</div>
+                                    <div class="text-muted">Propiedades evaluadas</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-card card text-center">
+                                <div class="card-body">
+                                    <div class="stat-number text-danger" id="totalDescartadas">0</div>
+                                    <div class="text-muted">Descartadas en fase 1</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-card card text-center">
+                                <div class="card-body">
+                                    <div class="stat-number text-success" id="totalCompatibles">0</div>
+                                    <div class="text-muted">Propiedades compatibles</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-card card text-center">
+                                <div class="card-body">
+                                    <div class="stat-number" id="scorePromedio">0.0</div>
+                                    <div class="text-muted">Score promedio</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SECCIÓN 3: Gráficos -->
+    <div id="panelGraficos" class="row mb-4" style="display: none;">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-pie-chart me-2"></i>
+                        Visualización de Resultados
+                    </h5>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-secondary active" data-chart="distribucion">
+                            <i class="bi bi-pie-chart"></i> Distribución
+                        </button>
+                        <button class="btn btn-outline-secondary" data-chart="top10">
+                            <i class="bi bi-bar-chart"></i> Top 10
+                        </button>
+                        <button class="btn btn-outline-secondary" data-chart="aporte">
+                            <i class="bi bi-stack"></i> Aporte por campo
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="chartPrincipal"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SECCIÓN 4: Tabla de resultados -->
+    <div id="panelResultados" class="card mb-4" style="display: none;">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="bi bi-table me-2"></i>
+                Propiedades Compatibles (Ordenadas por Score)
+            </h5>
+            <div class="d-flex align-items-center">
+                <div class="input-group input-group-sm me-2" style="width: 200px;">
+                    <span class="input-group-text">
+                        <i class="bi bi-filter"></i>
+                    </span>
+                    <input type="number" class="form-control" id="filterScoreMin" placeholder="Score mínimo" min="0" max="100">
+                </div>
+                <button class="btn btn-sm btn-outline-primary" id="btnGuardarResultados">
+                    <i class="bi bi-save me-1"></i> Guardar resultados
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover" id="tablaResultados">
+                    <thead>
+                        <tr>
+                            <th width="50">#</th>
+                            <th>Propiedad</th>
+                            <th>Distrito</th>
+                            <th>Precio</th>
+                            <th>Tipo</th>
+                            <th width="200">Score</th>
+                            <th width="100">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbodyResultados">
+                        <!-- Los resultados se cargarán dinámicamente via AJAX -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="text-center mt-3">
+                <nav aria-label="Paginación de resultados">
+                    <ul class="pagination justify-content-center" id="paginationResultados">
+                        <!-- La paginación se generará dinámicamente -->
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+
+    <!-- SECCIÓN 5: Propiedades descartadas (colapsable) -->
+    <div id="panelDescartadas" class="card mb-4" style="display: none;">
+        <div class="card-header bg-white">
+            <h5 class="mb-0">
+                <a class="collapse-toggle text-decoration-none" data-bs-toggle="collapse" href="#collapseDescartadas">
+                    <i class="bi bi-chevron-down me-2"></i>
+                    Propiedades Descartadas en Fase 1
+                    <span class="badge bg-danger ms-2" id="badgeTotalDescartadas">0</span>
+                </a>
+            </h5>
+        </div>
+        <div class="collapse" id="collapseDescartadas">
+            <div class="card-body">
+                <div class="row" id="contenidoDescartadas">
+                    <!-- El contenido se cargará dinámicamente via AJAX -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SECCIÓN 6: Acciones finales -->
+    <div id="panelAcciones" class="card mb-4" style="display: none;">
+        <div class="card-header bg-white">
+            <h5 class="mb-0">
+                <i class="bi bi-gear me-2"></i>
+                Acciones Finales
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="d-flex justify-content-between">
+                <div>
+                    <button class="btn btn-success me-2" id="btnGuardarBD">
+                        <i class="bi bi-database-check me-2"></i>
+                        Guardar en Base de Datos
+                    </button>
+                    <button class="btn btn-outline-success me-2" id="btnEnviarCorreo">
+                        <i class="bi bi-envelope me-2"></i>
+                        Enviar por Correo al Agente
+                    </button>
+                </div>
+                <div>
+                    <button class="btn btn-outline-secondary" id="btnLimpiar">
+                        <i class="bi bi-arrow-clockwise me-2"></i>
+                        Limpiar y Empezar Nuevo
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para detalle de propiedad -->
+<div class="modal fade" id="modalDetallePropiedad" tabindex="-1" aria-labelledby="modalDetallePropiedadLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalDetallePropiedadLabel">
+                    Detalle de Propiedad - <span id="modalPropiedadCodigo"></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="card mb-3">
+                            <div class="card-header">
+                                <h6 class="mb-0">Información General</h6>
+                            </div>
+                            <div class="card-body" id="modalPropiedadInfo">
+                                <!-- Información se cargará dinámicamente -->
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="mb-0">Desglose del Score</h6>
+                            </div>
+                            <div class="card-body" id="modalScoreBreakdown">
+                                <!-- Desglose se cargará dinámicamente -->
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="mb-0">Resumen de Compatibilidad</h6>
+                            </div>
+                            <div class="card-body text-center">
+                                <div class="display-4 fw-bold mb-2" id="modalScoreTotal">0.0</div>
+                                <div class="mb-3">
+                                    <div class="progress progress-score">
+                                        <div class="progress-bar" id="modalScoreBar" role="progressbar" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <span class="badge bg-success" id="modalNivelCompatibilidad">N/A</span>
+                                </div>
+                                <div class="text-start small">
+                                    <div class="mb-1">
+                                        <i class="bi bi-check-circle text-success me-2"></i>
+                                        <span id="modalCamposCumplidos">0</span> campos cumplen criterios
+                                    </div>
+                                    <div class="mb-1">
+                                        <i class="bi bi-exclamation-triangle text-warning me-2"></i>
+                                        <span id="modalCamposParciales">0</span> campos parcialmente cumplen
+                                    </div>
+                                    <div class="mb-1">
+                                        <i class="bi bi-x-circle text-danger me-2"></i>
+                                        <span id="modalCamposNoCumplidos">0</span> campos no cumplen
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card mt-3">
+                            <div class="card-header">
+                                <h6 class="mb-0">Acciones Rápidas</h6>
+                            </div>
+                            <div class="card-body">
+                                <button class="btn btn-outline-primary w-100 mb-2">
+                                    <i class="bi bi-eye me-2"></i> Ver propiedad completa
+                                </button>
+                                <button class="btn btn-outline-success w-100 mb-2">
+                                    <i class="bi bi-whatsapp me-2"></i> Contactar agente
+                                </button>
+                                <button class="btn btn-outline-info w-100">
+                                    <i class="bi bi-map me-2"></i> Ver en mapa
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-primary">Marcar como Favorita</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="{% static 'matching/matching.js' %}"></script>
+<script>
+    // Inicialización cuando el DOM está listo
+    document.addEventListener('DOMContentLoaded', function() {
+        // Inicializar Select2
+        $('#selectRequerimiento').select2({
+            theme: 'bootstrap-5',
+            placeholder: 'Seleccione un requerimiento...',
+            width: '100%'
+        });
+        
+        // Cargar resumen si hay un requerimiento seleccionado
+        const requerimientoId = $('#selectRequerimiento').val();
+        if (requerimientoId) {
+            cargarResumenRequerimiento(requerimientoId);
+        }
+        
+        // Evento para cambiar requerimiento
+        $('#selectRequerimiento').on('change', function() {
+            const id = $(this).val();
+            if (id) {
+                cargarResumenRequerimiento(id);
+                $('#panelEstadisticas, #panelGraficos, #panelResultados, #panelDescartadas, #panelAcciones').hide();
+            } else {
+                $('#resumenRequerimiento').hide();
+            }
+        });
+        
+        // Evento para ejecutar matching
+        $('#btnEjecutarMatching').on('click', function() {
+            const requerimientoId = $('#selectRequerimiento').val();
+            if (!requerimientoId) {
+                alert('Por favor seleccione un requerimiento primero.');
+                return;
+            }
+            
+            ejecutarMatching(requerimientoId);
+        });
+        
+        // Inicializar tooltips de Bootstrap
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    });
+    
+    // Función para cargar resumen del requerimiento
+    function cargarResumenRequerimiento(requerimientoId) {
+        $.ajax({
+            url: `/api/matching/${requerimientoId}/resumen/`,
+            method: 'GET',
+            success: function(data) {
+                // Actualizar el resumen en el DOM
+                $('#resumenRequerimiento').show().html(`
+                    <div class="alert alert-info">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <strong>Agente:</strong> ${data.requerimiento.agente || 'No especificado'}
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Tipo:</strong> ${data.requerimiento.tipo_propiedad_display || 'No especificado'}
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Distritos:</strong> ${data.requerimiento.distritos || 'No especificado'}
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Presupuesto:</strong> ${data.requerimiento.presupuesto_display || 'No especificado'}
+                            </div>
+                        </div>
+                        <div class="row mt-2">
+                            <div class="col-md-3">
+                                <strong>Habitaciones:</strong> ${data.requerimiento.habitaciones || 'Indiferente'}
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Baños:</strong> ${data.requerimiento.banos || 'Indiferente'}
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Área:</strong> ${data.requerimiento.area_m2 ? data.requerimiento.area_m2 + ' m²' : 'Indiferente'}
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Estado:</strong> ${data.requerimiento.es_urgente ? 'URGENTE' : 'Normal'}
+                            </div>
+                        </div>
+                    </div>
+                `);
+            },
+            error: function() {
+                $('#resumenRequerimiento').show().html(`
+                    <div class="alert alert-warning">
+                        No se pudo cargar el resumen del requerimiento.
+                    </div>
+                `);
+            }
+        });
+    }
+    
+    // Función para ejecutar matching (simplificada)
+    function ejecutarMatching(requerimientoId) {
+        const btn = $('#btnEjecutarMatching');
+        const originalText = btn.html();
+        btn.prop('disabled', true).html('<i class="bi bi-hourglass-split me-2"></i> Procesando...');
+        
+        $.ajax({
+            url: `/api/matching/${requerimientoId}/ejecutar/`,
+            method: 'GET',
+            data: {
+                limite: 100,
+                score_minimo: 0
+            },
+            success: function(data) {
+                // Mostrar todos los paneles
+                $('#panelEstadisticas, #panelGraficos, #panelResultados, #panelDescartadas, #panelAcciones').show();
+                
+                // Actualizar estadísticas
+                actualizarEstadisticas(data.estadisticas);
+                
+                // Actualizar gráficos
+                actualizarGraficos(data);
+                
+                // Actualizar tabla de resultados
+                actualizarTablaResultados(data.resultados);
+                
+                // Actualizar propiedades descartadas
+                actualizarPropiedadesDescartadas(data.estadisticas);
+                
+                // Guardar datos en variable global para uso posterior
+                window.matchingData = data;
+                
+                // Scroll a resultados
+                $('html, body').animate({
+                    scrollTop: $('#panelResultados').offset().top - 100
+                }, 500);
+            },
+            error: function(xhr) {
+                alert('Error al ejecutar matching: ' + (xhr.responseJSON?.error || 'Error desconocido'));
+            },
+            complete: function() {
+                btn.prop('disabled', false).html(originalText);
+            }
+        });
+    }
+    
+    // Funciones auxiliares (implementación simplificada)
+    function actualizarEstadisticas(estadisticas) {
+        $('#totalEvaluadas').text(estadisticas.total_evaluadas);
+        $('#totalDescartadas').text(estadisticas.total_descartadas);
+        $('#totalCompatibles').text(estadisticas.total_compatibles);
+        $('#scorePromedio').text(estadisticas.score_promedio.toFixed(1));
+    }
+    
+    function actualizarGraficos(data) {
+        // Implementación básica - se expandirá en matching.js
+        console.log('Datos para gráficos:', data);
+    }
+    
+    function actualizarTablaResultados(resultados) {
+        const tbody = $('#tbodyResultados');
+        tbody.empty();
+        
+        resultados.slice(0, 10).forEach(function(item, index) {
+            const propiedad = item.propiedad;
+            const score = item.score_total;
+            const scoreClass = score >= 75 ? 'score-high' : score >= 50 ? 'score-medium' : 'score-low';
+            
+            tbody.append(`
+                <tr>
+                    <td class="fw-bold">${index + 1}</td>
+                    <td>
+                        <strong>${propiedad.code}</strong><br>
+                        <small class="text-muted">${propiedad.title || 'Sin título'}</small>
+                    </td>
+                    <td>${propiedad.district || 'No especificado'}</td>
+                    <td>${propiedad.precio_formateado || 'No especificado'}</td>
+                    <td>${propiedad.tipo_propiedad || 'Propiedad'}</td>
+                    <td>
+                        <div class="d-flex align-items-center">
+                            <div class="progress progress-score flex-grow-1 me-2">
+                                <div class="progress-bar ${scoreClass}" role="progressbar" style="width: ${score}%"></div>
+                            </div>
+                            <span class="fw-bold">${score.toFixed(1)}</span>
+                        </div>
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" onclick="verDetallePropiedad(${index})">
+                            <i class="bi bi-eye"></i> Ver
+                        </button>
+                    </td>
+                </tr>
+            `);
+        });
+    }
+    
+    function actualizarPropiedadesDescartadas(estadisticas) {
+        const descartadas = estadisticas.descartadas_por_campo;
+        const total = estadisticas.total_descartadas;
+        
+        $('#badgeTotalDescartadas').text(total);
+        
+        let html = '';
+        for (const [campo, cantidad] of Object.entries(descartadas)) {
+            if (cantidad > 0) {
+                html += `
+                    <div class="col-md-3 mb-3">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title">${campo.replace('_', ' ').toUpperCase()}</h6>
+                                <div class="display-6 text-danger">${cantidad}</div>
+                                <small class="text-muted">propiedades descartadas</small>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        $('#contenidoDescartadas').html(html || '<div class="col-12 text-center text-muted">No hay propiedades descartadas</div>');
+    }
+    
+    // Función para ver detalle de propiedad (global)
+    window.verDetallePropiedad = function(index) {
+        if (!window.matchingData) return;
+        
+        const item = window.matchingData.resultados[index];
+        const propiedad = item.propiedad;
+        const score = item.score_total;
+        
+        // Actualizar modal
+        $('#modalPropiedadCodigo').text(propiedad.code);
+        $('#modalScoreTotal').text(score.toFixed(1));
+        $('#modalScoreBar').css('width', score + '%');
+        
+        // Determinar nivel de compatibilidad
+        let nivel = 'Muy baja';
+        if (score >= 80) nivel = 'Alta';
+        else if (score >= 60) nivel = 'Media';
+        else if (score >= 40) nivel = 'Baja';
+        $('#modalNivelCompatibilidad').text(nivel).removeClass().addClass(`badge bg-${score >= 60 ? 'success' : score >= 40 ? 'warning' : 'danger'}`);
+        
+        // Información de la propiedad
+        $('#modalPropiedadInfo').html(`
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>Dirección:</strong> ${propiedad.real_address || 'No especificada'}</p>
+                    <p><strong>Distrito:</strong> ${propiedad.district || 'No especificado'}</p>
+                    <p><strong>Área construida:</strong> ${propiedad.built_area ? propiedad.built_area + ' m²' : 'No especificado'}</p>
+                    <p><strong>Habitaciones:</strong> ${propiedad.bedrooms || 'No especificado'}</p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>Baños:</strong> ${propiedad.bathrooms || 'No especificado'}</p>
+                    <p><strong>Estacionamientos:</strong> ${propiedad.garage_spaces || '0'}</p>
+                    <p><strong>Antigüedad:</strong> ${propiedad.antiquity_years ? propiedad.antiquity_years + ' años' : 'No especificado'}</p>
+                    <p><strong>Ascensor:</strong> ${propiedad.ascensor || 'No especificado'}</p>
+                </div>
+            </div>
+            <div class="mt-3">
+                <strong>Descripción:</strong>
+                <p class="text-muted">${propiedad.description || 'Sin descripción disponible.'}</p>
+            </div>
+        `);
+        
+        // Desglose del score
+        let breakdownHtml = '';
+        for (const [campo, valor] of Object.entries(item.score_detalle)) {
+            const porcentaje = (valor * 100).toFixed(0);
+            breakdownHtml += `
+                <div class="score-breakdown mb-2">
+                    <div class="d-flex justify-content-between">
+                        <span>${campo.replace('_', ' ').toUpperCase()}</span>
+                        <span class="badge badge-score ${porcentaje >= 80 ? 'bg-success' : porcentaje >= 50 ? 'bg-warning' : 'bg-danger'}">
+                            ${porcentaje}%
+                        </span>
+                    </div>
+                    <div class="progress" style="height: 8px;">
+                        <div class="progress-bar ${porcentaje >= 80 ? 'bg-success' : porcentaje >= 50 ? 'bg-warning' : 'bg-danger'}"
+                             role="progressbar" style="width: ${porcentaje}%"></div>
+                    </div>
+                </div>
+            `;
+        }
+        $('#modalScoreBreakdown').html(breakdownHtml || '<p class="text-muted">No hay desglose disponible.</p>');
+        
+        // Mostrar modal
+        const modal = new bootstrap.Modal(document.getElementById('modalDetallePropiedad'));
+        modal.show();
+    };
+</script>
+{% endblock %}

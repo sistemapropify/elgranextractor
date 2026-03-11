@@ -1,0 +1,1204 @@
+<!DOCTYPE html>
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Cuadrantización Inmobiliaria - Zonas de Valor{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Estilos para el mapa y controles */
+    #map-container {
+        position: relative;
+        width: 100%;
+        height: 80vh;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    
+    #propertyMap {
+        width: 100%;
+        height: 100%;
+    }
+    
+    .map-controls {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        z-index: 1000;
+        background: white;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        max-width: 300px;
+    }
+    
+    .zone-info-panel {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        z-index: 1000;
+        background: white;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        max-width: 350px;
+        max-height: 80vh;
+        overflow-y: auto;
+    }
+    
+    .zone-card {
+        border-left: 4px solid #2196F3;
+        padding: 10px;
+        margin-bottom: 10px;
+        background: #f8f9fa;
+        border-radius: 4px;
+    }
+    
+    .zone-card.high-price {
+        border-left-color: #F44336;
+    }
+    
+    .zone-card.medium-price {
+        border-left-color: #FFC107;
+    }
+    
+    .zone-card.low-price {
+        border-left-color: #4CAF50;
+    }
+    
+    .price-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: bold;
+        color: white;
+    }
+    
+    .price-high {
+        background: #F44336;
+    }
+    
+    .price-medium {
+        background: #FFC107;
+        color: #333;
+    }
+    
+    .price-low {
+        background: #4CAF50;
+    }
+    
+    .drawing-controls {
+        display: flex;
+        gap: 5px;
+        margin-bottom: 15px;
+    }
+    
+    .drawing-btn {
+        flex: 1;
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        background: white;
+        border-radius: 4px;
+        cursor: pointer;
+        text-align: center;
+    }
+    
+    .drawing-btn.active {
+        background: #2196F3;
+        color: white;
+        border-color: #1976D2;
+    }
+    
+    .estimation-form {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        margin-top: 15px;
+    }
+    
+    .form-group {
+        margin-bottom: 10px;
+    }
+    
+    .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: 500;
+    }
+    
+    .form-control {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+    
+    .btn {
+        padding: 8px 16px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: 500;
+    }
+    
+    .btn-primary {
+        background: #2196F3;
+        color: white;
+    }
+    
+    .btn-success {
+        background: #4CAF50;
+        color: white;
+    }
+    
+    .btn-danger {
+        background: #F44336;
+        color: white;
+    }
+    
+    .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 15px;
+    }
+    
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+    
+    .legend-color {
+        width: 20px;
+        height: 20px;
+        border-radius: 4px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="mb-4">
+                <i class="fas fa-map-marked-alt"></i> Cuadrantización Inmobiliaria
+            </h1>
+            <p class="lead">
+                Sistema de valoración por m² basado en polígonos irregulares. Dibuja zonas, analiza precios y estima valores.
+            </p>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-9">
+            <div id="map-container">
+                <div id="propertyMap"></div>
+                
+                <!-- Controles de dibujo -->
+                <div class="map-controls">
+                    <h5><i class="fas fa-draw-polygon"></i> Herramientas de Dibujo</h5>
+                    <div class="drawing-controls">
+                        <button id="btn-draw-polygon" class="drawing-btn" title="Activar modo dibujo de polígono">
+                            <i class="fas fa-draw-polygon"></i> Polígono
+                        </button>
+                        <button id="btn-edit-shape" class="drawing-btn" title="Editar forma">
+                            <i class="fas fa-edit"></i> Editar
+                        </button>
+                        <button id="btn-delete-shape" class="drawing-btn" title="Eliminar forma">
+                            <i class="fas fa-trash"></i> Eliminar
+                        </button>
+                    </div>
+                    
+                    <!-- Búsqueda de direcciones -->
+                    <div class="form-group">
+                        <label for="address-search"><i class="fas fa-search"></i> Buscar Dirección:</label>
+                        <div class="input-group">
+                            <input type="text" id="address-search" class="form-control"
+                                   placeholder="Ej: Av. Arequipa 123, Miraflores, Lima">
+                            <button id="btn-search-address" class="btn btn-primary" type="button">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                        <small class="text-muted">Ingresa una dirección para centrar el mapa en esa ubicación</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="zone-name">Nombre de Zona:</label>
+                        <input type="text" id="zone-name" class="form-control" placeholder="Ej: Miraflores Centro">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="zone-level">Nivel Jerárquico:</label>
+                        <select id="zone-level" class="form-control">
+                            <option value="pais">País</option>
+                            <option value="departamento">Departamento</option>
+                            <option value="provincia">Provincia</option>
+                            <option value="distrito" selected>Distrito</option>
+                            <option value="zona">Zona</option>
+                            <option value="subzona">Subzona</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="zone-parent">Zona Padre (opcional):</label>
+                        <select id="zone-parent" class="form-control">
+                            <option value="">-- Sin padre (zona raíz) --</option>
+                            <!-- Las opciones se cargarán dinámicamente según el nivel seleccionado -->
+                        </select>
+                        <small class="text-muted">Selecciona una zona existente como padre para crear jerarquía (se filtran por nivel)</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="zone-description">Descripción:</label>
+                        <textarea id="zone-description" class="form-control" rows="2" placeholder="Descripción opcional"></textarea>
+                    </div>
+                    
+                    <button id="btn-save-zone" class="btn btn-success btn-block">
+                        <i class="fas fa-save"></i> Guardar Zona con Jerarquía
+                    </button>
+                    
+                    <div class="legend mt-3">
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #4CAF50;"></div>
+                            <span>Bajo (< $1000/m²)</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #FFC107;"></div>
+                            <span>Medio ($1000-2000/m²)</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #F44336;"></div>
+                            <span>Alto (> $2000/m²)</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Panel de información de zona -->
+                <div class="zone-info-panel" id="zone-info-panel" style="display: none;">
+                    <h5><i class="fas fa-info-circle"></i> Información de Zona</h5>
+                    <div id="zone-details">
+                        <!-- Los detalles se cargarán dinámicamente -->
+                    </div>
+                    <button id="btn-close-panel" class="btn btn-sm btn-secondary mt-2">
+                        <i class="fas fa-times"></i> Cerrar
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3">
+            <!-- Panel de jerarquía de zonas -->
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-sitemap"></i> Jerarquía de Zonas</h5>
+                    <a href="{% url 'configurar_jerarquia' %}" class="btn btn-sm btn-light" title="Configurar jerarquía completa">
+                        <i class="fas fa-cog"></i> Configurar
+                    </a>
+                </div>
+                <div class="card-body">
+                    <div class="hierarchy-info">
+                        <p class="text-muted small mb-3">
+                            <i class="fas fa-info-circle"></i> Sistema de niveles: país → departamento → provincia → distrito → zona → subzona
+                        </p>
+                        
+                        <div class="mb-3">
+                            <h6>Resumen por Nivel:</h6>
+                            <div class="list-group">
+                                {% for nivel_codigo, nivel_info in zonas_por_nivel.items %}
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    {{ nivel_info.nombre }}
+                                    <span class="badge bg-primary rounded-pill">{{ nivel_info.cantidad }}</span>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <h6>Zonas Raíz (sin padre):</h6>
+                            {% if zonas_raiz %}
+                            <div class="list-group">
+                                {% for zona in zonas_raiz %}
+                                <div class="list-group-item">
+                                    <strong>{{ zona.nombre_zona }}</strong>
+                                    <small class="d-block text-muted">{{ zona.get_nivel_display }}</small>
+                                    {% if zona.children.count %}
+                                    <small class="text-success">
+                                        <i class="fas fa-sitemap"></i> {{ zona.children.count }} subzonas
+                                    </small>
+                                    {% endif %}
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <div class="alert alert-warning">
+                                <i class="fas fa-exclamation-triangle"></i> No hay zonas raíz definidas.
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="alert alert-info">
+                            <h6><i class="fas fa-lightbulb"></i> Cómo usar la jerarquía:</h6>
+                            <ol class="mb-2 small">
+                                <li>Selecciona un nivel jerárquico al crear una zona</li>
+                                <li>Asigna una zona padre para crear relaciones</li>
+                                <li>Las subzonas heredan estadísticas de sus padres</li>
+                                <li>Puedes navegar la jerarquía en el mapa</li>
+                            </ol>
+                            <div class="text-center mt-2">
+                                <a href="{% url 'configurar_jerarquia' %}" class="btn btn-sm btn-primary">
+                                    <i class="fas fa-sitemap"></i> Configurar Jerarquía Completa
+                                </a>
+                                <small class="d-block text-muted mt-1">Arrastra y suelta para anidar padres con hijos</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Lista de zonas -->
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="fas fa-layer-group"></i> Zonas de Valor</h5>
+                </div>
+                <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                    <div id="zones-list">
+                        <!-- Las zonas se cargarán dinámicamente -->
+                        <div class="text-center text-muted">
+                            <i class="fas fa-spinner fa-spin"></i> Cargando zonas...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Google Maps API con Drawing Library -->
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBrL1QF7vTl9zF8FmCUumfRpFJcaYokO7Q&libraries=drawing,places&callback=initMap" async defer></script>
+
+<script>
+    // Variables globales
+    let map;
+    let drawingManager;
+    let selectedPolygon = null;
+    let polygons = [];
+    let zoneLabels = []; // Etiquetas de zonas
+    let currentZone = null;
+    let markers = [];
+    let infoWindow;
+    
+    // URLs de la API
+    const API_BASE = '/cuadrantizacion/';
+    const ZONAS_API = API_BASE + 'zonas/';
+    
+    // Variables para jerarquía
+    let allZones = []; // Todas las zonas cargadas
+    const LEVEL_ORDER = ['pais', 'departamento', 'provincia', 'distrito', 'zona', 'subzona'];
+    
+    // Función para mostrar alertas personalizadas
+    function showAlert(type, message, duration = 5000) {
+        // Crear contenedor de alertas si no existe
+        let alertContainer = document.getElementById('alert-container');
+        if (!alertContainer) {
+            alertContainer = document.createElement('div');
+            alertContainer.id = 'alert-container';
+            alertContainer.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                z-index: 9999;
+                max-width: 400px;
+            `;
+            document.body.appendChild(alertContainer);
+        }
+        
+        // Crear alerta
+        const alertId = 'alert-' + Date.now();
+        const alert = document.createElement('div');
+        alert.id = alertId;
+        alert.className = `alert alert-${type} alert-dismissible fade show`;
+        alert.style.cssText = `
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            margin-bottom: 10px;
+            animation: slideIn 0.3s ease-out;
+        `;
+        
+        alert.innerHTML = `
+            <button type="button" class="btn-close" onclick="document.getElementById('${alertId}').remove()"></button>
+            <div class="d-flex align-items-center">
+                <i class="fas ${getAlertIcon(type)} me-2"></i>
+                <div>${message}</div>
+            </div>
+        `;
+        
+        alertContainer.appendChild(alert);
+        
+        // Auto-remover después de la duración
+        setTimeout(() => {
+            const alertEl = document.getElementById(alertId);
+            if (alertEl) {
+                alertEl.style.opacity = '0';
+                alertEl.style.transition = 'opacity 0.3s';
+                setTimeout(() => alertEl.remove(), 300);
+            }
+        }, duration);
+    }
+    
+    // Función auxiliar para obtener icono según tipo de alerta
+    function getAlertIcon(type) {
+        const icons = {
+            'success': 'fa-check-circle',
+            'warning': 'fa-exclamation-triangle',
+            'danger': 'fa-times-circle',
+            'info': 'fa-info-circle'
+        };
+        return icons[type] || 'fa-info-circle';
+    }
+    
+    // Inicializar mapa
+    function initMap() {
+        const defaultCenter = { lat: -16.4090, lng: -71.5375 }; // Arequipa, Perú
+        
+        map = new google.maps.Map(document.getElementById('propertyMap'), {
+            center: defaultCenter,
+            zoom: 13,
+            mapTypeId: 'roadmap',
+            styles: [
+                {
+                    featureType: "poi",
+                    elementType: "labels",
+                    stylers: [{ visibility: "off" }]
+                }
+            ]
+        });
+        
+        infoWindow = new google.maps.InfoWindow();
+        
+        // Configurar Drawing Manager - Sin modo activo por defecto
+        drawingManager = new google.maps.drawing.DrawingManager({
+            drawingMode: null, // No activar modo de dibujo automáticamente
+            drawingControl: false,
+            polygonOptions: {
+                fillColor: '#2196F3',
+                fillOpacity: 0.3,
+                strokeWeight: 2,
+                strokeColor: '#1976D2',
+                editable: true,
+                draggable: true
+            }
+        });
+        
+        drawingManager.setMap(map);
+        
+        // Eventos de dibujo
+        google.maps.event.addListener(drawingManager, 'polygoncomplete', function(polygon) {
+            selectedPolygon = polygon;
+            setupPolygonListeners(polygon);
+            
+            // Calcular área aproximada
+            const area = google.maps.geometry.spherical.computeArea(polygon.getPath());
+            console.log('Área aproximada:', area.toFixed(2), 'm²');
+        });
+        
+        // Cargar zonas existentes
+        loadZones();
+        
+        // Configurar eventos de clic en el mapa
+        map.addListener('click', function(event) {
+            const lat = event.latLng.lat();
+            const lng = event.latLng.lng();
+            
+            // Detectar zona en ese punto
+            detectZoneAtPoint(lat, lng);
+            
+            // Agregar marcador temporal
+            addTempMarker(lat, lng);
+        });
+        
+        // Configurar botones de control
+        setupControlButtons();
+    }
+    
+    function setupPolygonListeners(polygon) {
+        // Al hacer clic en el polígono, seleccionarlo
+        google.maps.event.addListener(polygon, 'click', function(event) {
+            selectedPolygon = polygon;
+            showZoneInfo(polygon.zoneData);
+        });
+        
+        // Al editar el polígono, actualizar datos
+        google.maps.event.addListener(polygon.getPath(), 'set_at', function() {
+            updatePolygonArea(polygon);
+        });
+        
+        google.maps.event.addListener(polygon.getPath(), 'insert_at', function() {
+            updatePolygonArea(polygon);
+        });
+    }
+    
+    function updatePolygonArea(polygon) {
+        if (polygon.zoneData) {
+            const area = google.maps.geometry.spherical.computeArea(polygon.getPath());
+            console.log('Área actualizada:', area.toFixed(2), 'm²');
+        }
+    }
+    
+    function setupControlButtons() {
+        // Botón búsqueda de dirección
+        document.getElementById('btn-search-address').addEventListener('click', searchAddress);
+        document.getElementById('address-search').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchAddress();
+            }
+        });
+        
+        // Botón dibujar polígono (toggle)
+        document.getElementById('btn-draw-polygon').addEventListener('click', function() {
+            const isActive = this.classList.contains('active');
+            
+            if (isActive) {
+                // Desactivar modo dibujo
+                drawingManager.setDrawingMode(null);
+                this.classList.remove('active');
+                this.innerHTML = '<i class="fas fa-draw-polygon"></i> Polígono';
+                this.title = "Activar modo dibujo de polígono";
+            } else {
+                // Activar modo dibujo
+                drawingManager.setDrawingMode(google.maps.drawing.OverlayType.POLYGON);
+                setActiveButton(this);
+                this.innerHTML = '<i class="fas fa-draw-polygon"></i> Dibujando...';
+                this.title = "Modo dibujo activo - Haz clic para desactivar";
+            }
+        });
+        
+        // Botón editar forma
+        document.getElementById('btn-edit-shape').addEventListener('click', function() {
+            if (selectedPolygon) {
+                selectedPolygon.setEditable(true);
+                setActiveButton(this);
+            } else {
+                alert('Selecciona un polígono primero');
+            }
+        });
+        
+        // Botón eliminar forma
+        document.getElementById('btn-delete-shape').addEventListener('click', function() {
+            if (selectedPolygon && confirm('¿Eliminar esta zona?')) {
+                if (selectedPolygon.zoneData && selectedPolygon.zoneData.id) {
+                    deleteZone(selectedPolygon.zoneData.id);
+                }
+                selectedPolygon.setMap(null);
+                selectedPolygon = null;
+            }
+        });
+        
+        // Botón guardar zona
+        document.getElementById('btn-save-zone').addEventListener('click', saveZone);
+        
+        // Botón cerrar panel
+        document.getElementById('btn-close-panel').addEventListener('click', function() {
+            document.getElementById('zone-info-panel').style.display = 'none';
+        });
+        
+        // Selector de nivel - actualizar opciones de padre cuando cambie
+        document.getElementById('zone-level').addEventListener('change', function() {
+            updateParentOptions(this.value);
+        });
+    }
+    
+    function searchAddress() {
+        const address = document.getElementById('address-search').value.trim();
+        if (!address) {
+            alert('Ingresa una dirección para buscar');
+            return;
+        }
+        
+        // Mostrar indicador de carga
+        const searchBtn = document.getElementById('btn-search-address');
+        const originalHtml = searchBtn.innerHTML;
+        searchBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        searchBtn.disabled = true;
+        
+        // Usar Nominatim (OpenStreetMap) para geocodificación
+        const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&countrycodes=pe`;
+        
+        fetch(nominatimUrl)
+            .then(response => response.json())
+            .then(data => {
+                if (data && data.length > 0) {
+                    const result = data[0];
+                    const lat = parseFloat(result.lat);
+                    const lng = parseFloat(result.lon);
+                    
+                    // Centrar mapa en la ubicación encontrada
+                    const newCenter = new google.maps.LatLng(lat, lng);
+                    map.setCenter(newCenter);
+                    map.setZoom(16); // Zoom más cercano
+                    
+                    // Agregar marcador en la ubicación
+                    if (window.searchMarker) {
+                        window.searchMarker.setMap(null);
+                    }
+                    
+                    window.searchMarker = new google.maps.Marker({
+                        position: newCenter,
+                        map: map,
+                        title: result.display_name,
+                        animation: google.maps.Animation.DROP
+                    });
+                    
+                    // Mostrar información en el marcador
+                    const infoWindow = new google.maps.InfoWindow({
+                        content: `<div class="p-2">
+                            <strong>${result.display_name}</strong><br>
+                            <small>Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}</small>
+                        </div>`
+                    });
+                    
+                    window.searchMarker.addListener('click', () => {
+                        infoWindow.open(map, window.searchMarker);
+                    });
+                    
+                    // Auto-abrir infoWindow
+                    infoWindow.open(map, window.searchMarker);
+                    
+                    // Actualizar campo de búsqueda con el nombre encontrado
+                    document.getElementById('address-search').value = result.display_name;
+                    
+                    console.log('Dirección encontrada:', result.display_name, lat, lng);
+                } else {
+                    alert('No se encontró la dirección. Intenta con una dirección más específica.');
+                }
+            })
+            .catch(error => {
+                console.error('Error en geocodificación:', error);
+                alert('Error al buscar la dirección. Verifica tu conexión a internet.');
+            })
+            .finally(() => {
+                // Restaurar botón
+                searchBtn.innerHTML = originalHtml;
+                searchBtn.disabled = false;
+            });
+    }
+    
+    function setActiveButton(button) {
+        document.querySelectorAll('.drawing-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        button.classList.add('active');
+    }
+    
+    function saveZone() {
+        if (!selectedPolygon) {
+            showAlert('warning', 'Dibuja un polígono primero');
+            return;
+        }
+        
+        const name = document.getElementById('zone-name').value.trim();
+        if (!name) {
+            showAlert('warning', 'Ingresa un nombre para la zona');
+            return;
+        }
+        
+        // Obtener coordenadas del polígono
+        const path = selectedPolygon.getPath();
+        const coordinates = [];
+        
+        for (let i = 0; i < path.getLength(); i++) {
+            const point = path.getAt(i);
+            coordinates.push([point.lat(), point.lng()]);
+        }
+        
+        const description = document.getElementById('zone-description').value.trim();
+        const level = document.getElementById('zone-level').value;
+        const parentId = document.getElementById('zone-parent').value;
+        
+        // Validación de zona padre obligatoria para niveles jerárquicos bajos
+        const nivelesRequeridosPadre = ['subzona', 'zona', 'distrito'];
+        if (nivelesRequeridosPadre.includes(level) && !parentId) {
+            const nivelNombre = getLevelDisplayName(level);
+            showAlert('warning', `Para crear una ${nivelNombre}, debes seleccionar una zona padre`);
+            return;
+        }
+        
+        // Datos para enviar a la API con jerarquía
+        const zoneData = {
+            nombre_zona: name,
+            descripcion: description,
+            nivel: level,
+            parent: parentId || null,
+            coordenadas: coordinates,
+            color_fill: '#2196F3',
+            color_borde: '#1976D2',
+            opacidad: 0.3
+        };
+        
+        // Obtener botón de guardar y mostrar spinner
+        const saveBtn = document.getElementById('btn-save-zone');
+        const originalHtml = saveBtn.innerHTML;
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+        saveBtn.disabled = true;
+        
+        // Enviar a la API
+        fetch(ZONAS_API, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify(zoneData)
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => {
+                    throw new Error(err.detail || `Error HTTP ${response.status}`);
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            const nivelNombre = getLevelDisplayName(level);
+            showAlert('success', `${nivelNombre} "${name}" creada exitosamente`);
+            
+            selectedPolygon.zoneData = data;
+            loadZones(); // Recargar lista de zonas
+            
+            // Limpiar formulario
+            document.getElementById('zone-name').value = '';
+            document.getElementById('zone-description').value = '';
+            
+            // Recargar la página después de 2 segundos para actualizar jerarquía
+            setTimeout(() => {
+                location.reload();
+            }, 2000);
+        })
+        .catch(error => {
+            console.error('Error al guardar zona:', error);
+            showAlert('danger', `Error al crear zona: ${error.message}`);
+        })
+        .finally(() => {
+            // Restaurar botón
+            saveBtn.innerHTML = originalHtml;
+            saveBtn.disabled = false;
+        });
+    }
+    
+    function loadZones() {
+        fetch(ZONAS_API)
+            .then(response => response.json())
+            .then(data => {
+                // Extraer resultados de la paginación (si existe)
+                const zones = data.results || data;
+                
+                // Guardar todas las zonas para filtrado
+                allZones = zones;
+                
+                // Limpiar polígonos y etiquetas anteriores
+                polygons.forEach(polygon => polygon.setMap(null));
+                polygons = [];
+                zoneLabels.forEach(label => label.setMap(null));
+                zoneLabels = [];
+                
+                // Crear polígonos para cada zona
+                zones.forEach(zone => {
+                    // Solo crear polígono si tiene coordenadas
+                    if (zone.coordenadas && zone.coordenadas.length > 0) {
+                        const polygon = new google.maps.Polygon({
+                            paths: zone.coordenadas.map(coord => ({ lat: coord[0], lng: coord[1] })),
+                            strokeColor: zone.color_borde || '#1976D2',
+                            strokeOpacity: 0.8,
+                            strokeWeight: 2,
+                            fillColor: zone.color_fill || '#2196F3',
+                            fillOpacity: zone.opacidad || 0.3,
+                            editable: false,
+                            draggable: false
+                        });
+                        
+                        polygon.setMap(map);
+                        polygon.zoneData = zone;
+                        
+                        // Configurar eventos
+                        google.maps.event.addListener(polygon, 'click', function() {
+                            selectedPolygon = polygon;
+                            showZoneInfo(zone);
+                        });
+                        
+                        polygons.push(polygon);
+                        
+                        // Crear etiqueta en el centro del polígono
+                        const center = calculatePolygonCenter(zone.coordenadas);
+                        if (center) {
+                            // Texto de la etiqueta: nombre de la zona
+                            const labelText = zone.nombre_zona || `Zona ${zone.id}`;
+                            const label = createZoneLabel(center, labelText, zone);
+                            if (label) {
+                                zoneLabels.push(label);
+                            }
+                        }
+                    }
+                });
+                
+                // Actualizar lista de zonas en el panel
+                updateZonesList(zones);
+                
+                // Actualizar opciones de zona padre basadas en el nivel seleccionado actual
+                const selectedLevel = document.getElementById('zone-level').value;
+                updateParentOptions(selectedLevel);
+            })
+            .catch(error => console.error('Error cargando zonas:', error));
+    }
+    
+    /**
+     * Actualiza las opciones del selector de zona padre basadas en el nivel seleccionado.
+     * Solo muestra zonas de nivel superior al seleccionado (o cualquier nivel superior).
+     * @param {string} selectedLevel - Nivel seleccionado (ej: 'subzona', 'zona', etc.)
+     */
+    function updateParentOptions(selectedLevel) {
+        const parentSelect = document.getElementById('zone-parent');
+        if (!parentSelect) return;
+        
+        // Guardar la selección actual
+        const currentValue = parentSelect.value;
+        
+        // Limpiar opciones excepto la primera
+        parentSelect.innerHTML = '<option value="">-- Sin padre (zona raíz) --</option>';
+        
+        if (!selectedLevel || !allZones || allZones.length === 0) {
+            return;
+        }
+        
+        // Encontrar el índice del nivel seleccionado en la jerarquía
+        const levelIndex = LEVEL_ORDER.indexOf(selectedLevel);
+        if (levelIndex === -1) return;
+        
+        // Los padres válidos son niveles superiores (índice menor) o el mismo nivel?
+        // En jerarquía estricta, un padre debe ser un nivel superior.
+        // Permitimos cualquier nivel superior (índice < levelIndex)
+        const validLevels = LEVEL_ORDER.slice(0, levelIndex); // Niveles superiores
+        
+        // Filtrar zonas que tengan nivel válido
+        const validZones = allZones.filter(zone => validLevels.includes(zone.nivel));
+        
+        // Agrupar por nivel para mejor organización
+        validLevels.forEach(level => {
+            const zonesOfLevel = validZones.filter(z => z.nivel === level);
+            if (zonesOfLevel.length === 0) return;
+            
+            // Agregar optgroup para este nivel
+            const optgroup = document.createElement('optgroup');
+            optgroup.label = getLevelDisplayName(level);
+            zonesOfLevel.forEach(zone => {
+                const option = document.createElement('option');
+                option.value = zone.id;
+                option.textContent = `${zone.nombre_zona} (${getLevelDisplayName(zone.nivel)})`;
+                optgroup.appendChild(option);
+            });
+            parentSelect.appendChild(optgroup);
+        });
+        
+        // Restaurar selección anterior si aún existe
+        if (currentValue) {
+            const optionExists = Array.from(parentSelect.options).some(opt => opt.value === currentValue);
+            if (optionExists) {
+                parentSelect.value = currentValue;
+            }
+        }
+    }
+    
+    /**
+     * Calcula el centro (centroide) de un polígono.
+     * @param {Array} coordinates - Array de coordenadas [[lat, lng], ...]
+     * @returns {Object} Centro {lat, lng}
+     */
+    function calculatePolygonCenter(coordinates) {
+        if (!coordinates || coordinates.length === 0) {
+            return null;
+        }
+        
+        let latSum = 0;
+        let lngSum = 0;
+        
+        coordinates.forEach(coord => {
+            latSum += coord[0];
+            lngSum += coord[1];
+        });
+        
+        return {
+            lat: latSum / coordinates.length,
+            lng: lngSum / coordinates.length
+        };
+    }
+    
+    /**
+     * Crea una etiqueta (label) en el centro de un polígono.
+     * @param {Object} center - Centro {lat, lng}
+     * @param {string} text - Texto a mostrar
+     * @param {Object} zone - Datos de la zona
+     * @returns {google.maps.Marker} Marcador de etiqueta
+     */
+    function createZoneLabel(center, text, zone) {
+        if (!center) return null;
+        
+        // Determinar color basado en el nivel
+        const levelColors = {
+            'pais': '#FF0000',
+            'departamento': '#FF6600',
+            'provincia': '#FFCC00',
+            'distrito': '#33CC33',
+            'zona': '#3366FF',
+            'subzona': '#9900CC'
+        };
+        
+        const color = levelColors[zone.nivel] || '#000000';
+        
+        const label = new google.maps.Marker({
+            position: center,
+            map: map,
+            icon: {
+                path: google.maps.SymbolPath.CIRCLE,
+                scale: 0, // Círculo invisible
+                fillOpacity: 0,
+                strokeOpacity: 0
+            },
+            label: {
+                text: text,
+                color: color,
+                fontSize: '12px',
+                fontWeight: 'bold',
+                className: 'zone-label'
+            },
+            zIndex: 1000
+        });
+        
+        return label;
+    }
+    
+    /**
+     * Devuelve el nombre legible de un nivel.
+     */
+    function getLevelDisplayName(levelCode) {
+        const levelMap = {
+            'pais': 'País',
+            'departamento': 'Departamento',
+            'provincia': 'Provincia',
+            'distrito': 'Distrito',
+            'zona': 'Zona',
+            'subzona': 'Subzona'
+        };
+        return levelMap[levelCode] || levelCode;
+    }
+    
+    function updateZonesList(zones) {
+        const zonesList = document.getElementById('zones-list');
+        zonesList.innerHTML = '';
+        
+        if (zones.length === 0) {
+            zonesList.innerHTML = '<div class="text-center text-muted">No hay zonas definidas</div>';
+            return;
+        }
+        
+        zones.forEach(zone => {
+            const price = zone.precio_promedio_m2 || 0;
+            let priceClass = 'medium-price';
+            let priceBadge = 'price-medium';
+            let priceText = 'Medio';
+            
+            if (price < 1000) {
+                priceClass = 'low-price';
+                priceBadge = 'price-low';
+                priceText = 'Bajo';
+            } else if (price > 2000) {
+                priceClass = 'high-price';
+                priceBadge = 'price-high';
+                priceText = 'Alto';
+            }
+            
+            const zoneElement = document.createElement('div');
+            zoneElement.className = `zone-card ${priceClass}`;
+            zoneElement.innerHTML = `
+                <h6 class="mb-1">${zone.nombre_zona}</h6>
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="price-badge ${priceBadge}">$${price.toFixed(2)}/m²</span>
+                    <small class="text-muted">${zone.cantidad_propiedades_analizadas || 0} props.</small>
+                </div>
+                <small class="text-muted d-block mt-1">${zone.descripcion || 'Sin descripción'}</small>
+                <button class="btn btn-sm btn-outline-primary mt-2 w-100" onclick="focusZone(${zone.id})">
+                    <i class="fas fa-search"></i> Ver en mapa
+                </button>
+            `;
+            
+            zonesList.appendChild(zoneElement);
+        });
+    }
+    
+    function focusZone(zoneId) {
+        const zone = polygons.find(p => p.zoneData.id === zoneId);
+        if (zone) {
+            const bounds = new google.maps.LatLngBounds();
+            zone.getPath().forEach(point => bounds.extend(point));
+            map.fitBounds(bounds);
+            showZoneInfo(zone.zoneData);
+        }
+    }
+    
+    function showZoneInfo(zoneData) {
+        const panel = document.getElementById('zone-info-panel');
+        const details = document.getElementById('zone-details');
+        
+        const price = zoneData.precio_promedio_m2 || 0;
+        let priceClass = 'price-medium';
+        let priceText = 'Medio';
+        
+        if (price < 1000) {
+            priceClass = 'price-low';
+            priceText = 'Bajo';
+        } else if (price > 2000) {
+            priceClass = 'price-high';
+            priceText = 'Alto';
+        }
+        
+        details.innerHTML = `
+            <h6>${zoneData.nombre_zona}</h6>
+            <p>${zoneData.descripcion || 'Sin descripción'}</p>
+            
+            <div class="mb-2">
+                <strong>Precio promedio m²:</strong>
+                <span class="price-badge ${priceClass} ml-2">$${price.toFixed(2)}</span>
+                <small class="d-block text-muted">Nivel: ${priceText}</small>
+            </div>
+            
+            <div class="mb-2">
+                <strong>Área total:</strong>
+                <span class="ml-2">${zoneData.area_total ? zoneData.area_total.toFixed(2) + ' m²' : 'No calculada'}</span>
+            </div>
+            
+            <div class="mb-2">
+                <strong>Propiedades analizadas:</strong>
+                <span class="ml-2">${zoneData.cantidad_propiedades_analizadas || 0}</span>
+            </div>
+            
+            <div class="mb-2">
+                <strong>Última actualización:</strong>
+                <span class="ml-2">${new Date(zoneData.fecha_actualizacion).toLocaleDateString()}</span>
+            </div>
+            
+            <button class="btn btn-sm btn-primary w-100 mt-2" onclick="calculateZonePrice(${zoneData.id})">
+                <i class="fas fa-calculator"></i> Recalcular precio
+            </button>
+        `;
+        
+        panel.style.display = 'block';
+    }
+    
+    function detectZoneAtPoint(lat, lng) {
+        fetch(API_BASE + 'zonas/punto-en-zona/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({ lat, lng })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.zonas_contienen && data.zonas_contienen.length > 0) {
+                const zone = data.zonas_contienen[0];
+                document.getElementById('zone-name-display').textContent = zone.nombre_zona;
+                currentZone = zone;
+            } else {
+                document.getElementById('zone-name-display').textContent = 'Fuera de zona definida';
+                currentZone = null;
+            }
+        })
+        .catch(error => {
+            console.error('Error detectando zona:', error);
+            document.getElementById('zone-name-display').textContent = 'Error detectando zona';
+        });
+    }
+    
+    function addTempMarker(lat, lng) {
+        // Limpiar marcadores anteriores
+        markers.forEach(marker => marker.setMap(null));
+        markers = [];
+        
+        const marker = new google.maps.Marker({
+            position: { lat, lng },
+            map: map,
+            icon: {
+                url: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
+                scaledSize: new google.maps.Size(32, 32)
+            },
+            title: 'Punto seleccionado'
+        });
+        
+        markers.push(marker);
+    }
+    
+    function deleteZone(zoneId) {
+        if (!confirm('¿Estás seguro de eliminar esta zona? Esta acción no se puede deshacer.')) {
+            return;
+        }
+        
+        fetch(`${ZONAS_API}${zoneId}/`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        })
+        .then(response => {
+            if (response.ok) {
+                alert('Zona eliminada exitosamente');
+                loadZones();
+            } else {
+                alert('Error al eliminar la zona');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error al eliminar la zona');
+        });
+    }
+    
+    function calculateZonePrice(zoneId) {
+        fetch(`${API_BASE}zonas/${zoneId}/calcular-precio/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        })
+        .then(response => response.json())
+        .then(result => {
+            alert(`Precio recalculado: $${result.precio_promedio_m2}/m² (${result.cantidad_propiedades_utilizadas} propiedades)`);
+            loadZones(); // Recargar zonas
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error al recalcular precio');
+        });
+    }
+    
+    // Función auxiliar para obtener el token CSRF
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    
+    // Inicializar cuando Google Maps esté listo
+    window.initMap = initMap;
+</script>
+{% endblock %}

@@ -351,9 +351,13 @@ class ProcesadorExcel:
         """Lee archivo Excel o CSV y retorna DataFrame."""
         import pandas as pd
         if archivo.name.endswith('.csv'):
-            df = pd.read_csv(archivo)
+            df = pd.read_csv(archivo, index_col=False)
         else:
             df = pd.read_excel(archivo, engine='openpyxl')
+        # Eliminar columnas que comiencen con 'Unnamed' (columnas sin nombre)
+        columnas_unnamed = [col for col in df.columns if isinstance(col, str) and col.startswith('Unnamed')]
+        if columnas_unnamed:
+            df = df.drop(columns=columnas_unnamed)
         return df
     
     @staticmethod

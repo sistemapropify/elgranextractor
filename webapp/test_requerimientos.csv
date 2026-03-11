@@ -1,0 +1,6 @@
+Cliente Nombre,Cliente Email,Telefono,Tipo Requerimiento,Ubicacion,Presupuesto Min,Presupuesto Max,Moneda,Metros Cuadrados Min,Habitaciones Min,Banos Min,Estado,Prioridad,Observaciones
+Juan Pérez,juan@email.com,555-1234,Compra,Miraflores,150000,250000,USD,80,2,1,Activo,Alta,Cliente interesado en departamento
+María García,maria@email.com,555-5678,Alquiler,San Isidro,800,1200,USD,60,1,1,Activo,Media,Busca apartamento amueblado
+Carlos López,carlos@email.com,555-9012,Venta,Barranco,300000,450000,USD,120,3,2,Activo,Baja,Propiedad familiar
+Ana Rodríguez,ana@email.com,555-3456,Compra,Surco,180000,220000,USD,90,2,2,En proceso,Alta,En negociación
+Luis Martínez,luis@email.com,555-7890,Alquiler,La Molina,1000,1500,USD,70,2,1,Activo,Media,Preferencia con estacionamiento

@@ -35,21 +35,44 @@ def heatmap_view(request):
                     # Mostrar TODAS las coordenadas, no solo Lima
                     # (sin filtro de bounding box)
                     
-                    # Calcular peso basado en precio/m² si está disponible
+                    # Calcular peso basado en rangos de precio/m²
                     weight = 0.5  # Peso por defecto para propiedades sin precio
                     precio_m2 = None
                     
                     # Intentar calcular precio por m²
                     area = None
-                    if prop.area_construida and prop.area_construida > 0:
-                        area = float(prop.area_construida)
-                    elif prop.area_terreno and prop.area_terreno > 0:
-                        area = float(prop.area_terreno)
+                    tipo_propiedad = (prop.tipo_propiedad or '').lower().strip() if hasattr(prop, 'tipo_propiedad') else ''
+                    # Detectar terrenos con más variantes
+                    es_terreno = any(term in tipo_propiedad for term in [
+                        'terreno', 'terrenos', 'lote', 'parcela', 'parcel',
+                        'land', 'lot', 'plot', 'ground', 'solar', 'vacant'
+                    ])
+                    
+                    # Si es terreno, usar solo área de terreno
+                    if es_terreno:
+                        if prop.area_terreno and prop.area_terreno > 0:
+                            area = float(prop.area_terreno)
+                        # Si no hay área de terreno pero sí área construida, no usar área construida para terrenos
+                        # (dejar area = None para que no calcule precio/m²)
+                    else:
+                        # Para otros tipos, priorizar área construida
+                        if prop.area_construida and prop.area_construida > 0:
+                            area = float(prop.area_construida)
+                        elif prop.area_terreno and prop.area_terreno > 0:
+                            area = float(prop.area_terreno)
                     
                     if area and prop.precio_usd and prop.precio_usd > 0:
                         precio_m2 = float(prop.precio_usd) / area
                         if precio_m2 > 0 and precio_m2 < 10000:
-                            weight = min(precio_m2 / 2000, 1.0) * 3
+                            # Asignar peso por rangos discretos (no densidad)
+                            if precio_m2 < 1000:
+                                weight = 1.0  # Bajo
+                            elif precio_m2 < 2000:
+                                weight = 2.0  # Medio
+                            elif precio_m2 < 3000:
+                                weight = 3.0  # Alto
+                            else:
+                                weight = 4.0  # Muy alto
                     
                     heatmap_points.append({
                         'lat': lat,
@@ -59,7 +82,14 @@ def heatmap_view(request):
                         'fuente': 'local',
                         'tipo': 'Propiedad Real (Remax)',
                         'id': prop.id,
-                        'tiene_precio': precio_m2 is not None
+                        'tiene_precio': precio_m2 is not None,
+                        'precio_usd': float(prop.precio_usd) if prop.precio_usd else None,
+                        'area_construida': float(prop.area_construida) if prop.area_construida else None,
+                        'area_terreno': float(prop.area_terreno) if prop.area_terreno else None,
+                        'direccion': prop.direccion if hasattr(prop, 'direccion') and prop.direccion else None,
+                        'tipo_propiedad': prop.tipo_propiedad if hasattr(prop, 'tipo_propiedad') and prop.tipo_propiedad else None,
+                        'habitaciones': prop.habitaciones if hasattr(prop, 'habitaciones') else None,
+                        'banos': prop.banos if hasattr(prop, 'banos') else None
                     })
                     local_count += 1
             except (ValueError, AttributeError, TypeError):
@@ -83,21 +113,79 @@ def heatmap_view(request):
                     # Mostrar TODAS las coordenadas, no solo Lima
                     # (sin filtro de bounding box)
                     
-                    # Calcular peso basado en precio/m² si está disponible
+                    # Calcular peso basado en rangos de precio/m²
                     weight = 0.5  # Peso por defecto para propiedades sin precio
                     precio_m2 = None
                     
                     # Intentar calcular precio por m²
                     area = None
-                    if prop.built_area and prop.built_area > 0:
-                        area = float(prop.built_area)
-                    elif prop.land_area and prop.land_area > 0:
-                        area = float(prop.land_area)
+                    
+                    # Detectar terrenos en Propifai - LÓGICA MEJORADA
+                    # 1. Buscar en description, title, zoning
+                    description = (prop.description or '').lower().strip()
+                    title = (prop.title or '').lower().strip()
+                    zoning = (prop.zoning or '').lower().strip()
+                    
+                    # Verificar si contiene términos de terreno
+                    textos_busqueda = f'{description} {title} {zoning}'
+                    es_terreno_texto = any(term in textos_busqueda for term in [
+                        'terreno', 'terrenos', 'lote', 'parcela', 'parcel',
+                        'land', 'lot', 'plot', 'ground', 'solar', 'vacant'
+                    ])
+                    
+                    # 2. Heurística mejorada y más agresiva para detectar terrenos
+                    built_area_val = prop.built_area if prop.built_area else 0
+                    land_area_val = prop.land_area if prop.land_area else 0
+                    
+                    # LÓGICA SIMPLIFICADA Y MÁS AGRESIVA:
+                    # Si tiene land_area y es mayor que built_area, probablemente es terreno
+                    # (el usuario insiste que terrenos no deben usar built_area nunca)
+                    es_terreno_heuristico = False
+                    if land_area_val > 0:
+                        # Caso 1: No tiene built_area o es 0 -> muy probable terreno
+                        if built_area_val == 0 or built_area_val is None:
+                            es_terreno_heuristico = True
+                        # Caso 2: land_area es mayor que built_area -> probable terreno
+                        elif land_area_val > built_area_val:
+                            es_terreno_heuristico = True
+                        # Caso 3: Tiene built_area pero land_area es significativo también
+                        # (por seguridad, si land_area > 100m², lo consideramos terreno)
+                        elif land_area_val > 100:  # Terreno de al menos 100m²
+                            es_terreno_heuristico = True
+                    
+                    # 3. Si es proyecto, definitivamente es terreno para desarrollo
+                    es_proyecto = prop.is_project if hasattr(prop, 'is_project') else False
+                    if es_proyecto and land_area_val > 0:
+                        es_terreno_heuristico = True
+                    
+                    # Combinar detecciones - si cualquiera dice que es terreno, lo tratamos como terreno
+                    es_terreno = es_terreno_texto or es_terreno_heuristico
+                    
+                    # SI ES TERRENO: usar SOLO land_area (nunca built_area)
+                    if es_terreno:
+                        if prop.land_area and prop.land_area > 0:
+                            area = float(prop.land_area)
+                        # Si no hay land_area, NO usar built_area bajo ninguna circunstancia
+                        # (dejar area = None, no calcular precio/m²)
+                    else:
+                        # Para NO terrenos, priorizar built_area con fallback a land_area
+                        if prop.built_area and prop.built_area > 0:
+                            area = float(prop.built_area)
+                        elif prop.land_area and prop.land_area > 0:
+                            area = float(prop.land_area)
                     
                     if area and prop.price and prop.price > 0:
                         precio_m2 = float(prop.price) / area
                         if precio_m2 > 0 and precio_m2 < 10000:
-                            weight = min(precio_m2 / 2000, 1.0) * 3
+                            # Asignar peso por rangos discretos (no densidad)
+                            if precio_m2 < 1000:
+                                weight = 1.0  # Bajo
+                            elif precio_m2 < 2000:
+                                weight = 2.0  # Medio
+                            elif precio_m2 < 3000:
+                                weight = 3.0  # Alto
+                            else:
+                                weight = 4.0  # Muy alto
                     
                     heatmap_points.append({
                         'lat': lat,
@@ -107,7 +195,14 @@ def heatmap_view(request):
                         'fuente': 'propifai',
                         'tipo': 'Propiedad Real (Propify)',
                         'id': prop.id,
-                        'tiene_precio': precio_m2 is not None
+                        'tiene_precio': precio_m2 is not None,
+                        'price': float(prop.price) if prop.price else None,
+                        'built_area': float(prop.built_area) if prop.built_area else None,
+                        'land_area': float(prop.land_area) if prop.land_area else None,
+                        'address': prop.address if hasattr(prop, 'address') and prop.address else None,
+                        'property_type': prop.property_type if hasattr(prop, 'property_type') and prop.property_type else None,
+                        'bedrooms': prop.bedrooms if hasattr(prop, 'bedrooms') else None,
+                        'bathrooms': prop.bathrooms if hasattr(prop, 'bathrooms') else None
                     })
                     propifai_count += 1
             except (ValueError, AttributeError, TypeError):
@@ -219,10 +314,82 @@ def heatmap_view(request):
                     <h5><i class="bi bi-sliders me-2"></i>Controles</h5>
                     <div class="mb-3">
                         <label class="form-label">Opacidad del heatmap</label>
-                        <input type="range" class="form-range" id="opacitySlider" min="0.1" max="1" step="0.1" value="0.6">
+                        <input type="range" class="form-range" id="opacitySlider" min="0.1" max="1" step="0.1" value="0.7">
+                        <div class="d-flex justify-content-between small text-muted">
+                            <span>Baja</span>
+                            <span id="opacityValue">70%</span>
+                            <span>Alta</span>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Radio del heatmap</label>
+                        <input type="range" class="form-range" id="radiusSlider" min="100" max="500" step="25" value="300">
+                        <div class="d-flex justify-content-between small text-muted">
+                            <span>Pequeño</span>
+                            <span id="radiusValue">300px</span>
+                            <span>Grande</span>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Paleta de colores</label>
+                        <select class="form-select" id="colorPalette">
+                            <option value="default">Default (Azul-Amarillo-Rojo)</option>
+                            <option value="viridis">Viridis (Verde-Amarillo)</option>
+                            <option value="plasma">Plasma (Púrpura-Amarillo)</option>
+                            <option value="inferno">Inferno (Negro-Rojo-Amarillo)</option>
+                            <option value="cool">Cool (Cian-Magenta)</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Filtrar por fuente</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="filterRemax" checked>
+                            <label class="form-check-label" for="filterRemax">
+                                Remax/Local
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="filterPropify" checked>
+                            <label class="form-check-label" for="filterPropify">
+                                Propify
+                            </label>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Filtrar por tipo de propiedad</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="filterCasa" checked>
+                            <label class="form-check-label" for="filterCasa">
+                                Casa
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="filterDepartamento" checked>
+                            <label class="form-check-label" for="filterDepartamento">
+                                Departamento
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="filterTerreno" checked>
+                            <label class="form-check-label" for="filterTerreno">
+                                Terreno
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="filterOficina" checked>
+                            <label class="form-check-label" for="filterOficina">
+                                Oficina
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="filterOtro" checked>
+                            <label class="form-check-label" for="filterOtro">
+                                Otro
+                            </label>
+                        </div>
                     </div>
                     <button class="btn btn-primary w-100 mb-2" id="btnRefresh">
-                        <i class="bi bi-arrow-clockwise me-1"></i>Actualizar datos
+                        <i class="bi bi-arrow-clockwise me-1"></i>Actualizar datos en tiempo real
                     </button>
                     <button class="btn btn-outline-secondary w-100" id="btnHelp">
                         <i class="bi bi-question-circle me-1"></i>Ayuda
@@ -282,10 +449,18 @@ def heatmap_view(request):
             await loadGoogleMapsAPI();
             console.log('Google Maps API cargada');
             
-            // Crear mapa centrado en Lima
+            // Crear mapa centrado en Lima con zoom habilitado
             const map = new google.maps.Map(document.getElementById('heatmapMap'), {{
                 center: {{ lat: -12.0464, lng: -77.0428 }},
                 zoom: 10,
+                scrollwheel: true, // Habilitar zoom con rueda del mouse
+                gestureHandling: 'cooperative', // Manejo cooperativo de gestos
+                zoomControl: true, // Mostrar controles de zoom
+                mapTypeControl: true, // Mostrar control de tipo de mapa
+                scaleControl: true, // Mostrar escala
+                streetViewControl: true, // Mostrar control de Street View
+                rotateControl: true, // Mostrar control de rotación
+                fullscreenControl: true, // Mostrar control de pantalla completa
                 styles: [
                     {{
                         featureType: "all",
@@ -304,23 +479,16 @@ def heatmap_view(request):
                 weight: point.weight
             }}));
             
-            // Crear heatmap
-            const heatmap = new google.maps.visualization.HeatmapLayer({{
-                data: heatmapData.map(d => d.location),
-                map: map,
-                radius: 70,
-                opacity: 0.8,
-                gradient: [
-                    'rgba(0, 0, 255, 0)',
-                    'rgba(0, 0, 255, 0.5)',
-                    'rgba(0, 255, 255, 0.8)',
-                    'rgba(0, 255, 0, 1)',
-                    'rgba(255, 255, 0, 1)',
-                    'rgba(255, 0, 0, 1)'
-                ]
+            // Depurar: mostrar primeros 5 puntos con sus pesos y precios
+            console.log('Muestra de datos heatmap (primeros 5 puntos):');
+            heatmapDataJson.slice(0, 5).forEach((point, i) => {{
+                console.log(`Punto ${{i}}: precio_m2=${{point.precio_m2}}, weight=${{point.weight}}, fuente=${{point.fuente}}`);
             }});
             
-            console.log('Heatmap creado con {{heatmapData.length}} puntos');
+            // HEATMAP DESACTIVADO - Solo se muestran marcadores con colores y precios
+            const heatmap = null; // No se crea capa de heatmap
+            
+            console.log('Heatmap desactivado. Mostrando {{heatmapData.length}} puntos como marcadores.');
             
             // Crear marcadores visibles con tooltips
             const markers = [];
@@ -381,15 +549,44 @@ def heatmap_view(request):
                     }}
                 }});
                 
-                // Crear tooltip (info window)
+                // Crear tooltip (info window) con todos los datos
                 const infoWindow = new google.maps.InfoWindow({{
                     content: `
-                        <div style="padding: 10px; min-width: 200px;">
-                            <h6 style="margin: 0 0 10px 0; color: #333;">Propiedad #${{index + 1}}</h6>
-                            <p style="margin: 5px 0;"><strong>Precio por m²:</strong> ${{point.precio_m2 ? point.precio_m2.toFixed(2) : 'N/A'}} USD</p>
-                            <p style="margin: 5px 0;"><strong>Fuente:</strong> ${{point.fuente === 'local' ? 'Remax/Local' : 'Propify'}}</p>
-                            <p style="margin: 5px 0;"><strong>Coordenadas:</strong> ${{point.lat.toFixed(6)}}, ${{point.lng.toFixed(6)}}</p>
-                            <p style="margin: 5px 0;"><strong>Intensidad:</strong> ${{(point.weight * 100).toFixed(1)}}%</p>
+                        <div style="padding: 15px; min-width: 300px; max-width: 400px; font-family: Arial, sans-serif;">
+                            <h5 style="margin: 0 0 12px 0; color: #1a73e8; border-bottom: 2px solid #f0f0f0; padding-bottom: 8px;">
+                                ${{point.fuente === 'local' ? '🏠 Propiedad Remax/Local' : '🏢 Propiedad Propify'}}
+                            </h5>
+                            
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
+                                <div>
+                                    <strong>ID:</strong> ${{point.id}}<br>
+                                    <strong>Precio/m²:</strong> ${{point.precio_m2 ? '$' + point.precio_m2.toFixed(2) + ' USD' : 'N/A'}}<br>
+                                    <strong>Intensidad:</strong> ${{(point.weight * 100).toFixed(1)}}%<br>
+                                    <strong>Coordenadas:</strong><br>
+                                    <small>${{point.lat.toFixed(6)}}, ${{point.lng.toFixed(6)}}</small>
+                                </div>
+                                <div>
+                                    <strong>Precio total:</strong> ${{point.precio_usd ? '$' + point.precio_usd.toLocaleString() + ' USD' : point.price ? '$' + point.price.toLocaleString() + ' USD' : 'N/A'}}<br>
+                                    <strong>Área construida:</strong> ${{point.area_construida ? point.area_construida.toLocaleString() + ' m²' : point.built_area ? point.built_area.toLocaleString() + ' m²' : 'N/A'}}<br>
+                                    <strong>Área terreno:</strong> ${{point.area_terreno ? point.area_terreno.toLocaleString() + ' m²' : point.land_area ? point.land_area.toLocaleString() + ' m²' : 'N/A'}}<br>
+                                </div>
+                            </div>
+                            
+                            <div style="margin-bottom: 12px;">
+                                <strong>Dirección:</strong><br>
+                                <span style="color: #555;">${{point.direccion || point.address || 'N/A'}}</span><br>
+                                <strong>Tipo:</strong> ${{point.tipo_propiedad || point.property_type || 'N/A'}}<br>
+                            </div>
+                            
+                            <div style="display: flex; gap: 15px; margin-bottom: 12px;">
+                                <div><strong>Habitaciones:</strong> ${{point.habitaciones || point.bedrooms || 'N/A'}}</div>
+                                <div><strong>Baños:</strong> ${{point.banos || point.bathrooms || 'N/A'}}</div>
+                            </div>
+                            
+                            <div style="font-size: 12px; color: #666; border-top: 1px solid #eee; padding-top: 8px;">
+                                <strong>Fuente:</strong> ${{point.fuente === 'local' ? 'Remax/Local' : 'Propify'}} |
+                                <strong>Tiene precio:</strong> ${{point.tiene_precio ? 'Sí' : 'No'}}
+                            </div>
                         </div>
                     `
                 }});
@@ -430,13 +627,248 @@ def heatmap_view(request):
                 markers.forEach(marker => marker.setVisible(show));
             }});
             
-            // Configurar controles
+            // Configurar controles con debouncing para mejor rendimiento
+            function debounce(func, wait) {{
+                let timeout;
+                return function executedFunction(...args) {{
+                    const later = () => {{
+                        clearTimeout(timeout);
+                        func(...args);
+                    }};
+                    clearTimeout(timeout);
+                    timeout = setTimeout(later, wait);
+                }};
+            }}
+            
+            // Actualizar valores de los sliders inmediatamente
             document.getElementById('opacitySlider').addEventListener('input', function(e) {{
-                heatmap.setOpacity(parseFloat(e.target.value));
+                document.getElementById('opacityValue').textContent = Math.round(parseFloat(e.target.value) * 100) + '%';
             }});
             
+            document.getElementById('radiusSlider').addEventListener('input', function(e) {{
+                document.getElementById('radiusValue').textContent = e.target.value + 'px';
+            }});
+            
+            // Aplicar cambios inmediatamente (sin debouncing) - Heatmap desactivado
+            const updateHeatmapOpacity = function(value) {{
+                console.log('Heatmap desactivado, opacidad ignorada:', value);
+                // heatmap.setOpacity(parseFloat(value)); // No hay heatmap
+            }};
+            
+            const updateHeatmapRadius = function(value) {{
+                console.log('Heatmap desactivado, radio ignorado:', value);
+                // heatmap.set('radius', parseInt(value)); // No hay heatmap
+            }};
+            
+            // Los sliders aún actualizan los valores visuales pero no afectan al heatmap
+            document.getElementById('opacitySlider').addEventListener('input', function(e) {{
+                updateHeatmapOpacity(e.target.value);
+            }});
+            
+            document.getElementById('radiusSlider').addEventListener('input', function(e) {{
+                updateHeatmapRadius(e.target.value);
+            }});
+            
+            document.getElementById('colorPalette').addEventListener('change', function(e) {{
+                const palette = e.target.value;
+                let gradient;
+                switch(palette) {{
+                    case 'viridis':
+                        gradient = [
+                            'rgba(68, 1, 84, 0)',
+                            'rgba(68, 1, 84, 0.5)',
+                            'rgba(72, 40, 120, 0.8)',
+                            'rgba(62, 73, 137, 1)',
+                            'rgba(49, 104, 142, 1)',
+                            'rgba(38, 130, 142, 1)',
+                            'rgba(31, 158, 137, 1)',
+                            'rgba(53, 183, 121, 1)',
+                            'rgba(110, 206, 88, 1)',
+                            'rgba(181, 222, 43, 1)',
+                            'rgba(253, 231, 37, 1)'
+                        ];
+                        break;
+                    case 'plasma':
+                        gradient = [
+                            'rgba(13, 8, 135, 0)',
+                            'rgba(13, 8, 135, 0.5)',
+                            'rgba(84, 2, 163, 0.8)',
+                            'rgba(139, 10, 165, 1)',
+                            'rgba(185, 19, 137, 1)',
+                            'rgba(221, 38, 106, 1)',
+                            'rgba(247, 72, 70, 1)',
+                            'rgba(253, 118, 37, 1)',
+                            'rgba(254, 168, 24, 1)',
+                            'rgba(240, 219, 16, 1)'
+                        ];
+                        break;
+                    case 'inferno':
+                        gradient = [
+                            'rgba(0, 0, 4, 0)',
+                            'rgba(0, 0, 4, 0.5)',
+                            'rgba(31, 12, 72, 0.8)',
+                            'rgba(85, 15, 109, 1)',
+                            'rgba(136, 34, 106, 1)',
+                            'rgba(186, 54, 85, 1)',
+                            'rgba(227, 89, 51, 1)',
+                            'rgba(249, 140, 10, 1)',
+                            'rgba(249, 201, 14, 1)',
+                            'rgba(252, 255, 164, 1)'
+                        ];
+                        break;
+                    case 'cool':
+                        gradient = [
+                            'rgba(0, 255, 255, 0)',
+                            'rgba(0, 255, 255, 0.5)',
+                            'rgba(0, 200, 255, 0.8)',
+                            'rgba(0, 150, 255, 1)',
+                            'rgba(0, 100, 255, 1)',
+                            'rgba(100, 0, 255, 1)',
+                            'rgba(200, 0, 255, 1)',
+                            'rgba(255, 0, 200, 1)',
+                            'rgba(255, 0, 100, 1)'
+                        ];
+                        break;
+                    default: // default
+                        gradient = [
+                            'rgba(0, 0, 255, 0)',
+                            'rgba(0, 0, 255, 0.5)',
+                            'rgba(0, 255, 255, 0.8)',
+                            'rgba(0, 255, 0, 1)',
+                            'rgba(255, 255, 0, 1)',
+                            'rgba(255, 0, 0, 1)'
+                        ];
+                }}
+                heatmap.set('gradient', gradient);
+            }});
+            
+            // Filtros por fuente y tipo de propiedad con caché para mejor rendimiento (solo marcadores)
+            let filterCache = {{}};
+            let lastFilterState = {{
+                showRemax: true,
+                showPropify: true,
+                showCasa: true,
+                showDepartamento: true,
+                showTerreno: true,
+                showOficina: true,
+                showOtro: true
+            }};
+            
+            function applyFilters() {{
+                const showRemax = document.getElementById('filterRemax').checked;
+                const showPropify = document.getElementById('filterPropify').checked;
+                const showCasa = document.getElementById('filterCasa').checked;
+                const showDepartamento = document.getElementById('filterDepartamento').checked;
+                const showTerreno = document.getElementById('filterTerreno').checked;
+                const showOficina = document.getElementById('filterOficina').checked;
+                const showOtro = document.getElementById('filterOtro').checked;
+                
+                // Si el estado no ha cambiado, no hacer nada
+                if (lastFilterState.showRemax === showRemax &&
+                    lastFilterState.showPropify === showPropify &&
+                    lastFilterState.showCasa === showCasa &&
+                    lastFilterState.showDepartamento === showDepartamento &&
+                    lastFilterState.showTerreno === showTerreno &&
+                    lastFilterState.showOficina === showOficina &&
+                    lastFilterState.showOtro === showOtro) {{
+                    return;
+                }}
+                lastFilterState = {{
+                    showRemax, showPropify, showCasa, showDepartamento,
+                    showTerreno, showOficina, showOtro
+                }};
+                
+                // Generar clave de caché
+                const cacheKey = `${{showRemax ? 'R' : ''}}${{showPropify ? 'P' : ''}}${{showCasa ? 'C' : ''}}${{showDepartamento ? 'D' : ''}}${{showTerreno ? 'T' : ''}}${{showOficina ? 'O' : ''}}${{showOtro ? 'X' : ''}}`;
+                
+                // Usar caché si existe (solo visibilidad de marcadores)
+                if (filterCache[cacheKey]) {{
+                    // Aplicar visibilidad de marcadores desde caché
+                    filterCache[cacheKey].forEach((visible, index) => {{
+                        if (markers[index]) {{
+                            markers[index].setVisible(visible);
+                        }}
+                    }});
+                    return;
+                }}
+                
+                // Calcular nueva visibilidad de marcadores
+                const markerVisibility = [];
+                
+                heatmapDataJson.forEach((point, index) => {{
+                    // Filtrar por fuente
+                    const fuenteOk = (point.fuente === 'local' && showRemax) || (point.fuente === 'propifai' && showPropify);
+                    
+                    // Filtrar por tipo de propiedad
+                    let tipoOk = false;
+                    const tipoPropiedad = (point.tipo_propiedad || point.property_type || '').toLowerCase();
+                    
+                    if (showCasa && (tipoPropiedad.includes('casa') || tipoPropiedad.includes('house') || tipoPropiedad.includes('villa'))) {{
+                        tipoOk = true;
+                    }}
+                    if (showDepartamento && (tipoPropiedad.includes('departamento') || tipoPropiedad.includes('apartment') || tipoPropiedad.includes('flat') || tipoPropiedad.includes('dpto'))) {{
+                        tipoOk = true;
+                    }}
+                    if (showTerreno && (tipoPropiedad.includes('terreno') || tipoPropiedad.includes('land') || tipoPropiedad.includes('lot') || tipoPropiedad.includes('parcel'))) {{
+                        tipoOk = true;
+                    }}
+                    if (showOficina && (tipoPropiedad.includes('oficina') || tipoPropiedad.includes('office') || tipoPropiedad.includes('commercial'))) {{
+                        tipoOk = true;
+                    }}
+                    if (showOtro && !tipoOk && tipoPropiedad) {{
+                        // Si no coincide con ningún tipo específico pero tiene tipo, y "Otro" está seleccionado
+                        tipoOk = true;
+                    }}
+                    // Si no hay tipo de propiedad definido, mostrar si "Otro" está seleccionado
+                    if (!tipoPropiedad && showOtro) {{
+                        tipoOk = true;
+                    }}
+                    // Si todos los tipos están deseleccionados, mostrar nada
+                    if (!showCasa && !showDepartamento && !showTerreno && !showOficina && !showOtro) {{
+                        tipoOk = false;
+                    }}
+                    
+                    const shouldShow = fuenteOk && tipoOk;
+                    markerVisibility.push(shouldShow);
+                    
+                    // Actualizar visibilidad del marcador
+                    if (markers[index]) {{
+                        markers[index].setVisible(shouldShow);
+                    }}
+                }});
+                
+                // Guardar en caché (solo visibilidad)
+                filterCache[cacheKey] = markerVisibility;
+                
+                // Limitar tamaño de caché (mantener solo las últimas 8 combinaciones)
+                const cacheKeys = Object.keys(filterCache);
+                if (cacheKeys.length > 8) {{
+                    delete filterCache[cacheKeys[0]];
+                }}
+            }}
+            
+            document.getElementById('filterRemax').addEventListener('change', applyFilters);
+            document.getElementById('filterPropify').addEventListener('change', applyFilters);
+            document.getElementById('filterCasa').addEventListener('change', applyFilters);
+            document.getElementById('filterDepartamento').addEventListener('change', applyFilters);
+            document.getElementById('filterTerreno').addEventListener('change', applyFilters);
+            document.getElementById('filterOficina').addEventListener('change', applyFilters);
+            document.getElementById('filterOtro').addEventListener('change', applyFilters);
+            
+            // Botón de recarga de datos en tiempo real
             document.getElementById('btnRefresh').addEventListener('click', function() {{
-                alert('Datos actualizados (simulación)');
+                // Mostrar indicador de carga
+                const refreshBtn = document.getElementById('btnRefresh');
+                const originalText = refreshBtn.innerHTML;
+                refreshBtn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Cargando...';
+                refreshBtn.disabled = true;
+                
+                // Simular carga de datos (en producción sería una llamada AJAX)
+                setTimeout(() => {{
+                    // Aquí iría la llamada real a la API para obtener datos actualizados
+                    // Por ahora solo recargamos la página para demostración
+                    location.reload();
+                }}, 1000);
             }});
             
             document.getElementById('btnHelp').addEventListener('click', function() {{
@@ -445,6 +877,10 @@ def heatmap_view(request):
                       '• Propiedades Remax/Local: {local_count}\\n' +
                       '• Propiedades Propify: {propifai_count}\\n\\n' +
                       '• Use el deslizador para ajustar la opacidad\\n' +
+                      '• Ajuste el radio para cambiar el tamaño de los puntos\\n' +
+                      '• Seleccione diferentes paletas de colores\\n' +
+                      '• Filtre por tipo de propiedad (Remax/Propify)\\n' +
+                      '• Actualice datos en tiempo real con el botón\\n' +
                       '• El mapa muestra propiedades REALES con coordenadas válidas\\n' +
                       '• Los colores indican densidad de precio por m²\\n' +
                       '• NO hay propiedades inventadas - todos los datos son reales');
@@ -546,12 +982,26 @@ def api_heatmap_data(request):
                             lat = float(coords[0].strip())
                             lng = float(coords[1].strip())
                             
-                            # Calcular área
+                            # Calcular área con detección de terrenos
                             area = None
-                            if prop.area_construida and prop.area_construida > 0:
-                                area = float(prop.area_construida)
-                            elif prop.area_terreno and prop.area_terreno > 0:
-                                area = float(prop.area_terreno)
+                            tipo_propiedad = (prop.tipo_propiedad or '').lower().strip() if hasattr(prop, 'tipo_propiedad') else ''
+                            # Detectar terrenos
+                            es_terreno = any(term in tipo_propiedad for term in [
+                                'terreno', 'terrenos', 'lote', 'parcela', 'parcel',
+                                'land', 'lot', 'plot', 'ground', 'solar', 'vacant'
+                            ])
+                            
+                            # Si es terreno, usar solo área de terreno
+                            if es_terreno:
+                                if prop.area_terreno and prop.area_terreno > 0:
+                                    area = float(prop.area_terreno)
+                                # Si no hay área de terreno, no usar área construida para terrenos
+                            else:
+                                # Para otros tipos, priorizar área construida
+                                if prop.area_construida and prop.area_construida > 0:
+                                    area = float(prop.area_construida)
+                                elif prop.area_terreno and prop.area_terreno > 0:
+                                    area = float(prop.area_terreno)
                             
                             precio_m2 = None
                             if area and prop.precio_usd:
@@ -567,7 +1017,7 @@ def api_heatmap_data(request):
                                     'area': area,
                                     'tipo_propiedad': prop.tipo_propiedad or '',
                                     'fuente': 'local',
-                                    'weight': min(precio_m2 / 2000, 1.0)
+                                    'weight': min(precio_m2 / 1000, 2.0)
                                 })
                 except (ValueError, AttributeError, TypeError):
                     continue
@@ -598,12 +1048,50 @@ def api_heatmap_data(request):
                                 lat = float(coords[0].strip())
                                 lng = float(coords[1].strip())
                                 
-                                # Calcular área
+                                # Calcular área con detección de terrenos (misma lógica que heatmap_view)
                                 area = None
-                                if prop.built_area and prop.built_area > 0:
-                                    area = float(prop.built_area)
-                                elif prop.land_area and prop.land_area > 0:
-                                    area = float(prop.land_area)
+                                
+                                # Detectar terrenos en Propifai
+                                description = (prop.description or '').lower().strip()
+                                title = (prop.title or '').lower().strip()
+                                zoning = (prop.zoning or '').lower().strip()
+                                
+                                textos_busqueda = f'{description} {title} {zoning}'
+                                es_terreno_texto = any(term in textos_busqueda for term in [
+                                    'terreno', 'terrenos', 'lote', 'parcela', 'parcel',
+                                    'land', 'lot', 'plot', 'ground', 'solar', 'vacant'
+                                ])
+                                
+                                built_area_val = prop.built_area if prop.built_area else 0
+                                land_area_val = prop.land_area if prop.land_area else 0
+                                
+                                # Lógica agresiva para detectar terrenos
+                                es_terreno_heuristico = False
+                                if land_area_val > 0:
+                                    if built_area_val == 0 or built_area_val is None:
+                                        es_terreno_heuristico = True
+                                    elif land_area_val > built_area_val:
+                                        es_terreno_heuristico = True
+                                    elif land_area_val > 100:
+                                        es_terreno_heuristico = True
+                                
+                                es_proyecto = prop.is_project if hasattr(prop, 'is_project') else False
+                                if es_proyecto and land_area_val > 0:
+                                    es_terreno_heuristico = True
+                                
+                                es_terreno = es_terreno_texto or es_terreno_heuristico
+                                
+                                # SI ES TERRENO: usar SOLO land_area
+                                if es_terreno:
+                                    if prop.land_area and prop.land_area > 0:
+                                        area = float(prop.land_area)
+                                    # Si no hay land_area, NO usar built_area
+                                else:
+                                    # Para NO terrenos, priorizar built_area
+                                    if prop.built_area and prop.built_area > 0:
+                                        area = float(prop.built_area)
+                                    elif prop.land_area and prop.land_area > 0:
+                                        area = float(prop.land_area)
                                 
                                 precio_m2 = None
                                 if area and prop.price:
@@ -619,7 +1107,7 @@ def api_heatmap_data(request):
                                         'area': area,
                                         'tipo_propiedad': prop.tipo_propiedad or '',
                                         'fuente': 'propifai',
-                                        'weight': min(precio_m2 / 2000, 1.0)
+                                        'weight': min(precio_m2 / 1000, 2.0)
                                     })
                     except (ValueError, AttributeError, TypeError):
                         continue

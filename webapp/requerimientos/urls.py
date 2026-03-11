@@ -4,24 +4,22 @@ from . import views
 app_name = 'requerimientos'
 
 urlpatterns = [
-    # Subir archivo
-    path('subir/', views.SubirExcelRequerimientoView.as_view(), name='subir'),
-    
-    # Validar mapeo
-    path('validar/', views.ValidarMapeoRequerimientoView.as_view(), name='validar_mapeo'),
-    
-    # Procesar datos
-    path('procesar/', views.ProcesarRequerimientoView.as_view(), name='procesar'),
-    
     # Lista de requerimientos
     path('lista/', views.ListaRequerimientosView.as_view(), name='lista'),
     
     # Detalle de requerimiento
     path('detalle/<int:pk>/', views.DetalleRequerimientoView.as_view(), name='detalle'),
     
-    # Análisis inteligente con DeepSeek
-    path('analisis-inteligente/', views.AnalisisInteligenteView.as_view(), name='analisis_inteligente'),
+    # Subir Excel (redirige a ingestas)
+    path('subir/', views.SubirExcelView.as_view(), name='subir'),
     
-    # Análisis completo del archivo Excel
-    path('analisis-completo/', views.AnalisisCompletoView.as_view(), name='analisis_completo'),
+    # Dashboard de análisis temporal
+    path('dashboard-analisis/', views.DashboardAnalisisTemporalView.as_view(), name='dashboard_analisis'),
+    
+    # API para datos del dashboard (AJAX)
+    path('api/analisis-temporal/', views.ApiAnalisisTemporalView.as_view(), name='api_analisis_temporal'),
+    
+    # Exportaciones
+    path('exportar-excel/', views.ExportarAnalisisExcelView.as_view(), name='exportar_excel'),
+    path('exportar-pdf/', views.ExportarAnalisisPDFView.as_view(), name='exportar_pdf'),
 ]

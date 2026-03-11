@@ -77,3 +77,50 @@ class ProcesarTodoForm(forms.Form):
         required=True,
         help_text="Al confirmar, se importarán todas las filas del Excel a la base de datos."
     )
+
+
+from django.forms import ModelForm
+from .models import PropiedadRaw
+
+class PropiedadRawForm(ModelForm):
+    """Formulario para editar propiedades."""
+    class Meta:
+        model = PropiedadRaw
+        fields = [
+            'tipo_propiedad',
+            'precio_usd',
+            'descripcion',
+            'portal',
+            'url_propiedad',
+            'coordenadas',
+            'departamento',
+            'provincia',
+            'distrito',
+            'area_terreno',
+            'area_construida',
+            'numero_pisos',
+            'numero_habitaciones',
+            'numero_banos',
+            'numero_cocheras',
+            'agente_inmobiliario',
+            'imagenes_propiedad',
+            'id_propiedad',
+            'fecha_publicacion',
+            'antiguedad',
+            'servicio_agua',
+            'energia_electrica',
+            'servicio_drenaje',
+            'servicio_gas',
+            'email_agente',
+            'telefono_agente',
+            'oficina_remax',
+            'estado_propiedad',
+            'fecha_venta',
+            'precio_final_venta',
+        ]
+        widgets = {
+            'descripcion': forms.Textarea(attrs={'rows': 4}),
+            'imagenes_propiedad': forms.Textarea(attrs={'rows': 3}),
+            'fecha_publicacion': forms.DateInput(attrs={'type': 'date'}),
+            'fecha_venta': forms.DateInput(attrs={'type': 'date'}),
+        }

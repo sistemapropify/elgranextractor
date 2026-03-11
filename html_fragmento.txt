@@ -1,0 +1,1387 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Meta tags para prevenir caché en desarrollo -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Portal Inmobiliario - Catálogo de Propiedades</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --header-height: 60px;
+            --sidebar-width: 250px;
+            --primary-color: #10b981;          /* Verde esmeralda brillante */
+            --secondary-color: #059669;        /* Verde esmeralda medio */
+            --accent-color: #34d399;           /* Verde esmeralda claro */
+            --light-teal: #a7f3d0;             /* Verde muy claro */
+            --very-light-teal: #d1fae5;        /* Verde super claro */
+            --sidebar-bg: #059669;             /* Verde medio para sidebar */
+            --header-bg: #ffffff;              /* Blanco para header */
+            --content-bg: rgba(16, 185, 129, 0.08); /* Color base con transparencia */
+            --card-bg: #ffffff;                /* Blanco para cards */
+            --text-dark: #065f46;              /* Verde oscuro para texto */
+            --text-light: #ffffff;             /* Blanco para texto claro */
+        }
+        
+        body {
+            background-color: var(--content-bg);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+            color: var(--text-dark);
+        }
+        
+        /* Header delgado */
+        .app-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: var(--header-height);
+            background-color: var(--header-bg);
+            box-shadow: 0 2px 10px rgba(3, 94, 94, 0.1);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            border-bottom: 1px solid var(--very-light-teal);
+        }
+        
+        .logo-container {
+            display: flex;
+            align-items: center;
+            height: 100%;
+        }
+        
+        .logo {
+            height: 40px;
+            width: auto;
+            margin-right: 10px;
+        }
+        
+        .logo-text {
+            font-weight: 700;
+            font-size: 1.5rem;
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+        
+        .logo-text:hover {
+            color: var(--secondary-color);
+        }
+        
+        /* Barra lateral delgada */
+        .app-sidebar {
+            position: fixed;
+            top: var(--header-height);
+            left: 0;
+            width: var(--sidebar-width);
+            height: calc(100vh - var(--header-height));
+            background-color: var(--sidebar-bg);
+            color: var(--text-light);
+            overflow-y: auto;
+            transition: transform 0.3s ease;
+            z-index: 999;
+            border-right: 1px solid var(--light-teal);
+        }
+        
+        .sidebar-menu {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .sidebar-menu li {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .sidebar-menu a {
+            display: flex;
+            align-items: center;
+            padding: 15px 20px;
+            color: rgba(255, 255, 255, 0.9);
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+        
+        .sidebar-menu a:hover {
+            background-color: rgba(255, 255, 255, 0.15);
+            color: white;
+        }
+        
+        .sidebar-menu a.active {
+            background-color: rgba(255, 255, 255, 0.2);
+            color: white;
+            border-left: 4px solid var(--accent-color);
+        }
+        
+        .sidebar-menu i {
+            margin-right: 10px;
+            font-size: 1.2rem;
+            width: 24px;
+            text-align: center;
+        }
+        
+        /* Contenido principal */
+        .app-content {
+            margin-left: var(--sidebar-width);
+            margin-top: var(--header-height);
+            padding: 20px;
+            min-height: calc(100vh - var(--header-height));
+            transition: margin-left 0.3s ease;
+            background-color: var(--content-bg);
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .app-sidebar {
+                transform: translateX(-100%);
+            }
+            
+            .app-content {
+                margin-left: 0;
+            }
+            
+            .sidebar-toggle {
+                display: block;
+            }
+            
+            .sidebar-open .app-sidebar {
+                transform: translateX(0);
+            }
+            
+            .sidebar-open .app-content {
+                margin-left: var(--sidebar-width);
+            }
+        }
+        
+        /* Botón para mostrar/ocultar sidebar en móviles */
+        .sidebar-toggle {
+            display: none;
+            background: none;
+            border: none;
+            color: var(--primary-color);
+            font-size: 1.5rem;
+            margin-right: 15px;
+            cursor: pointer;
+        }
+        
+        /* Estilos adicionales para contenido */
+        .card {
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(3, 94, 94, 0.1);
+            margin-bottom: 1.5rem;
+            background-color: var(--card-bg);
+            border: 1px solid var(--very-light-teal);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            border: none;
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(135deg, var(--accent-color) 0%, var(--primary-color) 100%);
+        }
+        
+        .btn-outline-secondary {
+            border-color: var(--light-teal);
+            color: var(--primary-color);
+        }
+        
+        .btn-outline-info {
+            border-color: var(--light-teal);
+            color: var(--primary-color);
+        }
+        
+        .stat-card {
+            text-align: center;
+            padding: 1.5rem;
+            background-color: var(--card-bg);
+        }
+        
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+        
+        .footer {
+            margin-top: 3rem;
+            padding: 1.5rem 0;
+            background-color: var(--sidebar-bg);
+            color: var(--text-light);
+            text-align: center;
+            border-top: 1px solid var(--light-teal);
+        }
+        
+        /* Espacio para el logo placeholder */
+        .logo-placeholder {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+        
+        /* Estilos para enlaces */
+        a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+        
+        a:hover {
+            color: var(--secondary-color);
+        }
+        
+        /* Estilos para formularios */
+        .form-control {
+            border: 1px solid var(--light-teal);
+        }
+        
+        .form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.25rem rgba(4, 125, 125, 0.25);
+        }
+        
+        /* Estilos para alertas */
+        .alert-info {
+            background-color: rgba(4, 125, 125, 0.1);
+            border-color: var(--light-teal);
+            color: var(--text-dark);
+        }
+        
+        /* Estilos para bordes y separadores */
+        hr {
+            border-color: var(--very-light-teal);
+        }
+    </style>
+    
+<style>
+    :root {
+        --color-primary: #047d7d;
+        --color-secondary: #5ab0ae;
+        --color-accent: #2ea44f;
+        --navbar-height: 60px;
+    }
+
+    /* Contenedor principal */
+    .portal-container {
+        display: flex;
+        flex-direction: column;
+        height: calc(100vh - var(--navbar-height));
+        overflow: hidden;
+        background: #fff;
+    }
+
+    /* Barra de filtros superior */
+    .filters-bar {
+        background: #fff;
+        border-bottom: 1px solid rgba(4, 125, 125, 0.1);
+        padding: 0.75rem 1rem;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+        z-index: 100;
+        flex-shrink: 0;
+    }
+
+    .filters-bar form {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        align-items: flex-end;
+    }
+
+    .filter-group {
+        display: flex;
+        flex-direction: column;
+        min-width: 150px;
+    }
+
+    .filter-group label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #4a5a5a;
+        margin-bottom: 0.25rem;
+    }
+
+    .filter-group .form-control,
+    .filter-group .form-select {
+        padding: 0.375rem 0.5rem;
+        font-size: 0.85rem;
+        border-color: rgba(4, 125, 125, 0.2);
+        border-radius: 4px;
+        height: 32px;
+    }
+
+    .filter-actions {
+        display: flex;
+        gap: 0.5rem;
+        margin-left: auto;
+    }
+
+    .filter-checkboxes {
+        background: #f8f9fa;
+        padding: 8px;
+        border-radius: 4px;
+        border: 1px solid rgba(4, 125, 125, 0.1);
+    }
+
+    .filter-checkboxes .form-check {
+        margin-bottom: 4px;
+    }
+
+    .filter-checkboxes .form-check:last-child {
+        margin-bottom: 0;
+    }
+
+    .filter-checkboxes .form-check-label {
+        font-size: 0.8rem;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .filter-checkboxes .form-check-input {
+        margin-top: 0;
+        margin-right: 6px;
+    }
+
+    /* Contenido principal: Mapa + Propiedades */
+    .main-content {
+        display: flex;
+        flex: 1;
+        overflow: hidden;
+    }
+
+    /* Mapa a la izquierda (50%) */
+    .map-section {
+        flex: 0 0 50%;
+        display: flex;
+        flex-direction: column;
+        border-right: 1px solid rgba(4, 125, 125, 0.1);
+        background: #f8fafa;
+    }
+
+    .map-header {
+        padding: 0.75rem 1rem;
+        background: #fff;
+        border-bottom: 1px solid rgba(4, 125, 125, 0.1);
+        font-weight: 600;
+        color: var(--color-primary);
+        font-size: 0.9rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .map-container {
+        flex: 1;
+        position: relative;
+        min-height: 0;
+    }
+
+    #propertyMap {
+        width: 100%;
+        height: 100%;
+        min-height: 300px;
+    }
+
+    /* Propiedades a la derecha (50%) */
+    .properties-section {
+        flex: 0 0 50%;
+        display: flex;
+        flex-direction: column;
+        background: #fff;
+    }
+
+    .properties-header {
+        padding: 0.75rem 1rem;
+        background: #fff;
+        border-bottom: 1px solid rgba(4, 125, 125, 0.1);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .properties-title {
+        font-weight: 600;
+        color: var(--color-primary);
+        font-size: 0.9rem;
+        margin: 0;
+    }
+
+    .properties-count {
+        font-size: 0.8rem;
+        color: #6c757d;
+        background: rgba(4, 125, 125, 0.08);
+        padding: 0.25rem 0.5rem;
+        border-radius: 12px;
+    }
+
+    /* Contenedor de tarjetas con scroll */
+    .properties-container {
+        flex: 1;
+        overflow-y: auto;
+        padding: 0.75rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    /* Tarjetas de propiedades compactas */
+    .property-card {
+        background: #fff;
+        border-radius: 6px;
+        border: 1px solid rgba(4, 125, 125, 0.1);
+        padding: 0.75rem;
+        display: flex;
+        gap: 0.75rem;
+        transition: all 0.15s ease;
+        cursor: pointer;
+        position: relative;
+    }
+
+    .property-card:hover {
+        border-color: rgba(4, 125, 125, 0.3);
+        box-shadow: 0 2px 6px rgba(4, 125, 125, 0.1);
+        transform: translateY(-1px);
+    }
+
+    .property-card.active {
+        background-color: rgba(243, 253, 253, 0.95);
+        border-color: var(--color-primary);
+    }
+
+    /* Imagen de la propiedad */
+    .property-image-container {
+        flex-shrink: 0;
+        width: 80px;
+        height: 80px;
+        border-radius: 4px;
+        overflow: hidden;
+        background: #f0f4f4;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(4, 125, 125, 0.08);
+    }
+
+    .property-image {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .property-image-placeholder {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #8a9a9a;
+        font-size: 1.25rem;
+    }
+
+    /* Contenido de la tarjeta */
+    .property-content {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .property-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 0.25rem;
+    }
+
+    .property-type {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--color-primary);
+        background: rgba(4, 125, 125, 0.08);
+        padding: 0.125rem 0.375rem;
+        border-radius: 3px;
+    }
+
+    .property-price {
+        font-size: 0.9rem;
+        font-weight: 700;
+        color: var(--color-primary);
+        text-align: right;
+    }
+
+    .property-description {
+        font-size: 0.8rem;
+        color: #3b5454;
+        line-height: 1.2;
+        margin-bottom: 0.375rem;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .property-location {
+        font-size: 0.75rem;
+        color: #6c757d;
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        margin-bottom: 0.375rem;
+    }
+
+    .property-location i {
+        color: var(--color-secondary);
+        font-size: 0.7rem;
+    }
+
+    .property-features {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        margin-bottom: 0.375rem;
+    }
+
+    .feature-item {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        font-size: 0.7rem;
+        color: #5a6c6c;
+    }
+
+    .feature-item i {
+        color: var(--color-secondary);
+        font-size: 0.75rem;
+    }
+
+    .property-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: auto;
+        padding-top: 0.375rem;
+        border-top: 1px solid rgba(4, 125, 125, 0.05);
+    }
+
+    .property-source {
+        font-size: 0.7rem;
+        color: #8a9a9a;
+    }
+
+    .property-actions {
+        display: flex;
+        gap: 0.25rem;
+    }
+
+    .property-actions .btn {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+        border-radius: 4px;
+        transition: all 0.2s ease;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.25rem;
+    }
+    
+    .property-actions .btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    
+    .property-actions .btn-details {
+        background-color: var(--color-primary);
+        color: white;
+        border: 1px solid var(--color-primary);
+    }
+    
+    .property-actions .btn-details:hover {
+        background-color: #036a6a;
+        border-color: #036a6a;
+        color: white;
+    }
+    
+    .property-actions .btn-edit {
+        background-color: #5ab0ae;
+        color: white;
+        border: 1px solid #5ab0ae;
+    }
+    
+    .property-actions .btn-edit:hover {
+        background-color: #4a9c9a;
+        border-color: #4a9c9a;
+        color: white;
+    }
+    
+    .property-actions .btn-external {
+        background-color: transparent;
+        color: var(--color-primary);
+        border: 1px solid var(--color-primary);
+    }
+    
+    .property-actions .btn-external:hover {
+        background-color: var(--color-primary);
+        color: white;
+    }
+
+    /* Paginación */
+    .pagination-container {
+        padding: 0.75rem 1rem;
+        border-top: 1px solid rgba(4, 125, 125, 0.1);
+        background: #fff;
+        flex-shrink: 0;
+    }
+
+    .pagination {
+        margin: 0;
+        justify-content: center;
+    }
+
+    .page-link {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.8rem;
+        color: var(--color-primary);
+        border-color: rgba(4, 125, 125, 0.1);
+    }
+
+    .page-item.active .page-link {
+        background-color: var(--color-primary);
+        border-color: var(--color-primary);
+    }
+
+    /* Estados vacíos */
+    .empty-state {
+        padding: 2rem 1rem;
+        text-align: center;
+        color: #6c757d;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .empty-state i {
+        font-size: 2.5rem;
+        margin-bottom: 1rem;
+        color: #ced4da;
+    }
+
+    /* Responsive */
+    @media (max-width: 992px) {
+        .main-content {
+            flex-direction: column;
+        }
+
+        .map-section,
+        .properties-section {
+            flex: 0 0 50%;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .filters-bar form {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .filter-group {
+            min-width: 100%;
+        }
+
+        .filter-actions {
+            margin-left: 0;
+            width: 100%;
+        }
+
+        .main-content {
+            flex-direction: column;
+        }
+
+        .map-section,
+        .properties-section {
+            flex: 0 0 100%;
+            min-height: 300px;
+        }
+    }
+
+    /* Estilos para el modal de agregar propiedad */
+    #propertyMapModal {
+        width: 100%;
+        height: 300px;
+    }
+    
+    .modal-lg {
+        max-width: 900px;
+    }
+    
+    .modal-body .form-label {
+        font-weight: 600;
+        font-size: 0.9rem;
+        color: #4a5a5a;
+    }
+    
+    .modal-body .form-control:read-only {
+        background-color: #f8f9fa;
+        cursor: not-allowed;
+    }
+    
+    .modal-body .input-group .btn {
+        border-color: #ced4da;
+    }
+    
+    /* Spinner para botón de guardar */
+    .btn-spinner {
+        display: inline-block;
+        width: 1rem;
+        height: 1rem;
+        border: 2px solid rgba(255,255,255,0.3);
+        border-radius: 50%;
+        border-top-color: #fff;
+        animation: spin 1s ease-in-out infinite;
+        margin-right: 0.5rem;
+    }
+    
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+</style>
+
+</head>
+<body>
+    <!-- Header delgado -->
+    <header class="app-header">
+        <button class="sidebar-toggle" id="sidebarToggle">
+            <i class="bi bi-list"></i>
+        </button>
+        
+        <div class="logo-container">
+            <div class="logo-placeholder">
+                <i class="bi bi-binoculars-fill"></i>
+            </div>
+            <a href="/" class="logo-text ms-2">El Gran Extractor</a>
+        </div>
+        
+        <div class="ms-auto d-flex align-items-center">
+            <a href="/admin/" class="btn btn-outline-secondary btn-sm me-2" target="_blank">
+                <i class="bi bi-gear"></i> Admin
+            </a>
+            <a href="/api/" class="btn btn-outline-info btn-sm" target="_blank">
+                <i class="bi bi-code-slash"></i> API
+            </a>
+        </div>
+    </header>
+    
+    <!-- Barra lateral delgada -->
+    <nav class="app-sidebar" id="appSidebar">
+        <ul class="sidebar-menu">
+            <li>
+                <a href="/" class="">
+                    <i class="bi bi-speedometer2"></i>
+                    <span>Dashboard</span>
+                </a>
+            </li>
+            <li>
+                <a href="/fuentes-web/" class="">
+                    <i class="bi bi-globe"></i>
+                    <span>Fuentes Web</span>
+                </a>
+            </li>
+            <li>
+                <a href="/capturas/" class="">
+                    <i class="bi bi-camera"></i>
+                    <span>Capturas</span>
+                </a>
+            </li>
+            <li>
+                <a href="/ingestas/" class="active">
+                    <i class="bi bi-database"></i>
+                    <span>Ingestas</span>
+                </a>
+            </li>
+            <li>
+                <a href="/ingestas/propiedades/" class="active">
+                    <i class="bi bi-house-door"></i>
+                    <span>Propiedades</span>
+                </a>
+            </li>
+            <li>
+                <a href="/requerimientos/lista/" class="">
+                    <i class="bi bi-clipboard-check"></i>
+                    <span>Requerimientos</span>
+                </a>
+            </li>
+            <li>
+                <a href="/cuadrantizacion/mapa/" class="">
+                    <i class="bi bi-map"></i>
+                    <span>Cuadrantización</span>
+                </a>
+            </li>
+            <li>
+                <a href="#">
+                    <i class="bi bi-graph-up"></i>
+                    <span>Análisis</span>
+                </a>
+            </li>
+            <li>
+                <a href="#">
+                    <i class="bi bi-search"></i>
+                    <span>Descubrimiento</span>
+                </a>
+            </li>
+            <li>
+                <a href="#">
+                    <i class="bi bi-gear"></i>
+                    <span>Configuración</span>
+                </a>
+            </li>
+            <li>
+                <a href="#">
+                    <i class="bi bi-question-circle"></i>
+                    <span>Ayuda</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+    
+    <!-- Contenido principal -->
+    <main class="app-content" id="appContent">
+        
+<div class="portal-container">
+    <!-- Barra de filtros superior -->
+    <div class="filters-bar">
+        <form method="get" id="filter-form">
+            <div class="filter-group">
+                <label for="filter-type">Tipo</label>
+                <select class="form-select" id="filter-type" name="tipo_propiedad">
+                    <option value="">Todos</option>
+                    
+                        <option value="AIRES EN VENTA">AIRES EN VENTA</option>
+                    
+                        <option value="CASA DE CAMPO EN VENTA">CASA DE CAMPO EN VENTA</option>
+                    
+                        <option value="CASA EN VENTA">CASA EN VENTA</option>
+                    
+                        <option value="CASA URBANA EN VENTA">CASA URBANA EN VENTA</option>
+                    
+                        <option value="Casa">Casa</option>
+                    
+                        <option value="DEPARTAMENTO DUPLEX EN VENTA">DEPARTAMENTO DUPLEX EN VENTA</option>
+                    
+                        <option value="DEPARTAMENTO EN CONDOMINIO EN VENTA">DEPARTAMENTO EN CONDOMINIO EN VENTA</option>
+                    
+                        <option value="DEPARTAMENTO EN VENTA">DEPARTAMENTO EN VENTA</option>
+                    
+                        <option value="DEPARTAMENTO FLAT EN VENTA">DEPARTAMENTO FLAT EN VENTA</option>
+                    
+                        <option value="DEPARTAMENTO PENTHOUSE EN VENTA">DEPARTAMENTO PENTHOUSE EN VENTA</option>
+                    
+                        <option value="DEPARTAMENTO TRIPLEX EN VENTA">DEPARTAMENTO TRIPLEX EN VENTA</option>
+                    
+                        <option value="Departamento">Departamento</option>
+                    
+                        <option value="EDIFICIOS EN VENTA">EDIFICIOS EN VENTA</option>
+                    
+                        <option value="HOTEL EN VENTA">HOTEL EN VENTA</option>
+                    
+                        <option value="LOCAL COMERCIAL EN VENTA">LOCAL COMERCIAL EN VENTA</option>
+                    
+                        <option value="LOCAL EN VENTA">LOCAL EN VENTA</option>
+                    
+                        <option value="LOCAL INDUSTRIAL EN VENTA">LOCAL INDUSTRIAL EN VENTA</option>
+                    
+                        <option value="MINIDEPARTAMENTO EN VENTA">MINIDEPARTAMENTO EN VENTA</option>
+                    
+                        <option value="OFICINA EN VENTA">OFICINA EN VENTA</option>
+                    
+                        <option value="OPORTUNIDADES EN VENTA">OPORTUNIDADES EN VENTA</option>
+                    
+                        <option value="OTROS EN VENTA">OTROS EN VENTA</option>
+                    
+                        <option value="TERRENO AGRÍCOLA EN VENTA">TERRENO AGRÍCOLA EN VENTA</option>
+                    
+                        <option value="TERRENO COMERCIAL EN VENTA">TERRENO COMERCIAL EN VENTA</option>
+                    
+                        <option value="TERRENO EN VENTA">TERRENO EN VENTA</option>
+                    
+                        <option value="TERRENO INDUSTRIAL EN VENTA">TERRENO INDUSTRIAL EN VENTA</option>
+                    
+                        <option value="TERRENO URBANO EN VENTA">TERRENO URBANO EN VENTA</option>
+                    
+                        <option value="Terreno">Terreno</option>
+                    
+                        <option value="casa">casa</option>
+                    
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label for="filter-departamento">Departamento</label>
+                <select class="form-select" id="filter-departamento" name="departamento">
+                    <option value="">Todos</option>
+                    
+                        <option value="Arequipa">Arequipa</option>
+                    
+                        <option value="Lima">Lima</option>
+                    
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label>Fuentes</label>
+                <div class="filter-checkboxes">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="filter-fuente-local" name="fuente_local" value="local" checked>
+                        <label class="form-check-label" for="filter-fuente-local">
+                            <i class="fas fa-database text-primary"></i> Locales
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="filter-fuente-externa" name="fuente_externa" value="externa" checked>
+                        <label class="form-check-label" for="filter-fuente-externa">
+                            <i class="fas fa-external-link-alt text-warning"></i> Externas
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="filter-fuente-propify" name="fuente_propify" value="propify" checked>
+                        <label class="form-check-label" for="filter-fuente-propify">
+                            <i class="fas fa-home text-success"></i> Propify
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="filter-group">
+                <label for="filter-precio-min">Precio Mín</label>
+                <input type="number" class="form-control" id="filter-precio-min" name="precio_min" placeholder="0" min="0" step="1000">
+            </div>
+
+            <div class="filter-group">
+                <label for="filter-precio-max">Precio Máx</label>
+                <input type="number" class="form-control" id="filter-precio-max" name="precio_max" placeholder="Sin límite" min="0" step="1000">
+            </div>
+
+            <div class="filter-group">
+                <label for="filter-habitaciones">Hab.</label>
+                <select class="form-select" id="filter-habitaciones" name="habitaciones">
+                    <option value="">Cualquiera</option>
+                    <option value="1">1+</option>
+                    <option value="2">2+</option>
+                    <option value="3">3+</option>
+                    <option value="4">4+</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label for="filter-banios">Baños</label>
+                <select class="form-select" id="filter-banios" name="banios">
+                    <option value="">Cualquiera</option>
+                    <option value="1">1+</option>
+                    <option value="2">2+</option>
+                    <option value="3">3+</option>
+                </select>
+            </div>
+
+            <div class="filter-actions">
+                <button type="submit" class="btn btn-primary btn-sm">
+                    <i class="fas fa-filter"></i> Filtrar
+                </button>
+                <a href="/ingestas/propiedades/" class="btn btn-outline-secondary btn-sm">
+                    <i class="fas fa-times"></i> Limpiar
+                </a>
+                <button type="button" class="btn btn-success btn-sm" id="btn-add-property" data-bs-toggle="modal" data-bs-target="#addPropertyModal">
+                    <i class="fas fa-plus"></i> Agregar Propiedad
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Contenido principal: Mapa + Propiedades -->
+    <div class="main-content">
+        <!-- Mapa a la izquierda -->
+        <div class="map-section">
+            <div class="map-header">
+                <i class="fas fa-map"></i> Mapa de Propiedades
+            </div>
+            <div class="map-container">
+                <div id="propertyMap"></div>
+            </div>
+        </div>
+
+        <!-- Propiedades a la derecha -->
+        <div class="properties-section">
+            <div class="properties-header">
+                <h3 class="properties-title">Propiedades Disponibles</h3>
+                <span class="properties-count">860 propiedades (857 locales + 3 externas + 0 propify)</span>
+            </div>
+
+            <div class="properties-container" id="propertiesContainer">
+                
+                    
+                    <div class="property-card" data-property-id="3002" data-lat="-16.3859004" data-lng="-71.54758149999999" data-es-externo="false">
+                        <!-- Imagen -->
+                        <div class="property-image-container">
+                            
+                                <img src="https://sfo3.digitaloceanspaces.com/media-remax-peru/media/public/photos/propertys/1101149/fcfd9127-6a3e-4301-a1ec-1_wsXsiG3.jpeg?X-Amz-Algorithm=AWS4-HMAC-SHA256&amp;X-Amz-Expires=86400&amp;X-Amz-Credential=PVSQWTTYSF24OLDHUMMG%2F20260221%2Fus-east-1%2Fs3%2Faws4_request&amp;X-Amz-SignedHeaders=host&amp;X-Amz-Date=20260221T040219Z&amp;X-Amz-Signature=938e9fda06b27711f8fbdaeafe868062b5a8bc9b8fc8537322a79bf7ebec298f" alt="casa" class="property-image" onerror="handleImageError(this)">
+                            
+                        </div>
+
+                        <!-- Contenido -->
+                        <div class="property-content">
+                            <div class="property-header">
+                                <span class="property-type">
+                                    casa
+                                    
+                                </span>
+                                <div class="property-price">
+                                    
+                                        $370000
+                                    
+                                </div>
+                            </div>
+
+                            <div class="property-description">
+                                Propiedad sin descripción
+                            </div>
+
+                            <div class="property-location">
+                                <i class="fas fa-map-marker-alt"></i>
+                                <span>
+                                    
+                                        Arequipa, Arequipa
+                                    
+                                </span>
+                            </div>
+
+                            <div class="property-features">
+                                
+                                <div class="feature-item">
+                                    <i class="fas fa-ruler-combined"></i>
+                                    <span>320 m²</span>
+                                </div>
+                                
+
+                                
+
+                                
+                            </div>
+
+                            <div class="property-footer">
+                                <div class="property-source">
+                                    
+                                        Fuente Local
+                                    
+                                </div>
+                                <div class="property-actions">
+                                    
+                                        <!-- Para propiedades locales, mostrar detalles y edición -->
+                                        <a href="/ingestas/propiedades/3002/" class="btn btn-details btn-sm" title="Ver detalles">
+                                            <i class="fas fa-eye"></i>
+                                            <span class="btn-text">Detalles</span>
+                                        </a>
+                                        <a href="/admin/ingestas/propiedadraw/3002/change/" class="btn btn-edit btn-sm" title="Editar propiedad">
+                                            <i class="fas fa-edit"></i>
+                                            <span class="btn-text">Editar</span>
+                                        </a>
+                                        <a href="https://www.remax.pe/app/propertys/listing/detail/?slug=propiedad-casa-en-venta-cayma-arequipa-arequipa-1101149" target="_blank" class="btn btn-external btn-sm" title="Ver en portal original">
+                                            <i class="fas fa-external-link-alt"></i>
+                                            <span class="btn-text">Portal</span>
+                                        </a>
+                                    
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="property-card" data-property-id="3001" data-lat="-16.3198159123998" data-lng="-71.63236921293641" data-es-externo="false">
+                        <!-- Imagen -->
+                        <div class="property-image-container">
+                            
+                                <img src="https://sfo3.digitaloceanspaces.com/media-remax-peru/media/public/photos/propertys/1106855/cover_1106855.jpg" alt="TERRENO URBANO EN VENTA" class="property-image" onerror="handleImageError(this)">
+                            
+                        </div>
+
+                        <!-- Contenido -->
+                        <div class="property-content">
+                            <div class="property-header">
+                                <span class="property-type">
+                                    TERRENO URBANO EN VENTA
+                                    
+                                </span>
+                                <div class="property-price">
+                                    
+                                        $33168
+                                    
+                                </div>
+                            </div>
+
+                            <div class="property-description">
+                                Propiedad sin descripción
+                            </div>
+
+                            <div class="property-location">
+                                <i class="fas fa-map-marker-alt"></i>
+                                <span>
+                                    
+                                        Arequipa, Arequipa
+                                    
+                                </span>
+                            </div>
+
+                            <div class="property-features">
+                                
+
+                                
+
+                                
+                            </div>
+
+                            <div class="property-footer">
+                                <div class="property-source">
+                                    
+                                        Fuente Local
+                                    
+                                </div>
+                                <div class="property-actions">
+                                    
+                                        <!-- Para propiedades locales, mostrar detalles y edición -->
+                                        <a href="/ingestas/propiedades/3001/" class="btn btn-details btn-sm" title="Ver detalles">
+                                            <i class="fas fa-eye"></i>
+                                            <span class="btn-text">Detalles</span>
+                                        </a>
+                                        <a href="/admin/ingestas/propiedadraw/3001/change/" class="btn btn-edit btn-sm" title="Editar propiedad">
+                                            <i class="fas fa-edit"></i>
+                                            <span class="btn-text">Editar</span>
+                                        </a>
+                                        <a href="https://www.remax.pe/web/search/property/propiedad-terreno-en-venta-yura-arequipa-arequipa-1106855/" target="_blank" class="btn btn-external btn-sm" title="Ver en portal original">
+                                            <i class="fas fa-external-link-alt"></i>
+                                            <span class="btn-text">Portal</span>
+                                        </a>
+                                    
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="property-card" data-property-id="3000" data-lat="-16.320629338283105" data-lng="-71.63303440077213" data-es-externo="false">
+                        <!-- Imagen -->
+                        <div class="property-image-container">
+                            
+                                <img src="https://sfo3.digitaloceanspaces.com/media-remax-peru/media/public/photos/propertys/1106853/cover_1106853.jpg" alt="TERRENO URBANO EN VENTA" class="property-image" onerror="handleImageError(this)">
+                            
+                        </div>
+
+                        <!-- Contenido -->
+                        <div class="property-content">
+                            <div class="property-header">
+                                <span class="property-type">
+                                    TERRENO URBANO EN VENTA
+                                    
+                                </span>
+                                <div class="property-price">
+                                    
+                                        $33699
+                                    
+                                </div>
+                            </div>
+
+                            <div class="property-description">
+                                Propiedad sin descripción
+                            </div>
+
+                            <div class="property-location">
+                                <i class="fas fa-map-marker-alt"></i>
+                                <span>
+                                    
+                                        Arequipa, Arequipa
+                                    
+                                </span>
+                            </div>
+
+                            <div class="property-features">
+                                
+
+                                
+
+                                
+                            </div>
+
+                            <div class="property-footer">
+                                <div class="property-source">
+                                    
+                                        Fuente Local
+                                    
+                                </div>
+                                <div class="property-actions">
+                                    
+                                        <!-- Para propiedades locales, mostrar detalles y edición -->
+                                        <a href="/ingestas/propiedades/3000/" class="btn btn-details btn-sm" title="Ver detalles">
+                                            <i class="fas fa-eye"></i>
+                                            <span class="btn-text">Detalles</span>
+                                        </a>
+                                        <a href="/admin/ingestas/propiedadraw/3000/change/" class="btn btn-edit btn-sm" title="Editar propiedad">
+                                            <i class="fas fa-edit"></i>
+                                            <span class="btn-text">Editar</span>
+                                        </a>
+                                        <a href="https://www.remax.pe/web/search/property/propiedad-terreno-en-venta-yura-arequipa-arequipa-1106853/" target="_blank" class="btn btn-external btn-sm" title="Ver en portal original">
+                                            <i class="fas fa-external-link-alt"></i>
+                                            <span class="btn-text">Portal</span>
+                                        </a>
+                                    
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="property-card" data-property-id="2999" data-lat="" data-lng="" data-es-externo="false">
+                        <!-- Imagen -->
+                        <div class="property-image-container">
+                            
+                                <img src="https://sfo3.digitaloceanspaces.com/media-remax-peru/media/public/photos/propertys/1106856/cover_1106856.jpg" alt="TERRENO URBANO EN VENTA" class="property-image" onerror="handleImageError(this)">
+                            
+                        </div>
+
+                        <!-- Contenido -->
+                        <div class="property-content">
+                            <div class="property-header">
+                                <span class="property-type">
+                                    TERRENO URBANO EN VENTA
+                                    
+                                </span>
+                                <div class="property-price">
+                                    
+                                        $32136
+                                    
+                                </div>
+                            </div>
+
+                            <div class="property-description">
+                                Propiedad sin descripción
+                            </div>
+
+                            <div class="property-location">
+                                <i class="fas fa-map-marker-alt"></i>
+                                <span>
+                                    
+                                        Arequipa, Arequipa
+                                    
+                                </span>
+                            </div>
+
+                            <div class="property-features">
+                                
+
+                                
+
+                                
+                            </div>
+
+                            <div class="property-footer">
+                                <div class="property-source">
+                                    
+                                        Fuente Local
+                                    
+                                </div>
+                                <div class="property-actions">
+                                    
+                                        <!-- Para propiedades locales, mostrar detalles y edición -->
+                                        <a href="/ingestas/propiedades/2999/" class="btn btn-details btn-sm" title="Ver detalles">
+                                            <i class="fas fa-eye"></i>
+                                            <span class="btn-text">Detalles</span>
+                                        </a>
+                                        <a href="/admin/ingestas/propiedadraw/2999/change/" class="btn btn-edit btn-sm" title="Editar propiedad">
+                                            <i class="fas fa-edit"></i>
+                                            <span class="btn-text">Editar</span>
+                                        </a>
+                                        <a href="https://www.remax.pe/web/search/property/propiedad-terreno-en-venta-yura-arequipa-arequipa-1106856/" target="_blank" class="btn btn-external btn-sm" title="Ver en portal original">
+                                            <i class="fas fa-external-link-alt"></i>
+                                            <span class="btn-text">Portal</span>
+                                        </a>
+                                    
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="property-card" data-property-id="2998" data-lat="" data-lng="" data-es-externo="false">
+                        <!-- Imagen -->
+                        <div class="property-image-container">
+                            
+                                <img src="https://sfo3.digitaloceanspaces.com/media-remax-peru/media/public/photos/propertys/1152489/cover_1152489.jpg" alt="CASA URBANA EN VENTA" class="property-image" onerror="handleImageError(this)">
+                            
+                        </div>
+
+                        <!-- Contenido -->
+                        <div class="property-content">
+                            <div class="property-header">
+                                <span class="property-type">
+                                    CASA URBANA EN VENTA
+                                    
+                                </span>
+                                <div class="property-price">
+                                    
+                                        $125000
+                                    
+                                </div>
+                            </div>
+
+                            <div class="property-description">
+                                Propiedad sin descripción
+                            </div>
+
+                            <div class="property-location">
+                                <i class="fas fa-map-marker-alt"></i>
+                                <span>
+                                    
+                                        Arequipa, Arequipa
+                                    
+                                </span>
+                            </div>
+
+                            <div class="property-features">
+                                
+                                <div class="feature-item">
+                                    <i class="fas fa-ruler-combined"></i>
+                                    <span>224 m²</span>
+                                </div>
+                                
+
+                                
+
+                                
+                            </div>
+
+                            <div class="property-footer">
+                                <div class="property-source">
+                                    
+                                        Fuente Local
+                                    
+                                </div>
+                                <div class="property-actions">
+                                    
+                                        <!-- Para propiedades locales, mostrar detalles y edición -->
+                                        <a href="/ingestas/propiedades/2998/" class="btn btn-details btn-sm" title="Ver detalles">
+                                            <i class="fas fa-eye"></i>
+                                            <span class="btn-text">Detalles</span>
+                                        </a>
+                                        <a href="/admin/ingestas/propiedadraw/2998/change/" class="btn btn-edit btn-sm" title="Editar propiedad">
+                                            <i class="fas fa-edit"></i>
+                                            <span class="btn-text">Editar</span>
+                                        </a>
+                                        <a href="https://www.remax.pe/web/search/property/propiedad-casa-en-venta-yura-arequipa-arequipa-1152489/" target="_blank" class="btn btn-external btn-sm" title="Ver en portal original"

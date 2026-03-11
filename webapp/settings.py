@@ -59,6 +59,9 @@ INSTALLED_APPS = [
     'requerimientos',
     'cuadrantizacion',
     'propifai',
+    'matching',
+    'acm',
+    'market_analysis',
 ]
 
 MIDDLEWARE = [
