@@ -104,11 +104,11 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'mssql',  # Usando mssql-django
-        'NAME': env('DB_NAME', default='propiextractor'),
-        'USER': env('DB_USER', default='adminpropify'),
-        'PASSWORD': env('DB_PASSWORD', default='Propify12345@'),
-        'HOST': env('DB_HOST', default='granextractor.database.windows.net'),
+        'ENGINE': 'mssql',
+        'NAME': env('DB_NAME'),
+        'USER': env('DB_USER'),
+        'PASSWORD': env('DB_PASSWORD'),
+        'HOST': env('DB_HOST'),
         'PORT': env('DB_PORT', default='1433'),
         'OPTIONS': {
             'driver': 'ODBC Driver 18 for SQL Server',
@@ -212,7 +212,7 @@ RAW_HTML_STORAGE = 'blob_storage'  # 'database' or 'blob_storage'
 
 # Azure Blob Storage Configuration
 AZURE_STORAGE_CONNECTION_STRING = env('AZURE_STORAGE_CONNECTION_STRING', default='')
-AZURE_STORAGE_CONTAINER_NAME = env('AZURE_STORAGE_CONTAINER_NAME', default='documentos-crudos')
+AZURE_STORAGE_CONTAINER_NAME = env('AZURE_STORAGE_CONTAINER_NAME', default='documentoscrudos')
 AZURE_STORAGE_ACCOUNT_NAME = env('AZURE_STORAGE_ACCOUNT_NAME', default='')
 AZURE_STORAGE_ACCOUNT_KEY = env('AZURE_STORAGE_ACCOUNT_KEY', default='')
 
