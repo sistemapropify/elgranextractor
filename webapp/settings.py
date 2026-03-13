@@ -32,7 +32,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-g76()bgf_)1ygr$!a1s-i
 DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
 # Allow all hosts for now, but you should restrict this in production
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'granextractor.azurewebsites.net,localhost,127.0.0.1').split(',')
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'granextractorservice-emehaffsf8e2c7eg.brazilsouth-01.azurewebsites.net,localhost,127.0.0.1').split(',')
 
 
 # Application definition
