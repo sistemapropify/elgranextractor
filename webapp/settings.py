@@ -75,7 +75,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'webapp.urls'
+ROOT_URLCONF = 'urls'
 
 TEMPLATES = [
     {
@@ -92,7 +92,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'webapp.wsgi.application'
+WSGI_APPLICATION = 'wsgi.application'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
@@ -220,3 +220,35 @@ AZURE_STORAGE_ACCOUNT_KEY = env('AZURE_STORAGE_ACCOUNT_KEY', default='')
 API_EXTERNA_URL = env('API_EXTERNA_URL', default='http://localhost/dashboard/api/properties/with-docs/')
 API_EXTERNA_KEY = env('API_EXTERNA_KEY', default='ItBJSnE6F7gIG5uhnPh0mtXmQ9yjE8ZgqtIjTU')
 API_EXTERNA_TIMEOUT = env.int('API_EXTERNA_TIMEOUT', default=10)
+
+# Monkey patch para corregir el error 'super' object has no attribute 'dicts'
+# en Django 5.0.6 con Python 3.14.2
+import django.template.context
+
+def patched_context_copy(self):
+    """Versión segura de __copy__ para Context que evita llamar a super().__copy__()."""
+    # Crear nueva instancia
+    duplicate = self.__class__.__new__(self.__class__)
+    
+    # Copiar todos los atributos existentes
+    duplicate.__dict__.update(self.__dict__)
+    
+    # Asegurar que dicts sea una copia
+    duplicate.dicts = self.dicts[:] if hasattr(self, 'dicts') and self.dicts else []
+    
+    return duplicate
+
+# Aplicar patch a Context.__copy__
+django.template.context.Context.__copy__ = patched_context_copy
+
+# También necesitamos parchear BaseContext.__copy__ porque Context llama a super().__copy__()
+def patched_basecontext_copy(self):
+    """Versión segura de __copy__ para BaseContext."""
+    duplicate = self.__class__.__new__(self.__class__)
+    duplicate.__dict__.update(self.__dict__)
+    duplicate.dicts = self.dicts[:] if hasattr(self, 'dicts') and self.dicts else []
+    return duplicate
+
+django.template.context.BaseContext.__copy__ = patched_basecontext_copy
+
+print("Monkey patch aplicado a django.template.context.__copy__")

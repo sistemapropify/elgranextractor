@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }} - Prometeo</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .dashboard-header {
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            color: white;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+            border-radius: 0 0 15px 15px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .card {
+            border-radius: 12px;
+            border: none;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            margin-bottom: 1.5rem;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+        }
+        .kpi-card {
+            text-align: center;
+            padding: 1.5rem;
+            border-left: 5px solid #3498db;
+        }
+        .kpi-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #2c3e50;
+            line-height: 1;
+        }
+        .kpi-label {
+            font-size: 0.9rem;
+            color: #6c757d;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255,255,255,0.95);
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            backdrop-filter: blur(3px);
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-header">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h1 class="display-5 fw-bold">
+                        <i class="bi bi-graph-up-arrow me-2"></i>
+                        {{ title }}
+                    </h1>
+                    <p class="lead mb-0">
+                        Análisis de mercado inmobiliario con datos de Remax y Propify
+                    </p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <button class="btn btn-light" id="btnRefresh">
+                        <i class="bi bi-arrow-clockwise"></i> Actualizar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- KPIs principales -->
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card kpi-card">
+                    <div class="kpi-value" id="kpiTotal">{{ total_count }}</div>
+                    <div class="kpi-label">Propiedades Totales</div>
+                    <div class="small text-muted mt-2" id="kpiTotalDetail">
+                        <span id="localCount">{{ local_count }}</span> locales + 
+                        <span id="propifaiCount">{{ propifai_count }}</span> Propify
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card kpi-card">
+                    <div class="kpi-value" id="kpiWithPrice">--</div>
+                    <div class="kpi-label">Con Precio</div>
+                    <div class="small text-muted mt-2" id="kpiWithPriceDetail">Cargando...</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card kpi-card">
+                    <div class="kpi-value" id="kpiWithArea">--</div>
+                    <div class="kpi-label">Con Área</div>
+                    <div class="small text-muted mt-2" id="kpiWithAreaDetail">Cargando...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Gráficos y más datos -->
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="bi bi-bar-chart-line me-2"></i> Estadísticas Detalladas
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-striped" id="statsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Métrica</th>
+                                        <th>Valor</th>
+                                        <th>Descripción</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="statsBody">
+                                    <!-- Los datos se cargarán por JavaScript -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Información de fuentes -->
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="bi bi-database me-2"></i> Base de Datos Local (Remax)
+                    </div>
+                    <div class="card-body">
+                        <p>Propiedades importadas desde Excel con coordenadas válidas.</p>
+                        <ul>
+                            <li><strong>Total:</strong> <span id="localTotal">{{ local_count }}</span></li>
+                            <li><strong>Con precio:</strong> <span id="localWithPrice">--</span></li>
+                            <li><strong>Con área:</strong> <span id="localWithArea">--</span></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="bi bi-cloud me-2"></i> Base de Datos Propify
+                    </div>
+                    <div class="card-body">
+                        <p>Propiedades de la base de datos Propifai (solo lectura).</p>
+                        <ul>
+                            <li><strong>Total:</strong> <span id="propifaiTotal">{{ propifai_count }}</span></li>
+                            <li><strong>Con precio:</strong> <span id="propifaiWithPrice">--</span></li>
+                            <li><strong>Con área:</strong> <span id="propifaiWithArea">--</span></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading overlay -->
+    <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+        <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
+            <span class="visually-hidden">Cargando...</span>
+        </div>
+        <div class="mt-3">
+            <h5 id="loadingMessage">Cargando datos del dashboard...</h5>
+            <p class="text-muted" id="loadingDetail">Por favor espere</p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const btnRefresh = document.getElementById('btnRefresh');
+            
+            // Mostrar loading inicial
+            loadingOverlay.style.display = 'flex';
+            
+            // Cargar estadísticas detalladas
+            loadDashboardStats();
+            
+            // Configurar botón de refrescar
+            btnRefresh.addEventListener('click', function() {
+                loadingOverlay.style.display = 'flex';
+                loadDashboardStats();
+            });
+            
+            function loadDashboardStats() {
+                fetch('/market-analysis/api/dashboard-stats/')
+                    .then(response => {
+                        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                        return response.json();
+                    })
+                    .then(data => {
+                        if (data.success) {
+                            updateDashboard(data.stats);
+                        } else {
+                            throw new Error('API returned unsuccessful response');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error loading dashboard stats:', error);
+                        alert('No se pudieron cargar las estadísticas. Por favor, intente nuevamente.');
+                    })
+                    .finally(() => {
+                        loadingOverlay.style.display = 'none';
+                    });
+            }
+            
+            function updateDashboard(stats) {
+                // Actualizar KPIs
+                document.getElementById('kpiWithPrice').textContent = 
+                    (stats.local_with_price + stats.propifai_with_price).toLocaleString();
+                document.getElementById('kpiWithPriceDetail').textContent = 
+                    `${stats.local_with_price} locales + ${stats.propifai_with_price} Propify`;
+                
+                document.getElementById('kpiWithArea').textContent = 
+                    (stats.local_with_area + stats.propifai_with_area).toLocaleString();
+                document.getElementById('kpiWithAreaDetail').textContent = 
+                    `${stats.local_with_area} locales + ${stats.propifai_with_area} Propify`;
+                
+                // Actualizar detalles por fuente
+                document.getElementById('localWithPrice').textContent = stats.local_with_price;
+                document.getElementById('localWithArea').textContent = stats.local_with_area;
+                document.getElementById('propifaiWithPrice').textContent = stats.propifai_with_price;
+                document.getElementById('propifaiWithArea').textContent = stats.propifai_with_area;
+                
+                // Actualizar tabla de estadísticas
+                const statsBody = document.getElementById('statsBody');
+                statsBody.innerHTML = '';
+                
+                const metrics = [
+                    { key: 'local_count', label: 'Propiedades locales con coordenadas', desc: 'Propiedades Remax con coordenadas válidas' },
+                    { key: 'propifai_count', label: 'Propiedades Propify con coordenadas', desc: 'Propiedades Propifai con coordenadas válidas' },
+                    { key: 'local_with_price', label: 'Locales con precio', desc: 'Propiedades Remax con precio USD > 0' },
+                    { key: 'propifai_with_price', label: 'Propify con precio', desc: 'Propiedades Propifai con precio > 0' },
+                    { key: 'local_with_area', label: 'Locales con área', desc: 'Propiedades Remax con área construida/terreno > 0' },
+                    { key: 'propifai_with_area', label: 'Propify con área', desc: 'Propiedades Propifai con built_area/land_area > 0' },
+                ];
+                
+                metrics.forEach(metric => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${metric.label}</td>
+                        <td><strong>${stats[metric.key]?.toLocaleString() || '0'}</strong></td>
+                        <td class="text-muted">${metric.desc}</td>
+                    `;
+                    statsBody.appendChild(row);
+                });
+            }
+        });
+    </script>
+</body>
+</html>
