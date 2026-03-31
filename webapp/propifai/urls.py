@@ -15,4 +15,13 @@ urlpatterns = [
     
     # API JSON
     path('api/propiedades-json/', views.api_propiedades_json, name='api_propiedades_json'),
+    
+    # Dashboard de calidad de cartera
+    path('dashboard/calidad/', views.dashboard_calidad_cartera, name='dashboard_calidad_cartera'),
+    
+    # Dashboard de visitas y actividad por propiedad
+    path('dashboard/visitas/', views.property_visits_dashboard, name='property_visits_dashboard'),
+    
+    # API de eventos por propiedad
+    path('api/property/<int:property_id>/events/', views.property_events_api, name='property_events_api'),
 ]

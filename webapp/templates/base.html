@@ -266,6 +266,49 @@
         hr {
             border-color: var(--very-light-teal);
         }
+
+        /* Estilos para submenús en sidebar */
+        .has-submenu > a {
+            position: relative;
+        }
+        .has-submenu > a .bi-chevron-down {
+            transition: transform 0.3s ease;
+            font-size: 0.9rem;
+            margin-left: auto;
+        }
+        .has-submenu.active > a .bi-chevron-down {
+            transform: rotate(180deg);
+        }
+        .submenu {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            background-color: rgba(0, 0, 0, 0.2);
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+        .has-submenu.active .submenu {
+            max-height: 200px;
+        }
+        .submenu li {
+            border-bottom: none;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .submenu a {
+            padding-left: 50px;
+            padding-top: 12px;
+            padding-bottom: 12px;
+            font-size: 0.95rem;
+        }
+        .submenu a.active {
+            background-color: rgba(255, 255, 255, 0.15);
+            border-left: 4px solid var(--accent-color);
+        }
+        .submenu i {
+            font-size: 1rem;
+            margin-right: 10px;
+        }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
@@ -326,11 +369,32 @@
                     <span>Propiedades</span>
                 </a>
             </li>
-            <li>
-                <a href="/propifai/propiedades/" class="{% if '/propifai/' in request.path %}active{% endif %}">
+            <li class="has-submenu {% if '/propifai/' in request.path %}active{% endif %}">
+                <a href="#">
                     <i class="bi bi-house-door-fill"></i>
                     <span>Propiedades Propify</span>
+                    <i class="bi bi-chevron-down ms-auto"></i>
                 </a>
+                <ul class="submenu">
+                    <li>
+                        <a href="/propifai/dashboard/calidad/" class="{% if '/propifai/dashboard/calidad/' in request.path %}active{% endif %}">
+                            <i class="bi bi-bar-chart-line"></i>
+                            <span>Análisis de Cartera</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/propifai/propiedades/" class="{% if '/propifai/propiedades/' in request.path and '/dashboard/calidad/' not in request.path %}active{% endif %}">
+                            <i class="bi bi-list-ul"></i>
+                            <span>Lista de Propiedades</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/propifai/dashboard/visitas/" class="{% if '/propifai/dashboard/visitas/' in request.path %}active{% endif %}">
+                            <i class="bi bi-calendar-check"></i>
+                            <span>Dashboard de Visitas</span>
+                        </a>
+                    </li>
+                </ul>
             </li>
             <li>
                 <a href="/requerimientos/lista/" class="{% if '/requerimientos/' in request.path %}active{% endif %}">
@@ -357,9 +421,54 @@
                 </a>
             </li>
             <li>
-                <a href="/market-analysis/heatmap/" class="{% if '/market-analysis/' in request.path %}active{% endif %}">
+                <a href="/market-analysis/dashboard/" class="{% if '/market-analysis/dashboard/' in request.path %}active{% endif %}">
+                    <i class="bi bi-speedometer"></i>
+                    <span>Dashboard Mercado</span>
+                </a>
+            </li>
+            <li>
+                <a href="/market-analysis/heatmap/" class="{% if '/market-analysis/' in request.path and '/dashboard/' not in request.path %}active{% endif %}">
                     <i class="bi bi-thermometer-high"></i>
-                    <span>Análisis de Mercado</span>
+                    <span>Heatmap Mercado</span>
+                </a>
+            </li>
+            <li class="has-submenu {% if '/meta-ads/' in request.path %}active{% endif %}">
+                <a href="#">
+                    <i class="bi bi-megaphone-fill"></i>
+                    <span>Meta Ads</span>
+                    <i class="bi bi-chevron-down ms-auto"></i>
+                </a>
+                <ul class="submenu">
+                    <li>
+                        <a href="/meta-ads/dashboard/" class="{% if '/meta-ads/dashboard/' in request.path %}active{% endif %}">
+                            <i class="bi bi-speedometer"></i>
+                            <span>Dashboard Principal</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/meta-ads/analisis/historico/" class="{% if '/meta-ads/analisis/historico/' in request.path %}active{% endif %}">
+                            <i class="bi bi-bar-chart-line"></i>
+                            <span>Análisis Histórico</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/meta-ads/campañas/" class="{% if '/meta-ads/campañas/' in request.path and '/dashboard/' not in request.path and '/analisis/' not in request.path %}active{% endif %}">
+                            <i class="bi bi-list-ul"></i>
+                            <span>Lista de Campañas</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/meta-ads/sincronizar/" class="{% if '/meta-ads/sincronizar/' in request.path %}active{% endif %}">
+                            <i class="bi bi-arrow-repeat"></i>
+                            <span>Sincronizar Datos</span>
+                        </a>
+                    </li>
+                </ul>
+            </li>
+            <li>
+                <a href="/analisis-crm/" class="{% if '/analisis-crm/' in request.path %}active{% endif %}">
+                    <i class="bi bi-people-fill"></i>
+                    <span>Leads CRM</span>
                 </a>
             </li>
             <li>
@@ -418,6 +527,26 @@
             menuItems.forEach(item => {
                 if (item.getAttribute('href') === currentPath) {
                     item.classList.add('active');
+                }
+            });
+
+            // Submenús: alternar al hacer clic en el enlace padre
+            document.querySelectorAll('.has-submenu > a').forEach(link => {
+                link.addEventListener('click', function(e) {
+                    // Solo si el enlace no tiene href válido (es #)
+                    if (this.getAttribute('href') === '#') {
+                        e.preventDefault();
+                        const parentLi = this.parentElement;
+                        parentLi.classList.toggle('active');
+                    }
+                });
+            });
+
+            // Expandir submenú si alguna subpágina está activa
+            document.querySelectorAll('.has-submenu').forEach(li => {
+                const activeSub = li.querySelector('.submenu a.active');
+                if (activeSub) {
+                    li.classList.add('active');
                 }
             });
         });

@@ -1,0 +1,904 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Dashboard de Visitas y Actividad por Propiedad - Propifai{% endblock %}
+
+{% block extra_css %}
+<style>
+:root {
+    --color-disponible: #28a745;
+    --color-vendida: #6f42c1;
+    --color-reservada: #007bff;
+    --color-negociacion: #ffc107;
+    --color-retirada: #6c757d;
+    --color-visita: #007bff;
+    --color-seguimiento: #ffc107;
+    --color-propuesta: #6f42c1;
+    --color-llamada: #28a745;
+    --color-cierre: #20c997;
+}
+
+/* Estilos generales */
+.sticky-filters {
+    position: sticky;
+    top: 0;
+    z-index: 1020;
+    background-color: white;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    padding: 1rem;
+    border-radius: 0.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.kpi-card {
+    border-radius: 10px;
+    border: 1px solid #e0e0e0;
+    padding: 1.2rem;
+    background: white;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    transition: transform 0.2s;
+    height: 100%;
+}
+.kpi-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+.kpi-value {
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1;
+}
+.kpi-label {
+    font-size: 0.85rem;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Tabla */
+.table-container {
+    overflow-x: auto;
+}
+.table-visits {
+    font-size: 0.9rem;
+}
+.table-visits th {
+    background-color: #f8f9fa;
+    border-bottom: 2px solid #007bff;
+    color: #495057;
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+}
+.table-visits th.sortable:hover {
+    background-color: #e9ecef;
+}
+.table-visits th i {
+    font-size: 0.8rem;
+    margin-left: 0.3rem;
+    opacity: 0.6;
+}
+.table-visits tbody tr {
+    transition: background-color 0.15s;
+}
+.table-visits tbody tr:hover {
+    background-color: rgba(0, 123, 255, 0.05);
+}
+.table-visits tbody tr.zero-visits {
+    background-color: rgba(255, 182, 193, 0.1);
+}
+.table-visits td {
+    vertical-align: middle;
+}
+
+/* Badges */
+.badge-status {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.35em 0.65em;
+}
+.badge-disponible { background-color: var(--color-disponible); color: white; }
+.badge-vendida { background-color: var(--color-vendida); color: white; }
+.badge-reservada { background-color: var(--color-reservada); color: white; }
+.badge-negociacion { background-color: var(--color-negociacion); color: #212529; }
+.badge-retirada { background-color: var(--color-retirada); color: white; }
+
+/* Barra de visitas */
+.visits-bar-container {
+    width: 100%;
+    height: 1.5rem;
+    background-color: #e9ecef;
+    border-radius: 0.75rem;
+    overflow: hidden;
+    position: relative;
+}
+.visits-bar-fill {
+    height: 100%;
+    background-color: #28a745;
+    border-radius: 0.75rem;
+    transition: width 0.3s;
+}
+.visits-bar-zero {
+    background-color: #dc3545;
+}
+.visits-bar-text {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #495057;
+}
+
+/* Panel lateral */
+.offcanvas-end {
+    width: 600px;
+    max-width: 90vw;
+}
+.timeline {
+    position: relative;
+    padding-left: 2rem;
+    margin-top: 1.5rem;
+}
+.timeline::before {
+    content: '';
+    position: absolute;
+    left: 0.75rem;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background-color: #dee2e6;
+}
+.timeline-item {
+    position: relative;
+    margin-bottom: 1.5rem;
+}
+.timeline-dot {
+    position: absolute;
+    left: -2rem;
+    top: 0.25rem;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 50%;
+    border: 3px solid white;
+    box-shadow: 0 0 0 2px currentColor;
+}
+.timeline-content {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .table-visits {
+        font-size: 0.8rem;
+    }
+    .kpi-value {
+        font-size: 1.5rem;
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0">Dashboard de Visitas y Actividad por Propiedad</h1>
+        <div class="text-muted">
+            <span id="last-update">Actualizado: {{ now|date:"d/m/Y H:i" }}</span>
+        </div>
+    </div>
+
+    <!-- Barra de filtros sticky -->
+    <div class="sticky-filters">
+        <div class="row g-3">
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Status</label>
+                <select class="form-select form-select-sm" id="filter-status">
+                    <option value="">Todos</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Distrito</label>
+                <select class="form-select form-select-sm" id="filter-district">
+                    <option value="">Todos</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Zona</label>
+                <select class="form-select form-select-sm" id="filter-zone" disabled>
+                    <option value="">Todas</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Agente</label>
+                <select class="form-select form-select-sm" id="filter-agent">
+                    <option value="">Todos</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Visitas</label>
+                <select class="form-select form-select-sm" id="filter-visits">
+                    <option value="">Todas</option>
+                    <option value="0">Sin ninguna visita</option>
+                    <option value="1+">1 o más</option>
+                    <option value="3+">3 o más</option>
+                    <option value="5+">5 o más</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Buscar</label>
+                <input type="text" class="form-control form-control-sm" id="filter-search" placeholder="Código o título">
+            </div>
+            <div class="col-md-12 mt-2">
+                <div class="d-flex justify-content-between">
+                    <button class="btn btn-sm btn-outline-secondary" id="clear-filters">
+                        <i class="fas fa-times"></i> Limpiar filtros
+                    </button>
+                    <div class="text-muted small">
+                        <span id="filter-count">Mostrando <strong>0</strong> propiedades — <strong>0</strong> sin visitas</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fila de KPIs -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-2">
+            <div class="kpi-card">
+                <div class="kpi-label">Total propiedades</div>
+                <div class="kpi-value text-primary" id="kpi-total">0</div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="kpi-card">
+                <div class="kpi-label">Sin ninguna visita</div>
+                <div class="kpi-value text-danger" id="kpi-zero-visits">0</div>
+                <div class="kpi-label" id="kpi-zero-percent">0%</div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="kpi-card">
+                <div class="kpi-label">Promedio de visitas</div>
+                <div class="kpi-value text-info" id="kpi-avg-visits">0.0</div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="kpi-card">
+                <div class="kpi-label">Con propuesta</div>
+                <div class="kpi-value text-success" id="kpi-with-proposal">0</div>
+                <div class="kpi-label" id="kpi-proposal-percent">0%</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="kpi-card">
+                <div class="kpi-label">Propiedad con más visitas</div>
+                <div class="d-flex align-items-center">
+                    <div class="kpi-value text-warning me-2" id="kpi-max-visits-count">0</div>
+                    <div class="small" id="kpi-max-visits-name">—</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Matriz de propiedades -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Matriz de propiedades</h5>
+            <div class="text-muted small">
+                <span id="table-count">Mostrando 0 propiedades</span>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-container">
+                <table class="table table-hover table-visits mb-0">
+                    <thead>
+                        <tr>
+                            <th class="sortable" data-sort="code">Código <i class="fas fa-sort"></i></th>
+                            <th class="sortable" data-sort="title">Título <i class="fas fa-sort"></i></th>
+                            <th class="sortable" data-sort="tipo_propiedad">Tipo <i class="fas fa-sort"></i></th>
+                            <th class="sortable" data-sort="distrito">Distrito <i class="fas fa-sort"></i></th>
+                            <th class="sortable" data-sort="zona">Zona <i class="fas fa-sort"></i></th>
+                            <th class="sortable" data-sort="status">Status <i class="fas fa-sort"></i></th>
+                            <th class="sortable" data-sort="price">Precio <i class="fas fa-sort"></i></th>
+                            <th class="sortable" data-sort="agente_asignado">Agente <i class="fas fa-sort"></i></th>
+                            <th class="sortable" data-sort="total_eventos">Visitas <i class="fas fa-sort"></i></th>
+                            <th class="sortable" data-sort="ultima_visita">Última visita <i class="fas fa-sort"></i></th>
+                            <th class="sortable" data-sort="primera_visita">Primera visita <i class="fas fa-sort"></i></th>
+                            <th>Lead</th>
+                            <th>Propuesta</th>
+                            <th class="sortable" data-sort="dias_en_cartera">Días en cartera <i class="fas fa-sort"></i></th>
+                        </tr>
+                    </thead>
+                    <tbody id="properties-tbody">
+                        <!-- Datos cargados por JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer text-muted small">
+            <div class="d-flex justify-content-between">
+                <div>
+                    <span id="table-summary">0 propiedades cargadas</span>
+                </div>
+                <div>
+                    <span id="render-info">Renderizado por lotes activo</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Panel lateral de detalle -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="detailOffcanvas" aria-labelledby="detailOffcanvasLabel">
+    <div class="offcanvas-header border-bottom">
+        <h5 class="offcanvas-title" id="detailOffcanvasLabel">Detalle de propiedad</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body p-0">
+        <div id="detail-loading" class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Cargando...</span>
+            </div>
+            <p class="mt-3">Cargando eventos...</p>
+        </div>
+        <div id="detail-content" class="d-none">
+            <!-- Header sticky dentro del panel -->
+            <div class="sticky-top bg-white border-bottom p-3">
+                <h6 class="mb-1" id="detail-code"></h6>
+                <p class="mb-1 small" id="detail-title"></p>
+                <div class="d-flex flex-wrap gap-2 mb-2">
+                    <span class="badge" id="detail-type"></span>
+                    <span class="badge" id="detail-district"></span>
+                    <span class="badge" id="detail-zone"></span>
+                    <span class="badge" id="detail-agent"></span>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span class="badge bg-secondary" id="detail-status"></span>
+                    <span class="fw-bold" id="detail-price"></span>
+                </div>
+            </div>
+            <!-- Mini KPIs -->
+            <div class="row g-2 p-3 border-bottom">
+                <div class="col-4 text-center">
+                    <div class="small text-muted">Total visitas</div>
+                    <div class="h4 mb-0" id="detail-total-visits">0</div>
+                </div>
+                <div class="col-4 text-center">
+                    <div class="small text-muted">Días en cartera</div>
+                    <div class="h4 mb-0" id="detail-days-portfolio">0</div>
+                </div>
+                <div class="col-4 text-center">
+                    <div class="small text-muted">Tiene propuesta</div>
+                    <div class="h4 mb-0" id="detail-has-proposal">No</div>
+                </div>
+            </div>
+            <!-- Timeline o mensaje sin eventos -->
+            <div id="detail-no-events" class="alert alert-danger m-3 d-none">
+                <i class="fas fa-exclamation-triangle"></i> Sin ninguna visita registrada
+            </div>
+            <div id="detail-timeline" class="p-3">
+                <h6 class="mb-3">Historial de eventos</h6>
+                <div class="timeline" id="timeline-container">
+                    <!-- Timeline items generados por JavaScript -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Overlay semitransparente -->
+<div class="offcanvas-backdrop fade d-none" id="offcanvasBackdrop"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Datos iniciales desde Django
+const propertiesData = {{ properties_json|safe }};
+let filteredData = [];
+let currentSort = { column: null, direction: 'asc' };
+let batchSize = 50;
+let renderedCount = 0;
+let isRendering = false;
+let renderQueue = [];
+
+// Debug
+console.log('Dashboard cargado, propiedades:', propertiesData.length);
+console.log('Primera propiedad:', propertiesData[0]);
+
+// Funciones de utilidad
+function formatDate(dateStr) {
+    if (!dateStr) return 'N/A';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function daysBetween(date1, date2) {
+    if (!date1 || !date2) return 0;
+    const d1 = new Date(date1);
+    const d2 = new Date(date2);
+    const diff = Math.abs(d2 - d1);
+    return Math.floor(diff / (1000 * 60 * 60 * 24));
+}
+
+function getStatusColor(status) {
+    const colors = {
+        'Disponible': '#28a745',
+        'Vendida': '#6f42c1',
+        'Reservada': '#007bff',
+        'En Negociación': '#ffc107',
+        'Retirada': '#6c757d'
+    };
+    return colors[status] || '#6c757d';
+}
+
+function getEventTypeColor(eventType) {
+    const colors = {
+        'Visita': '#007bff',
+        'Seguimiento': '#ffc107',
+        'Propuesta': '#6f42c1',
+        'Llamada': '#28a745',
+        'Cierre': '#20c997'
+    };
+    return colors[eventType] || '#6c757d';
+}
+
+// Poblar opciones de filtro
+function populateFilterOptions() {
+    const statusSet = new Set();
+    const typeSet = new Set();
+    const districtSet = new Set();
+    const agentSet = new Set();
+    
+    propertiesData.forEach(prop => {
+        if (prop.status) statusSet.add(prop.status);
+        if (prop.property_type) typeSet.add(prop.property_type);
+        if (prop.district) districtSet.add(prop.district);
+        if (prop.agent_name) agentSet.add(prop.agent_name);
+    });
+    
+    populateSelect('filter-status', Array.from(statusSet).sort());
+    populateSelect('filter-type', Array.from(typeSet).sort());
+    populateSelect('filter-district', Array.from(districtSet).sort());
+    populateSelect('filter-agent', Array.from(agentSet).sort());
+}
+
+function populateSelect(selectId, options) {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+    
+    // Mantener la opción "Todos"
+    const currentValue = select.value;
+    select.innerHTML = '<option value="">Todos</option>';
+    
+    options.forEach(option => {
+        const opt = document.createElement('option');
+        opt.value = option;
+        opt.textContent = option;
+        select.appendChild(opt);
+    });
+    
+    // Restaurar valor si existe
+    if (options.includes(currentValue)) {
+        select.value = currentValue;
+    }
+}
+
+// Actualizar KPIs
+function updateKPIs() {
+    const totalProps = filteredData.length;
+    const totalVisits = filteredData.reduce((sum, prop) => sum + (prop.total_eventos || 0), 0);
+    const avgVisits = totalProps > 0 ? (totalVisits / totalProps).toFixed(1) : 0;
+    
+    // Propiedades sin visitas
+    const propsWithZeroVisits = filteredData.filter(prop => (prop.total_eventos || 0) === 0).length;
+    const zeroVisitsPercentage = totalProps > 0 ? ((propsWithZeroVisits / totalProps) * 100).toFixed(1) : 0;
+    
+    // Propiedades con propuesta
+    const propsWithProposal = filteredData.filter(prop => prop.tiene_propuesta).length;
+    const proposalPercentage = totalProps > 0 ? ((propsWithProposal / totalProps) * 100).toFixed(1) : 0;
+    
+    // Propiedad con más visitas
+    let maxVisits = 0;
+    let maxVisitsProp = null;
+    filteredData.forEach(prop => {
+        const visits = prop.total_eventos || 0;
+        if (visits > maxVisits) {
+            maxVisits = visits;
+            maxVisitsProp = prop;
+        }
+    });
+    
+    // Actualizar elementos
+    document.getElementById('kpi-total').textContent = totalProps.toLocaleString();
+    document.getElementById('kpi-zero-visits').textContent = propsWithZeroVisits.toLocaleString();
+    document.getElementById('kpi-zero-percent').textContent = `${zeroVisitsPercentage}%`;
+    document.getElementById('kpi-avg-visits').textContent = avgVisits;
+    document.getElementById('kpi-with-proposal').textContent = propsWithProposal.toLocaleString();
+    document.getElementById('kpi-proposal-percent').textContent = `${proposalPercentage}%`;
+    document.getElementById('kpi-max-visits-count').textContent = maxVisits.toLocaleString();
+    document.getElementById('kpi-max-visits-name').textContent = maxVisitsProp ? maxVisitsProp.code : '—';
+}
+
+// Aplicar filtros
+function applyFilters() {
+    const status = document.getElementById('filter-status').value;
+    const type = document.getElementById('filter-type').value;
+    const district = document.getElementById('filter-district').value;
+    const agent = document.getElementById('filter-agent').value;
+    const visitsMin = parseInt(document.getElementById('filter-visits-min').value) || 0;
+    const visitsMax = parseInt(document.getElementById('filter-visits-max').value) || Infinity;
+    
+    filteredData = propertiesData.filter(prop => {
+        if (status && prop.status !== status) return false;
+        if (type && prop.property_type !== type) return false;
+        if (district && prop.district !== district) return false;
+        if (agent && prop.agent_name !== agent) return false;
+        
+        const visits = prop.total_eventos || 0;
+        if (visits < visitsMin || visits > visitsMax) return false;
+        
+        return true;
+    });
+    
+    renderedCount = 0;
+    updateKPIs();
+    clearTable();
+    renderTableBatch();
+}
+
+// Limpiar tabla
+function clearTable() {
+    const tbody = document.getElementById('properties-tbody');
+    tbody.innerHTML = '';
+    renderedCount = 0;
+}
+
+// Renderizar tabla por lotes
+function renderTableBatch() {
+    console.log('renderTableBatch llamado');
+    console.log('isRendering:', isRendering);
+    console.log('filteredData length:', filteredData.length);
+    console.log('renderedCount:', renderedCount);
+    
+    if (isRendering) {
+        console.log('Ya se está renderizando, saliendo');
+        return;
+    }
+    
+    const tbody = document.getElementById('properties-tbody');
+    console.log('tbody encontrado:', !!tbody);
+    
+    const start = renderedCount;
+    const end = Math.min(start + batchSize, filteredData.length);
+    console.log('start:', start, 'end:', end);
+    
+    if (start >= filteredData.length) {
+        console.log('Ya se renderizaron todas las filas');
+        document.getElementById('rendered-count').textContent = filteredData.length.toLocaleString();
+        return;
+    }
+    
+    isRendering = true;
+    console.log('Comenzando renderizado...');
+    
+    const fragment = document.createDocumentFragment();
+    let rowsCreated = 0;
+    for (let i = start; i < end; i++) {
+        const prop = filteredData[i];
+        console.log('Creando fila para propiedad:', prop.id, prop.code);
+        const row = createTableRow(prop);
+        if (row) {
+            fragment.appendChild(row);
+            rowsCreated++;
+        }
+    }
+    
+    console.log('Rows creadas:', rowsCreated);
+    console.log('Appending fragment to tbody...');
+    tbody.appendChild(fragment);
+    
+    renderedCount = end;
+    document.getElementById('rendered-count').textContent = renderedCount.toLocaleString();
+    
+    isRendering = false;
+    console.log('Renderizado completado, renderedCount:', renderedCount);
+    
+    // Programar siguiente lote
+    if (renderedCount < filteredData.length) {
+        console.log('Programando siguiente lote...');
+        requestAnimationFrame(() => {
+            renderTableBatch();
+        });
+    } else {
+        console.log('Todos los lotes renderizados');
+    }
+}
+
+// Crear fila de tabla
+function createTableRow(prop) {
+    const row = document.createElement('tr');
+    row.dataset.propertyId = prop.id;
+    row.style.cursor = 'pointer';
+    
+    // Calcular días en cartera
+    const daysInPortfolio = prop.dias_en_cartera || 0;
+    const visitFrequency = prop.total_eventos > 0 ? (daysInPortfolio / prop.total_eventos).toFixed(1) : 'N/A';
+    
+    row.innerHTML = `
+        <td>
+            <div class="d-flex align-items-center">
+                <div class="status-indicator" style="background-color: ${getStatusColor(prop.status)}"></div>
+                <span class="ms-2">${prop.code || 'N/A'}</span>
+            </div>
+        </td>
+        <td>${prop.title || 'N/A'}</td>
+        <td>${prop.property_type || 'N/A'}</td>
+        <td>${prop.district || 'N/A'}</td>
+        <td>${prop.zone || 'N/A'}</td>
+        <td>
+            <span class="badge-status badge-${prop.status?.toLowerCase() || 'secondary'}">
+                ${prop.status || 'N/A'}
+            </span>
+        </td>
+        <td>
+            ${prop.price ? `S/ ${prop.price.toLocaleString('es-PE')}` : 'N/A'}
+        </td>
+        <td>${prop.agent_name || 'N/A'}</td>
+        <td>
+            <span class="badge bg-primary rounded-pill">${prop.total_eventos || 0}</span>
+        </td>
+        <td>${formatDate(prop.ultima_visita)}</td>
+        <td>${formatDate(prop.primera_visita)}</td>
+        <td>
+            ${prop.tiene_lead ? '<span class="badge bg-success">Sí</span>' : '<span class="badge bg-secondary">No</span>'}
+        </td>
+        <td>
+            ${prop.tiene_propuesta ? '<span class="badge bg-warning">Sí</span>' : '<span class="badge bg-secondary">No</span>'}
+        </td>
+        <td>${daysInPortfolio}</td>
+    `;
+    
+    // Evento para hacer clic en la fila (abre detalles)
+    row.addEventListener('click', () => {
+        loadPropertyDetails(prop.id);
+    });
+    
+    return row;
+}
+
+// Ordenar tabla
+function sortTable(columnIndex) {
+    const columns = ['code', 'title', 'property_type', 'district', 'zone', 'status', 'price',
+                     'agent_name', 'total_eventos', 'ultima_visita', 'primera_visita',
+                     'tiene_lead', 'tiene_propuesta', 'dias_en_cartera'];
+    
+    if (columnIndex < 0 || columnIndex >= columns.length) return;
+    
+    const column = columns[columnIndex];
+    const direction = currentSort.column === column && currentSort.direction === 'asc' ? 'desc' : 'asc';
+    
+    filteredData.sort((a, b) => {
+        let valA = a[column];
+        let valB = b[column];
+        
+        // Manejar fechas
+        if (column.includes('visita') && valA && valB) {
+            valA = new Date(valA);
+            valB = new Date(valB);
+        }
+        
+        // Manejar valores nulos
+        if (valA == null) valA = direction === 'asc' ? Infinity : -Infinity;
+        if (valB == null) valB = direction === 'asc' ? Infinity : -Infinity;
+        
+        if (valA < valB) return direction === 'asc' ? -1 : 1;
+        if (valA > valB) return direction === 'asc' ? 1 : -1;
+        return 0;
+    });
+    
+    currentSort = { column, direction };
+    updateSortIndicators(columnIndex, direction);
+    
+    renderedCount = 0;
+    clearTable();
+    renderTableBatch();
+}
+
+function updateSortIndicators(columnIndex, direction) {
+    // Remover indicadores anteriores
+    document.querySelectorAll('th .sort-indicator').forEach(ind => ind.remove());
+    
+    const th = document.querySelector(`th:nth-child(${columnIndex + 1})`);
+    if (!th) return;
+    
+    const indicator = document.createElement('span');
+    indicator.className = 'sort-indicator ms-1';
+    indicator.innerHTML = direction === 'asc' ? '↑' : '↓';
+    th.appendChild(indicator);
+}
+
+// Cargar detalles de propiedad
+async function loadPropertyDetails(propertyId) {
+    const loading = document.getElementById('detail-loading');
+    const content = document.getElementById('detail-content');
+    
+    loading.classList.remove('d-none');
+    content.classList.add('d-none');
+    
+    // Mostrar offcanvas
+    const offcanvas = new bootstrap.Offcanvas(document.getElementById('detailOffcanvas'));
+    offcanvas.show();
+    
+    try {
+        const response = await fetch(`/propifai/api/property/${propertyId}/events/`);
+        if (!response.ok) throw new Error('Error al cargar eventos');
+        
+        const data = await response.json();
+        displayPropertyDetails(data);
+    } catch (error) {
+        console.error('Error:', error);
+        document.getElementById('detail-timeline').innerHTML = `
+            <div class="alert alert-danger">
+                Error al cargar los detalles: ${error.message}
+            </div>
+        `;
+    } finally {
+        loading.classList.add('d-none');
+        content.classList.remove('d-none');
+    }
+}
+
+// Mostrar detalles de propiedad
+function displayPropertyDetails(data) {
+    const prop = data.property;
+    const events = data.events || [];
+    
+    // Actualizar encabezado
+    document.getElementById('detail-title').textContent = prop.code || 'Propiedad';
+    document.getElementById('detail-address').textContent = prop.address || 'N/A';
+    document.getElementById('detail-status').innerHTML = `
+        <span class="badge" style="background-color: ${getStatusColor(prop.status)}">
+            ${prop.status || 'N/A'}
+        </span>
+    `;
+    
+    // Actualizar KPIs de detalle
+    document.getElementById('detail-total-events').textContent = events.length;
+    document.getElementById('detail-last-event').textContent = formatDate(prop.ultima_visita);
+    document.getElementById('detail-days-in-portfolio').textContent = prop.dias_en_cartera || 0;
+    
+    // Renderizar timeline
+    renderTimeline(events);
+}
+
+// Renderizar timeline de eventos
+function renderTimeline(events) {
+    const container = document.getElementById('detail-timeline');
+    
+    if (events.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">No hay eventos registrados para esta propiedad.</div>';
+        return;
+    }
+    
+    // Ordenar eventos por fecha descendente
+    events.sort((a, b) => new Date(b.fecha_evento) - new Date(a.fecha_evento));
+    
+    const timelineHTML = events.map(event => `
+        <div class="timeline-item">
+            <div class="timeline-marker" style="background-color: ${getEventTypeColor(event.event_type)}"></div>
+            <div class="timeline-content">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="mb-1">${event.titulo || 'Evento'}</h6>
+                        <p class="mb-1 small text-muted">${event.descripcion || 'Sin descripción'}</p>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge" style="background-color: ${getEventTypeColor(event.event_type)}">
+                                ${event.event_type || 'N/A'}
+                            </span>
+                            <span class="small">${event.agent_name || 'N/A'}</span>
+                        </div>
+                    </div>
+                    <div class="text-end">
+                        <div class="fw-bold">${formatDate(event.fecha_evento)}</div>
+                        <div class="small text-muted">${event.hora_evento || ''}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+    
+    container.innerHTML = `
+        <div class="timeline">
+            ${timelineHTML}
+        </div>
+    `;
+}
+
+// Configurar event listeners
+function setupEventListeners() {
+    // Filtros
+    document.getElementById('filter-status').addEventListener('change', applyFilters);
+    document.getElementById('filter-type').addEventListener('change', applyFilters);
+    document.getElementById('filter-district').addEventListener('change', applyFilters);
+    document.getElementById('filter-agent').addEventListener('change', applyFilters);
+    document.getElementById('filter-visits-min').addEventListener('input', applyFilters);
+    document.getElementById('filter-visits-max').addEventListener('input', applyFilters);
+    
+    // Botón limpiar filtros
+    document.getElementById('clear-filters').addEventListener('click', () => {
+        document.getElementById('filter-status').value = '';
+        document.getElementById('filter-type').value = '';
+        document.getElementById('filter-district').value = '';
+        document.getElementById('filter-agent').value = '';
+        document.getElementById('filter-visits-min').value = '';
+        document.getElementById('filter-visits-max').value = '';
+        applyFilters();
+    });
+    
+    // Ordenamiento de columnas
+    document.querySelectorAll('th[data-sortable]').forEach((th, index) => {
+        th.addEventListener('click', () => sortTable(index));
+    });
+    
+    // Scroll para carga incremental
+    const tableContainer = document.querySelector('.table-container');
+    tableContainer.addEventListener('scroll', () => {
+        const scrollBottom = tableContainer.scrollHeight - tableContainer.scrollTop - tableContainer.clientHeight;
+        if (scrollBottom < 100 && renderedCount < filteredData.length) {
+            renderTableBatch();
+        }
+    });
+    
+    // Cerrar offcanvas
+    document.getElementById('close-offcanvas').addEventListener('click', () => {
+        const offcanvas = bootstrap.Offcanvas.getInstance(document.getElementById('detailOffcanvas'));
+        offcanvas.hide();
+    });
+}
+
+// Inicialización completa
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Dashboard de visitas - Inicializando...');
+    
+    try {
+        // 1. Inicializar datos
+        filteredData = [...propertiesData];
+        console.log(`Datos cargados: ${propertiesData.length} propiedades`);
+        
+        // 2. Poblar opciones de filtro
+        populateFilterOptions();
+        
+        // 3. Actualizar KPIs
+        updateKPIs();
+        
+        // 4. Renderizar tabla inicial (primer lote)
+        clearTable();
+        renderTableBatch();
+        
+        // 5. Configurar event listeners
+        setupEventListeners();
+        
+        console.log('Dashboard inicializado correctamente');
+        
+    } catch (error) {
+        console.error('Error en inicialización:', error);
+        
+        // Mostrar error en la página
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'alert alert-danger';
+        errorDiv.innerHTML = `<strong>Error al cargar el dashboard:</strong> ${error.message}`;
+        document.querySelector('.container-fluid').prepend(errorDiv);
+    }
+});
+</script>
+{% endblock %}

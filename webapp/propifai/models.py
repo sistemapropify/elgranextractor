@@ -303,3 +303,115 @@ class PropertyImage(models.Model):
         
     def __str__(self):
         return f"Imagen {self.id} para propiedad {self.property_id}"
+
+
+class Event(models.Model):
+    """Modelo para eventos de propiedades en la base de datos Propifai."""
+    id = models.BigIntegerField(primary_key=True)
+    code = models.CharField(max_length=20)
+    titulo = models.CharField(max_length=200)
+    fecha_evento = models.DateField()
+    hora_inicio = models.TimeField()
+    hora_fin = models.TimeField()
+    detalle = models.TextField()
+    interesado = models.CharField(max_length=200)
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+    is_active = models.BooleanField()
+    created_by = models.ForeignKey('User', on_delete=models.CASCADE, related_name='eventos_creados', db_column='created_by_id')
+    property = models.ForeignKey('PropifaiProperty', on_delete=models.CASCADE, null=True, db_column='property_id')
+    event_type = models.ForeignKey('EventType', on_delete=models.CASCADE, db_column='event_type_id')
+    contact_id = models.BigIntegerField(null=True)
+    assigned_agent = models.ForeignKey('User', on_delete=models.CASCADE, null=True, related_name='eventos_asignados', db_column='assigned_agent_id')
+    seguimiento = models.TextField()
+    lead_id = models.BigIntegerField(null=True)
+    proposal_id = models.BigIntegerField(null=True)
+    status = models.CharField(max_length=20)
+    rejection_reason = models.TextField()
+
+    class Meta:
+        db_table = 'events'
+        managed = False
+
+    def __str__(self):
+        return f"{self.code} - {self.titulo}"
+
+
+class EventType(models.Model):
+    """Modelo para tipos de eventos."""
+    id = models.BigIntegerField(primary_key=True)
+    name = models.CharField(max_length=100)
+    color = models.CharField(max_length=7)
+    is_active = models.BooleanField()
+    created_at = models.DateTimeField()
+
+    class Meta:
+        db_table = 'event_types'
+        managed = False
+
+    def __str__(self):
+        return self.name
+
+
+class PropertyStatus(models.Model):
+    """Modelo para estados de propiedades."""
+    id = models.BigIntegerField(primary_key=True)
+    name = models.CharField(max_length=100)
+    code = models.CharField(max_length=50)
+    description = models.TextField()
+    order = models.IntegerField()
+    is_active = models.BooleanField()
+
+    class Meta:
+        db_table = 'property_statuses'
+        managed = False
+
+    def __str__(self):
+        return self.name
+
+
+class PropertyType(models.Model):
+    """Modelo para tipos de propiedades."""
+    id = models.BigIntegerField(primary_key=True)
+    name = models.CharField(max_length=100)
+    description = models.TextField()
+    is_active = models.BooleanField()
+
+    class Meta:
+        db_table = 'property_types'
+        managed = False
+
+    def __str__(self):
+        return self.name
+
+
+class User(models.Model):
+    """Modelo para usuarios (agentes) de la base de datos Propifai."""
+    id = models.BigIntegerField(primary_key=True)
+    password = models.CharField(max_length=128)
+    last_login = models.DateTimeField(null=True)
+    is_superuser = models.BooleanField()
+    username = models.CharField(max_length=150)
+    first_name = models.CharField(max_length=150)
+    last_name = models.CharField(max_length=150)
+    email = models.CharField(max_length=254)
+    is_staff = models.BooleanField()
+    is_active = models.BooleanField()
+    date_joined = models.DateTimeField()
+    phone = models.CharField(max_length=20)
+    is_verified = models.BooleanField()
+    commission_rate = models.DecimalField(max_digits=10, decimal_places=2)
+    is_active_agent = models.BooleanField()
+    area_id = models.BigIntegerField(null=True)
+    role_id = models.BigIntegerField(null=True)
+
+    class Meta:
+        db_table = 'users'
+        managed = False
+
+    def __str__(self):
+        return f"{self.first_name} {self.last_name}"
+
+    @property
+    def nombre_completo(self):
+        return f"{self.first_name} {self.last_name}"
