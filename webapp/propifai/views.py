@@ -239,7 +239,24 @@ def dashboard_calidad_cartera(request):
     Muestra matriz de completitud de datos y análisis agregados.
     """
     # Obtener todas las propiedades, ordenadas por fecha de creación descendente (más recientes primero)
+    # Anotar con conteo de eventos y fechas de visitas
+    from django.db.models import Count, Min, Max, Case, When, Value, BooleanField
     propiedades = PropifaiProperty.objects.all().order_by('-created_at')
+    propiedades = propiedades.annotate(
+        total_eventos=Count('event', distinct=True),
+        primera_visita=Min('event__fecha_evento'),
+        ultima_visita=Max('event__fecha_evento'),
+        tiene_lead=Case(
+            When(event__lead_id__isnull=False, then=Value(True)),
+            default=Value(False),
+            output_field=BooleanField()
+        ),
+        tiene_propuesta=Case(
+            When(event__proposal_id__isnull=False, then=Value(True)),
+            default=Value(False),
+            output_field=BooleanField()
+        )
+    ).distinct()
     
     # Filtros desde parámetros GET
     tipo_filtro = request.GET.get('tipo', '').strip()
@@ -458,9 +475,16 @@ def dashboard_calidad_cartera(request):
         else:
             prop.dias_publicacion = None
         
+        # Atributos de visitas (ya anotados en el queryset)
+        prop.total_eventos = prop.total_eventos
+        prop.primera_visita = prop.primera_visita
+        prop.ultima_visita = prop.ultima_visita
+        prop.tiene_lead = prop.tiene_lead
+        prop.tiene_propuesta = prop.tiene_propuesta
+        
         propiedades_con_score.append(prop)
         if i % 20 == 0:
-            print(f"[DEBUG] Procesada propiedad {i}: {prop.code}")
+            print(f"[DEBUG] Procesada propiedad {i}: {prop.code} - Eventos: {prop.total_eventos}")
 
     print(f"[DEBUG] Propiedades con score calculado: {len(propiedades_con_score)}")
     
