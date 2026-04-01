@@ -1119,9 +1119,14 @@ def property_timeline_api(request, property_id):
     def to_peru_date(dt):
         if not dt:
             return None
-        # Si dt es naive, asumir UTC
+        import datetime as dt_module
         from datetime import timezone, timedelta
-        if dt.tzinfo is None:
+        # Si dt es date, convertirlo a datetime a mediodía UTC
+        if isinstance(dt, dt_module.date) and not isinstance(dt, dt_module.datetime):
+            dt = dt_module.datetime.combine(dt, dt_module.time(12, 0, 0))
+            dt = dt.replace(tzinfo=timezone.utc)
+        # Si dt es naive datetime, asumir UTC
+        elif isinstance(dt, dt_module.datetime) and dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
         # Convertir a Perú (UTC-5)
         peru_tz = timezone(timedelta(hours=-5))
@@ -1142,7 +1147,7 @@ def property_timeline_api(request, property_id):
             'id': event.id,
             'code': event.code,
             'titulo': event.titulo,
-            'fecha_evento': event.fecha_evento.isoformat() if event.fecha_evento else None,
+            'fecha_evento': to_peru_date(event.fecha_evento) if event.fecha_evento else None,
             'hora_inicio': event.hora_inicio.isoformat() if event.hora_inicio else None,
             'hora_fin': event.hora_fin.isoformat() if event.hora_fin else None,
             'detalle': event.detalle,
