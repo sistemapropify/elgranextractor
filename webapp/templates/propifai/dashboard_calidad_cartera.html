@@ -197,6 +197,378 @@
         background-color: var(--teal-primary);
         color: white;
     }
+
+    /* Estilos para filas clickeables de la tabla */
+    .property-row {
+        cursor: pointer;
+        transition: background-color 0.15s ease;
+    }
+    
+    .property-row:hover {
+        background-color: var(--teal-hover) !important;
+    }
+    
+    .property-row:active {
+        background-color: rgba(4, 125, 125, 0.1) !important;
+    }
+
+    /* ==================== DRAWER DE DETALLES DE PROPIEDAD ==================== */
+    .drawer-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.4);
+        z-index: 1050;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 280ms ease, visibility 280ms ease;
+    }
+    
+    .drawer-overlay.active {
+        opacity: 1;
+        visibility: visible;
+    }
+    
+    .property-drawer {
+        position: fixed;
+        top: 0;
+        right: 0;
+        width: 680px;
+        max-width: 90vw;
+        height: 100vh;
+        background: white;
+        box-shadow: -5px 0 25px rgba(0, 0, 0, 0.15);
+        z-index: 1051;
+        transform: translateX(100%);
+        transition: transform 280ms ease;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    
+    .property-drawer.active {
+        transform: translateX(0);
+    }
+    
+    .drawer-header {
+        padding: 1.5rem;
+        border-bottom: 1px solid #e9ecef;
+        background: #f8f9fa;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-shrink: 0;
+    }
+    
+    .drawer-header h3 {
+        margin: 0;
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: #212529;
+    }
+    
+    .drawer-close {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        color: #6c757d;
+        cursor: pointer;
+        padding: 0.25rem;
+        line-height: 1;
+        transition: color 0.2s;
+    }
+    
+    .drawer-close:hover {
+        color: #dc3545;
+    }
+    
+    .drawer-body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1.5rem;
+    }
+    
+    .drawer-loading {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: #6c757d;
+    }
+    
+    .drawer-loading .spinner {
+        width: 3rem;
+        height: 3rem;
+        border: 3px solid #f3f3f3;
+        border-top: 3px solid var(--teal-primary);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-bottom: 1rem;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    /* Sección de información básica */
+    .property-basic-info {
+        margin-bottom: 2rem;
+        padding-bottom: 1.5rem;
+        border-bottom: 1px solid #e9ecef;
+    }
+    
+    .property-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #212529;
+        margin-bottom: 0.5rem;
+    }
+    
+    .property-subtitle {
+        color: #6c757d;
+        font-size: 0.95rem;
+        margin-bottom: 1rem;
+    }
+    
+    .property-metrics {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+    
+    .metric-card {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 1rem;
+        text-align: center;
+    }
+    
+    .metric-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--teal-primary);
+        line-height: 1;
+    }
+    
+    .metric-label {
+        font-size: 0.85rem;
+        color: #6c757d;
+        margin-top: 0.25rem;
+    }
+    
+    /* Línea de tiempo de etapas */
+    .timeline-section {
+        margin-bottom: 2rem;
+    }
+    
+    .timeline-section h4 {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #212529;
+        margin-bottom: 1.5rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid var(--teal-primary);
+    }
+    
+    .timeline-container {
+        position: relative;
+        padding-left: 2rem;
+    }
+    
+    .timeline-stage {
+        position: relative;
+        margin-bottom: 2rem;
+        padding-bottom: 1.5rem;
+        border-left: 2px solid #e9ecef;
+        padding-left: 1.5rem;
+    }
+    
+    .timeline-stage:last-child {
+        margin-bottom: 0;
+        padding-bottom: 0;
+    }
+    
+    .timeline-stage.active {
+        border-left-color: var(--teal-primary);
+    }
+    
+    .timeline-stage.completed {
+        border-left-color: #20c997;
+    }
+    
+    .timeline-stage-icon {
+        position: absolute;
+        left: -1.25rem;
+        top: 0;
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: 50%;
+        background: white;
+        border: 2px solid #e9ecef;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+        color: #6c757d;
+        z-index: 1;
+    }
+    
+    .timeline-stage.active .timeline-stage-icon {
+        border-color: var(--teal-primary);
+        background: var(--teal-primary);
+        color: white;
+    }
+    
+    .timeline-stage.completed .timeline-stage-icon {
+        border-color: #20c997;
+        background: #20c997;
+        color: white;
+    }
+    
+    .timeline-stage-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 0.5rem;
+    }
+    
+    .timeline-stage-title {
+        font-weight: 600;
+        color: #212529;
+        font-size: 1rem;
+    }
+    
+    .timeline-stage-date {
+        font-size: 0.85rem;
+        color: #6c757d;
+        background: #f8f9fa;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+    }
+    
+    .timeline-stage-details {
+        font-size: 0.9rem;
+        color: #6c757d;
+        margin-bottom: 0.5rem;
+    }
+    
+    .timeline-connector {
+        margin: 0.5rem 0 1rem 0;
+        padding: 0.75rem;
+        background: #f8f9fa;
+        border-radius: 6px;
+        border-left: 3px solid #adb5bd;
+    }
+    
+    .timeline-connector.benchmark-good {
+        border-left-color: #20c997;
+        background: #f0f9f6;
+    }
+    
+    .timeline-connector.benchmark-warning {
+        border-left-color: #ffc107;
+        background: #fff9e6;
+    }
+    
+    .timeline-connector.benchmark-bad {
+        border-left-color: #dc3545;
+        background: #fdf2f2;
+    }
+    
+    .connector-label {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 0.25rem;
+    }
+    
+    .connector-value {
+        font-size: 0.9rem;
+        color: #6c757d;
+    }
+    
+    /* Sección de eventos */
+    .events-section {
+        margin-top: 2rem;
+    }
+    
+    .events-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+    
+    .event-item {
+        padding: 0.75rem;
+        border-bottom: 1px solid #f1f3f5;
+        display: flex;
+        align-items: flex-start;
+    }
+    
+    .event-item:last-child {
+        border-bottom: none;
+    }
+    
+    .event-icon {
+        width: 2rem;
+        height: 2rem;
+        border-radius: 50%;
+        background: #f8f9fa;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 0.75rem;
+        flex-shrink: 0;
+        color: #6c757d;
+    }
+    
+    .event-content {
+        flex: 1;
+    }
+    
+    .event-title {
+        font-weight: 600;
+        color: #212529;
+        font-size: 0.95rem;
+        margin-bottom: 0.25rem;
+    }
+    
+    .event-meta {
+        font-size: 0.85rem;
+        color: #6c757d;
+    }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+        .property-drawer {
+            width: 100%;
+            max-width: 100%;
+        }
+        
+        .property-metrics {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .timeline-container {
+            padding-left: 1rem;
+        }
+        
+        .timeline-stage {
+            padding-left: 1rem;
+        }
+        
+        .timeline-stage-icon {
+            left: -1rem;
+            width: 2rem;
+            height: 2rem;
+            font-size: 0.9rem;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -358,7 +730,7 @@
                             </thead>
                             <tbody>
                                 {% for prop in properties %}
-                                <tr data-status="{{ prop.status_filter }}">
+                                <tr data-status="{{ prop.status_filter }}" data-property-id="{{ prop.id }}" class="property-row">
                                     <td class="sticky-col fw-bold">{{ prop.codigo_unico_propiedad|default:prop.code }}</td>
                                     <td class="{% if not prop.title %}cell-empty{% endif %}">
                                         {{ prop.title|truncatechars:30|default:"—" }}
@@ -760,5 +1132,359 @@
             updateSortIndicators();
         });
     </script>
+
+    <!-- JavaScript para drawer de detalles de propiedad -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const drawerOverlay = document.getElementById('propertyDrawerOverlay');
+            const drawer = document.getElementById('propertyDrawer');
+            const drawerClose = document.getElementById('drawerClose');
+            const drawerBody = document.getElementById('drawerBody');
+            const drawerLoading = document.getElementById('drawerLoading');
+            const drawerContent = document.getElementById('drawerContent');
+            
+            // Elementos para contenido
+            const drawerTitle = document.getElementById('drawerTitle');
+            const propertyTitle = document.getElementById('propertyTitle');
+            const propertySubtitle = document.getElementById('propertySubtitle');
+            const propertyMetrics = document.getElementById('propertyMetrics');
+            const timelineContainer = document.getElementById('timelineContainer');
+            const eventsList = document.getElementById('eventsList');
+            
+            // Función para abrir el drawer
+            function openDrawer(propertyId) {
+                // Mostrar loading
+                drawerLoading.style.display = 'flex';
+                drawerContent.style.display = 'none';
+                
+                // Activar overlay y drawer
+                drawerOverlay.classList.add('active');
+                drawer.classList.add('active');
+                
+                // Deshabilitar scroll del body
+                document.body.style.overflow = 'hidden';
+                
+                // Cargar datos de la propiedad
+                loadPropertyData(propertyId);
+            }
+            
+            // Función para cerrar el drawer
+            function closeDrawer() {
+                drawerOverlay.classList.remove('active');
+                drawer.classList.remove('active');
+                document.body.style.overflow = '';
+            }
+            
+            // Event listeners
+            drawerOverlay.addEventListener('click', closeDrawer);
+            drawerClose.addEventListener('click', closeDrawer);
+            
+            // Prevenir que clicks dentro del drawer cierren el overlay
+            drawer.addEventListener('click', function(e) {
+                e.stopPropagation();
+            });
+            
+            // Función para cargar datos de la propiedad desde la API
+            async function loadPropertyData(propertyId) {
+                try {
+                    const response = await fetch(`/propifai/api/property/${propertyId}/timeline/`);
+                    if (!response.ok) {
+                        throw new Error(`Error HTTP: ${response.status}`);
+                    }
+                    const data = await response.json();
+                    
+                    // Actualizar UI con los datos
+                    updateDrawerContent(data);
+                    
+                    // Mostrar contenido y ocultar loading
+                    drawerLoading.style.display = 'none';
+                    drawerContent.style.display = 'block';
+                    
+                } catch (error) {
+                    console.error('Error cargando datos de propiedad:', error);
+                    drawerLoading.innerHTML = `
+                        <div style="color: #dc3545;">
+                            <i class="bi bi-exclamation-triangle-fill" style="font-size: 2rem;"></i>
+                            <p>Error al cargar los datos de la propiedad</p>
+                            <button class="btn btn-sm btn-outline-teal mt-2" onclick="closeDrawer()">Cerrar</button>
+                        </div>
+                    `;
+                }
+            }
+            
+            // Función para actualizar el contenido del drawer con los datos
+            function updateDrawerContent(data) {
+                // Título del drawer
+                drawerTitle.textContent = `Propiedad #${data.property.id}`;
+                
+                // Información básica
+                propertyTitle.textContent = data.property.title || `Propiedad en ${data.property.district || 'Sin ubicación'}`;
+                propertySubtitle.textContent = `${data.property.property_type || 'Tipo no especificado'} • ${data.property.status || 'Estado desconocido'}`;
+                
+                // Métricas
+                updateMetrics(data.metrics);
+                
+                // Línea de tiempo
+                updateTimeline(data.timeline);
+                
+                // Eventos
+                updateEvents(data.events);
+            }
+            
+            // Función para actualizar las métricas
+            function updateMetrics(metrics) {
+                propertyMetrics.innerHTML = '';
+                
+                const metricTemplates = [
+                    { key: 'dias_activa', label: 'Días activa', format: (val) => `${val} días` },
+                    { key: 'precio_m2', label: 'Precio/m²', format: (val) => val ? `S/ ${val.toLocaleString('es-PE')}` : '—' },
+                    { key: 'total_eventos', label: 'Eventos totales', format: (val) => val || '0' },
+                    { key: 'total_visitas', label: 'Visitas', format: (val) => val || '0' },
+                    { key: 'tiene_lead', label: 'Tiene lead', format: (val) => val ? 'Sí' : 'No' },
+                    { key: 'tiene_propuesta', label: 'Tiene propuesta', format: (val) => val ? 'Sí' : 'No' }
+                ];
+                
+                metricTemplates.forEach(template => {
+                    const value = metrics[template.key];
+                    if (value !== undefined && value !== null) {
+                        const metricCard = document.createElement('div');
+                        metricCard.className = 'metric-card';
+                        metricCard.innerHTML = `
+                            <div class="metric-value">${template.format(value)}</div>
+                            <div class="metric-label">${template.label}</div>
+                        `;
+                        propertyMetrics.appendChild(metricCard);
+                    }
+                });
+            }
+            
+            // Función para actualizar la línea de tiempo
+            function updateTimeline(timeline) {
+                timelineContainer.innerHTML = '';
+                
+                if (!timeline || !timeline.etapas || timeline.etapas.length === 0) {
+                    timelineContainer.innerHTML = '<p class="text-muted">No hay información de línea de tiempo disponible.</p>';
+                    return;
+                }
+                
+                // Crear cada etapa
+                timeline.etapas.forEach((etapa, index) => {
+                    const stageElement = document.createElement('div');
+                    stageElement.className = `timeline-stage ${etapa.estado}`;
+                    
+                    // Icono según el tipo de etapa
+                    const iconMap = {
+                        1: '📋', // Captación
+                        2: '🌐', // Publicación
+                        3: '👁️', // Visitas
+                        4: '🤝', // Propuesta
+                        5: '💰'  // Cierre
+                    };
+                    
+                    const icon = iconMap[etapa.id] || '📌';
+                    
+                    // Formatear fecha
+                    let fechaTexto = 'Pendiente';
+                    if (etapa.fecha_inicio) {
+                        const fecha = new Date(etapa.fecha_inicio);
+                        fechaTexto = fecha.toLocaleDateString('es-PE', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric'
+                        });
+                    }
+                    
+                    stageElement.innerHTML = `
+                        <div class="timeline-stage-icon">${icon}</div>
+                        <div class="timeline-stage-header">
+                            <div class="timeline-stage-title">${etapa.nombre}</div>
+                            <div class="timeline-stage-date">${fechaTexto}</div>
+                        </div>
+                        <div class="timeline-stage-details">${etapa.descripcion || ''}</div>
+                    `;
+                    
+                    timelineContainer.appendChild(stageElement);
+                    
+                    // Agregar conector si no es la última etapa
+                    if (index < timeline.etapas.length - 1) {
+                        const nextEtapa = timeline.etapas[index + 1];
+                        // Buscar conector correspondiente en timeline.conectores
+                        const conector = timeline.conectores?.find(c => c.desde === etapa.id && c.hacia === nextEtapa.id);
+                        if (conector) {
+                            const connectorElement = document.createElement('div');
+                            const days = conector.dias_transcurridos;
+                            let benchmarkClass = 'benchmark-warning';
+                            let benchmarkLabel = 'Tiempo entre etapas';
+                            
+                            if (days <= conector.benchmark) {
+                                benchmarkClass = 'benchmark-good';
+                                benchmarkLabel = '✅ Transición rápida';
+                            } else if (days > conector.benchmark * 2) {
+                                benchmarkClass = 'benchmark-bad';
+                                benchmarkLabel = '⚠️ Transición lenta';
+                            }
+                            
+                            connectorElement.className = `timeline-connector ${benchmarkClass}`;
+                            connectorElement.innerHTML = `
+                                <div class="connector-label">${benchmarkLabel}</div>
+                                <div class="connector-value">${days} días entre "${etapa.nombre}" y "${nextEtapa.nombre}"</div>
+                                ${conector.benchmark ? `<div class="connector-value"><small>Benchmark: ${conector.benchmark} días</small></div>` : ''}
+                            `;
+                            timelineContainer.appendChild(connectorElement);
+                        }
+                    }
+                });
+            }
+            
+            // Función para actualizar los eventos
+            function updateEvents(events) {
+                eventsList.innerHTML = '';
+                
+                if (!events || events.length === 0) {
+                    eventsList.innerHTML = '<li class="text-muted p-3">No hay eventos registrados para esta propiedad.</li>';
+                    return;
+                }
+                
+                // Iconos por tipo de evento
+                const eventIcons = {
+                    'visita': '👁️',
+                    'llamada': '📞',
+                    'email': '📧',
+                    'propuesta': '📄',
+                    'contrato': '📑',
+                    'cierre': '✅',
+                    'default': '📌'
+                };
+                
+                events.forEach(event => {
+                    const eventItem = document.createElement('li');
+                    eventItem.className = 'event-item';
+                    
+                    // Determinar tipo de evento basado en event_type_nombre
+                    let eventType = 'default';
+                    if (event.event_type_nombre) {
+                        const lowerType = event.event_type_nombre.toLowerCase();
+                        if (lowerType.includes('visita')) eventType = 'visita';
+                        else if (lowerType.includes('llamada')) eventType = 'llamada';
+                        else if (lowerType.includes('email')) eventType = 'email';
+                        else if (lowerType.includes('propuesta')) eventType = 'propuesta';
+                        else if (lowerType.includes('contrato')) eventType = 'contrato';
+                        else if (lowerType.includes('cierre')) eventType = 'cierre';
+                    }
+                    
+                    const icon = eventIcons[eventType] || eventIcons.default;
+                    
+                    // Formatear fecha
+                    let fechaTexto = 'Sin fecha';
+                    if (event.fecha_evento) {
+                        const fecha = new Date(event.fecha_evento);
+                        fechaTexto = fecha.toLocaleDateString('es-PE', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric'
+                        });
+                    }
+                    
+                    // Formatear hora si existe
+                    let horaTexto = '';
+                    if (event.hora_inicio) {
+                        const hora = new Date(`1970-01-01T${event.hora_inicio}`);
+                        horaTexto = hora.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
+                    }
+                    
+                    eventItem.innerHTML = `
+                        <div class="event-icon">${icon}</div>
+                        <div class="event-content">
+                            <div class="event-title">${event.titulo || 'Evento sin título'}</div>
+                            <div class="event-meta">
+                                ${fechaTexto}${horaTexto ? ` • ${horaTexto}` : ''} • ${event.assigned_agent_nombre || 'Agente no asignado'}
+                            </div>
+                            ${event.detalle ? `<div class="event-description small text-muted mt-1">${event.detalle}</div>` : ''}
+                        </div>
+                    `;
+                    
+                    eventsList.appendChild(eventItem);
+                });
+            }
+            
+            // Agregar event listeners a las filas de la tabla
+            function setupTableRowListeners() {
+                const tableRows = document.querySelectorAll('.property-row');
+                tableRows.forEach(row => {
+                    row.addEventListener('click', function(e) {
+                        // Prevenir que clicks en enlaces o botones dentro de la fila activen el drawer
+                        if (e.target.tagName === 'A' || e.target.tagName === 'BUTTON' || e.target.closest('a') || e.target.closest('button')) {
+                            return;
+                        }
+                        
+                        const propertyId = this.getAttribute('data-property-id');
+                        if (propertyId) {
+                            openDrawer(propertyId);
+                        }
+                    });
+                });
+            }
+            
+            // Configurar listeners después de que la tabla esté completamente cargada
+            setTimeout(setupTableRowListeners, 100);
+            
+            // También configurar después de ordenar la tabla (cuando se reordenan las filas)
+            const originalSortTable = window.sortTable;
+            if (originalSortTable) {
+                window.sortTable = function(...args) {
+                    const result = originalSortTable.apply(this, args);
+                    setTimeout(setupTableRowListeners, 50);
+                    return result;
+                };
+            }
+            
+            // Exponer funciones globalmente para que las filas de la tabla puedan llamarlas
+            window.openPropertyDrawer = openDrawer;
+            window.closePropertyDrawer = closeDrawer;
+            window.setupTableRowListeners = setupTableRowListeners;
+        });
+    </script>
+
+    <!-- Drawer de detalles de propiedad -->
+    <div class="drawer-overlay" id="propertyDrawerOverlay"></div>
+    <div class="property-drawer" id="propertyDrawer">
+        <div class="drawer-header">
+            <h3 id="drawerTitle">Detalles de Propiedad</h3>
+            <button class="drawer-close" id="drawerClose">&times;</button>
+        </div>
+        <div class="drawer-body" id="drawerBody">
+            <!-- Contenido cargado dinámicamente -->
+            <div class="drawer-loading" id="drawerLoading">
+                <div class="spinner"></div>
+                <p>Cargando detalles de la propiedad...</p>
+            </div>
+            <div id="drawerContent" style="display: none;">
+                <!-- Sección de información básica -->
+                <div class="property-basic-info">
+                    <h4 class="property-title" id="propertyTitle"></h4>
+                    <p class="property-subtitle" id="propertySubtitle"></p>
+                    <div class="property-metrics" id="propertyMetrics">
+                        <!-- Métricas se llenarán dinámicamente -->
+                    </div>
+                </div>
+
+                <!-- Línea de tiempo de etapas -->
+                <div class="timeline-section">
+                    <h4>Línea de tiempo del proceso</h4>
+                    <div class="timeline-container" id="timelineContainer">
+                        <!-- Etapas se llenarán dinámicamente -->
+                    </div>
+                </div>
+
+                <!-- Eventos recientes -->
+                <div class="events-section">
+                    <h4>Eventos recientes</h4>
+                    <ul class="events-list" id="eventsList">
+                        <!-- Eventos se llenarán dinámicamente -->
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}

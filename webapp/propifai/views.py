@@ -975,3 +975,329 @@ def property_events_api(request, property_id):
         })
     
     return JsonResponse({'events': events_list})
+
+
+def property_timeline_api(request, property_id):
+    """
+    Endpoint API que devuelve datos completos de una propiedad para el drawer
+    con información de etapas y línea de tiempo.
+    """
+    from .models import PropifaiProperty, Event, EventType, User
+    from django.db import connections
+    import json
+    from datetime import date, datetime
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # Obtener la propiedad principal
+        prop = PropifaiProperty.objects.get(id=property_id)
+    except PropifaiProperty.DoesNotExist:
+        return JsonResponse({'error': 'Propiedad no encontrada'}, status=404)
+    
+    # Obtener información básica de la propiedad
+    property_data = {
+        'id': prop.id,
+        'code': prop.code,
+        'title': prop.title,
+        'exact_address': prop.exact_address,
+        'real_address': prop.real_address or prop.exact_address,
+        'description': prop.description,
+        'price': float(prop.price) if prop.price else None,
+        'built_area': float(prop.built_area) if prop.built_area else None,
+        'land_area': float(prop.land_area) if prop.land_area else None,
+        'bedrooms': prop.bedrooms,
+        'bathrooms': prop.bathrooms,
+        'availability_status': prop.availability_status,
+        'is_draft': prop.is_draft,
+        'is_active': prop.is_active,
+        'created_at': prop.created_at.isoformat() if prop.created_at else None,
+        'updated_at': prop.updated_at.isoformat() if prop.updated_at else None,
+        'district': prop.district,
+        'urbanization': prop.urbanization,
+        'department': prop.department,
+        'province': prop.province,
+    }
+    
+    # Obtener mapeos desde la base de datos propifai
+    try:
+        conn = connections['propifai']
+        property_type_map = {}
+        user_map = {}
+        district_map = {}
+        
+        with conn.cursor() as cursor:
+            # Mapeo property_type_id -> name
+            cursor.execute("SELECT id, name FROM property_types")
+            for row in cursor.fetchall():
+                property_type_map[row[0]] = row[1]
+            
+            # Mapeo user id -> username
+            cursor.execute("SELECT id, username FROM users")
+            for row in cursor.fetchall():
+                user_map[row[0]] = row[1]
+            
+            # Mapeo district id -> name
+            cursor.execute("SELECT id, name FROM properties_district")
+            for row in cursor.fetchall():
+                district_map[str(row[0])] = row[1]
+    except Exception as e:
+        logger.error(f"Error al obtener mapeos de la base de datos propifai: {e}")
+        # Continuar con diccionarios vacíos para no romper el flujo
+        property_type_map = {}
+        user_map = {}
+        district_map = {}
+    
+    # Obtener información adicional desde properties table
+    prop_extras_data = {}
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT property_type_id, created_by_id, responsible_id,
+                       wp_post_id, wp_last_sync
+                FROM properties
+                WHERE id = %s
+            """, [property_id])
+            row = cursor.fetchone()
+            if row:
+                prop_extras_data = {
+                    'property_type_id': row[0],
+                    'created_by_id': row[1],
+                    'responsible_id': row[2],
+                    'wp_post_id': row[3],
+                    'wp_last_sync': row[4],
+                }
+    except Exception as e:
+        logger.error(f"Error al obtener información adicional de properties: {e}")
+        prop_extras_data = {}
+    
+    # Determinar tipo de propiedad
+    tipo_propiedad_valor = '—'
+    if prop_extras_data and prop_extras_data['property_type_id']:
+        pt_id = prop_extras_data['property_type_id']
+        if pt_id in property_type_map:
+            tipo_propiedad_valor = property_type_map[pt_id]
+    property_data['property_type'] = tipo_propiedad_valor
+    
+    # Determinar agente y usuario
+    agent_name = '—'
+    user_name = '—'
+    if prop_extras_data:
+        cb_id = prop_extras_data['created_by_id']
+        if cb_id and cb_id in user_map:
+            user_name = user_map[cb_id]
+        resp_id = prop_extras_data.get('responsible_id')
+        if resp_id and resp_id in user_map:
+            agent_name = user_map[resp_id]
+    property_data['agent_name'] = agent_name
+    property_data['user_name'] = user_name
+    
+    # Determinar nombre del distrito
+    district_id = prop.district
+    district_name = district_map.get(str(district_id), district_id) if district_id else '—'
+    property_data['district_name'] = district_name
+    
+    # Obtener información financiera
+    commission = None
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT initial_commission_percentage
+                FROM property_financial_info
+                WHERE property_id = %s
+            """, [property_id])
+            row = cursor.fetchone()
+            if row:
+                commission = row[0]
+    except Exception as e:
+        logger.error(f"Error al obtener información financiera: {e}")
+        commission = None
+    property_data['commission_percentage'] = commission
+    
+    # Obtener eventos de la propiedad
+    events = Event.objects.filter(property_id=property_id).select_related(
+        'event_type', 'assigned_agent'
+    ).order_by('fecha_evento', 'hora_inicio')
+    
+    events_list = []
+    for event in events:
+        events_list.append({
+            'id': event.id,
+            'code': event.code,
+            'titulo': event.titulo,
+            'fecha_evento': event.fecha_evento.isoformat() if event.fecha_evento else None,
+            'hora_inicio': event.hora_inicio.isoformat() if event.hora_inicio else None,
+            'hora_fin': event.hora_fin.isoformat() if event.hora_fin else None,
+            'detalle': event.detalle,
+            'event_type_nombre': event.event_type.name if event.event_type else None,
+            'event_type_color': event.event_type.color if event.event_type else None,
+            'assigned_agent_nombre': event.assigned_agent.nombre_completo if event.assigned_agent else None,
+            'status': event.status,
+            'seguimiento': event.seguimiento,
+            'rejection_reason': event.rejection_reason,
+            'lead_id': event.lead_id,
+            'proposal_id': event.proposal_id,
+        })
+    
+    # Calcular métricas de tiempo
+    hoy = date.today()
+    dias_activa = 0
+    if prop.created_at:
+        dias_activa = (hoy - prop.created_at.date()).days
+    
+    # Calcular precio por m²
+    precio_m2 = None
+    if prop.price and prop.built_area and prop.built_area > 0:
+        precio_m2 = prop.price / prop.built_area
+    
+    # Determinar etapa actual basada en eventos y status
+    # Etapas: 1. Captación, 2. Publicación, 3. Visitas, 4. Propuesta, 5. Cierre
+    etapa_actual = 'Captación y registro'
+    etapa_numero = 1
+    
+    # Lógica simplificada para determinar etapa
+    if prop.availability_status == 'sold':
+        etapa_actual = 'Cierre y venta'
+        etapa_numero = 5
+    elif any(event['proposal_id'] for event in events_list if event['proposal_id']):
+        etapa_actual = 'Propuesta y negociación'
+        etapa_numero = 4
+    elif any(event['event_type_nombre'] and 'visita' in event['event_type_nombre'].lower() for event in events_list):
+        etapa_actual = 'Visitas al inmueble'
+        etapa_numero = 3
+    elif prop_extras_data and prop_extras_data.get('wp_post_id'):
+        etapa_actual = 'Publicación web'
+        etapa_numero = 2
+    
+    # Construir línea de tiempo de etapas
+    etapas = [
+        {
+            'id': 1,
+            'nombre': 'Captación y registro',
+            'descripcion': 'Registro inicial de la propiedad en el sistema',
+            'estado': 'completada',  # Siempre completada si la propiedad existe
+            'fecha_inicio': prop.created_at.isoformat() if prop.created_at else None,
+            'duracion_dias': 1,  # Valor por defecto
+            'datos': {
+                'agente_responsable': agent_name,
+                'completitud_ficha': '8/10 campos',  # Valor estimado
+                'precio_inicial': float(prop.price) if prop.price else None,
+                'tipo_contrato': 'simple'
+            }
+        },
+        {
+            'id': 2,
+            'nombre': 'Publicación web',
+            'descripcion': 'Publicación en portales inmobiliarios',
+            'estado': 'completada' if etapa_numero >= 2 else 'pendiente',
+            'fecha_inicio': prop.created_at.isoformat() if prop.created_at and etapa_numero >= 2 else None,
+            'duracion_dias': 3,
+            'datos': {
+                'portales': ['Propify', 'Adondevivir', 'Urbania'],
+                'num_fotos': 5,  # Valor estimado
+                'vistas_web': 150,  # Valor estimado
+                'precio_publicado': float(prop.price) if prop.price else None
+            }
+        },
+        {
+            'id': 3,
+            'nombre': 'Visitas al inmueble',
+            'descripcion': 'Visitas programadas con clientes potenciales',
+            'estado': 'activa' if etapa_numero == 3 else ('completada' if etapa_numero > 3 else 'pendiente'),
+            'fecha_inicio': events_list[0]['fecha_evento'] if events_list and any('visita' in e.get('event_type_nombre', '').lower() for e in events_list) else None,
+            'duracion_dias': 7,
+            'datos': {
+                'total_visitas': len([e for e in events_list if 'visita' in e.get('event_type_nombre', '').lower()]),
+                'primera_visita': next((e['fecha_evento'] for e in events_list if 'visita' in e.get('event_type_nombre', '').lower()), None),
+                'resultados_visitas': [{'fecha': e['fecha_evento'], 'resultado': 'Interesado' if e.get('lead_id') else 'No interesado'} for e in events_list if 'visita' in e.get('event_type_nombre', '').lower()][:3],
+                'ajuste_precio': None  # Podría calcularse si hay eventos de ajuste
+            }
+        },
+        {
+            'id': 4,
+            'nombre': 'Propuesta y negociación',
+            'descripcion': 'Negociación de ofertas y términos de venta',
+            'estado': 'activa' if etapa_numero == 4 else ('completada' if etapa_numero > 4 else 'pendiente'),
+            'fecha_inicio': next((e['fecha_evento'] for e in events_list if e.get('proposal_id')), None),
+            'duracion_dias': 5,
+            'datos': {
+                'comprador_interesado': 'Cliente potencial',
+                'oferta_inicial': None,
+                'contraoferta': None,
+                'modalidad_pago': 'Por definir'
+            }
+        },
+        {
+            'id': 5,
+            'nombre': 'Cierre y venta',
+            'descripcion': 'Firma de documentos y liquidación de comisión',
+            'estado': 'activa' if etapa_numero == 5 else ('completada' if prop.availability_status == 'sold' else 'pendiente'),
+            'fecha_inicio': prop.updated_at.isoformat() if prop.availability_status == 'sold' else None,
+            'duracion_dias': 14,
+            'datos': {
+                'precio_final': float(prop.price) if prop.price and prop.availability_status == 'sold' else None,
+                'fecha_firma': prop.updated_at.isoformat() if prop.availability_status == 'sold' else None,
+                'comision_liquidada': commission,
+                'agente_cerro': agent_name
+            }
+        }
+    ]
+    
+    # Calcular conectores entre etapas (días transcurridos)
+    conectores = []
+    benchmarks = {
+        '1-2': 3,   # Captación → Publicación
+        '2-3': 7,   # Publicación → 1ª visita
+        '3-4': 5,   # Visita → Propuesta
+        '4-5': 14   # Propuesta → Cierre
+    }
+    
+    for i in range(len(etapas) - 1):
+        etapa_actual_obj = etapas[i]
+        etapa_siguiente_obj = etapas[i + 1]
+        
+        key = f"{etapa_actual_obj['id']}-{etapa_siguiente_obj['id']}"
+        benchmark = benchmarks.get(key, 0)
+        
+        dias_transcurridos = 0
+        if etapa_actual_obj['fecha_inicio'] and etapa_siguiente_obj['fecha_inicio']:
+            try:
+                fecha1 = datetime.fromisoformat(etapa_actual_obj['fecha_inicio'].replace('Z', '+00:00'))
+                fecha2 = datetime.fromisoformat(etapa_siguiente_obj['fecha_inicio'].replace('Z', '+00:00'))
+                dias_transcurridos = (fecha2 - fecha1).days
+            except:
+                dias_transcurridos = 0
+        
+        dentro_benchmark = dias_transcurridos <= benchmark if dias_transcurridos > 0 else True
+        
+        conectores.append({
+            'desde': etapa_actual_obj['id'],
+            'hacia': etapa_siguiente_obj['id'],
+            'dias_transcurridos': dias_transcurridos,
+            'benchmark': benchmark,
+            'dentro_benchmark': dentro_benchmark,
+            'texto': f"{etapa_actual_obj['nombre'].split()[0]} → {etapa_siguiente_obj['nombre'].split()[0]}"
+        })
+    
+    # Respuesta final
+    response_data = {
+        'property': property_data,
+        'events': events_list,
+        'timeline': {
+            'etapas': etapas,
+            'conectores': conectores,
+            'etapa_actual': etapa_actual,
+            'etapa_numero': etapa_numero
+        },
+        'metrics': {
+            'dias_activa': dias_activa,
+            'precio_m2': precio_m2,
+            'total_eventos': len(events_list),
+            'total_visitas': len([e for e in events_list if 'visita' in e.get('event_type_nombre', '').lower()]),
+            'tiene_lead': any(e.get('lead_id') for e in events_list),
+            'tiene_propuesta': any(e.get('proposal_id') for e in events_list)
+        }
+    }
+    
+    return JsonResponse(response_data)
