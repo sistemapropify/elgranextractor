@@ -64,7 +64,7 @@ INSTALLED_APPS = [
     'acm',
     'market_analysis',
     'analisis_crm',
-    'meta_ads',
+    # 'meta_ads',  # Comentado temporalmente debido a error de importación en producción
 ]
 
 MIDDLEWARE = [

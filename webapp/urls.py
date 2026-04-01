@@ -75,5 +75,5 @@ urlpatterns = [
     path('analisis-crm/', include('analisis_crm.urls')),
     
     # Meta Ads - Dashboard de campañas publicitarias de Meta
-    path('meta-ads/', include('meta_ads.urls')),
+    # path('meta-ads/', include('meta_ads.urls')),  # Comentado temporalmente debido a error de importación en producción
 ]
