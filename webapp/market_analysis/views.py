@@ -5,6 +5,12 @@ from django.db.models.functions import Cast
 from django.utils import timezone
 from ingestas.models import PropiedadRaw
 from propifai.models import PropifaiProperty
+import json
+import math
+import logging
+
+logger = logging.getLogger(__name__)
+
 try:
     from .charts import create_data_quality_summary, calculate_data_quality_metrics
 except ImportError as e:
@@ -15,12 +21,7 @@ except ImportError as e:
     
     def calculate_data_quality_metrics(*args, **kwargs):
         return {"error": "Charts module not available"}
-import json
-import math
-import logging
 # FORCE RELOAD - Template heatmap fix
-
-logger = logging.getLogger(__name__)
 
 
 def heatmap_view(request):
