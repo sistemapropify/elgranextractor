@@ -1172,13 +1172,31 @@ def property_timeline_api(request, property_id):
         etapa_numero = 2
     
     # Construir línea de tiempo de etapas
+    # Usar solo fecha (sin hora) para evitar offset de zona horaria
+    fecha_registro = prop.created_at.date().isoformat() if prop.created_at else None
+    
+    # Determinar fecha de publicación (usar wp_last_sync si está disponible)
+    fecha_publicacion = fecha_registro  # Por defecto usar fecha de registro
+    if prop_extras_data and prop_extras_data.get('wp_last_sync'):
+        wp_last_sync = prop_extras_data['wp_last_sync']
+        if hasattr(wp_last_sync, 'date'):
+            fecha_publicacion = wp_last_sync.date().isoformat()
+        elif isinstance(wp_last_sync, str):
+            # Si es string, intentar parsear y extraer fecha
+            try:
+                from datetime import datetime
+                dt = datetime.fromisoformat(wp_last_sync.replace('Z', '+00:00'))
+                fecha_publicacion = dt.date().isoformat()
+            except:
+                pass
+    
     etapas = [
         {
             'id': 1,
             'nombre': 'Captación y registro',
             'descripcion': 'Registro inicial de la propiedad en el sistema',
             'estado': 'completada',  # Siempre completada si la propiedad existe
-            'fecha_inicio': prop.created_at.isoformat() if prop.created_at else None,
+            'fecha_inicio': fecha_registro,
             'duracion_dias': 1,  # Valor por defecto
             'datos': {
                 'agente_responsable': agent_name,
@@ -1192,7 +1210,7 @@ def property_timeline_api(request, property_id):
             'nombre': 'Publicación web',
             'descripcion': 'Publicación en portales inmobiliarios',
             'estado': 'completada' if etapa_numero >= 2 else 'pendiente',
-            'fecha_inicio': prop.created_at.isoformat() if prop.created_at and etapa_numero >= 2 else None,
+            'fecha_inicio': fecha_publicacion if etapa_numero >= 2 else None,
             'duracion_dias': 3,
             'datos': {
                 'portales': ['Propify', 'Adondevivir', 'Urbania'],
@@ -1254,6 +1272,19 @@ def property_timeline_api(request, property_id):
         '4-5': 14   # Propuesta → Cierre
     }
     
+    # Función para convertir fecha ISO a date (sin hora)
+    def iso_to_date(iso_str):
+        if not iso_str:
+            return None
+        try:
+            # Si la cadena contiene 'T' (datetime), tomar solo la parte de fecha
+            if 'T' in iso_str:
+                iso_str = iso_str.split('T')[0]
+            # Convertir a date
+            return date.fromisoformat(iso_str)
+        except:
+            return None
+    
     for i in range(len(etapas) - 1):
         etapa_actual_obj = etapas[i]
         etapa_siguiente_obj = etapas[i + 1]
@@ -1262,12 +1293,13 @@ def property_timeline_api(request, property_id):
         benchmark = benchmarks.get(key, 0)
         
         dias_transcurridos = 0
-        if etapa_actual_obj['fecha_inicio'] and etapa_siguiente_obj['fecha_inicio']:
-            try:
-                fecha1 = datetime.fromisoformat(etapa_actual_obj['fecha_inicio'].replace('Z', '+00:00'))
-                fecha2 = datetime.fromisoformat(etapa_siguiente_obj['fecha_inicio'].replace('Z', '+00:00'))
-                dias_transcurridos = (fecha2 - fecha1).days
-            except:
+        fecha1 = iso_to_date(etapa_actual_obj['fecha_inicio'])
+        fecha2 = iso_to_date(etapa_siguiente_obj['fecha_inicio'])
+        
+        if fecha1 and fecha2:
+            dias_transcurridos = (fecha2 - fecha1).days
+            # Asegurar que no sea negativo (si las fechas están invertidas)
+            if dias_transcurridos < 0:
                 dias_transcurridos = 0
         
         dentro_benchmark = dias_transcurridos <= benchmark if dias_transcurridos > 0 else True
