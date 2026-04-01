@@ -1237,7 +1237,7 @@
                 
                 const metricTemplates = [
                     { key: 'dias_activa', label: 'Días activa', format: (val) => `${val} días` },
-                    { key: 'precio_m2', label: 'Precio/m²', format: (val) => val ? `S/ ${val.toLocaleString('es-PE')}` : '—' },
+                    { key: 'precio_m2', label: 'Precio/m²', format: (val) => val ? `$ ${Math.round(Number(val)).toLocaleString('es-PE')}` : '—' },
                     { key: 'total_eventos', label: 'Eventos totales', format: (val) => val || '0' },
                     { key: 'total_visitas', label: 'Visitas', format: (val) => val || '0' },
                     { key: 'tiene_lead', label: 'Tiene lead', format: (val) => val ? 'Sí' : 'No' },
