@@ -314,7 +314,7 @@ def dashboard_calidad_cartera(request):
                     propiedades = propiedades.filter(id__in=prop_ids)
 
     # Filtro por estado (availability_status o borrador)
-    if estado_filtro:
+    if estado_filtro and estado_filtro != 'all':
         # Mapeo inverso de español a inglés (y borrador)
         estado_a_ingles = {
             'disponible': 'available',
@@ -507,7 +507,7 @@ def dashboard_calidad_cartera(request):
     }
     # Estadísticas generales
     total_real = total_db  # 73
-    props_disponibles = propiedades.filter(is_draft=False).count()  # no borradores (69)
+    props_disponibles = propiedades.filter(is_draft=False, availability_status='available').count()  # solo disponibles (estado available)
     props_borradores = propiedades.filter(is_draft=True).count()    # 4
     props_sin_gps = propiedades.filter(coordinates__isnull=True).count()
     
