@@ -164,23 +164,71 @@ class ApiAnalisisTemporalView(TemplateView):
                 'fuente': fuente,
             }
             
-            # Obtener todos los datos
-            datos_mes = list(obtener_requerimientos_por_mes(fecha_inicio, fecha_fin, filtros))
-            distritos_mes = obtener_distritos_por_mes(fecha_inicio, fecha_fin)
-            tipos_mes = obtener_tipos_propiedad_por_mes(fecha_inicio, fecha_fin)
-            presupuesto_mes = obtener_presupuesto_por_mes(fecha_inicio, fecha_fin)
-            caracteristicas_mes = obtener_caracteristicas_demandadas(fecha_inicio, fecha_fin)
+            # Obtener todos los datos con manejo de errores individual
+            try:
+                datos_mes = list(obtener_requerimientos_por_mes(fecha_inicio, fecha_fin, filtros))
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Error en obtener_requerimientos_por_mes: {e}")
+                datos_mes = []
+            
+            try:
+                distritos_mes = obtener_distritos_por_mes(fecha_inicio, fecha_fin)
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Error en obtener_distritos_por_mes: {e}")
+                distritos_mes = {'distritos': [], 'data': {}, 'meses': []}
+            
+            try:
+                tipos_mes = obtener_tipos_propiedad_por_mes(fecha_inicio, fecha_fin)
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Error en obtener_tipos_propiedad_por_mes: {e}")
+                tipos_mes = {'tipos': [], 'data': {}, 'meses': []}
+            
+            try:
+                presupuesto_mes = obtener_presupuesto_por_mes(fecha_inicio, fecha_fin)
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Error en obtener_presupuesto_por_mes: {e}")
+                presupuesto_mes = []
+            
+            try:
+                caracteristicas_mes = obtener_caracteristicas_demandadas(fecha_inicio, fecha_fin)
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Error en obtener_caracteristicas_demandadas: {e}")
+                caracteristicas_mes = {}
             
             # Calcular crecimiento y tendencias
-            totales = [item['total'] for item in datos_mes]
-            crecimiento = calcular_crecimiento_porcentual(totales)
-            picos, valles = detectar_picos_y_valles(totales)
-            tendencia = calcular_tendencia(totales)
+            totales = [item['total'] for item in datos_mes] if datos_mes else []
+            try:
+                crecimiento = calcular_crecimiento_porcentual(totales)
+            except Exception as e:
+                crecimiento = []
+            
+            try:
+                picos, valles = detectar_picos_y_valles(totales)
+            except Exception as e:
+                picos, valles = [], []
+            
+            try:
+                tendencia = calcular_tendencia(totales)
+            except Exception as e:
+                tendencia = 'estable'
             
             # Generar insights
-            insights = self._generar_insights(
-                datos_mes, distritos_mes, tipos_mes, presupuesto_mes
-            )
+            try:
+                insights = self._generar_insights(
+                    datos_mes, distritos_mes, tipos_mes, presupuesto_mes
+                )
+            except Exception as e:
+                insights = []
             
             # Preparar respuesta
             response_data = {
@@ -204,11 +252,34 @@ class ApiAnalisisTemporalView(TemplateView):
             return JsonResponse(response_data, safe=False)
             
         except Exception as e:
-            return JsonResponse({
-                'success': False,
-                'error': str(e),
-                'mode': 'sync'
-            }, status=500)
+            # Log del error para diagnóstico
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error en _obtener_analisis_sincrono: {e}", exc_info=True)
+            
+            # Intentar devolver datos de ejemplo si la base de datos está vacía
+            try:
+                # Verificar si hay datos en la base de datos
+                from .models import Requerimiento
+                if Requerimiento.objects.exists():
+                    # Hay datos pero hay un error en el procesamiento
+                    return JsonResponse({
+                        'success': False,
+                        'error': str(e),
+                        'mode': 'sync',
+                        'message': 'Error procesando datos existentes'
+                    }, status=500)
+                else:
+                    # Base de datos vacía, devolver datos de ejemplo para demostración
+                    return self._devolver_datos_ejemplo()
+            except Exception as inner_e:
+                # Si falla la verificación, devolver error genérico
+                return JsonResponse({
+                    'success': False,
+                    'error': f"{str(e)} (adicional: {str(inner_e)})",
+                    'mode': 'sync',
+                    'message': 'Error crítico en el análisis'
+                }, status=500)
     
     def _iniciar_analisis_asincrono(self, request):
         """Inicia análisis asíncrono y retorna ID de tarea."""
@@ -315,6 +386,126 @@ class ApiAnalisisTemporalView(TemplateView):
             })
         
         return insights
+
+    def _devolver_datos_ejemplo(self):
+        """Devuelve datos de ejemplo para demostración cuando la base de datos está vacía."""
+        from datetime import datetime, timedelta
+        import random
+        
+        # Generar datos de ejemplo para los últimos 6 meses
+        meses = []
+        fecha_actual = datetime.now().date()
+        for i in range(6):
+            mes = fecha_actual.replace(day=1) - timedelta(days=i*30)
+            meses.append({
+                'mes': mes,
+                'total': random.randint(10, 50),
+                'compra': random.randint(5, 25),
+                'alquiler': random.randint(5, 25),
+                'departamento': random.randint(3, 20),
+                'casa': random.randint(2, 15),
+                'terreno': random.randint(1, 10),
+                'presupuesto_promedio': random.uniform(50000, 200000),
+                'presupuesto_mediano': None,
+                'cochera_si': random.randint(0, 10),
+                'ascensor_si': random.randint(0, 5),
+                'amueblado_si': random.randint(0, 8),
+            })
+        
+        # Datos de ejemplo para distritos
+        distritos_ejemplo = ['Cayma', 'Yanahuara', 'Cerro Colorado', 'Sachaca', 'Hunter']
+        distritos_data = {}
+        for distrito in distritos_ejemplo:
+            distritos_data[distrito] = {mes['mes'].strftime('%Y-%m'): random.randint(1, 10) for mes in meses}
+        
+        # Datos de ejemplo para tipos de propiedad
+        tipos_ejemplo = ['departamento', 'casa', 'terreno', 'oficina', 'local_comercial']
+        tipos_data = {}
+        for tipo in tipos_ejemplo:
+            tipos_data[tipo] = [random.randint(1, 15) for _ in range(len(meses))]
+        
+        # Datos de ejemplo para presupuesto
+        presupuesto_data = [{
+            'mes': mes['mes'],
+            'presupuesto_promedio': mes['presupuesto_promedio'],
+            'presupuesto_mediano': None,
+            'cantidad': mes['total']
+        } for mes in meses]
+        
+        # Datos de ejemplo para características
+        caracteristicas_data = {
+            'cochera': random.randint(20, 80),
+            'ascensor': random.randint(10, 50),
+            'amueblado': random.randint(15, 60),
+            'habitaciones_3': random.randint(5, 40),
+            'banos_2': random.randint(10, 50),
+        }
+        
+        # Calcular métricas
+        totales = [mes['total'] for mes in meses]
+        crecimiento = [None] + [random.uniform(-20, 30) for _ in range(len(meses)-1)]
+        picos = [i for i, val in enumerate(totales) if val == max(totales)]
+        valles = [i for i, val in enumerate(totales) if val == min(totales)]
+        tendencia = 'creciente' if totales[-1] > totales[0] else 'decreciente'
+        
+        # Insights de ejemplo
+        insights = [
+            {
+                'icono': '🔥',
+                'titulo': 'Mes pico: ' + meses[picos[0]]['mes'].strftime('%B %Y'),
+                'descripcion': f'{totales[picos[0]]} requerimientos',
+                'tipo': 'destacado'
+            },
+            {
+                'icono': '📈',
+                'titulo': f'Crecimiento total: {((totales[-1] - totales[0]) / totales[0] * 100):.1f}%',
+                'descripcion': f'De {totales[0]} a {totales[-1]} requerimientos',
+                'tipo': 'tendencia'
+            },
+            {
+                'icono': '🏆',
+                'titulo': f'Distrito líder: {distritos_ejemplo[0]}',
+                'descripcion': f'{sum(distritos_data[distritos_ejemplo[0]].values())} requerimientos',
+                'tipo': 'liderazgo'
+            },
+            {
+                'icono': '🏠',
+                'titulo': f'Tipo más buscado: Departamento',
+                'descripcion': f'{sum(tipos_data["departamento"])} requerimientos',
+                'tipo': 'preferencia'
+            },
+        ]
+        
+        response_data = {
+            'success': True,
+            'mode': 'sync',
+            'datos_mes': meses,
+            'distritos_mes': {
+                'distritos': distritos_ejemplo,
+                'data': distritos_data,
+                'meses': [mes['mes'].strftime('%Y-%m') for mes in meses]
+            },
+            'tipos_mes': {
+                'tipos': tipos_ejemplo,
+                'data': tipos_data,
+                'meses': [mes['mes'].strftime('%Y-%m') for mes in meses]
+            },
+            'presupuesto_mes': presupuesto_data,
+            'caracteristicas_mes': caracteristicas_data,
+            'metricas': {
+                'totales': totales,
+                'crecimiento': crecimiento,
+                'picos': picos,
+                'valles': valles,
+                'tendencia': tendencia,
+            },
+            'insights': insights,
+            'is_sample_data': True,
+            'message': 'Se están mostrando datos de ejemplo porque la base de datos está vacía.'
+        }
+        
+        from django.http import JsonResponse
+        return JsonResponse(response_data, safe=False)
 
 
 class ApiAnalisisProgresoView(TemplateView):

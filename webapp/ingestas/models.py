@@ -66,6 +66,29 @@ class PropiedadRaw(models.Model):
         verbose_name='Subtipo de propiedad',
         help_text='Ej: Casa de campo, Departamento dúplex, Oficina ejecutiva, etc.'
     )
+    # Condición: venta (compra) o alquiler
+    CONDICION_CHOICES = [
+        ('venta', 'Venta'),
+        ('compra', 'Compra'),  # Mantener por compatibilidad
+        ('alquiler', 'Alquiler'),
+        ('anticresis', 'Anticresis'),
+        ('ambos', 'Compra y Alquiler'),
+        ('no_especificado', 'No Especificado'),
+    ]
+    condicion = models.CharField(
+        max_length=20,
+        choices=CONDICION_CHOICES,
+        default='no_especificado',
+        null=True,
+        blank=True,
+        verbose_name='Condición (Venta/Alquiler)',
+        help_text='Indica si la propiedad está en venta, alquiler, anticresis o ambos'
+    )
+    propiedad_verificada = models.BooleanField(
+        default=False,
+        verbose_name='Propiedad Verificada',
+        help_text='Indica si los campos están óptimos para el análisis del ACM'
+    )
     precio_usd = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
     descripcion = models.TextField(null=True, blank=True)
     # Campos según Excel inmobiliaria-remax-10-febrero-2026

@@ -56,6 +56,12 @@
                                     <div class="form-text">Ej: Casa, Departamento, Terreno, etc.</div>
                                 </div>
                                 
+                                <div class="mb-3">
+                                    <label for="{{ form.subtipo_propiedad.id_for_label }}" class="form-label">Subtipo de Propiedad</label>
+                                    {{ form.subtipo_propiedad }}
+                                    <div class="form-text">Ej: Casa de campo, Departamento dúplex, Oficina ejecutiva, etc.</div>
+                                </div>
+                                
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
                                         <label for="{{ form.precio_usd.id_for_label }}" class="form-label">Precio (USD)</label>
@@ -75,6 +81,18 @@
                                 <div class="mb-3">
                                     <label for="{{ form.portal.id_for_label }}" class="form-label">Portal</label>
                                     {{ form.portal }}
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="{{ form.fuente_excel.id_for_label }}" class="form-label">Fuente Excel</label>
+                                    {{ form.fuente_excel }}
+                                    <div class="form-text">Nombre del archivo Excel de origen</div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="{{ form.identificador_externo.id_for_label }}" class="form-label">Identificador Externo</label>
+                                    {{ form.identificador_externo }}
+                                    <div class="form-text">ID de la propiedad en la base de datos original de la fuente</div>
                                 </div>
                                 
                                 <div class="mb-3">

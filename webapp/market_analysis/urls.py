@@ -1,17 +1,23 @@
 from django.urls import path
 from . import views
 
+print("[DEBUG] market_analysis/urls.py cargado")
+
 app_name = 'market_analysis'
 
 urlpatterns = [
-    # Módulo A: Heatmap
-    path('heatmap/', views.heatmap_view, name='heatmap'),
-    path('heatmap-simple/', views.heatmap_simple_view, name='heatmap_simple'),
-    path('heatmap-test/', views.heatmap_test_view, name='heatmap_test'),
-    path('api/heatmap-data/', views.api_heatmap_data, name='api_heatmap_data'),
-    path('api/heatmap-stats/', views.api_heatmap_stats, name='api_heatmap_stats'),
-    
-    # Módulo B: Dashboard
+    # Dashboard principal
     path('dashboard/', views.dashboard_view, name='dashboard'),
+    # Heatmap principal
+    path('heatmap/', views.heatmap_view, name='heatmap'),
+    path('api/heatmap-data/', views.api_heatmap_data, name='api_heatmap_data'),
+    # API para estadísticas del dashboard
     path('api/dashboard-stats/', views.api_dashboard_stats, name='api_dashboard_stats'),
+    # Dashboard avanzado de calidad de datos
+    path('data-quality/', views.data_quality_dashboard, name='data_quality_dashboard'),
+    path('api/data-quality-metrics/', views.api_data_quality_metrics, name='api_data_quality_metrics'),
+    # API para actualizar propiedades desde el dashboard
+    path('api/update-property-field/', views.api_update_property_field, name='api_update_property_field'),
+    # Vista alternativa de detalle de propiedad (para evitar error ModuleNotFoundError)
+    path('property-quick-detail/<int:property_id>/', views.property_quick_detail, name='property_quick_detail'),
 ]

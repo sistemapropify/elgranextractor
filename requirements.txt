@@ -18,3 +18,6 @@ pandas==2.2.2
 openpyxl==3.1.5
 reportlab==4.2.0
 selenium
+matplotlib==3.8.0
+seaborn==0.13.2
+facebook-business>=20.0.0

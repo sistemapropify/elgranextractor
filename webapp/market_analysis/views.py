@@ -5,9 +5,13 @@ from django.db.models.functions import Cast
 from django.utils import timezone
 from ingestas.models import PropiedadRaw
 from propifai.models import PropifaiProperty
+from .charts import create_data_quality_summary, calculate_data_quality_metrics
 import json
 import math
+import logging
 # FORCE RELOAD - Template heatmap fix
+
+logger = logging.getLogger(__name__)
 
 
 def heatmap_view(request):
@@ -659,3 +663,408 @@ def api_dashboard_stats(request):
         'stats': stats,
         'timestamp': timezone.now().isoformat()
     })
+
+def data_quality_dashboard(request):
+    """Vista para el dashboard avanzado de calidad de datos y detección de anomalías."""
+    print("[DEBUG] data_quality_dashboard llamada")
+    title = "Dashboard de Calidad de Datos y Detección de Anomalías"
+    
+    try:
+        # Obtener métricas de calidad de datos
+        metrics = calculate_data_quality_metrics()
+        
+        # Obtener gráficos de calidad de datos
+        charts = create_data_quality_summary()
+        print(f"[DEBUG] Charts keys: {list(charts.keys())}")
+        
+        # Verificar estado de matplotlib
+        matplotlib_available = charts.get('matplotlib_available', False)
+        matplotlib_status = charts.get('matplotlib_status', 'Desconocido')
+        print(f"[DEBUG] Matplotlib disponible: {matplotlib_available}, estado: {matplotlib_status}")
+        
+        # Contar gráficos válidos
+        valid_charts = 0
+        for key in ['local_completeness', 'propifai_completeness', 'local_outliers',
+                   'propifai_outliers', 'local_duplicates', 'propifai_duplicates',
+                   'local_empty_fields', 'propifai_empty_fields']:
+            if key in charts and charts[key] and 'data:image' in charts[key]:
+                valid_charts += 1
+                print(f"[DEBUG] Gráfico {key} válido")
+            else:
+                print(f"[DEBUG] Gráfico {key} no válido o vacío")
+        
+        print(f"[DEBUG] Total gráficos válidos: {valid_charts}/8")
+        
+        # Obtener ejemplos de datos problemáticos
+        from market_analysis.charts import get_problematic_examples
+        problematic_examples = {
+            'local': get_problematic_examples('local', limit=3),
+            'propifai': get_problematic_examples('propifai', limit=3)
+        }
+        
+        # Contar total de ejemplos problemáticos
+        total_problems = 0
+        for source in ['local', 'propifai']:
+            for problem_type in problematic_examples[source].values():
+                total_problems += len(problem_type)
+        
+        print(f"[DEBUG] Ejemplos problemáticos encontrados: {total_problems}")
+        
+        # Estadísticas básicas del dashboard actual
+        try:
+            local_count = PropiedadRaw.objects.using('default').count()
+        except Exception as e:
+            logger.error(f"Error en local_count: {e}")
+            local_count = 0
+            
+        try:
+            propifai_count = PropifaiProperty.objects.using('propifai').filter(
+                coordinates__isnull=False
+            ).exclude(coordinates='').count()
+        except Exception as e:
+            logger.error(f"Error en propifai_count: {e}")
+            propifai_count = 0
+        
+        total_count = local_count + propifai_count
+        
+        # Calcular puntaje de calidad general
+        overall_score = metrics['overall'].get('data_quality_score', 0) if metrics['overall'] else 0
+        
+        # Determinar estado de calidad
+        if overall_score >= 80:
+            quality_status = "Excelente"
+            quality_color = "success"
+        elif overall_score >= 60:
+            quality_status = "Buena"
+            quality_color = "info"
+        elif overall_score >= 40:
+            quality_status = "Regular"
+            quality_color = "warning"
+        else:
+            quality_status = "Crítica"
+            quality_color = "danger"
+        
+        # Calcular anchos para las barras de progreso (evitar problemas CSS)
+        local_completeness_width = metrics.get('local', {}).get('avg_completeness', 0) or 0
+        propifai_completeness_width = metrics.get('propifai', {}).get('avg_completeness', 0) or 0
+        
+        context = {
+            'title': title,
+            'local_count': local_count,
+            'propifai_count': propifai_count,
+            'total_count': total_count,
+            'metrics': metrics,
+            'charts': charts,
+            'overall_score': round(overall_score, 1),
+            'quality_status': quality_status,
+            'quality_color': quality_color,
+            'critical_issues': metrics['overall'].get('critical_issues', 0) if metrics['overall'] else 0,
+            'warning_issues': metrics['overall'].get('warning_issues', 0) if metrics['overall'] else 0,
+            'local_completeness_width': int(local_completeness_width),
+            'propifai_completeness_width': int(propifai_completeness_width),
+            'problematic_examples': problematic_examples,
+            'total_problems': total_problems,
+        }
+        
+        print(f"[DEBUG] Contexto data_quality_dashboard: {context.keys()}")
+        print(f"[DEBUG] Total problemas encontrados: {total_problems}")
+        return render(request, 'market_analysis/data_quality_dashboard_fixed.html', context)
+        
+    except Exception as e:
+        logger.error(f"Error en data_quality_dashboard: {e}")
+        import traceback
+        traceback.print_exc()
+        # Contexto de fallback
+        context = {
+            'title': title,
+            'error': str(e),
+            'local_count': 0,
+            'propifai_count': 0,
+            'total_count': 0,
+            'overall_score': 0,
+            'quality_status': "Error",
+            'quality_color': "danger",
+            'critical_issues': 1,
+            'warning_issues': 0,
+            'local_completeness_width': 0,
+            'propifai_completeness_width': 0,
+            'metrics': {'local': {}, 'propifai': {}, 'overall': {}},
+            'charts': {},
+        }
+        return render(request, 'market_analysis/data_quality_dashboard_fixed.html', context)
+
+def api_data_quality_metrics(request):
+    """API para obtener métricas de calidad de datos en formato JSON."""
+    try:
+        metrics = calculate_data_quality_metrics()
+        charts = create_data_quality_summary()
+        
+        return JsonResponse({
+            'success': True,
+            'metrics': metrics,
+            'charts': list(charts.keys()),  # Solo nombres de gráficos
+            'timestamp': timezone.now().isoformat()
+        })
+    except Exception as e:
+        logger.error(f"Error en api_data_quality_metrics: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+            'timestamp': timezone.now().isoformat()
+        }, status=500)
+
+
+def api_update_property_field(request):
+    """API para actualizar un campo de propiedad desde el dashboard de calidad."""
+    if request.method != 'POST':
+        return JsonResponse({
+            'success': False,
+            'error': 'Método no permitido. Use POST.'
+        }, status=405)
+    
+    try:
+        # Obtener datos del formulario
+        property_id = request.POST.get('id')
+        field_name = request.POST.get('field')
+        field_value = request.POST.get('value')
+        
+        print(f"[DEBUG] api_update_property_field llamado")
+        print(f"[DEBUG] Parámetros recibidos: id={property_id}, field={field_name}, value='{field_value}'")
+        print(f"[DEBUG] Método: {request.method}, Content-Type: {request.content_type}")
+        print(f"[DEBUG] POST data: {dict(request.POST)}")
+        
+        if not property_id or not field_name:
+            print(f"[DEBUG] Error: Faltan parámetros. id={property_id}, field={field_name}")
+            return JsonResponse({
+                'success': False,
+                'error': 'Faltan parámetros: id y field son requeridos.'
+            }, status=400)
+        
+        # Buscar la propiedad en la base de datos local
+        try:
+            propiedad = PropiedadRaw.objects.get(id=property_id)
+        except PropiedadRaw.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'Propiedad con ID {property_id} no encontrada.'
+            }, status=404)
+        
+        # Validar y procesar el valor según el campo
+        processed_value = None
+        
+        if field_name == 'coordenadas':
+            # Validar formato de coordenadas
+            if field_value:
+                # Limpiar espacios
+                coords = field_value.strip()
+                print(f"[DEBUG] Coordenadas recibidas: '{coords}'")
+                
+                # Verificar formato básico: dos números separados por coma
+                parts = coords.split(',')
+                if len(parts) != 2:
+                    print(f"[DEBUG] Error: Formato inválido, partes encontradas: {len(parts)}")
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'Formato de coordenadas inválido. Use: latitud, longitud (ejemplo: -12.046374, -77.042793)'
+                    }, status=400)
+                
+                try:
+                    lat = float(parts[0].strip())
+                    lng = float(parts[1].strip())
+                    print(f"[DEBUG] Coordenadas parseadas: lat={lat}, lng={lng}")
+                    
+                    # Validar rangos aproximados para Perú (más flexible)
+                    # Perú: latitud entre -18.5 y 0, longitud entre -81.5 y -68.5
+                    if not (-18.5 <= lat <= 0) or not (-81.5 <= lng <= -68.5):
+                        print(f"[WARNING] Coordenadas fuera de rango Perú: {lat}, {lng}")
+                        # Solo advertencia, no error - permitir guardar de todos modos
+                        # pero mostrar mensaje informativo
+                except ValueError as e:
+                    print(f"[DEBUG] Error al convertir a float: {e}")
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'Coordenadas deben ser números válidos. Error: {str(e)}'
+                    }, status=400)
+                
+                processed_value = coords
+                print(f"[DEBUG] Valor procesado para coordenadas: {processed_value}")
+        
+        elif field_name == 'precio_usd':
+            # Validar precio
+            if not field_value:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'El precio no puede estar vacío.'
+                }, status=400)
+            
+            try:
+                precio = float(field_value)
+                if precio <= 0:
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'El precio debe ser mayor a 0.'
+                    }, status=400)
+                processed_value = precio
+            except ValueError:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Precio debe ser un número válido.'
+                }, status=400)
+        
+        elif field_name == 'area_construida':
+            # Validar área
+            if not field_value:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'El área no puede estar vacía.'
+                }, status=400)
+            
+            try:
+                area = float(field_value)
+                if area <= 0:
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'El área debe ser mayor a 0.'
+                    }, status=400)
+                processed_value = area
+            except ValueError:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Área debe ser un número válido.'
+                }, status=400)
+        
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': f'Campo {field_name} no permitido para edición.'
+            }, status=400)
+        
+        # Actualizar el campo
+        setattr(propiedad, field_name, processed_value)
+        propiedad.save()
+        
+        # Registrar la acción
+        logger.info(f"Campo actualizado: Propiedad {property_id}, campo {field_name} = {processed_value}")
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Campo {field_name} actualizado correctamente.',
+            'property_id': property_id,
+            'field': field_name,
+            'value': processed_value
+        })
+        
+    except Exception as e:
+        logger.error(f"Error en api_update_property_field: {e}")
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+def property_quick_detail(request, property_id):
+    """Vista simple para mostrar detalles básicos de una propiedad (alternativa a la vista rota)."""
+    try:
+        # Buscar la propiedad
+        propiedad = PropiedadRaw.objects.get(id=property_id)
+        
+        # Obtener todos los campos disponibles
+        fields = []
+        for field in propiedad._meta.fields:
+            field_name = field.name
+            field_value = getattr(propiedad, field_name)
+            
+            # Saltar campos vacíos o nulos
+            if field_value is None or field_value == '':
+                continue
+                
+            # Formatear valores
+            if isinstance(field_value, (int, float)):
+                field_value = str(field_value)
+            elif isinstance(field_value, bool):
+                field_value = "Sí" if field_value else "No"
+            elif hasattr(field_value, 'strftime'):  # Fechas
+                field_value = field_value.strftime('%Y-%m-%d')
+            
+            fields.append({
+                'name': field_name.replace('_', ' ').title(),
+                'value': field_value,
+                'original_name': field_name
+            })
+        
+        # Agrupar campos por categoría
+        basic_fields = ['id', 'fuente_excel', 'identificador_externo', 'tipo_propiedad', 'subtipo_propiedad', 'descripcion', 'condicion', 'estado', 'operacion', 'tipo_operacion', 'venta_alquiler', 'propiedad_verificada']
+        location_fields = ['distrito', 'provincia', 'departamento', 'direccion', 'coordenadas']
+        price_fields = ['precio_usd', 'precio_soles', 'moneda', 'precio_original']
+        area_fields = ['area_construida', 'area_terreno', 'area_total', 'unidad_area']
+        other_fields = ['habitaciones', 'banos', 'estacionamientos', 'antiguedad', 'piso']
+        
+        # Incluir campos adicionales importantes
+        extra_fields = ['subtipo_propiedad', 'fuente_excel', 'identificador_externo', 'portal', 'url_propiedad', 'operacion', 'tipo_operacion', 'venta_alquiler', 'propiedad_verificada']
+        for field_name in extra_fields:
+            if hasattr(propiedad, field_name):
+                field_value = getattr(propiedad, field_name)
+                if field_value not in (None, ''):
+                    fields.append({
+                        'name': field_name.replace('_', ' ').title(),
+                        'value': field_value,
+                        'original_name': field_name
+                    })
+        
+        # Incluir campos dinámicos de atributos_extras (JSON)
+        if propiedad.atributos_extras and isinstance(propiedad.atributos_extras, dict):
+            for key, value in propiedad.atributos_extras.items():
+                if value not in (None, ''):
+                    fields.append({
+                        'name': key.replace('_', ' ').title(),
+                        'value': str(value),
+                        'original_name': key
+                    })
+        
+        # Verificar si se solicita formato JSON
+        if request.GET.get('format') == 'json':
+            # Preparar datos para JSON
+            property_data = {
+                'id': propiedad.id,
+                'fields': fields,
+                'grouped_fields': {
+                    'basic': [f for f in fields if f['original_name'] in basic_fields],
+                    'location': [f for f in fields if f['original_name'] in location_fields],
+                    'price': [f for f in fields if f['original_name'] in price_fields],
+                    'area': [f for f in fields if f['original_name'] in area_fields],
+                    'other': [f for f in fields if f['original_name'] in other_fields],
+                    'extra': [f for f in fields if f['original_name'] in extra_fields]
+                }
+            }
+            return JsonResponse(property_data)
+        
+        context = {
+            'title': f'Propiedad ID: {property_id}',
+            'propiedad': propiedad,
+            'fields': fields,
+            'basic_fields': [f for f in fields if f['original_name'] in basic_fields],
+            'location_fields': [f for f in fields if f['original_name'] in location_fields],
+            'price_fields': [f for f in fields if f['original_name'] in price_fields],
+            'area_fields': [f for f in fields if f['original_name'] in area_fields],
+            'other_fields': [f for f in fields if f['original_name'] in other_fields],
+        }
+        
+        return render(request, 'market_analysis/property_quick_detail.html', context)
+        
+    except PropiedadRaw.DoesNotExist:
+        if request.GET.get('format') == 'json':
+            return JsonResponse({'error': f'La propiedad con ID {property_id} no existe.'}, status=404)
+        return render(request, 'market_analysis/property_quick_detail.html', {
+            'title': 'Propiedad no encontrada',
+            'error': f'La propiedad con ID {property_id} no existe.'
+        })
+    except Exception as e:
+        logger.error(f"Error en property_quick_detail: {e}")
+        if request.GET.get('format') == 'json':
+            return JsonResponse({'error': str(e)}, status=500)
+        return render(request, 'market_analysis/property_quick_detail.html', {
+            'title': 'Error',
+            'error': str(e)
+        })

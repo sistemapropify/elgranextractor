@@ -241,6 +241,34 @@
                         <strong>ID de propiedad:</strong> {{ propiedad.id_propiedad }}
                     </p>
                     {% endif %}
+                    
+                    {% if propiedad.condicion %}
+                    <p class="mb-2">
+                        <i class="fas fa-tag text-primary me-2"></i>
+                        <strong>Condición:</strong> {{ propiedad.get_condicion_display|default:propiedad.condicion }}
+                    </p>
+                    {% endif %}
+                    
+                    {% if propiedad.propiedad_verificada %}
+                    <p class="mb-2">
+                        <i class="fas fa-check-circle text-success me-2"></i>
+                        <strong>Propiedad Verificada:</strong> Sí
+                    </p>
+                    {% endif %}
+                    
+                    {% if propiedad.fuente_excel %}
+                    <p class="mb-2">
+                        <i class="fas fa-file-excel text-success me-2"></i>
+                        <strong>Fuente Excel:</strong> {{ propiedad.fuente_excel }}
+                    </p>
+                    {% endif %}
+                    
+                    {% if propiedad.identificador_externo %}
+                    <p class="mb-2">
+                        <i class="fas fa-key text-warning me-2"></i>
+                        <strong>Identificador Externo:</strong> {{ propiedad.identificador_externo }}
+                    </p>
+                    {% endif %}
                 </div>
             </div>
 

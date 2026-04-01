@@ -24,17 +24,23 @@ class MapeoFuenteAdmin(admin.ModelAdmin):
 
 @admin.register(PropiedadRaw)
 class PropiedadRawAdmin(admin.ModelAdmin):
+    # Mostrar TODOS los campos del modelo en list_display (excepto campos de relación)
+    # Nota: 'valoraciones' es un ReverseForeignKey y no puede estar en list_display
     list_display = (
-        'tipo_propiedad', 'precio_usd', 'departamento', 'provincia', 'distrito',
-        'numero_habitaciones', 'numero_banos', 'numero_cocheras',
-        'fuente_excel', 'fecha_ingesta'
+        'id', 'fuente_excel', 'fecha_ingesta', 'tipo_propiedad', 'subtipo_propiedad', 'condicion',
+        'propiedad_verificada', 'precio_usd', 'descripcion', 'portal', 'url_propiedad', 'coordenadas',
+        'departamento', 'provincia', 'distrito', 'area_terreno', 'area_construida', 'numero_pisos',
+        'numero_habitaciones', 'numero_banos', 'numero_cocheras', 'agente_inmobiliario', 'imagenes_propiedad',
+        'id_propiedad', 'identificador_externo', 'fecha_publicacion', 'antiguedad', 'servicio_agua',
+        'energia_electrica', 'servicio_drenaje', 'servicio_gas', 'email_agente', 'telefono_agente',
+        'oficina_remax', 'estado_propiedad', 'fecha_venta', 'precio_final_venta', 'atributos_extras'
     )
-    list_filter = ('tipo_propiedad', 'fuente_excel', 'fecha_ingesta', 'departamento', 'provincia')
-    search_fields = ('descripcion', 'fuente_excel', 'departamento', 'provincia', 'distrito')
+    list_filter = ('tipo_propiedad', 'condicion', 'propiedad_verificada', 'fuente_excel', 'fecha_ingesta', 'departamento', 'provincia')
+    search_fields = ('descripcion', 'fuente_excel', 'departamento', 'provincia', 'distrito', 'identificador_externo', 'id_propiedad')
     readonly_fields = ('fecha_ingesta',)
     fieldsets = (
         ('Información Básica', {
-            'fields': ('fuente_excel', 'fecha_ingesta', 'tipo_propiedad', 'precio_usd', 'descripcion')
+            'fields': ('fuente_excel', 'fecha_ingesta', 'tipo_propiedad', 'condicion', 'propiedad_verificada', 'precio_usd', 'descripcion')
         }),
         ('Ubicación', {
             'fields': ('departamento', 'provincia', 'distrito', 'coordenadas')

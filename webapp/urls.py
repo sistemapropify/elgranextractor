@@ -17,7 +17,7 @@ Including another URLconf
 
 from django.contrib import admin
 from django.urls import path, include
-from . import views
+import views
 
 urlpatterns = [
     # Página principal
@@ -70,4 +70,10 @@ urlpatterns = [
     
     # Market Analysis - Análisis de Mercado (Heatmap + Dashboard)
     path('market-analysis/', include('market_analysis.urls')),
+    
+    # Análisis CRM - Dashboard de leads
+    path('analisis-crm/', include('analisis_crm.urls')),
+    
+    # Meta Ads - Dashboard de campañas publicitarias de Meta
+    path('meta-ads/', include('meta_ads.urls')),
 ]

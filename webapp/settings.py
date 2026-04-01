@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.humanize',
     
     # Third-party apps
     'rest_framework',
@@ -62,6 +63,8 @@ INSTALLED_APPS = [
     'matching',
     'acm',
     'market_analysis',
+    'analisis_crm',
+    'meta_ads',
 ]
 
 MIDDLEWARE = [
@@ -128,7 +131,7 @@ DATABASES = {
 }
 
 # Database routers for multiple databases
-DATABASE_ROUTERS = ['webapp.routers.PropifaiRouter', 'webapp.routers.DefaultRouter']
+DATABASE_ROUTERS = ['routers.PropifaiRouter', 'routers.DefaultRouter']
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators

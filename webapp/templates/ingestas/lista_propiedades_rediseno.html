@@ -742,6 +742,20 @@
                                     <span>{{ propiedad.numero_banos }} baños</span>
                                 </div>
                                 {% endif %}
+
+                                {% if propiedad.condicion %}
+                                <div class="feature-item">
+                                    <i class="fas fa-tag"></i>
+                                    <span>{{ propiedad.get_condicion_display|default:propiedad.condicion }}</span>
+                                </div>
+                                {% endif %}
+
+                                {% if propiedad.propiedad_verificada %}
+                                <div class="feature-item">
+                                    <i class="fas fa-check-circle text-success"></i>
+                                    <span>Verificada</span>
+                                </div>
+                                {% endif %}
                             </div>
 
                             <div class="property-footer">

@@ -406,7 +406,14 @@ class MatchingMasivoView(TemplateView):
         
         # Estadísticas (usar counts eficientes)
         context['total_requerimientos'] = requerimientos_qs.count()
-        context['total_propiedades'] = PropifaiProperty.objects.count()
+        
+        # Contar propiedades Propifai - manejar error si la tabla no existe
+        try:
+            context['total_propiedades'] = PropifaiProperty.objects.count()
+        except Exception as e:
+            # Si hay error (tabla no existe, conexión fallida, etc.), usar 0
+            print(f"Error al contar propiedades Propifai: {e}")
+            context['total_propiedades'] = 0
         
         # Contar requerimientos con match alto (>80%) en el resumen
         match_alto_count = sum(1 for item in resumen if item['porcentaje_match'] >= 80)

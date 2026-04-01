@@ -24,4 +24,7 @@ urlpatterns = [
     
     # API de eventos por propiedad
     path('api/property/<int:property_id>/events/', views.property_events_api, name='property_events_api'),
+    
+    # API de línea de tiempo por propiedad (para el drawer)
+    path('api/property/<int:property_id>/timeline/', views.property_timeline_api, name='property_timeline_api'),
 ]

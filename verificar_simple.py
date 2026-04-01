@@ -49,7 +49,7 @@ print("2. Verificando estructura del modelo...")
 try:
     from django.db import connection
     with connection.cursor() as cursor:
-        cursor.execute("SELECT TOP 1 * FROM dbo.properties")
+
         columns = [col[0] for col in cursor.description]
         print(f"   Columnas en tabla dbo.properties: {len(columns)}")
         print(f"   Primeras 10 columnas: {columns[:10]}")

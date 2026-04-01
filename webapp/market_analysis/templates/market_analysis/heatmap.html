@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}Heatmap de Precio por m² - El Gran Extractor{% endblock %}
+{% block title %}{{ title }}{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -133,44 +133,46 @@
                     <div class="mb-3">
                         <label class="form-label small mb-1">Fuente de datos</label>
                         <select class="form-select form-select-sm" id="filterFuente">
-                            <option value="">Todas las fuentes</option>
-                            <option value="local">Base de datos local</option>
-                            <option value="propifai">Propifai</option>
+                            <option value="todas">Todas las fuentes</option>
+                            <option value="local">Remax (Local)</option>
+                            <option value="propifai">Propify</option>
                         </select>
                     </div>
                     
                     <div class="d-grid">
                         <button class="btn btn-primary btn-sm" id="btnAplicarFiltros">
-                            <i class="bi bi-check-circle me-1"></i>Aplicar filtros
+                            <i class="bi bi-filter me-1"></i>Aplicar filtros
                         </button>
                     </div>
                 </div>
-                
-                <!-- Controles de capas -->
+
+                <!-- Controles de capa -->
                 <div class="layer-controls">
                     <h6 class="mb-3"><i class="bi bi-layers me-1"></i>Controles de capa</h6>
                     
                     <div class="mb-3">
+                        <label class="form-label small mb-1">Mostrar heatmap</label>
                         <div class="toggle-switch">
                             <div class="form-check form-switch">
                                 <input class="form-check-input" type="checkbox" id="toggleHeatmap" checked>
-                                <label class="form-check-label" for="toggleHeatmap">Mostrar heatmap</label>
+                                <label class="form-check-label small" for="toggleHeatmap">Activar mapa de calor</label>
                             </div>
                         </div>
                     </div>
                     
                     <div class="mb-3">
+                        <label class="form-label small mb-1">Mostrar marcadores</label>
                         <div class="toggle-switch">
                             <div class="form-check form-switch">
                                 <input class="form-check-input" type="checkbox" id="toggleMarkers" checked>
-                                <label class="form-check-label" for="toggleMarkers">Mostrar marcadores</label>
+                                <label class="form-check-label small" for="toggleMarkers">Activar marcadores</label>
                             </div>
                         </div>
                     </div>
                     
                     <div class="mb-3">
                         <label class="form-label small mb-1">Opacidad del heatmap</label>
-                        <input type="range" class="form-range" id="heatmapOpacity" min="0.1" max="1" step="0.1" value="0.6">
+                        <input type="range" class="form-range" id="heatmapOpacity" min="0" max="1" step="0.1" value="0.6">
                         <div class="d-flex justify-content-between small text-muted">
                             <span>Baja</span>
                             <span>Alta</span>
@@ -178,15 +180,15 @@
                     </div>
                     
                     <div class="mt-4">
-                        <h6 class="mb-2">Leyenda de colores</h6>
-                        <div class="legend-gradient" style="height: 20px; background: linear-gradient(to right, blue, cyan, green, yellow, red); border-radius: 4px;"></div>
+                        <label class="form-label small mb-1">Leyenda de colores</label>
+                        <div class="legend-gradient" style="height: 20px; background: linear-gradient(to right, blue, cyan, green, yellow, orange, red); border-radius: 4px;"></div>
                         <div class="legend-labels d-flex justify-content-between small text-muted mt-1">
                             <span>Bajo</span>
                             <span>Alto</span>
                         </div>
                     </div>
                 </div>
-                
+
                 <!-- Estadísticas -->
                 <div class="stats-card p-3 mt-3">
                     <h6 class="mb-3"><i class="bi bi-graph-up me-1"></i>Estadísticas</h6>
@@ -194,20 +196,20 @@
                     <div class="row g-2">
                         <div class="col-6">
                             <div class="text-center p-2">
-                                <div class="h5 mb-0" id="statTotalPropiedades">0</div>
-                                <div class="small text-muted">Propiedades</div>
+                                <div class="h5 mb-0" id="statTotalPropiedades">{{ total_count }}</div>
+                                <div class="small text-muted">Propiedades totales</div>
                             </div>
                         </div>
                         <div class="col-6">
                             <div class="text-center p-2">
-                                <div class="h5 mb-0" id="statPrecioPromedio">0</div>
-                                <div class="small text-muted">Precio promedio</div>
+                                <div class="h5 mb-0" id="statLocalPropiedades">{{ local_count }}</div>
+                                <div class="small text-muted">Propiedades Remax</div>
                             </div>
                         </div>
                         <div class="col-6">
                             <div class="text-center p-2">
-                                <div class="h5 mb-0" id="statAreaPromedio">0</div>
-                                <div class="small text-muted">Área promedio</div>
+                                <div class="h5 mb-0" id="statPropifaiPropiedades">{{ propifai_count }}</div>
+                                <div class="small text-muted">Propiedades Propify</div>
                             </div>
                         </div>
                         <div class="col-6">
@@ -225,7 +227,7 @@
                         </div>
                         <div class="d-flex justify-content-between">
                             <span>Fuente de datos:</span>
-                            <span id="dataSource">Local</span>
+                            <span id="dataSource">Remax + Propify</span>
                         </div>
                     </div>
                 </div>
@@ -380,6 +382,15 @@
 
 {% block extra_js %}
 <script>
+// Variables globales
+let map;
+let heatmap;
+let markers = [];
+let heatmapData = JSON.parse('{{ heatmap_data_json|escapejs }}');
+let googleMapsApiKey = '{{ google_maps_api_key }}';
+let mapCenter = { lat: -12.046374, lng: -77.042793 }; // Centro por defecto
+let mapZoom = 12;
+
 // Cargar Google Maps API dinámicamente
 function loadGoogleMapsAPI() {
     return new Promise((resolve, reject) => {
@@ -388,3 +399,332 @@ function loadGoogleMapsAPI() {
             return;
         }
         
+        const script = document.createElement('script');
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&libraries=visualization`;
+        script.async = true;
+        script.defer = true;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('Error cargando Google Maps API'));
+        document.head.appendChild(script);
+    });
+}
+
+// Calcular el centro y bounds de todas las propiedades
+function calculateMapBounds() {
+    if (!heatmapData || heatmapData.length === 0) {
+        mapCenter = { lat: -12.046374, lng: -77.042793 }; // Lima por defecto
+        mapZoom = 12;
+        return {
+            center: mapCenter,
+            zoom: mapZoom
+        };
+    }
+    
+    // Inicializar bounds
+    const bounds = new google.maps.LatLngBounds();
+    
+    // Agregar todas las propiedades al bounds
+    heatmapData.forEach(point => {
+        if (point.lat && point.lng) {
+            bounds.extend(new google.maps.LatLng(point.lat, point.lng));
+        }
+    });
+    
+    // Calcular centro
+    const center = bounds.getCenter();
+    mapCenter = { lat: center.lat(), lng: center.lng() };
+    
+    // Calcular zoom aproximado basado en el tamaño del bounds
+    const ne = bounds.getNorthEast();
+    const sw = bounds.getSouthWest();
+    const latDiff = Math.abs(ne.lat() - sw.lat());
+    const lngDiff = Math.abs(ne.lng() - sw.lng());
+    
+    // Determinar zoom basado en el área cubierta
+    let zoom = 12;
+    const maxDiff = Math.max(latDiff, lngDiff);
+    
+    if (maxDiff < 0.01) zoom = 16;
+    else if (maxDiff < 0.02) zoom = 15;
+    else if (maxDiff < 0.05) zoom = 14;
+    else if (maxDiff < 0.1) zoom = 13;
+    else if (maxDiff < 0.2) zoom = 12;
+    else if (maxDiff < 0.5) zoom = 11;
+    else if (maxDiff < 1.0) zoom = 10;
+    else if (maxDiff < 2.0) zoom = 9;
+    else zoom = 8;
+    
+    mapZoom = zoom;
+    
+    return {
+        center: mapCenter,
+        zoom: mapZoom,
+        bounds: bounds
+    };
+}
+
+// Inicializar mapa
+function initMap() {
+    // Crear mapa con centro temporal
+    map = new google.maps.Map(document.getElementById('heatmapMap'), {
+        center: { lat: -12.046374, lng: -77.042793 }, // Centro temporal
+        zoom: 12,
+        mapTypeId: 'roadmap',
+        styles: [
+            {
+                featureType: 'poi',
+                elementType: 'labels',
+                stylers: [{ visibility: 'off' }]
+            }
+        ]
+    });
+    
+    // Crear heatmap si hay datos
+    if (heatmapData && heatmapData.length > 0) {
+        console.log(`[DEBUG] Creando heatmap con ${heatmapData.length} puntos`);
+        
+        const heatmapPoints = heatmapData.map(point => {
+            // Crear objeto con location y weight para Google Maps Heatmap
+            return {
+                location: new google.maps.LatLng(point.lat, point.lng),
+                weight: point.weight || 0.5  // Usar el peso de los datos, default 0.5
+            };
+        });
+        
+        console.log(`[DEBUG] Primer punto: ${heatmapPoints[0].location.lat()}, ${heatmapPoints[0].location.lng()}, peso: ${heatmapPoints[0].weight}`);
+        
+        // Configuración optimizada para mostrar TODAS las propiedades
+        heatmap = new google.maps.visualization.HeatmapLayer({
+            data: heatmapPoints,
+            map: map,
+            radius: 80,  // Radio MUCHO más grande para cubrir más área
+            opacity: 0.9,  // Opacidad máxima
+            dissipating: false,  // NO disipar - mostrar todos los puntos siempre
+            maxIntensity: 2.0,  // Reducir intensidad máxima para que los puntos débiles sean visibles
+            gradient: [         // Gradiente más simple y visible
+                'rgba(0, 0, 255, 0)',      // Azul transparente
+                'rgba(0, 255, 255, 0.5)',  // Cian semi-transparente
+                'rgba(0, 255, 0, 0.8)',    // Verde
+                'rgba(255, 255, 0, 0.9)',  // Amarillo
+                'rgba(255, 0, 0, 1)'       // Rojo sólido
+            ]
+        });
+        
+        console.log(`[DEBUG] Heatmap creado exitosamente con ${heatmapPoints.length} puntos`);
+        console.log(`[DEBUG] Configuración: radius=80, opacity=0.9, dissipating=false, maxIntensity=2.0`);
+        
+        // Ajustar el mapa para mostrar todas las propiedades
+        const mapConfig = calculateMapBounds();
+        console.log(`[DEBUG] Centro calculado: ${mapConfig.center.lat.toFixed(6)}, ${mapConfig.center.lng.toFixed(6)}`);
+        console.log(`[DEBUG] Zoom calculado: ${mapConfig.zoom}`);
+        
+        map.setCenter(mapConfig.center);
+        map.setZoom(mapConfig.zoom);
+        
+        // Opcional: ajustar bounds exactos
+        if (mapConfig.bounds) {
+            map.fitBounds(mapConfig.bounds);
+            console.log(`[DEBUG] Bounds ajustados`);
+        }
+        
+        // Crear marcadores
+        createMarkers();
+        
+        // Mostrar información en consola
+        console.log(`[INFO] Mapa centrado en: ${mapConfig.center.lat.toFixed(6)}, ${mapConfig.center.lng.toFixed(6)}`);
+        console.log(`[INFO] Zoom: ${mapConfig.zoom}`);
+        console.log(`[INFO] Propiedades mostradas: ${heatmapData.length}`);
+        
+        // Verificar distribución de pesos
+        const weights = heatmapData.map(p => p.weight || 0.5);
+        const avgWeight = weights.reduce((a, b) => a + b, 0) / weights.length;
+        console.log(`[INFO] Peso promedio: ${avgWeight.toFixed(2)}`);
+        console.log(`[INFO] Peso mínimo: ${Math.min(...weights).toFixed(2)}`);
+        console.log(`[INFO] Peso máximo: ${Math.max(...weights).toFixed(2)}`);
+    } else {
+        console.error(`[ERROR] No hay datos para el heatmap: ${heatmapData ? heatmapData.length : 'null'}`);
+    }
+    
+    // Configurar controles
+    setupControls();
+}
+
+// Crear marcadores para TODAS las propiedades
+function createMarkers() {
+    // Limpiar marcadores anteriores
+    markers.forEach(marker => marker.setMap(null));
+    markers = [];
+    
+    if (!heatmapData || heatmapData.length === 0) return;
+    
+    console.log(`[DEBUG] Creando marcadores para ${heatmapData.length} propiedades`);
+    
+    // Contadores para monitoreo
+    let markersCreated = 0;
+    let markersSkipped = 0;
+    
+    // Crear marcadores para TODAS las propiedades
+    for (let i = 0; i < heatmapData.length; i++) {
+        const point = heatmapData[i];
+        if (!point.lat || !point.lng) {
+            markersSkipped++;
+            continue;
+        }
+        
+        // Determinar color basado en fuente o precio
+        let fillColor = '#4285F4'; // Azul por defecto
+        if (point.fuente === 'propifai') {
+            fillColor = '#0B6623'; // VERDE OSCURO para Propifai (como solicitó el usuario)
+        } else if (point.fuente === 'local') {
+            fillColor = '#EA4335'; // Rojo para Remax
+        }
+        
+        // Determinar tamaño basado en peso
+        const scale = point.weight ? Math.max(3, Math.min(point.weight * 2, 8)) : 4;
+        
+        const marker = new google.maps.Marker({
+            position: { lat: point.lat, lng: point.lng },
+            map: map,  // Mostrar en el mapa por defecto
+            title: `Propiedad ${point.id || i+1}`,
+            icon: {
+                path: google.maps.SymbolPath.CIRCLE,
+                scale: scale,
+                fillColor: fillColor,
+                fillOpacity: 0.7,
+                strokeColor: '#FFFFFF',
+                strokeWeight: 1
+            },
+            // Datos adicionales para info window
+            propertyData: point
+        });
+        
+        // Info window con información detallada
+        const infoContent = `
+            <div style="padding: 10px; max-width: 300px; font-size: 14px;">
+                <h6 style="margin: 0 0 8px 0; color: #1a73e8;">Propiedad ${point.id || i+1}</h6>
+                ${point.tipo_propiedad ? `<p style="margin: 0 0 4px 0;"><strong>Tipo:</strong> ${point.tipo_propiedad}</p>` : ''}
+                ${point.precio_usd ? `<p style="margin: 0 0 4px 0;"><strong>Precio:</strong> $${point.precio_usd.toLocaleString()} USD</p>` : ''}
+                ${point.area_construida ? `<p style="margin: 0 0 4px 0;"><strong>Área construida:</strong> ${point.area_construida} m²</p>` : ''}
+                ${point.area_terreno ? `<p style="margin: 0 0 4px 0;"><strong>Área terreno:</strong> ${point.area_terreno} m²</p>` : ''}
+                ${point.precio_m2 ? `<p style="margin: 0 0 4px 0;"><strong>Precio/m²:</strong> $${point.precio_m2.toFixed(2)} USD</p>` : ''}
+                ${point.habitaciones ? `<p style="margin: 0 0 4px 0;"><strong>Habitaciones:</strong> ${point.habitaciones}</p>` : ''}
+                ${point.banos ? `<p style="margin: 0 0 4px 0;"><strong>Baños:</strong> ${point.banos}</p>` : ''}
+                ${point.direccion ? `<p style="margin: 0 0 4px 0;"><strong>Dirección:</strong> ${point.direccion}</p>` : ''}
+                ${point.fuente ? `<p style="margin: 0 0 4px 0;"><strong>Fuente:</strong> ${point.fuente === 'local' ? 'Remax' : 'Propify'}</p>` : ''}
+                <p style="margin: 8px 0 0 0; font-size: 12px; color: #666;">
+                    Coordenadas: ${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}
+                </p>
+            </div>
+        `;
+        
+        const infoWindow = new google.maps.InfoWindow({
+            content: infoContent
+        });
+        
+        marker.addListener('click', () => {
+            // Cerrar cualquier info window abierto
+            markers.forEach(m => {
+                if (m.infoWindow) m.infoWindow.close();
+            });
+            infoWindow.open(map, marker);
+            marker.infoWindow = infoWindow;
+        });
+        
+        markers.push(marker);
+        markersCreated++;
+        
+        // Mostrar progreso cada 100 marcadores
+        if (markersCreated % 100 === 0) {
+            console.log(`[DEBUG] Marcadores creados: ${markersCreated}/${heatmapData.length}`);
+        }
+    }
+    
+    console.log(`[DEBUG] Total marcadores creados: ${markersCreated}, omitidos: ${markersSkipped}`);
+    
+    // Actualizar el toggle de marcadores para reflejar que están visibles
+    document.getElementById('toggleMarkers').checked = true;
+}
+
+// Configurar controles de la interfaz
+function setupControls() {
+    // Botón de zoom in
+    document.getElementById('btnZoomIn').addEventListener('click', () => {
+        map.setZoom(map.getZoom() + 1);
+    });
+    
+    // Botón de zoom out
+    document.getElementById('btnZoomOut').addEventListener('click', () => {
+        map.setZoom(map.getZoom() - 1);
+    });
+    
+    // Botón de reset view
+    document.getElementById('btnResetView').addEventListener('click', () => {
+        // Recalcular bounds por si hay nuevos datos
+        const mapConfig = calculateMapBounds();
+        map.setCenter(mapConfig.center);
+        map.setZoom(mapConfig.zoom);
+        
+        // Ajustar bounds exactos si existen
+        if (mapConfig.bounds) {
+            map.fitBounds(mapConfig.bounds);
+        }
+    });
+    
+    // Toggle heatmap
+    document.getElementById('toggleHeatmap').addEventListener('change', (e) => {
+        if (heatmap) {
+            heatmap.setMap(e.target.checked ? map : null);
+        }
+    });
+    
+    // Toggle markers
+    document.getElementById('toggleMarkers').addEventListener('change', (e) => {
+        markers.forEach(marker => {
+            marker.setMap(e.target.checked ? map : null);
+        });
+    });
+    
+    // Control de opacidad
+    document.getElementById('heatmapOpacity').addEventListener('input', (e) => {
+        if (heatmap) {
+            heatmap.set('opacity', parseFloat(e.target.value));
+        }
+    });
+    
+    // Botón de ayuda
+    document.getElementById('btnHelp').addEventListener('click', () => {
+        const helpModal = new bootstrap.Modal(document.getElementById('helpModal'));
+        helpModal.show();
+    });
+    
+    // Botón de refresh
+    document.getElementById('btnRefresh').addEventListener('click', () => {
+        location.reload();
+    });
+    
+    // Botón de aplicar filtros
+    document.getElementById('btnAplicarFiltros').addEventListener('click', () => {
+        alert('Los filtros se aplicarán en una futura implementación');
+    });
+}
+
+// Inicializar cuando el DOM esté listo
+document.addEventListener('DOMContentLoaded', () => {
+    loadGoogleMapsAPI()
+        .then(() => {
+            initMap();
+            console.log('Heatmap cargado con', heatmapData.length, 'propiedades');
+        })
+        .catch(error => {
+            console.error('Error cargando Google Maps:', error);
+            document.getElementById('heatmapMap').innerHTML = `
+                <div class="alert alert-danger m-3">
+                    <h6>Error cargando el mapa</h6>
+                    <p>${error.message}</p>
+                    <p>Por favor, verifique su conexión a internet e intente nuevamente.</p>
+                </div>
+            `;
+        });
+});
+</script>
+{% endblock %}
