@@ -5,7 +5,16 @@ from django.db.models.functions import Cast
 from django.utils import timezone
 from ingestas.models import PropiedadRaw
 from propifai.models import PropifaiProperty
-from .charts import create_data_quality_summary, calculate_data_quality_metrics
+try:
+    from .charts import create_data_quality_summary, calculate_data_quality_metrics
+except ImportError as e:
+    logger.warning(f"No se pudo importar charts: {e}. Usando funciones dummy.")
+    # Funciones dummy como fallback
+    def create_data_quality_summary(*args, **kwargs):
+        return {"error": "Charts module not available"}
+    
+    def calculate_data_quality_metrics(*args, **kwargs):
+        return {"error": "Charts module not available"}
 import json
 import math
 import logging
