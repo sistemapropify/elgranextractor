@@ -1146,10 +1146,11 @@ def property_timeline_api(request, property_id):
     if prop.created_at:
         dias_activa = (hoy - prop.created_at.date()).days
     
-    # Calcular precio por m²
+    # Calcular precio por m² (el precio ya está en dólares)
     precio_m2 = None
     if prop.price and prop.built_area and prop.built_area > 0:
-        precio_m2 = prop.price / prop.built_area
+        # Calcular precio por m² y redondear a entero
+        precio_m2 = round(float(prop.price) / float(prop.built_area))
     
     # Determinar etapa actual basada en eventos y status
     # Etapas: 1. Captación, 2. Publicación, 3. Visitas, 4. Propuesta, 5. Cierre
