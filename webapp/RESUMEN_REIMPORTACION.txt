@@ -1,0 +1,80 @@
+=== RESUMEN DE LA REIMPORTACIÓN DE PROPIEDADES RAW ===
+
+FECHA: 2026-03-19
+PROBLEMA ORIGINAL: "la condicion noi se a exportado con exito"
+
+SOLUCIÓN IMPLEMENTADA:
+
+1. CORRECCIÓN DE ESTRUCTURA DE DATOS
+   - Se agregaron las columnas faltantes a la base de datos:
+     * 'condicion' (VARCHAR con opciones: 'nueva', 'usada', 'en_construccion', 'remodelada')
+     * 'propiedad_verificada' (BIT/BOOLEAN)
+
+2. ACTUALIZACIÓN DEL ADMIN DE DJANGO
+   - Se modificó `webapp/ingestas/admin.py` para mostrar los campos nuevos:
+     * Agregados a list_display
+     * Agregados a list_filter  
+     * Agregados a fieldsets
+
+3. ACTUALIZACIÓN DE TEMPLATES
+   - Se actualizó `lista_propiedades_rediseno.html` para mostrar los campos en las tarjetas
+   - Se actualizó `detalle_propiedad.html` para mostrar los campos en la vista detallada
+
+4. SCRIPTS CREADOS PARA LA REIMPORTACIÓN:
+
+   A) PARA BORRAR REGISTROS:
+      - `borrar_propiedadraw.py` - Script Python con confirmación
+      - `borrar_propiedadraw.bat` - Archivo batch para doble clic
+
+   B) PARA REIMPORTAR DESDE EXCEL:
+      - `reimportar_excel_completo.py` - Script Python completo
+      - `reimportar_completo.bat` - Archivo batch para doble clic
+
+   C) PARA VERIFICAR RESULTADOS:
+      - `verificar_campos_nuevos.py` - Script de verificación
+      - `verificar_campos.bat` - Archivo batch para doble clic
+
+5. ARCHIVOS DE INSTRUCCIONES:
+   - `INSTRUCCIONES_EJECUCION.txt` - Guía paso a paso
+   - `RESUMEN_REIMPORTACION.txt` - Este archivo
+
+PASOS PARA EL USUARIO:
+
+1. Navegar a: D:\proyectos\prometeo\webapp
+2. Ejecutar (en orden):
+   a) borrar_propiedadraw.bat (DOBLE CLIC)
+   b) reimportar_completo.bat (DOBLE CLIC)
+   c) verificar_campos.bat (DOBLE CLIC - opcional)
+
+3. Verificar resultados:
+   - Admin Django: http://localhost:8000/admin/ingestas/propiedadraw/
+   - Lista de propiedades: http://localhost:8000/propiedades/
+   - Detalle de propiedad: http://localhost:8000/propiedades/1/
+
+ESTADO ACTUAL:
+
+✅ Columnas agregadas a la base de datos
+✅ Admin Django actualizado para mostrar campos nuevos
+✅ Templates actualizados para mostrar campos nuevos
+✅ Scripts de reimportación creados y listos para ejecutar
+✅ Instrucciones detalladas proporcionadas
+
+PRÓXIMOS PASOS:
+
+1. Ejecutar los scripts .bat en el orden indicado
+2. Verificar que los campos 'condicion' y 'propiedad_verificada' aparecen con datos
+3. Si hay problemas, ejecutar los scripts Python manualmente desde la terminal
+
+ARCHIVO EXCEL DE ORIGEN:
+   D:\proyectos\prometeo\webapp\requerimientos\data\propiedadesraw_corregido (2).xlsx
+
+NOTAS TÉCNICAS:
+
+- Los campos se mapean automáticamente desde el Excel usando el comando de Django
+- El script de importación maneja conversión de tipos de datos
+- Se preservan todos los demás campos existentes
+- La operación es atómica (si falla, no se guardan cambios)
+
+CONTACTO:
+Para problemas técnicos, revisar los mensajes anteriores o ejecutar diagnóstico con:
+   python estado_actual.py

@@ -1,0 +1,68 @@
+=== INSTRUCCIONES PARA EJECUTAR LOS SCRIPTS ===
+
+1. ABRIR EL EXPLORADOR DE ARCHIVOS
+   - Ve a la carpeta: D:\proyectos\prometeo\webapp
+   - Deberías ver los archivos:
+     * borrar_propiedadraw.bat
+     * reimportar_completo.bat
+     * verificar_campos.bat
+     * borrar_propiedadraw.py
+     * reimportar_excel_completo.py
+     * verificar_campos_nuevos.py
+
+2. EJECUTAR EL BORRADO (PRIMER PASO)
+   - Haz DOBLE CLIC en el archivo "borrar_propiedadraw.bat"
+   - Se abrirá una ventana negra (consola)
+   - El script te preguntará si quieres continuar
+   - Escribe "SI" (en mayúsculas) y presiona Enter
+   - Espera a que termine
+   - Presiona cualquier tecla para cerrar la ventana
+
+3. EJECUTAR LA REIMPORTACIÓN (SEGUNDO PASO)
+   - Haz DOBLE CLIC en el archivo "reimportar_completo.bat"
+   - Se abrirá otra ventana negra
+   - El script importará los datos del Excel
+   - Espera a que termine (puede tomar unos segundos)
+   - Presiona cualquier tecla para cerrar la ventana
+
+4. VERIFICAR RESULTADOS (TERCER PASO - OPCIONAL)
+   - Haz DOBLE CLIC en "verificar_campos.bat"
+   - Verás un reporte que muestra:
+     * Cuántos registros tienen datos en "condicion"
+     * Cuántos registros tienen datos en "propiedad_verificada"
+     * Ejemplos de registros con estos campos
+
+5. VERIFICAR VISUALMENTE
+   - Después de ejecutar ambos scripts, puedes:
+     a) Ir al admin de Django: http://localhost:8000/admin/ingestas/propiedadraw/
+     b) Verificar que los campos "condicion" y "propiedad_verificada" tienen datos
+     c) Revisar los templates para ver los campos nuevos
+
+=== TROUBLESHOOTING ===
+
+Si los archivos .bat no funcionan:
+1. Abre una ventana de comandos (CMD)
+2. Navega a la carpeta:
+      cd D:\proyectos\prometeo\webapp
+3. Ejecuta manualmente:
+      python borrar_propiedadraw.py
+      python reimportar_excel_completo.py
+      python verificar_campos_nuevos.py
+
+Si aparece error de Python:
+- Asegúrate de tener Django instalado
+- Ejecuta: pip install django pandas openpyxl
+
+=== ARCHIVOS IMPORTANTES ===
+
+- Excel original: D:\proyectos\prometeo\webapp\requerimientos\data\propiedadesraw_corregido (2).xlsx
+- Script de borrado: borrar_propiedadraw.py
+- Script de reimportación: reimportar_excel_completo.py
+- Script de verificación: verificar_campos_nuevos.py
+- Archivos batch para doble clic: .bat
+
+=== FLUJO COMPLETO ===
+1. borrar_propiedadraw.bat → 2. reimportar_completo.bat → 3. verificar_campos.bat
+
+=== CONTACTO ===
+Si tienes problemas, revisa los mensajes anteriores o ejecuta los scripts manualmente desde la terminal.

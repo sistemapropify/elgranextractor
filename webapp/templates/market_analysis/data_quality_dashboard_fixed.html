@@ -1,0 +1,1807 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_head %}
+    <style>
+        :root {
+            --primary-color: #10b981;
+            --secondary-color: #059669;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --info-color: #3b82f6;
+            --light-bg: #f8fafc;
+        }
+        
+        body {
+            background-color: var(--light-bg);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .dashboard-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .quality-score-card {
+            border-radius: 12px;
+            border: none;
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.08);
+            transition: transform 0.3s ease;
+        }
+        
+        .quality-score-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .score-circle {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto;
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: white;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        
+        .score-excellent { background: linear-gradient(135deg, #10b981, #059669); }
+        .score-good { background: linear-gradient(135deg, #3b82f6, #1d4ed8); }
+        .score-regular { background: linear-gradient(135deg, #f59e0b, #d97706); }
+        .score-critical { background: linear-gradient(135deg, #ef4444, #dc2626); }
+        
+        .nav-tabs .nav-link {
+            border: none;
+            color: #64748b;
+            font-weight: 500;
+            padding: 0.75rem 1.5rem;
+        }
+        
+        .nav-tabs .nav-link.active {
+            color: var(--primary-color);
+            border-bottom: 3px solid var(--primary-color);
+            background: transparent;
+        }
+        
+        .chart-container {
+            background: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e2e8f0;
+        }
+        
+        .chart-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .chart-title i {
+            color: var(--primary-color);
+        }
+        
+        .metric-card {
+            background: white;
+            border-radius: 10px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            border-left: 4px solid var(--primary-color);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+        }
+        
+        .metric-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #1e293b;
+        }
+        
+        .metric-label {
+            font-size: 0.9rem;
+            color: #64748b;
+            margin-top: 0.25rem;
+        }
+        
+        .issue-badge {
+            padding: 0.35rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        
+        .data-source-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        
+        .badge-local { background-color: #dbeafe; color: #1d4ed8; }
+        .badge-propifai { background-color: #f0f9ff; color: #0c4a6e; }
+        
+        @media (max-width: 768px) {
+            .score-circle {
+                width: 100px;
+                height: 100px;
+                font-size: 2rem;
+            }
+            
+            .nav-tabs .nav-link {
+                padding: 0.5rem 1rem;
+                font-size: 0.9rem;
+            }
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <div class="dashboard-header">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h1 class="display-5 fw-bold mb-3">
+                        <i class="bi bi-graph-up-arrow me-2"></i>{{ title }}
+                    </h1>
+                    <p class="lead mb-0">
+                        Análisis avanzado de calidad de datos, detección de anomalías y métricas de completitud
+                    </p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <div class="btn-group">
+                        <a href="{% url 'market_analysis:dashboard' %}" class="btn btn-outline-light">
+                            <i class="bi bi-speedometer2 me-1"></i> Dashboard Simple
+                        </a>
+                        <button class="btn btn-light" onclick="refreshData()">
+                            <i class="bi bi-arrow-clockwise me-1"></i> Actualizar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        {% if total_count == 0 %}
+        <div class="alert alert-warning mt-4">
+            <h4 class="alert-heading"><i class="bi bi-exclamation-triangle me-2"></i>No hay datos disponibles</h4>
+            <p>No se encontraron propiedades en las bases de datos. El dashboard de calidad de datos requiere datos para funcionar.</p>
+            <hr>
+            <p class="mb-0">
+                <strong>Acciones recomendadas:</strong>
+                <ul>
+                    <li>Verificar que las bases de datos tengan datos de propiedades</li>
+                    <li>Importar datos usando las herramientas de ingesta</li>
+                    <li>Verificar la conexión a la base de datos Propifai</li>
+                </ul>
+            </p>
+        </div>
+        {% endif %}
+        
+        <!-- Información sobre matplotlib -->
+        <div class="alert {% if charts.matplotlib_available %}alert-success{% else %}alert-warning{% endif %} mt-4">
+            <div class="d-flex align-items-center">
+                <i class="bi {% if charts.matplotlib_available %}bi-check-circle-fill{% else %}bi-exclamation-triangle-fill{% endif %} me-3 fs-4"></i>
+                <div>
+                    <p class="mb-0">
+                        <strong>Estado de visualización:</strong> {{ charts.matplotlib_status|default:"Desconocido" }}
+                        <ul class="mt-2 mb-0">
+                            {% if charts.matplotlib_available %}
+                            <li>✓ Matplotlib y Seaborn están instalados correctamente</li>
+                            <li>✓ Los gráficos se generan automáticamente con datos reales</li>
+                            <li>✓ Puede cambiar entre pestañas para ver diferentes análisis</li>
+                            {% else %}
+                            <li>⚠ Matplotlib o Seaborn no están instalados</li>
+                            <li>⚠ Se muestran gráficos SVG de ejemplo en lugar de gráficos reales</li>
+                            <li>⚠ Para gráficos completos, instale: <code>pip install matplotlib seaborn</code></li>
+                            {% endif %}
+                            <li>Los datos se obtienen de las bases de datos local y Propify</li>
+                        </ul>
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Resumen de calidad -->
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="quality-score-card">
+                    <div class="card-body text-center">
+                        <div class="score-circle score-{{ quality_color }} quality-score">
+                            {{ overall_score }}
+                        </div>
+                        <h3 class="mt-3 mb-1">Puntaje de Calidad</h3>
+                        <span class="badge bg-{{ quality_color }} fs-6">{{ quality_status }}</span>
+                        <p class="text-muted mt-2 small">
+                            Basado en completitud, duplicados y valores atípicos
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-8">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="metric-card">
+                            <div class="metric-value">{{ total_count }}</div>
+                            <div class="metric-label">Total de Propiedades</div>
+                            <div class="mt-2">
+                                <span class="data-source-badge badge-local me-2">
+                                    <i class="bi bi-house me-1"></i> Local: {{ local_count }}
+                                </span>
+                                <span class="data-source-badge badge-propifai">
+                                    <i class="bi bi-cloud me-1"></i> Propify: {{ propifai_count }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="metric-card">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <div class="metric-value text-danger">{{ critical_issues }}</div>
+                                    <div class="metric-label">Problemas Críticos</div>
+                                </div>
+                                <div>
+                                    <div class="metric-value text-warning">{{ warning_issues }}</div>
+                                    <div class="metric-label">Advertencias</div>
+                                </div>
+                            </div>
+                            <div class="mt-3">
+                                {% if critical_issues == 0 and warning_issues == 0 %}
+                                    <span class="issue-badge bg-success">Todo en orden</span>
+                                {% elif critical_issues > 0 %}
+                                    <span class="issue-badge bg-danger">Requiere atención inmediata</span>
+                                {% else %}
+                                    <span class="issue-badge bg-warning text-dark">Revisión recomendada</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="metric-card">
+                            <h6 class="fw-bold mb-2">Métricas por Fuente</h6>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <div class="me-2">
+                                            <i class="bi bi-house text-primary"></i>
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <div class="d-flex justify-content-between">
+                                                <span>Base Local</span>
+                                                <span class="fw-bold">
+                                                    {{ metrics.local.avg_completeness|default:0|floatformat:1 }}%
+                                                </span>
+                                            </div>
+                                            <div class="progress" style="height: 6px;">
+                                                <div class="progress-bar bg-primary"
+                                                     data-width="{{ local_completeness_width }}">
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <div class="me-2">
+                                            <i class="bi bi-cloud text-info"></i>
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <div class="d-flex justify-content-between">
+                                                <span>Propify</span>
+                                                <span class="fw-bold">
+                                                    {{ metrics.propifai.avg_completeness|default:0|floatformat:1 }}%
+                                                </span>
+                                            </div>
+                                            <div class="progress" style="height: 6px;">
+                                                <div class="progress-bar bg-info"
+                                                     data-width="{{ propifai_completeness_width }}">
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pestañas de análisis -->
+        <ul class="nav nav-tabs mb-4" id="analysisTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="completeness-tab" data-bs-toggle="tab" 
+                        data-bs-target="#completeness" type="button" role="tab">
+                    <i class="bi bi-check-circle me-1"></i> Completitud
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="outliers-tab" data-bs-toggle="tab" 
+                        data-bs-target="#outliers" type="button" role="tab">
+                    <i class="bi bi-exclamation-triangle me-1"></i> Valores Atípicos
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="duplicates-tab" data-bs-toggle="tab" 
+                        data-bs-target="#duplicates" type="button" role="tab">
+                    <i class="bi bi-files me-1"></i> Duplicados
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="emptyfields-tab" data-bs-toggle="tab" 
+                        data-bs-target="#emptyfields" type="button" role="tab">
+                    <i class="bi bi-x-circle me-1"></i> Campos Vacíos
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content" id="analysisTabsContent">
+            <!-- Pestaña Completitud -->
+            <div class="tab-pane fade show active" id="completeness" role="tabpanel">
+                <div class="row">
+                    <div class="col-md-6 local-data data-source-element">
+                        <div class="chart-container">
+                            <div class="chart-title">
+                                <i class="bi bi-bar-chart"></i> Completitud - Base Local
+                            </div>
+                            {% if charts.local_completeness and 'data:image' in charts.local_completeness %}
+                                <img src="{{ charts.local_completeness }}" class="img-fluid" alt="Completitud Base Local">
+                            {% else %}
+                                <div class="alert alert-info text-center py-4">
+                                    <i class="bi bi-info-circle fs-1 text-muted"></i>
+                                    <p class="mt-2 mb-0">Gráfico no disponible</p>
+                                    <small class="text-muted">No hay datos suficientes o matplotlib no está instalado</small>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-6 propifai-data data-source-element">
+                        <div class="chart-container">
+                            <div class="chart-title">
+                                <i class="bi bi-bar-chart"></i> Completitud - Propify
+                            </div>
+                            {% if charts.propifai_completeness and 'data:image' in charts.propifai_completeness %}
+                                <img src="{{ charts.propifai_completeness }}" class="img-fluid" alt="Completitud Propify">
+                            {% else %}
+                                <div class="alert alert-info text-center py-4">
+                                    <i class="bi bi-info-circle fs-1 text-muted"></i>
+                                    <p class="mt-2 mb-0">Gráfico no disponible</p>
+                                    <small class="text-muted">No hay datos suficientes o matplotlib no está instalado</small>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="metric-card">
+                            <h6 class="fw-bold mb-3">Recomendaciones de Completitud</h6>
+                            <ul class="list-unstyled mb-0">
+                                <li class="mb-2">
+                                    <i class="bi bi-check-circle-fill text-success me-2"></i>
+                                    <strong>Objetivo:</strong> Mantener completitud por encima del 80%
+                                </li>
+                                <li class="mb-2">
+                                    <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>
+                                    <strong>Alerta:</strong> Campos por debajo del 50% requieren atención prioritaria
+                                </li>
+                                <li>
+                                    <i class="bi bi-lightbulb-fill text-info me-2"></i>
+                                    <strong>Sugerencia:</strong> Implementar validaciones en el proceso de ingesta
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pestaña Valores Atípicos -->
+            <div class="tab-pane fade" id="outliers" role="tabpanel">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="chart-container">
+                            <div class="chart-title">
+                                <i class="bi bi-box-plot"></i> Valores Atípicos - Base Local
+                            </div>
+                            {% if charts.local_outliers and 'data:image' in charts.local_outliers %}
+                                <img src="{{ charts.local_outliers }}" class="img-fluid" alt="Valores Atípicos Base Local">
+                            {% else %}
+                                <div class="alert alert-info text-center py-4">
+                                    <i class="bi bi-info-circle fs-1 text-muted"></i>
+                                    <p class="mt-2 mb-0">Gráfico no disponible</p>
+                                    <small class="text-muted">No hay datos suficientes o matplotlib no está instalado</small>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="chart-container">
+                            <div class="chart-title">
+                                <i class="bi bi-box-plot"></i> Valores Atípicos - Propify
+                            </div>
+                            {% if charts.propifai_outliers and 'data:image' in charts.propifai_outliers %}
+                                <img src="{{ charts.propifai_outliers }}" class="img-fluid" alt="Valores Atípicos Propify">
+                            {% else %}
+                                <div class="alert alert-info text-center py-4">
+                                    <i class="bi bi-info-circle fs-1 text-muted"></i>
+                                    <p class="mt-2 mb-0">Gráfico no disponible</p>
+                                    <small class="text-muted">No hay datos suficientes o matplotlib no está instalado</small>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="metric-card">
+                            <h6 class="fw-bold mb-3">Detección de Anomalías</h6>
+                            <p class="mb-2">
+                                Los valores atípicos se detectan usando el método IQR (Rango Intercuartílico).
+                                Valores fuera de 1.5 veces el IQR se consideran anomalías.
+                            </p>
+                            <div class="alert alert-info small mb-0">
+                                <i class="bi bi-info-circle me-1"></i>
+                                <strong>Nota:</strong> Algunos valores atípicos pueden ser legítimos (propiedades de lujo).
+                                Revise manualmente antes de eliminarlos.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pestaña Duplicados -->
+            <div class="tab-pane fade" id="duplicates" role="tabpanel">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="chart-container">
+                            <div class="chart-title">
+                                <i class="bi bi-files"></i> Posibles Duplicados - Base Local
+                            </div>
+                            {% if charts.local_duplicates and 'data:image' in charts.local_duplicates %}
+                                <img src="{{ charts.local_duplicates }}" class="img-fluid" alt="Duplicados Base Local">
+                            {% else %}
+                                <div class="alert alert-info text-center py-4">
+                                    <i class="bi bi-info-circle fs-1 text-muted"></i>
+                                    <p class="mt-2 mb-0">Gráfico no disponible</p>
+                                    <small class="text-muted">No hay datos suficientes o matplotlib no está instalado</small>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="chart-container">
+                            <div class="chart-title">
+                                <i class="bi bi-files"></i> Posibles Duplicados - Propify
+                            </div>
+                            {% if charts.propifai_duplicates and 'data:image' in charts.propifai_duplicates %}
+                                <img src="{{ charts.propifai_duplicates }}" class="img-fluid" alt="Duplicados Propify">
+                            {% else %}
+                                <div class="alert alert-info text-center py-4">
+                                    <i class="bi bi-info-circle fs-1 text-muted"></i>
+                                    <p class="mt-2 mb-0">Gráfico no disponible</p>
+                                    <small class="text-muted">No hay datos suficientes o matplotlib no está instalado</small>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="metric-card">
+                            <h6 class="fw-bold mb-3">Gestión de Duplicados</h6>
+                            <p class="mb-2">
+                                Se detectan posibles duplicados basados en coordenadas, URLs y descripciones similares.
+                                Los umbrales de alerta ayudan a priorizar la revisión.
+                            </p>
+                            <div class="alert alert-warning small mb-0">
+                                <i class="bi bi-exclamation-triangle me-1"></i>
+                                <strong>Importante:</strong> Los duplicados detectados automáticamente requieren validación manual.
+                                Algunos pueden ser propiedades similares pero distintas.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pestaña Campos Vacíos -->
+            <div class="tab-pane fade" id="emptyfields" role="tabpanel">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="chart-container">
+                            <div class="chart-title">
+                                <i class="bi bi-x-circle"></i> Campos Vacíos - Base Local
+                            </div>
+                            {% if charts.local_empty_fields and 'data:image' in charts.local_empty_fields %}
+                                <img src="{{ charts.local_empty_fields }}" class="img-fluid" alt="Campos Vacíos Base Local">
+                            {% else %}
+                                <div class="alert alert-info text-center py-4">
+                                    <i class="bi bi-info-circle fs-1 text-muted"></i>
+                                    <p class="mt-2 mb-0">Gráfico no disponible</p>
+                                    <small class="text-muted">No hay datos suficientes o matplotlib no está instalado</small>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="chart-container">
+                            <div class="chart-title">
+                                <i class="bi bi-x-circle"></i> Campos Vacíos - Propify
+                            </div>
+                            {% if charts.propifai_empty_fields and 'data:image' in charts.propifai_empty_fields %}
+                                <img src="{{ charts.propifai_empty_fields }}" class="img-fluid" alt="Campos Vacíos Propify">
+                            {% else %}
+                                <div class="alert alert-info text-center py-4">
+                                    <i class="bi bi-info-circle fs-1 text-muted"></i>
+                                    <p class="mt-2 mb-0">Gráfico no disponible</p>
+                                    <small class="text-muted">No hay datos suficientes o matplotlib no está instalado</small>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="metric-card">
+                            <h6 class="fw-bold mb-3">Estrategia para Campos Vacíos</h6>
+                            <ul class="list-unstyled mb-0">
+                                <li class="mb-2">
+                                    <i class="bi bi-arrow-right-circle-fill text-primary me-2"></i>
+                                    <strong>Prioridad 1:</strong> Campos críticos (precio, coordenadas) deben tener menos del 10% de vacíos
+                                </li>
+                                <li class="mb-2">
+                                    <i class="bi bi-arrow-right-circle-fill text-primary me-2"></i>
+                                    <strong>Prioridad 2:</strong> Campos importantes (área, ubicación) deben tener menos del 20% de vacíos
+                                </li>
+                                <li>
+                                    <i class="bi bi-arrow-right-circle-fill text-primary me-2"></i>
+                                    <strong>Acción:</strong> Implementar validaciones obligatorias en formularios de ingesta
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filtros y controles -->
+        <div class="row mt-5">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">
+                            <i class="bi bi-sliders me-2"></i>Controles y Filtros
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label class="form-label">Fuente de datos</label>
+                                    <select class="form-select" id="dataSourceFilter">
+                                        <option value="all">Todas las fuentes</option>
+                                        <option value="local">Base Local</option>
+                                        <option value="propifai">Propify</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label class="form-label">Tipo de análisis</label>
+                                    <select class="form-select" id="analysisTypeFilter">
+                                        <option value="all">Todos los análisis</option>
+                                        <option value="completeness">Completitud</option>
+                                        <option value="outliers">Valores atípicos</option>
+                                        <option value="duplicates">Duplicados</option>
+                                        <option value="empty">Campos vacíos</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label class="form-label">Umbral de calidad</label>
+                                    <select class="form-select" id="qualityThresholdFilter">
+                                        <option value="80">Alto (≥80%)</option>
+                                        <option value="60" selected>Medio (≥60%)</option>
+                                        <option value="40">Bajo (≥40%)</option>
+                                        <option value="0">Todos</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <button class="btn btn-outline-primary" onclick="applyFilters()">
+                                <i class="bi bi-funnel me-1"></i>Aplicar Filtros
+                            </button>
+                            <button class="btn btn-primary" onclick="refreshData()">
+                                <i class="bi bi-arrow-clockwise me-1"></i>Actualizar Datos
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Información adicional -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="alert alert-info">
+                    <div class="d-flex">
+                        <div class="me-3">
+                            <i class="bi bi-info-circle fs-4"></i>
+                        </div>
+                        <div>
+                            <h5 class="alert-heading">Cómo interpretar este dashboard</h5>
+                            <p class="mb-1">
+                                <strong>Puntaje de calidad:</strong> Calculado combinando completitud (70%), duplicados (20%) y valores atípicos (10%).
+                                Un puntaje ≥80 indica excelente calidad, ≤40 requiere atención inmediata.
+                            </p>
+                            <p class="mb-0">
+                                <strong>Actualización:</strong> Los datos se actualizan automáticamente cada 5 minutos.
+                                Use el botón "Actualizar" para forzar una actualización inmediata.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ejemplos de datos problemáticos -->
+        {% if total_problems > 0 %}
+        <div class="row mt-5">
+            <div class="col-12">
+                <div class="card border-warning">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0">
+                            <i class="bi bi-exclamation-triangle me-2"></i>Ejemplos de Datos Problemáticos ({{ total_problems }} encontrados)
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted mb-3">
+                            Estos son ejemplos concretos de registros que requieren atención. Haga clic en el ID para ver el registro completo.
+                        </p>
+                        
+                        <div class="row">
+                            <!-- Base Local -->
+                            <div class="col-md-6">
+                                <div class="card mb-3">
+                                    <div class="card-header bg-light">
+                                        <h6 class="mb-0">
+                                            <i class="bi bi-house me-1"></i> Base Local
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        {% with examples=problematic_examples.local %}
+                                        {% if examples.missing_coordinates %}
+                                        <div class="mb-3">
+                                            <h6 class="text-danger">
+                                                <i class="bi bi-geo-alt me-1"></i> Sin coordenadas ({{ examples.missing_coordinates|length }})
+                                            </h6>
+                                            <div class="small">
+                                                {% for item in examples.missing_coordinates %}
+                                                <div class="border-start border-3 border-danger ps-2 mb-2">
+                                                    <div class="d-flex justify-content-between align-items-start">
+                                                        <div>
+                                                            <strong>ID {{ item.id }}</strong>: {{ item.descripcion|default:"Sin descripción"|truncatechars:80 }}<br>
+                                                            <span class="text-muted">
+                                                                Precio: {{ item.precio_usd|default:"N/A" }} |
+                                                                Área: {{ item.area_construida|default:"N/A" }} m² |
+                                                                Tipo: {{ item.tipo_propiedad|default:"N/A" }}<br>
+                                                                Ubicación: {{ item.distrito|default:"N/A" }}, {{ item.provincia|default:"N/A" }}
+                                                            </span>
+                                                        </div>
+                                                        <div class="btn-group btn-group-sm" role="group">
+                                                            {% if item.url_propiedad %}
+                                                            <a href="{{ item.url_propiedad }}"
+                                                               class="btn btn-outline-primary"
+                                                               target="_blank"
+                                                               title="Ver publicación original">
+                                                                <i class="bi bi-box-arrow-up-right"></i> Publicación
+                                                            </a>
+                                                            {% else %}
+                                                            <button class="btn btn-outline-secondary copy-id-btn"
+                                                                    data-id="{{ item.id }}"
+                                                                    title="No hay URL disponible - Copiar ID">
+                                                                <i class="bi bi-clipboard"></i> Sin URL
+                                                            </button>
+                                                            {% endif %}
+                                                            <button class="btn btn-outline-info view-details-btn"
+                                                                    data-id="{{ item.id }}"
+                                                                    data-field="coordenadas"
+                                                                    data-problem="missing_coordinates"
+                                                                    title="Ver detalles en modal">
+                                                                <i class="bi bi-eye"></i> Modal
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    <div class="mt-2">
+                                                        <div class="alert alert-info py-2 mb-2">
+                                                            <div class="d-flex align-items-center">
+                                                                <i class="bi bi-info-circle me-2"></i>
+                                                                <div class="small">
+                                                                    <strong>Para encontrar coordenadas:</strong>
+                                                                    Copie el ID <code>{{ item.id }}</code> y búsquelo en el sistema original.
+                                                                    Luego busque la dirección en Google Maps y copie las coordenadas.
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <form class="edit-form" data-id="{{ item.id }}" data-field="coordenadas">
+                                                            <div class="input-group input-group-sm">
+                                                                <input type="text" class="form-control form-control-sm"
+                                                                       placeholder="Ej: -12.046374, -77.042793"
+                                                                       name="coordenadas" required>
+                                                                <button type="submit" class="btn btn-success btn-sm">
+                                                                    <i class="bi bi-check"></i> Corregir
+                                                                </button>
+                                                            </div>
+                                                            <small class="text-muted">Formato: latitud, longitud (copie de Google Maps)</small>
+                                                        </form>
+                                                    </div>
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                        
+                                        {% if examples.missing_price %}
+                                        <div class="mb-3">
+                                            <h6 class="text-warning">
+                                                <i class="bi bi-currency-dollar me-1"></i> Sin precio ({{ examples.missing_price|length }})
+                                            </h6>
+                                            <div class="small">
+                                                {% for item in examples.missing_price %}
+                                                <div class="border-start border-3 border-warning ps-2 mb-2">
+                                                    <div class="d-flex justify-content-between align-items-start">
+                                                        <div>
+                                                            <strong>ID {{ item.id }}</strong>: {{ item.descripcion|default:"Sin descripción"|truncatechars:80 }}<br>
+                                                            <span class="text-muted">
+                                                                Área: {{ item.area_construida|default:"N/A" }} m² |
+                                                                Tipo: {{ item.tipo_propiedad|default:"N/A" }}<br>
+                                                                Ubicación: {{ item.distrito|default:"N/A" }}, {{ item.provincia|default:"N/A" }}
+                                                            </span>
+                                                        </div>
+                                                        <div class="btn-group btn-group-sm" role="group">
+                                                            {% if item.url_propiedad %}
+                                                            <a href="{{ item.url_propiedad }}"
+                                                               class="btn btn-outline-primary"
+                                                               target="_blank"
+                                                               title="Ver publicación original">
+                                                                <i class="bi bi-box-arrow-up-right"></i> Publicación
+                                                            </a>
+                                                            {% else %}
+                                                            <button class="btn btn-outline-secondary copy-id-btn"
+                                                                    data-id="{{ item.id }}"
+                                                                    title="No hay URL disponible - Copiar ID">
+                                                                <i class="bi bi-clipboard"></i> Sin URL
+                                                            </button>
+                                                            {% endif %}
+                                                            <button class="btn btn-outline-info view-details-btn"
+                                                                    data-id="{{ item.id }}"
+                                                                    data-field="precio_usd"
+                                                                    data-problem="missing_price"
+                                                                    title="Ver detalles en modal">
+                                                                <i class="bi bi-eye"></i> Modal
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    <div class="mt-2">
+                                                        <div class="d-flex justify-content-between align-items-center mb-1">
+                                                            <small class="text-muted">Corregir precio:</small>
+                                                            <button class="btn btn-sm btn-outline-warning view-details-btn"
+                                                                    data-id="{{ item.id }}"
+                                                                    data-field="precio_usd"
+                                                                    data-problem="missing_price"
+                                                                    title="Ver detalles y editar">
+                                                                <i class="bi bi-pencil"></i> Ver y editar
+                                                            </button>
+                                                        </div>
+                                                        <form class="edit-form" data-id="{{ item.id }}" data-field="precio_usd">
+                                                            <div class="input-group input-group-sm">
+                                                                <span class="input-group-text">$</span>
+                                                                <input type="number" class="form-control form-control-sm"
+                                                                       placeholder="Ej: 150000"
+                                                                       name="precio_usd" min="1" step="0.01" required>
+                                                                <button type="submit" class="btn btn-success btn-sm">
+                                                                    <i class="bi bi-check"></i> Corregir aquí
+                                                                </button>
+                                                            </div>
+                                                            <small class="text-muted">Precio en USD (consulte la publicación para ver el precio real)</small>
+                                                        </form>
+                                                    </div>
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                        
+                                        {% if examples.zero_price %}
+                                        <div class="mb-3">
+                                            <h6 class="text-info">
+                                                <i class="bi bi-exclamation-circle me-1"></i> Precio cero ({{ examples.zero_price|length }})
+                                            </h6>
+                                            <div class="small">
+                                                {% for item in examples.zero_price %}
+                                                <div class="border-start border-3 border-info ps-2 mb-2">
+                                                    <strong>ID {{ item.id }}</strong>: {{ item.descripcion|default:"Sin descripción"|truncatechars:50 }}<br>
+                                                    <span class="text-muted">Precio: $0 | Área: {{ item.area_construida|default:"N/A" }}</span>
+                                                    <div class="mt-2">
+                                                        <form class="edit-form" data-id="{{ item.id }}" data-field="precio_usd">
+                                                            <div class="input-group input-group-sm">
+                                                                <span class="input-group-text">$</span>
+                                                                <input type="number" class="form-control form-control-sm"
+                                                                       placeholder="Ej: 150000"
+                                                                       name="precio_usd" min="1" step="0.01" required>
+                                                                <button type="submit" class="btn btn-success btn-sm">
+                                                                    <i class="bi bi-check"></i> Corregir
+                                                                </button>
+                                                            </div>
+                                                            <small class="text-muted">Precio en USD (debe ser mayor a 0)</small>
+                                                        </form>
+                                                    </div>
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                        
+                                        {% if examples.missing_area %}
+                                        <div class="mb-3">
+                                            <h6 class="text-warning">
+                                                <i class="bi bi-rulers me-1"></i> Sin área ({{ examples.missing_area|length }})
+                                            </h6>
+                                            <div class="small">
+                                                {% for item in examples.missing_area %}
+                                                <div class="border-start border-3 border-warning ps-2 mb-2">
+                                                    <strong>ID {{ item.id }}</strong>: {{ item.descripcion|default:"Sin descripción"|truncatechars:50 }}<br>
+                                                    <span class="text-muted">Precio: {{ item.precio_usd|default:"N/A" }}</span>
+                                                    <div class="mt-2">
+                                                        <form class="edit-form" data-id="{{ item.id }}" data-field="area_construida">
+                                                            <div class="input-group input-group-sm">
+                                                                <input type="number" class="form-control form-control-sm"
+                                                                       placeholder="Ej: 120.5"
+                                                                       name="area_construida" min="1" step="0.1" required>
+                                                                <span class="input-group-text">m²</span>
+                                                                <button type="submit" class="btn btn-success btn-sm">
+                                                                    <i class="bi bi-check"></i> Corregir
+                                                                </button>
+                                                            </div>
+                                                            <small class="text-muted">Área construida en metros cuadrados</small>
+                                                        </form>
+                                                    </div>
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                        
+                                        {% if examples.zero_area %}
+                                        <div class="mb-3">
+                                            <h6 class="text-info">
+                                                <i class="bi bi-exclamation-circle me-1"></i> Área cero ({{ examples.zero_area|length }})
+                                            </h6>
+                                            <div class="small">
+                                                {% for item in examples.zero_area %}
+                                                <div class="border-start border-3 border-info ps-2 mb-2">
+                                                    <strong>ID {{ item.id }}</strong>: {{ item.descripcion|default:"Sin descripción"|truncatechars:50 }}<br>
+                                                    <span class="text-muted">Precio: {{ item.precio_usd|default:"N/A" }} | Área: 0</span>
+                                                    <div class="mt-2">
+                                                        <form class="edit-form" data-id="{{ item.id }}" data-field="area_construida">
+                                                            <div class="input-group input-group-sm">
+                                                                <input type="number" class="form-control form-control-sm"
+                                                                       placeholder="Ej: 120.5"
+                                                                       name="area_construida" min="1" step="0.1" required>
+                                                                <span class="input-group-text">m²</span>
+                                                                <button type="submit" class="btn btn-success btn-sm">
+                                                                    <i class="bi bi-check"></i> Corregir
+                                                                </button>
+                                                            </div>
+                                                            <small class="text-muted">Área construida en metros cuadrados (debe ser mayor a 0)</small>
+                                                        </form>
+                                                    </div>
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                        {% endwith %}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Propify -->
+                            <div class="col-md-6">
+                                <div class="card mb-3">
+                                    <div class="card-header bg-light">
+                                        <h6 class="mb-0">
+                                            <i class="bi bi-database me-1"></i> Propify
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        {% with examples=problematic_examples.propifai %}
+                                        {% if examples.missing_coordinates %}
+                                        <div class="mb-3">
+                                            <h6 class="text-danger">
+                                                <i class="bi bi-geo-alt me-1"></i> Sin coordenadas ({{ examples.missing_coordinates|length }})
+                                            </h6>
+                                            <div class="small">
+                                                {% for item in examples.missing_coordinates %}
+                                                <div class="border-start border-3 border-danger ps-2 mb-2">
+                                                    <div class="d-flex justify-content-between align-items-start">
+                                                        <div>
+                                                            <strong>ID {{ item.id }}</strong>: {{ item.title|default:"Sin título"|truncatechars:50 }}<br>
+                                                            <span class="text-muted">Precio: {{ item.price|default:"N/A" }} | Área: {{ item.built_area|default:"N/A" }}</span>
+                                                            <div class="mt-1">
+                                                                <span class="badge bg-danger">Falta: Coordenadas</span>
+                                                                {% if item.code %}
+                                                                <span class="badge bg-secondary ms-1">Código: {{ item.code }}</span>
+                                                                {% endif %}
+                                                            </div>
+                                                        </div>
+                                                        <div class="btn-group btn-group-sm" role="group">
+                                                            <button class="btn btn-outline-info view-details-btn"
+                                                                    data-id="{{ item.id }}"
+                                                                    data-field="coordinates"
+                                                                    data-problem="missing_coordinates"
+                                                                    data-source="propifai"
+                                                                    title="Ver detalles en modal">
+                                                                <i class="bi bi-eye"></i> Modal
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                        
+                                        {% if examples.missing_price %}
+                                        <div class="mb-3">
+                                            <h6 class="text-warning">
+                                                <i class="bi bi-currency-dollar me-1"></i> Sin precio ({{ examples.missing_price|length }})
+                                            </h6>
+                                            <div class="small">
+                                                {% for item in examples.missing_price %}
+                                                <div class="border-start border-3 border-warning ps-2 mb-2">
+                                                    <div class="d-flex justify-content-between align-items-start">
+                                                        <div>
+                                                            <strong>ID {{ item.id }}</strong>: {{ item.title|default:"Sin título"|truncatechars:50 }}<br>
+                                                            <span class="text-muted">Área: {{ item.built_area|default:"N/A" }}</span>
+                                                            <div class="mt-1">
+                                                                <span class="badge bg-warning">Falta: Precio</span>
+                                                                {% if item.code %}
+                                                                <span class="badge bg-secondary ms-1">Código: {{ item.code }}</span>
+                                                                {% endif %}
+                                                            </div>
+                                                        </div>
+                                                        <div class="btn-group btn-group-sm" role="group">
+                                                            <button class="btn btn-outline-info view-details-btn"
+                                                                    data-id="{{ item.id }}"
+                                                                    data-field="price"
+                                                                    data-problem="missing_price"
+                                                                    data-source="propifai"
+                                                                    title="Ver detalles en modal">
+                                                                <i class="bi bi-eye"></i> Modal
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                        
+                                        {% if examples.zero_price %}
+                                        <div class="mb-3">
+                                            <h6 class="text-info">
+                                                <i class="bi bi-exclamation-circle me-1"></i> Precio cero ({{ examples.zero_price|length }})
+                                            </h6>
+                                            <div class="small">
+                                                {% for item in examples.zero_price %}
+                                                <div class="border-start border-3 border-info ps-2 mb-2">
+                                                    <div class="d-flex justify-content-between align-items-start">
+                                                        <div>
+                                                            <strong>ID {{ item.id }}</strong>: {{ item.title|default:"Sin título"|truncatechars:50 }}<br>
+                                                            <span class="text-muted">Precio: $0 | Área: {{ item.built_area|default:"N/A" }}</span>
+                                                            <div class="mt-1">
+                                                                <span class="badge bg-info">Problema: Precio $0</span>
+                                                                {% if item.code %}
+                                                                <span class="badge bg-secondary ms-1">Código: {{ item.code }}</span>
+                                                                {% endif %}
+                                                            </div>
+                                                        </div>
+                                                        <div class="btn-group btn-group-sm" role="group">
+                                                            <button class="btn btn-outline-info view-details-btn"
+                                                                    data-id="{{ item.id }}"
+                                                                    data-field="price"
+                                                                    data-problem="zero_price"
+                                                                    data-source="propifai"
+                                                                    title="Ver detalles en modal">
+                                                                <i class="bi bi-eye"></i> Modal
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                        
+                                        {% if examples.missing_area %}
+                                        <div class="mb-3">
+                                            <h6 class="text-warning">
+                                                <i class="bi bi-rulers me-1"></i> Sin área ({{ examples.missing_area|length }})
+                                            </h6>
+                                            <div class="small">
+                                                {% for item in examples.missing_area %}
+                                                <div class="border-start border-3 border-warning ps-2 mb-2">
+                                                    <div class="d-flex justify-content-between align-items-start">
+                                                        <div>
+                                                            <strong>ID {{ item.id }}</strong>: {{ item.title|default:"Sin título"|truncatechars:50 }}<br>
+                                                            <span class="text-muted">Precio: {{ item.price|default:"N/A" }}</span>
+                                                            <div class="mt-1">
+                                                                <span class="badge bg-warning">Falta: Área</span>
+                                                                {% if item.code %}
+                                                                <span class="badge bg-secondary ms-1">Código: {{ item.code }}</span>
+                                                                {% endif %}
+                                                            </div>
+                                                        </div>
+                                                        <div class="btn-group btn-group-sm" role="group">
+                                                            <button class="btn btn-outline-info view-details-btn"
+                                                                    data-id="{{ item.id }}"
+                                                                    data-field="built_area"
+                                                                    data-problem="missing_area"
+                                                                    data-source="propifai"
+                                                                    title="Ver detalles en modal">
+                                                                <i class="bi bi-eye"></i> Modal
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                        
+                                        {% if examples.zero_area %}
+                                        <div class="mb-3">
+                                            <h6 class="text-info">
+                                                <i class="bi bi-exclamation-circle me-1"></i> Área cero ({{ examples.zero_area|length }})
+                                            </h6>
+                                            <div class="small">
+                                                {% for item in examples.zero_area %}
+                                                <div class="border-start border-3 border-info ps-2 mb-2">
+                                                    <div class="d-flex justify-content-between align-items-start">
+                                                        <div>
+                                                            <strong>ID {{ item.id }}</strong>: {{ item.title|default:"Sin título"|truncatechars:50 }}<br>
+                                                            <span class="text-muted">Precio: {{ item.price|default:"N/A" }} | Área: 0</span>
+                                                            <div class="mt-1">
+                                                                <span class="badge bg-info">Problema: Área 0</span>
+                                                                {% if item.code %}
+                                                                <span class="badge bg-secondary ms-1">Código: {{ item.code }}</span>
+                                                                {% endif %}
+                                                            </div>
+                                                        </div>
+                                                        <div class="btn-group btn-group-sm" role="group">
+                                                            <button class="btn btn-outline-info view-details-btn"
+                                                                    data-id="{{ item.id }}"
+                                                                    data-field="built_area"
+                                                                    data-problem="zero_area"
+                                                                    data-source="propifai"
+                                                                    title="Ver detalles en modal">
+                                                                <i class="bi bi-eye"></i> Modal
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                        {% endwith %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="alert alert-info mt-3">
+                            <i class="bi bi-lightbulb me-2"></i>
+                            <strong>Acción recomendada:</strong> Revise estos registros en las interfaces de edición correspondientes.
+                            Para la base local: <a href="/ingestas/propiedades/">/ingestas/propiedades/</a>.
+                            Para Propify: <a href="/propifai/propiedades/">/propifai/propiedades/</a>.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="row mt-5">
+            <div class="col-12">
+                <div class="card border-success">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-check-circle me-2"></i>¡Excelente! No se encontraron datos problemáticos
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-0">
+                            No se detectaron registros con problemas críticos en las bases de datos.
+                            Esto indica una buena calidad general de los datos.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Modal para ver todos los datos de la propiedad -->
+    <div class="modal fade" id="propertyDetailsModal" tabindex="-1" aria-labelledby="propertyDetailsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="propertyDetailsModalLabel">Detalles Completos de la Propiedad</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Información Básica</h6>
+                            <table class="table table-sm">
+                                <tbody id="modalBasicInfo">
+                                    <!-- Se llena con JavaScript -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Datos Específicos</h6>
+                            <table class="table table-sm">
+                                <tbody id="modalSpecificInfo">
+                                    <!-- Se llena con JavaScript -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <h6>Corrección de Datos</h6>
+                            <div id="modalEditForm">
+                                <!-- Formulario de edición dinámico -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                    <button type="button" class="btn btn-primary" id="saveChangesBtn" style="display: none;">Guardar Cambios</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading overlay -->
+    <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+        <div class="text-center">
+            <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
+                <span class="visually-hidden">Cargando...</span>
+            </div>
+            <h4 class="mt-3">Generando análisis de calidad...</h4>
+            <p class="text-muted">Esto puede tomar unos segundos</p>
+        </div>
+    </div>
+
+    <script>
+        function refreshData() {
+            const overlay = document.getElementById('loadingOverlay');
+            overlay.style.display = 'flex';
+            
+            // Simular recarga de página después de un breve delay
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        }
+        
+        function applyFilters() {
+            const dataSource = document.getElementById('dataSourceFilter').value;
+            const analysisType = document.getElementById('analysisTypeFilter').value;
+            const qualityThreshold = document.getElementById('qualityThresholdFilter').value;
+            
+            // Mostrar notificación de filtros aplicados
+            showNotification(`Filtros aplicados: Fuente=${dataSource}, Análisis=${analysisType}, Umbral=${qualityThreshold}%`, 'success');
+            
+            // Si se seleccionó un tipo de análisis específico, cambiar a esa pestaña
+            if (analysisType !== 'all') {
+                const tabId = analysisType === 'completeness' ? 'completeness-tab' :
+                             analysisType === 'outliers' ? 'outliers-tab' :
+                             analysisType === 'duplicates' ? 'duplicates-tab' :
+                             analysisType === 'empty' ? 'emptyfields-tab' : null;
+                
+                if (tabId) {
+                    const tabElement = document.getElementById(tabId);
+                    if (tabElement) {
+                        const tab = new bootstrap.Tab(tabElement);
+                        tab.show();
+                    }
+                }
+            }
+            
+            // Filtrar visualmente por fuente de datos
+            filterByDataSource(dataSource);
+            
+            // Resaltar elementos que cumplen con el umbral de calidad
+            highlightByQualityThreshold(qualityThreshold);
+        }
+        
+        function filterByDataSource(dataSource) {
+            // Mostrar/ocultar secciones según la fuente de datos seleccionada
+            const localElements = document.querySelectorAll('.local-data');
+            const propifaiElements = document.querySelectorAll('.propifai-data');
+            const allElements = document.querySelectorAll('.data-source-element');
+            
+            if (dataSource === 'all') {
+                allElements.forEach(el => el.style.display = '');
+            } else if (dataSource === 'local') {
+                localElements.forEach(el => el.style.display = '');
+                propifaiElements.forEach(el => el.style.display = 'none');
+            } else if (dataSource === 'propifai') {
+                localElements.forEach(el => el.style.display = 'none');
+                propifaiElements.forEach(el => el.style.display = '');
+            }
+        }
+        
+        function highlightByQualityThreshold(threshold) {
+            // Resaltar puntajes que cumplen con el umbral
+            const scoreElements = document.querySelectorAll('.quality-score');
+            scoreElements.forEach(el => {
+                const score = parseInt(el.textContent) || 0;
+                if (score >= parseInt(threshold)) {
+                    el.classList.add('border', 'border-success', 'border-2');
+                    el.classList.remove('border-warning', 'border-danger');
+                } else if (score >= 40) {
+                    el.classList.add('border', 'border-warning', 'border-2');
+                    el.classList.remove('border-success', 'border-danger');
+                } else {
+                    el.classList.add('border', 'border-danger', 'border-2');
+                    el.classList.remove('border-success', 'border-warning');
+                }
+            });
+        }
+        
+        function showNotification(message, type = 'info') {
+            // Crear notificación Bootstrap
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+            alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 1050; max-width: 400px;';
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            document.body.appendChild(alertDiv);
+            
+            // Auto-remover después de 5 segundos
+            setTimeout(() => {
+                if (alertDiv.parentNode) {
+                    alertDiv.remove();
+                }
+            }, 5000);
+        }
+        
+        // Establecer ancho de barras de progreso desde atributos data-width
+        function setupProgressBars() {
+            document.querySelectorAll('.progress-bar[data-width]').forEach(bar => {
+                const width = bar.getAttribute('data-width');
+                bar.style.width = width + '%';
+            });
+        }
+        
+        // Inicializar tooltips de Bootstrap y barras de progreso
+        document.addEventListener('DOMContentLoaded', function() {
+            const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+            
+            // Configurar barras de progreso
+            setupProgressBars();
+            
+            // Configurar eventos para los filtros
+            document.getElementById('dataSourceFilter').addEventListener('change', function() {
+                filterByDataSource(this.value);
+            });
+            
+            document.getElementById('analysisTypeFilter').addEventListener('change', function() {
+                if (this.value !== 'all') {
+                    const tabId = this.value === 'completeness' ? 'completeness-tab' :
+                                 this.value === 'outliers' ? 'outliers-tab' :
+                                 this.value === 'duplicates' ? 'duplicates-tab' :
+                                 this.value === 'empty' ? 'emptyfields-tab' : null;
+                    
+                    if (tabId) {
+                        const tabElement = document.getElementById(tabId);
+                        if (tabElement) {
+                            const tab = new bootstrap.Tab(tabElement);
+                            tab.show();
+                        }
+                    }
+                }
+            });
+            
+            document.getElementById('qualityThresholdFilter').addEventListener('change', function() {
+                highlightByQualityThreshold(this.value);
+            });
+            
+            // Auto-refresh cada 5 minutos (300000 ms)
+            setInterval(refreshData, 300000);
+            
+            // Configurar botones para ver detalles
+            document.querySelectorAll('.view-details-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const propertyId = this.getAttribute('data-id');
+                    const field = this.getAttribute('data-field');
+                    const problem = this.getAttribute('data-problem');
+                    showPropertyDetails(propertyId, field, problem);
+                });
+            });
+            
+            // Configurar formularios de edición
+            document.querySelectorAll('.edit-form').forEach(form => {
+                form.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    const propertyId = this.getAttribute('data-id');
+                    const field = this.getAttribute('data-field');
+                    const input = this.querySelector(`[name="${field}"]`);
+                    const value = input.value;
+                    
+                    if (!value.trim()) {
+                        showNotification('Por favor ingrese un valor', 'warning');
+                        return;
+                    }
+                    
+                    updatePropertyField(propertyId, field, value, this);
+                });
+            });
+            
+            // Configurar botón de guardar cambios en el modal
+            document.getElementById('saveChangesBtn').addEventListener('click', function() {
+                const propertyId = this.getAttribute('data-property-id');
+                const field = this.getAttribute('data-field');
+                const input = document.querySelector(`#modalEditForm input[name="${field}"]`);
+                
+                if (!input) {
+                    showNotification('No se encontró el campo a editar', 'error');
+                    return;
+                }
+                
+                const value = input.value;
+                updatePropertyField(propertyId, field, value, null, true);
+            });
+        });
+        
+        // Función para mostrar detalles de la propiedad en el modal
+        function showPropertyDetails(propertyId, field, problem) {
+            const modal = new bootstrap.Modal(document.getElementById('propertyDetailsModal'));
+            const modalTitle = document.getElementById('propertyDetailsModalLabel');
+            
+            modalTitle.textContent = `Propiedad ID: ${propertyId}`;
+            
+            // Mostrar indicador de carga
+            const basicInfo = document.getElementById('modalBasicInfo');
+            const specificInfo = document.getElementById('modalSpecificInfo');
+            const editForm = document.getElementById('modalEditForm');
+            const saveBtn = document.getElementById('saveChangesBtn');
+            
+            basicInfo.innerHTML = '<tr><td colspan="2" class="text-center"><div class="spinner-border spinner-border-sm" role="status"></div> Cargando datos...</td></tr>';
+            specificInfo.innerHTML = '<tr><td colspan="2" class="text-center">Cargando...</td></tr>';
+            editForm.innerHTML = '<p>Cargando formulario...</p>';
+            saveBtn.style.display = 'none';
+            
+            // Obtener datos completos de la propiedad vía AJAX
+            fetch(`/market-analysis/property-quick-detail/${propertyId}/?format=json`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Error HTTP: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Datos de propiedad recibidos:', data);
+                    // Renderizar información básica
+                    renderBasicInfo(data, propertyId, field, problem);
+                    
+                    // Renderizar información específica (campos agrupados)
+                    renderSpecificInfo(data);
+                    
+                    // Configurar formulario de edición
+                    editForm.innerHTML = getEditFormHtml(field, propertyId);
+                    
+                    // Configurar botón de guardar
+                    saveBtn.setAttribute('data-property-id', propertyId);
+                    saveBtn.setAttribute('data-field', field);
+                    saveBtn.style.display = 'block';
+                    
+                    // Mostrar modal
+                    modal.show();
+                })
+                .catch(error => {
+                    console.error('Error al cargar detalles de propiedad:', error);
+                    basicInfo.innerHTML = `<tr><td colspan="2" class="text-danger">Error al cargar datos: ${error.message}</td></tr>`;
+                    specificInfo.innerHTML = '<tr><td colspan="2">No se pudieron cargar los detalles.</td></tr>';
+                    editForm.innerHTML = '<p>No se pudo cargar el formulario.</p>';
+                    modal.show();
+                });
+        }
+        
+        // Función para renderizar información básica
+        function renderBasicInfo(data, propertyId, field, problem) {
+            const basicInfo = document.getElementById('modalBasicInfo');
+            
+            // Crear un mapa de todos los campos para búsqueda fácil
+            const fieldMap = {};
+            if (data.fields) {
+                data.fields.forEach(f => {
+                    fieldMap[f.original_name] = f.value;
+                });
+            }
+            console.log('fieldMap:', fieldMap);
+            
+            // Determinar fuente real (fuente_excel o 'Base Local')
+            const fuente = fieldMap['fuente_excel'] || 'Base Local';
+            
+            let html = `
+                <tr><td><strong>ID</strong></td><td>${propertyId}</td></tr>
+                <tr><td><strong>Problema</strong></td><td>${getProblemDescription(problem)}</td></tr>
+                <tr><td><strong>Campo a corregir</strong></td><td>${getFieldName(field)}</td></tr>
+                <tr><td><strong>Fuente</strong></td><td>${fuente}</td></tr>
+            `;
+            
+            // Campos clave que el usuario quiere ver
+            const keyFields = [
+                { key: 'identificador_externo', label: 'Identificador Externo' },
+                { key: 'tipo_propiedad', label: 'Tipo de Propiedad' },
+                { key: 'subtipo_propiedad', label: 'Subtipo de Propiedad' },
+                { key: 'condicion', label: 'Condición' },
+                { key: 'estado', label: 'Estado' }
+            ];
+            
+            keyFields.forEach(fieldDef => {
+                if (fieldMap[fieldDef.key] !== undefined) {
+                    html += `<tr><td><strong>${fieldDef.label}</strong></td><td>${fieldMap[fieldDef.key]}</td></tr>`;
+                }
+            });
+            
+            // Buscar campo de operación (alquiler/venta)
+            const operationKeys = ['operacion', 'tipo_operacion', 'condicion', 'tipo_venta', 'alquiler', 'venta', 'tipo', 'operation', 'sale_rent', 'venta_alquiler'];
+            let operationFound = false;
+            console.log('Buscando operación en fieldMap:', fieldMap);
+            for (const key of operationKeys) {
+                if (fieldMap[key] !== undefined) {
+                    console.log('Operación encontrada con clave:', key, 'valor:', fieldMap[key]);
+                    html += `<tr><td><strong>Operación</strong></td><td>${fieldMap[key]}</td></tr>`;
+                    operationFound = true;
+                    break;
+                }
+            }
+            // Si no se encontró, buscar en las claves que contengan "operacion"
+            if (!operationFound) {
+                console.log('Buscando operación por coincidencia parcial...');
+                for (const key in fieldMap) {
+                    const lowerKey = key.toLowerCase();
+                    if (lowerKey.includes('operacion') || lowerKey.includes('alquiler') || lowerKey.includes('venta') || lowerKey.includes('sale') || lowerKey.includes('rent')) {
+                        console.log('Operación encontrada por coincidencia parcial:', key, 'valor:', fieldMap[key]);
+                        html += `<tr><td><strong>Operación</strong></td><td>${fieldMap[key]}</td></tr>`;
+                        operationFound = true;
+                        break;
+                    }
+                }
+            }
+            if (!operationFound) {
+                console.log('No se encontró ningún campo de operación en fieldMap');
+            }
+            
+            // Mostrar estado de verificación (propiedad_verificada)
+            if (fieldMap['propiedad_verificada'] !== undefined) {
+                const verificada = fieldMap['propiedad_verificada'];
+                const badge = verificada === true || verificada === 'true' || verificada === 'True' || verificada === '1'
+                    ? '<span class="badge bg-success">Sí</span>'
+                    : '<span class="badge bg-danger">No</span>';
+                html += `<tr><td><strong>Propiedad Verificada</strong></td><td>${badge}</td></tr>`;
+            }
+            
+            // Si no hay campos clave adicionales, mostrar un mensaje
+            if (html === '') {
+                html = '<tr><td colspan="2">No hay información básica adicional.</td></tr>';
+            }
+            
+            basicInfo.innerHTML = html;
+        }
+        
+        // Función para renderizar información específica (campos agrupados)
+        function renderSpecificInfo(data) {
+            const specificInfo = document.getElementById('modalSpecificInfo');
+            let html = '';
+            
+            if (!data.grouped_fields) {
+                specificInfo.innerHTML = '<tr><td colspan="2">No hay datos agrupados disponibles.</td></tr>';
+                return;
+            }
+            
+            // Campos que ya se mostraron en la información básica (no repetir)
+            const excludedFields = ['id', 'fuente_excel', 'identificador_externo', 'tipo_propiedad', 'subtipo_propiedad', 'condicion', 'estado', 'operacion', 'tipo_operacion', 'tipo_venta', 'alquiler', 'venta', 'propiedad_verificada'];
+            
+            // Función auxiliar para filtrar campos excluidos
+            function filterExcluded(fields) {
+                if (!fields) return [];
+                return fields.filter(f => !excludedFields.includes(f.original_name));
+            }
+            
+            // Función auxiliar para formatear valores (convertir URLs en enlaces)
+            function formatValue(field) {
+                const value = field.value;
+                const name = field.original_name.toLowerCase();
+                // Si el valor parece una URL (comienza con http:// o https://)
+                if (typeof value === 'string' && (value.startsWith('http://') || value.startsWith('https://'))) {
+                    return `<a href="${value}" target="_blank" rel="noopener noreferrer">${value}</a>`;
+                }
+                // Si el nombre contiene "url" pero no es una URL completa, podríamos mostrarlo como texto
+                return value;
+            }
+            
+            // Campos de ubicación
+            const locationFields = filterExcluded(data.grouped_fields.location);
+            if (locationFields.length > 0) {
+                html += `<tr><td colspan="2"><h6 class="mt-2 mb-1">Ubicación</h6></td></tr>`;
+                locationFields.forEach(f => {
+                    html += `<tr><td><strong>${f.name}</strong></td><td>${formatValue(f)}</td></tr>`;
+                });
+            }
+            
+            // Campos de precio
+            const priceFields = filterExcluded(data.grouped_fields.price);
+            if (priceFields.length > 0) {
+                html += `<tr><td colspan="2"><h6 class="mt-2 mb-1">Precio</h6></td></tr>`;
+                priceFields.forEach(f => {
+                    html += `<tr><td><strong>${f.name}</strong></td><td>${formatValue(f)}</td></tr>`;
+                });
+            }
+            
+            // Campos de área
+            const areaFields = filterExcluded(data.grouped_fields.area);
+            if (areaFields.length > 0) {
+                html += `<tr><td colspan="2"><h6 class="mt-2 mb-1">Área</h6></td></tr>`;
+                areaFields.forEach(f => {
+                    html += `<tr><td><strong>${f.name}</strong></td><td>${formatValue(f)}</td></tr>`;
+                });
+            }
+            
+            // Campos adicionales
+            const otherFields = filterExcluded(data.grouped_fields.other);
+            if (otherFields.length > 0) {
+                html += `<tr><td colspan="2"><h6 class="mt-2 mb-1">Otros</h6></td></tr>`;
+                otherFields.forEach(f => {
+                    html += `<tr><td><strong>${f.name}</strong></td><td>${formatValue(f)}</td></tr>`;
+                });
+            }
+            
+            // Campos extra (fuente_excel, identificador_externo, etc.) - excluir los ya mostrados
+            const extraFields = filterExcluded(data.grouped_fields.extra);
+            if (extraFields.length > 0) {
+                html += `<tr><td colspan="2"><h6 class="mt-2 mb-1">Información de Fuente</h6></td></tr>`;
+                extraFields.forEach(f => {
+                    html += `<tr><td><strong>${f.name}</strong></td><td>${formatValue(f)}</td></tr>`;
+                });
+            }
+            
+            if (html === '') {
+                html = '<tr><td colspan="2">No hay datos específicos disponibles.</td></tr>';
+            }
+            
+            specificInfo.innerHTML = html;
+        }
+        
+        // Función para obtener descripción del problema
+        function getProblemDescription(problem) {
+            const descriptions = {
+                'missing_coordinates': 'Coordenadas faltantes',
+                'missing_price': 'Precio faltante',
+                'zero_price': 'Precio cero',
+                'missing_area': 'Área faltante',
+                'zero_area': 'Área cero'
+            };
+            return descriptions[problem] || problem;
+        }
+        
+        // Función para obtener nombre del campo
+        function getFieldName(field) {
+            const names = {
+                'coordenadas': 'Coordenadas (latitud, longitud)',
+                'precio_usd': 'Precio (USD)',
+                'area_construida': 'Área construida (m²)'
+            };
+            return names[field] || field;
+        }
+        
+        // Función para generar HTML del formulario de edición
+        function getEditFormHtml(field, propertyId) {
+            if (field === 'coordenadas') {
+                return `
+                    <div class="mb-3">
+                        <label for="modalCoordenadas" class="form-label">Coordenadas</label>
+                        <input type="text" class="form-control" id="modalCoordenadas"
+                               name="coordenadas" placeholder="Ej: -12.046374, -77.042793" required>
+                        <div class="form-text">Formato: latitud, longitud (ejemplo: -12.046374, -77.042793)</div>
+                    </div>
+                `;
+            } else if (field === 'precio_usd') {
+                return `
+                    <div class="mb-3">
+                        <label for="modalPrecio" class="form-label">Precio (USD)</label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" class="form-control" id="modalPrecio"
+                                   name="precio_usd" placeholder="Ej: 150000" min="1" step="0.01" required>
+                        </div>
+                        <div class="form-text">Precio en dólares americanos (debe ser mayor a 0)</div>
+                    </div>
+                `;
+            } else if (field === 'area_construida') {
+                return `
+                    <div class="mb-3">
+                        <label for="modalArea" class="form-label">Área construida (m²)</label>
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="modalArea"
+                                   name="area_construida" placeholder="Ej: 120" min="1" step="0.01" required>
+                            <span class="input-group-text">m²</span>
+                        </div>
+                        <div class="form-text">Área en metros cuadrados (debe ser mayor a 0)</div>
+                    </div>
+                `;
+            }
+            return '<p>Formulario no disponible para este campo.</p>';
+        }
+        
+        // Función para actualizar un campo de propiedad
+        function updatePropertyField(propertyId, field, value, formElement = null, fromModal = false) {
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            loadingOverlay.style.display = 'flex';
+            
+            // Crear FormData para enviar
+            const formData = new FormData();
+            formData.append('id', propertyId);
+            formData.append('field', field);
+            formData.append('value', value);
+            
+            // Enviar solicitud POST
+            fetch('/market-analysis/api/update-property-field/', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                loadingOverlay.style.display = 'none';
+                
+                if (data.success) {
+                    showNotification(data.message || 'Campo actualizado correctamente', 'success');
+                    
+                    // Si se actualizó desde un formulario inline, limpiarlo
+                    if (formElement) {
+                        formElement.reset();
+                        // Opcional: ocultar el elemento después de la corrección
+                        const parentDiv = formElement.closest('.border-start');
+                        if (parentDiv) {
+                            parentDiv.style.opacity = '0.5';
+                            setTimeout(() => {
+                                parentDiv.remove();
+                                // Actualizar contador
+                                updateProblemCount();
+                            }, 1000);
+                        }
+                    }
+                    
+                    // Si se actualizó desde el modal, cerrarlo
+                    if (fromModal) {
+                        const modal = bootstrap.Modal.getInstance(document.getElementById('propertyDetailsModal'));
+                        if (modal) {
+                            modal.hide();
+                        }
+                        // Recargar la página después de un breve delay
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1500);
+                    } else {
+                        // Recargar después de 2 segundos para ver cambios
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 2000);
+                    }
+                } else {
+                    showNotification(`Error: ${data.error}`, 'danger');
+                }
+            })
+            .catch(error => {
+                loadingOverlay.style.display = 'none';
+                showNotification(`Error de conexión: ${error.message}`, 'danger');
+                console.error('Error:', error);
+            });
+        }
+        
+        // Función para obtener cookie CSRF
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+        
+        // Función para actualizar contador de problemas (simulada)
+        function updateProblemCount() {
+            // En una implementación real, actualizaría los contadores via AJAX
+            console.log('Contador de problemas actualizado (simulado)');
+        }
+        
+        // Configurar botones de copiar ID
+        document.querySelectorAll('.copy-id-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const propertyId = this.getAttribute('data-id');
+                navigator.clipboard.writeText(propertyId).then(() => {
+                    showNotification(`ID ${propertyId} copiado al portapapeles`, 'success');
+                    // Cambiar temporalmente el texto del botón
+                    const originalHTML = this.innerHTML;
+                    this.innerHTML = '<i class="bi bi-check"></i> ¡Copiado!';
+                    this.classList.remove('btn-outline-warning');
+                    this.classList.add('btn-success');
+                    
+                    setTimeout(() => {
+                        this.innerHTML = originalHTML;
+                        this.classList.remove('btn-success');
+                        this.classList.add('btn-outline-warning');
+                    }, 2000);
+                }).catch(err => {
+                    showNotification('Error al copiar: ' + err, 'danger');
+                });
+            });
+        });
+    </script>
+{% endblock %}

@@ -1,0 +1,45 @@
+=== EJECUTAR BORRADO DE PROPIEDADRAW AHORA ===
+
+El usuario ha solicitado: "te dije que borres los registros de propiedadraw"
+
+PARA EJECUTAR EL BORRADO INMEDIATAMENTE:
+
+OPCIÓN 1 (RECOMENDADA) - DOBLE CLIC:
+1. Ve a la carpeta: D:\proyectos\prometeo\webapp
+2. Haz DOBLE CLIC en el archivo: borrar_propiedadraw.bat
+3. En la ventana negra que aparece, escribe: SI
+4. Presiona Enter
+5. Espera a que termine
+6. Presiona cualquier tecla para cerrar
+
+OPCIÓN 2 - TERMINAL MANUAL:
+1. Abre una ventana de comandos (CMD)
+2. Escribe:
+      cd D:\proyectos\prometeo\webapp
+      python borrar_propiedadraw.py
+3. Cuando pregunte, escribe: SI
+4. Presiona Enter
+
+QUÉ HACE EL SCRIPT:
+- Cuenta cuántos registros hay actualmente
+- Pide confirmación (debes escribir "SI" en mayúsculas)
+- Borra TODOS los registros de la tabla PropiedadRaw
+- Muestra un mensaje de confirmación
+
+DESPUÉS DEL BORRADO:
+- La tabla PropiedadRaw quedará vacía
+- Puedes verificar en: http://localhost:8000/admin/ingestas/propiedadraw/
+- Luego puedes ejecutar la reimportación con reimportar_completo.bat
+
+ARCHIVOS DISPONIBLES:
+- borrar_propiedadraw.bat (para doble clic)
+- borrar_propiedadraw.py (script Python)
+- reimportar_completo.bat (para reimportar después)
+
+SI NO PUEDES EJECUTAR:
+1. Asegúrate de estar en la carpeta correcta
+2. Verifica que Python esté instalado
+3. Si hay errores, ejecuta: pip install django
+
+CONTACTO:
+Si necesitas ayuda adicional, proporciona el mensaje de error.

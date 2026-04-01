@@ -1,0 +1,1467 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Meta tags para prevenir caché en desarrollo -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Dashboard de Visitas y Actividad por Propiedad - Propifai</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --header-height: 60px;
+            --sidebar-width: 250px;
+            --primary-color: #10b981;          /* Verde esmeralda brillante */
+            --secondary-color: #059669;        /* Verde esmeralda medio */
+            --accent-color: #34d399;           /* Verde esmeralda claro */
+            --light-teal: #a7f3d0;             /* Verde muy claro */
+            --very-light-teal: #d1fae5;        /* Verde super claro */
+            --sidebar-bg: #059669;             /* Verde medio para sidebar */
+            --header-bg: #ffffff;              /* Blanco para header */
+            --content-bg: rgba(16, 185, 129, 0.08); /* Color base con transparencia */
+            --card-bg: #ffffff;                /* Blanco para cards */
+            --text-dark: #065f46;              /* Verde oscuro para texto */
+            --text-light: #ffffff;             /* Blanco para texto claro */
+        }
+        
+        body {
+            background-color: var(--content-bg);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+            color: var(--text-dark);
+        }
+        
+        /* Header delgado */
+        .app-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: var(--header-height);
+            background-color: var(--header-bg);
+            box-shadow: 0 2px 10px rgba(3, 94, 94, 0.1);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            border-bottom: 1px solid var(--very-light-teal);
+        }
+        
+        .logo-container {
+            display: flex;
+            align-items: center;
+            height: 100%;
+        }
+        
+        .logo {
+            height: 40px;
+            width: auto;
+            margin-right: 10px;
+        }
+        
+        .logo-text {
+            font-weight: 700;
+            font-size: 1.5rem;
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+        
+        .logo-text:hover {
+            color: var(--secondary-color);
+        }
+        
+        /* Barra lateral delgada */
+        .app-sidebar {
+            position: fixed;
+            top: var(--header-height);
+            left: 0;
+            width: var(--sidebar-width);
+            height: calc(100vh - var(--header-height));
+            background-color: var(--sidebar-bg);
+            color: var(--text-light);
+            overflow-y: auto;
+            transition: transform 0.3s ease;
+            z-index: 999;
+            border-right: 1px solid var(--light-teal);
+        }
+        
+        .sidebar-menu {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .sidebar-menu li {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .sidebar-menu a {
+            display: flex;
+            align-items: center;
+            padding: 15px 20px;
+            color: rgba(255, 255, 255, 0.9);
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+        
+        .sidebar-menu a:hover {
+            background-color: rgba(255, 255, 255, 0.15);
+            color: white;
+        }
+        
+        .sidebar-menu a.active {
+            background-color: rgba(255, 255, 255, 0.2);
+            color: white;
+            border-left: 4px solid var(--accent-color);
+        }
+        
+        .sidebar-menu i {
+            margin-right: 10px;
+            font-size: 1.2rem;
+            width: 24px;
+            text-align: center;
+        }
+        
+        /* Contenido principal */
+        .app-content {
+            margin-left: var(--sidebar-width);
+            margin-top: var(--header-height);
+            padding: 20px;
+            min-height: calc(100vh - var(--header-height));
+            transition: margin-left 0.3s ease;
+            background-color: var(--content-bg);
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .app-sidebar {
+                transform: translateX(-100%);
+            }
+            
+            .app-content {
+                margin-left: 0;
+            }
+            
+            .sidebar-toggle {
+                display: block;
+            }
+            
+            .sidebar-open .app-sidebar {
+                transform: translateX(0);
+            }
+            
+            .sidebar-open .app-content {
+                margin-left: var(--sidebar-width);
+            }
+        }
+        
+        /* Botón para mostrar/ocultar sidebar en móviles */
+        .sidebar-toggle {
+            display: none;
+            background: none;
+            border: none;
+            color: var(--primary-color);
+            font-size: 1.5rem;
+            margin-right: 15px;
+            cursor: pointer;
+        }
+        
+        /* Estilos adicionales para contenido */
+        .card {
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(3, 94, 94, 0.1);
+            margin-bottom: 1.5rem;
+            background-color: var(--card-bg);
+            border: 1px solid var(--very-light-teal);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            border: none;
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(135deg, var(--accent-color) 0%, var(--primary-color) 100%);
+        }
+        
+        .btn-outline-secondary {
+            border-color: var(--light-teal);
+            color: var(--primary-color);
+        }
+        
+        .btn-outline-info {
+            border-color: var(--light-teal);
+            color: var(--primary-color);
+        }
+        
+        .stat-card {
+            text-align: center;
+            padding: 1.5rem;
+            background-color: var(--card-bg);
+        }
+        
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+        
+        .footer {
+            margin-top: 3rem;
+            padding: 1.5rem 0;
+            background-color: var(--sidebar-bg);
+            color: var(--text-light);
+            text-align: center;
+            border-top: 1px solid var(--light-teal);
+        }
+        
+        /* Espacio para el logo placeholder */
+        .logo-placeholder {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+        
+        /* Estilos para enlaces */
+        a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+        
+        a:hover {
+            color: var(--secondary-color);
+        }
+        
+        /* Estilos para formularios */
+        .form-control {
+            border: 1px solid var(--light-teal);
+        }
+        
+        .form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.25rem rgba(4, 125, 125, 0.25);
+        }
+        
+        /* Estilos para alertas */
+        .alert-info {
+            background-color: rgba(4, 125, 125, 0.1);
+            border-color: var(--light-teal);
+            color: var(--text-dark);
+        }
+        
+        /* Estilos para bordes y separadores */
+        hr {
+            border-color: var(--very-light-teal);
+        }
+
+        /* Estilos para submenús en sidebar */
+        .has-submenu > a {
+            position: relative;
+        }
+        .has-submenu > a .bi-chevron-down {
+            transition: transform 0.3s ease;
+            font-size: 0.9rem;
+            margin-left: auto;
+        }
+        .has-submenu.active > a .bi-chevron-down {
+            transform: rotate(180deg);
+        }
+        .submenu {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            background-color: rgba(0, 0, 0, 0.2);
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+        .has-submenu.active .submenu {
+            max-height: 200px;
+        }
+        .submenu li {
+            border-bottom: none;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .submenu a {
+            padding-left: 50px;
+            padding-top: 12px;
+            padding-bottom: 12px;
+            font-size: 0.95rem;
+        }
+        .submenu a.active {
+            background-color: rgba(255, 255, 255, 0.15);
+            border-left: 4px solid var(--accent-color);
+        }
+        .submenu i {
+            font-size: 1rem;
+            margin-right: 10px;
+        }
+    </style>
+    
+<style>
+:root {
+    --color-disponible: #28a745;
+    --color-vendida: #6f42c1;
+    --color-reservada: #007bff;
+    --color-negociacion: #ffc107;
+    --color-retirada: #6c757d;
+    --color-visita: #007bff;
+    --color-seguimiento: #ffc107;
+    --color-propuesta: #6f42c1;
+    --color-llamada: #28a745;
+    --color-cierre: #20c997;
+}
+
+/* Estilos generales */
+.sticky-filters {
+    position: sticky;
+    top: 0;
+    z-index: 1020;
+    background-color: white;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    padding: 1rem;
+    border-radius: 0.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.kpi-card {
+    border-radius: 10px;
+    border: 1px solid #e0e0e0;
+    padding: 1.2rem;
+    background: white;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    transition: transform 0.2s;
+    height: 100%;
+}
+.kpi-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+.kpi-value {
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1;
+}
+.kpi-label {
+    font-size: 0.85rem;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Tabla */
+.table-container {
+    overflow-x: auto;
+}
+.table-visits {
+    font-size: 0.9rem;
+}
+.table-visits th {
+    background-color: #f8f9fa;
+    border-bottom: 2px solid #007bff;
+    color: #495057;
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+}
+.table-visits th.sortable:hover {
+    background-color: #e9ecef;
+}
+.table-visits th i {
+    font-size: 0.8rem;
+    margin-left: 0.3rem;
+    opacity: 0.6;
+}
+.table-visits tbody tr {
+    transition: background-color 0.15s;
+}
+.table-visits tbody tr:hover {
+    background-color: rgba(0, 123, 255, 0.05);
+}
+.table-visits tbody tr.zero-visits {
+    background-color: rgba(255, 182, 193, 0.1);
+}
+.table-visits td {
+    vertical-align: middle;
+}
+
+/* Badges */
+.badge-status {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.35em 0.65em;
+}
+.badge-disponible { background-color: var(--color-disponible); color: white; }
+.badge-vendida { background-color: var(--color-vendida); color: white; }
+.badge-reservada { background-color: var(--color-reservada); color: white; }
+.badge-negociacion { background-color: var(--color-negociacion); color: #212529; }
+.badge-retirada { background-color: var(--color-retirada); color: white; }
+
+/* Barra de visitas */
+.visits-bar-container {
+    width: 100%;
+    height: 1.5rem;
+    background-color: #e9ecef;
+    border-radius: 0.75rem;
+    overflow: hidden;
+    position: relative;
+}
+.visits-bar-fill {
+    height: 100%;
+    background-color: #28a745;
+    border-radius: 0.75rem;
+    transition: width 0.3s;
+}
+.visits-bar-zero {
+    background-color: #dc3545;
+}
+.visits-bar-text {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #495057;
+}
+
+/* Panel lateral */
+.offcanvas-end {
+    width: 600px;
+    max-width: 90vw;
+}
+.timeline {
+    position: relative;
+    padding-left: 2rem;
+    margin-top: 1.5rem;
+}
+.timeline::before {
+    content: '';
+    position: absolute;
+    left: 0.75rem;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background-color: #dee2e6;
+}
+.timeline-item {
+    position: relative;
+    margin-bottom: 1.5rem;
+}
+.timeline-dot {
+    position: absolute;
+    left: -2rem;
+    top: 0.25rem;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 50%;
+    border: 3px solid white;
+    box-shadow: 0 0 0 2px currentColor;
+}
+.timeline-content {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .table-visits {
+        font-size: 0.8rem;
+    }
+    .kpi-value {
+        font-size: 1.5rem;
+    }
+}
+</style>
+
+</head>
+<body>
+    <!-- Header delgado -->
+    <header class="app-header">
+        <button class="sidebar-toggle" id="sidebarToggle">
+            <i class="bi bi-list"></i>
+        </button>
+        
+        <div class="logo-container">
+            <div class="logo-placeholder">
+                <i class="bi bi-binoculars-fill"></i>
+            </div>
+            <a href="/" class="logo-text ms-2">El Gran Extractor</a>
+        </div>
+        
+        <div class="ms-auto d-flex align-items-center">
+            <a href="/admin/" class="btn btn-outline-secondary btn-sm me-2" target="_blank">
+                <i class="bi bi-gear"></i> Admin
+            </a>
+            <a href="/api/" class="btn btn-outline-info btn-sm" target="_blank">
+                <i class="bi bi-code-slash"></i> API
+            </a>
+        </div>
+    </header>
+    
+    <!-- Barra lateral delgada -->
+    <nav class="app-sidebar" id="appSidebar">
+        <ul class="sidebar-menu">
+            <li>
+                <a href="/" class="">
+                    <i class="bi bi-speedometer2"></i>
+                    <span>Dashboard</span>
+                </a>
+            </li>
+            <li>
+                <a href="/fuentes-web/" class="">
+                    <i class="bi bi-globe"></i>
+                    <span>Fuentes Web</span>
+                </a>
+            </li>
+            <li>
+                <a href="/capturas/" class="">
+                    <i class="bi bi-camera"></i>
+                    <span>Capturas</span>
+                </a>
+            </li>
+            <li>
+                <a href="/ingestas/" class="">
+                    <i class="bi bi-database"></i>
+                    <span>Ingestas</span>
+                </a>
+            </li>
+            <li>
+                <a href="/ingestas/propiedades/" class="">
+                    <i class="bi bi-house-door"></i>
+                    <span>Propiedades</span>
+                </a>
+            </li>
+            <li class="has-submenu active">
+                <a href="#">
+                    <i class="bi bi-house-door-fill"></i>
+                    <span>Propiedades Propify</span>
+                    <i class="bi bi-chevron-down ms-auto"></i>
+                </a>
+                <ul class="submenu">
+                    <li>
+                        <a href="/propifai/dashboard/calidad/" class="">
+                            <i class="bi bi-bar-chart-line"></i>
+                            <span>Análisis de Cartera</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/propifai/propiedades/" class="">
+                            <i class="bi bi-list-ul"></i>
+                            <span>Lista de Propiedades</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/propifai/dashboard/visitas/" class="active">
+                            <i class="bi bi-calendar-check"></i>
+                            <span>Dashboard de Visitas</span>
+                        </a>
+                    </li>
+                </ul>
+            </li>
+            <li>
+                <a href="/requerimientos/lista/" class="">
+                    <i class="bi bi-clipboard-check"></i>
+                    <span>Requerimientos</span>
+                </a>
+            </li>
+            <li>
+                <a href="/matching/masivo/" class="">
+                    <i class="bi bi-lightning-charge-fill"></i>
+                    <span>Matching Masivo</span>
+                </a>
+            </li>
+            <li>
+                <a href="/cuadrantizacion/mapa/" class="">
+                    <i class="bi bi-map"></i>
+                    <span>Cuadrantización</span>
+                </a>
+            </li>
+            <li>
+                <a href="/acm/analisis/" class="">
+                    <i class="bi bi-graph-up"></i>
+                    <span>Análisis Comparativo (ACM)</span>
+                </a>
+            </li>
+            <li>
+                <a href="/market-analysis/dashboard/" class="">
+                    <i class="bi bi-speedometer"></i>
+                    <span>Dashboard Mercado</span>
+                </a>
+            </li>
+            <li>
+                <a href="/market-analysis/heatmap/" class="">
+                    <i class="bi bi-thermometer-high"></i>
+                    <span>Heatmap Mercado</span>
+                </a>
+            </li>
+            <li class="has-submenu ">
+                <a href="#">
+                    <i class="bi bi-megaphone-fill"></i>
+                    <span>Meta Ads</span>
+                    <i class="bi bi-chevron-down ms-auto"></i>
+                </a>
+                <ul class="submenu">
+                    <li>
+                        <a href="/meta-ads/dashboard/" class="">
+                            <i class="bi bi-speedometer"></i>
+                            <span>Dashboard Principal</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/meta-ads/analisis/historico/" class="">
+                            <i class="bi bi-bar-chart-line"></i>
+                            <span>Análisis Histórico</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/meta-ads/campañas/" class="">
+                            <i class="bi bi-list-ul"></i>
+                            <span>Lista de Campañas</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/meta-ads/sincronizar/" class="">
+                            <i class="bi bi-arrow-repeat"></i>
+                            <span>Sincronizar Datos</span>
+                        </a>
+                    </li>
+                </ul>
+            </li>
+            <li>
+                <a href="/analisis-crm/" class="">
+                    <i class="bi bi-people-fill"></i>
+                    <span>Leads CRM</span>
+                </a>
+            </li>
+            <li>
+                <a href="#">
+                    <i class="bi bi-search"></i>
+                    <span>Descubrimiento</span>
+                </a>
+            </li>
+            <li>
+                <a href="#">
+                    <i class="bi bi-gear"></i>
+                    <span>Configuración</span>
+                </a>
+            </li>
+            <li>
+                <a href="#">
+                    <i class="bi bi-question-circle"></i>
+                    <span>Ayuda</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+    
+    <!-- Contenido principal -->
+    <main class="app-content" id="appContent">
+        
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0">Dashboard de Visitas y Actividad por Propiedad</h1>
+        <div class="text-muted">
+            <span id="last-update">Actualizado: </span>
+        </div>
+    </div>
+
+    <!-- Barra de filtros sticky -->
+    <div class="sticky-filters">
+        <div class="row g-3">
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Status</label>
+                <select class="form-select form-select-sm" id="filter-status">
+                    <option value="">Todos</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Distrito</label>
+                <select class="form-select form-select-sm" id="filter-district">
+                    <option value="">Todos</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Zona</label>
+                <select class="form-select form-select-sm" id="filter-zone" disabled>
+                    <option value="">Todas</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Agente</label>
+                <select class="form-select form-select-sm" id="filter-agent">
+                    <option value="">Todos</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Visitas</label>
+                <select class="form-select form-select-sm" id="filter-visits">
+                    <option value="">Todas</option>
+                    <option value="0">Sin ninguna visita</option>
+                    <option value="1+">1 o más</option>
+                    <option value="3+">3 o más</option>
+                    <option value="5+">5 o más</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Buscar</label>
+                <input type="text" class="form-control form-control-sm" id="filter-search" placeholder="Código o título">
+            </div>
+            <div class="col-md-12 mt-2">
+                <div class="d-flex justify-content-between">
+                    <button class="btn btn-sm btn-outline-secondary" id="clear-filters">
+                        <i class="fas fa-times"></i> Limpiar filtros
+                    </button>
+                    <div class="text-muted small">
+                        <span id="filter-count">Mostrando <strong>0</strong> propiedades — <strong>0</strong> sin visitas</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fila de KPIs -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-2">
+            <div class="kpi-card">
+                <div class="kpi-label">Total propiedades</div>
+                <div class="kpi-value text-primary" id="kpi-total">0</div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="kpi-card">
+                <div class="kpi-label">Sin ninguna visita</div>
+                <div class="kpi-value text-danger" id="kpi-zero-visits">0</div>
+                <div class="kpi-label" id="kpi-zero-percent">0%</div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="kpi-card">
+                <div class="kpi-label">Promedio de visitas</div>
+                <div class="kpi-value text-info" id="kpi-avg-visits">0.0</div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="kpi-card">
+                <div class="kpi-label">Con propuesta</div>
+                <div class="kpi-value text-success" id="kpi-with-proposal">0</div>
+                <div class="kpi-label" id="kpi-proposal-percent">0%</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="kpi-card">
+                <div class="kpi-label">Propiedad con más visitas</div>
+                <div class="d-flex align-items-center">
+                    <div class="kpi-value text-warning me-2" id="kpi-max-visits-count">0</div>
+                    <div class="small" id="kpi-max-visits-name">—</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Matriz de propiedades -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Matriz de propiedades</h5>
+            <div class="text-muted small">
+                <span id="table-count">Mostrando 0 propiedades</span>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-container">
+                <table class="table table-hover table-visits mb-0">
+                    <thead>
+                        <tr>
+                            <th class="sortable" data-sort="code">Código <i class="fas fa-sort"></i></th>
+                            <th class="sortable" data-sort="title">Título <i class="fas fa-sort"></i></th>
+                            <th class="sortable" data-sort="tipo_propiedad">Tipo <i class="fas fa-sort"></i></th>
+                            <th class="sortable" data-sort="distrito">Distrito <i class="fas fa-sort"></i></th>
+                            <th class="sortable" data-sort="zona">Zona <i class="fas fa-sort"></i></th>
+                            <th class="sortable" data-sort="status">Status <i class="fas fa-sort"></i></th>
+                            <th class="sortable" data-sort="price">Precio <i class="fas fa-sort"></i></th>
+                            <th class="sortable" data-sort="agente_asignado">Agente <i class="fas fa-sort"></i></th>
+                            <th class="sortable" data-sort="total_eventos">Visitas <i class="fas fa-sort"></i></th>
+                            <th class="sortable" data-sort="ultima_visita">Última visita <i class="fas fa-sort"></i></th>
+                            <th class="sortable" data-sort="primera_visita">Primera visita <i class="fas fa-sort"></i></th>
+                            <th>Lead</th>
+                            <th>Propuesta</th>
+                            <th class="sortable" data-sort="dias_en_cartera">Días en cartera <i class="fas fa-sort"></i></th>
+                        </tr>
+                    </thead>
+                    <tbody id="properties-tbody">
+                        <!-- Datos cargados por JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer text-muted small">
+            <div class="d-flex justify-content-between">
+                <div>
+                    <span id="table-summary">0 propiedades cargadas</span>
+                </div>
+                <div>
+                    <span id="render-info">Renderizado por lotes activo</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Panel lateral de detalle -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="detailOffcanvas" aria-labelledby="detailOffcanvasLabel">
+    <div class="offcanvas-header border-bottom">
+        <h5 class="offcanvas-title" id="detailOffcanvasLabel">Detalle de propiedad</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body p-0">
+        <div id="detail-loading" class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Cargando...</span>
+            </div>
+            <p class="mt-3">Cargando eventos...</p>
+        </div>
+        <div id="detail-content" class="d-none">
+            <!-- Header sticky dentro del panel -->
+            <div class="sticky-top bg-white border-bottom p-3">
+                <h6 class="mb-1" id="detail-code"></h6>
+                <p class="mb-1 small" id="detail-title"></p>
+                <div class="d-flex flex-wrap gap-2 mb-2">
+                    <span class="badge" id="detail-type"></span>
+                    <span class="badge" id="detail-district"></span>
+                    <span class="badge" id="detail-zone"></span>
+                    <span class="badge" id="detail-agent"></span>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span class="badge bg-secondary" id="detail-status"></span>
+                    <span class="fw-bold" id="detail-price"></span>
+                </div>
+            </div>
+            <!-- Mini KPIs -->
+            <div class="row g-2 p-3 border-bottom">
+                <div class="col-4 text-center">
+                    <div class="small text-muted">Total visitas</div>
+                    <div class="h4 mb-0" id="detail-total-visits">0</div>
+                </div>
+                <div class="col-4 text-center">
+                    <div class="small text-muted">Días en cartera</div>
+                    <div class="h4 mb-0" id="detail-days-portfolio">0</div>
+                </div>
+                <div class="col-4 text-center">
+                    <div class="small text-muted">Tiene propuesta</div>
+                    <div class="h4 mb-0" id="detail-has-proposal">No</div>
+                </div>
+            </div>
+            <!-- Timeline o mensaje sin eventos -->
+            <div id="detail-no-events" class="alert alert-danger m-3 d-none">
+                <i class="fas fa-exclamation-triangle"></i> Sin ninguna visita registrada
+            </div>
+            <div id="detail-timeline" class="p-3">
+                <h6 class="mb-3">Historial de eventos</h6>
+                <div class="timeline" id="timeline-container">
+                    <!-- Timeline items generados por JavaScript -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Overlay semitransparente -->
+<div class="offcanvas-backdrop fade d-none" id="offcanvasBackdrop"></div>
+
+    </main>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Toggle sidebar en móviles
+        document.addEventListener('DOMContentLoaded', function() {
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            const appSidebar = document.getElementById('appSidebar');
+            const appContent = document.getElementById('appContent');
+            
+            if (sidebarToggle) {
+                sidebarToggle.addEventListener('click', function() {
+                    document.body.classList.toggle('sidebar-open');
+                });
+            }
+            
+            // Cerrar sidebar al hacer clic fuera en móviles
+            appContent.addEventListener('click', function() {
+                if (window.innerWidth <= 768 && document.body.classList.contains('sidebar-open')) {
+                    document.body.classList.remove('sidebar-open');
+                }
+            });
+            
+            // Actualizar clase activa en menú
+            const currentPath = window.location.pathname;
+            const menuItems = document.querySelectorAll('.sidebar-menu a');
+            
+            menuItems.forEach(item => {
+                if (item.getAttribute('href') === currentPath) {
+                    item.classList.add('active');
+                }
+            });
+
+            // Submenús: alternar al hacer clic en el enlace padre
+            document.querySelectorAll('.has-submenu > a').forEach(link => {
+                link.addEventListener('click', function(e) {
+                    // Solo si el enlace no tiene href válido (es #)
+                    if (this.getAttribute('href') === '#') {
+                        e.preventDefault();
+                        const parentLi = this.parentElement;
+                        parentLi.classList.toggle('active');
+                    }
+                });
+            });
+
+            // Expandir submenú si alguna subpágina está activa
+            document.querySelectorAll('.has-submenu').forEach(li => {
+                const activeSub = li.querySelector('.submenu a.active');
+                if (activeSub) {
+                    li.classList.add('active');
+                }
+            });
+        });
+    </script>
+    
+    
+<script>
+// Datos iniciales desde Django
+const propertiesData = [{"id": 1, "code": "PROP000001", "title": "", "address": "Caba\u00f1a maria, Arequipa", "property_type": "Propiedad", "district": "1", "zone": "Sin zona", "status": "paused", "status_code": "paused", "price": 330000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 82, "frecuencia_visitas": "N/A", "created_at": "2026-01-07T21:27:16.851383+00:00"}, {"id": 2, "code": "PROP000002", "title": "", "address": "Campo Verde; Cerro Colorado", "property_type": "Propiedad", "district": "4", "zone": "Sin zona", "status": "sold", "status_code": "sold", "price": 299000.0, "agent_name": "Sin agente", "total_eventos": 2, "primera_visita": "2026-01-21", "ultima_visita": "2026-01-23", "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 82, "frecuencia_visitas": "2.0 d\u00edas", "created_at": "2026-01-07T21:30:52.372341+00:00"}, {"id": 3, "code": "PROP000003", "title": "", "address": "Urb. Los Bosques,La Campi\u00f1a, Socabaya", "property_type": "Propiedad", "district": "23", "zone": "Sin zona", "status": "sold", "status_code": "sold", "price": 120000.0, "agent_name": "Sin agente", "total_eventos": 3, "primera_visita": "2026-01-13", "ultima_visita": "2026-01-22", "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 81, "frecuencia_visitas": "4.5 d\u00edas", "created_at": "2026-01-08T07:35:37.369230+00:00"}, {"id": 6, "code": "PROP000006", "title": "Se Vende Casona En Puente Grau", "address": "PUENTE GRAU 104", "property_type": "Propiedad", "district": "1", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 900000.0, "agent_name": "Sin agente", "total_eventos": 1, "primera_visita": "2026-01-24", "ultima_visita": "2026-01-24", "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 76, "frecuencia_visitas": "N/A", "created_at": "2026-01-13T04:07:26.665207+00:00"}, {"id": 8, "code": "PROP000007", "title": "Casa En Venta Como Terreno (zamacola)", "address": "Urubamba 308, Arequipa 04017, Per\u00fa", "property_type": "Propiedad", "district": "4", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 500000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 76, "frecuencia_visitas": "N/A", "created_at": "2026-01-13T13:02:27.996550+00:00"}, {"id": 9, "code": "PROP000009", "title": "Vendo 2 Departamentos Mariscal Castilla Cerro Colorado", "address": "Arequipa\r\nArequipa", "property_type": "Propiedad", "district": "4", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 139000.0, "agent_name": "Sin agente", "total_eventos": 7, "primera_visita": "2026-02-12", "ultima_visita": "2026-03-26", "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 75, "frecuencia_visitas": "7.0 d\u00edas", "created_at": "2026-01-14T15:52:11.080835+00:00"}, {"id": 10, "code": "PROP000010", "title": "Terreno Urbano En Huasacache Av Paisajista", "address": "Av. Paisajista Mz. J Lt. 1A, Jacobo Hunter 04011, Per\u00fa", "property_type": "Propiedad", "district": "7", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 390208.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 75, "frecuencia_visitas": "N/A", "created_at": "2026-01-14T16:23:29.265801+00:00"}, {"id": 11, "code": "PROP000011", "title": "Vendo Terreno En Avenida - Urb El Ensue\u00f1o", "address": "urb el ensue\u00f1o sachaca", "property_type": "Propiedad", "district": "18", "zone": "Sin zona", "status": "paused", "status_code": "paused", "price": 189750.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 75, "frecuencia_visitas": "N/A", "created_at": "2026-01-14T20:11:21.090388+00:00"}, {"id": 12, "code": "PROP000012", "title": "Terreno En Venta Frente A Parque - Urb El Ensue\u00f1o", "address": "HCFG+F38, Arequipa 04013, Per\u00fa", "property_type": "Propiedad", "district": "18", "zone": "Sin zona", "status": "paused", "status_code": "paused", "price": 158521.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 74, "frecuencia_visitas": "N/A", "created_at": "2026-01-15T01:16:57.073435+00:00"}, {"id": 13, "code": "PROP000013", "title": "En Venta D\u00faplex En Cerro Colorado", "address": "SECCION 10 MZ A LOTE 11 URB, RESIDENCIAL SANTA SOFIA\r\nCERRO COLORADO", "property_type": "Propiedad", "district": "4", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 177000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 69, "frecuencia_visitas": "N/A", "created_at": "2026-01-20T03:33:26.463872+00:00"}, {"id": 14, "code": "PROP000014", "title": "En Venta Casa Tipo Townhouse Frente A Parque, Sachaca.", "address": "HC8G+5VC, Sachaca 04013, Per\u00fa", "property_type": "Propiedad", "district": "18", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 195000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 69, "frecuencia_visitas": "N/A", "created_at": "2026-01-20T11:44:47.065874+00:00"}, {"id": 15, "code": "PROP000015", "title": "En Venta 02 Casa En Sachaca", "address": "Urbanizacion El dorado, Sachaca", "property_type": "Propiedad", "district": "18", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 395000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 67, "frecuencia_visitas": "N/A", "created_at": "2026-01-22T03:59:39.604018+00:00"}, {"id": 16, "code": "PROP000016", "title": "Venta De Casa En Camana", "address": "Balneario Punta Nueva K 7 Samuel Pastor provincia de Caman\u00e1", "property_type": "Propiedad", "district": "30", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 90000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 66, "frecuencia_visitas": "N/A", "created_at": "2026-01-23T07:32:10.887496+00:00"}, {"id": 17, "code": "PROP000017", "title": "Venta De Local Comercial En La Pampilla", "address": "CALLE TRISTAN 101 URB. CASAPIA, JOSE LUIS BUSTAMANTE Y RIVERO", "property_type": "Propiedad", "district": "8", "zone": "Sin zona", "status": "sold", "status_code": "sold", "price": 650000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 69, "frecuencia_visitas": "N/A", "created_at": "2026-01-20T19:46:17.932468+00:00"}, {"id": 18, "code": "PROP000018", "title": "Venta De Duplex + Terraza Por Dolores", "address": "Urb Juan Pablo vizcardo y guzman G-9A", "property_type": "Propiedad", "district": "8", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 132000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 69, "frecuencia_visitas": "N/A", "created_at": "2026-01-20T20:21:31.352738+00:00"}, {"id": 20, "code": "PROP000020", "title": "En Venta Hermosa Casa De Estreno En Sachaca", "address": "La catedral D2, Sachaca.", "property_type": "Propiedad", "district": "18", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 389000.0, "agent_name": "Sin agente", "total_eventos": 4, "primera_visita": "2026-02-17", "ultima_visita": "2026-03-20", "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 59, "frecuencia_visitas": "10.3 d\u00edas", "created_at": "2026-01-30T09:10:06.095040+00:00"}, {"id": 21, "code": "PROP000021", "title": "Terreno En Venta, Variante Uchumayo.", "address": "HCQR+PVV, Variante de Uchumayo, Cerro Colorado 04013, Per\u00fa", "property_type": "Propiedad", "district": "18", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 3323514.2, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 60, "frecuencia_visitas": "N/A", "created_at": "2026-01-29T18:20:51.940762+00:00"}, {"id": 22, "code": "PROP000022", "title": "En Venta Espectacular Casa En Challapampa, Cerro Colorado", "address": "Challapampa - Santa Sofia", "property_type": "Propiedad", "district": "4", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 1600000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 57, "frecuencia_visitas": "N/A", "created_at": "2026-02-01T16:42:53.722516+00:00"}, {"id": 23, "code": "PROP000023", "title": "Vendo Departamentos En Congata", "address": "Departamento Congata", "property_type": "Propiedad", "district": "25", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 77000.0, "agent_name": "Sin agente", "total_eventos": 3, "primera_visita": "2026-02-12", "ultima_visita": "2026-02-17", "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 59, "frecuencia_visitas": "2.5 d\u00edas", "created_at": "2026-01-30T20:19:45.866348+00:00"}, {"id": 29, "code": "PROP000029", "title": "Preventa De Departamentos Emperatriz En Challapampa", "address": "Urb. Teresa de Jes\u00fas Mz. I; Lote 43, Cerro Colorado", "property_type": "Propiedad", "district": "4", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 163800.0, "agent_name": "Sin agente", "total_eventos": 1, "primera_visita": "2026-03-14", "ultima_visita": "2026-03-14", "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 51, "frecuencia_visitas": "N/A", "created_at": "2026-02-07T22:08:52.917003+00:00"}, {"id": 31, "code": "PROP000031", "title": "En Venta Departamento En Valle Blanco", "address": "Valle Blanco Reserva", "property_type": "Propiedad", "district": "4", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 357200.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 50, "frecuencia_visitas": "N/A", "created_at": "2026-02-08T07:31:58.955076+00:00"}, {"id": 32, "code": "PROP000032", "title": "\ud83c\udfe1 Venta De Terrenos \u2013 Cercado \u2013 Arequipa", "address": "Avenida Alfonso Ugarte 303, Cercado - Arequipa", "property_type": "Propiedad", "district": "1", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 136416.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 48, "frecuencia_visitas": "N/A", "created_at": "2026-02-10T23:39:53.703431+00:00"}, {"id": 33, "code": "PROP000033", "title": "Casa Como Terreno En Cerro Viejo - Cerro Colorado", "address": "Cerro viejo (al frente del portal)", "property_type": "Propiedad", "district": "4", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 590000.0, "agent_name": "Sin agente", "total_eventos": 1, "primera_visita": "2026-03-12", "ultima_visita": "2026-03-12", "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 46, "frecuencia_visitas": "N/A", "created_at": "2026-02-12T17:50:39.219633+00:00"}, {"id": 34, "code": "PROP000034", "title": "Departamento En Venta En Condominio Almira De Hunter", "address": "Calle Argentina N\u00b0398, sub lote B-4, Departamento A-1006, distrito de Jacobo Hunter, provincia y departamento de Arequipa.", "property_type": "Propiedad", "district": "7", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 85000.0, "agent_name": "Sin agente", "total_eventos": 4, "primera_visita": "2026-03-23", "ultima_visita": "2026-03-30", "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 43, "frecuencia_visitas": "2.3 d\u00edas", "created_at": "2026-02-15T03:13:49.352110+00:00"}, {"id": 35, "code": "PROP000035", "title": "Casa Como Terreno En Pampa De Camarones", "address": "Pampa de Camarones Mz - F Lote 33", "property_type": "Propiedad", "district": "18", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 220000.0, "agent_name": "Sin agente", "total_eventos": 15, "primera_visita": "2026-03-02", "ultima_visita": "2026-04-06", "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 45, "frecuencia_visitas": "2.5 d\u00edas", "created_at": "2026-02-13T17:25:45.525783+00:00"}, {"id": 36, "code": "PROP000036", "title": "Departamento En El Primer Piso - Las Condes", "address": "Mz C lote 14 Seccion 1 Urb. Las Condes Sachaca", "property_type": "Propiedad", "district": "18", "zone": "Sin zona", "status": "sold", "status_code": "sold", "price": 180000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 45, "frecuencia_visitas": "N/A", "created_at": "2026-02-13T07:32:37.821768+00:00"}, {"id": 37, "code": "PROP000037", "title": "Casa A Precio De Departamento Socabaya - La Campi\u00f1a", "address": "Urb. Los Bosques La Campi\u00f1a, Socabaya", "property_type": "Propiedad", "district": "23", "zone": "Sin zona", "status": "sold", "status_code": "sold", "price": 120000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 45, "frecuencia_visitas": "N/A", "created_at": "2026-02-13T03:10:38.851823+00:00"}, {"id": 38, "code": "PROP000038", "title": "Terreno En Urb. Mirasol - Cayma", "address": "Urb. Mirasol Cayma", "property_type": "Propiedad", "district": "3", "zone": "Sin zona", "status": "sold", "status_code": "sold", "price": 160000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 46, "frecuencia_visitas": "N/A", "created_at": "2026-02-12T17:19:20.418813+00:00"}, {"id": 39, "code": "PROP000039", "title": "Terreno En Urb. Las Terrazas Del Rosario, Cerro Colorado", "address": "Urb. las Terrazas del Rosario, Cerro Colorado", "property_type": "Propiedad", "district": "4", "zone": "Sin zona", "status": "sold", "status_code": "sold", "price": 185000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 46, "frecuencia_visitas": "N/A", "created_at": "2026-02-12T17:23:16.385181+00:00"}, {"id": 40, "code": "PROP000040", "title": "Departamento Urb. Guardia Civil Cerca Al Mall Aventura Porongoche", "address": "Urb. Guardia Civil", "property_type": "Propiedad", "district": "13", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 82500.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 45, "frecuencia_visitas": "N/A", "created_at": "2026-02-13T12:17:42.372538+00:00"}, {"id": 44, "code": "PROP000044", "title": "Terreno En Miguel Grau", "address": "Pasaje 3 de Abril Mz.38 - Lt.7, Paucarpata 04007, Per\u00fa", "property_type": "Propiedad", "district": "13", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 600000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 41, "frecuencia_visitas": "N/A", "created_at": "2026-02-17T00:09:51.914230+00:00"}, {"id": 46, "code": "PROP000046", "title": "Casa En Venta Cayma ( Urb El Mirador)", "address": "JFG3+FW4 Mirador, Arequipa 04017, Peru", "property_type": "Propiedad", "district": "3", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 777150.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 41, "frecuencia_visitas": "N/A", "created_at": "2026-02-17T18:45:30.188811+00:00"}, {"id": 47, "code": "PROP000047", "title": "Departamentos De Estreno (hunter)", "address": "Jir\u00f3n 3 Mz.G - Lt.6, Jacobo Hunter 04011, Peru", "property_type": "Propiedad", "district": "7", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 330000.0, "agent_name": "Sin agente", "total_eventos": 2, "primera_visita": "2026-03-03", "ultima_visita": "2026-03-19", "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 40, "frecuencia_visitas": "16.0 d\u00edas", "created_at": "2026-02-18T05:26:35.373022+00:00"}, {"id": 48, "code": "PROP000048", "title": "\ud83c\udfe1 Departamento En Venta \u2013 Avidge, Cayma", "address": "Urbanizaci\u00f3n Avidge, Cayma", "property_type": "Propiedad", "district": "3", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 145000.0, "agent_name": "Sin agente", "total_eventos": 6, "primera_visita": "2026-03-09", "ultima_visita": "2026-03-23", "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 40, "frecuencia_visitas": "2.8 d\u00edas", "created_at": "2026-02-18T02:35:23.660399+00:00"}, {"id": 49, "code": "PROP000049", "title": "\ud83c\udfe1 En Venta \u2013 Casa De Estreno En Sachaca, Urb Privada.", "address": "Sachaca", "property_type": "Propiedad", "district": "18", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 315000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 40, "frecuencia_visitas": "N/A", "created_at": "2026-02-18T16:47:32.952541+00:00"}, {"id": 50, "code": "PROP000050", "title": "\u2728 Departamento De Estreno En Preventa \u2013 Cayma \u2728", "address": "Urb. Emperatriz Mz. B lote 3 - Cayma", "property_type": "Propiedad", "district": "3", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 133000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 39, "frecuencia_visitas": "N/A", "created_at": "2026-02-19T08:19:17.455453+00:00"}, {"id": 51, "code": "PROP000051", "title": "Casa En Urb Lambramani", "address": "HFRG+HP5, Arequipa 04002, Peru", "property_type": "Propiedad", "district": "1", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 370000.0, "agent_name": "Sin agente", "total_eventos": 1, "primera_visita": "2026-02-19", "ultima_visita": "2026-02-19", "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 39, "frecuencia_visitas": "N/A", "created_at": "2026-02-19T21:23:45.778715+00:00"}, {"id": 52, "code": "PROP000052", "title": "\ud83c\udfe1 Se Vende Casa A Precio De Terreno \u2013 Paucarpata", "address": "pueblo joven progresista mz I lote 20", "property_type": "Propiedad", "district": "13", "zone": "Sin zona", "status": "reserved", "status_code": "reserved", "price": 185000.0, "agent_name": "Sin agente", "total_eventos": 2, "primera_visita": "2026-03-14", "ultima_visita": "2026-03-23", "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 38, "frecuencia_visitas": "9.0 d\u00edas", "created_at": "2026-02-20T01:53:26.786556+00:00"}, {"id": 54, "code": "PROP000053", "title": "Terreno Industrial Rio Seco", "address": "Parque Industrial Rio Seco", "property_type": "Propiedad", "district": "4", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 861300.0, "agent_name": "Sin agente", "total_eventos": 1, "primera_visita": "2026-03-23", "ultima_visita": "2026-03-23", "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 36, "frecuencia_visitas": "N/A", "created_at": "2026-02-22T05:13:29.200955+00:00"}, {"id": 56, "code": "PROP000055", "title": "\ud83c\udfe1 D\u00faplex De Estreno Con Cochera En J.l.b.yr.", "address": "HF9M+F33, Alameda del Sol, Jos\u00e9 Luis Bustamante y Rivero 04009, Per\u00fa", "property_type": "Propiedad", "district": "8", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 615000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 34, "frecuencia_visitas": "N/A", "created_at": "2026-02-24T16:22:41.441895+00:00"}, {"id": 57, "code": "PROP000057", "title": "\ud83c\udfe2 Proyecto De Solo 5 Departamentos Con Cochera - Monterrico", "address": "HF8H+JVW, Arequipa 04009, Per\u00fa", "property_type": "Propiedad", "district": "8", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 425000.0, "agent_name": "Sin agente", "total_eventos": 5, "primera_visita": "2026-03-11", "ultima_visita": "2026-03-18", "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 34, "frecuencia_visitas": "1.8 d\u00edas", "created_at": "2026-02-24T21:36:18.972180+00:00"}, {"id": 58, "code": "PROP000058", "title": "3 Departamentos En Valle Escondido", "address": "JFH4+V5V Parque Av. Bolognesi, Av. Bolognesi, Cayma 04017, Per\u00fa", "property_type": "Propiedad", "district": "3", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 178000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 33, "frecuencia_visitas": "N/A", "created_at": "2026-02-25T14:32:53.902619+00:00"}, {"id": 59, "code": "PROP000059", "title": "Depas De 2 Y 3 Habitaciones En El Exclusivo Proyecto Ares.", "address": "Av. Cayma", "property_type": "Propiedad", "district": "3", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 127000.0, "agent_name": "Sin agente", "total_eventos": 1, "primera_visita": "2026-02-25", "ultima_visita": "2026-02-25", "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 33, "frecuencia_visitas": "N/A", "created_at": "2026-02-25T15:42:27.809394+00:00"}, {"id": 63, "code": "PROP000063", "title": "Duplex En Venta Sachaca De 140 M2 Con Cochera De 14m2 Total 154 M2 De \u00c1rea", "address": "HCFG+QWF, Sachaca 04013, Peru", "property_type": "Propiedad", "district": "18", "zone": "Sin zona", "status": "unavailable", "status_code": "unavailable", "price": 571000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 32, "frecuencia_visitas": "N/A", "created_at": "2026-02-26T15:52:32.284672+00:00"}, {"id": 64, "code": "PROP000064", "title": "Duplex En Venta Sachaca", "address": "HCFG+QWF, Sachaca 04013, Peru", "property_type": "Propiedad", "district": "18", "zone": "Sin zona", "status": "unavailable", "status_code": "unavailable", "price": 571000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 32, "frecuencia_visitas": "N/A", "created_at": "2026-02-26T16:05:20.894270+00:00"}, {"id": 65, "code": "PROP000065", "title": "Terreno En Venta En Zamacola", "address": "Mantaro Mz.G1 - Lt.18, Cerro Colorado 04017, Peru", "property_type": "Propiedad", "district": "4", "zone": "Sin zona", "status": "catchment", "status_code": "catchment", "price": 360000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 32, "frecuencia_visitas": "N/A", "created_at": "2026-02-26T17:57:20.946615+00:00"}, {"id": 66, "code": "PROP000066", "title": "Duplex En Venta Sachaca", "address": "HCFG+QWF, Sachaca 04013, Peru", "property_type": "Propiedad", "district": "18", "zone": "Sin zona", "status": "unavailable", "status_code": "unavailable", "price": 571000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 32, "frecuencia_visitas": "N/A", "created_at": "2026-02-26T19:16:52.193290+00:00"}, {"id": 67, "code": "PROP000067", "title": "Duplex En Venta Sachaca", "address": "HCFG+QWF, Sachaca 04013, Peru", "property_type": "Propiedad", "district": "18", "zone": "Sin zona", "status": "catchment", "status_code": "catchment", "price": 571000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 32, "frecuencia_visitas": "N/A", "created_at": "2026-02-26T19:41:08.618497+00:00"}, {"id": 68, "code": "PROP000068", "title": "Vendo Casa En Esquina En Asa", "address": "URB. RAFAEL HOYOS RUBIO MZ LL 9", "property_type": "Propiedad", "district": "2", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 140000.0, "agent_name": "Sin agente", "total_eventos": 5, "primera_visita": "2026-03-12", "ultima_visita": "2026-03-23", "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 31, "frecuencia_visitas": "2.8 d\u00edas", "created_at": "2026-02-27T05:53:09.863502+00:00"}, {"id": 69, "code": "PROP000069", "title": "Vendo Departamento En Quinta Privada Yanahuara", "address": "Calle espinar 310  lote 4 secci\u00f3n 4 Residencial Quinta Maria Santos dpto 401", "property_type": "Propiedad", "district": "27", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 160000.0, "agent_name": "Sin agente", "total_eventos": 1, "primera_visita": "2026-02-28", "ultima_visita": "2026-02-28", "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 32, "frecuencia_visitas": "N/A", "created_at": "2026-02-26T22:03:04.983130+00:00"}, {"id": 70, "code": "PROP000070", "title": "", "address": "Terreno ubicado en urbanizaci\u00f3n Fundo Santa Rosa\r\nTerreno de 250.55 m2\r\nPrecio x m2: $1050.00\r\n\r\nPAPELES EN REGLA", "property_type": "Propiedad", "district": "27", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 263077.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 32, "frecuencia_visitas": "N/A", "created_at": "2026-02-26T22:20:29.053607+00:00"}, {"id": 71, "code": "PROP000071", "title": "En Venta \u00daltimos Departamentos Y D\u00faplex En Sachaca", "address": "El Palacio", "property_type": "Propiedad", "district": "18", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 1.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 31, "frecuencia_visitas": "N/A", "created_at": "2026-02-27T03:34:53.276226+00:00"}, {"id": 72, "code": "PROP000072", "title": "Departamentos En Selva Alegre", "address": "Calle Jacinto Mariategui 403, Alto Selva Alegre 04001, Per\u00fa", "property_type": "Propiedad", "district": "2", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 75000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 31, "frecuencia_visitas": "N/A", "created_at": "2026-02-27T13:56:08.166333+00:00"}, {"id": 73, "code": "PROP000073", "title": "Departamentos En Selva Alegre - Preventa", "address": "Calle Jacinto Mariategui 403, Alto Selva Alegre 04001, Per\u00fa", "property_type": "Propiedad", "district": "2", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 78000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 31, "frecuencia_visitas": "N/A", "created_at": "2026-02-27T18:57:14.402751+00:00"}, {"id": 74, "code": "PROP000074", "title": "Casa En Miraflores - Alameda", "address": "Lt. 35, C. 22 B Mz. R, Miraflores 04004, Per\u00fa", "property_type": "Propiedad", "district": "11", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 175000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 29, "frecuencia_visitas": "N/A", "created_at": "2026-03-01T11:09:47.763257+00:00"}, {"id": 76, "code": "PROP000076", "title": "Casa Con Local En Socabaya - La Campi\u00f1a", "address": "La Campi\u00f1a, Arequipa, Per\u00fa", "property_type": "Propiedad", "district": "23", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 185000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 31, "frecuencia_visitas": "N/A", "created_at": "2026-02-27T14:31:24.044943+00:00"}, {"id": 79, "code": "PROP000077", "title": "Departamentos Campo Verde", "address": "JCMP+9G4, Cerro Colorado 04017, Per\u00fa", "property_type": "Propiedad", "district": "27", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 433000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 31, "frecuencia_visitas": "N/A", "created_at": "2026-02-27T15:24:24.866138+00:00"}, {"id": 80, "code": "PROP000080", "title": "Departamentos Campo Verde", "address": "JCMP+7F3, Arequipa 04017, Per\u00fa", "property_type": "Propiedad", "district": "4", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 419000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 31, "frecuencia_visitas": "N/A", "created_at": "2026-02-27T20:50:06.206132+00:00"}, {"id": 81, "code": "PROP000081", "title": "Departamentos Campo Verde", "address": "JCMP+7F3, Arequipa 04017, Per\u00fa", "property_type": "Propiedad", "district": "4", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 337000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 31, "frecuencia_visitas": "N/A", "created_at": "2026-02-27T15:54:01.823751+00:00"}, {"id": 82, "code": "PROP000082", "title": "Departamentos Semi Sotano Campo Verde", "address": "JCMP+7F3, Arequipa 04017, Per\u00fa", "property_type": "Propiedad", "district": "4", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 294000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 30, "frecuencia_visitas": "N/A", "created_at": "2026-02-28T01:57:12.515153+00:00"}, {"id": 83, "code": "PROP000083", "title": "En Venta \u00daltimos Departamentos Y D\u00faplex En Sachaca", "address": "Urb el Palacio Etapa 1, Sachaca, Per\u00fa", "property_type": "Propiedad", "district": "18", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 209503.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 31, "frecuencia_visitas": "N/A", "created_at": "2026-02-27T16:15:07.615343+00:00"}, {"id": 84, "code": "PROP000084", "title": "En Venta \u00daltimos Departamentos Y D\u00faplex En Sachaca", "address": "Urb el Palacio Etapa 1, Sachaca, Per\u00fa", "property_type": "Propiedad", "district": "1", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 186399.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 31, "frecuencia_visitas": "N/A", "created_at": "2026-02-27T16:35:09.340019+00:00"}, {"id": 85, "code": "PROP000085", "title": "En Venta \u00daltimos Departamentos En Sachaca", "address": "Urb el Palacio Etapa 1, Sachaca, Per\u00fa", "property_type": "Propiedad", "district": "18", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 142330.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 31, "frecuencia_visitas": "N/A", "created_at": "2026-02-27T16:40:39.518378+00:00"}, {"id": 86, "code": "PROP000086", "title": "Casa En Urb. Wayra - Sachaca", "address": "HCCF+XC, Sachaca 04013, Per\u00fa", "property_type": "Propiedad", "district": "18", "zone": "Sin zona", "status": "catchment", "status_code": "catchment", "price": 247000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 24, "frecuencia_visitas": "N/A", "created_at": "2026-03-06T16:12:23.405870+00:00"}, {"id": 87, "code": "PROP000087", "title": "Casa De Campo, Mollebaya", "address": "Sin direcci\u00f3n", "property_type": "Propiedad", "district": "12", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 130000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 21, "frecuencia_visitas": "N/A", "created_at": "2026-03-09T16:33:10.714251+00:00"}, {"id": 88, "code": "PROP000088", "title": "Terreno En Miraflores Jorge Chavez 409", "address": "JORGE CHAVEZ 409 MIRAFLORES", "property_type": "Propiedad", "district": "11", "zone": "Sin zona", "status": "reserved", "status_code": "reserved", "price": 175000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 18, "frecuencia_visitas": "N/A", "created_at": "2026-03-12T22:25:48.913959+00:00"}, {"id": 89, "code": "PROP000089", "title": "Venta De Casona Con Tres Locales En Funcionamiento !!!!", "address": "MANUEL MU\u00d1OZ NAJAR 400", "property_type": "Propiedad", "district": "1", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 800000.0, "agent_name": "Sin agente", "total_eventos": 1, "primera_visita": "2026-03-16", "ultima_visita": "2026-03-16", "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 17, "frecuencia_visitas": "N/A", "created_at": "2026-03-13T23:39:53.188478+00:00"}, {"id": 90, "code": "PROP000090", "title": "Terreno Punta Camana Urb Privada :)", "address": "ASOCIACION DE VIVIENDA BALNEARIO AGUSTINO H 9 CAMANA", "property_type": "Propiedad", "district": "37", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 24000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 17, "frecuencia_visitas": "N/A", "created_at": "2026-03-13T23:55:27.567074+00:00"}, {"id": 91, "code": "PROP000091", "title": "Vendo Casa Cerca A Mariscal Castilla", "address": "PUEBLO JOVEN PROGRESISTA Mz P 11B", "property_type": "Propiedad", "district": "13", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 165000.0, "agent_name": "Sin agente", "total_eventos": 7, "primera_visita": "2026-03-16", "ultima_visita": "2026-03-29", "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 14, "frecuencia_visitas": "2.2 d\u00edas", "created_at": "2026-03-16T16:47:43.300351+00:00"}, {"id": 92, "code": "PROP000092", "title": "Amplio Tereno En Av. Alfonso Ugarte", "address": "luna de plata", "property_type": "Propiedad", "district": "1", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 850000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 14, "frecuencia_visitas": "N/A", "created_at": "2026-03-16T17:13:13.586936+00:00"}, {"id": 93, "code": "PROP000093", "title": "Casa Mariano Melgar", "address": "Sin direcci\u00f3n", "property_type": "Propiedad", "district": "10", "zone": "Sin zona", "status": "sold", "status_code": "sold", "price": 205000.0, "agent_name": "Sin agente", "total_eventos": 1, "primera_visita": "2026-03-17", "ultima_visita": "2026-03-17", "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 14, "frecuencia_visitas": "N/A", "created_at": "2026-03-16T21:03:33.740689+00:00"}, {"id": 94, "code": "PROP000094", "title": "Casa En Characato", "address": "Sin direcci\u00f3n", "property_type": "Propiedad", "district": "5", "zone": "Sin zona", "status": "catchment", "status_code": "catchment", "price": 115000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 11, "frecuencia_visitas": "N/A", "created_at": "2026-03-19T15:27:38.329461+00:00"}, {"id": 96, "code": "PROP000095", "title": "Vendo Departamento - Arrayanes Sachaca", "address": "HCRX+36H, Arequipa 04013, Per\u00fa", "property_type": "Propiedad", "district": "18", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 169000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 6, "frecuencia_visitas": "N/A", "created_at": "2026-03-24T23:00:00.051775+00:00"}, {"id": 97, "code": "PROP000097", "title": "Vendo Terreno En Quinta Natura", "address": "Sin direcci\u00f3n", "property_type": "Propiedad", "district": "1", "zone": "Sin zona", "status": "available", "status_code": "available", "price": 94000.0, "agent_name": "Sin agente", "total_eventos": 1, "primera_visita": "2026-03-26", "ultima_visita": "2026-03-26", "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 4, "frecuencia_visitas": "N/A", "created_at": "2026-03-26T20:16:51.496251+00:00"}, {"id": 98, "code": "PROP000098", "title": "En Venta Casa De Playa - Cerrillos I - Camana, Arequipa, Peru", "address": "Cerrillos I MZ-B LT-24 ZN-A Samuel Pastor, Camana, Arequipa, Peru", "property_type": "Propiedad", "district": "37", "zone": "Sin zona", "status": "catchment", "status_code": "catchment", "price": 95000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 3, "frecuencia_visitas": "N/A", "created_at": "2026-03-27T23:05:18.942770+00:00"}];
+let filteredData = [];
+let currentSort = { column: null, direction: 'asc' };
+let batchSize = 50;
+let renderedCount = 0;
+let isRendering = false;
+let renderQueue = [];
+
+// Debug
+console.log('Dashboard cargado, propiedades:', propertiesData.length);
+console.log('Primera propiedad:', propertiesData[0]);
+
+// Funciones de utilidad
+function formatDate(dateStr) {
+    if (!dateStr) return 'N/A';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function daysBetween(date1, date2) {
+    if (!date1 || !date2) return 0;
+    const d1 = new Date(date1);
+    const d2 = new Date(date2);
+    const diff = Math.abs(d2 - d1);
+    return Math.floor(diff / (1000 * 60 * 60 * 24));
+}
+
+function getStatusColor(status) {
+    const colors = {
+        'Disponible': '#28a745',
+        'Vendida': '#6f42c1',
+        'Reservada': '#007bff',
+        'En Negociación': '#ffc107',
+        'Retirada': '#6c757d'
+    };
+    return colors[status] || '#6c757d';
+}
+
+function getEventTypeColor(eventType) {
+    const colors = {
+        'Visita': '#007bff',
+        'Seguimiento': '#ffc107',
+        'Propuesta': '#6f42c1',
+        'Llamada': '#28a745',
+        'Cierre': '#20c997'
+    };
+    return colors[eventType] || '#6c757d';
+}
+
+// Poblar opciones de filtro
+function populateFilterOptions() {
+    const statusSet = new Set();
+    const typeSet = new Set();
+    const districtSet = new Set();
+    const agentSet = new Set();
+    
+    propertiesData.forEach(prop => {
+        if (prop.status) statusSet.add(prop.status);
+        if (prop.property_type) typeSet.add(prop.property_type);
+        if (prop.district) districtSet.add(prop.district);
+        if (prop.agent_name) agentSet.add(prop.agent_name);
+    });
+    
+    populateSelect('filter-status', Array.from(statusSet).sort());
+    populateSelect('filter-type', Array.from(typeSet).sort());
+    populateSelect('filter-district', Array.from(districtSet).sort());
+    populateSelect('filter-agent', Array.from(agentSet).sort());
+}
+
+function populateSelect(selectId, options) {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+    
+    // Mantener la opción "Todos"
+    const currentValue = select.value;
+    select.innerHTML = '<option value="">Todos</option>';
+    
+    options.forEach(option => {
+        const opt = document.createElement('option');
+        opt.value = option;
+        opt.textContent = option;
+        select.appendChild(opt);
+    });
+    
+    // Restaurar valor si existe
+    if (options.includes(currentValue)) {
+        select.value = currentValue;
+    }
+}
+
+// Actualizar KPIs
+function updateKPIs() {
+    const totalProps = filteredData.length;
+    const totalVisits = filteredData.reduce((sum, prop) => sum + (prop.total_eventos || 0), 0);
+    const avgVisits = totalProps > 0 ? (totalVisits / totalProps).toFixed(1) : 0;
+    
+    // Propiedades con lead (al menos un evento)
+    const propsWithLead = filteredData.filter(prop => prop.total_eventos > 0).length;
+    const leadPercentage = totalProps > 0 ? ((propsWithLead / totalProps) * 100).toFixed(1) : 0;
+    
+    // Propiedades con propuesta
+    const propsWithProposal = filteredData.filter(prop => prop.tiene_propuesta).length;
+    
+    document.getElementById('kpi-total-props').textContent = totalProps.toLocaleString();
+    document.getElementById('kpi-total-visits').textContent = totalVisits.toLocaleString();
+    document.getElementById('kpi-avg-visits').textContent = avgVisits;
+    document.getElementById('kpi-lead-percentage').textContent = `${leadPercentage}%`;
+    document.getElementById('kpi-proposal-count').textContent = propsWithProposal.toLocaleString();
+}
+
+// Aplicar filtros
+function applyFilters() {
+    const status = document.getElementById('filter-status').value;
+    const type = document.getElementById('filter-type').value;
+    const district = document.getElementById('filter-district').value;
+    const agent = document.getElementById('filter-agent').value;
+    const visitsMin = parseInt(document.getElementById('filter-visits-min').value) || 0;
+    const visitsMax = parseInt(document.getElementById('filter-visits-max').value) || Infinity;
+    
+    filteredData = propertiesData.filter(prop => {
+        if (status && prop.status !== status) return false;
+        if (type && prop.property_type !== type) return false;
+        if (district && prop.district !== district) return false;
+        if (agent && prop.agent_name !== agent) return false;
+        
+        const visits = prop.total_eventos || 0;
+        if (visits < visitsMin || visits > visitsMax) return false;
+        
+        return true;
+    });
+    
+    renderedCount = 0;
+    updateKPIs();
+    clearTable();
+    renderTableBatch();
+}
+
+// Limpiar tabla
+function clearTable() {
+    const tbody = document.getElementById('properties-tbody');
+    tbody.innerHTML = '';
+    renderedCount = 0;
+}
+
+// Renderizar tabla por lotes
+function renderTableBatch() {
+    console.log('renderTableBatch llamado');
+    console.log('isRendering:', isRendering);
+    console.log('filteredData length:', filteredData.length);
+    console.log('renderedCount:', renderedCount);
+    
+    if (isRendering) {
+        console.log('Ya se está renderizando, saliendo');
+        return;
+    }
+    
+    const tbody = document.getElementById('properties-tbody');
+    console.log('tbody encontrado:', !!tbody);
+    
+    const start = renderedCount;
+    const end = Math.min(start + batchSize, filteredData.length);
+    console.log('start:', start, 'end:', end);
+    
+    if (start >= filteredData.length) {
+        console.log('Ya se renderizaron todas las filas');
+        document.getElementById('rendered-count').textContent = filteredData.length.toLocaleString();
+        return;
+    }
+    
+    isRendering = true;
+    console.log('Comenzando renderizado...');
+    
+    const fragment = document.createDocumentFragment();
+    let rowsCreated = 0;
+    for (let i = start; i < end; i++) {
+        const prop = filteredData[i];
+        console.log('Creando fila para propiedad:', prop.id, prop.code);
+        const row = createTableRow(prop);
+        if (row) {
+            fragment.appendChild(row);
+            rowsCreated++;
+        }
+    }
+    
+    console.log('Rows creadas:', rowsCreated);
+    console.log('Appending fragment to tbody...');
+    tbody.appendChild(fragment);
+    
+    renderedCount = end;
+    document.getElementById('rendered-count').textContent = renderedCount.toLocaleString();
+    
+    isRendering = false;
+    console.log('Renderizado completado, renderedCount:', renderedCount);
+    
+    // Programar siguiente lote
+    if (renderedCount < filteredData.length) {
+        console.log('Programando siguiente lote...');
+        requestAnimationFrame(() => {
+            renderTableBatch();
+        });
+    } else {
+        console.log('Todos los lotes renderizados');
+    }
+}
+
+// Crear fila de tabla
+function createTableRow(prop) {
+    const row = document.createElement('tr');
+    row.dataset.propertyId = prop.id;
+    row.style.cursor = 'pointer';
+    
+    // Calcular días en cartera
+    const daysInPortfolio = prop.dias_en_cartera || 0;
+    const visitFrequency = prop.total_eventos > 0 ? (daysInPortfolio / prop.total_eventos).toFixed(1) : 'N/A';
+    
+    row.innerHTML = `
+        <td>
+            <div class="d-flex align-items-center">
+                <div class="status-indicator" style="background-color: ${getStatusColor(prop.status)}"></div>
+                <span class="ms-2">${prop.code || 'N/A'}</span>
+            </div>
+        </td>
+        <td>${prop.address || 'N/A'}</td>
+        <td>${prop.district || 'N/A'}</td>
+        <td>${prop.property_type || 'N/A'}</td>
+        <td>${prop.agent_name || 'N/A'}</td>
+        <td>
+            <span class="badge bg-primary rounded-pill">${prop.total_eventos || 0}</span>
+        </td>
+        <td>${formatDate(prop.primera_visita)}</td>
+        <td>${formatDate(prop.ultima_visita)}</td>
+        <td>${daysInPortfolio}</td>
+        <td>${visitFrequency}</td>
+        <td>
+            ${prop.tiene_lead ? '<span class="badge bg-success">Sí</span>' : '<span class="badge bg-secondary">No</span>'}
+        </td>
+        <td>
+            ${prop.tiene_propuesta ? '<span class="badge bg-warning">Sí</span>' : '<span class="badge bg-secondary">No</span>'}
+        </td>
+        <td>
+            <button class="btn btn-sm btn-outline-primary view-details" data-property-id="${prop.id}">
+                <i class="bi bi-eye"></i>
+            </button>
+        </td>
+    `;
+    
+    // Evento para abrir detalles
+    row.querySelector('.view-details').addEventListener('click', (e) => {
+        e.stopPropagation();
+        loadPropertyDetails(prop.id);
+    });
+    
+    // Evento para hacer clic en la fila
+    row.addEventListener('click', () => {
+        loadPropertyDetails(prop.id);
+    });
+    
+    return row;
+}
+
+// Ordenar tabla
+function sortTable(columnIndex) {
+    const columns = ['code', 'address', 'district', 'property_type', 'agent_name', 'total_eventos',
+                     'primera_visita', 'ultima_visita', 'dias_en_cartera', 'frecuencia_visitas',
+                     'tiene_lead', 'tiene_propuesta'];
+    
+    if (columnIndex < 0 || columnIndex >= columns.length) return;
+    
+    const column = columns[columnIndex];
+    const direction = currentSort.column === column && currentSort.direction === 'asc' ? 'desc' : 'asc';
+    
+    filteredData.sort((a, b) => {
+        let valA = a[column];
+        let valB = b[column];
+        
+        // Manejar fechas
+        if (column.includes('visita') && valA && valB) {
+            valA = new Date(valA);
+            valB = new Date(valB);
+        }
+        
+        // Manejar valores nulos
+        if (valA == null) valA = direction === 'asc' ? Infinity : -Infinity;
+        if (valB == null) valB = direction === 'asc' ? Infinity : -Infinity;
+        
+        if (valA < valB) return direction === 'asc' ? -1 : 1;
+        if (valA > valB) return direction === 'asc' ? 1 : -1;
+        return 0;
+    });
+    
+    currentSort = { column, direction };
+    updateSortIndicators(columnIndex, direction);
+    
+    renderedCount = 0;
+    clearTable();
+    renderTableBatch();
+}
+
+function updateSortIndicators(columnIndex, direction) {
+    // Remover indicadores anteriores
+    document.querySelectorAll('th .sort-indicator').forEach(ind => ind.remove());
+    
+    const th = document.querySelector(`th:nth-child(${columnIndex + 1})`);
+    if (!th) return;
+    
+    const indicator = document.createElement('span');
+    indicator.className = 'sort-indicator ms-1';
+    indicator.innerHTML = direction === 'asc' ? '↑' : '↓';
+    th.appendChild(indicator);
+}
+
+// Cargar detalles de propiedad
+async function loadPropertyDetails(propertyId) {
+    const loading = document.getElementById('detail-loading');
+    const content = document.getElementById('detail-content');
+    
+    loading.classList.remove('d-none');
+    content.classList.add('d-none');
+    
+    // Mostrar offcanvas
+    const offcanvas = new bootstrap.Offcanvas(document.getElementById('detailOffcanvas'));
+    offcanvas.show();
+    
+    try {
+        const response = await fetch(`/propifai/api/property/${propertyId}/events/`);
+        if (!response.ok) throw new Error('Error al cargar eventos');
+        
+        const data = await response.json();
+        displayPropertyDetails(data);
+    } catch (error) {
+        console.error('Error:', error);
+        document.getElementById('detail-timeline').innerHTML = `
+            <div class="alert alert-danger">
+                Error al cargar los detalles: ${error.message}
+            </div>
+        `;
+    } finally {
+        loading.classList.add('d-none');
+        content.classList.remove('d-none');
+    }
+}
+
+// Mostrar detalles de propiedad
+function displayPropertyDetails(data) {
+    const prop = data.property;
+    const events = data.events || [];
+    
+    // Actualizar encabezado
+    document.getElementById('detail-title').textContent = prop.code || 'Propiedad';
+    document.getElementById('detail-address').textContent = prop.address || 'N/A';
+    document.getElementById('detail-status').innerHTML = `
+        <span class="badge" style="background-color: ${getStatusColor(prop.status)}">
+            ${prop.status || 'N/A'}
+        </span>
+    `;
+    
+    // Actualizar KPIs de detalle
+    document.getElementById('detail-total-events').textContent = events.length;
+    document.getElementById('detail-last-event').textContent = formatDate(prop.ultima_visita);
+    document.getElementById('detail-days-in-portfolio').textContent = prop.dias_en_cartera || 0;
+    
+    // Renderizar timeline
+    renderTimeline(events);
+}
+
+// Renderizar timeline de eventos
+function renderTimeline(events) {
+    const container = document.getElementById('detail-timeline');
+    
+    if (events.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">No hay eventos registrados para esta propiedad.</div>';
+        return;
+    }
+    
+    // Ordenar eventos por fecha descendente
+    events.sort((a, b) => new Date(b.fecha_evento) - new Date(a.fecha_evento));
+    
+    const timelineHTML = events.map(event => `
+        <div class="timeline-item">
+            <div class="timeline-marker" style="background-color: ${getEventTypeColor(event.event_type)}"></div>
+            <div class="timeline-content">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="mb-1">${event.titulo || 'Evento'}</h6>
+                        <p class="mb-1 small text-muted">${event.descripcion || 'Sin descripción'}</p>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge" style="background-color: ${getEventTypeColor(event.event_type)}">
+                                ${event.event_type || 'N/A'}
+                            </span>
+                            <span class="small">${event.agent_name || 'N/A'}</span>
+                        </div>
+                    </div>
+                    <div class="text-end">
+                        <div class="fw-bold">${formatDate(event.fecha_evento)}</div>
+                        <div class="small text-muted">${event.hora_evento || ''}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+    
+    container.innerHTML = `
+        <div class="timeline">
+            ${timelineHTML}
+        </div>
+    `;
+}
+
+// Configurar event listeners
+function setupEventListeners() {
+    // Filtros
+    document.getElementById('filter-status').addEventListener('change', applyFilters);
+    document.getElementById('filter-type').addEventListener('change', applyFilters);
+    document.getElementById('filter-district').addEventListener('change', applyFilters);
+    document.getElementById('filter-agent').addEventListener('change', applyFilters);
+    document.getElementById('filter-visits-min').addEventListener('input', applyFilters);
+    document.getElementById('filter-visits-max').addEventListener('input', applyFilters);
+    
+    // Botón limpiar filtros
+    document.getElementById('clear-filters').addEventListener('click', () => {
+        document.getElementById('filter-status').value = '';
+        document.getElementById('filter-type').value = '';
+        document.getElementById('filter-district').value = '';
+        document.getElementById('filter-agent').value = '';
+        document.getElementById('filter-visits-min').value = '';
+        document.getElementById('filter-visits-max').value = '';
+        applyFilters();
+    });
+    
+    // Ordenamiento de columnas
+    document.querySelectorAll('th[data-sortable]').forEach((th, index) => {
+        th.addEventListener('click', () => sortTable(index));
+    });
+    
+    // Scroll para carga incremental
+    const tableContainer = document.querySelector('.table-container');
+    tableContainer.addEventListener('scroll', () => {
+        const scrollBottom = tableContainer.scrollHeight - tableContainer.scrollTop - tableContainer.clientHeight;
+        if (scrollBottom < 100 && renderedCount < filteredData.length) {
+            renderTableBatch();
+        }
+    });
+    
+    // Cerrar offcanvas
+    document.getElementById('close-offcanvas').addEventListener('click', () => {
+        const offcanvas = bootstrap.Offcanvas.getInstance(document.getElementById('detailOffcanvas'));
+        offcanvas.hide();
+    });
+}
+
+// Inicialización
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOMContentLoaded ejecutado');
+    console.log('propertiesData length:', propertiesData.length);
+    
+    try {
+        filteredData = [...propertiesData];
+        console.log('filteredData length:', filteredData.length);
+        
+        // Depuración paso a paso
+        console.log('Llamando a populateFilterOptions...');
+        try {
+            populateFilterOptions();
+            console.log('populateFilterOptions completado');
+        } catch (err1) {
+            console.error('Error en populateFilterOptions:', err1);
+            throw err1;
+        }
+        
+        console.log('Llamando a updateKPIs...');
+        try {
+            updateKPIs();
+            console.log('updateKPIs completado');
+        } catch (err2) {
+            console.error('Error en updateKPIs:', err2);
+            throw err2;
+        }
+        
+        console.log('Llamando a renderTableBatch...');
+        try {
+            renderTableBatch();
+            console.log('renderTableBatch llamado (se ejecuta asíncronamente)');
+        } catch (err3) {
+            console.error('Error en renderTableBatch:', err3);
+            throw err3;
+        }
+        
+        console.log('Llamando a setupEventListeners...');
+        try {
+            setupEventListeners();
+            console.log('setupEventListeners completado');
+        } catch (err4) {
+            console.error('Error en setupEventListeners:', err4);
+            throw err4;
+        }
+        
+        console.log('Inicialización completada');
+    } catch (error) {
+        console.error('Error en inicialización:', error);
+        console.error('Stack trace:', error.stack);
+        
+        // Mostrar error en la página para debugging
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'alert alert-danger';
+        errorDiv.innerHTML = `<strong>Error JavaScript:</strong> ${error.message}<br><small>${error.stack}</small>`;
+        // Asegurarse de que .container-fluid existe
+        const container = document.querySelector('.container-fluid');
+        if (container) {
+            container.prepend(errorDiv);
+        } else {
+            // Si no existe, agregar al body
+            document.body.prepend(errorDiv);
+        }
+    }
+});
+</script>
+
+</body>
+</html>

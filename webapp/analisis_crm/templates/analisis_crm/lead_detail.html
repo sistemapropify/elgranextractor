@@ -1,0 +1,153 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'analisis_crm:dashboard' %}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'analisis_crm:lead_list' %}">Lista de Leads</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Lead {{ lead.id }}</li>
+                </ol>
+            </nav>
+            <h1 class="mb-4">{{ title }}</h1>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">Información del Lead</h6>
+                    <span class="badge {% if lead.is_active %}bg-success{% else %}bg-secondary{% endif %}">
+                        {% if lead.is_active %}Activo{% else %}Inactivo{% endif %}
+                    </span>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <table class="table table-sm table-borderless">
+                                <tr>
+                                    <th class="text-muted">ID:</th>
+                                    <td>{{ lead.id }}</td>
+                                </tr>
+                                <tr>
+                                    <th class="text-muted">Nombre completo:</th>
+                                    <td>{{ lead.full_name|default:"No especificado" }}</td>
+                                </tr>
+                                <tr>
+                                    <th class="text-muted">Teléfono:</th>
+                                    <td>{{ lead.phone }}</td>
+                                </tr>
+                                <tr>
+                                    <th class="text-muted">Email:</th>
+                                    <td>
+                                        {% if lead.email %}
+                                        <a href="mailto:{{ lead.email }}">{{ lead.email }}</a>
+                                        {% else %}
+                                        No especificado
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th class="text-muted">Usuario:</th>
+                                    <td>{{ lead.username }}</td>
+                                </tr>
+                                <tr>
+                                    <th class="text-muted">ID Chatwoot:</th>
+                                    <td>{{ lead.id_chatwoot|default:"-" }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <table class="table table-sm table-borderless">
+                                <tr>
+                                    <th class="text-muted">Fecha de entrada:</th>
+                                    <td>{{ lead.date_entry|date:"d/m/Y H:i"|default:"-" }}</td>
+                                </tr>
+                                <tr>
+                                    <th class="text-muted">Último mensaje:</th>
+                                    <td>{{ lead.date_last_message|date:"d/m/Y H:i"|default:"-" }}</td>
+                                </tr>
+                                <tr>
+                                    <th class="text-muted">Usuario último mensaje:</th>
+                                    <td>{{ lead.user_last_message|default:"-" }}</td>
+                                </tr>
+                                <tr>
+                                    <th class="text-muted">Canal Lead ID:</th>
+                                    <td>{{ lead.canal_lead_id|default:"-" }}</td>
+                                </tr>
+                                <tr>
+                                    <th class="text-muted">Estado Lead ID:</th>
+                                    <td>{{ lead.lead_status_id|default:"-" }}</td>
+                                </tr>
+                                <tr>
+                                    <th class="text-muted">Creado por ID:</th>
+                                    <td>{{ lead.created_by_id|default:"-" }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <h6 class="text-muted">Notas</h6>
+                            <div class="border rounded p-3 bg-light">
+                                {{ lead.notes|linebreaks|default:"Sin notas" }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer text-muted">
+                    <small>
+                        Creado: {{ lead.created_at|date:"d/m/Y H:i" }} | 
+                        Actualizado: {{ lead.updated_at|date:"d/m/Y H:i" }}
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Acciones</h6>
+                </div>
+                <div class="card-body text-center">
+                    <p class="card-text">Este lead es de solo lectura porque proviene de la base de datos de Propifai.</p>
+                    <a href="{% url 'analisis_crm:lead_list' %}" class="btn btn-outline-primary btn-block mb-2">
+                        <i class="bi bi-arrow-left"></i> Volver a la lista
+                    </a>
+                    <a href="{% url 'analisis_crm:dashboard' %}" class="btn btn-outline-secondary btn-block mb-2">
+                        <i class="bi bi-dashboard"></i> Ir al Dashboard
+                    </a>
+                    <div class="mt-4">
+                        <h6 class="text-muted">Información técnica</h6>
+                        <ul class="list-unstyled small">
+                            <li><strong>Tabla:</strong> crm_leads</li>
+                            <li><strong>Base de datos:</strong> propifai</li>
+                            <li><strong>App:</strong> analisis_crm</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Datos relacionados (podrían agregarse en el futuro) -->
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Posibles relaciones</h6>
+                </div>
+                <div class="card-body">
+                    <p class="small">Esta vista es de solo lectura. Para modificar datos, acceda a la aplicación original de Propifai.</p>
+                    <ul class="list-unstyled">
+                        <li><i class="bi bi-link-45deg"></i> <strong>Canal:</strong> {{ lead.canal_lead_id|default:"No asignado" }}</li>
+                        <li><i class="bi bi-link-45deg"></i> <strong>Estado:</strong> {{ lead.lead_status_id|default:"No asignado" }}</li>
+                        <li><i class="bi bi-link-45deg"></i> <strong>Creador:</strong> {{ lead.created_by_id|default:"No asignado" }}</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

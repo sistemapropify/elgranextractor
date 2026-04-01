@@ -1,0 +1,48 @@
+"""
+Monkey patch para corregir el error 'super' object has no attribute 'dicts'
+en Django 5.0.6 con Python 3.14.2.
+
+Este patch reemplaza completamente el método __copy__ de BaseContext
+y también parchea el método __copy__ de Context para evitar llamadas a super().
+"""
+import django.template.context
+import django.template.context as context_module
+
+def patched_basecontext_copy(self):
+    """Versión segura de __copy__ para BaseContext."""
+    # Crear nueva instancia
+    duplicate = self.__class__.__new__(self.__class__)
+    
+    # Copiar todos los atributos existentes
+    duplicate.__dict__.update(self.__dict__)
+    
+    # Manejar dicts de forma segura
+    if hasattr(self, 'dicts'):
+        duplicate.dicts = self.dicts[:] if self.dicts else []
+    else:
+        duplicate.dicts = []
+    
+    return duplicate
+
+def patched_context_copy(self):
+    """Versión segura de __copy__ para Context que evita llamar a super().__copy__()."""
+    # Crear nueva instancia
+    duplicate = self.__class__.__new__(self.__class__)
+    
+    # Copiar todos los atributos existentes
+    duplicate.__dict__.update(self.__dict__)
+    
+    # Asegurar que dicts sea una copia
+    duplicate.dicts = self.dicts[:] if self.dicts else []
+    
+    return duplicate
+
+# Aplicar patches a ambas clases
+django.template.context.BaseContext.__copy__ = patched_basecontext_copy
+django.template.context.Context.__copy__ = patched_context_copy
+
+# También parchear RequestContext si existe
+if hasattr(django.template.context, 'RequestContext'):
+    django.template.context.RequestContext.__copy__ = patched_context_copy
+
+print("Monkey patch completo aplicado a django.template.context")

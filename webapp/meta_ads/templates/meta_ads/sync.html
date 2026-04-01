@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block title %}Sincronizar Datos - Meta Ads - Propifai{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Encabezado -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="h3 mb-0">
+                    <i class="fas fa-sync-alt text-primary me-2"></i>
+                    Sincronizar Datos Meta Ads
+                </h1>
+                <div>
+                    <a href="{% url 'meta_ads:meta_ads_dashboard' %}" class="btn btn-outline-secondary btn-sm">
+                        <i class="fas fa-arrow-left me-1"></i> Volver al Dashboard
+                    </a>
+                </div>
+            </div>
+            <p class="text-muted mb-0">
+                Sincronización manual de datos desde la API de Meta Business
+            </p>
+        </div>
+    </div>
+
+    <!-- Estadísticas -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="kpi-card">
+                <div class="kpi-icon bg-primary">
+                    <i class="fas fa-ad"></i>
+                </div>
+                <div class="kpi-content">
+                    <h6 class="kpi-label">Campañas</h6>
+                    <h3 class="kpi-value">{{ total_campaigns|intcomma }}</h3>
+                    <div class="kpi-trend text-success">
+                        <i class="fas fa-database me-1"></i>
+                        En base de datos
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="kpi-card">
+                <div class="kpi-icon bg-success">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <div class="kpi-content">
+                    <h6 class="kpi-label">Insights</h6>
+                    <h3 class="kpi-value">{{ total_insights|intcomma }}</h3>
+                    <div class="kpi-trend">
+                        <i class="fas fa-calendar-day me-1"></i>
+                        Registros diarios
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="kpi-card">
+                <div class="kpi-icon bg-info">
+                    <i class="fas fa-calendar-check"></i>
+                </div>
+                <div class="kpi-content">
+                    <h6 class="kpi-label">Última Sincronización</h6>
+                    <h3 class="kpi-value">
+                        {% if last_sync_date %}
+                            {{ last_sync_date|date:"d/m/Y" }}
+                        {% else %}
+                            Nunca
+                        {% endif %}
+                    </h3>
+                    <div class="kpi-trend">
+                        <i class="fas fa-clock me-1"></i>
+                        Fecha más reciente
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="kpi-card">
+                <div class="kpi-icon bg-warning">
+                    <i class="fas fa-tools"></i>
+                </div>
+                <div class="kpi-content">
+                    <h6 class="kpi-label">Estado API</h6>
+                    <h3 class="kpi-value">Conectada</h3>
+                    <div class="kpi-trend text-success">
+                        <i class="fas fa-plug me-1"></i>
+                        Token activo
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Panel de Sincronización -->
+    <div class="row">
+        <div class="col-lg-8 mb-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-bottom">
+                    <h5 class="mb-0">
+                        <i class="fas fa-cogs text-primary me-2"></i>
+                        Opciones de Sincronización
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-4">
+                            <div class="card border h-100">
+                                <div class="card-body text-center">
+                                    <div class="mb-3">
+                                        <i class="fas fa-ad fa-3x text-primary"></i>
+                                    </div>
+                                    <h5 class="card-title">Sincronizar Campañas</h5>
+                                    <p class="card-text text-muted small">
+                                        Obtiene la lista actual de campañas desde Meta Business y actualiza la base de datos.
+                                    </p>
+                                    <button class="btn btn-primary btn-sm" onclick="syncCampaigns()">
+                                        <i class="fas fa-sync-alt me-1"></i> Ejecutar Ahora
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-4">
+                            <div class="card border h-100">
+                                <div class="card-body text-center">
+                                    <div class="mb-3">
+                                        <i class="fas fa-chart-line fa-3x text-success"></i>
+                                    </div>
+                                    <h5 class="card-title">Sincronizar Insights</h5>
+                                    <p class="card-text text-muted small">
+                                        Descarga métricas diarias de las últimas 30 días para todas las campañas activas.
+                                    </p>
+                                    <button class="btn btn-success btn-sm" onclick="syncInsights()">
+                                        <i class="fas fa-sync-alt me-1"></i> Ejecutar Ahora
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-4">
+                            <div class="card border h-100">
+                                <div class="card-body text-center">
+                                    <div class="mb-3">
+                                        <i class="fas fa-bolt fa-3x text-warning"></i>
+                                    </div>
+                                    <h5 class="card-title">Sincronización Completa</h5>
+                                    <p class="card-text text-muted small">
+                                        Ejecuta ambos procesos: campañas + insights. Tiempo estimado: 2-3 minutos.
+                                    </p>
+                                    <button class="btn btn-warning btn-sm" onclick="syncAll()">
+                                        <i class="fas fa-bolt me-1"></i> Ejecutar Completa
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-4">
+                            <div class="card border h-100">
+                                <div class="card-body text-center">
+                                    <div class="mb-3">
+                                        <i class="fas fa-history fa-3x text-info"></i>
+                                    </div>
+                                    <h5 class="card-title">Historial de Sincronización</h5>
+                                    <p class="card-text text-muted small">
+                                        Muestra el historial de ejecuciones anteriores y resultados.
+                                    </p>
+                                    <a href="{% url 'admin:meta_ads_metacampaign_changelist' %}" class="btn btn-info btn-sm" target="_blank">
+                                        <i class="fas fa-external-link-alt me-1"></i> Ver en Admin
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-bottom">
+                    <h5 class="mb-0">
+                        <i class="fas fa-terminal text-secondary me-2"></i>
+                        Comando Manual
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted">
+                        Para sincronizar datos manualmente desde la terminal, ejecuta:
+                    </p>
+                    <div class="bg-dark text-light p-3 rounded mb-3">
+                        <code class="small">python manage.py sync_meta_ads</code>
+                    </div>
+                    <p class="small text-muted">
+                        Opciones adicionales:
+                    </p>
+                    <div class="bg-light p-3 rounded">
+                        <code class="small d-block mb-1">python manage.py sync_meta_ads --days 60</code>
+                        <small class="text-muted">Sincroniza insights de los últimos 60 días</small>
+                        
+                        <code class="small d-block mb-1 mt-2">python manage.py sync_meta_ads --verbose</code>
+                        <small class="text-muted">Muestra detalles de la sincronización</small>
+                        
+                        <code class="small d-block mb-1 mt-2">python manage.py sync_meta_ads --force</code>
+                        <small class="text-muted">Fuerza resincronización completa</small>
+                    </div>
+                </div>
+                <div class="card-footer bg-white border-top">
+                    <small class="text-muted">
+                        <i class="fas fa-info-circle me-1"></i>
+                        La sincronización automática se ejecuta diariamente a las 2:00 AM.
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function syncCampaigns() {
+    alert('Función de sincronización de campañas ejecutada (simulación).\n\nEn producción, esto llamaría a una API que ejecuta el comando de sincronización.');
+    // En una implementación real, aquí haríamos una llamada AJAX a una vista que ejecuta el comando
+}
+
+function syncInsights() {
+    alert('Función de sincronización de insights ejecutada (simulación).\n\nSe descargarían métricas de los últimos 30 días.');
+}
+
+function syncAll() {
+    if (confirm('¿Estás seguro de ejecutar una sincronización completa?\n\nEsto puede tomar varios minutos.')) {
+        alert('Sincronización completa iniciada (simulación).\n\nPor favor, espera a que se complete.');
+    }
+}
+</script>
+{% endblock %}

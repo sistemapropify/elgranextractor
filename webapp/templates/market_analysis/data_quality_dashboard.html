@@ -1,0 +1,627 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_head %}
+    <style>
+        :root {
+            --primary-color: #10b981;
+            --secondary-color: #059669;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --info-color: #3b82f6;
+            --light-bg: #f8fafc;
+        }
+        
+        body {
+            background-color: var(--light-bg);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .dashboard-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .quality-score-card {
+            border-radius: 12px;
+            border: none;
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.08);
+            transition: transform 0.3s ease;
+        }
+        
+        .quality-score-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .score-circle {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto;
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: white;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        
+        .score-excellent { background: linear-gradient(135deg, #10b981, #059669); }
+        .score-good { background: linear-gradient(135deg, #3b82f6, #1d4ed8); }
+        .score-regular { background: linear-gradient(135deg, #f59e0b, #d97706); }
+        .score-critical { background: linear-gradient(135deg, #ef4444, #dc2626); }
+        
+        .nav-tabs .nav-link {
+            border: none;
+            color: #64748b;
+            font-weight: 500;
+            padding: 0.75rem 1.5rem;
+        }
+        
+        .nav-tabs .nav-link.active {
+            color: var(--primary-color);
+            border-bottom: 3px solid var(--primary-color);
+            background: transparent;
+        }
+        
+        .chart-container {
+            background: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e2e8f0;
+        }
+        
+        .chart-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .chart-title i {
+            color: var(--primary-color);
+        }
+        
+        .metric-card {
+            background: white;
+            border-radius: 10px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            border-left: 4px solid var(--primary-color);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+        }
+        
+        .metric-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #1e293b;
+        }
+        
+        .metric-label {
+            font-size: 0.9rem;
+            color: #64748b;
+            margin-top: 0.25rem;
+        }
+        
+        .issue-badge {
+            padding: 0.35rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        
+        .data-source-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        
+        .badge-local { background-color: #dbeafe; color: #1d4ed8; }
+        .badge-propifai { background-color: #f0f9ff; color: #0c4a6e; }
+        
+        @media (max-width: 768px) {
+            .score-circle {
+                width: 100px;
+                height: 100px;
+                font-size: 2rem;
+            }
+            
+            .nav-tabs .nav-link {
+                padding: 0.5rem 1rem;
+                font-size: 0.9rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    {% extends "base.html" %}
+    
+    {% block content %}
+    <div class="dashboard-header">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h1 class="display-5 fw-bold mb-3">
+                        <i class="bi bi-graph-up-arrow me-2"></i>{{ title }}
+                    </h1>
+                    <p class="lead mb-0">
+                        Análisis avanzado de calidad de datos, detección de anomalías y métricas de completitud
+                    </p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <div class="btn-group">
+                        <a href="{% url 'market_analysis:dashboard' %}" class="btn btn-outline-light">
+                            <i class="bi bi-speedometer2 me-1"></i> Dashboard Simple
+                        </a>
+                        <button class="btn btn-light" onclick="refreshData()">
+                            <i class="bi bi-arrow-clockwise me-1"></i> Actualizar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Resumen de calidad -->
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="quality-score-card">
+                    <div class="card-body text-center">
+                        <div class="score-circle score-{{ quality_color }}">
+                            {{ overall_score }}
+                        </div>
+                        <h3 class="mt-3 mb-1">Puntaje de Calidad</h3>
+                        <span class="badge bg-{{ quality_color }} fs-6">{{ quality_status }}</span>
+                        <p class="text-muted mt-2 small">
+                            Basado en completitud, duplicados y valores atípicos
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-8">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="metric-card">
+                            <div class="metric-value">{{ total_count }}</div>
+                            <div class="metric-label">Total de Propiedades</div>
+                            <div class="mt-2">
+                                <span class="data-source-badge badge-local me-2">
+                                    <i class="bi bi-house me-1"></i> Local: {{ local_count }}
+                                </span>
+                                <span class="data-source-badge badge-propifai">
+                                    <i class="bi bi-cloud me-1"></i> Propify: {{ propifai_count }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="metric-card">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <div class="metric-value text-danger">{{ critical_issues }}</div>
+                                    <div class="metric-label">Problemas Críticos</div>
+                                </div>
+                                <div>
+                                    <div class="metric-value text-warning">{{ warning_issues }}</div>
+                                    <div class="metric-label">Advertencias</div>
+                                </div>
+                            </div>
+                            <div class="mt-3">
+                                {% if critical_issues == 0 and warning_issues == 0 %}
+                                    <span class="issue-badge bg-success">Todo en orden</span>
+                                {% elif critical_issues > 0 %}
+                                    <span class="issue-badge bg-danger">Requiere atención inmediata</span>
+                                {% else %}
+                                    <span class="issue-badge bg-warning text-dark">Revisión recomendada</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="metric-card">
+                            <h6 class="fw-bold mb-2">Métricas por Fuente</h6>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <div class="me-2">
+                                            <i class="bi bi-house text-primary"></i>
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <div class="d-flex justify-content-between">
+                                                <span>Base Local</span>
+                                                <span class="fw-bold">
+                                                    {{ metrics.local.avg_completeness|default:0|floatformat:1 }}%
+                                                </span>
+                                            </div>
+                                            {% with local_width=metrics.local.avg_completeness|default:0|floatformat:0 %}
+                                            <div class="progress" style="height: 6px;">
+                                                <div class="progress-bar bg-primary"
+                                                     style="width: {{ local_width }}%">
+                                                </div>
+                                            </div>
+                                            {% endwith %}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <div class="me-2">
+                                            <i class="bi bi-cloud text-info"></i>
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <div class="d-flex justify-content-between">
+                                                <span>Propify</span>
+                                                <span class="fw-bold">
+                                                    {{ metrics.propifai.avg_completeness|default:0|floatformat:1 }}%
+                                                </span>
+                                            </div>
+                                            {% with propifai_width=metrics.propifai.avg_completeness|default:0|floatformat:0 %}
+                                            <div class="progress" style="height: 6px;">
+                                                <div class="progress-bar bg-info"
+                                                     style="width: {{ propifai_width }}%">
+                                                </div>
+                                            </div>
+                                            {% endwith %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pestañas de análisis -->
+        <ul class="nav nav-tabs mb-4" id="analysisTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="completeness-tab" data-bs-toggle="tab" 
+                        data-bs-target="#completeness" type="button" role="tab">
+                    <i class="bi bi-check-circle me-1"></i> Completitud
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="outliers-tab" data-bs-toggle="tab" 
+                        data-bs-target="#outliers" type="button" role="tab">
+                    <i class="bi bi-exclamation-triangle me-1"></i> Valores Atípicos
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="duplicates-tab" data-bs-toggle="tab" 
+                        data-bs-target="#duplicates" type="button" role="tab">
+                    <i class="bi bi-files me-1"></i> Duplicados
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="emptyfields-tab" data-bs-toggle="tab" 
+                        data-bs-target="#emptyfields" type="button" role="tab">
+                    <i class="bi bi-x-circle me-1"></i> Campos Vacíos
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content" id="analysisTabsContent">
+            <!-- Pestaña Completitud -->
+            <div class="tab-pane fade show active" id="completeness" role="tabpanel">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="chart-container">
+                            <div class="chart-title">
+                                <i class="bi bi-bar-chart"></i> Completitud - Base Local
+                            </div>
+                            <img src="{{ charts.local_completeness }}" class="img-fluid" alt="Completitud Base Local">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="chart-container">
+                            <div class="chart-title">
+                                <i class="bi bi-bar-chart"></i> Completitud - Propify
+                            </div>
+                            <img src="{{ charts.propifai_completeness }}" class="img-fluid" alt="Completitud Propify">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="metric-card">
+                            <h6 class="fw-bold mb-3">Recomendaciones de Completitud</h6>
+                            <ul class="list-unstyled mb-0">
+                                <li class="mb-2">
+                                    <i class="bi bi-check-circle-fill text-success me-2"></i>
+                                    <strong>Objetivo:</strong> Mantener completitud por encima del 80%
+                                </li>
+                                <li class="mb-2">
+                                    <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>
+                                    <strong>Alerta:</strong> Campos por debajo del 50% requieren atención prioritaria
+                                </li>
+                                <li>
+                                    <i class="bi bi-lightbulb-fill text-info me-2"></i>
+                                    <strong>Sugerencia:</strong> Implementar validaciones en el proceso de ingesta
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pestaña Valores Atípicos -->
+            <div class="tab-pane fade" id="outliers" role="tabpanel">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="chart-container">
+                            <div class="chart-title">
+                                <i class="bi bi-box-plot"></i> Valores Atípicos - Base Local
+                            </div>
+                            <img src="{{ charts.local_outliers }}" class="img-fluid" alt="Valores Atípicos Base Local">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="chart-container">
+                            <div class="chart-title">
+                                <i class="bi bi-box-plot"></i> Valores Atípicos - Propify
+                            </div>
+                            <img src="{{ charts.propifai_outliers }}" class="img-fluid" alt="Valores Atípicos Propify">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="metric-card">
+                            <h6 class="fw-bold mb-3">Detección de Anomalías</h6>
+                            <p class="mb-2">
+                                Los valores atípicos se detectan usando el método IQR (Rango Intercuartílico).
+                                Valores fuera de 1.5 veces el IQR se consideran anomalías.
+                            </p>
+                            <div class="alert alert-info small mb-0">
+                                <i class="bi bi-info-circle me-1"></i>
+                                <strong>Nota:</strong> Algunos valores atípicos pueden ser legítimos (propiedades de lujo).
+                                Revise manualmente antes de eliminarlos.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pestaña Duplicados -->
+            <div class="tab-pane fade" id="duplicates" role="tabpanel">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="chart-container">
+                            <div class="chart-title">
+                                <i class="bi bi-files"></i> Posibles Duplicados - Base Local
+                            </div>
+                            <img src="{{ charts.local_duplicates }}" class="img-fluid" alt="Duplicados Base Local">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="chart-container">
+                            <div class="chart-title">
+                                <i class="bi bi-files"></i> Posibles Duplicados - Propify
+                            </div>
+                            <img src="{{ charts.propifai_duplicates }}" class="img-fluid" alt="Duplicados Propify">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="metric-card">
+                            <h6 class="fw-bold mb-3">Gestión de Duplicados</h6>
+                            <p class="mb-2">
+                                Se detectan posibles duplicados basados en coordenadas, URLs y descripciones similares.
+                                Los umbrales de alerta ayudan a priorizar la revisión.
+                            </p>
+                            <div class="alert alert-warning small mb-0">
+                                <i class="bi bi-exclamation-triangle me-1"></i>
+                                <strong>Importante:</strong> Los duplicados detectados automáticamente requieren validación manual.
+                                Algunos pueden ser propiedades similares pero distintas.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pestaña Campos Vacíos -->
+            <div class="tab-pane fade" id="emptyfields" role="tabpanel">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="chart-container">
+                            <div class="chart-title">
+                                <i class="bi bi-x-circle"></i> Campos Vacíos - Base Local
+                            </div>
+                            <img src="{{ charts.local_empty_fields }}" class="img-fluid" alt="Campos Vacíos Base Local">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="chart-container">
+                            <div class="chart-title">
+                                <i class="bi bi-x-circle"></i> Campos Vacíos - Propify
+                            </div>
+                            <img src="{{ charts.propifai_empty_fields }}" class="img-fluid" alt="Campos Vacíos Propify">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="metric-card">
+                            <h6 class="fw-bold mb-3">Estrategia para Campos Vacíos</h6>
+                            <ul class="list-unstyled mb-0">
+                                <li class="mb-2">
+                                    <i class="bi bi-arrow-right-circle-fill text-primary me-2"></i>
+                                    <strong>Prioridad 1:</strong> Campos críticos (precio, coordenadas) deben tener menos del 10% de vacíos
+                                </li>
+                                <li class="mb-2">
+                                    <i class="bi bi-arrow-right-circle-fill text-primary me-2"></i>
+                                    <strong>Prioridad 2:</strong> Campos importantes (área, ubicación) deben tener menos del 20% de vacíos
+                                </li>
+                                <li>
+                                    <i class="bi bi-arrow-right-circle-fill text-primary me-2"></i>
+                                    <strong>Acción:</strong> Implementar validaciones obligatorias en formularios de ingesta
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filtros y controles -->
+        <div class="row mt-5">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">
+                            <i class="bi bi-sliders me-2"></i>Controles y Filtros
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label class="form-label">Fuente de datos</label>
+                                    <select class="form-select" id="dataSourceFilter">
+                                        <option value="all">Todas las fuentes</option>
+                                        <option value="local">Base Local</option>
+                                        <option value="propifai">Propify</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label class="form-label">Tipo de análisis</label>
+                                    <select class="form-select" id="analysisTypeFilter">
+                                        <option value="all">Todos los análisis</option>
+                                        <option value="completeness">Completitud</option>
+                                        <option value="outliers">Valores atípicos</option>
+                                        <option value="duplicates">Duplicados</option>
+                                        <option value="empty">Campos vacíos</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label class="form-label">Umbral de calidad</label>
+                                    <select class="form-select" id="qualityThresholdFilter">
+                                        <option value="80">Alto (≥80%)</option>
+                                        <option value="60" selected>Medio (≥60%)</option>
+                                        <option value="40">Bajo (≥40%)</option>
+                                        <option value="0">Todos</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <button class="btn btn-outline-primary" onclick="applyFilters()">
+                                <i class="bi bi-funnel me-1"></i>Aplicar Filtros
+                            </button>
+                            <button class="btn btn-primary" onclick="refreshData()">
+                                <i class="bi bi-arrow-clockwise me-1"></i>Actualizar Datos
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Información adicional -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="alert alert-info">
+                    <div class="d-flex">
+                        <div class="me-3">
+                            <i class="bi bi-info-circle fs-4"></i>
+                        </div>
+                        <div>
+                            <h5 class="alert-heading">Cómo interpretar este dashboard</h5>
+                            <p class="mb-1">
+                                <strong>Puntaje de calidad:</strong> Calculado combinando completitud (70%), duplicados (20%) y valores atípicos (10%).
+                                Un puntaje ≥80 indica excelente calidad, ≤40 requiere atención inmediata.
+                            </p>
+                            <p class="mb-0">
+                                <strong>Actualización:</strong> Los datos se actualizan automáticamente cada 5 minutos.
+                                Use el botón "Actualizar" para forzar una actualización inmediata.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading overlay -->
+    <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+        <div class="text-center">
+            <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
+                <span class="visually-hidden">Cargando...</span>
+            </div>
+            <h4 class="mt-3">Generando análisis de calidad...</h4>
+            <p class="text-muted">Esto puede tomar unos segundos</p>
+        </div>
+    </div>
+
+    <script>
+        function refreshData() {
+            const overlay = document.getElementById('loadingOverlay');
+            overlay.style.display = 'flex';
+            
+            // Simular recarga de página después de un breve delay
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        }
+        
+        function applyFilters() {
+            const dataSource = document.getElementById('dataSourceFilter').value;
+            const analysisType = document.getElementById('analysisTypeFilter').value;
+            const qualityThreshold = document.getElementById('qualityThresholdFilter').value;
+            
+            alert(`Filtros aplicados:\n- Fuente: ${dataSource}\n- Análisis: ${analysisType}\n- Umbral: ${qualityThreshold}%\n\n(Esta funcionalidad se implementará en la siguiente versión)`);
+        }
+        
+        // Inicializar tooltips de Bootstrap
+        document.addEventListener('DOMContentLoaded', function() {
+            const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+            
+            // Auto-refresh cada 5 minutos (300000 ms)
+            setInterval(refreshData, 300000);
+        });
+    </script>
+{% endblock %}
+
+{% block content %}
