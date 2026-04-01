@@ -960,7 +960,7 @@ def property_events_api(request, property_id):
             'id': event.id,
             'code': event.code,
             'titulo': event.titulo,
-            'fecha_evento': event.fecha_evento.isoformat() if event.fecha_evento else None,
+            'fecha_evento': event.fecha_evento.date().isoformat() if event.fecha_evento else None,
             'hora_inicio': event.hora_inicio.isoformat() if event.hora_inicio else None,
             'hora_fin': event.hora_fin.isoformat() if event.hora_fin else None,
             'detalle': event.detalle,
@@ -1224,7 +1224,7 @@ def property_timeline_api(request, property_id):
             'nombre': 'Visitas al inmueble',
             'descripcion': 'Visitas programadas con clientes potenciales',
             'estado': 'activa' if etapa_numero == 3 else ('completada' if etapa_numero > 3 else 'pendiente'),
-            'fecha_inicio': events_list[0]['fecha_evento'] if events_list and any('visita' in e.get('event_type_nombre', '').lower() for e in events_list) else None,
+            'fecha_inicio': next((e['fecha_evento'] for e in events_list if 'visita' in e.get('event_type_nombre', '').lower()), None),
             'duracion_dias': 7,
             'datos': {
                 'total_visitas': len([e for e in events_list if 'visita' in e.get('event_type_nombre', '').lower()]),
@@ -1251,12 +1251,12 @@ def property_timeline_api(request, property_id):
             'id': 5,
             'nombre': 'Cierre y venta',
             'descripcion': 'Firma de documentos y liquidación de comisión',
-            'estado': 'activa' if etapa_numero == 5 else ('completada' if prop.availability_status == 'sold' else 'pendiente'),
-            'fecha_inicio': prop.updated_at.isoformat() if prop.availability_status == 'sold' else None,
+            'estado': 'completada' if prop.availability_status == 'sold' else ('activa' if etapa_numero == 5 else 'pendiente'),
+            'fecha_inicio': prop.updated_at.date().isoformat() if prop.availability_status == 'sold' else None,
             'duracion_dias': 14,
             'datos': {
                 'precio_final': float(prop.price) if prop.price and prop.availability_status == 'sold' else None,
-                'fecha_firma': prop.updated_at.isoformat() if prop.availability_status == 'sold' else None,
+                'fecha_firma': prop.updated_at.date().isoformat() if prop.availability_status == 'sold' else None,
                 'comision_liquidada': commission,
                 'agente_cerro': agent_name
             }
