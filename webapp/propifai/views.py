@@ -1115,6 +1115,22 @@ def property_timeline_api(request, property_id):
         commission = None
     property_data['commission_percentage'] = commission
     
+    # Función para obtener fecha en zona horaria de Perú (UTC-5) como string ISO con offset
+    def to_peru_date(dt):
+        if not dt:
+            return None
+        # Si dt es naive, asumir UTC
+        from datetime import timezone, timedelta
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        # Convertir a Perú (UTC-5)
+        peru_tz = timezone(timedelta(hours=-5))
+        peru_dt = dt.astimezone(peru_tz)
+        # Devolver string ISO con offset de Perú, pero con hora a mediodía para evitar problemas de medianoche
+        # Usar mediodía (12:00) para que la fecha sea clara en cualquier zona horaria
+        peru_dt_noon = peru_dt.replace(hour=12, minute=0, second=0, microsecond=0)
+        return peru_dt_noon.isoformat()
+    
     # Obtener eventos de la propiedad
     events = Event.objects.filter(property_id=property_id).select_related(
         'event_type', 'assigned_agent'
@@ -1172,21 +1188,25 @@ def property_timeline_api(request, property_id):
         etapa_numero = 2
     
     # Construir línea de tiempo de etapas
-    # Usar solo fecha (sin hora) para evitar offset de zona horaria
-    fecha_registro = prop.created_at.date().isoformat() if prop.created_at else None
+    # Usar fecha en zona horaria de Perú para evitar offset
+    fecha_registro = to_peru_date(prop.created_at) if prop.created_at else None
     
     # Determinar fecha de publicación (usar wp_last_sync si está disponible)
     fecha_publicacion = fecha_registro  # Por defecto usar fecha de registro
     if prop_extras_data and prop_extras_data.get('wp_last_sync'):
         wp_last_sync = prop_extras_data['wp_last_sync']
         if hasattr(wp_last_sync, 'date'):
-            fecha_publicacion = wp_last_sync.date().isoformat()
+            # wp_last_sync puede ser datetime con timezone o naive
+            fecha_publicacion = to_peru_date(wp_last_sync)
         elif isinstance(wp_last_sync, str):
             # Si es string, intentar parsear y extraer fecha
             try:
-                from datetime import datetime
+                from datetime import datetime, timezone
                 dt = datetime.fromisoformat(wp_last_sync.replace('Z', '+00:00'))
-                fecha_publicacion = dt.date().isoformat()
+                # Asumir UTC si no tiene zona horaria
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                fecha_publicacion = to_peru_date(dt)
             except:
                 pass
     
@@ -1252,11 +1272,11 @@ def property_timeline_api(request, property_id):
             'nombre': 'Cierre y venta',
             'descripcion': 'Firma de documentos y liquidación de comisión',
             'estado': 'completada' if prop.availability_status == 'sold' else ('activa' if etapa_numero == 5 else 'pendiente'),
-            'fecha_inicio': prop.updated_at.date().isoformat() if prop.availability_status == 'sold' else None,
+            'fecha_inicio': to_peru_date(prop.updated_at) if prop.availability_status == 'sold' else None,
             'duracion_dias': 14,
             'datos': {
                 'precio_final': float(prop.price) if prop.price and prop.availability_status == 'sold' else None,
-                'fecha_firma': prop.updated_at.date().isoformat() if prop.availability_status == 'sold' else None,
+                'fecha_firma': to_peru_date(prop.updated_at) if prop.availability_status == 'sold' else None,
                 'comision_liquidada': commission,
                 'agente_cerro': agent_name
             }
