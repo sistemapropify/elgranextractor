@@ -177,14 +177,14 @@
                         <table class="table table-sm">
                             <thead>
                                 <tr>
-                                    <th>Estado ID</th>
+                                    <th>Estado</th>
                                     <th>Cantidad</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for item in status_counts %}
                                 <tr>
-                                    <td>{{ item.lead_status_id|default:"Sin estado" }}</td>
+                                    <td>{{ item.status_name|default:"Sin estado" }}</td>
                                     <td>{{ item.count }}</td>
                                 </tr>
                                 {% empty %}

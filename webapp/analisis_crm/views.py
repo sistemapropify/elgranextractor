@@ -69,9 +69,25 @@ def dashboard(request):
     ).count()
     
     # Leads por estado (lead_status_id) - agrupar
-    status_counts = Lead.objects.values('lead_status_id').annotate(
+    status_counts_raw = Lead.objects.values('lead_status_id').annotate(
         count=Count('id')
     ).order_by('-count')
+    
+    # Obtener nombres de estados para los IDs encontrados
+    status_ids = [item['lead_status_id'] for item in status_counts_raw if item['lead_status_id'] is not None]
+    lead_statuses = LeadStatus.objects.filter(id__in=status_ids)
+    status_name_map = {status.id: status.name for status in lead_statuses}
+    
+    # Crear lista final con nombres de estado
+    status_counts = []
+    for item in status_counts_raw:
+        status_id = item['lead_status_id']
+        status_name = status_name_map.get(status_id, 'Sin estado') if status_id is not None else 'Sin estado'
+        status_counts.append({
+            'lead_status_id': status_id,
+            'status_name': status_name,
+            'count': item['count']
+        })
     
     # Leads por canal (canal_lead_id)
     canal_counts = Lead.objects.values('canal_lead_id').annotate(
