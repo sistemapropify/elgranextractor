@@ -5,7 +5,7 @@ from django.db.models import Count, Q
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 from datetime import timedelta, datetime
-from .models import Lead, LeadAssignment, User
+from .models import Lead, LeadAssignment, User, LeadStatus
 
 logger = logging.getLogger(__name__)
 
@@ -223,9 +223,15 @@ def dashboard(request):
     for assignment in assignments:
         assignment_map[assignment.lead_id] = assignment.user
     
+    # Obtener estados de leads (lead_status_id -> nombre)
+    status_ids = [lead.lead_status_id for lead in unique_leads if lead.lead_status_id is not None]
+    lead_statuses = LeadStatus.objects.filter(id__in=status_ids)
+    status_map = {status.id: status.name for status in lead_statuses}
+    
     # Asignar usuario a cada lead (monkey-patch para uso en template)
     for lead in unique_leads:
         lead.assigned_user = assignment_map.get(lead.id)
+        lead.status_name = status_map.get(lead.lead_status_id, 'Sin estado')
     
     # Calcular estadísticas de duplicación
     duplicate_stats = {

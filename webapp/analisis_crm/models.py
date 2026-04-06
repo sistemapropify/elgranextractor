@@ -86,3 +86,21 @@ class LeadAssignment(models.Model):
 
     def __str__(self):
         return f"Lead {self.lead_id} asignado a {self.user_id}"
+
+
+class LeadStatus(models.Model):
+    """
+    Modelo para la tabla crm_lead_statuses que contiene los estados de leads.
+    """
+    id = models.BigIntegerField(primary_key=True)
+    name = models.CharField(max_length=255)
+    is_active = models.BooleanField()
+
+    class Meta:
+        managed = False
+        db_table = 'crm_lead_statuses'
+        verbose_name = 'Estado de Lead'
+        verbose_name_plural = 'Estados de Leads'
+
+    def __str__(self):
+        return self.name
