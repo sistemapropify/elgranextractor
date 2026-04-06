@@ -5,7 +5,7 @@ from django.db.models import Count, Q
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 from datetime import timedelta, datetime
-from .models import Lead
+from .models import Lead, LeadAssignment, User
 
 logger = logging.getLogger(__name__)
 
@@ -214,6 +214,19 @@ def dashboard(request):
     days_js = json.dumps(days_of_month)  # Ya es un string JSON
     counts_js = json.dumps(counts_per_day)
     
+    # Obtener asignaciones de leads (lead -> usuario)
+    lead_ids = [lead.id for lead in unique_leads]
+    assignments = LeadAssignment.objects.filter(lead_id__in=lead_ids).select_related('user')
+    
+    # Crear diccionario de asignaciones por lead_id
+    assignment_map = {}
+    for assignment in assignments:
+        assignment_map[assignment.lead_id] = assignment.user
+    
+    # Asignar usuario a cada lead (monkey-patch para uso en template)
+    for lead in unique_leads:
+        lead.assigned_user = assignment_map.get(lead.id)
+    
     # Calcular estadísticas de duplicación
     duplicate_stats = {
         'total_in_list': all_leads.count(),
@@ -242,6 +255,7 @@ def dashboard(request):
         'days_js': days_js,  # Para usar directamente en JavaScript
         'counts_js': counts_js,
         'duplicate_stats': duplicate_stats,  # Estadísticas de duplicación
+        'assignment_map': assignment_map,  # Mapeo de lead_id -> usuario asignado
         'filter_date': filter_date,
         'filter_date_str': filter_date_str,
         'title': 'Dashboard de Leads CRM',
