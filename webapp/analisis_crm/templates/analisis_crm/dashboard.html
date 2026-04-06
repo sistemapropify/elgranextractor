@@ -110,14 +110,70 @@
                         <table class="table table-bordered table-hover" id="dataTable" width="100%" cellspacing="0">
                             <thead>
                                 <tr>
-                                    <th>ID</th>
-                                    <th>Nombre</th>
-                                    <th>Teléfono</th>
-                                    <th>Email</th>
-                                    <th>Fecha Entrada</th>
-                                    <th>Estado</th>
-                                    <th>Estado Lead</th>
-                                    <th>Asignado a:</th>
+                                    <th>
+                                        <a href="?{% if filter_date_str %}filter_date={{ filter_date_str }}&{% endif %}sort_by=id&sort_order={% if sort_by == 'id' and sort_order == 'asc' %}desc{% else %}asc{% endif %}" class="text-decoration-none text-dark">
+                                            ID
+                                            {% if sort_by == 'id' %}
+                                                {% if sort_order == 'asc' %}↑{% else %}↓{% endif %}
+                                            {% endif %}
+                                        </a>
+                                    </th>
+                                    <th>
+                                        <a href="?{% if filter_date_str %}filter_date={{ filter_date_str }}&{% endif %}sort_by=full_name&sort_order={% if sort_by == 'full_name' and sort_order == 'asc' %}desc{% else %}asc{% endif %}" class="text-decoration-none text-dark">
+                                            Nombre
+                                            {% if sort_by == 'full_name' %}
+                                                {% if sort_order == 'asc' %}↑{% else %}↓{% endif %}
+                                            {% endif %}
+                                        </a>
+                                    </th>
+                                    <th>
+                                        <a href="?{% if filter_date_str %}filter_date={{ filter_date_str }}&{% endif %}sort_by=phone&sort_order={% if sort_by == 'phone' and sort_order == 'asc' %}desc{% else %}asc{% endif %}" class="text-decoration-none text-dark">
+                                            Teléfono
+                                            {% if sort_by == 'phone' %}
+                                                {% if sort_order == 'asc' %}↑{% else %}↓{% endif %}
+                                            {% endif %}
+                                        </a>
+                                    </th>
+                                    <th>
+                                        <a href="?{% if filter_date_str %}filter_date={{ filter_date_str }}&{% endif %}sort_by=email&sort_order={% if sort_by == 'email' and sort_order == 'asc' %}desc{% else %}asc{% endif %}" class="text-decoration-none text-dark">
+                                            Email
+                                            {% if sort_by == 'email' %}
+                                                {% if sort_order == 'asc' %}↑{% else %}↓{% endif %}
+                                            {% endif %}
+                                        </a>
+                                    </th>
+                                    <th>
+                                        <a href="?{% if filter_date_str %}filter_date={{ filter_date_str }}&{% endif %}sort_by=date_entry&sort_order={% if sort_by == 'date_entry' and sort_order == 'asc' %}desc{% else %}asc{% endif %}" class="text-decoration-none text-dark">
+                                            Fecha Entrada
+                                            {% if sort_by == 'date_entry' %}
+                                                {% if sort_order == 'asc' %}↑{% else %}↓{% endif %}
+                                            {% endif %}
+                                        </a>
+                                    </th>
+                                    <th>
+                                        <a href="?{% if filter_date_str %}filter_date={{ filter_date_str }}&{% endif %}sort_by=is_active&sort_order={% if sort_by == 'is_active' and sort_order == 'asc' %}desc{% else %}asc{% endif %}" class="text-decoration-none text-dark">
+                                            Estado
+                                            {% if sort_by == 'is_active' %}
+                                                {% if sort_order == 'asc' %}↑{% else %}↓{% endif %}
+                                            {% endif %}
+                                        </a>
+                                    </th>
+                                    <th>
+                                        <a href="?{% if filter_date_str %}filter_date={{ filter_date_str }}&{% endif %}sort_by=status_name&sort_order={% if sort_by == 'status_name' and sort_order == 'asc' %}desc{% else %}asc{% endif %}" class="text-decoration-none text-dark">
+                                            Estado Lead
+                                            {% if sort_by == 'status_name' %}
+                                                {% if sort_order == 'asc' %}↑{% else %}↓{% endif %}
+                                            {% endif %}
+                                        </a>
+                                    </th>
+                                    <th>
+                                        <a href="?{% if filter_date_str %}filter_date={{ filter_date_str }}&{% endif %}sort_by=assigned_user&sort_order={% if sort_by == 'assigned_user' and sort_order == 'asc' %}desc{% else %}asc{% endif %}" class="text-decoration-none text-dark">
+                                            Asignado a:
+                                            {% if sort_by == 'assigned_user' %}
+                                                {% if sort_order == 'asc' %}↑{% else %}↓{% endif %}
+                                            {% endif %}
+                                        </a>
+                                    </th>
                                     <th>Acciones</th>
                                 </tr>
                             </thead>

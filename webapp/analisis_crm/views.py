@@ -30,6 +30,18 @@ def dashboard(request):
         except ValueError:
             filter_date = None
     
+    # Obtener parámetros de ordenamiento
+    sort_by = request.GET.get('sort_by', 'date_entry')
+    sort_order = request.GET.get('sort_order', 'desc')
+    
+    # Validar parámetros de ordenamiento
+    valid_sort_fields = ['id', 'full_name', 'phone', 'email', 'date_entry', 'is_active', 'lead_status_id', 'status_name', 'assigned_user']
+    if sort_by not in valid_sort_fields:
+        sort_by = 'date_entry'
+    
+    if sort_order not in ['asc', 'desc']:
+        sort_order = 'desc'
+    
     # Obtener leads únicos por teléfono (evitar duplicados en la lista)
     # Enfoque simplificado para SQL Server: obtener los últimos 200 leads y filtrar duplicados en Python
     # Esto es menos eficiente pero funciona con las limitaciones de SQL Server
@@ -39,7 +51,10 @@ def dashboard(request):
     if filter_date:
         leads_qs = leads_qs.filter(date_entry__date=filter_date)
     
-    # Obtener más leads de los necesarios para asegurar tener suficientes después de eliminar duplicados
+    # Aplicar ordenamiento inicial (para obtener los leads más relevantes primero)
+    # Por defecto ordenamos por fecha descendente para obtener los más recientes
+    order_prefix = '-' if sort_order == 'desc' else ''
+    # Pero para la consulta inicial, siempre obtenemos los más recientes para mantener consistencia
     recent_leads = leads_qs.order_by('-date_entry', '-created_at')[:200]
     
     # Filtrar duplicados por teléfono en Python
@@ -57,6 +72,58 @@ def dashboard(request):
     
     # Tomar solo los primeros 100 leads únicos
     unique_leads = unique_leads_list[:100]
+    
+    # Obtener asignaciones de leads (lead -> usuario) para los leads únicos
+    lead_ids = [lead.id for lead in unique_leads]
+    assignments = LeadAssignment.objects.filter(lead_id__in=lead_ids).select_related('user')
+    
+    # Crear diccionario de asignaciones por lead_id
+    assignment_map = {}
+    for assignment in assignments:
+        assignment_map[assignment.lead_id] = assignment.user
+    
+    # Obtener estados de leads (lead_status_id -> nombre) para los leads únicos
+    status_ids = [lead.lead_status_id for lead in unique_leads if lead.lead_status_id is not None]
+    lead_statuses = LeadStatus.objects.filter(id__in=status_ids)
+    status_map = {status.id: status.name for status in lead_statuses}
+    
+    # Asignar usuario y estado a cada lead (monkey-patch para uso en template y ordenamiento)
+    for lead in unique_leads:
+        lead.assigned_user = assignment_map.get(lead.id)
+        lead.status_name = status_map.get(lead.lead_status_id, 'Sin estado')
+    
+    # Aplicar ordenamiento en Python según los parámetros
+    def get_sort_key(lead):
+        """Función para obtener valor de ordenamiento para un lead."""
+        if sort_by == 'id':
+            return lead.id or 0
+        elif sort_by == 'full_name':
+            return (lead.full_name or '').lower()
+        elif sort_by == 'phone':
+            return lead.phone or ''
+        elif sort_by == 'email':
+            return (lead.email or '').lower()
+        elif sort_by == 'date_entry':
+            return lead.date_entry or lead.created_at or timezone.now()
+        elif sort_by == 'is_active':
+            return 1 if lead.is_active else 0
+        elif sort_by == 'lead_status_id':
+            return lead.lead_status_id or 0
+        elif sort_by == 'status_name':
+            # Usar el nombre del estado (ya asignado)
+            return (lead.status_name or '').lower()
+        elif sort_by == 'assigned_user':
+            # Usar el nombre del usuario asignado
+            if lead.assigned_user:
+                full_name = f"{lead.assigned_user.first_name or ''} {lead.assigned_user.last_name or ''}".strip()
+                return full_name.lower()
+            return ''  # Para leads no asignados
+        else:
+            return lead.date_entry or lead.created_at or timezone.now()
+    
+    # Ordenar la lista
+    reverse_order = (sort_order == 'desc')
+    unique_leads.sort(key=get_sort_key, reverse=reverse_order)
     
     # Para compatibilidad, también mantener la lista original (pero marcada como duplicada)
     all_leads = leads_qs.order_by('-date_entry', '-created_at')[:100]
@@ -280,6 +347,8 @@ def dashboard(request):
         'assignment_map': assignment_map,  # Mapeo de lead_id -> usuario asignado
         'filter_date': filter_date,
         'filter_date_str': filter_date_str,
+        'sort_by': sort_by,
+        'sort_order': sort_order,
         'title': 'Dashboard de Leads CRM',
     }
     
