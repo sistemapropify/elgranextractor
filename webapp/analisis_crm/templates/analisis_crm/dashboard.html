@@ -79,30 +79,41 @@
         </div>
     </div>
 
-    <!-- Tabla de leads recientes -->
+    <!-- Tabla de leads -->
     <div class="row">
         <div class="col-12">
             <div class="card shadow mb-4">
                 <div class="card-header py-3 d-flex justify-content-between align-items-center">
                     <div>
-                        <h6 class="m-0 font-weight-bold text-primary">Leads Recientes (últimos 100)</h6>
+                        <h6 class="m-0 font-weight-bold text-primary">Todos los Leads</h6>
                         {% if filter_date %}
                         <small class="text-muted">Filtrado por fecha: <strong>{{ filter_date|date:"d/m/Y" }}</strong></small>
+                        {% endif %}
+                        {% if search %}
+                        <small class="text-muted ms-2">Búsqueda: <strong>"{{ search }}"</strong></small>
                         {% endif %}
                     </div>
                     <div class="d-flex align-items-center gap-2">
                         <form method="get" action="{% url 'analisis_crm:dashboard' %}" class="d-flex align-items-center gap-2">
-                            <label for="filter_date" class="form-label mb-0">Filtrar por fecha:</label>
+                            <!-- Campo de búsqueda -->
+                            <div class="input-group input-group-sm" style="width: 250px;">
+                                <input type="text" class="form-control" name="search" placeholder="Nombre, teléfono o email"
+                                       value="{{ search|default:'' }}">
+                                <button class="btn btn-outline-primary" type="submit">
+                                    <i class="bi bi-search"></i>
+                                </button>
+                            </div>
+                            
+                            <!-- Filtro por fecha -->
+                            <label for="filter_date" class="form-label mb-0 ms-2">Fecha:</label>
                             <input type="date" id="filter_date" name="filter_date" class="form-control form-control-sm" style="width: auto;"
                                    value="{{ filter_date_str }}" placeholder="YYYY-MM-DD">
                             <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>
-                            {% if filter_date %}
+                            
+                            {% if filter_date or search %}
                             <a href="{% url 'analisis_crm:dashboard' %}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
                             {% endif %}
                         </form>
-                        <a href="{% url 'analisis_crm:lead_list' %}" class="btn btn-sm btn-outline-primary ms-2">
-                            Ver todos <i class="bi bi-arrow-right"></i>
-                        </a>
                     </div>
                 </div>
                 <div class="card-body">
@@ -215,6 +226,54 @@
                                 {% endfor %}
                             </tbody>
                         </table>
+                        
+                        <!-- Paginación -->
+                        {% if page_obj.paginator.num_pages > 1 %}
+                        <div class="d-flex justify-content-between align-items-center mt-4">
+                            <div class="text-muted">
+                                Mostrando {{ page_obj.start_index }} - {{ page_obj.end_index }} de {{ page_obj.paginator.count }} leads
+                            </div>
+                            <nav aria-label="Paginación de leads">
+                                <ul class="pagination pagination-sm mb-0">
+                                    {% if page_obj.has_previous %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search %}&search={{ search }}{% endif %}{% if filter_date_str %}&filter_date={{ filter_date_str }}{% endif %}{% if sort_by %}&sort_by={{ sort_by }}{% endif %}{% if sort_order %}&sort_order={{ sort_order }}{% endif %}">
+                                            <i class="bi bi-chevron-left"></i>
+                                        </a>
+                                    </li>
+                                    {% else %}
+                                    <li class="page-item disabled">
+                                        <span class="page-link"><i class="bi bi-chevron-left"></i></span>
+                                    </li>
+                                    {% endif %}
+                                    
+                                    {% for num in page_obj.paginator.page_range %}
+                                        {% if page_obj.number == num %}
+                                        <li class="page-item active">
+                                            <span class="page-link">{{ num }}</span>
+                                        </li>
+                                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                        <li class="page-item">
+                                            <a class="page-link" href="?page={{ num }}{% if search %}&search={{ search }}{% endif %}{% if filter_date_str %}&filter_date={{ filter_date_str }}{% endif %}{% if sort_by %}&sort_by={{ sort_by }}{% endif %}{% if sort_order %}&sort_order={{ sort_order }}{% endif %}">{{ num }}</a>
+                                        </li>
+                                        {% endif %}
+                                    {% endfor %}
+                                    
+                                    {% if page_obj.has_next %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search %}&search={{ search }}{% endif %}{% if filter_date_str %}&filter_date={{ filter_date_str }}{% endif %}{% if sort_by %}&sort_by={{ sort_by }}{% endif %}{% if sort_order %}&sort_order={{ sort_order }}{% endif %}">
+                                            <i class="bi bi-chevron-right"></i>
+                                        </a>
+                                    </li>
+                                    {% else %}
+                                    <li class="page-item disabled">
+                                        <span class="page-link"><i class="bi bi-chevron-right"></i></span>
+                                    </li>
+                                    {% endif %}
+                                </ul>
+                            </nav>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>

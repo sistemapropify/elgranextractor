@@ -74,6 +74,9 @@ urlpatterns = [
     # Análisis CRM - Dashboard de leads
     path('analisis-crm/', include('analisis_crm.urls')),  # Habilitado para desarrollo
     
+    # Eventos - Dashboard de análisis de eventos
+    path('eventos/', include('eventos.urls')),
+    
     # Meta Ads - Dashboard de campañas publicitarias de Meta
     # path('meta-ads/', include('meta_ads.urls')),  # Comentado temporalmente debido a error de importación en producción
 ]

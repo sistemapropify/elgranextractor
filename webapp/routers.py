@@ -8,7 +8,7 @@ class PropifaiRouter:
     """
     
     # List of app labels that should use the 'propifai' database
-    propifai_apps = {'propifai', 'analisis_crm'}
+    propifai_apps = {'propifai', 'analisis_crm', 'eventos'}
     
     def db_for_read(self, model, **hints):
         """

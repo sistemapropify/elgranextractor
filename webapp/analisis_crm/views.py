@@ -42,39 +42,60 @@ def dashboard(request):
     if sort_order not in ['asc', 'desc']:
         sort_order = 'desc'
     
-    # Obtener leads únicos por teléfono (evitar duplicados en la lista)
-    # Enfoque simplificado para SQL Server: obtener los últimos 200 leads y filtrar duplicados en Python
-    # Esto es menos eficiente pero funciona con las limitaciones de SQL Server
+    # Obtener parámetro de búsqueda por nombre/teléfono/email
+    search = request.GET.get('search', '').strip()
     
-    # Base queryset
+    # Base queryset con filtros
     leads_qs = Lead.objects.all()
+    
+    # Aplicar filtro por fecha si existe
     if filter_date:
         leads_qs = leads_qs.filter(date_entry__date=filter_date)
     
-    # Aplicar ordenamiento inicial (para obtener los leads más relevantes primero)
-    # Por defecto ordenamos por fecha descendente para obtener los más recientes
+    # Aplicar filtro de búsqueda
+    if search:
+        leads_qs = leads_qs.filter(
+            Q(full_name__icontains=search) |
+            Q(phone__icontains=search) |
+            Q(email__icontains=search)
+        )
+    
+    # Aplicar ordenamiento según parámetros (ahora en base de datos, no en Python)
     order_prefix = '-' if sort_order == 'desc' else ''
-    # Pero para la consulta inicial, siempre obtenemos los más recientes para mantener consistencia
-    recent_leads = leads_qs.order_by('-date_entry', '-created_at')[:200]
     
-    # Filtrar duplicados por teléfono en Python
-    seen_phones = set()
-    unique_leads_list = []
+    # Mapear campos de ordenamiento a campos reales del modelo
+    sort_field_map = {
+        'id': 'id',
+        'full_name': 'full_name',
+        'phone': 'phone',
+        'email': 'email',
+        'date_entry': 'date_entry',
+        'is_active': 'is_active',
+        'lead_status_id': 'lead_status_id',
+        'status_name': 'lead_status_id',  # Ordenar por ID de estado
+        'assigned_user': 'leadassignment__user_id',  # Ordenar por ID de usuario asignado
+    }
     
-    for lead in recent_leads:
-        if lead.phone:
-            if lead.phone not in seen_phones:
-                seen_phones.add(lead.phone)
-                unique_leads_list.append(lead)
-        else:
-            # Leads sin teléfono los incluimos todos
-            unique_leads_list.append(lead)
+    sort_field = sort_field_map.get(sort_by, 'date_entry')
     
-    # Tomar solo los primeros 100 leads únicos
-    unique_leads = unique_leads_list[:100]
+    # Construir ordenamiento
+    if sort_order == 'desc':
+        sort_field = '-' + sort_field
     
-    # Obtener asignaciones de leads (lead -> usuario) para los leads únicos
-    lead_ids = [lead.id for lead in unique_leads]
+    # Aplicar ordenamiento
+    leads_qs = leads_qs.order_by(sort_field, '-date_entry')
+    
+    # Paginación
+    from django.core.paginator import Paginator
+    paginator = Paginator(leads_qs, 50)  # 50 leads por página
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    # Obtener leads de la página actual
+    leads_on_page = list(page_obj.object_list)
+    
+    # Obtener asignaciones de leads (lead -> usuario) para los leads de esta página
+    lead_ids = [lead.id for lead in leads_on_page]
     assignments = LeadAssignment.objects.filter(lead_id__in=lead_ids).select_related('user')
     
     # Crear diccionario de asignaciones por lead_id
@@ -82,51 +103,19 @@ def dashboard(request):
     for assignment in assignments:
         assignment_map[assignment.lead_id] = assignment.user
     
-    # Obtener estados de leads (lead_status_id -> nombre) para los leads únicos
-    status_ids = [lead.lead_status_id for lead in unique_leads if lead.lead_status_id is not None]
+    # Obtener estados de leads (lead_status_id -> nombre) para los leads de esta página
+    status_ids = [lead.lead_status_id for lead in leads_on_page if lead.lead_status_id is not None]
     lead_statuses = LeadStatus.objects.filter(id__in=status_ids)
     status_map = {status.id: status.name for status in lead_statuses}
     
-    # Asignar usuario y estado a cada lead (monkey-patch para uso en template y ordenamiento)
-    for lead in unique_leads:
+    # Asignar usuario y estado a cada lead (monkey-patch para uso en template)
+    for lead in leads_on_page:
         lead.assigned_user = assignment_map.get(lead.id)
         lead.status_name = status_map.get(lead.lead_status_id, 'Sin estado')
     
-    # Aplicar ordenamiento en Python según los parámetros
-    def get_sort_key(lead):
-        """Función para obtener valor de ordenamiento para un lead."""
-        if sort_by == 'id':
-            return lead.id or 0
-        elif sort_by == 'full_name':
-            return (lead.full_name or '').lower()
-        elif sort_by == 'phone':
-            return lead.phone or ''
-        elif sort_by == 'email':
-            return (lead.email or '').lower()
-        elif sort_by == 'date_entry':
-            return lead.date_entry or lead.created_at or timezone.now()
-        elif sort_by == 'is_active':
-            return 1 if lead.is_active else 0
-        elif sort_by == 'lead_status_id':
-            return lead.lead_status_id or 0
-        elif sort_by == 'status_name':
-            # Usar el nombre del estado (ya asignado)
-            return (lead.status_name or '').lower()
-        elif sort_by == 'assigned_user':
-            # Usar el nombre del usuario asignado
-            if lead.assigned_user:
-                full_name = f"{lead.assigned_user.first_name or ''} {lead.assigned_user.last_name or ''}".strip()
-                return full_name.lower()
-            return ''  # Para leads no asignados
-        else:
-            return lead.date_entry or lead.created_at or timezone.now()
-    
-    # Ordenar la lista
-    reverse_order = (sort_order == 'desc')
-    unique_leads.sort(key=get_sort_key, reverse=reverse_order)
-    
-    # Para compatibilidad, también mantener la lista original (pero marcada como duplicada)
-    all_leads = leads_qs.order_by('-date_entry', '-created_at')[:100]
+    # Para compatibilidad con template (mantener nombres de variables similares)
+    unique_leads = leads_on_page
+    all_leads = leads_qs  # Queryset completo para estadísticas
     
     # Estadísticas básicas
     total_leads = Lead.objects.count()

@@ -64,6 +64,7 @@ INSTALLED_APPS = [
     'acm',
     'market_analysis',
     'analisis_crm',
+    'eventos',
     # 'meta_ads',  # Comentado temporalmente debido a error de importación en producción
 ]
 
