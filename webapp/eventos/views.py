@@ -123,6 +123,128 @@ def calcular_evolucion_semanal(eventos_queryset):
     }
 
 
+def calcular_matriz_agente_semana(eventos_queryset, num_semanas=8):
+    """
+    Calcula una matriz agente x semana x tipo de evento.
+    
+    Retorna un diccionario con:
+    - agentes: lista de agentes (id, nombre completo)
+    - semanas: lista de semanas (formato ISO: "2024-W01")
+    - semanas_labels: etiquetas legibles para las semanas
+    - tipos_evento: lista de tipos de evento (id, nombre)
+    - matriz: diccionario anidado {agente_id: {semana_iso: {tipo_id: cantidad}}}
+    - porcentajes: diccionario anidado {agente_id: {semana_iso: {tipo_id: porcentaje}}}
+    - totales_semana: {semana_iso: total_eventos}
+    - totales_agente: {agente_id: total_eventos}
+    """
+    hoy = date.today()
+    
+    # Generar lista de las últimas N semanas
+    semanas_iso = []
+    semanas_labels = []
+    for i in range(num_semanas - 1, -1, -1):
+        # Fecha de referencia dentro de la semana (usamos lunes)
+        fecha_ref = hoy - timedelta(days=hoy.weekday() + 7 * i)
+        año, semana, _ = fecha_ref.isocalendar()
+        semana_iso = f"{año}-W{semana:02d}"
+        semanas_iso.append(semana_iso)
+        
+        # Crear etiqueta legible
+        lunes = fecha_ref - timedelta(days=fecha_ref.weekday())
+        domingo = lunes + timedelta(days=6)
+        semanas_labels.append(f"Sem {semana} ({lunes.day}/{lunes.month}-{domingo.day}/{domingo.month})")
+    
+    # Obtener todos los agentes que tienen eventos en el período
+    fecha_inicio = hoy - timedelta(days=7 * num_semanas)
+    eventos_recientes = eventos_queryset.filter(
+        fecha_evento__gte=fecha_inicio,
+        fecha_evento__lte=hoy
+    )
+    
+    # Obtener IDs de agentes únicos
+    agentes_ids = eventos_recientes.exclude(assigned_agent_id__isnull=True)\
+                                   .values_list('assigned_agent_id', flat=True)\
+                                   .distinct()
+    
+    # Obtener información de agentes
+    agentes = []
+    agentes_dict = {}
+    for agente_id in agentes_ids:
+        try:
+            agente = User.objects.get(id=agente_id)
+            agentes.append({
+                'id': agente.id,
+                'nombre_completo': f"{agente.first_name} {agente.last_name}".strip(),
+                'username': agente.username,
+            })
+            agentes_dict[agente_id] = agente
+        except User.DoesNotExist:
+            continue
+    
+    # Obtener tipos de evento activos
+    tipos_evento = EventType.objects.filter(is_active=True).order_by('name')
+    tipos_info = [{'id': tipo.id, 'name': tipo.name} for tipo in tipos_evento]
+    
+    # Inicializar estructuras de datos
+    matriz = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+    totales_semana = defaultdict(int)
+    totales_agente = defaultdict(int)
+    
+    # Contar eventos por agente, semana y tipo
+    for evento in eventos_recientes:
+        if evento.assigned_agent_id is None:
+            continue
+            
+        # Obtener semana ISO
+        año_sem, semana_sem, _ = evento.fecha_evento.isocalendar()
+        semana_iso = f"{año_sem}-W{semana_sem:02d}"
+        
+        # Si la semana no está en nuestro rango, saltar
+        if semana_iso not in semanas_iso:
+            continue
+            
+        agente_id = evento.assigned_agent_id
+        tipo_id = evento.event_type_id
+        
+        matriz[agente_id][semana_iso][tipo_id] += 1
+        totales_semana[semana_iso] += 1
+        totales_agente[agente_id] += 1
+    
+    # Calcular porcentajes
+    porcentajes = defaultdict(lambda: defaultdict(lambda: defaultdict(float)))
+    for agente_id, semanas_data in matriz.items():
+        for semana_iso, tipos_data in semanas_data.items():
+            total_semana_agente = sum(tipos_data.values())
+            if total_semana_agente > 0:
+                for tipo_id, cantidad in tipos_data.items():
+                    porcentaje = (cantidad / total_semana_agente) * 100
+                    porcentajes[agente_id][semana_iso][tipo_id] = round(porcentaje, 1)
+    
+    # Convertir defaultdict a dict regular para serialización JSON
+    matriz_dict = {}
+    for agente_id, semanas_data in matriz.items():
+        matriz_dict[agente_id] = {}
+        for semana_iso, tipos_data in semanas_data.items():
+            matriz_dict[agente_id][semana_iso] = dict(tipos_data)
+    
+    porcentajes_dict = {}
+    for agente_id, semanas_data in porcentajes.items():
+        porcentajes_dict[agente_id] = {}
+        for semana_iso, tipos_data in semanas_data.items():
+            porcentajes_dict[agente_id][semana_iso] = dict(tipos_data)
+    
+    return {
+        'agentes': agentes,
+        'semanas_iso': semanas_iso,
+        'semanas_labels': semanas_labels,
+        'tipos_evento': tipos_info,
+        'matriz': dict(matriz_dict),
+        'porcentajes': dict(porcentajes_dict),
+        'totales_semana': dict(totales_semana),
+        'totales_agente': dict(totales_agente),
+    }
+
+
 def dashboard_eventos(request):
     """
     Vista principal del dashboard de eventos con paginación y filtros.
@@ -225,6 +347,10 @@ def dashboard_eventos(request):
     # Calcular evolución semanal por tipo de evento
     evolucion_semanal = calcular_evolucion_semanal(eventos_list)
     evolucion_semanal_json = json.dumps(evolucion_semanal)
+    
+    # Calcular matriz agente x semana x tipo de evento
+    matriz_agente_semana = calcular_matriz_agente_semana(eventos_list)
+    matriz_agente_semana_json = json.dumps(matriz_agente_semana)
 
     context = {
         'page_obj': page_obj,
@@ -237,6 +363,8 @@ def dashboard_eventos(request):
         'hoy': date.today().isoformat(),
         'evolucion_semanal': evolucion_semanal,
         'evolucion_semanal_json': evolucion_semanal_json,
+        'matriz_agente_semana': matriz_agente_semana,
+        'matriz_agente_semana_json': matriz_agente_semana_json,
     }
     
     return render(request, 'eventos/dashboard.html', context)

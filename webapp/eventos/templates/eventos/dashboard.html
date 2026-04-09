@@ -160,6 +160,98 @@
         </div>
     </div>
 
+    <!-- Matriz Agente x Semana x Tipo de Evento -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-table me-2"></i>Matriz Agente x Semana x Tipo de Evento
+                    </h5>
+                    <div class="d-flex align-items-center">
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="checkbox" id="mostrarPorcentajes" checked>
+                            <label class="form-check-label" for="mostrarPorcentajes">
+                                Mostrar porcentajes
+                            </label>
+                        </div>
+                        <div class="ms-3">
+                            <select class="form-select form-select-sm" id="filtroTipoEvento" style="width: 200px;">
+                                <option value="todos">Todos los tipos de evento</option>
+                                {% for tipo in matriz_agente_semana.tipos_evento %}
+                                <option value="{{ tipo.id }}">{{ tipo.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover mb-0" id="matrizAgenteSemana">
+                            <thead class="table-light">
+                                <tr>
+                                    <th rowspan="2" class="align-middle">Agente</th>
+                                    <th colspan="{{ matriz_agente_semana.semanas_labels|length }}" class="text-center">
+                                        Semanas (últimas {{ matriz_agente_semana.semanas_labels|length }} semanas)
+                                    </th>
+                                    <th rowspan="2" class="align-middle">Total</th>
+                                </tr>
+                                <tr>
+                                    {% for label in matriz_agente_semana.semanas_labels %}
+                                    <th class="text-center small">{{ label }}</th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for agente in matriz_agente_semana.agentes %}
+                                <tr data-agente-id="{{ agente.id }}">
+                                    <td class="fw-medium">{{ agente.nombre_completo }}</td>
+                                    {% for semana in matriz_agente_semana.semanas_iso %}
+                                    <td class="text-center" data-semana="{{ semana }}" data-agente-id="{{ agente.id }}">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <br>
+                                            <small class="matriz-porcentaje text-muted">-</small>
+                                        </div>
+                                    </td>
+                                    {% endfor %}
+                                    <td class="text-center fw-bold">
+                                        <span class="total-agente" data-agente-id="{{ agente.id }}">0</span>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="{{ matriz_agente_semana.semanas_labels|length|add:2 }}" class="text-center py-4 text-muted">
+                                        No hay datos de agentes para mostrar.
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot>
+                                <tr class="table-light">
+                                    <td class="fw-medium">Total Semana</td>
+                                    {% for semana in matriz_agente_semana.semanas_iso %}
+                                    <td class="text-center fw-bold">
+                                        <span class="total-semana" data-semana="{{ semana }}">0</span>
+                                    </td>
+                                    {% endfor %}
+                                    <td class="text-center fw-bold">
+                                        <span id="total-general">0</span>
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    <div class="mt-3 text-center text-muted small">
+                        <i class="bi bi-info-circle me-1"></i>
+                        La matriz muestra la cantidad de eventos por agente por semana. Seleccione un tipo de evento para filtrar.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Tabla de eventos -->
     <div class="row">
         <div class="col-12">
@@ -530,6 +622,7 @@
 </script>
 
 {{ evolucion_semanal|json_script:"evolucionData" }}
+{{ matriz_agente_semana|json_script:"matrizData" }}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -619,6 +712,154 @@ document.addEventListener('DOMContentLoaded', function() {
     toggleAllBtn.innerHTML = allVisible ?
         '<i class="bi bi-eye-slash"></i> Ocultar Todos' :
         '<i class="bi bi-eye"></i> Mostrar Todos';
+});
+
+// ==============================================
+// Código para la Matriz Agente x Semana x Tipo
+// ==============================================
+
+// Cargar datos de la matriz desde JSON
+const matrizData = JSON.parse(document.getElementById('matrizData').textContent);
+
+// Variables globales
+let tipoEventoSeleccionado = 'todos';
+let mostrarPorcentajes = true;
+
+// Función para actualizar una celda de la matriz
+function actualizarCelda(agenteId, semanaIso, tipoId) {
+    const celda = document.querySelector(`td[data-agente-id="${agenteId}"][data-semana="${semanaIso}"]`);
+    if (!celda) return;
+    
+    const valorSpan = celda.querySelector('.matriz-valor');
+    const porcentajeSpan = celda.querySelector('.matriz-porcentaje');
+    
+    // Obtener cantidad y porcentaje
+    const cantidad = matrizData.matriz[agenteId]?.[semanaIso]?.[tipoId] || 0;
+    const porcentaje = matrizData.porcentajes[agenteId]?.[semanaIso]?.[tipoId] || 0;
+    
+    // Actualizar visualización
+    if (tipoEventoSeleccionado === 'todos') {
+        // Sumar todos los tipos para este agente y semana
+        let totalCantidad = 0;
+        let totalPorcentaje = 0;
+        
+        if (matrizData.matriz[agenteId]?.[semanaIso]) {
+            Object.values(matrizData.matriz[agenteId][semanaIso]).forEach(val => totalCantidad += val);
+        }
+        if (matrizData.porcentajes[agenteId]?.[semanaIso]) {
+            Object.values(matrizData.porcentajes[agenteId][semanaIso]).forEach(val => totalPorcentaje += val);
+        }
+        
+        valorSpan.textContent = totalCantidad || '-';
+        porcentajeSpan.textContent = totalPorcentaje ? `${totalPorcentaje.toFixed(1)}%` : '-';
+    } else {
+        // Mostrar solo el tipo seleccionado
+        valorSpan.textContent = cantidad || '-';
+        porcentajeSpan.textContent = porcentaje ? `${porcentaje}%` : '-';
+    }
+    
+    // Mostrar/ocultar porcentaje según configuración
+    porcentajeSpan.style.display = mostrarPorcentajes ? 'inline' : 'none';
+    
+    // Resaltar celdas con valores
+    if (cantidad > 0 || (tipoEventoSeleccionado === 'todos' && totalCantidad > 0)) {
+        celda.classList.add('table-success');
+        celda.classList.remove('table-light');
+    } else {
+        celda.classList.remove('table-success');
+        celda.classList.add('table-light');
+    }
+}
+
+// Función para actualizar totales
+function actualizarTotales() {
+    // Totales por agente
+    Object.keys(matrizData.totales_agente).forEach(agenteId => {
+        const totalElement = document.querySelector(`.total-agente[data-agente-id="${agenteId}"]`);
+        if (totalElement) {
+            if (tipoEventoSeleccionado === 'todos') {
+                totalElement.textContent = matrizData.totales_agente[agenteId] || 0;
+            } else {
+                // Calcular total solo para el tipo seleccionado
+                let total = 0;
+                matrizData.semanas_iso.forEach(semana => {
+                    total += matrizData.matriz[agenteId]?.[semana]?.[tipoEventoSeleccionado] || 0;
+                });
+                totalElement.textContent = total;
+            }
+        }
+    });
+    
+    // Totales por semana
+    matrizData.semanas_iso.forEach(semana => {
+        const totalElement = document.querySelector(`.total-semana[data-semana="${semana}"]`);
+        if (totalElement) {
+            if (tipoEventoSeleccionado === 'todos') {
+                totalElement.textContent = matrizData.totales_semana[semana] || 0;
+            } else {
+                // Calcular total solo para el tipo seleccionado
+                let total = 0;
+                matrizData.agentes.forEach(agente => {
+                    total += matrizData.matriz[agente.id]?.[semana]?.[tipoEventoSeleccionado] || 0;
+                });
+                totalElement.textContent = total;
+            }
+        }
+    });
+    
+    // Total general
+    const totalGeneralElement = document.getElementById('total-general');
+    if (totalGeneralElement) {
+        if (tipoEventoSeleccionado === 'todos') {
+            const totalGeneral = Object.values(matrizData.totales_agente).reduce((a, b) => a + b, 0);
+            totalGeneralElement.textContent = totalGeneral;
+        } else {
+            let totalGeneral = 0;
+            matrizData.agentes.forEach(agente => {
+                matrizData.semanas_iso.forEach(semana => {
+                    totalGeneral += matrizData.matriz[agente.id]?.[semana]?.[tipoEventoSeleccionado] || 0;
+                });
+            });
+            totalGeneralElement.textContent = totalGeneral;
+        }
+    }
+}
+
+// Función para actualizar toda la matriz
+function actualizarMatriz() {
+    // Actualizar cada celda
+    matrizData.agentes.forEach(agente => {
+        matrizData.semanas_iso.forEach(semana => {
+            actualizarCelda(agente.id, semana, tipoEventoSeleccionado);
+        });
+    });
+    
+    // Actualizar totales
+    actualizarTotales();
+}
+
+// Inicializar matriz cuando el DOM esté listo
+document.addEventListener('DOMContentLoaded', function() {
+    // Configurar eventos
+    const filtroTipoEvento = document.getElementById('filtroTipoEvento');
+    const mostrarPorcentajesCheckbox = document.getElementById('mostrarPorcentajes');
+    
+    if (filtroTipoEvento) {
+        filtroTipoEvento.addEventListener('change', function() {
+            tipoEventoSeleccionado = this.value;
+            actualizarMatriz();
+        });
+    }
+    
+    if (mostrarPorcentajesCheckbox) {
+        mostrarPorcentajesCheckbox.addEventListener('change', function() {
+            mostrarPorcentajes = this.checked;
+            actualizarMatriz();
+        });
+    }
+    
+    // Inicializar matriz
+    actualizarMatriz();
 });
 </script>
 {% endblock %}
