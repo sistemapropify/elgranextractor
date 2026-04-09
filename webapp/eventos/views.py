@@ -165,11 +165,15 @@ def calcular_matriz_agente_semana(eventos_queryset, num_semanas=8):
     agentes_ids = eventos_recientes.exclude(assigned_agent_id__isnull=True)\
                                    .values_list('assigned_agent_id', flat=True)\
                                    .distinct()
+    # Convertir a conjunto para garantizar unicidad (por si distinct() no funciona correctamente)
+    agentes_ids_unicos = set(agentes_ids)
     
     # Obtener información de agentes
     agentes = []
     agentes_dict = {}
-    for agente_id in agentes_ids:
+    for agente_id in agentes_ids_unicos:
+        if agente_id is None:
+            continue
         try:
             agente = User.objects.get(id=agente_id)
             agentes.append({
