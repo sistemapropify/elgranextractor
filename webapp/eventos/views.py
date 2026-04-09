@@ -1,10 +1,99 @@
+import json
 from django.shortcuts import render
 from django.core.paginator import Paginator
-from django.db.models import Q
+from django.db.models import Q, Count
 from django.utils import timezone
 from datetime import datetime, date, timedelta
+from collections import defaultdict
 from .models import Event, EventType
 from propifai.models import PropifaiProperty, User
+
+
+def calcular_evolucion_semanal(eventos_queryset):
+    """
+    Calcula la evolución semanal de eventos por tipo (agrupado por semanas).
+    Retorna un diccionario con:
+    - labels: lista de semanas (últimas 8 semanas)
+    - datasets: lista de datasets por tipo de evento
+    - tipos_evento: información de cada tipo (id, nombre, color)
+    """
+    hoy = date.today()
+    # Número de semanas a mostrar
+    num_semanas = 8
+    
+    # Generar lista de las últimas N semanas (semana del año, año)
+    semanas = []
+    for i in range(num_semanas - 1, -1, -1):
+        # Fecha de referencia dentro de la semana (usamos lunes)
+        fecha_ref = hoy - timedelta(days=hoy.weekday() + 7 * i)
+        año, semana, _ = fecha_ref.isocalendar()
+        semanas.append((año, semana, fecha_ref))
+    
+    # Obtener todos los tipos de eventos activos
+    tipos_evento = EventType.objects.filter(is_active=True).order_by('name')
+    
+    # Crear estructura para almacenar conteos por tipo y semana
+    conteos = defaultdict(lambda: defaultdict(int))
+    
+    # Filtrar eventos de las últimas N*7 días (para cubrir todas las semanas)
+    fecha_inicio = hoy - timedelta(days=7 * num_semanas)
+    eventos_recientes = eventos_queryset.filter(
+        fecha_evento__gte=fecha_inicio,
+        fecha_evento__lte=hoy
+    )
+    
+    # Contar eventos por tipo y semana
+    for evento in eventos_recientes:
+        # Obtener semana ISO
+        año_sem, semana_sem, _ = evento.fecha_evento.isocalendar()
+        clave_semana = f"{año_sem}-W{semana_sem:02d}"
+        tipo_id = evento.event_type_id
+        conteos[tipo_id][clave_semana] += 1
+    
+    # Preparar datasets para Chart.js
+    datasets = []
+    tipos_info = []
+    
+    # Mapeo de clave_semana a índice en la lista de semanas
+    semana_keys = [f"{año}-W{semana:02d}" for año, semana, _ in semanas]
+    
+    for tipo in tipos_evento:
+        tipo_id = tipo.id
+        datos = [conteos[tipo_id][clave] for clave in semana_keys]
+        
+        # Solo incluir tipos que tengan al menos un evento en el período
+        if sum(datos) > 0:
+            datasets.append({
+                'label': tipo.name,
+                'data': datos,
+                'borderColor': tipo.color if tipo.color else '#007bff',
+                'backgroundColor': tipo.color + '20' if tipo.color else '#007bff20',
+                'borderWidth': 2,
+                'fill': False,
+                'tension': 0.4,
+            })
+            
+            tipos_info.append({
+                'id': tipo.id,
+                'name': tipo.name,
+                'color': tipo.color if tipo.color else '#007bff',
+                'total_semana': sum(datos),
+            })
+    
+    # Generar etiquetas legibles para las semanas
+    labels = []
+    for año, semana, fecha_ref in semanas:
+        # Calcular lunes de esa semana
+        lunes = fecha_ref - timedelta(days=fecha_ref.weekday())
+        domingo = lunes + timedelta(days=6)
+        labels.append(f"Sem {semana} ({lunes.day}/{lunes.month}-{domingo.day}/{domingo.month})")
+    
+    return {
+        'labels': labels,
+        'datasets': datasets,
+        'tipos_evento': tipos_info,
+        'semanas_iso': semana_keys,
+    }
 
 
 def dashboard_eventos(request):
@@ -106,6 +195,10 @@ def dashboard_eventos(request):
         fecha_evento__gte=date.today() - timedelta(days=7)
     ).count()
     
+    # Calcular evolución semanal por tipo de evento
+    evolucion_semanal = calcular_evolucion_semanal(eventos_list)
+    evolucion_semanal_json = json.dumps(evolucion_semanal)
+
     context = {
         'page_obj': page_obj,
         'eventos_con_propiedad': eventos_con_propiedad,
@@ -115,6 +208,8 @@ def dashboard_eventos(request):
         'eventos_hoy': eventos_hoy,
         'eventos_semana': eventos_semana,
         'hoy': date.today().isoformat(),
+        'evolucion_semanal': evolucion_semanal,
+        'evolucion_semanal_json': evolucion_semanal_json,
     }
     
     return render(request, 'eventos/dashboard.html', context)

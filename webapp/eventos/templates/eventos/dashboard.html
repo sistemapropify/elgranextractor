@@ -114,6 +114,52 @@
     </div>
     {% endif %}
 
+    <!-- Gráfico de evolución semanal -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-graph-up me-2"></i>Evolución Semanal de Eventos
+                    </h5>
+                    <div class="d-flex align-items-center">
+                        <small class="text-muted me-3">Mostrar tipos:</small>
+                        <div class="form-check form-check-inline" id="graficoFiltrosContainer">
+                            {% for tipo in evolucion_semanal.tipos_evento %}
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input tipo-checkbox"
+                                       type="checkbox"
+                                       id="tipo_{{ tipo.id }}"
+                                       value="{{ tipo.id }}"
+                                       checked
+                                       data-color="{{ tipo.color }}"
+                                       data-name="{{ tipo.name }}">
+                                <label class="form-check-label" for="tipo_{{ tipo.id }}">
+                                    <span class="badge" style="background-color: {{ tipo.color }}; color: white; padding: 2px 8px;">
+                                        {{ tipo.name }} ({{ tipo.total_semana }})
+                                    </span>
+                                </label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <button class="btn btn-sm btn-outline-secondary ms-2" id="toggleAllTipos">
+                            <i class="bi bi-eye"></i> Mostrar/Ocultar Todos
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container" style="position: relative; height: 300px;">
+                        <canvas id="evolucionSemanalChart"></canvas>
+                    </div>
+                    <div class="mt-3 text-center text-muted small">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Gráfico muestra la cantidad de eventos por tipo durante los últimos 7 días
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Tabla de eventos -->
     <div class="row">
         <div class="col-12">
@@ -481,5 +527,98 @@
             marker = null;
         }
     });
+</script>
+
+{{ evolucion_semanal|json_script:"evolucionData" }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Datos del gráfico desde Django
+    const evolucionData = JSON.parse(document.getElementById('evolucionData').textContent);
+    
+    // Inicializar gráfico
+    const ctx = document.getElementById('evolucionSemanalChart').getContext('2d');
+    let chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: evolucionData.labels,
+            datasets: evolucionData.datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Cantidad de Eventos'
+                    },
+                    ticks: {
+                        stepSize: 1
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Días de la Semana'
+                    }
+                }
+            },
+            interaction: {
+                intersect: false,
+                mode: 'nearest'
+            }
+        }
+    });
+    
+    // Control de checkboxes para mostrar/ocultar líneas
+    const checkboxes = document.querySelectorAll('.tipo-checkbox');
+    const toggleAllBtn = document.getElementById('toggleAllTipos');
+    
+    // Función para actualizar visibilidad de datasets
+    function updateChartVisibility() {
+        checkboxes.forEach((checkbox, index) => {
+            const datasetIndex = Array.from(checkboxes).findIndex(cb => cb.value === checkbox.value);
+            if (datasetIndex !== -1 && chart.data.datasets[datasetIndex]) {
+                chart.data.datasets[datasetIndex].hidden = !checkbox.checked;
+            }
+        });
+        chart.update();
+    }
+    
+    // Event listeners para checkboxes
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', updateChartVisibility);
+    });
+    
+    // Botón para mostrar/ocultar todos
+    let allVisible = true;
+    toggleAllBtn.addEventListener('click', function() {
+        allVisible = !allVisible;
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = allVisible;
+        });
+        updateChartVisibility();
+        this.innerHTML = allVisible ?
+            '<i class="bi bi-eye-slash"></i> Ocultar Todos' :
+            '<i class="bi bi-eye"></i> Mostrar Todos';
+    });
+    
+    // Inicializar estado del botón
+    toggleAllBtn.innerHTML = allVisible ?
+        '<i class="bi bi-eye-slash"></i> Ocultar Todos' :
+        '<i class="bi bi-eye"></i> Mostrar Todos';
+});
 </script>
 {% endblock %}
