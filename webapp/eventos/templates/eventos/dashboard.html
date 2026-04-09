@@ -160,17 +160,17 @@
         </div>
     </div>
 
-    <!-- Matriz Agente x Semana x Tipo de Evento -->
+    <!-- Matriz Agente x Semana -->
     <div class="row mb-4">
         <div class="col-12">
             <div class="card border-0 shadow-sm">
                 <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">
-                        <i class="bi bi-table me-2"></i>Matriz Agente x Semana x Tipo de Evento
+                        <i class="bi bi-table me-2"></i>Matriz Agente x Semana
                     </h5>
                     <div class="d-flex align-items-center">
                         <div class="form-check form-check-inline">
-                            <input class="form-check-input" type="checkbox" id="mostrarPorcentajes" checked>
+                            <input class="form-check-input" type="checkbox" id="mostrarPorcentajes">
                             <label class="form-check-label" for="mostrarPorcentajes">
                                 Mostrar porcentajes
                             </label>
@@ -211,8 +211,7 @@
                                         <div class="matriz-celda">
                                             <!-- Los valores se llenarán con JavaScript -->
                                             <span class="matriz-valor">-</span>
-                                            <br>
-                                            <small class="matriz-porcentaje text-muted">-</small>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
                                         </div>
                                     </td>
                                     {% endfor %}
@@ -245,7 +244,7 @@
                     </div>
                     <div class="mt-3 text-center text-muted small">
                         <i class="bi bi-info-circle me-1"></i>
-                        La matriz muestra la cantidad de eventos por agente por semana. Seleccione un tipo de evento para filtrar.
+                        La matriz muestra la cantidad total de eventos por agente por semana. Seleccione un tipo de evento para ver solo ese tipo.
                     </div>
                 </div>
             </div>
@@ -723,7 +722,7 @@ const matrizData = JSON.parse(document.getElementById('matrizData').textContent)
 
 // Variables globales
 let tipoEventoSeleccionado = 'todos';
-let mostrarPorcentajes = true;
+let mostrarPorcentajes = false;  // Por defecto sin porcentajes
 
 // Función para actualizar una celda de la matriz
 function actualizarCelda(agenteId, semanaIso, tipoId) {
