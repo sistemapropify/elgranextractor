@@ -161,6 +161,25 @@
     </div>
 
     <!-- Matriz Agente x Semana -->
+    <style>
+/* Estilos para el mapa de calor tipo semáforo */
+.matriz-bajo {
+    background-color: #ff6b6b !important; /* Rojo */
+    color: white !important;
+}
+.matriz-medio {
+    background-color: #ffd93d !important; /* Amarillo */
+    color: #333 !important;
+}
+.matriz-alto {
+    background-color: #6bcf7f !important; /* Verde */
+    color: white !important;
+}
+/* Asegurar que las celdas tengan un padding adecuado */
+#matrizAgenteSemana td {
+    transition: background-color 0.3s ease;
+}
+</style>
     <div class="row mb-4">
         <div class="col-12">
             <div class="card border-0 shadow-sm">
@@ -717,6 +736,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // Código para la Matriz Agente x Semana x Tipo
 // ==============================================
 
+
 // Cargar datos de la matriz desde JSON
 const matrizData = JSON.parse(document.getElementById('matrizData').textContent);
 
@@ -724,8 +744,34 @@ const matrizData = JSON.parse(document.getElementById('matrizData').textContent)
 let tipoEventoSeleccionado = 'todos';
 let mostrarPorcentajes = false;  // Por defecto sin porcentajes
 
+// Función para calcular el valor máximo en la matriz para el tipo seleccionado
+function calcularMaximoValor(tipoId) {
+    let maxVal = 0;
+    if (tipoId === 'todos') {
+        // Sumar todos los tipos por celda y encontrar el máximo
+        matrizData.agentes.forEach(agente => {
+            matrizData.semanas_iso.forEach(semana => {
+                let total = 0;
+                if (matrizData.matriz[agente.id]?.[semana]) {
+                    Object.values(matrizData.matriz[agente.id][semana]).forEach(val => total += val);
+                }
+                if (total > maxVal) maxVal = total;
+            });
+        });
+    } else {
+        // Solo el tipo específico
+        matrizData.agentes.forEach(agente => {
+            matrizData.semanas_iso.forEach(semana => {
+                const val = matrizData.matriz[agente.id]?.[semana]?.[tipoId] || 0;
+                if (val > maxVal) maxVal = val;
+            });
+        });
+    }
+    return maxVal;
+}
+
 // Función para actualizar una celda de la matriz
-function actualizarCelda(agenteId, semanaIso, tipoId) {
+function actualizarCelda(agenteId, semanaIso, tipoId, maxVal) {
     const celda = document.querySelector(`td[data-agente-id="${agenteId}"][data-semana="${semanaIso}"]`);
     if (!celda) return;
     
@@ -760,13 +806,32 @@ function actualizarCelda(agenteId, semanaIso, tipoId) {
     // Mostrar/ocultar porcentaje según configuración
     porcentajeSpan.style.display = mostrarPorcentajes ? 'inline' : 'none';
     
-    // Resaltar celdas con valores
-    if (cantidad > 0 || (tipoEventoSeleccionado === 'todos' && totalCantidad > 0)) {
-        celda.classList.add('table-success');
-        celda.classList.remove('table-light');
+    // Determinar el valor a evaluar (depende de si estamos viendo todos los tipos o uno específico)
+    let valorEvaluar = 0;
+    if (tipoEventoSeleccionado === 'todos') {
+        valorEvaluar = totalCantidad;
     } else {
-        celda.classList.remove('table-success');
-        celda.classList.add('table-light');
+        valorEvaluar = cantidad;
+    }
+    
+    // Remover todas las clases de color anteriores
+    celda.classList.remove('table-light', 'table-success', 'matriz-bajo', 'matriz-medio', 'matriz-alto');
+    
+    // Aplicar color según el valor (escala semáforo)
+    if (valorEvaluar === 0) {
+        celda.classList.add('table-light');  // Gris para cero
+    } else if (maxVal === 0) {
+        celda.classList.add('table-light');  // No debería ocurrir si valorEvaluar > 0
+    } else {
+        // Calcular proporción respecto al máximo
+        const proporcion = valorEvaluar / maxVal;
+        if (proporcion <= 0.33) {
+            celda.classList.add('matriz-bajo');      // Rojo
+        } else if (proporcion <= 0.66) {
+            celda.classList.add('matriz-medio');     // Amarillo
+        } else {
+            celda.classList.add('matriz-alto');      // Verde
+        }
     }
 }
 
@@ -826,10 +891,13 @@ function actualizarTotales() {
 
 // Función para actualizar toda la matriz
 function actualizarMatriz() {
+    // Calcular el valor máximo para el tipo seleccionado
+    const maxVal = calcularMaximoValor(tipoEventoSeleccionado);
+    
     // Actualizar cada celda
     matrizData.agentes.forEach(agente => {
         matrizData.semanas_iso.forEach(semana => {
-            actualizarCelda(agente.id, semana, tipoEventoSeleccionado);
+            actualizarCelda(agente.id, semana, tipoEventoSeleccionado, maxVal);
         });
     });
     
