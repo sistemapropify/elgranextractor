@@ -17,6 +17,26 @@ def calcular_evolucion_semanal(eventos_queryset):
     - datasets: lista de datasets por tipo de evento
     - tipos_evento: información de cada tipo (id, nombre, color)
     """
+    # Paleta de colores vistosos y diferenciados
+    COLORES_PREDEFINIDOS = [
+        '#FF6384',  # Rojo coral
+        '#36A2EB',  # Azul brillante
+        '#FFCE56',  # Amarillo
+        '#4BC0C0',  # Turquesa
+        '#9966FF',  # Púrpura
+        '#FF9F40',  # Naranja
+        '#8AC926',  # Verde lima
+        '#1982C4',  # Azul oscuro
+        '#6A4C93',  # Violeta
+        '#FF595E',  # Rojo vibrante
+        '#FFCA3A',  # Amarillo brillante
+        '#118AB2',  # Azul verdoso
+        '#EF476F',  # Rosa
+        '#06D6A0',  # Verde esmeralda
+        '#7209B7',  # Púrpura intenso
+        '#F15BB5',  # Rosa fuerte
+    ]
+    
     hoy = date.today()
     # Número de semanas a mostrar
     num_semanas = 8
@@ -57,26 +77,33 @@ def calcular_evolucion_semanal(eventos_queryset):
     # Mapeo de clave_semana a índice en la lista de semanas
     semana_keys = [f"{año}-W{semana:02d}" for año, semana, _ in semanas]
     
-    for tipo in tipos_evento:
+    # Asignar colores predefinidos a cada tipo (cíclicamente)
+    for idx, tipo in enumerate(tipos_evento):
         tipo_id = tipo.id
         datos = [conteos[tipo_id][clave] for clave in semana_keys]
         
         # Solo incluir tipos que tengan al menos un evento en el período
         if sum(datos) > 0:
+            color = COLORES_PREDEFINIDOS[idx % len(COLORES_PREDEFINIDOS)]
             datasets.append({
                 'label': tipo.name,
                 'data': datos,
-                'borderColor': tipo.color if tipo.color else '#007bff',
-                'backgroundColor': tipo.color + '20' if tipo.color else '#007bff20',
-                'borderWidth': 2,
+                'borderColor': color,
+                'backgroundColor': color + '40',  # Transparencia 25% (hex 40)
+                'borderWidth': 3,
                 'fill': False,
                 'tension': 0.4,
+                'pointBackgroundColor': color,
+                'pointBorderColor': '#ffffff',
+                'pointBorderWidth': 1,
+                'pointRadius': 4,
+                'pointHoverRadius': 6,
             })
             
             tipos_info.append({
                 'id': tipo.id,
                 'name': tipo.name,
-                'color': tipo.color if tipo.color else '#007bff',
+                'color': color,
                 'total_semana': sum(datos),
             })
     
