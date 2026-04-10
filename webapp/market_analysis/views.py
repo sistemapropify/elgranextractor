@@ -1078,3 +1078,40 @@ def property_quick_detail(request, property_id):
             'title': 'Error',
             'error': str(e)
         })
+
+
+def property_list_dashboard(request):
+    """Vista para mostrar lista paginada de todas las propiedades de la base local."""
+    from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+    from ingestas.models import PropiedadRaw
+    
+    # Obtener todas las propiedades
+    propiedades_list = PropiedadRaw.objects.using('default').all().order_by('-id')
+    
+    # Paginación
+    page = request.GET.get('page', 1)
+    paginator = Paginator(propiedades_list, 50)  # 50 propiedades por página
+    
+    try:
+        propiedades = paginator.page(page)
+    except PageNotAnInteger:
+        propiedades = paginator.page(1)
+    except EmptyPage:
+        propiedades = paginator.page(paginator.num_pages)
+    
+    # Campos principales a mostrar en la tabla
+    campos_principales = [
+        'id', 'tipo_propiedad', 'subtipo_propiedad', 'condicion',
+        'precio_usd', 'area_construida', 'area_terreno',
+        'departamento', 'provincia', 'distrito', 'coordenadas',
+        'propiedad_verificada', 'fuente_excel', 'fecha_ingesta'
+    ]
+    
+    context = {
+        'title': 'Lista de Propiedades - Base Local',
+        'propiedades': propiedades,
+        'campos_principales': campos_principales,
+        'total_propiedades': propiedades_list.count(),
+    }
+    
+    return render(request, 'market_analysis/property_list_dashboard.html', context)

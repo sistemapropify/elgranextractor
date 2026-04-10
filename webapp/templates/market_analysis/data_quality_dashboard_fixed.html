@@ -357,10 +357,16 @@
                 </button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link" id="emptyfields-tab" data-bs-toggle="tab" 
+                <button class="nav-link" id="emptyfields-tab" data-bs-toggle="tab"
                         data-bs-target="#emptyfields" type="button" role="tab">
                     <i class="bi bi-x-circle me-1"></i> Campos Vacíos
                 </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <a class="nav-link" href="{% url 'market_analysis:property_list_dashboard' %}"
+                   id="propertylist-tab" type="button" role="tab">
+                    <i class="bi bi-list-ul me-1"></i> Lista de Propiedades
+                </a>
             </li>
         </ul>
 

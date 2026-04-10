@@ -16,6 +16,8 @@ urlpatterns = [
     # Dashboard avanzado de calidad de datos
     path('data-quality/', views.data_quality_dashboard, name='data_quality_dashboard'),
     path('api/data-quality-metrics/', views.api_data_quality_metrics, name='api_data_quality_metrics'),
+    # Lista de propiedades (nueva pestaña)
+    path('property-list/', views.property_list_dashboard, name='property_list_dashboard'),
     # API para actualizar propiedades desde el dashboard
     path('api/update-property-field/', views.api_update_property_field, name='api_update_property_field'),
     # Vista alternativa de detalle de propiedad (para evitar error ModuleNotFoundError)
