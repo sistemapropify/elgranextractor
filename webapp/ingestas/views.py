@@ -1611,3 +1611,33 @@ class CrearPropiedadAPIView(View):
                 'success': False,
                 'error': str(e)
             }, status=400)
+
+
+# Vista para mostrar lista completa de propiedades con todos los campos
+class ListaPropiedadesCompletaView(ListView):
+    """Vista que muestra todas las propiedades en una tabla con todos los campos."""
+    model = PropiedadRaw
+    template_name = 'ingestas/tabla_propiedades_completa.html'
+    context_object_name = 'propiedades'
+    paginate_by = 20
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Obtener todos los nombres de campos del modelo
+        from django.db.models.fields import Field
+        campos = []
+        for field in PropiedadRaw._meta.get_fields():
+            if isinstance(field, Field):
+                campos.append({
+                    'name': field.name,
+                    'verbose_name': field.verbose_name if hasattr(field, 'verbose_name') else field.name,
+                    'type': field.get_internal_type()
+                })
+        context['campos'] = campos
+        context['total_campos'] = len(campos)
+        return context
+    
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        # Ordenar por fecha de ingesta descendente
+        return queryset.order_by('-fecha_ingesta')

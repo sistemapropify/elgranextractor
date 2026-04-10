@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div id="graficoEvolucionData" style="display: none;">{"semanas": ["Sem 09/02", "Sem 16/02", "Sem 23/02", "Sem 02/03", "Sem 09/03", "Sem 16/03", "Sem 23/03", "Sem 30/03", "Sem 06/04"], "tipos": {"5": "Capacitacion", "2": "Captación", "3": "Cierre", "6": "Otro", "4": "Tramite", "1": "Visita"}, "datos": {"5": [1, 5, 0, 1, 0, 3, 1, 0, 2], "2": [2, 7, 3, 13, 6, 7, 4, 2, 2], "3": [0, 0, 0, 3, 1, 0, 0, 0, 1], "6": [0, 0, 1, 10, 2, 6, 3, 4, 0], "4": [1, 2, 1, 1, 0, 1, 1, 0, 0], "1": [33, 37, 31, 42, 41, 37, 29, 8, 21]}, "colores": {"5": "#047D7D", "2": "#3498db", "3": "#2ecc71", "6": "#51A7F0", "4": "#e74c3c", "1": "#f39c12"}}</div>
+    <canvas id="evolucionTiposChart" height="250"></canvas>
+    
+    <script>
+        // Simular el código de la plantilla
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM cargado');
+            let graficoData = null;
+            const dataElement = document.getElementById('graficoEvolucionData');
+            
+            if (dataElement && dataElement.textContent) {
+                try {
+                    graficoData = JSON.parse(dataElement.textContent);
+                    console.log('Datos parseados correctamente');
+                } catch (e) {
+                    console.error('Error parsing chart data:', e);
+                }
+            }
+            
+            if (graficoData && graficoData.semanas && graficoData.semanas.length > 0) {
+                console.log('Hay datos para el gráfico');
+                console.log('Chart disponible:', typeof Chart !== 'undefined');
+                
+                // Intentar crear el gráfico
+                const ctx = document.getElementById('evolucionTiposChart').getContext('2d');
+                if (ctx) {
+                    console.log('Contexto del canvas obtenido');
+                    // Crear un gráfico simple para probar
+                    const chart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: graficoData.semanas,
+                            datasets: [{
+                                label: 'Test',
+                                data: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+                                borderColor: '#ff0000'
+                            }]
+                        }
+                    });
+                    console.log('Gráfico creado exitosamente');
+                } else {
+                    console.error('No se pudo obtener el contexto del canvas');
+                }
+            } else {
+                console.log('No hay datos para el gráfico');
+            }
+        });
+    </script>
+</body>
+</html>

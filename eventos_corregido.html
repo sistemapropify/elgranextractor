@@ -1,0 +1,3610 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Meta tags para prevenir caché en desarrollo -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Dashboard de Eventos - El Gran Extractor</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --header-height: 60px;
+            --sidebar-width: 250px;
+            --primary-color: #10b981;          /* Verde esmeralda brillante */
+            --secondary-color: #059669;        /* Verde esmeralda medio */
+            --accent-color: #34d399;           /* Verde esmeralda claro */
+            --light-teal: #a7f3d0;             /* Verde muy claro */
+            --very-light-teal: #d1fae5;        /* Verde super claro */
+            --sidebar-bg: #059669;             /* Verde medio para sidebar */
+            --header-bg: #ffffff;              /* Blanco para header */
+            --content-bg: rgba(16, 185, 129, 0.08); /* Color base con transparencia */
+            --card-bg: #ffffff;                /* Blanco para cards */
+            --text-dark: #065f46;              /* Verde oscuro para texto */
+            --text-light: #ffffff;             /* Blanco para texto claro */
+        }
+        
+        body {
+            background-color: var(--content-bg);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+            color: var(--text-dark);
+        }
+        
+        /* Header delgado */
+        .app-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: var(--header-height);
+            background-color: var(--header-bg);
+            box-shadow: 0 2px 10px rgba(3, 94, 94, 0.1);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            border-bottom: 1px solid var(--very-light-teal);
+        }
+        
+        .logo-container {
+            display: flex;
+            align-items: center;
+            height: 100%;
+        }
+        
+        .logo {
+            height: 40px;
+            width: auto;
+            margin-right: 10px;
+        }
+        
+        .logo-text {
+            font-weight: 700;
+            font-size: 1.5rem;
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+        
+        .logo-text:hover {
+            color: var(--secondary-color);
+        }
+        
+        /* Barra lateral delgada */
+        .app-sidebar {
+            position: fixed;
+            top: var(--header-height);
+            left: 0;
+            width: var(--sidebar-width);
+            height: calc(100vh - var(--header-height));
+            background-color: var(--sidebar-bg);
+            color: var(--text-light);
+            overflow-y: auto;
+            transition: transform 0.3s ease;
+            z-index: 999;
+            border-right: 1px solid var(--light-teal);
+        }
+        
+        .sidebar-menu {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .sidebar-menu li {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .sidebar-menu a {
+            display: flex;
+            align-items: center;
+            padding: 15px 20px;
+            color: rgba(255, 255, 255, 0.9);
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+        
+        .sidebar-menu a:hover {
+            background-color: rgba(255, 255, 255, 0.15);
+            color: white;
+        }
+        
+        .sidebar-menu a.active {
+            background-color: rgba(255, 255, 255, 0.2);
+            color: white;
+            border-left: 4px solid var(--accent-color);
+        }
+        
+        .sidebar-menu i {
+            margin-right: 10px;
+            font-size: 1.2rem;
+            width: 24px;
+            text-align: center;
+        }
+        
+        /* Contenido principal */
+        .app-content {
+            margin-left: var(--sidebar-width);
+            margin-top: var(--header-height);
+            padding: 20px;
+            min-height: calc(100vh - var(--header-height));
+            transition: margin-left 0.3s ease;
+            background-color: var(--content-bg);
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .app-sidebar {
+                transform: translateX(-100%);
+            }
+            
+            .app-content {
+                margin-left: 0;
+            }
+            
+            .sidebar-toggle {
+                display: block;
+            }
+            
+            .sidebar-open .app-sidebar {
+                transform: translateX(0);
+            }
+            
+            .sidebar-open .app-content {
+                margin-left: var(--sidebar-width);
+            }
+        }
+        
+        /* Botón para mostrar/ocultar sidebar en móviles */
+        .sidebar-toggle {
+            display: none;
+            background: none;
+            border: none;
+            color: var(--primary-color);
+            font-size: 1.5rem;
+            margin-right: 15px;
+            cursor: pointer;
+        }
+        
+        /* Estilos adicionales para contenido */
+        .card {
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(3, 94, 94, 0.1);
+            margin-bottom: 1.5rem;
+            background-color: var(--card-bg);
+            border: 1px solid var(--very-light-teal);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            border: none;
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(135deg, var(--accent-color) 0%, var(--primary-color) 100%);
+        }
+        
+        .btn-outline-secondary {
+            border-color: var(--light-teal);
+            color: var(--primary-color);
+        }
+        
+        .btn-outline-info {
+            border-color: var(--light-teal);
+            color: var(--primary-color);
+        }
+        
+        .stat-card {
+            text-align: center;
+            padding: 1.5rem;
+            background-color: var(--card-bg);
+        }
+        
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+        
+        .footer {
+            margin-top: 3rem;
+            padding: 1.5rem 0;
+            background-color: var(--sidebar-bg);
+            color: var(--text-light);
+            text-align: center;
+            border-top: 1px solid var(--light-teal);
+        }
+        
+        /* Espacio para el logo placeholder */
+        .logo-placeholder {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+        
+        /* Estilos para enlaces */
+        a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+        
+        a:hover {
+            color: var(--secondary-color);
+        }
+        
+        /* Estilos para formularios */
+        .form-control {
+            border: 1px solid var(--light-teal);
+        }
+        
+        .form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.25rem rgba(4, 125, 125, 0.25);
+        }
+        
+        /* Estilos para alertas */
+        .alert-info {
+            background-color: rgba(4, 125, 125, 0.1);
+            border-color: var(--light-teal);
+            color: var(--text-dark);
+        }
+        
+        /* Estilos para bordes y separadores */
+        hr {
+            border-color: var(--very-light-teal);
+        }
+
+        /* Estilos para submenús en sidebar */
+        .has-submenu > a {
+            position: relative;
+        }
+        .has-submenu > a .bi-chevron-down {
+            transition: transform 0.3s ease;
+            font-size: 0.9rem;
+            margin-left: auto;
+        }
+        .has-submenu.active > a .bi-chevron-down {
+            transform: rotate(180deg);
+        }
+        .submenu {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            background-color: rgba(0, 0, 0, 0.2);
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+        .has-submenu.active .submenu {
+            max-height: 200px;
+        }
+        .submenu li {
+            border-bottom: none;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .submenu a {
+            padding-left: 50px;
+            padding-top: 12px;
+            padding-bottom: 12px;
+            font-size: 0.95rem;
+        }
+        .submenu a.active {
+            background-color: rgba(255, 255, 255, 0.15);
+            border-left: 4px solid var(--accent-color);
+        }
+        .submenu i {
+            font-size: 1rem;
+            margin-right: 10px;
+        }
+    </style>
+    
+</head>
+<body>
+    <!-- Header delgado -->
+    <header class="app-header">
+        <button class="sidebar-toggle" id="sidebarToggle">
+            <i class="bi bi-list"></i>
+        </button>
+        
+        <div class="logo-container">
+            <div class="logo-placeholder">
+                <i class="bi bi-binoculars-fill"></i>
+            </div>
+            <a href="/" class="logo-text ms-2">El Gran Extractor</a>
+        </div>
+        
+        <div class="ms-auto d-flex align-items-center">
+            <a href="/admin/" class="btn btn-outline-secondary btn-sm me-2" target="_blank">
+                <i class="bi bi-gear"></i> Admin
+            </a>
+            <a href="/api/" class="btn btn-outline-info btn-sm" target="_blank">
+                <i class="bi bi-code-slash"></i> API
+            </a>
+        </div>
+    </header>
+    
+    <!-- Barra lateral delgada -->
+    <nav class="app-sidebar" id="appSidebar">
+        <ul class="sidebar-menu">
+            <li>
+                <a href="/" class="">
+                    <i class="bi bi-speedometer2"></i>
+                    <span>Dashboard</span>
+                </a>
+            </li>
+            <li>
+                <a href="/fuentes-web/" class="">
+                    <i class="bi bi-globe"></i>
+                    <span>Fuentes Web</span>
+                </a>
+            </li>
+            <li>
+                <a href="/capturas/" class="">
+                    <i class="bi bi-camera"></i>
+                    <span>Capturas</span>
+                </a>
+            </li>
+            <li>
+                <a href="/ingestas/" class="">
+                    <i class="bi bi-database"></i>
+                    <span>Ingestas</span>
+                </a>
+            </li>
+            <li>
+                <a href="/ingestas/propiedades/" class="">
+                    <i class="bi bi-house-door"></i>
+                    <span>Propiedades</span>
+                </a>
+            </li>
+            <li class="has-submenu ">
+                <a href="#">
+                    <i class="bi bi-house-door-fill"></i>
+                    <span>Propiedades Propify</span>
+                    <i class="bi bi-chevron-down ms-auto"></i>
+                </a>
+                <ul class="submenu">
+                    <li>
+                        <a href="/propifai/dashboard/calidad/" class="">
+                            <i class="bi bi-bar-chart-line"></i>
+                            <span>Análisis de Cartera</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/propifai/propiedades/" class="">
+                            <i class="bi bi-list-ul"></i>
+                            <span>Lista de Propiedades</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/propifai/dashboard/visitas/" class="">
+                            <i class="bi bi-calendar-check"></i>
+                            <span>Dashboard de Visitas</span>
+                        </a>
+                    </li>
+                </ul>
+            </li>
+            <li>
+                <a href="/requerimientos/lista/" class="">
+                    <i class="bi bi-clipboard-check"></i>
+                    <span>Requerimientos</span>
+                </a>
+            </li>
+            <li>
+                <a href="/matching/masivo/" class="">
+                    <i class="bi bi-lightning-charge-fill"></i>
+                    <span>Matching Masivo</span>
+                </a>
+            </li>
+            <li>
+                <a href="/cuadrantizacion/mapa/" class="">
+                    <i class="bi bi-map"></i>
+                    <span>Cuadrantización</span>
+                </a>
+            </li>
+            <li>
+                <a href="/acm/analisis/" class="">
+                    <i class="bi bi-graph-up"></i>
+                    <span>Análisis Comparativo (ACM)</span>
+                </a>
+            </li>
+            <li>
+                <a href="/market-analysis/dashboard/" class="">
+                    <i class="bi bi-speedometer"></i>
+                    <span>Dashboard Mercado</span>
+                </a>
+            </li>
+            <li>
+                <a href="/market-analysis/heatmap/" class="">
+                    <i class="bi bi-thermometer-high"></i>
+                    <span>Heatmap Mercado</span>
+                </a>
+            </li>
+            <li class="has-submenu ">
+                <a href="#">
+                    <i class="bi bi-megaphone-fill"></i>
+                    <span>Meta Ads</span>
+                    <i class="bi bi-chevron-down ms-auto"></i>
+                </a>
+                <ul class="submenu">
+                    <li>
+                        <a href="/meta-ads/dashboard/" class="">
+                            <i class="bi bi-speedometer"></i>
+                            <span>Dashboard Principal</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/meta-ads/analisis/historico/" class="">
+                            <i class="bi bi-bar-chart-line"></i>
+                            <span>Análisis Histórico</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/meta-ads/campañas/" class="">
+                            <i class="bi bi-list-ul"></i>
+                            <span>Lista de Campañas</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/meta-ads/sincronizar/" class="">
+                            <i class="bi bi-arrow-repeat"></i>
+                            <span>Sincronizar Datos</span>
+                        </a>
+                    </li>
+                </ul>
+            </li>
+            <li>
+                <a href="/analisis-crm/" class="">
+                    <i class="bi bi-people-fill"></i>
+                    <span>Leads CRM</span>
+                </a>
+            </li>
+            <li>
+                <a href="/eventos/" class="active">
+                    <i class="bi bi-calendar-event"></i>
+                    <span>Análisis de Eventos</span>
+                </a>
+            </li>
+            <li>
+                <a href="#">
+                    <i class="bi bi-search"></i>
+                    <span>Descubrimiento</span>
+                </a>
+            </li>
+            <li>
+                <a href="#">
+                    <i class="bi bi-gear"></i>
+                    <span>Configuración</span>
+                </a>
+            </li>
+            <li>
+                <a href="#">
+                    <i class="bi bi-question-circle"></i>
+                    <span>Ayuda</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+    
+    <!-- Contenido principal -->
+    <main class="app-content" id="appContent">
+        
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">
+                    <i class="bi bi-calendar-event me-2"></i>Dashboard de Eventos
+                </h1>
+                <div class="d-flex gap-2">
+                    <a href="?dia=2026-04-09" class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-calendar-day"></i> Hoy
+                    </a>
+                    <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#filtrosModal">
+                        <i class="bi bi-funnel"></i> Filtros
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estadísticas -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Total Eventos</h6>
+                            <h3 class="mb-0">400</h3>
+                        </div>
+                        <div class="bg-primary bg-opacity-10 p-3 rounded-circle">
+                            <i class="bi bi-calendar-check text-primary fs-4"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Eventos Hoy</h6>
+                            <h3 class="mb-0">7</h3>
+                        </div>
+                        <div class="bg-success bg-opacity-10 p-3 rounded-circle">
+                            <i class="bi bi-calendar-day text-success fs-4"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Eventos Semana</h6>
+                            <h3 class="mb-0">34</h3>
+                        </div>
+                        <div class="bg-info bg-opacity-10 p-3 rounded-circle">
+                            <i class="bi bi-calendar-week text-info fs-4"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Página Actual</h6>
+                            <h3 class="mb-0">1/16</h3>
+                        </div>
+                        <div class="bg-warning bg-opacity-10 p-3 rounded-circle">
+                            <i class="bi bi-file-text text-warning fs-4"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros activos -->
+    
+
+    <!-- Gráfico de evolución semanal -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-graph-up me-2"></i>Evolución Semanal de Eventos
+                    </h5>
+                    <div class="d-flex align-items-center">
+                        <small class="text-muted me-3">Mostrar tipos:</small>
+                        <div class="form-check form-check-inline" id="graficoFiltrosContainer">
+                            
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input tipo-checkbox"
+                                       type="checkbox"
+                                       id="tipo_5"
+                                       value="5"
+                                       checked
+                                       data-color="#FF6384"
+                                       data-name="Capacitacion">
+                                <label class="form-check-label" for="tipo_5">
+                                    <span class="badge" style="background-color: #FF6384; color: white; padding: 2px 8px;">
+                                        Capacitacion (12)
+                                    </span>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input tipo-checkbox"
+                                       type="checkbox"
+                                       id="tipo_2"
+                                       value="2"
+                                       checked
+                                       data-color="#36A2EB"
+                                       data-name="Captación">
+                                <label class="form-check-label" for="tipo_2">
+                                    <span class="badge" style="background-color: #36A2EB; color: white; padding: 2px 8px;">
+                                        Captación (43)
+                                    </span>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input tipo-checkbox"
+                                       type="checkbox"
+                                       id="tipo_3"
+                                       value="3"
+                                       checked
+                                       data-color="#FFCE56"
+                                       data-name="Cierre">
+                                <label class="form-check-label" for="tipo_3">
+                                    <span class="badge" style="background-color: #FFCE56; color: white; padding: 2px 8px;">
+                                        Cierre (5)
+                                    </span>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input tipo-checkbox"
+                                       type="checkbox"
+                                       id="tipo_6"
+                                       value="6"
+                                       checked
+                                       data-color="#4BC0C0"
+                                       data-name="Otro">
+                                <label class="form-check-label" for="tipo_6">
+                                    <span class="badge" style="background-color: #4BC0C0; color: white; padding: 2px 8px;">
+                                        Otro (28)
+                                    </span>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input tipo-checkbox"
+                                       type="checkbox"
+                                       id="tipo_4"
+                                       value="4"
+                                       checked
+                                       data-color="#9966FF"
+                                       data-name="Tramite">
+                                <label class="form-check-label" for="tipo_4">
+                                    <span class="badge" style="background-color: #9966FF; color: white; padding: 2px 8px;">
+                                        Tramite (6)
+                                    </span>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input tipo-checkbox"
+                                       type="checkbox"
+                                       id="tipo_1"
+                                       value="1"
+                                       checked
+                                       data-color="#FF9F40"
+                                       data-name="Visita">
+                                <label class="form-check-label" for="tipo_1">
+                                    <span class="badge" style="background-color: #FF9F40; color: white; padding: 2px 8px;">
+                                        Visita (246)
+                                    </span>
+                                </label>
+                            </div>
+                            
+                        </div>
+                        <button class="btn btn-sm btn-outline-secondary ms-2" id="toggleAllTipos">
+                            <i class="bi bi-eye"></i> Mostrar/Ocultar Todos
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container" style="position: relative; height: 300px;">
+                        <canvas id="evolucionSemanalChart"></canvas>
+                    </div>
+                    <div class="mt-3 text-center text-muted small">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Gráfico muestra la cantidad de eventos por tipo durante los últimos 7 días
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Matriz Agente x Semana -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-table me-2"></i>Matriz Agente x Semana
+                    </h5>
+                    <div class="d-flex align-items-center">
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="checkbox" id="mostrarPorcentajes">
+                            <label class="form-check-label" for="mostrarPorcentajes">
+                                Mostrar porcentajes
+                            </label>
+                        </div>
+                        <div class="ms-3">
+                            <select class="form-select form-select-sm" id="filtroTipoEvento" style="width: 200px;">
+                                <option value="todos">Todos los tipos de evento</option>
+                                
+                                <option value="5">Capacitacion</option>
+                                
+                                <option value="2">Captación</option>
+                                
+                                <option value="3">Cierre</option>
+                                
+                                <option value="6">Otro</option>
+                                
+                                <option value="4">Tramite</option>
+                                
+                                <option value="1">Visita</option>
+                                
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover mb-0" id="matrizAgenteSemana">
+                            <thead class="table-light">
+                                <tr>
+                                    <th rowspan="2" class="align-middle">Agente</th>
+                                    <th colspan="8" class="text-center">
+                                        Semanas (últimas 8 semanas)
+                                    </th>
+                                    <th rowspan="2" class="align-middle">Total</th>
+                                </tr>
+                                <tr>
+                                    
+                                    <th class="text-center small">Sem 8 (16/2-22/2)</th>
+                                    
+                                    <th class="text-center small">Sem 9 (23/2-1/3)</th>
+                                    
+                                    <th class="text-center small">Sem 10 (2/3-8/3)</th>
+                                    
+                                    <th class="text-center small">Sem 11 (9/3-15/3)</th>
+                                    
+                                    <th class="text-center small">Sem 12 (16/3-22/3)</th>
+                                    
+                                    <th class="text-center small">Sem 13 (23/3-29/3)</th>
+                                    
+                                    <th class="text-center small">Sem 14 (30/3-5/4)</th>
+                                    
+                                    <th class="text-center small">Sem 15 (6/4-12/4)</th>
+                                    
+                                </tr>
+                            </thead>
+                            <tbody>
+                                
+                                <tr data-agente-id="2">
+                                    <td class="fw-medium">Maria Belen Aguilar Arévalo</td>
+                                    
+                                    <td class="text-center" data-semana="2026-W08" data-agente-id="2">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W09" data-agente-id="2">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W10" data-agente-id="2">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W11" data-agente-id="2">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W12" data-agente-id="2">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W13" data-agente-id="2">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W14" data-agente-id="2">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W15" data-agente-id="2">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center fw-bold">
+                                        <span class="total-agente" data-agente-id="2">0</span>
+                                    </td>
+                                </tr>
+                                
+                                <tr data-agente-id="6">
+                                    <td class="fw-medium">Veronica Alejandra Palacios Trigoso</td>
+                                    
+                                    <td class="text-center" data-semana="2026-W08" data-agente-id="6">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W09" data-agente-id="6">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W10" data-agente-id="6">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W11" data-agente-id="6">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W12" data-agente-id="6">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W13" data-agente-id="6">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W14" data-agente-id="6">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W15" data-agente-id="6">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center fw-bold">
+                                        <span class="total-agente" data-agente-id="6">0</span>
+                                    </td>
+                                </tr>
+                                
+                                <tr data-agente-id="7">
+                                    <td class="fw-medium">brayan Tong</td>
+                                    
+                                    <td class="text-center" data-semana="2026-W08" data-agente-id="7">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W09" data-agente-id="7">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W10" data-agente-id="7">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W11" data-agente-id="7">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W12" data-agente-id="7">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W13" data-agente-id="7">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W14" data-agente-id="7">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W15" data-agente-id="7">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center fw-bold">
+                                        <span class="total-agente" data-agente-id="7">0</span>
+                                    </td>
+                                </tr>
+                                
+                                <tr data-agente-id="9">
+                                    <td class="fw-medium">Erika Palacios</td>
+                                    
+                                    <td class="text-center" data-semana="2026-W08" data-agente-id="9">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W09" data-agente-id="9">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W10" data-agente-id="9">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W11" data-agente-id="9">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W12" data-agente-id="9">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W13" data-agente-id="9">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W14" data-agente-id="9">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W15" data-agente-id="9">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center fw-bold">
+                                        <span class="total-agente" data-agente-id="9">0</span>
+                                    </td>
+                                </tr>
+                                
+                                <tr data-agente-id="11">
+                                    <td class="fw-medium">Valery Gonzales Pastor</td>
+                                    
+                                    <td class="text-center" data-semana="2026-W08" data-agente-id="11">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W09" data-agente-id="11">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W10" data-agente-id="11">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W11" data-agente-id="11">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W12" data-agente-id="11">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W13" data-agente-id="11">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W14" data-agente-id="11">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W15" data-agente-id="11">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center fw-bold">
+                                        <span class="total-agente" data-agente-id="11">0</span>
+                                    </td>
+                                </tr>
+                                
+                                <tr data-agente-id="17">
+                                    <td class="fw-medium">Jean Carlo Pastor Lopez</td>
+                                    
+                                    <td class="text-center" data-semana="2026-W08" data-agente-id="17">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W09" data-agente-id="17">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W10" data-agente-id="17">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W11" data-agente-id="17">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W12" data-agente-id="17">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W13" data-agente-id="17">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W14" data-agente-id="17">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W15" data-agente-id="17">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center fw-bold">
+                                        <span class="total-agente" data-agente-id="17">0</span>
+                                    </td>
+                                </tr>
+                                
+                                <tr data-agente-id="19">
+                                    <td class="fw-medium">Ramiro Bellido</td>
+                                    
+                                    <td class="text-center" data-semana="2026-W08" data-agente-id="19">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W09" data-agente-id="19">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W10" data-agente-id="19">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W11" data-agente-id="19">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W12" data-agente-id="19">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W13" data-agente-id="19">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W14" data-agente-id="19">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W15" data-agente-id="19">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center fw-bold">
+                                        <span class="total-agente" data-agente-id="19">0</span>
+                                    </td>
+                                </tr>
+                                
+                                <tr data-agente-id="20">
+                                    <td class="fw-medium">Juan Diego Valdivia Mendoza</td>
+                                    
+                                    <td class="text-center" data-semana="2026-W08" data-agente-id="20">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W09" data-agente-id="20">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W10" data-agente-id="20">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W11" data-agente-id="20">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W12" data-agente-id="20">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W13" data-agente-id="20">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W14" data-agente-id="20">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W15" data-agente-id="20">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center fw-bold">
+                                        <span class="total-agente" data-agente-id="20">0</span>
+                                    </td>
+                                </tr>
+                                
+                                <tr data-agente-id="22">
+                                    <td class="fw-medium">Jeremy Esteves</td>
+                                    
+                                    <td class="text-center" data-semana="2026-W08" data-agente-id="22">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W09" data-agente-id="22">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W10" data-agente-id="22">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W11" data-agente-id="22">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W12" data-agente-id="22">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W13" data-agente-id="22">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W14" data-agente-id="22">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W15" data-agente-id="22">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center fw-bold">
+                                        <span class="total-agente" data-agente-id="22">0</span>
+                                    </td>
+                                </tr>
+                                
+                                <tr data-agente-id="24">
+                                    <td class="fw-medium">Tomas Fernandez Pacheco</td>
+                                    
+                                    <td class="text-center" data-semana="2026-W08" data-agente-id="24">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W09" data-agente-id="24">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W10" data-agente-id="24">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W11" data-agente-id="24">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W12" data-agente-id="24">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W13" data-agente-id="24">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W14" data-agente-id="24">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W15" data-agente-id="24">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center fw-bold">
+                                        <span class="total-agente" data-agente-id="24">0</span>
+                                    </td>
+                                </tr>
+                                
+                                <tr data-agente-id="25">
+                                    <td class="fw-medium">Shiomara Luz Quispe Taipe</td>
+                                    
+                                    <td class="text-center" data-semana="2026-W08" data-agente-id="25">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W09" data-agente-id="25">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W10" data-agente-id="25">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W11" data-agente-id="25">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W12" data-agente-id="25">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W13" data-agente-id="25">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W14" data-agente-id="25">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center" data-semana="2026-W15" data-agente-id="25">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    
+                                    <td class="text-center fw-bold">
+                                        <span class="total-agente" data-agente-id="25">0</span>
+                                    </td>
+                                </tr>
+                                
+                            </tbody>
+                            <tfoot>
+                                <tr class="table-light">
+                                    <td class="fw-medium">Total Semana</td>
+                                    
+                                    <td class="text-center fw-bold">
+                                        <span class="total-semana" data-semana="2026-W08">0</span>
+                                    </td>
+                                    
+                                    <td class="text-center fw-bold">
+                                        <span class="total-semana" data-semana="2026-W09">0</span>
+                                    </td>
+                                    
+                                    <td class="text-center fw-bold">
+                                        <span class="total-semana" data-semana="2026-W10">0</span>
+                                    </td>
+                                    
+                                    <td class="text-center fw-bold">
+                                        <span class="total-semana" data-semana="2026-W11">0</span>
+                                    </td>
+                                    
+                                    <td class="text-center fw-bold">
+                                        <span class="total-semana" data-semana="2026-W12">0</span>
+                                    </td>
+                                    
+                                    <td class="text-center fw-bold">
+                                        <span class="total-semana" data-semana="2026-W13">0</span>
+                                    </td>
+                                    
+                                    <td class="text-center fw-bold">
+                                        <span class="total-semana" data-semana="2026-W14">0</span>
+                                    </td>
+                                    
+                                    <td class="text-center fw-bold">
+                                        <span class="total-semana" data-semana="2026-W15">0</span>
+                                    </td>
+                                    
+                                    <td class="text-center fw-bold">
+                                        <span id="total-general">0</span>
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    <div class="mt-3 text-center text-muted small">
+                        <i class="bi bi-info-circle me-1"></i>
+                        La matriz muestra la cantidad total de eventos por agente por semana. Seleccione un tipo de evento para ver solo ese tipo.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla de eventos -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Código</th>
+                                    <th>Título</th>
+                                    <th>Fecha</th>
+                                    <th>Hora Inicio</th>
+                                    <th>Hora Fin</th>
+                                    <th>Interesado</th>
+                                    <th>Propiedad</th>
+                                    <th>Coordenadas</th>
+                                    <th>Tipo</th>
+                                    <th>Agente</th>
+                                    <th>Estado</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#453</span></td>
+                                    <td><code>EVT20262PGRMN</code></td>
+                                    <td>
+                                        <strong>Videos Coop 58</strong>
+                                        
+                                    </td>
+                                    <td>11/04/2026</td>
+                                    <td>14:00</td>
+                                    <td>14:30</td>
+                                    <td></td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #51A7F0; color: white;">
+                                            Otro
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">Valery Gonzales Pastor</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">PENDING</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/453/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#444</span></td>
+                                    <td><code>EVT202644QGFR</code></td>
+                                    <td>
+                                        <strong>Senda</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: nicolas castañeda corzo
+…</small>
+                                        
+                                    </td>
+                                    <td>11/04/2026</td>
+                                    <td>11:30</td>
+                                    <td>12:10</td>
+                                    <td>Nicolas Castañeda C…</td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">Valery Gonzales Pastor</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">ACCEPTED</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/444/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#442</span></td>
+                                    <td><code>EVT2026FK053I</code></td>
+                                    <td>
+                                        <strong>Senda</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: Oscar Montero López
+Telé…</small>
+                                        
+                                    </td>
+                                    <td>11/04/2026</td>
+                                    <td>10:00</td>
+                                    <td>11:05</td>
+                                    <td>Oscar Montero López</td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">Valery Gonzales Pastor</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">PENDING</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/442/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#369</span></td>
+                                    <td><code>EVT2026ZXF1NN</code></td>
+                                    <td>
+                                        <strong>Plaza Las Americas</strong>
+                                        
+                                        <br><small class="text-muted">LLAMAR</small>
+                                        
+                                    </td>
+                                    <td>11/04/2026</td>
+                                    <td>09:00</td>
+                                    <td>09:05</td>
+                                    <td></td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Captación
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">Valery Gonzales Pastor</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary"></span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/369/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#448</span></td>
+                                    <td><code>EVT2026CN2RKE</code></td>
+                                    <td>
+                                        <strong>Almira Visita Eka</strong>
+                                        
+                                        <br><small class="text-muted">Visita con agente Erika</small>
+                                        
+                                    </td>
+                                    <td>11/04/2026</td>
+                                    <td>09:00</td>
+                                    <td>10:30</td>
+                                    <td></td>
+                                    <td>
+                                        
+                                        <div class="d-flex flex-column">
+                                            <span class="badge bg-info mb-1">#34</span>
+                                            
+                                            <small class="text-muted" style="font-size: 0.8rem;">
+                                                <i class="bi bi-building"></i> Departamento En Venta En Condominio Almira De Hunter
+                                            </small>
+                                            
+                                        </div>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <button class="btn btn-sm btn-outline-success"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#mapModal"
+                                                data-latitude="-16.438691"
+                                                data-longitude="-71.558936"
+                                                data-title="Departamento En Venta En Condominio Almira De Hunter">
+                                            <i class="bi bi-geo-alt"></i> Ver Mapa
+                                        </button>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">Veronica Alejandra Palacios Trigoso</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">PENDING</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/448/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#461</span></td>
+                                    <td><code>EVT2026YYIIM7</code></td>
+                                    <td>
+                                        <strong>Casa Cerro Viejo</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: Daniel Medina Rodríguez
+…</small>
+                                        
+                                    </td>
+                                    <td>10/04/2026</td>
+                                    <td>10:30</td>
+                                    <td>11:15</td>
+                                    <td>Daniel Medina Rodrí…</td>
+                                    <td>
+                                        
+                                        <div class="d-flex flex-column">
+                                            <span class="badge bg-info mb-1">#33</span>
+                                            
+                                            <small class="text-muted" style="font-size: 0.8rem;">
+                                                <i class="bi bi-building"></i> Casa Como Terreno En Cerro Viejo - Cerro Colorado
+                                            </small>
+                                            
+                                        </div>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <button class="btn btn-sm btn-outline-success"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#mapModal"
+                                                data-latitude="-16.379433"
+                                                data-longitude="-71.554267"
+                                                data-title="Casa Como Terreno En Cerro Viejo - Cerro Colorado">
+                                            <i class="bi bi-geo-alt"></i> Ver Mapa
+                                        </button>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">Valery Gonzales Pastor</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">ACCEPTED</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/461/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#460</span></td>
+                                    <td><code>EVT2026OTHC8H</code></td>
+                                    <td>
+                                        <strong>Oficina - Legal</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: Yvonne Cáceres
+Teléfono:…</small>
+                                        
+                                    </td>
+                                    <td>10/04/2026</td>
+                                    <td>09:15</td>
+                                    <td>10:00</td>
+                                    <td>Yvonne Cáceres</td>
+                                    <td>
+                                        
+                                        <div class="d-flex flex-column">
+                                            <span class="badge bg-info mb-1">#9</span>
+                                            
+                                            <small class="text-muted" style="font-size: 0.8rem;">
+                                                <i class="bi bi-building"></i> Vendo 2 Departamentos Mariscal Castilla Cerro Colorado
+                                            </small>
+                                            
+                                        </div>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <button class="btn btn-sm btn-outline-success"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#mapModal"
+                                                data-latitude="-16.391994"
+                                                data-longitude="-71.568237"
+                                                data-title="Vendo 2 Departamentos Mariscal Castilla Cerro Colorado">
+                                            <i class="bi bi-geo-alt"></i> Ver Mapa
+                                        </button>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">Valery Gonzales Pastor</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">ACCEPTED</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/460/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#459</span></td>
+                                    <td><code>EVT20267WRE01</code></td>
+                                    <td>
+                                        <strong>Llamada Casa Bella</strong>
+                                        
+                                        <br><small class="text-muted">LLamada con cliente interesada en casa bella</small>
+                                        
+                                    </td>
+                                    <td>09/04/2026</td>
+                                    <td>19:00</td>
+                                    <td>20:00</td>
+                                    <td></td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">brayan Tong</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">PENDING</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/459/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#457</span></td>
+                                    <td><code>EVT20269681AC</code></td>
+                                    <td>
+                                        <strong>Llamada</strong>
+                                        
+                                        <br><small class="text-muted">cliente interesado en la casa de paucarpata, ya s…</small>
+                                        
+                                    </td>
+                                    <td>09/04/2026</td>
+                                    <td>16:00</td>
+                                    <td>17:00</td>
+                                    <td></td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #51A7F0; color: white;">
+                                            Otro
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">brayan Tong</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">PENDING</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/457/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#456</span></td>
+                                    <td><code>EVT2026GFFPK1</code></td>
+                                    <td>
+                                        <strong>Llamada</strong>
+                                        
+                                        <br><small class="text-muted">Reunión con el propietario y el dueño de la vivie…</small>
+                                        
+                                    </td>
+                                    <td>09/04/2026</td>
+                                    <td>15:00</td>
+                                    <td>15:30</td>
+                                    <td></td>
+                                    <td>
+                                        
+                                        <div class="d-flex flex-column">
+                                            <span class="badge bg-info mb-1">#9</span>
+                                            
+                                            <small class="text-muted" style="font-size: 0.8rem;">
+                                                <i class="bi bi-building"></i> Vendo 2 Departamentos Mariscal Castilla Cerro Colorado
+                                            </small>
+                                            
+                                        </div>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <button class="btn btn-sm btn-outline-success"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#mapModal"
+                                                data-latitude="-16.391994"
+                                                data-longitude="-71.568237"
+                                                data-title="Vendo 2 Departamentos Mariscal Castilla Cerro Colorado">
+                                            <i class="bi bi-geo-alt"></i> Ver Mapa
+                                        </button>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #51A7F0; color: white;">
+                                            Otro
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">brayan Tong</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">ACCEPTED</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/456/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#454</span></td>
+                                    <td><code>EVT2026007Z2Y</code></td>
+                                    <td>
+                                        <strong>Casa Paucarpata</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: HILDA CHAQUILLA
+Teléfono…</small>
+                                        
+                                    </td>
+                                    <td>09/04/2026</td>
+                                    <td>14:00</td>
+                                    <td>14:45</td>
+                                    <td>Hilda Chaquilla</td>
+                                    <td>
+                                        
+                                        <div class="d-flex flex-column">
+                                            <span class="badge bg-info mb-1">#91</span>
+                                            
+                                            <small class="text-muted" style="font-size: 0.8rem;">
+                                                <i class="bi bi-building"></i> Casa A Pasos De La Av. Mariscal Castilla - Mariano Melgar, Arequipa
+                                            </small>
+                                            
+                                        </div>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <button class="btn btn-sm btn-outline-success"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#mapModal"
+                                                data-latitude="-16.412184"
+                                                data-longitude="-71.504266"
+                                                data-title="Casa A Pasos De La Av. Mariscal Castilla - Mariano Melgar, Arequipa">
+                                            <i class="bi bi-geo-alt"></i> Ver Mapa
+                                        </button>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">Valery Gonzales Pastor</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">PENDING</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/454/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#458</span></td>
+                                    <td><code>EVT2026ELWP0Y</code></td>
+                                    <td>
+                                        <strong>Terreno Av 54</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: PERCY NUÑEZ
+Teléfono: +5…</small>
+                                        
+                                    </td>
+                                    <td>09/04/2026</td>
+                                    <td>14:00</td>
+                                    <td>15:00</td>
+                                    <td>Percy Nuñez</td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">brayan Tong</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">ACCEPTED</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/458/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#449</span></td>
+                                    <td><code>EVT20263FDTI0</code></td>
+                                    <td>
+                                        <strong>Casa Paucarpata</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: Mary Caceres
+Teléfono: +…</small>
+                                        
+                                    </td>
+                                    <td>09/04/2026</td>
+                                    <td>13:00</td>
+                                    <td>14:00</td>
+                                    <td>Mary Caceres</td>
+                                    <td>
+                                        
+                                        <div class="d-flex flex-column">
+                                            <span class="badge bg-info mb-1">#91</span>
+                                            
+                                            <small class="text-muted" style="font-size: 0.8rem;">
+                                                <i class="bi bi-building"></i> Casa A Pasos De La Av. Mariscal Castilla - Mariano Melgar, Arequipa
+                                            </small>
+                                            
+                                        </div>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <button class="btn btn-sm btn-outline-success"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#mapModal"
+                                                data-latitude="-16.412184"
+                                                data-longitude="-71.504266"
+                                                data-title="Casa A Pasos De La Av. Mariscal Castilla - Mariano Melgar, Arequipa">
+                                            <i class="bi bi-geo-alt"></i> Ver Mapa
+                                        </button>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">Valery Gonzales Pastor</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">PENDING</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/449/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#439</span></td>
+                                    <td><code>EVT202698RMFZ</code></td>
+                                    <td>
+                                        <strong>Senda</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: Maciel Granda
+Teléfono: …</small>
+                                        
+                                    </td>
+                                    <td>09/04/2026</td>
+                                    <td>11:00</td>
+                                    <td>11:45</td>
+                                    <td>Maciel Granda</td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">Valery Gonzales Pastor</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">PENDING</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/439/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#452</span></td>
+                                    <td><code>EVT2026QWOUQD</code></td>
+                                    <td>
+                                        <strong>Apima</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: Luis Daniel Zevallos Veg…</small>
+                                        
+                                    </td>
+                                    <td>08/04/2026</td>
+                                    <td>16:30</td>
+                                    <td>17:30</td>
+                                    <td>Luis Daniel Zevallo…</td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">brayan Tong</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">ACCEPTED</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/452/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#440</span></td>
+                                    <td><code>EVT2026F6OD1E</code></td>
+                                    <td>
+                                        <strong>Depas Mariscal Castilla</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: Carmen Pineda
+Teléfono: …</small>
+                                        
+                                    </td>
+                                    <td>08/04/2026</td>
+                                    <td>16:00</td>
+                                    <td>17:00</td>
+                                    <td>Carmen Pineda</td>
+                                    <td>
+                                        
+                                        <div class="d-flex flex-column">
+                                            <span class="badge bg-info mb-1">#9</span>
+                                            
+                                            <small class="text-muted" style="font-size: 0.8rem;">
+                                                <i class="bi bi-building"></i> Vendo 2 Departamentos Mariscal Castilla Cerro Colorado
+                                            </small>
+                                            
+                                        </div>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <button class="btn btn-sm btn-outline-success"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#mapModal"
+                                                data-latitude="-16.391994"
+                                                data-longitude="-71.568237"
+                                                data-title="Vendo 2 Departamentos Mariscal Castilla Cerro Colorado">
+                                            <i class="bi bi-geo-alt"></i> Ver Mapa
+                                        </button>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">Valery Gonzales Pastor</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">ACCEPTED</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/440/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#450</span></td>
+                                    <td><code>EVT2026NXFGWI</code></td>
+                                    <td>
+                                        <strong>Senda</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: Marlube Aguilar Valencia…</small>
+                                        
+                                    </td>
+                                    <td>08/04/2026</td>
+                                    <td>15:00</td>
+                                    <td>15:40</td>
+                                    <td>Marlube Aguilar Val…</td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">Valery Gonzales Pastor</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">PENDING</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/450/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#451</span></td>
+                                    <td><code>EVT2026LM18G4</code></td>
+                                    <td>
+                                        <strong>Senda</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: Gustavo Flores  Cáceres
+…</small>
+                                        
+                                    </td>
+                                    <td>08/04/2026</td>
+                                    <td>15:00</td>
+                                    <td>15:55</td>
+                                    <td>Gustavo Flores Cáce…</td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">Valery Gonzales Pastor</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">PENDING</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/451/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#443</span></td>
+                                    <td><code>EVT2026AIGWUE</code></td>
+                                    <td>
+                                        <strong>Casa Paucarpata</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: Luz Mamani
+Teléfono: +51…</small>
+                                        
+                                    </td>
+                                    <td>08/04/2026</td>
+                                    <td>12:30</td>
+                                    <td>13:15</td>
+                                    <td>Luz Mamani</td>
+                                    <td>
+                                        
+                                        <div class="d-flex flex-column">
+                                            <span class="badge bg-info mb-1">#91</span>
+                                            
+                                            <small class="text-muted" style="font-size: 0.8rem;">
+                                                <i class="bi bi-building"></i> Casa A Pasos De La Av. Mariscal Castilla - Mariano Melgar, Arequipa
+                                            </small>
+                                            
+                                        </div>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <button class="btn btn-sm btn-outline-success"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#mapModal"
+                                                data-latitude="-16.412184"
+                                                data-longitude="-71.504266"
+                                                data-title="Casa A Pasos De La Av. Mariscal Castilla - Mariano Melgar, Arequipa">
+                                            <i class="bi bi-geo-alt"></i> Ver Mapa
+                                        </button>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">brayan Tong</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">PENDING</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/443/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#438</span></td>
+                                    <td><code>EVT2026GBXAGE</code></td>
+                                    <td>
+                                        <strong>Casa Paucarpata</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: Christian alfaro saico
+T…</small>
+                                        
+                                    </td>
+                                    <td>08/04/2026</td>
+                                    <td>12:00</td>
+                                    <td>13:00</td>
+                                    <td>Christian Alfaro Sa…</td>
+                                    <td>
+                                        
+                                        <div class="d-flex flex-column">
+                                            <span class="badge bg-info mb-1">#91</span>
+                                            
+                                            <small class="text-muted" style="font-size: 0.8rem;">
+                                                <i class="bi bi-building"></i> Casa A Pasos De La Av. Mariscal Castilla - Mariano Melgar, Arequipa
+                                            </small>
+                                            
+                                        </div>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <button class="btn btn-sm btn-outline-success"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#mapModal"
+                                                data-latitude="-16.412184"
+                                                data-longitude="-71.504266"
+                                                data-title="Casa A Pasos De La Av. Mariscal Castilla - Mariano Melgar, Arequipa">
+                                            <i class="bi bi-geo-alt"></i> Ver Mapa
+                                        </button>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">brayan Tong</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">PENDING</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/438/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#434</span></td>
+                                    <td><code>EVT2026HJDB60</code></td>
+                                    <td>
+                                        <strong>En Villalba 315a Casona</strong>
+                                        
+                                        <br><small class="text-muted">En Villalba 315A CERCADO PABLO BUSTINZA</small>
+                                        
+                                    </td>
+                                    <td>08/04/2026</td>
+                                    <td>10:00</td>
+                                    <td>11:00</td>
+                                    <td></td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Capacitacion
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">Valery Gonzales Pastor</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">ACCEPTED</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/434/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#441</span></td>
+                                    <td><code>EVT2026M0IYI4</code></td>
+                                    <td>
+                                        <strong>Terreno Real Plaza</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: Ronald valer
+Teléfono: +…</small>
+                                        
+                                    </td>
+                                    <td>08/04/2026</td>
+                                    <td>10:00</td>
+                                    <td>11:00</td>
+                                    <td>Ronald Valer</td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">Veronica Alejandra Palacios Trigoso</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">PENDING</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/441/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#446</span></td>
+                                    <td><code>EVT2026XILUXC</code></td>
+                                    <td>
+                                        <strong>Apima</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: Carlos portugal
+Teléfono…</small>
+                                        
+                                    </td>
+                                    <td>08/04/2026</td>
+                                    <td>10:00</td>
+                                    <td>11:00</td>
+                                    <td>Carlos Portugal</td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">brayan Tong</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">PENDING</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/446/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#445</span></td>
+                                    <td><code>EVT2026QDY7MF</code></td>
+                                    <td>
+                                        <strong>Casa Paucarpata</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: Miluska Velarde Obando
+T…</small>
+                                        
+                                    </td>
+                                    <td>08/04/2026</td>
+                                    <td>09:00</td>
+                                    <td>09:40</td>
+                                    <td>Miluska Velarde Oba…</td>
+                                    <td>
+                                        
+                                        <div class="d-flex flex-column">
+                                            <span class="badge bg-info mb-1">#91</span>
+                                            
+                                            <small class="text-muted" style="font-size: 0.8rem;">
+                                                <i class="bi bi-building"></i> Casa A Pasos De La Av. Mariscal Castilla - Mariano Melgar, Arequipa
+                                            </small>
+                                            
+                                        </div>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <button class="btn btn-sm btn-outline-success"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#mapModal"
+                                                data-latitude="-16.412184"
+                                                data-longitude="-71.504266"
+                                                data-title="Casa A Pasos De La Av. Mariscal Castilla - Mariano Melgar, Arequipa">
+                                            <i class="bi bi-geo-alt"></i> Ver Mapa
+                                        </button>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">brayan Tong</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">PENDING</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/445/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#447</span></td>
+                                    <td><code>EVT2026F3X66W</code></td>
+                                    <td>
+                                        <strong>Casa Paucarpata</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: Ana Oviedo
+Teléfono: +51…</small>
+                                        
+                                    </td>
+                                    <td>08/04/2026</td>
+                                    <td>09:00</td>
+                                    <td>10:00</td>
+                                    <td>Ana Oviedo</td>
+                                    <td>
+                                        
+                                        <div class="d-flex flex-column">
+                                            <span class="badge bg-info mb-1">#91</span>
+                                            
+                                            <small class="text-muted" style="font-size: 0.8rem;">
+                                                <i class="bi bi-building"></i> Casa A Pasos De La Av. Mariscal Castilla - Mariano Melgar, Arequipa
+                                            </small>
+                                            
+                                        </div>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <button class="btn btn-sm btn-outline-success"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#mapModal"
+                                                data-latitude="-16.412184"
+                                                data-longitude="-71.504266"
+                                                data-title="Casa A Pasos De La Av. Mariscal Castilla - Mariano Melgar, Arequipa">
+                                            <i class="bi bi-geo-alt"></i> Ver Mapa
+                                        </button>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">brayan Tong</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">PENDING</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/447/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <!-- Paginación -->
+                
+                <div class="card-footer border-0 bg-light">
+                    <nav aria-label="Paginación de eventos">
+                        <ul class="pagination justify-content-center mb-0">
+                            
+                            
+                            
+                                
+                                <li class="page-item active">
+                                    <span class="page-link">1</span>
+                                </li>
+                                
+                            
+                                
+                                <li class="page-item">
+                                    <a class="page-link" href="?page=2">2</a>
+                                </li>
+                                
+                            
+                                
+                                <li class="page-item">
+                                    <a class="page-link" href="?page=3">3</a>
+                                </li>
+                                
+                            
+                                
+                            
+                                
+                            
+                                
+                            
+                                
+                            
+                                
+                            
+                                
+                            
+                                
+                            
+                                
+                            
+                                
+                            
+                                
+                            
+                                
+                            
+                                
+                            
+                                
+                            
+                            
+                            
+                            <li class="page-item">
+                                <a class="page-link" href="?page=2">
+                                    <i class="bi bi-chevron-right"></i>
+                                </a>
+                            </li>
+                            
+                        </ul>
+                        <p class="text-center text-muted small mt-2">
+                            Mostrando 1–25 de 400 eventos
+                        </p>
+                    </nav>
+                </div>
+                
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Google Maps -->
+<div class="modal fade" id="mapModal" tabindex="-1" aria-labelledby="mapModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="mapModalLabel">
+                    <i class="bi bi-geo-alt me-2"></i>Ubicación de la Propiedad
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <div id="map" style="height: 400px; width: 100%; border-radius: 8px;"></div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-body">
+                                <h6 class="card-title">Información de la Propiedad</h6>
+                                <div class="mb-3">
+                                    <small class="text-muted">Título:</small>
+                                    <p id="propTitle" class="mb-1 fw-bold">Cargando...</p>
+                                </div>
+                                <div class="mb-3">
+                                    <small class="text-muted">Coordenadas:</small>
+                                    <p id="propCoords" class="mb-1">Cargando...</p>
+                                </div>
+                                <div class="mb-3">
+                                    <small class="text-muted">Latitud:</small>
+                                    <p id="propLat" class="mb-1">—</p>
+                                </div>
+                                <div class="mb-3">
+                                    <small class="text-muted">Longitud:</small>
+                                    <p id="propLng" class="mb-1">—</p>
+                                </div>
+                                <div class="mt-3">
+                                    <a href="#" id="propLink" class="btn btn-sm btn-outline-primary w-100" target="_blank">
+                                        <i class="bi bi-arrow-up-right-square"></i> Ver en Google Maps
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de filtros -->
+<div class="modal fade" id="filtrosModal" tabindex="-1" aria-labelledby="filtrosModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="filtrosModalLabel">
+                    <i class="bi bi-funnel me-2"></i>Filtrar Eventos
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="get" action="">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="dia" class="form-label">Día específico</label>
+                        <input type="date" class="form-control" id="dia" name="dia" value="">
+                        <div class="form-text">Selecciona una fecha para filtrar eventos de ese día.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="propiedad" class="form-label">ID de Propiedad</label>
+                        <input type="number" class="form-control" id="propiedad" name="propiedad" value="" placeholder="Ej: 12345">
+                    </div>
+                    <div class="mb-3">
+                        <label for="tipo" class="form-label">Tipo de Evento</label>
+                        <select class="form-select" id="tipo" name="tipo">
+                            <option value="">Todos los tipos</option>
+                            
+                            <option value="5" >
+                                Capacitacion (#047D7D)
+                            </option>
+                            
+                            <option value="2" >
+                                Captación (#047D7D)
+                            </option>
+                            
+                            <option value="3" >
+                                Cierre (#047D7D)
+                            </option>
+                            
+                            <option value="6" >
+                                Otro (#51A7F0)
+                            </option>
+                            
+                            <option value="4" >
+                                Tramite (#047D7D)
+                            </option>
+                            
+                            <option value="1" >
+                                Visita (#047D7D)
+                            </option>
+                            
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="agente" class="form-label">ID de Agente Asignado</label>
+                        <input type="number" class="form-control" id="agente" name="agente" value="" placeholder="Ej: 101">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-filter"></i> Aplicar Filtros
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+    </main>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Toggle sidebar en móviles
+        document.addEventListener('DOMContentLoaded', function() {
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            const appSidebar = document.getElementById('appSidebar');
+            const appContent = document.getElementById('appContent');
+            
+            if (sidebarToggle) {
+                sidebarToggle.addEventListener('click', function() {
+                    document.body.classList.toggle('sidebar-open');
+                });
+            }
+            
+            // Cerrar sidebar al hacer clic fuera en móviles
+            appContent.addEventListener('click', function() {
+                if (window.innerWidth <= 768 && document.body.classList.contains('sidebar-open')) {
+                    document.body.classList.remove('sidebar-open');
+                }
+            });
+            
+            // Actualizar clase activa en menú
+            const currentPath = window.location.pathname;
+            const menuItems = document.querySelectorAll('.sidebar-menu a');
+            
+            menuItems.forEach(item => {
+                if (item.getAttribute('href') === currentPath) {
+                    item.classList.add('active');
+                }
+            });
+
+            // Submenús: alternar al hacer clic en el enlace padre
+            document.querySelectorAll('.has-submenu > a').forEach(link => {
+                link.addEventListener('click', function(e) {
+                    // Solo si el enlace no tiene href válido (es #)
+                    if (this.getAttribute('href') === '#') {
+                        e.preventDefault();
+                        const parentLi = this.parentElement;
+                        parentLi.classList.toggle('active');
+                    }
+                });
+            });
+
+            // Expandir submenú si alguna subpágina está activa
+            document.querySelectorAll('.has-submenu').forEach(li => {
+                const activeSub = li.querySelector('.submenu a.active');
+                if (activeSub) {
+                    li.classList.add('active');
+                }
+            });
+        });
+    </script>
+    
+    
+<script>
+    // Auto-enfocar el campo de fecha al abrir el modal
+    document.getElementById('filtrosModal').addEventListener('shown.bs.modal', function () {
+        document.getElementById('dia').focus();
+    });
+    
+    // Botón para limpiar filtros
+    document.querySelectorAll('.clear-filter').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            window.location.href = this.getAttribute('href');
+        });
+    });
+    
+    // Variables globales para el mapa (Leaflet)
+    let map = null;
+    let marker = null;
+    
+    // Inicializar el mapa cuando se abre el modal
+    document.getElementById('mapModal').addEventListener('shown.bs.modal', function (event) {
+        const button = event.relatedTarget;
+        const latitude = parseFloat(button.getAttribute('data-latitude'));
+        const longitude = parseFloat(button.getAttribute('data-longitude'));
+        const title = button.getAttribute('data-title') || 'Propiedad';
+        
+        // Actualizar información en el panel lateral
+        document.getElementById('propTitle').textContent = title;
+        document.getElementById('propCoords').textContent = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+        document.getElementById('propLat').textContent = latitude.toFixed(6);
+        document.getElementById('propLng').textContent = longitude.toFixed(6);
+        
+        // Actualizar enlace a Google Maps
+        const googleMapsUrl = `https://www.google.com/maps?q=${latitude},${longitude}`;
+        document.getElementById('propLink').href = googleMapsUrl;
+        
+        // Cargar Leaflet CSS si no está cargado
+        if (!document.querySelector('link[href*="leaflet"]')) {
+            const leafletCSS = document.createElement('link');
+            leafletCSS.rel = 'stylesheet';
+            leafletCSS.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+            leafletCSS.integrity = 'sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=';
+            leafletCSS.crossOrigin = '';
+            document.head.appendChild(leafletCSS);
+        }
+        
+        // Cargar Leaflet JS si no está cargado
+        if (typeof L === 'undefined') {
+            const leafletJS = document.createElement('script');
+            leafletJS.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+            leafletJS.integrity = 'sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=';
+            leafletJS.crossOrigin = '';
+            leafletJS.onload = function() {
+                initializeMap(latitude, longitude, title);
+            };
+            document.head.appendChild(leafletJS);
+        } else {
+            initializeMap(latitude, longitude, title);
+        }
+    });
+    
+    // Función para inicializar el mapa Leaflet
+    function initializeMap(latitude, longitude, title) {
+        const mapElement = document.getElementById('map');
+        
+        // Limpiar el mapa anterior si existe
+        if (map) {
+            map.remove();
+            map = null;
+            marker = null;
+        }
+        
+        // Inicializar nuevo mapa
+        map = L.map('map').setView([latitude, longitude], 15);
+        
+        // Añadir capa de OpenStreetMap
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            maxZoom: 19
+        }).addTo(map);
+        
+        // Añadir marcador
+        marker = L.marker([latitude, longitude]).addTo(map)
+            .bindPopup(`<b>${title}</b><br>Lat: ${latitude.toFixed(6)}<br>Lng: ${longitude.toFixed(6)}`)
+            .openPopup();
+        
+        // Añadir círculo para mejor visibilidad
+        L.circle([latitude, longitude], {
+            color: 'blue',
+            fillColor: '#3388ff',
+            fillOpacity: 0.2,
+            radius: 100
+        }).addTo(map);
+    }
+    
+    // Limpiar el mapa cuando se cierra el modal
+    document.getElementById('mapModal').addEventListener('hidden.bs.modal', function () {
+        if (map) {
+            map.remove();
+            map = null;
+            marker = null;
+        }
+    });
+</script>
+
+<script id="evolucionData" type="application/json">{"labels": ["Sem 8 (16/2-22/2)", "Sem 9 (23/2-1/3)", "Sem 10 (2/3-8/3)", "Sem 11 (9/3-15/3)", "Sem 12 (16/3-22/3)", "Sem 13 (23/3-29/3)", "Sem 14 (30/3-5/4)", "Sem 15 (6/4-12/4)"], "datasets": [{"label": "Capacitacion", "data": [5, 0, 1, 0, 3, 1, 0, 2], "borderColor": "#FF6384", "backgroundColor": "#FF638440", "borderWidth": 3, "fill": false, "tension": 0.4, "pointBackgroundColor": "#FF6384", "pointBorderColor": "#ffffff", "pointBorderWidth": 1, "pointRadius": 4, "pointHoverRadius": 6}, {"label": "Captaci\u00f3n", "data": [7, 3, 13, 6, 7, 4, 2, 1], "borderColor": "#36A2EB", "backgroundColor": "#36A2EB40", "borderWidth": 3, "fill": false, "tension": 0.4, "pointBackgroundColor": "#36A2EB", "pointBorderColor": "#ffffff", "pointBorderWidth": 1, "pointRadius": 4, "pointHoverRadius": 6}, {"label": "Cierre", "data": [0, 0, 3, 1, 0, 0, 0, 1], "borderColor": "#FFCE56", "backgroundColor": "#FFCE5640", "borderWidth": 3, "fill": false, "tension": 0.4, "pointBackgroundColor": "#FFCE56", "pointBorderColor": "#ffffff", "pointBorderWidth": 1, "pointRadius": 4, "pointHoverRadius": 6}, {"label": "Otro", "data": [0, 1, 10, 2, 6, 3, 4, 2], "borderColor": "#4BC0C0", "backgroundColor": "#4BC0C040", "borderWidth": 3, "fill": false, "tension": 0.4, "pointBackgroundColor": "#4BC0C0", "pointBorderColor": "#ffffff", "pointBorderWidth": 1, "pointRadius": 4, "pointHoverRadius": 6}, {"label": "Tramite", "data": [2, 1, 1, 0, 1, 1, 0, 0], "borderColor": "#9966FF", "backgroundColor": "#9966FF40", "borderWidth": 3, "fill": false, "tension": 0.4, "pointBackgroundColor": "#9966FF", "pointBorderColor": "#ffffff", "pointBorderWidth": 1, "pointRadius": 4, "pointHoverRadius": 6}, {"label": "Visita", "data": [37, 31, 42, 41, 37, 29, 8, 21], "borderColor": "#FF9F40", "backgroundColor": "#FF9F4040", "borderWidth": 3, "fill": false, "tension": 0.4, "pointBackgroundColor": "#FF9F40", "pointBorderColor": "#ffffff", "pointBorderWidth": 1, "pointRadius": 4, "pointHoverRadius": 6}], "tipos_evento": [{"id": 5, "name": "Capacitacion", "color": "#FF6384", "total_semana": 12}, {"id": 2, "name": "Captaci\u00f3n", "color": "#36A2EB", "total_semana": 43}, {"id": 3, "name": "Cierre", "color": "#FFCE56", "total_semana": 5}, {"id": 6, "name": "Otro", "color": "#4BC0C0", "total_semana": 28}, {"id": 4, "name": "Tramite", "color": "#9966FF", "total_semana": 6}, {"id": 1, "name": "Visita", "color": "#FF9F40", "total_semana": 246}], "semanas_iso": ["2026-W08", "2026-W09", "2026-W10", "2026-W11", "2026-W12", "2026-W13", "2026-W14", "2026-W15"]}</script>
+<script id="matrizData" type="application/json">{"agentes": [{"id": 2, "nombre_completo": "Maria Belen Aguilar Ar\u00e9valo", "username": "Belen0042"}, {"id": 6, "nombre_completo": "Veronica Alejandra Palacios Trigoso", "username": "VERONICA_PALACIOS"}, {"id": 7, "nombre_completo": "brayan Tong", "username": "BTong"}, {"id": 9, "nombre_completo": "Erika Palacios", "username": "Erika"}, {"id": 11, "nombre_completo": "Valery Gonzales Pastor", "username": "Valerygonzales19"}, {"id": 17, "nombre_completo": "Jean Carlo Pastor Lopez", "username": "JPastor0"}, {"id": 19, "nombre_completo": "Ramiro Bellido", "username": "ramiro"}, {"id": 20, "nombre_completo": "Juan Diego Valdivia Mendoza", "username": "jdiegodiego4"}, {"id": 22, "nombre_completo": "Jeremy Esteves", "username": "Jeremy29"}, {"id": 24, "nombre_completo": "Tomas Fernandez Pacheco", "username": "Tommy"}, {"id": 25, "nombre_completo": "Shiomara Luz Quispe Taipe", "username": "Shio09"}], "semanas_iso": ["2026-W08", "2026-W09", "2026-W10", "2026-W11", "2026-W12", "2026-W13", "2026-W14", "2026-W15"], "semanas_labels": ["Sem 8 (16/2-22/2)", "Sem 9 (23/2-1/3)", "Sem 10 (2/3-8/3)", "Sem 11 (9/3-15/3)", "Sem 12 (16/3-22/3)", "Sem 13 (23/3-29/3)", "Sem 14 (30/3-5/4)", "Sem 15 (6/4-12/4)"], "tipos_evento": [{"id": 5, "name": "Capacitacion"}, {"id": 2, "name": "Captaci\u00f3n"}, {"id": 3, "name": "Cierre"}, {"id": 6, "name": "Otro"}, {"id": 4, "name": "Tramite"}, {"id": 1, "name": "Visita"}], "matriz": {"7": {"2026-W15": {"1": 12, "6": 2}, "2026-W14": {"1": 3}, "2026-W13": {"1": 10, "5": 1}, "2026-W12": {"1": 7, "6": 1}, "2026-W11": {"1": 13, "6": 1}, "2026-W10": {"1": 14, "6": 5, "2": 2, "5": 1}, "2026-W09": {"1": 12, "4": 1}, "2026-W08": {"1": 12, "5": 2}}, "11": {"2026-W15": {"1": 7, "5": 2, "3": 1}, "2026-W14": {"1": 3, "6": 2}, "2026-W13": {"1": 9, "2": 4, "4": 1, "6": 2}, "2026-W12": {"1": 16, "2": 3, "6": 1}, "2026-W11": {"1": 15, "2": 5, "6": 1}, "2026-W10": {"2": 7, "1": 16, "6": 2, "3": 1}, "2026-W09": {"1": 10, "2": 2}, "2026-W08": {"1": 12, "2": 4}}, "6": {"2026-W15": {"1": 2, "2": 1}, "2026-W14": {"6": 2, "2": 2, "1": 1}, "2026-W13": {"1": 7, "6": 1}, "2026-W12": {"6": 4, "1": 6, "2": 2, "4": 1}, "2026-W11": {"1": 10, "2": 1, "3": 1}, "2026-W10": {"2": 2, "3": 2, "6": 3, "1": 8, "4": 1}, "2026-W09": {"1": 9, "6": 1}, "2026-W08": {"1": 9, "2": 3, "4": 2}}, "17": {"2026-W14": {"1": 1}, "2026-W13": {"1": 2}, "2026-W12": {"1": 6, "5": 3, "2": 2}, "2026-W11": {"1": 3}, "2026-W10": {"1": 1, "2": 2}, "2026-W09": {"2": 1}, "2026-W08": {"1": 2, "5": 1}}, "19": {"2026-W13": {"1": 1}}, "2": {"2026-W12": {"1": 1}, "2026-W08": {"5": 2}}, "20": {"2026-W12": {"1": 1}}, "25": {"2026-W10": {"1": 2}}, "24": {"2026-W10": {"1": 1}}, "9": {"2026-W08": {"1": 1}}, "22": {"2026-W08": {"1": 1}}}, "porcentajes": {"7": {"2026-W15": {"1": 85.7, "6": 14.3}, "2026-W14": {"1": 100.0}, "2026-W13": {"1": 90.9, "5": 9.1}, "2026-W12": {"1": 87.5, "6": 12.5}, "2026-W11": {"1": 92.9, "6": 7.1}, "2026-W10": {"1": 63.6, "6": 22.7, "2": 9.1, "5": 4.5}, "2026-W09": {"1": 92.3, "4": 7.7}, "2026-W08": {"1": 85.7, "5": 14.3}}, "11": {"2026-W15": {"1": 70.0, "5": 20.0, "3": 10.0}, "2026-W14": {"1": 60.0, "6": 40.0}, "2026-W13": {"1": 56.2, "2": 25.0, "4": 6.2, "6": 12.5}, "2026-W12": {"1": 80.0, "2": 15.0, "6": 5.0}, "2026-W11": {"1": 71.4, "2": 23.8, "6": 4.8}, "2026-W10": {"2": 26.9, "1": 61.5, "6": 7.7, "3": 3.8}, "2026-W09": {"1": 83.3, "2": 16.7}, "2026-W08": {"1": 75.0, "2": 25.0}}, "6": {"2026-W15": {"1": 66.7, "2": 33.3}, "2026-W14": {"6": 40.0, "2": 40.0, "1": 20.0}, "2026-W13": {"1": 87.5, "6": 12.5}, "2026-W12": {"6": 30.8, "1": 46.2, "2": 15.4, "4": 7.7}, "2026-W11": {"1": 83.3, "2": 8.3, "3": 8.3}, "2026-W10": {"2": 12.5, "3": 12.5, "6": 18.8, "1": 50.0, "4": 6.2}, "2026-W09": {"1": 90.0, "6": 10.0}, "2026-W08": {"1": 64.3, "2": 21.4, "4": 14.3}}, "17": {"2026-W14": {"1": 100.0}, "2026-W13": {"1": 100.0}, "2026-W12": {"1": 54.5, "5": 27.3, "2": 18.2}, "2026-W11": {"1": 100.0}, "2026-W10": {"1": 33.3, "2": 66.7}, "2026-W09": {"2": 100.0}, "2026-W08": {"1": 66.7, "5": 33.3}}, "19": {"2026-W13": {"1": 100.0}}, "2": {"2026-W12": {"1": 100.0}, "2026-W08": {"5": 100.0}}, "20": {"2026-W12": {"1": 100.0}}, "25": {"2026-W10": {"1": 100.0}}, "24": {"2026-W10": {"1": 100.0}}, "9": {"2026-W08": {"1": 100.0}}, "22": {"2026-W08": {"1": 100.0}}}, "totales_semana": {"2026-W15": 27, "2026-W14": 14, "2026-W13": 38, "2026-W12": 54, "2026-W11": 50, "2026-W10": 70, "2026-W09": 36, "2026-W08": 51}, "totales_agente": {"7": 99, "11": 126, "6": 81, "17": 24, "19": 1, "2": 3, "20": 1, "25": 2, "24": 1, "9": 1, "22": 1}}</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Datos del gráfico desde Django
+    const evolucionData = JSON.parse(document.getElementById('evolucionData').textContent);
+    
+    // Inicializar gráfico
+    const ctx = document.getElementById('evolucionSemanalChart').getContext('2d');
+    let chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: evolucionData.labels,
+            datasets: evolucionData.datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Cantidad de Eventos'
+                    },
+                    ticks: {
+                        stepSize: 1
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Días de la Semana'
+                    }
+                }
+            },
+            interaction: {
+                intersect: false,
+                mode: 'nearest'
+            }
+        }
+    });
+    
+    // Control de checkboxes para mostrar/ocultar líneas
+    const checkboxes = document.querySelectorAll('.tipo-checkbox');
+    const toggleAllBtn = document.getElementById('toggleAllTipos');
+    
+    // Función para actualizar visibilidad de datasets
+    function updateChartVisibility() {
+        checkboxes.forEach((checkbox, index) => {
+            const datasetIndex = Array.from(checkboxes).findIndex(cb => cb.value === checkbox.value);
+            if (datasetIndex !== -1 && chart.data.datasets[datasetIndex]) {
+                chart.data.datasets[datasetIndex].hidden = !checkbox.checked;
+            }
+        });
+        chart.update();
+    }
+    
+    // Event listeners para checkboxes
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', updateChartVisibility);
+    });
+    
+    // Botón para mostrar/ocultar todos
+    let allVisible = true;
+    toggleAllBtn.addEventListener('click', function() {
+        allVisible = !allVisible;
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = allVisible;
+        });
+        updateChartVisibility();
+        this.innerHTML = allVisible ?
+            '<i class="bi bi-eye-slash"></i> Ocultar Todos' :
+            '<i class="bi bi-eye"></i> Mostrar Todos';
+    });
+    
+    // Inicializar estado del botón
+    toggleAllBtn.innerHTML = allVisible ?
+        '<i class="bi bi-eye-slash"></i> Ocultar Todos' :
+        '<i class="bi bi-eye"></i> Mostrar Todos';
+});
+
+// ==============================================
+// Código para la Matriz Agente x Semana x Tipo
+// ==============================================
+
+// Cargar datos de la matriz desde JSON
+const matrizData = JSON.parse(document.getElementById('matrizData').textContent);
+
+// Variables globales
+let tipoEventoSeleccionado = 'todos';
+let mostrarPorcentajes = false;  // Por defecto sin porcentajes
+
+// Función para actualizar una celda de la matriz
+function actualizarCelda(agenteId, semanaIso, tipoId) {
+    const celda = document.querySelector(`td[data-agente-id="${agenteId}"][data-semana="${semanaIso}"]`);
+    if (!celda) return;
+    
+    const valorSpan = celda.querySelector('.matriz-valor');
+    const porcentajeSpan = celda.querySelector('.matriz-porcentaje');
+    
+    // Obtener cantidad y porcentaje
+    const cantidad = matrizData.matriz[agenteId]?.[semanaIso]?.[tipoId] || 0;
+    const porcentaje = matrizData.porcentajes[agenteId]?.[semanaIso]?.[tipoId] || 0;
+    
+    // Actualizar visualización
+    if (tipoEventoSeleccionado === 'todos') {
+        // Sumar todos los tipos para este agente y semana
+        let totalCantidad = 0;
+        let totalPorcentaje = 0;
+        
+        if (matrizData.matriz[agenteId]?.[semanaIso]) {
+            Object.values(matrizData.matriz[agenteId][semanaIso]).forEach(val => totalCantidad += val);
+        }
+        if (matrizData.porcentajes[agenteId]?.[semanaIso]) {
+            Object.values(matrizData.porcentajes[agenteId][semanaIso]).forEach(val => totalPorcentaje += val);
+        }
+        
+        valorSpan.textContent = totalCantidad || '-';
+        porcentajeSpan.textContent = totalPorcentaje ? `${totalPorcentaje.toFixed(1)}%` : '-';
+    } else {
+        // Mostrar solo el tipo seleccionado
+        valorSpan.textContent = cantidad || '-';
+        porcentajeSpan.textContent = porcentaje ? `${porcentaje}%` : '-';
+    }
+    
+    // Mostrar/ocultar porcentaje según configuración
+    porcentajeSpan.style.display = mostrarPorcentajes ? 'inline' : 'none';
+    
+    // Resaltar celdas con valores
+    if (cantidad > 0 || (tipoEventoSeleccionado === 'todos' && totalCantidad > 0)) {
+        celda.classList.add('table-success');
+        celda.classList.remove('table-light');
+    } else {
+        celda.classList.remove('table-success');
+        celda.classList.add('table-light');
+    }
+}
+
+// Función para actualizar totales
+function actualizarTotales() {
+    // Totales por agente
+    Object.keys(matrizData.totales_agente).forEach(agenteId => {
+        const totalElement = document.querySelector(`.total-agente[data-agente-id="${agenteId}"]`);
+        if (totalElement) {
+            if (tipoEventoSeleccionado === 'todos') {
+                totalElement.textContent = matrizData.totales_agente[agenteId] || 0;
+            } else {
+                // Calcular total solo para el tipo seleccionado
+                let total = 0;
+                matrizData.semanas_iso.forEach(semana => {
+                    total += matrizData.matriz[agenteId]?.[semana]?.[tipoEventoSeleccionado] || 0;
+                });
+                totalElement.textContent = total;
+            }
+        }
+    });
+    
+    // Totales por semana
+    matrizData.semanas_iso.forEach(semana => {
+        const totalElement = document.querySelector(`.total-semana[data-semana="${semana}"]`);
+        if (totalElement) {
+            if (tipoEventoSeleccionado === 'todos') {
+                totalElement.textContent = matrizData.totales_semana[semana] || 0;
+            } else {
+                // Calcular total solo para el tipo seleccionado
+                let total = 0;
+                matrizData.agentes.forEach(agente => {
+                    total += matrizData.matriz[agente.id]?.[semana]?.[tipoEventoSeleccionado] || 0;
+                });
+                totalElement.textContent = total;
+            }
+        }
+    });
+    
+    // Total general
+    const totalGeneralElement = document.getElementById('total-general');
+    if (totalGeneralElement) {
+        if (tipoEventoSeleccionado === 'todos') {
+            const totalGeneral = Object.values(matrizData.totales_agente).reduce((a, b) => a + b, 0);
+            totalGeneralElement.textContent = totalGeneral;
+        } else {
+            let totalGeneral = 0;
+            matrizData.agentes.forEach(agente => {
+                matrizData.semanas_iso.forEach(semana => {
+                    totalGeneral += matrizData.matriz[agente.id]?.[semana]?.[tipoEventoSeleccionado] || 0;
+                });
+            });
+            totalGeneralElement.textContent = totalGeneral;
+        }
+    }
+}
+
+// Función para actualizar toda la matriz
+function actualizarMatriz() {
+    // Actualizar cada celda
+    matrizData.agentes.forEach(agente => {
+        matrizData.semanas_iso.forEach(semana => {
+            actualizarCelda(agente.id, semana, tipoEventoSeleccionado);
+        });
+    });
+    
+    // Actualizar totales
+    actualizarTotales();
+}
+
+// Inicializar matriz cuando el DOM esté listo
+document.addEventListener('DOMContentLoaded', function() {
+    // Configurar eventos
+    const filtroTipoEvento = document.getElementById('filtroTipoEvento');
+    const mostrarPorcentajesCheckbox = document.getElementById('mostrarPorcentajes');
+    
+    if (filtroTipoEvento) {
+        filtroTipoEvento.addEventListener('change', function() {
+            tipoEventoSeleccionado = this.value;
+            actualizarMatriz();
+        });
+    }
+    
+    if (mostrarPorcentajesCheckbox) {
+        mostrarPorcentajesCheckbox.addEventListener('change', function() {
+            mostrarPorcentajes = this.checked;
+            actualizarMatriz();
+        });
+    }
+    
+    // Inicializar matriz
+    actualizarMatriz();
+});
+</script>
+
+</body>
+</html>

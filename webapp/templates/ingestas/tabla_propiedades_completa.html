@@ -1,0 +1,235 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Propiedades - Lista Completa{% endblock %}
+
+{% block extra_css %}
+<style>
+    .table-container {
+        overflow-x: auto;
+        margin-top: 20px;
+    }
+    .table th {
+        background-color: #f8f9fa;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    .table td {
+        vertical-align: middle;
+        font-size: 0.9rem;
+    }
+    .field-value {
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .field-value.expandable:hover {
+        white-space: normal;
+        overflow: visible;
+        background-color: #f8f9fa;
+        z-index: 5;
+        position: relative;
+    }
+    .badge-field {
+        font-size: 0.75rem;
+    }
+    .pagination-container {
+        margin-top: 20px;
+    }
+    .summary {
+        background-color: #f8f9fa;
+        padding: 10px;
+        border-radius: 5px;
+        margin-bottom: 15px;
+    }
+    .toggle-columns-btn {
+        margin-bottom: 10px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">
+                    <i class="bi bi-table me-2"></i>Lista Completa de Propiedades
+                </h1>
+                <div>
+                    <a href="{% url 'ingestas:lista_propiedades' %}" class="btn btn-outline-secondary">
+                        <i class="bi bi-grid me-1"></i> Vista Tarjetas
+                    </a>
+                    <button class="btn btn-outline-primary toggle-columns-btn" id="toggleColumns">
+                        <i class="bi bi-eye-slash me-1"></i> Ocultar/Mostrar Columnas
+                    </button>
+                </div>
+            </div>
+
+            <div class="summary alert alert-info">
+                <div class="row">
+                    <div class="col-md-4">
+                        <strong>Total propiedades:</strong> {{ page_obj.paginator.count }}
+                    </div>
+                    <div class="col-md-4">
+                        <strong>Página:</strong> {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+                    </div>
+                    <div class="col-md-4">
+                        <strong>Campos por propiedad:</strong> {{ total_campos }}
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table class="table table-bordered table-hover table-striped">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>ID</th>
+                            {% for campo in campos %}
+                            <th data-field="{{ campo.name }}" class="column-toggle">
+                                {{ campo.verbose_name|title }}
+                                <br>
+                                <small class="text-muted">{{ campo.name }}</small>
+                            </th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for propiedad in propiedades %}
+                        <tr>
+                            <td>{{ forloop.counter0|add:page_obj.start_index }}</td>
+                            <td>
+                                <span class="badge bg-secondary">{{ propiedad.id }}</span>
+                            </td>
+                            {% for campo in campos %}
+                            <td data-field="{{ campo.name }}" class="column-toggle">
+                                {% with value=propiedad|getattr:campo.name %}
+                                    {% if value == None or value == '' %}
+                                        <span class="text-muted">—</span>
+                                    {% elif campo.type == 'BooleanField' %}
+                                        {% if value %}
+                                            <span class="badge bg-success">Sí</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">No</span>
+                                        {% endif %}
+                                    {% elif campo.type == 'DecimalField' or campo.type == 'FloatField' %}
+                                        {% if campo.name == 'precio_usd' %}
+                                            <strong>${{ value|floatformat:2 }}</strong>
+                                        {% else %}
+                                            {{ value|floatformat:2 }}
+                                        {% endif %}
+                                    {% elif campo.type == 'DateTimeField' %}
+                                        {{ value|date:"d/m/Y H:i" }}
+                                    {% elif campo.type == 'DateField' %}
+                                        {{ value|date:"d/m/Y" }}
+                                    {% elif campo.type == 'TextField' and value|length > 50 %}
+                                        <div class="field-value expandable" title="{{ value }}">
+                                            {{ value|truncatechars:50 }}
+                                        </div>
+                                    {% elif campo.type == 'JSONField' %}
+                                        <div class="field-value expandable" title="{{ value|default:'{}' }}">
+                                            {{ value|length }} items
+                                        </div>
+                                    {% else %}
+                                        <div class="field-value">
+                                            {{ value|default:'—' }}
+                                        </div>
+                                    {% endif %}
+                                {% endwith %}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="{{ total_campos|add:2 }}" class="text-center py-4">
+                                <div class="alert alert-warning">
+                                    <i class="bi bi-exclamation-triangle me-2"></i>
+                                    No hay propiedades registradas.
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% if is_paginated %}
+            <div class="pagination-container">
+                <nav aria-label="Navegación de páginas">
+                    <ul class="pagination justify-content-center">
+                        {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page=1">&laquo; Primera</a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Anterior</a>
+                        </li>
+                        {% endif %}
+
+                        {% for num in page_obj.paginator.page_range %}
+                            {% if page_obj.number == num %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ num }}</span>
+                            </li>
+                            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                            </li>
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}">Siguiente</a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">Última &raquo;</a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                <p class="text-center text-muted">
+                    Mostrando {{ page_obj.start_index }} - {{ page_obj.end_index }} de {{ page_obj.paginator.count }} propiedades
+                </p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Filtro para ocultar/mostrar columnas
+    document.getElementById('toggleColumns').addEventListener('click', function() {
+        const columns = document.querySelectorAll('.column-toggle');
+        const isHidden = columns[0].style.display === 'none';
+        
+        columns.forEach(col => {
+            col.style.display = isHidden ? '' : 'none';
+        });
+        
+        this.innerHTML = isHidden ? 
+            '<i class="bi bi-eye-slash me-1"></i> Ocultar/Mostrar Columnas' :
+            '<i class="bi bi-eye me-1"></i> Mostrar Todas las Columnas';
+    });
+
+    // Expansión de celdas largas
+    document.querySelectorAll('.field-value.expandable').forEach(cell => {
+        cell.addEventListener('click', function() {
+            if (this.style.whiteSpace === 'normal') {
+                this.style.whiteSpace = 'nowrap';
+                this.style.overflow = 'hidden';
+                this.style.textOverflow = 'ellipsis';
+            } else {
+                this.style.whiteSpace = 'normal';
+                this.style.overflow = 'visible';
+                this.style.textOverflow = 'clip';
+            }
+        });
+    });
+</script>
+{% endblock %}

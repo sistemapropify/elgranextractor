@@ -12,6 +12,7 @@ urlpatterns = [
     path('limpiar-logs/', views.LimpiarLogsView.as_view(), name='limpiar_logs'),
     # Nueva ruta para listar propiedades
     path('propiedades/', views.ListaPropiedadesView.as_view(), name='lista_propiedades'),
+    path('propiedades/completa/', views.ListaPropiedadesCompletaView.as_view(), name='lista_propiedades_completa'),
     path('propiedades/filtradas/', views.PropiedadesFiltradasView.as_view(), name='propiedades_filtradas'),
     path('propiedades/<int:pk>/', views.DetallePropiedadView.as_view(), name='detalle_propiedad'),
     path('propiedades/<int:pk>/editar/', views.EditarPropiedadView.as_view(), name='editar_propiedad'),
