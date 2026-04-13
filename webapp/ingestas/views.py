@@ -1355,6 +1355,9 @@ class ListaPropiedadesView(ListView):
         print(f"  Contexto DEBUG - fuente_externa_checked: {context.get('fuente_externa_checked')}")
         print(f"  Contexto DEBUG - fuente_propify_checked: {context.get('fuente_propify_checked')}")
         
+        # Agregar API key de Google Maps (misma que usan otras vistas)
+        context['google_maps_api_key'] = 'AIzaSyBrL1QF7vTl9zF8FmCUumfRpFJcaYokO7Q'
+        
         return context
 
 
@@ -1480,6 +1483,8 @@ class PropiedadesFiltradasView(ListView):
         context['parametros_filtro'] = self.request.GET.copy()
         if 'page' in context['parametros_filtro']:
             del context['parametros_filtro']['page']
+        # Agregar API key de Google Maps (misma que usan otras vistas)
+        context['google_maps_api_key'] = 'AIzaSyBrL1QF7vTl9zF8FmCUumfRpFJcaYokO7Q'
         return context
 
 
