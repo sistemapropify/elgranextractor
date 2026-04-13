@@ -1209,10 +1209,10 @@
         return label;
     }
 
-    // Inicializar mapa con manejo de errores
-    function initMap() {
+    // Inicializar mapa con manejo de errores - Nombre único para evitar conflictos
+    function initIngestasMap() {
         try {
-            console.log('initMap llamado - Google Maps API cargada');
+            console.log('initIngestasMap llamado - Google Maps API cargada');
             
             // Verificar que el contenedor del mapa existe
             const mapContainer = document.getElementById('propertyMap');
@@ -1303,7 +1303,7 @@
             loadZones();
             
         } catch (error) {
-            console.error('Error en initMap:', error);
+            console.error('Error en initIngestasMap:', error);
             console.error('Stack trace:', error.stack);
             
             // Mostrar mensaje de error en la página
