@@ -1085,7 +1085,41 @@
 {% block extra_js %}
 {% load static %}
 <!-- Google Maps API -->
-<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&libraries=places&callback=initMap" async defer></script>
+<script>
+    // Función para manejar errores de carga de Google Maps
+    function handleGoogleMapsError() {
+        console.error('Error: No se pudo cargar la API de Google Maps');
+        const mapContainer = document.getElementById('propertyMap');
+        if (mapContainer) {
+            mapContainer.innerHTML = `
+                <div style="padding: 20px; background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; border-radius: 4px;">
+                    <h4>Error al cargar Google Maps</h4>
+                    <p>No se pudo cargar la API de Google Maps. Posibles causas:</p>
+                    <ul>
+                        <li>La clave API no es válida o ha expirado</li>
+                        <li>La clave API no tiene habilitado el dominio acm.propifai.com</li>
+                        <li>Problemas de conexión a internet</li>
+                    </ul>
+                    <p>Por favor, verifica la consola del navegador para más detalles.</p>
+                </div>
+            `;
+        }
+    }
+    
+    // Cargar Google Maps API con manejo de errores
+    window.gm_authFailure = function() {
+        console.error('Error de autenticación de Google Maps API - Clave API inválida');
+        handleGoogleMapsError();
+    };
+    
+    // Cargar el script de Google Maps
+    const script = document.createElement('script');
+    script.src = 'https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&libraries=places&callback=initMap';
+    script.async = true;
+    script.defer = true;
+    script.onerror = handleGoogleMapsError;
+    document.head.appendChild(script);
+</script>
 
 {{ todas_propiedades_json|json_script:"todas-propiedades-data" }}
 
@@ -1175,66 +1209,115 @@
         return label;
     }
 
-    // Inicializar mapa
+    // Inicializar mapa con manejo de errores
     function initMap() {
-        const defaultCenter = { lat: -16.4090, lng: -71.5375 }; // Arequipa, Perú
-        map = new google.maps.Map(document.getElementById('propertyMap'), {
-            center: defaultCenter,
-            zoom: 13,
-            styles: [
-                {
-                    featureType: "poi",
-                    elementType: "labels",
-                    stylers: [{ visibility: "off" }]
-                }
-            ]
-        });
-
-        infoWindow = new google.maps.InfoWindow();
-
-        // Agregar marcadores para propiedades con coordenadas (usando JSON de todas las propiedades)
-        console.log('Total propiedades en JSON:', todasPropiedadesJSON.length);
-        let marcadoresAgregados = 0;
-        let propifyCount = 0;
-        todasPropiedadesJSON.forEach(prop => {
-            const lat = prop.lat;
-            const lng = prop.lng;
-            const propertyId = prop.id || prop.id_externo;
-            const esExterno = prop.es_externo || false;
-            const esPropify = prop.es_propify || false;
-            const esRemax = prop.es_remax || false;
+        try {
+            console.log('initMap llamado - Google Maps API cargada');
             
-            if (esPropify) {
-                propifyCount++;
-                console.log('Propify encontrada:', prop.id, 'lat:', lat, 'lng:', lng);
+            // Verificar que el contenedor del mapa existe
+            const mapContainer = document.getElementById('propertyMap');
+            if (!mapContainer) {
+                console.error('Error: No se encontró el contenedor del mapa con ID "propertyMap"');
+                return;
             }
             
-            if (lat && lng && lat !== 0 && lng !== 0) {
-                const type = prop.tipo_propiedad || 'Propiedad';
-                const title = prop.descripcion || prop.titulo || 'Sin descripción';
-                const price = prop.precio_usd ? '$' + prop.precio_usd.toLocaleString() : 'Consultar';
+            // Verificar dimensiones del contenedor
+            const containerWidth = mapContainer.offsetWidth;
+            const containerHeight = mapContainer.offsetHeight;
+            console.log(`Dimensiones del contenedor: ${containerWidth}x${containerHeight}px`);
+            
+            if (containerWidth === 0 || containerHeight === 0) {
+                console.warn('Advertencia: El contenedor del mapa tiene dimensiones cero. Forzando dimensiones mínimas.');
+                mapContainer.style.minHeight = '300px';
+                mapContainer.style.height = '300px';
+            }
+            
+            // Verificar que google.maps está disponible
+            if (!window.google || !window.google.maps) {
+                console.error('Error: Google Maps API no está disponible');
+                return;
+            }
+            
+            const defaultCenter = { lat: -16.4090, lng: -71.5375 }; // Arequipa, Perú
+            console.log('Creando mapa de Google Maps con centro:', defaultCenter);
+            
+            map = new google.maps.Map(mapContainer, {
+                center: defaultCenter,
+                zoom: 13,
+                styles: [
+                    {
+                        featureType: "poi",
+                        elementType: "labels",
+                        stylers: [{ visibility: "off" }]
+                    }
+                ]
+            });
+
+            console.log('Mapa creado exitosamente');
+            infoWindow = new google.maps.InfoWindow();
+
+            // Agregar marcadores para propiedades con coordenadas (usando JSON de todas las propiedades)
+            console.log('Total propiedades en JSON:', todasPropiedadesJSON.length);
+            let marcadoresAgregados = 0;
+            let propifyCount = 0;
+            todasPropiedadesJSON.forEach(prop => {
+                const lat = prop.lat;
+                const lng = prop.lng;
+                const propertyId = prop.id || prop.id_externo;
+                const esExterno = prop.es_externo || false;
+                const esPropify = prop.es_propify || false;
+                const esRemax = prop.es_remax || false;
                 
-                addMarker(lat, lng, type, title, price, propertyId, esExterno, esPropify, esRemax);
-                marcadoresAgregados++;
-            } else {
-                console.log('Propiedad sin coordenadas válidas:', prop.id, prop.tipo_propiedad);
-            }
-        });
-        console.log('Propify totales:', propifyCount);
-        console.log('Marcadores agregados:', marcadoresAgregados);
+                if (esPropify) {
+                    propifyCount++;
+                    console.log('Propify encontrada:', prop.id, 'lat:', lat, 'lng:', lng);
+                }
+                
+                if (lat && lng && lat !== 0 && lng !== 0) {
+                    const type = prop.tipo_propiedad || 'Propiedad';
+                    const title = prop.descripcion || prop.titulo || 'Sin descripción';
+                    const price = prop.precio_usd ? '$' + prop.precio_usd.toLocaleString() : 'Consultar';
+                    
+                    addMarker(lat, lng, type, title, price, propertyId, esExterno, esPropify, esRemax);
+                    marcadoresAgregados++;
+                } else {
+                    console.log('Propiedad sin coordenadas válidas:', prop.id, prop.tipo_propiedad);
+                }
+            });
+            console.log('Propify totales:', propifyCount);
+            console.log('Marcadores agregados:', marcadoresAgregados);
 
-        // Ajustar vista para mostrar todos los marcadores
-        if (markers.length > 0) {
-            const bounds = new google.maps.LatLngBounds();
-            markers.forEach(marker => bounds.extend(marker.getPosition()));
-            map.fitBounds(bounds);
-        } else {
-            // Si no hay marcadores, mantener vista por defecto
-            map.setZoom(13);
+            // Ajustar vista para mostrar todos los marcadores
+            if (markers.length > 0) {
+                const bounds = new google.maps.LatLngBounds();
+                markers.forEach(marker => bounds.extend(marker.getPosition()));
+                map.fitBounds(bounds);
+                console.log('Ajustando vista para mostrar', markers.length, 'marcadores');
+            } else {
+                // Si no hay marcadores, mantener vista por defecto
+                map.setZoom(13);
+                console.log('No hay marcadores, manteniendo vista por defecto');
+            }
+            
+            // Cargar zonas de cuadrantización
+            loadZones();
+            
+        } catch (error) {
+            console.error('Error en initMap:', error);
+            console.error('Stack trace:', error.stack);
+            
+            // Mostrar mensaje de error en la página
+            const mapContainer = document.getElementById('propertyMap');
+            if (mapContainer) {
+                mapContainer.innerHTML = `
+                    <div style="padding: 20px; background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; border-radius: 4px;">
+                        <h4>Error al cargar el mapa</h4>
+                        <p>${error.message}</p>
+                        <p>Por favor, verifica la consola del navegador para más detalles.</p>
+                    </div>
+                `;
+            }
         }
-        
-        // Cargar zonas de cuadrantización
-        loadZones();
     }
 
     function addMarker(lat, lng, type, description, price, propertyId, esExterno = false, esPropify = false, esRemax = false) {
