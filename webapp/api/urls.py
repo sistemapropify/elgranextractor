@@ -20,6 +20,8 @@ router = DefaultRouter()
 router.register(r'fuentes', views.FuenteWebViewSet, basename='fuente')
 router.register(r'capturas', views.CapturaCrudaViewSet, basename='captura')
 router.register(r'eventos', views.EventoDeteccionViewSet, basename='evento')
+router.register(r'propiedades-raw', views.PropiedadRawViewSet, basename='propiedadraw')
+router.register(r'propiedades-propifai', views.PropifaiPropertyViewSet, basename='propifaiproperty')
 
 # URLs de la API
 urlpatterns = [
@@ -49,6 +51,9 @@ urlpatterns = [
     
     # Endpoint simulado para propiedades externas (para pruebas)
     path('propiedades-externas-simuladas/', views.PropiedadesExternasSimuladasAPIView.as_view(), name='propiedades-externas-simuladas'),
+    
+    # Endpoint para buscar comparables
+    path('comparables/', views.ComparablesAPIView.as_view(), name='comparables'),
 ]
 
 # Agregar prefijo de versión (comentado porque ya hay prefijo en webapp/urls.py)

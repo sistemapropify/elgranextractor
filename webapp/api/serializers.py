@@ -10,6 +10,8 @@ from django.utils import timezone
 
 from semillas.models import FuenteWeb
 from captura.models import CapturaCruda, EventoDeteccion
+from ingestas.models import PropiedadRaw
+from propifai.models import PropifaiProperty
 
 
 class FuenteWebSerializer(serializers.ModelSerializer):
@@ -144,6 +146,129 @@ class CapturaCrudaSerializer(serializers.ModelSerializer):
             )
         
         return data
+
+
+class PropiedadRawSerializer(serializers.ModelSerializer):
+    """Serializer para el modelo PropiedadRaw."""
+    
+    # Campos calculados
+    lat = serializers.SerializerMethodField()
+    lng = serializers.SerializerMethodField()
+    precio_m2 = serializers.SerializerMethodField()
+    precio_m2_final = serializers.SerializerMethodField()
+    imagen_url = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = PropiedadRaw
+        fields = [
+            'id', 'fuente_excel', 'fecha_ingesta', 'tipo_propiedad', 'subtipo_propiedad',
+            'condicion', 'propiedad_verificada', 'precio_usd', 'descripcion', 'portal',
+            'url_propiedad', 'coordenadas', 'departamento', 'provincia', 'distrito',
+            'area_terreno', 'area_construida', 'numero_pisos', 'numero_habitaciones',
+            'numero_banos', 'lat', 'lng', 'precio_m2', 'precio_m2_final', 'imagen_url'
+        ]
+    
+    def get_lat(self, obj):
+        """Extrae latitud de coordenadas."""
+        if obj.coordenadas:
+            try:
+                parts = obj.coordenadas.split(',')
+                if len(parts) >= 2:
+                    return float(parts[0].strip())
+            except (ValueError, AttributeError):
+                pass
+        return None
+    
+    def get_lng(self, obj):
+        """Extrae longitud de coordenadas."""
+        if obj.coordenadas:
+            try:
+                parts = obj.coordenadas.split(',')
+                if len(parts) >= 2:
+                    return float(parts[1].strip())
+            except (ValueError, AttributeError):
+                pass
+        return None
+    
+    def get_precio_m2(self, obj):
+        """Calcula precio por m² de construcción."""
+        from acm.utils import calcular_precio_m2
+        precio_info = calcular_precio_m2(obj)
+        return precio_info.get('precio_m2')
+    
+    def get_precio_m2_final(self, obj):
+        """Calcula precio final por m²."""
+        from acm.utils import calcular_precio_m2
+        precio_info = calcular_precio_m2(obj)
+        return precio_info.get('precio_m2_final')
+    
+    def get_imagen_url(self, obj):
+        """Obtiene URL de la primera imagen."""
+        if hasattr(obj, 'primera_imagen'):
+            return obj.primera_imagen()
+        return None
+
+
+class PropifaiPropertySerializer(serializers.ModelSerializer):
+    """Serializer para el modelo PropifaiProperty."""
+    
+    # Campos calculados
+    lat = serializers.SerializerMethodField()
+    lng = serializers.SerializerMethodField()
+    precio_m2 = serializers.SerializerMethodField()
+    precio_m2_final = serializers.SerializerMethodField()
+    tipo_propiedad = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = PropifaiProperty
+        fields = [
+            'id', 'code', 'codigo_unico_propiedad', 'title', 'description',
+            'antiquity_years', 'delivery_date', 'price', 'maintenance_fee', 'has_maintenance',
+            'floors', 'bedrooms', 'bathrooms', 'half_bathrooms', 'garage_spaces',
+            'land_area', 'built_area', 'front_measure', 'depth_measure',
+            'real_address', 'exact_address', 'coordinates', 'department', 'province', 'district',
+            'urbanization', 'amenities', 'zoning', 'created_at', 'updated_at',
+            'is_active', 'is_ready_for_sale', 'is_draft', 'is_project',
+            'project_name', 'ascensor', 'availability_status', 'unit_location',
+            'lat', 'lng', 'precio_m2', 'precio_m2_final', 'tipo_propiedad'
+        ]
+    
+    def get_lat(self, obj):
+        """Usa la propiedad latitude del modelo."""
+        return obj.latitude
+    
+    def get_lng(self, obj):
+        """Usa la propiedad longitude del modelo."""
+        return obj.longitude
+    
+    def get_precio_m2(self, obj):
+        """Calcula precio por m²."""
+        if obj.price and obj.built_area and float(obj.built_area) > 0:
+            try:
+                return float(obj.price) / float(obj.built_area)
+            except (ValueError, ZeroDivisionError):
+                pass
+        return None
+    
+    def get_precio_m2_final(self, obj):
+        """Para Propifai, precio_m2_final es igual a precio_m2."""
+        return self.get_precio_m2(obj)
+    
+    def get_tipo_propiedad(self, obj):
+        """Determina tipo de propiedad."""
+        if hasattr(obj, 'tipo_propiedad'):
+            return obj.tipo_propiedad or 'Propiedad'
+        elif obj.title:
+            titulo_lower = obj.title.lower()
+            if any(tipo in titulo_lower for tipo in ['casa', 'house']):
+                return 'Casa'
+            elif any(tipo in titulo_lower for tipo in ['departamento', 'apartamento', 'apartment']):
+                return 'Departamento'
+            elif any(tipo in titulo_lower for tipo in ['terreno', 'land', 'lote']):
+                return 'Terreno'
+            elif any(tipo in titulo_lower for tipo in ['oficina', 'office', 'local']):
+                return 'Oficina'
+        return 'Propiedad'
 
 
 class EventoDeteccionSerializer(serializers.ModelSerializer):

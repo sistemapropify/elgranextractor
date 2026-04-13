@@ -19,10 +19,13 @@ import logging
 
 from .serializers import (
     FuenteWebSerializer, CapturaCrudaSerializer, EventoDeteccionSerializer,
-    EstadisticasSerializer, TareaCelerySerializer, DescubrimientoRequestSerializer
+    EstadisticasSerializer, TareaCelerySerializer, DescubrimientoRequestSerializer,
+    PropiedadRawSerializer, PropifaiPropertySerializer
 )
 from semillas.models import FuenteWeb
 from captura.models import CapturaCruda, EventoDeteccion
+from ingestas.models import PropiedadRaw
+from propifai.models import PropifaiProperty
 from colas.tareas_descubrimiento import ejecutar_descubrimiento_automatico
 from colas.tasks import revisar_fuente, ejecutar_prueba_sistema, generar_reporte_estadisticas
 
@@ -557,6 +560,85 @@ class TareasAPIView(APIView):
             })
 
 
+class PropiedadRawViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet para gestionar propiedades raw (PropiedadRaw).
+    Permite listar, crear, actualizar y eliminar propiedades.
+    """
+    queryset = PropiedadRaw.objects.all().order_by('-fecha_ingesta')
+    serializer_class = PropiedadRawSerializer
+    permission_classes = [AllowAny]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['tipo_propiedad', 'condicion', 'departamento', 'provincia', 'distrito']
+    ordering_fields = ['precio_usd', 'area_construida', 'area_terreno', 'fecha_ingesta']
+    
+    def get_queryset(self):
+        """Filtra el queryset basado en parámetros de consulta."""
+        queryset = super().get_queryset()
+        
+        # Filtrar por tipo de propiedad
+        tipo_propiedad = self.request.query_params.get('tipo_propiedad')
+        if tipo_propiedad:
+            queryset = queryset.filter(tipo_propiedad=tipo_propiedad)
+        
+        # Filtrar por condición (venta/alquiler)
+        condicion = self.request.query_params.get('condicion')
+        if condicion:
+            queryset = queryset.filter(condicion=condicion)
+        
+        # Filtrar por departamento
+        departamento = self.request.query_params.get('departamento')
+        if departamento:
+            queryset = queryset.filter(departamento__icontains=departamento)
+        
+        # Filtrar por precio mínimo y máximo
+        precio_min = self.request.query_params.get('precio_min')
+        precio_max = self.request.query_params.get('precio_max')
+        if precio_min:
+            queryset = queryset.filter(precio_usd__gte=precio_min)
+        if precio_max:
+            queryset = queryset.filter(precio_usd__lte=precio_max)
+        
+        return queryset
+
+
+class PropifaiPropertyViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet para gestionar propiedades de Propifai (PropifaiProperty).
+    Permite listar, crear, actualizar y eliminar propiedades.
+    """
+    queryset = PropifaiProperty.objects.using('propifai').all().order_by('-created_at')
+    serializer_class = PropifaiPropertySerializer
+    permission_classes = [AllowAny]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['title', 'description', 'department', 'province', 'district']
+    ordering_fields = ['price', 'built_area', 'land_area', 'created_at']
+    
+    def get_queryset(self):
+        """Filtra el queryset basado en parámetros de consulta."""
+        queryset = super().get_queryset()
+        
+        # Filtrar por tipo de propiedad (basado en título)
+        tipo_propiedad = self.request.query_params.get('tipo_propiedad')
+        if tipo_propiedad:
+            queryset = queryset.filter(title__icontains=tipo_propiedad)
+        
+        # Filtrar por departamento
+        departamento = self.request.query_params.get('departamento')
+        if departamento:
+            queryset = queryset.filter(department__icontains=departamento)
+        
+        # Filtrar por precio mínimo y máximo
+        precio_min = self.request.query_params.get('precio_min')
+        precio_max = self.request.query_params.get('precio_max')
+        if precio_min:
+            queryset = queryset.filter(price__gte=precio_min)
+        if precio_max:
+            queryset = queryset.filter(price__lte=precio_max)
+        
+        return queryset
+
+
 class PropiedadesExternasSimuladasAPIView(APIView):
     """
     Endpoint que simula la API externa de propiedades.
@@ -700,3 +782,358 @@ class PropiedadesExternasSimuladasAPIView(APIView):
         }
         
         return Response(response_data)
+
+
+class ComparablesAPIView(APIView):
+    """
+    Endpoint para buscar propiedades comparables basadas en ubicación y características.
+    Similar a la función buscar_comparables en acm/views.py pero adaptada para API REST.
+    """
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        """
+        Busca propiedades comparables.
+        
+        Parámetros esperados en el cuerpo JSON:
+        - lat: latitud del punto de referencia (obligatorio)
+        - lng: longitud del punto de referencia (obligatorio)
+        - radio: radio de búsqueda en metros (opcional, default 500)
+        - tipo_propiedad: tipo de propiedad (opcional)
+        - metros_construccion: área construida aproximada (opcional)
+        - metros_terreno: área de terreno aproximada (opcional)
+        - habitaciones: número de habitaciones (opcional)
+        - banos: número de baños (opcional)
+        """
+        from acm.utils import haversine, calcular_precio_m2
+        from propifai.mapeo_ubicaciones import DEPARTAMENTOS, PROVINCIAS, DISTRITOS
+        import json
+        
+        try:
+            data = request.data
+            
+            # Validar parámetros obligatorios
+            lat = data.get('lat')
+            lng = data.get('lng')
+            if lat is None or lng is None:
+                return Response(
+                    {'error': 'Los parámetros lat y lng son obligatorios'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            try:
+                lat = float(lat)
+                lng = float(lng)
+            except (ValueError, TypeError):
+                return Response(
+                    {'error': 'lat y lng deben ser números válidos'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Validar coordenadas
+            if not (-90 <= lat <= 90) or not (-180 <= lng <= 180):
+                return Response(
+                    {'error': 'Coordenadas inválidas'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            radio = float(data.get('radio', 500))
+            tipo_propiedad = data.get('tipo_propiedad', '').strip()
+            
+            # Obtener propiedades locales (PropiedadRaw)
+            propiedades_locales = PropiedadRaw.objects.exclude(
+                coordenadas__isnull=True
+            ).exclude(
+                coordenadas=''
+            )
+            
+            # Filtrar por tipo si se especifica
+            if tipo_propiedad:
+                from django.db.models import Q
+                propiedades_locales = propiedades_locales.filter(
+                    Q(tipo_propiedad__icontains=tipo_propiedad) |
+                    Q(atributos_extras__tipo_propiedad__icontains=tipo_propiedad) |
+                    Q(atributos_extras__tipo__icontains=tipo_propiedad)
+                )
+            
+            # Convertir a lista para procesar
+            propiedades_list = list(propiedades_locales)
+            
+            # Obtener propiedades de Propifai (si está disponible)
+            propiedades_propifai_list = []
+            try:
+                from propifai.models import PropifaiProperty
+                
+                # Diccionario de coordenadas aproximadas por distrito (para Arequipa y Lima principalmente)
+                COORDENADAS_APROXIMADAS = {
+                    # Arequipa
+                    'Yanahuara': (-16.3889, -71.5350),
+                    'Cayma': (-16.4000, -71.5300),
+                    'Cerro Colorado': (-16.3800, -71.5200),
+                    'Sachaca': (-16.4200, -71.5400),
+                    'Hunter': (-16.4100, -71.5250),
+                    'Mariano Melgar': (-16.4050, -71.5150),
+                    'Miraflores': (-16.3950, -71.5450),
+                    'Paucarpata': (-16.4300, -71.5100),
+                    'Sabandia': (-16.4400, -71.5500),
+                    'Socabaya': (-16.4500, -71.5200),
+                    'Tiabaya': (-16.4600, -71.5300),
+                    'Alto Selva Alegre': (-16.3850, -71.5100),
+                    'Jacobo Hunter': (-16.4150, -71.5200),
+                    'Jose Luis Bustamante y Rivero': (-16.3900, -71.5000),
+                    # Lima
+                    'Miraflores': (-12.1189, -77.0339),
+                    'San Isidro': (-12.0975, -77.0428),
+                    'San Borja': (-12.1000, -77.0083),
+                    'Surco': (-12.1333, -77.0000),
+                    'La Molina': (-12.0833, -76.9500),
+                    'Jesus Maria': (-12.0833, -77.0500),
+                    'Lince': (-12.0833, -77.0333),
+                    'Magdalena': (-12.1000, -77.0667),
+                    'Pueblo Libre': (-12.0667, -77.0667),
+                    'San Miguel': (-12.0833, -77.1000),
+                    'Callao': (-12.0500, -77.1333),
+                }
+                
+                # Obtener TODAS las propiedades de Propifai primero
+                propiedades_propifai = PropifaiProperty.objects.using('propifai').all()
+                
+                # Filtrar por tipo si se especifica
+                if tipo_propiedad:
+                    propiedades_propifai = propiedades_propifai.filter(
+                        Q(title__icontains=tipo_propiedad)
+                    )
+                
+                # Convertir a lista y procesar
+                todas_propifai = list(propiedades_propifai)
+                
+                for prop in todas_propifai:
+                    # Verificar si tiene coordenadas válidas usando las propiedades latitude/longitude
+                    if prop.latitude is not None and prop.longitude is not None:
+                        propiedades_propifai_list.append(prop)
+                    else:
+                        # Intentar obtener coordenadas aproximadas por distrito
+                        distrito_nombre = None
+                        if prop.district:
+                            # Obtener nombre del distrito desde el mapeo
+                            distrito_id = str(prop.district)
+                            distrito_nombre = DISTRITOS.get(distrito_id, distrito_id)
+                        
+                        # Buscar coordenadas aproximadas para este distrito
+                        if distrito_nombre and distrito_nombre in COORDENADAS_APROXIMADAS:
+                            prop_lat, prop_lng = COORDENADAS_APROXIMADAS[distrito_nombre]
+                            # Crear una copia del objeto con coordenadas aproximadas
+                            class PropiedadConCoordenadas:
+                                def __init__(self, original, lat, lng):
+                                    self.__dict__ = original.__dict__.copy()
+                                    self._latitude = lat
+                                    self._longitude = lng
+                                
+                                @property
+                                def latitude(self):
+                                    return self._latitude
+                                
+                                @property
+                                def longitude(self):
+                                    return self._longitude
+                            
+                            prop_con_coords = PropiedadConCoordenadas(prop, prop_lat, prop_lng)
+                            propiedades_propifai_list.append(prop_con_coords)
+            
+            except Exception as e:
+                # Si hay error al obtener propiedades de Propifai, continuar solo con locales
+                print(f"Error obteniendo propiedades de Propifai: {e}")
+                pass
+            
+            # Combinar ambas listas
+            todas_propiedades = propiedades_list + propiedades_propifai_list
+            
+            # Filtrar por distancia usando Haversine
+            propiedades_cercanas = []
+            for prop in todas_propiedades:
+                # Determinar coordenadas según el tipo de propiedad
+                if hasattr(prop, 'lat') and hasattr(prop, 'lng'):
+                    # Propiedad local (PropiedadRaw)
+                    prop_lat = prop.lat
+                    prop_lng = prop.lng
+                    if prop_lat is None or prop_lng is None:
+                        continue
+                    
+                    # Calcular distancia
+                    distancia = haversine(lat, lng, prop_lat, prop_lng)
+                    if distancia > radio:
+                        continue
+                    
+                    # Calcular precio por m² para propiedades locales
+                    precio_m2_info = calcular_precio_m2(prop)
+                    
+                    # Obtener ubicación
+                    distrito = prop.distrito or ''
+                    provincia = prop.provincia or ''
+                    departamento = prop.departamento or ''
+                    
+                    # Crear diccionario para propiedad local
+                    propiedad_dict = {
+                        'id': prop.id,
+                        'lat': prop_lat,
+                        'lng': prop_lng,
+                        'tipo': prop.tipo_propiedad or 'No especificado',
+                        'precio': float(prop.precio_usd) if prop.precio_usd else None,
+                        'precio_final': float(prop.precio_final_venta) if prop.precio_final_venta else None,
+                        'metros_construccion': float(prop.area_construida) if prop.area_construida else None,
+                        'metros_terreno': float(prop.area_terreno) if prop.area_terreno else None,
+                        'habitaciones': prop.numero_habitaciones,
+                        'baños': prop.numero_banos,
+                        'estado': prop.get_estado_propiedad_display() if prop.estado_propiedad else 'En Publicación',
+                        'distrito': distrito,
+                        'provincia': provincia,
+                        'departamento': departamento,
+                        'imagen_url': prop.primera_imagen() if hasattr(prop, 'primera_imagen') else None,
+                        'precio_m2': precio_m2_info.get('precio_m2'),
+                        'precio_m2_final': precio_m2_info.get('precio_m2_final'),
+                        'distancia_metros': round(distancia, 2),
+                        'fuente': 'local',
+                        'es_propify': False,
+                    }
+                    
+                else:
+                    # Propiedad de Propifai
+                    prop_lat = prop.latitude
+                    prop_lng = prop.longitude
+                    if prop_lat is None or prop_lng is None:
+                        continue
+                    
+                    # Calcular distancia
+                    distancia = haversine(lat, lng, prop_lat, prop_lng)
+                    if distancia > radio:
+                        continue
+                    
+                    # Obtener nombres mapeados de ubicación
+                    departamento_id = str(prop.department) if prop.department else ''
+                    provincia_id = str(prop.province) if prop.province else ''
+                    distrito_id = str(prop.district) if prop.district else ''
+                    
+                    departamento_nombre = DEPARTAMENTOS.get(departamento_id, departamento_id)
+                    provincia_nombre = PROVINCIAS.get(provincia_id, provincia_id)
+                    distrito_nombre = DISTRITOS.get(distrito_id, distrito_id)
+                    
+                    # Calcular precio por m² aproximado para Propifai
+                    precio_m2 = None
+                    precio_m2_final = None
+                    
+                    # Intentar calcular con built_area primero, luego land_area como alternativa
+                    area_para_calculo = None
+                    if prop.built_area and float(prop.built_area) > 0:
+                        area_para_calculo = float(prop.built_area)
+                    elif prop.land_area and float(prop.land_area) > 0:
+                        area_para_calculo = float(prop.land_area)
+                    
+                    if prop.price and area_para_calculo:
+                        try:
+                            precio_m2 = float(prop.price) / area_para_calculo
+                            precio_m2_final = precio_m2
+                        except (ValueError, ZeroDivisionError):
+                            pass
+                    
+                    # Determinar tipo de propiedad
+                    tipo_propiedad_valor = 'Propiedad'
+                    if hasattr(prop, 'tipo_propiedad'):
+                        tipo_propiedad_valor = prop.tipo_propiedad or 'Propiedad'
+                    elif prop.title:
+                        titulo_lower = prop.title.lower()
+                        if any(tipo in titulo_lower for tipo in ['casa', 'house']):
+                            tipo_propiedad_valor = 'Casa'
+                        elif any(tipo in titulo_lower for tipo in ['departamento', 'apartamento', 'apartment']):
+                            tipo_propiedad_valor = 'Departamento'
+                        elif any(tipo in titulo_lower for tipo in ['terreno', 'land', 'lote']):
+                            tipo_propiedad_valor = 'Terreno'
+                        elif any(tipo in titulo_lower for tipo in ['oficina', 'office', 'local']):
+                            tipo_propiedad_valor = 'Oficina'
+                    
+                    propiedad_dict = {
+                        'id': prop.id,
+                        'lat': prop_lat,
+                        'lng': prop_lng,
+                        'tipo': tipo_propiedad_valor,
+                        'precio': float(prop.price) if prop.price else None,
+                        'precio_final': float(prop.price) if prop.price else None,
+                        'metros_construccion': float(prop.built_area) if prop.built_area else None,
+                        'metros_terreno': float(prop.land_area) if prop.land_area else None,
+                        'habitaciones': prop.bedrooms,
+                        'baños': prop.bathrooms,
+                        'estado': 'En Publicación',
+                        'distrito': distrito_nombre,
+                        'provincia': provincia_nombre,
+                        'departamento': departamento_nombre,
+                        'imagen_url': prop.imagen_url if hasattr(prop, 'imagen_url') else None,
+                        'precio_m2': precio_m2,
+                        'precio_m2_final': precio_m2_final,
+                        'distancia_metros': round(distancia, 2),
+                        'fuente': 'propifai',
+                        'es_propify': True,
+                        'codigo': prop.code if hasattr(prop, 'code') else None,
+                        'titulo': prop.title if hasattr(prop, 'title') else None,
+                    }
+                
+                propiedades_cercanas.append(propiedad_dict)
+            
+            # Ordenar por distancia (más cercano primero)
+            propiedades_cercanas.sort(key=lambda x: x['distancia_metros'])
+            
+            # Aplicar filtros adicionales si se proporcionan
+            metros_construccion = data.get('metros_construccion')
+            if metros_construccion:
+                try:
+                    metros_construccion = float(metros_construccion)
+                    propiedades_cercanas = [p for p in propiedades_cercanas
+                                           if p['metros_construccion'] is None
+                                           or abs(p['metros_construccion'] - metros_construccion) / metros_construccion <= 0.3]
+                except (ValueError, TypeError):
+                    pass
+            
+            metros_terreno = data.get('metros_terreno')
+            if metros_terreno:
+                try:
+                    metros_terreno = float(metros_terreno)
+                    propiedades_cercanas = [p for p in propiedades_cercanas
+                                           if p['metros_terreno'] is None
+                                           or abs(p['metros_terreno'] - metros_terreno) / metros_terreno <= 0.3]
+                except (ValueError, TypeError):
+                    pass
+            
+            habitaciones = data.get('habitaciones')
+            if habitaciones:
+                try:
+                    habitaciones = int(habitaciones)
+                    propiedades_cercanas = [p for p in propiedades_cercanas
+                                           if p['habitaciones'] is None
+                                           or p['habitaciones'] == habitaciones]
+                except (ValueError, TypeError):
+                    pass
+            
+            banos = data.get('banos')
+            if banos:
+                try:
+                    banos = float(banos)
+                    propiedades_cercanas = [p for p in propiedades_cercanas
+                                           if p['baños'] is None
+                                           or p['baños'] == banos]
+                except (ValueError, TypeError):
+                    pass
+            
+            return Response({
+                'status': 'ok',
+                'total': len(propiedades_cercanas),
+                'radio_metros': radio,
+                'punto_referencia': {'lat': lat, 'lng': lng},
+                'propiedades': propiedades_cercanas,
+            })
+        
+        except Exception as e:
+            print(f"Error en ComparablesAPIView: {e}")
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {'error': 'Error interno del servidor', 'detalle': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
