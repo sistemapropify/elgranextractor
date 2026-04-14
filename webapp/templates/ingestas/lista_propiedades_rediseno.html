@@ -1112,105 +1112,8 @@
         handleGoogleMapsError();
     };
     
-    // Cargar el script de Google Maps con nombre de función único para evitar conflictos
-    const script = document.createElement('script');
-    script.src = 'https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&libraries=places&callback=initIngestasMap';
-    script.async = true;
-    script.defer = true;
-    script.onerror = handleGoogleMapsError;
-    document.head.appendChild(script);
-</script>
-
-{{ todas_propiedades_json|json_script:"todas-propiedades-data" }}
-
-<script>
-    // Datos de todas las propiedades (sin paginar) para el mapa
-    const todasPropiedadesJSON = JSON.parse(document.getElementById('todas-propiedades-data').textContent);
-    
-    // URLs de iconos
-    const ICONO_PROPIFFY = '{% static "requerimientos/data/Pin-propify.png" %}';
-    const ICONO_REMAX = '{% static "requerimientos/data/pin-remax.png" %}';
-    const ICONO_LOCAL = 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png';
-    console.log('Icono Propify:', ICONO_PROPIFFY);
-    console.log('Icono Remax:', ICONO_REMAX);
-    
-    let map;
-    let markers = [];
-    let infoWindow;
-    let zonePolygons = [];
-    let zoneLabels = []; // Etiquetas de zonas
-    const ZONAS_API = '/cuadrantizacion/zonas/';
-    
-    /**
-     * Calcula el centro (centroide) de un polígono.
-     * @param {Array} coordinates - Array de coordenadas [[lat, lng], ...]
-     * @returns {Object} Centro {lat, lng}
-     */
-    function calculatePolygonCenter(coordinates) {
-        if (!coordinates || coordinates.length === 0) {
-            return null;
-        }
-        
-        let latSum = 0;
-        let lngSum = 0;
-        
-        coordinates.forEach(coord => {
-            latSum += coord[0];
-            lngSum += coord[1];
-        });
-        
-        return {
-            lat: latSum / coordinates.length,
-            lng: lngSum / coordinates.length
-        };
-    }
-    
-    /**
-     * Crea una etiqueta (label) en el centro de un polígono.
-     * @param {Object} center - Centro {lat, lng}
-     * @param {string} text - Texto a mostrar
-     * @param {Object} zone - Datos de la zona
-     * @returns {google.maps.Marker} Marcador de etiqueta
-     */
-    function createZoneLabel(center, text, zone) {
-        if (!center) return null;
-        
-        // Determinar color basado en el nivel
-        const levelColors = {
-            'pais': '#FF0000',
-            'departamento': '#FF6600',
-            'provincia': '#FFCC00',
-            'distrito': '#33CC33',
-            'zona': '#3366FF',
-            'subzona': '#9900CC'
-        };
-        
-        const color = levelColors[zone.nivel] || '#000000';
-        
-        const label = new google.maps.Marker({
-            position: center,
-            map: map,
-            icon: {
-                path: google.maps.SymbolPath.CIRCLE,
-                scale: 0, // Círculo invisible
-                fillOpacity: 0,
-                strokeOpacity: 0
-            },
-            label: {
-                text: text,
-                color: color,
-                fontSize: '12px',
-                fontWeight: 'bold',
-                className: 'zone-label'
-            },
-            zIndex: 1000
-        });
-        
-        return label;
-    }
-
-    // Inicializar mapa con manejo de errores - Nombre único para evitar conflictos
-    function initIngestasMap() {
+    // Definir initIngestasMap antes de cargar el script para asegurar que esté disponible
+    window.initIngestasMap = function() {
         try {
             console.log('initIngestasMap llamado - Google Maps API cargada');
             
@@ -1311,14 +1214,112 @@
             if (mapContainer) {
                 mapContainer.innerHTML = `
                     <div style="padding: 20px; background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; border-radius: 4px;">
-                        <h4>Error al cargar el mapa</h4>
-                        <p>${error.message}</p>
-                        <p>Por favor, verifica la consola del navegador para más detalles.</p>
+                        <h4>Error al inicializar el mapa</h4>
+                        <p>Se produjo un error al intentar cargar el mapa de Google Maps.</p>
+                        <p>Detalles técnicos: ${error.message}</p>
+                        <p>Por favor, verifica la consola del navegador para más información.</p>
                     </div>
                 `;
             }
         }
+    };
+
+    // Cargar el script de Google Maps con nombre de función único para evitar conflictos
+    // Usar loading=async según recomendación de Google para mejor rendimiento
+    const script = document.createElement('script');
+    script.src = 'https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&libraries=places&loading=async&callback=initIngestasMap';
+    script.async = true;
+    script.defer = true;
+    script.onerror = handleGoogleMapsError;
+    document.head.appendChild(script);
+</script>
+
+{{ todas_propiedades_json|json_script:"todas-propiedades-data" }}
+
+<script>
+    // Datos de todas las propiedades (sin paginar) para el mapa
+    const todasPropiedadesJSON = JSON.parse(document.getElementById('todas-propiedades-data').textContent);
+    
+    // URLs de iconos
+    const ICONO_PROPIFFY = '{% static "requerimientos/data/Pin-propify.png" %}';
+    const ICONO_REMAX = '{% static "requerimientos/data/pin-remax.png" %}';
+    const ICONO_LOCAL = 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png';
+    console.log('Icono Propify:', ICONO_PROPIFFY);
+    console.log('Icono Remax:', ICONO_REMAX);
+    
+    let map;
+    let markers = [];
+    let infoWindow;
+    let zonePolygons = [];
+    let zoneLabels = []; // Etiquetas de zonas
+    const ZONAS_API = '/cuadrantizacion/zonas/';
+    
+    /**
+     * Calcula el centro (centroide) de un polígono.
+     * @param {Array} coordinates - Array de coordenadas [[lat, lng], ...]
+     * @returns {Object} Centro {lat, lng}
+     */
+    function calculatePolygonCenter(coordinates) {
+        if (!coordinates || coordinates.length === 0) {
+            return null;
+        }
+        
+        let latSum = 0;
+        let lngSum = 0;
+        
+        coordinates.forEach(coord => {
+            latSum += coord[0];
+            lngSum += coord[1];
+        });
+        
+        return {
+            lat: latSum / coordinates.length,
+            lng: lngSum / coordinates.length
+        };
     }
+    
+    /**
+     * Crea una etiqueta (label) en el centro de un polígono.
+     * @param {Object} center - Centro {lat, lng}
+     * @param {string} text - Texto a mostrar
+     * @param {Object} zone - Datos de la zona
+     * @returns {google.maps.Marker} Marcador de etiqueta
+     */
+    function createZoneLabel(center, text, zone) {
+        if (!center) return null;
+        
+        // Determinar color basado en el nivel
+        const levelColors = {
+            'pais': '#FF0000',
+            'departamento': '#FF6600',
+            'provincia': '#FFCC00',
+            'distrito': '#33CC33',
+            'zona': '#3366FF',
+            'subzona': '#9900CC'
+        };
+        
+        const color = levelColors[zone.nivel] || '#000000';
+        
+        const label = new google.maps.Marker({
+            position: center,
+            map: map,
+            icon: {
+                path: google.maps.SymbolPath.CIRCLE,
+                scale: 0, // Círculo invisible
+                fillOpacity: 0,
+                strokeOpacity: 0
+            },
+            label: {
+                text: text,
+                color: color,
+                fontSize: '12px',
+                fontWeight: 'bold',
+                className: 'zone-label'
+            },
+            zIndex: 1000
+        });
+        
+        return label;
 
     function addMarker(lat, lng, type, description, price, propertyId, esExterno = false, esPropify = false, esRemax = false) {
         // Determinar el icono según el tipo de propiedad
