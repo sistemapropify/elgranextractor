@@ -88,6 +88,30 @@ app.conf.update(
             'schedule': 43200.0,  # Cada 12 horas
             'options': {'queue': 'default'},
         },
+        # Tareas RAG (SPEC-003)
+        'sincronizar-colecciones-rag-cada-6-horas': {
+            'task': 'intelligence.tasks.sincronizar_todas_colecciones_rag',
+            'schedule': 21600.0,  # Cada 6 horas
+            'options': {'queue': 'analisis'},
+            'kwargs': {'force_full_sync': False}
+        },
+        'generar-embeddings-pendientes-cada-hora': {
+            'task': 'intelligence.tasks.generar_embeddings_pendientes',
+            'schedule': 3600.0,  # Cada hora
+            'options': {'queue': 'analisis'},
+            'kwargs': {'batch_size': 50}
+        },
+        'verificar-estado-rag-cada-12-horas': {
+            'task': 'intelligence.tasks.verificar_estado_rag',
+            'schedule': 43200.0,  # Cada 12 horas
+            'options': {'queue': 'analisis'},
+        },
+        'limpiar-documentos-antiguos-cada-dia': {
+            'task': 'intelligence.tasks.limpiar_documentos_antiguos',
+            'schedule': 86400.0,  # Cada día
+            'options': {'queue': 'default'},
+            'kwargs': {'days_old': 30}
+        },
     },
     
     # Configuración de resultados

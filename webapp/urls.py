@@ -77,6 +77,9 @@ urlpatterns = [
     # Eventos - Dashboard de análisis de eventos
     path('eventos/', include('eventos.urls')),
     
+    # Intelligence - Propifai Intelligence Layer (PIL)
+    path('api/v1/intelligence/', include('intelligence.urls')),
+    
     # Meta Ads - Dashboard de campañas publicitarias de Meta
     # path('meta-ads/', include('meta_ads.urls')),  # Comentado temporalmente debido a error de importación en producción
 ]
