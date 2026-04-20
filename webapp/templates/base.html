@@ -432,6 +432,12 @@
                     <span>Heatmap Mercado</span>
                 </a>
             </li>
+            <li>
+                <a href="/api/v1/intelligence/dashboard/" class="{% if '/intelligence/' in request.path %}active{% endif %}">
+                    <i class="bi bi-cpu"></i>
+                    <span>Intelligence Layer</span>
+                </a>
+            </li>
             <li class="has-submenu {% if '/meta-ads/' in request.path %}active{% endif %}">
                 <a href="#">
                     <i class="bi bi-megaphone-fill"></i>

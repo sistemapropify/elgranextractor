@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Roles - Propifai Intelligence Layer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #0d1117;
+            color: #c9d1d9;
+            line-height: 1.6;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #30363d;
+        }
+        
+        .header h1 {
+            color: #58a6ff;
+            font-size: 28px;
+        }
+        
+        .header-actions {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary {
+            background-color: #238636;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background-color: #2ea043;
+        }
+        
+        .btn-secondary {
+            background-color: #21262d;
+            color: #c9d1d9;
+            border: 1px solid #30363d;
+        }
+        
+        .btn-secondary:hover {
+            background-color: #30363d;
+        }
+        
+        .btn-danger {
+            background-color: #da3633;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background-color: #f85149;
+        }
+        
+        .filters {
+            background-color: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .filters h3 {
+            margin-bottom: 15px;
+            color: #8b949e;
+            font-size: 16px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .filter-form {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+        
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .form-group label {
+            margin-bottom: 8px;
+            color: #8b949e;
+            font-size: 14px;
+        }
+        
+        .form-control {
+            padding: 10px 15px;
+            background-color: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            color: #c9d1d9;
+            font-size: 14px;
+        }
+        
+        .form-control:focus {
+            outline: none;
+            border-color: #58a6ff;
+        }
+        
+        .roles-table {
+            width: 100%;
+            background-color: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 30px;
+        }
+        
+        .table-header {
+            display: grid;
+            grid-template-columns: 2fr 3fr 2fr 1fr;
+            background-color: #21262d;
+            padding: 15px 20px;
+            font-weight: 600;
+            color: #8b949e;
+            border-bottom: 1px solid #30363d;
+        }
+        
+        .table-row {
+            display: grid;
+            grid-template-columns: 2fr 3fr 2fr 1fr;
+            padding: 15px 20px;
+            border-bottom: 1px solid #30363d;
+            align-items: center;
+        }
+        
+        .table-row:last-child {
+            border-bottom: none;
+        }
+        
+        .table-row:hover {
+            background-color: #1c2128;
+        }
+        
+        .role-name {
+            color: #58a6ff;
+            font-weight: 600;
+        }
+        
+        .role-description {
+            color: #8b949e;
+            font-size: 14px;
+        }
+        
+        .role-levels {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+        
+        .level-badge {
+            padding: 4px 8px;
+            background-color: #238636;
+            color: white;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .level-badge.level-1 { background-color: #0d4429; }
+        .level-badge.level-2 { background-color: #196c2e; }
+        .level-badge.level-3 { background-color: #238636; }
+        .level-badge.level-4 { background-color: #2ea043; }
+        .level-badge.level-5 { background-color: #3fb950; }
+        
+        .actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+        
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 13px;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #8b949e;
+        }
+        
+        .empty-state h3 {
+            margin-bottom: 10px;
+            color: #c9d1d9;
+        }
+        
+        .messages {
+            margin-bottom: 20px;
+        }
+        
+        .alert {
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+        }
+        
+        .alert-success {
+            background-color: rgba(35, 134, 54, 0.2);
+            border: 1px solid #238636;
+            color: #56d364;
+        }
+        
+        .alert-error {
+            background-color: rgba(218, 54, 51, 0.2);
+            border: 1px solid #da3633;
+            color: #f85149;
+        }
+        
+        .alert-info {
+            background-color: rgba(56, 139, 253, 0.2);
+            border: 1px solid #388bfd;
+            color: #79c0ff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏛️ Gestión de Roles</h1>
+            <div class="header-actions">
+                <a href="{% url 'intelligence:role_list' %}" class="btn btn-secondary">Actualizar</a>
+                <a href="{% url 'intelligence:role_create' %}" class="btn btn-primary">➕ Crear Nuevo Rol</a>
+            </div>
+        </div>
+        
+        <!-- Mensajes -->
+        <div class="messages">
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        </div>
+        
+        <!-- Filtros -->
+        <div class="filters">
+            <h3>🔍 Filtros</h3>
+            <form method="get" class="filter-form">
+                <div class="form-group">
+                    <label for="name">Nombre del rol</label>
+                    <input type="text" id="name" name="name" class="form-control" 
+                           placeholder="Buscar por nombre..." value="{{ current_filters.name|default:'' }}">
+                </div>
+                
+                <div class="form-group">
+                    <label for="level">Nivel permitido</label>
+                    <select id="level" name="level" class="form-control">
+                        <option value="">Todos los niveles</option>
+                        {% for value, label in level_choices %}
+                            <option value="{{ value }}" {% if current_filters.level == value|stringformat:"i" %}selected{% endif %}>
+                                {{ label }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group" style="grid-column: span 2;">
+                    <label>&nbsp;</label>
+                    <div style="display: flex; gap: 10px;">
+                        <button type="submit" class="btn btn-primary">Aplicar Filtros</button>
+                        <a href="{% url 'intelligence:role_list' %}" class="btn btn-secondary">Limpiar Filtros</a>
+                    </div>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Tabla de roles -->
+        <div class="roles-table">
+            <div class="table-header">
+                <div>Nombre</div>
+                <div>Descripción</div>
+                <div>Niveles Permitidos</div>
+                <div>Acciones</div>
+            </div>
+            
+            {% if roles %}
+                {% for role in roles %}
+                    <div class="table-row">
+                        <div class="role-name">{{ role.name }}</div>
+                        <div class="role-description">{{ role.description|default:"Sin descripción" }}</div>
+                        <div class="role-levels">
+                            {% for level in role.allowed_levels %}
+                                <span class="level-badge level-{{ level }}">Nivel {{ level }}</span>
+                            {% empty %}
+                                <span style="color: #8b949e;">Sin niveles</span>
+                            {% endfor %}
+                        </div>
+                        <div class="actions">
+                            <a href="{% url 'intelligence:role_edit' role.id %}" class="btn btn-secondary btn-sm">✏️ Editar</a>
+                            <a href="{% url 'intelligence:role_delete' role.id %}" class="btn btn-danger btn-sm">🗑️ Eliminar</a>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="empty-state">
+                    <h3>No se encontraron roles</h3>
+                    <p>{% if current_filters.level or current_filters.name %}Intenta con otros filtros{% else %}Crea tu primer rol para comenzar{% endif %}</p>
+                    {% if not current_filters.level and not current_filters.name %}
+                        <a href="{% url 'intelligence:role_create' %}" class="btn btn-primary" style="margin-top: 15px;">Crear Primer Rol</a>
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+        
+        <div style="text-align: center; color: #8b949e; font-size: 14px; margin-top: 30px;">
+            <p>Propifai Intelligence Layer • Dashboard de Configuración • Total: {{ roles|length }} rol(es)</p>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Propifai Intelligence Layer</title>
+    <style>
+        :root {
+            --bg-dark: #0d1117;
+            --bg-card: #161b22;
+            --border-color: #30363d;
+            --text-primary: #c9d1d9;
+            --text-secondary: #8b949e;
+            --accent-blue: #58a6ff;
+            --accent-green: #238636;
+            --accent-yellow: #d29922;
+            --accent-red: #f85149;
+            --accent-purple: #bc8cff;
+        }
+        
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            margin: 0;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .header h1 {
+            margin: 0;
+            color: var(--accent-blue);
+            font-size: 32px;
+        }
+        
+        .header p {
+            margin: 10px 0 0;
+            color: var(--text-secondary);
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .nav-link {
+            color: var(--text-secondary);
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            transition: all 0.2s;
+            border: 1px solid var(--border-color);
+        }
+        
+        .nav-link:hover {
+            background-color: rgba(88, 166, 255, 0.1);
+            color: var(--accent-blue);
+            border-color: var(--accent-blue);
+        }
+        
+        .nav-link.active {
+            background-color: var(--accent-blue);
+            color: white;
+            border-color: var(--accent-blue);
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-2px);
+            border-color: var(--accent-blue);
+        }
+        
+        .stat-icon {
+            font-size: 24px;
+            margin-bottom: 15px;
+        }
+        
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .section {
+            margin-bottom: 40px;
+        }
+        
+        .section-title {
+            font-size: 20px;
+            color: var(--accent-blue);
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 20px;
+        }
+        
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .table th {
+            text-align: left;
+            padding: 12px 15px;
+            border-bottom: 2px solid var(--border-color);
+            color: var(--text-secondary);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 12px;
+            letter-spacing: 0.5px;
+        }
+        
+        .table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .table tr:hover {
+            background-color: rgba(88, 166, 255, 0.05);
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .badge-success {
+            background-color: var(--accent-green);
+            color: white;
+        }
+        
+        .badge-warning {
+            background-color: var(--accent-yellow);
+            color: white;
+        }
+        
+        .badge-info {
+            background-color: var(--accent-blue);
+            color: white;
+        }
+        
+        .badge-purple {
+            background-color: var(--accent-purple);
+            color: white;
+        }
+        
+        .level-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-right: 8px;
+            margin-bottom: 8px;
+        }
+        
+        .level-1 { background-color: #0d4429; color: #7ee787; }
+        .level-2 { background-color: #1a7f37; color: #7ee787; }
+        .level-3 { background-color: #2ea043; color: white; }
+        .level-4 { background-color: #3fb950; color: white; }
+        .level-5 { background-color: #56d364; color: white; }
+        
+        .progress-bar {
+            height: 8px;
+            background-color: var(--border-color);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background-color: var(--accent-blue);
+            border-radius: 4px;
+        }
+        
+        .quick-actions {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-top: 30px;
+        }
+        
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 20px;
+            background-color: var(--accent-green);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background-color 0.2s;
+        }
+        
+        .btn:hover {
+            background-color: #2ea043;
+        }
+        
+        .btn-blue {
+            background-color: var(--accent-blue);
+        }
+        
+        .btn-blue:hover {
+            background-color: #388bfd;
+        }
+        
+        .btn-purple {
+            background-color: var(--accent-purple);
+        }
+        
+        .btn-purple:hover {
+            background-color: #a371f7;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-secondary);
+        }
+        
+        .empty-state i {
+            font-size: 48px;
+            margin-bottom: 15px;
+            opacity: 0.5;
+        }
+        
+        .chart-container {
+            height: 300px;
+            margin-top: 20px;
+        }
+        
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .nav-links {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Dashboard - Propifai Intelligence Layer v1.0</h1>
+            <p>Vista general del sistema de inteligencia artificial y gestión de accesos</p>
+            
+            <div class="nav-links">
+                <a href="{% url 'intelligence:dashboard' %}" class="nav-link active">Dashboard</a>
+                <a href="{% url 'intelligence:role_list' %}" class="nav-link">Roles</a>
+                <a href="{% url 'intelligence:collection_list' %}" class="nav-link">Colecciones</a>
+                <a href="{% url 'intelligence:user_simulator' %}" class="nav-link">Simulador</a>
+                <a href="{% url 'intelligence:system_stats' %}" class="nav-link">Estadísticas</a>
+                <a href="{% url 'intelligence:activity_logs' %}" class="nav-link">Logs</a>
+            </div>
+        </div>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon">👥</div>
+                <div class="stat-value">{{ total_roles }}</div>
+                <div class="stat-label">Roles Definidos</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon">📱</div>
+                <div class="stat-value">{{ total_apps }}</div>
+                <div class="stat-label">Aplicaciones Activas</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon">🗂️</div>
+                <div class="stat-value">{{ total_collections }}</div>
+                <div class="stat-label">Colecciones RAG</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon">📄</div>
+                <div class="stat-value">{{ total_documents }}</div>
+                <div class="stat-label">Documentos Indexados</div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2 class="section-title">📈 Distribución de Aplicaciones por Nivel</h2>
+            <div class="card">
+                <div class="quick-actions" style="margin-bottom: 20px;">
+                    {% for level, count in apps_by_level.items %}
+                    <div style="flex: 1; min-width: 150px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                            <span class="level-badge level-{{ level }}">Nivel {{ level }}</span>
+                            <span style="font-weight: 600;">{{ count }}</span>
+                        </div>
+                        <div class="progress-bar">
+                            {% if total_apps > 0 %}
+                            <div class="progress-fill" style="width: {{ count|floatformat:0 }}%"></div>
+                            {% else %}
+                            <div class="progress-fill" style="width: 0%"></div>
+                            {% endif %}
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 5px;">
+                            {% if level == 1 %}Memoria pura{% endif %}
+                            {% if level == 2 %}Memoria + Conocimiento{% endif %}
+                            {% if level == 3 %}Memoria + Conocimiento + Métricas{% endif %}
+                            {% if level == 4 %}Acceso completo + Analytics{% endif %}
+                            {% if level == 5 %}Administrador total{% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2 class="section-title">🔄 Colecciones Recientemente Sincronizadas</h2>
+            <div class="card">
+                {% if recent_collections %}
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>Nivel</th>
+                            <th>Documentos</th>
+                            <th>Última Sincronización</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for collection in recent_collections %}
+                        <tr>
+                            <td>
+                                <strong>{{ collection.name }}</strong>
+                                {% if collection.description %}
+                                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 5px;">
+                                    {{ collection.description|truncatechars:60 }}
+                                </div>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="level-badge level-{{ collection.access_level }}">
+                                    Nivel {{ collection.access_level }}
+                                </span>
+                            </td>
+                            <td>{{ collection.documents.count }}</td>
+                            <td>
+                                {% if collection.last_sync_at %}
+                                    {{ collection.last_sync_at|date:"d/m/Y H:i" }}
+                                {% else %}
+                                    <span style="color: var(--text-secondary);">Nunca</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if collection.is_active %}
+                                    <span class="badge badge-success">Activo</span>
+                                {% else %}
+                                    <span class="badge badge-warning">Inactivo</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="empty-state">
+                    <div>📭</div>
+                    <h3>No hay colecciones sincronizadas recientemente</h3>
+                    <p>Usa la función de sincronización para actualizar las colecciones RAG.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2 class="section-title">👥 Roles Más Utilizados</h2>
+            <div class="card">
+                {% if popular_roles %}
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Rol</th>
+                            <th>Usuarios Asignados</th>
+                            <th>Niveles Permitidos</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for role in popular_roles %}
+                        <tr>
+                            <td>
+                                <strong>{{ role.name }}</strong>
+                                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 5px;">
+                                    Creado: {{ role.created_at|date:"d/m/Y" }}
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge badge-info">{{ role.user_count }}</span>
+                            </td>
+                            <td>
+                                {% if role.allowed_levels %}
+                                    {% for level in role.allowed_levels %}
+                                        <span class="level-badge level-{{ level }}">Nivel {{ level }}</span>
+                                    {% endfor %}
+                                {% else %}
+                                    <span style="color: var(--text-secondary);">Todos los niveles</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{% url 'intelligence:role_edit' role.id %}" class="btn btn-blue" style="padding: 6px 12px; font-size: 12px;">
+                                    Editar
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="empty-state">
+                    <div>👤</div>
+                    <h3>No hay roles definidos</h3>
+                    <p>Crea roles para asignar permisos a los usuarios del sistema.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2 class="section-title">⚡ Acciones Rápidas</h2>
+            <div class="quick-actions">
+                <a href="{% url 'intelligence:role_create' %}" class="btn">
+                    <span>➕</span> Crear Nuevo Rol
+                </a>
+                <a href="{% url 'intelligence:collection_create' %}" class="btn btn-blue">
+                    <span>🗂️</span> Crear Colección RAG
+                </a>
+                <a href="{% url 'intelligence:user_simulator' %}" class="btn btn-purple">
+                    <span>🔬</span> Probar Simulador
+                </a>
+                <a href="{% url 'intelligence:system_stats' %}" class="btn">
+                    <span>📈</span> Ver Estadísticas Detalladas
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Actualizar automáticamente la página cada 60 segundos
+        setTimeout(function() {
+            window.location.reload();
+        }, 60000);
+        
+        // Animación simple para las tarjetas de estadísticas
+        document.querySelectorAll('.stat-card').forEach(card => {
+            card.addEventListener('mouseenter', function() {
+                this.style.boxShadow = '0 4px 12px rgba(88, 166, 255, 0.1)';
+            });
+            
+            card.addEventListener('mouseleave', function() {
+                this.style.boxShadow = 'none';
+            });
+        });
+    </script>
+</body>
+</html>

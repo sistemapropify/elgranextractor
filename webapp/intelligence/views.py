@@ -2448,12 +2448,39 @@ def chat_web_upload(request):
         user_id = request.POST.get('user_id')
         conversation_id = request.POST.get('conversation_id')
         
-        # Validar tipo de archivo
-        allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf', 'text/plain']
-        if uploaded_file.content_type not in allowed_types:
+        # Validar tipo de archivo - incluir tipos MIME para Excel y documentos de Office
+        allowed_types = [
+            'image/jpeg', 'image/png', 'image/gif',
+            'application/pdf', 'text/plain',
+            # Tipos MIME para Excel
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',  # .xlsx
+            'application/vnd.ms-excel',  # .xls
+            'application/excel',
+            'application/x-excel',
+            'application/x-msexcel',
+            # Tipos MIME para Word
+            'application/msword',  # .doc
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',  # .docx
+            # Otros tipos de Office
+            'application/vnd.oasis.opendocument.spreadsheet',  # .ods
+            'application/vnd.oasis.opendocument.text'  # .odt
+        ]
+        
+        # También validar por extensión como fallback
+        allowed_extensions = ['.pdf', '.jpg', '.jpeg', '.png', '.gif', '.txt',
+                             '.xlsx', '.xls', '.doc', '.docx', '.ods', '.odt']
+        
+        file_extension = '.' + uploaded_file.name.split('.')[-1].lower() if '.' in uploaded_file.name else ''
+        file_content_type = uploaded_file.content_type.lower() if uploaded_file.content_type else ''
+        
+        # Verificar si el tipo MIME está permitido O la extensión está permitida
+        is_type_allowed = any(allowed_type.lower() in file_content_type for allowed_type in allowed_types)
+        is_extension_allowed = file_extension in allowed_extensions
+        
+        if not is_type_allowed and not is_extension_allowed:
             return Response({
                 'success': False,
-                'error': f'Tipo de archivo no permitido: {uploaded_file.content_type}'
+                'error': f'Tipo de archivo no permitido: {uploaded_file.content_type or "tipo desconocido"}'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Validar tamaño (max 10MB)

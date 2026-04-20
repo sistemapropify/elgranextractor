@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crear Colección RAG Dinámica - Propifai Intelligence Layer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #0d1117;
+            color: #c9d1d9;
+            line-height: 1.6;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #30363d;
+        }
+        
+        .header h1 {
+            color: #58a6ff;
+            font-size: 28px;
+        }
+        
+        .header-actions {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background-color: #238636;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background-color: #2ea043;
+        }
+        
+        .btn-secondary {
+            background-color: #30363d;
+            color: #c9d1d9;
+        }
+        
+        .btn-secondary:hover {
+            background-color: #3c444d;
+        }
+        
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+        
+        .messages {
+            margin-bottom: 20px;
+        }
+        
+        .alert {
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+        }
+        
+        .alert-success {
+            background-color: #238636;
+            color: white;
+            border: 1px solid #2ea043;
+        }
+        
+        .alert-error {
+            background-color: #da3633;
+            color: white;
+            border: 1px solid #f85149;
+        }
+        
+        .alert-warning {
+            background-color: #9e6a03;
+            color: white;
+            border: 1px solid #d29922;
+        }
+        
+        .form-container {
+            background-color: #161b22;
+            border-radius: 8px;
+            padding: 30px;
+            border: 1px solid #30363d;
+        }
+        
+        .form-section {
+            margin-bottom: 30px;
+        }
+        
+        .form-section h2 {
+            color: #58a6ff;
+            font-size: 20px;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #30363d;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #c9d1d9;
+        }
+        
+        .form-control {
+            width: 100%;
+            padding: 10px 12px;
+            background-color: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            color: #c9d1d9;
+            font-size: 14px;
+        }
+        
+        .form-control:focus {
+            outline: none;
+            border-color: #58a6ff;
+            box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.1);
+        }
+        
+        .form-text {
+            font-size: 12px;
+            color: #8b949e;
+            margin-top: 5px;
+        }
+        
+        .form-check {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .form-check-input {
+            width: 18px;
+            height: 18px;
+        }
+        
+        .form-check-label {
+            color: #c9d1d9;
+        }
+        
+        .select-multiple {
+            height: 120px;
+            padding: 8px;
+        }
+        
+        .select-multiple option {
+            padding: 8px;
+            background-color: #0d1117;
+            color: #c9d1d9;
+        }
+        
+        .form-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 15px;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #30363d;
+        }
+        
+        .dynamic-fields-section {
+            background-color: #1c2128;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        
+        .fields-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .field-card {
+            background-color: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 15px;
+        }
+        
+        .field-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .field-name {
+            font-weight: bold;
+            color: #58a6ff;
+        }
+        
+        .field-type {
+            font-size: 12px;
+            color: #8b949e;
+            background-color: #30363d;
+            padding: 2px 8px;
+            border-radius: 12px;
+        }
+        
+        .field-options {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        
+        .field-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .field-option input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+        }
+        
+        .field-option label {
+            font-size: 14px;
+            color: #c9d1d9;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #8b949e;
+        }
+        
+        .loading-spinner {
+            border: 3px solid #30363d;
+            border-top: 3px solid #58a6ff;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Crear Colección RAG Dinámica</h1>
+            <div class="header-actions">
+                <a href="{% url 'intelligence:collection_list' %}" class="btn btn-secondary">
+                    ← Volver a Colecciones
+                </a>
+            </div>
+        </div>
+        
+        <div class="messages">
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        </div>
+        
+        <form method="post" id="collection-form">
+            {% csrf_token %}
+            
+            <div class="form-container">
+                <!-- Sección 1: Información Básica -->
+                <div class="form-section">
+                    <h2>Información Básica</h2>
+                    
+                    <div class="form-group">
+                        <label for="name" class="form-label">Nombre de la Colección *</label>
+                        <input type="text" id="name" name="name" class="form-control" required
+                               placeholder="Ej: Propiedades en Venta, Requerimientos de Clientes">
+                        <div class="form-text">Nombre único para identificar esta colección.</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="description" class="form-label">Descripción</label>
+                        <textarea id="description" name="description" class="form-control" rows="3"
+                                  placeholder="Describe el propósito de esta colección..."></textarea>
+                        <div class="form-text">Opcional. Breve descripción de qué datos contiene esta colección.</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="access_level" class="form-label">Nivel de Acceso *</label>
+                        <select id="access_level" name="access_level" class="form-control" required>
+                            <option value="2">Nivel 2 - Memoria + Conocimiento</option>
+                            <option value="3">Nivel 3 - Memoria + Conocimiento + Métricas</option>
+                            <option value="4">Nivel 4 - Acceso completo + Analytics</option>
+                            <option value="5">Nivel 5 - Administrador total</option>
+                        </select>
+                        <div class="form-text">Define quién puede acceder a esta colección.</div>
+                    </div>
+                    
+                    <div class="form-check">
+                        <input type="checkbox" id="is_active" name="is_active" class="form-check-input" checked>
+                        <label for="is_active" class="form-check-label">Colección activa</label>
+                    </div>
+                </div>
+                
+                <!-- Sección 2: Configuración de Tabla -->
+                <div class="form-section">
+                    <h2>Configuración de Tabla</h2>
+                    
+                    <div class="form-group">
+                        <label for="table_name" class="form-label">Seleccionar Tabla *</label>
+                        <select id="table_name" name="table_name" class="form-control" required>
+                            <option value="">-- Selecciona una tabla --</option>
+                        </select>
+                        <div class="form-text">Tabla de Azure SQL que contiene los datos para esta colección.</div>
+                        <button type="button" id="refresh-tables-btn" class="btn btn-secondary btn-sm" style="margin-top: 10px;">
+                            🔄 Actualizar Lista de Tablas
+                        </button>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="schema" class="form-label">Esquema (opcional)</label>
+                        <input type="text" id="schema" name="schema" class="form-control" 
+                               placeholder="dbo (predeterminado)">
+                        <div class="form-text">Dejar vacío para usar el esquema predeterminado (dbo).</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <button type="button" id="analyze-table-btn" class="btn btn-secondary">
+                            🔍 Analizar Estructura de la Tabla
+                        </button>
+                        <div class="form-text">Haz clic para analizar los campos de la tabla seleccionada.</div>
+                    </div>
+                </div>
+                
+                <!-- Sección 3: Campos Detectados -->
+                <div id="fields-container" class="dynamic-fields-section hidden">
+                    <h2>Campos Detectados</h2>
+                    
+                    <div id="fields-grid" class="fields-grid">
+                        <!-- Los campos se insertarán aquí dinámicamente -->
+                    </div>
+                    
+                    <div class="form-group" style="margin-top: 20px;">
+                        <label class="form-label">Configuración de Campos Clave</label>
+                        <div class="form-text" style="margin-bottom: 10px;">
+                            Selecciona los campos que se usarán para diferentes propósitos:
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="embedding_fields" class="form-label">Campos para Embedding (Búsqueda Semántica) *</label>
+                            <select id="embedding_fields" name="embedding_fields" class="form-control select-multiple" multiple required>
+                                <!-- Se llenará dinámicamente -->
+                            </select>
+                            <div class="form-text">Selecciona los campos cuyo contenido se usará para búsqueda semántica. Generalmente campos de texto descriptivo.</div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="display_fields" class="form-label">Campos para Visualización</label>
+                            <select id="display_fields" name="display_fields" class="form-control select-multiple" multiple>
+                                <!-- Se llenará dinámicamente -->
+                            </select>
+                            <div class="form-text">Selecciona los campos que se mostrarán en los resultados de búsqueda.</div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="filter_fields" class="form-label">Campos para Filtrado</label>
+                            <select id="filter_fields" name="filter_fields" class="form-control select-multiple" multiple>
+                                <!-- Se llenará dinámicamente -->
+                            </select>
+                            <div class="form-text">Selecciona los campos que se pueden usar para filtrar resultados.</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Sección 4: Acciones -->
+                <div class="form-actions">
+                    <a href="{% url 'intelligence:collection_list' %}" class="btn btn-secondary">
+                        Cancelar
+                    </a>
+                    <button type="submit" class="btn btn-primary" id="submit-btn">
+                        Crear Colección
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const tableSelect = document.getElementById('table_name');
+            const refreshBtn = document.getElementById('refresh-tables-btn');
+            const analyzeBtn = document.getElementById('analyze-table-btn');
+            const fieldsContainer = document.getElementById('fields-container');
+            const fieldsGrid = document.getElementById('fields-grid');
+            const embeddingSelect = document.getElementById('embedding_fields');
+            const displaySelect = document.getElementById('display_fields');
+            const filterSelect = document.getElementById('filter_fields');
+            const schemaInput = document.getElementById('schema');
+            const submitBtn = document.getElementById('submit-btn');
+            
+            let currentFields = [];
+            
+            // Cargar tablas al iniciar
+            loadTables();
+            
+            // Evento para refrescar tablas
+            refreshBtn.addEventListener('click', loadTables);
+            
+            // Evento para analizar tabla
+            analyzeBtn.addEventListener('click', function() {
+                const tableName = tableSelect.value;
+                const schema = schemaInput.value || 'dbo';
+                
+                if (!tableName) {
+                    alert('Por favor selecciona una tabla primero.');
+                    return;
+                }
+                
+                analyzeTable(tableName, schema);
+            });
+            
+            // Función para cargar tablas
+            function loadTables() {
+                refreshBtn.disabled = true;
+                refreshBtn.innerHTML = '🔄 Cargando...';
+                
+                fetch('/api/intelligence/rag/discovery/tables/')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            tableSelect.innerHTML = '<option value="">-- Selecciona una tabla --</option>';
+                            data.tables.forEach(table => {
+                                const option = document.createElement('option');
+                                option.value = table;
+                                option.textContent = table;
+                                tableSelect.appendChild(option);
+                            });
+                            
+                            if (data.tables.length === 0) {
+                                tableSelect.innerHTML = '<option value="">No se encontraron tablas</option>';
+                            }
+                        } else {
+                            alert('Error al cargar tablas: ' + data.error);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Error de conexión al cargar tablas.');
+                    })
+                    .finally(() => {
+                        refreshBtn.disabled = false;
+                        refreshBtn.innerHTML = '🔄 Actualizar Lista de Tablas';
+                    });
+            }
+            
+            // Función para analizar tabla
+            function analyzeTable(tableName, schema) {
+                analyzeBtn.disabled = true;
+                analyzeBtn.innerHTML = '🔍 Analizando...';
+                fieldsContainer.classList.add('hidden');
+                
+                fetch(`/api/intelligence/rag/discovery/table/${tableName}/schema/?schema=${schema}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            currentFields = data.fields;
+                            renderFields(currentFields);
+                            populateSelectOptions();
+                            fieldsContainer.classList.remove('hidden');
+                            
+                            // Scroll a la sección de campos
+                            fieldsContainer.scrollIntoView({ behavior: 'smooth' });
+                        } else {
+                            alert('Error al analizar tabla: ' + data.error);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Error de conexión al analizar tabla.');
+                    })
+                    .finally(() => {
+                        analyzeBtn.disabled = false;
+                        analyzeBtn.innerHTML = '🔍 Analizar Estructura de la Tabla';
+                    });
+            }
+            
+            // Función para renderizar campos
+            function renderFields(fields) {
+                fieldsGrid.innerHTML = '';
+                
+                fields.forEach(field => {
+                    const fieldCard = document.createElement('div');
+                    fieldCard.className = 'field-card';
+                    
+                    const fieldTypeClass = getFieldTypeClass(field.type);
+                    
+                    fieldCard.innerHTML = `
+                        <div class="field-header">
+                            <span class="field-name">${field.name}</span>
+                            <span class="field-type">${field.type}</span>
+                        </div>
+                        <div class="field-options">
+                            <div class="field-option">
+                                <input type="checkbox" id="embed_${field.name}" data-field="${field.name}">
+                                <label for="embed_${field.name}">Usar para embedding</label>
+                            </div>
+                            <div class="field-option">
+                                <input type="checkbox" id="display_${field.name}" data-field="${field.name}">
+                                <label for="display_${field.name}">Mostrar en resultados</label>
+                            </div>
+                            <div class="field-option">
+                                <input type="checkbox" id="filter_${field.name}" data-field="${field.name}">
+                                <label for="filter_${field.name}">Usar para filtrado</label>
+                            </div>
+                        </div>
+                    `;
+                    
+                    fieldsGrid.appendChild(fieldCard);
+                    
+                    // Agregar event listeners a los checkboxes
+                    const embedCheckbox = fieldCard.querySelector(`#embed_${field.name}`);
+                    const displayCheckbox = fieldCard.querySelector(`#display_${field.name}`);
+                    const filterCheckbox = fieldCard.querySelector(`#filter_${field.name}`);
+                    
+                    embedCheckbox.addEventListener('change', function() {
+                        updateSelectOptions();
+                    });
+                    
+                    displayCheckbox.addEventListener('change', function() {
+                        updateSelectOptions();
+                    });
+                    
+                    filterCheckbox.addEventListener('change', function() {
+                        updateSelectOptions();
+                    });
+                });
+            }
+            
+            // Función para obtener clase CSS según tipo de campo
+            function getFieldTypeClass(fieldType) {
+                if (fieldType.includes('char') || fieldType.includes('text') || fieldType.includes('varchar')) {
+                    return 'text-field';
+                } else if (fieldType.includes('int') || fieldType.includes('decimal') || fieldType.includes('numeric')) {
+                    return 'numeric-field';
+                } else if (fieldType.includes('date') || fieldType.includes('time') || fieldType.includes('datetime')) {
+                    return 'date-field';
+                } else if (fieldType.includes('bit') || fieldType.includes('bool')) {
+                    return 'boolean-field';
+                } else {
+                    return 'other-field';
+                }
+            }
+            
+            // Función para poblar opciones de selects
+            function populateSelectOptions() {
+                embeddingSelect.innerHTML = '';
+                displaySelect.innerHTML = '';
+                filterSelect.innerHTML = '';
+                
+                currentFields.forEach(field => {
+                    // Para embedding select
+                    const embedOption = document.createElement('option');
+                    embedOption.value = field.name;
+                    embedOption.textContent = `${field.name} (${field.type})`;
+                    embeddingSelect.appendChild(embedOption);
+                    
+                    // Para display select
+                    const displayOption = document.createElement('option');
+                    displayOption.value = field.name;
+                    displayOption.textContent = `${field.name} (${field.type})`;
+                    displaySelect.appendChild(displayOption);
+                    
+                    // Para filter select
+                    const filterOption = document.createElement('option');
+                    filterOption.value = field.name;
+                    filterOption.textContent = `${field.name} (${field.type})`;
+                    filterSelect.appendChild(filterOption);
+                });
+            }
+            
+            // Función para actualizar selects basado en checkboxes
+            function updateSelectOptions() {
+                const selectedEmbedFields = [];
+                const selectedDisplayFields = [];
+                const selectedFilterFields = [];
+                
+                // Recorrer todos los checkboxes
+                currentFields.forEach(field => {
+                    const embedCheckbox = document.querySelector(`#embed_${field.name}`);
+                    const displayCheckbox = document.querySelector(`#display_${field.name}`);
+                    const filterCheckbox = document.querySelector(`#filter_${field.name}`);
+                    
+                    if (embedCheckbox && embedCheckbox.checked) {
+                        selectedEmbedFields.push(field.name);
+                    }
+                    
+                    if (displayCheckbox && displayCheckbox.checked) {
+                        selectedDisplayFields.push(field.name);
+                    }
+                    
+                    if (filterCheckbox && filterCheckbox.checked) {
+                        selectedFilterFields.push(field.name);
+                    }
+                });
+                
+                // Actualizar selects
+                Array.from(embeddingSelect.options).forEach(option => {
+                    option.selected = selectedEmbedFields.includes(option.value);
+                });
+                
+                Array.from(displaySelect.options).forEach(option => {
+                    option.selected = selectedDisplayFields.includes(option.value);
+                });
+                
+                Array.from(filterSelect.options).forEach(option => {
+                    option.selected = selectedFilterFields.includes(option.value);
+                });
+            }
+            
+            // Manejar envío del formulario
+            document.getElementById('collection-form').addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                // Validar que se haya seleccionado al menos un campo para embedding
+                const selectedEmbedFields = Array.from(embeddingSelect.selectedOptions).map(opt => opt.value);
+                if (selectedEmbedFields.length === 0) {
+                    alert('Debes seleccionar al menos un campo para embedding (búsqueda semántica).');
+                    return;
+                }
+                
+                // Crear objeto con los datos del formulario
+                const formData = new FormData(this);
+                
+                // Agregar field_definitions como JSON
+                const fieldDefinitions = currentFields.map(field => ({
+                    name: field.name,
+                    type: field.type,
+                    is_nullable: field.is_nullable || false,
+                    max_length: field.max_length || null
+                }));
+                
+                formData.append('field_definitions', JSON.stringify(fieldDefinitions));
+                
+                // Enviar formulario
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = 'Creando...';
+                
+                fetch('/api/intelligence/rag/collections/create-dynamic/', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        window.location.href = '/intelligence/collections/';
+                    } else {
+                        alert('Error al crear colección: ' + data.error);
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = 'Crear Colección';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error de conexión al crear colección.');
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = 'Crear Colección';
+                });
+            });
+        });
+    </script>
+</body>
+</html>

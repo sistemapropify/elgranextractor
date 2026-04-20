@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sincronizar Colección - Propifai Intelligence Layer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #0d1117;
+            color: #c9d1d9;
+            line-height: 1.6;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #30363d;
+        }
+        
+        .header h1 {
+            color: #58a6ff;
+            font-size: 28px;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background-color: #238636;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background-color: #2ea043;
+        }
+        
+        .btn-secondary {
+            background-color: #30363d;
+            color: #c9d1d9;
+        }
+        
+        .btn-secondary:hover {
+            background-color: #3c444d;
+        }
+        
+        .btn-danger {
+            background-color: #da3633;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background-color: #f85149;
+        }
+        
+        .messages {
+            margin-bottom: 20px;
+        }
+        
+        .alert {
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            border: 1px solid transparent;
+        }
+        
+        .alert-success {
+            background-color: rgba(35, 134, 54, 0.1);
+            border-color: rgba(35, 134, 54, 0.3);
+            color: #3fb950;
+        }
+        
+        .alert-error {
+            background-color: rgba(218, 54, 51, 0.1);
+            border-color: rgba(218, 54, 51, 0.3);
+            color: #f85149;
+        }
+        
+        .sync-card {
+            background-color: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .sync-info {
+            margin-bottom: 25px;
+        }
+        
+        .sync-info h2 {
+            color: #58a6ff;
+            font-size: 22px;
+            margin-bottom: 15px;
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+        
+        .info-item {
+            background-color: #21262d;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #58a6ff;
+        }
+        
+        .info-label {
+            font-size: 12px;
+            color: #8b949e;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 5px;
+        }
+        
+        .info-value {
+            font-size: 16px;
+            font-weight: 500;
+            color: #c9d1d9;
+        }
+        
+        .warning-box {
+            background-color: rgba(215, 158, 0, 0.1);
+            border: 1px solid rgba(215, 158, 0, 0.3);
+            border-radius: 6px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+        
+        .warning-box h3 {
+            color: #d79e00;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .warning-box ul {
+            padding-left: 20px;
+            margin-bottom: 15px;
+        }
+        
+        .warning-box li {
+            margin-bottom: 8px;
+            color: #c9d1d9;
+        }
+        
+        .sql-preview {
+            background-color: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 25px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: #8b949e;
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        
+        .form-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #30363d;
+        }
+        
+        .form-actions-left {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .footer {
+            text-align: center;
+            color: #8b949e;
+            font-size: 14px;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #30363d;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .status-active {
+            background-color: rgba(35, 134, 54, 0.2);
+            color: #3fb950;
+        }
+        
+        .status-inactive {
+            background-color: rgba(110, 118, 129, 0.2);
+            color: #8b949e;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔄 Sincronizar Colección</h1>
+            <a href="{% url 'intelligence:collection_list' %}" class="btn btn-secondary">← Volver a Colecciones</a>
+        </div>
+        
+        <!-- Mensajes -->
+        <div class="messages">
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        </div>
+        
+        <div class="sync-card">
+            <div class="sync-info">
+                <h2>{{ collection.name }}</h2>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <div class="info-label">Estado</div>
+                        <div class="info-value">
+                            <span class="status-badge {% if collection.is_active %}status-active{% else %}status-inactive{% endif %}">
+                                {% if collection.is_active %}✅ Activa{% else %}⏸️ Inactiva{% endif %}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="info-item">
+                        <div class="info-label">Documentos actuales</div>
+                        <div class="info-value">{{ document_count }}</div>
+                    </div>
+                    
+                    <div class="info-item">
+                        <div class="info-label">Última sincronización</div>
+                        <div class="info-value">
+                            {% if last_sync %}
+                                {{ last_sync|date:"d/m/Y H:i" }}
+                            {% else %}
+                                Nunca sincronizada
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="info-item">
+                        <div class="info-label">Nivel de acceso</div>
+                        <div class="info-value">Nivel {{ collection.access_level }}</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="warning-box">
+                <h3>⚠️ Advertencia importante</h3>
+                <p>La sincronización realizará las siguientes acciones:</p>
+                <ul>
+                    <li>Ejecutará la consulta SQL definida en la colección contra la base de datos Azure SQL</li>
+                    <li>Eliminará todos los documentos existentes en esta colección</li>
+                    <li>Creará nuevos documentos con los resultados de la consulta</li>
+                    <li>Generará embeddings vectoriales para cada documento (puede tomar tiempo)</li>
+                    <li>Actualizará el contador de registros y la fecha de última sincronización</li>
+                </ul>
+                <p><strong>Esta acción no se puede deshacer.</strong> Los documentos eliminados no podrán recuperarse.</p>
+            </div>
+            
+            <div>
+                <h3 style="color: #c9d1d9; margin-bottom: 10px;">Consulta SQL a ejecutar:</h3>
+                <div class="sql-preview">{{ collection.source_sql|truncatechars:500 }}</div>
+                {% if collection.source_sql|length > 500 %}
+                    <div style="text-align: center; color: #8b949e; font-size: 12px; margin-top: 5px;">
+                        (Consulta truncada, longitud total: {{ collection.source_sql|length }} caracteres)
+                    </div>
+                {% endif %}
+            </div>
+            
+            <div style="margin-top: 20px;">
+                <h3 style="color: #c9d1d9; margin-bottom: 10px;">Campos para embedding:</h3>
+                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                    {% for field in collection.embedding_fields %}
+                        <span style="background-color: #21262d; padding: 6px 12px; border-radius: 4px; font-size: 13px; color: #58a6ff;">
+                            {{ field }}
+                        </span>
+                    {% empty %}
+                        <span style="color: #8b949e;">No hay campos definidos para embedding</span>
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <form method="post" class="sync-form">
+                {% csrf_token %}
+                <div class="form-actions">
+                    <div class="form-actions-left">
+                        <a href="{% url 'intelligence:collection_list' %}" class="btn btn-secondary">❌ Cancelar</a>
+                        <a href="{% url 'intelligence:collection_edit' collection.id %}" class="btn btn-secondary">✏️ Editar Colección</a>
+                    </div>
+                    <button type="submit" class="btn btn-primary" onclick="return confirm('¿Estás seguro de que deseas sincronizar esta colección? Esta acción eliminará todos los documentos existentes y generará nuevos embeddings.')">
+                        🚀 Iniciar Sincronización
+                    </button>
+                </div>
+            </form>
+        </div>
+        
+        <div class="footer">
+            <p>Propifai Intelligence Layer • Sincronización de Colección RAG • ID: {{ collection.id }}</p>
+        </div>
+    </div>
+    
+    <script>
+        // Confirmación adicional antes de enviar el formulario
+        document.querySelector('.sync-form').addEventListener('submit', function(e) {
+            if (!confirm('⚠️ ADVERTENCIA FINAL\n\n¿Estás absolutamente seguro de que deseas sincronizar esta colección?\n\n• Se eliminarán {{ document_count }} documentos existentes\n• Se ejecutará la consulta SQL contra la base de datos\n• Se generarán nuevos embeddings (puede tardar varios minutos)\n\nEsta acción NO se puede deshacer.')) {
+                e.preventDefault();
+                return false;
+            }
+            
+            // Cambiar el texto del botón mientras se procesa
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '⏳ Procesando...';
+            submitBtn.disabled = true;
+            
+            // Restaurar después de 10 segundos por si hay error
+            setTimeout(() => {
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            }, 10000);
+        });
+    </script>
+</body>
+</html>

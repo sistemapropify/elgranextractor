@@ -81,5 +81,5 @@ urlpatterns = [
     path('api/v1/intelligence/', include('intelligence.urls')),
     
     # Meta Ads - Dashboard de campañas publicitarias de Meta
-    # path('meta-ads/', include('meta_ads.urls')),  # Comentado temporalmente debido a error de importación en producción
+    path('meta-ads/', include('meta_ads.urls')),  # Dashboard de campañas publicitarias de Meta
 ]

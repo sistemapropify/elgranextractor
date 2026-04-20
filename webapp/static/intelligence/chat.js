@@ -542,17 +542,37 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // Validar tipo
+        // Validar tipo - manejar múltiples tipos MIME para Excel y casos donde file.type esté vacío
         const allowedTypes = [
             'image/jpeg', 'image/png', 'image/gif',
             'application/pdf', 'text/plain',
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'application/vnd.ms-excel',
-            'application/msword',
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            // Tipos MIME para Excel
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+            'application/vnd.ms-excel', // .xls
+            'application/excel',
+            'application/x-excel',
+            'application/x-msexcel',
+            // Tipos MIME para Word
+            'application/msword', // .doc
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+            // Otros tipos de Office
+            'application/vnd.oasis.opendocument.spreadsheet', // .ods
+            'application/vnd.oasis.opendocument.text' // .odt
         ];
-        if (!allowedTypes.includes(file.type)) {
-            alert(`Tipo de archivo no permitido: ${file.type}. Solo se permiten PDF, imágenes, texto y documentos de Office.`);
+        
+        // También validar por extensión como fallback
+        const allowedExtensions = ['.pdf', '.jpg', '.jpeg', '.png', '.gif', '.txt',
+                                  '.xlsx', '.xls', '.doc', '.docx', '.ods', '.odt'];
+        
+        const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+        const fileType = file.type.toLowerCase();
+        
+        // Verificar si el tipo MIME está permitido O la extensión está permitida
+        const isTypeAllowed = allowedTypes.some(type => fileType.includes(type.toLowerCase().replace('*', '')));
+        const isExtensionAllowed = allowedExtensions.includes(fileExtension);
+        
+        if (!isTypeAllowed && !isExtensionAllowed) {
+            alert(`Tipo de archivo no permitido: ${file.type || 'tipo desconocido'}. Solo se permiten PDF, imágenes, texto y documentos de Office.`);
             return;
         }
         

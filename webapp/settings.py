@@ -66,7 +66,7 @@ INSTALLED_APPS = [
     'analisis_crm',
     'eventos',
     'intelligence',
-    # 'meta_ads',  # Comentado temporalmente debido a error de importación en producción
+    'meta_ads',  # Habilitado para desarrollo - dashboard de Meta Ads
 ]
 
 MIDDLEWARE = [
@@ -257,3 +257,49 @@ def patched_basecontext_copy(self):
 django.template.context.BaseContext.__copy__ = patched_basecontext_copy
 
 print("Monkey patch aplicado a django.template.context.__copy__")
+
+# Logging Configuration
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {asctime} {module}: {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple',
+            'level': 'DEBUG',
+        },
+        'file': {
+            'class': 'logging.FileHandler',
+            'filename': BASE_DIR / 'logs' / 'django.log',
+            'formatter': 'verbose',
+            'level': 'INFO',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'intelligence': {
+            'handlers': ['console', 'file'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'intelligence.views': {
+            'handlers': ['console', 'file'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+    },
+}
