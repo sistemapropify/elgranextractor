@@ -14,25 +14,25 @@ class Command(BaseCommand):
         roles_data = [
             {
                 'name': 'Usuario Básico',
-                'level': 1,
+                'allowed_levels': [1],
                 'capabilities': {'memory': True, 'knowledge_base': False, 'metrics': False, 'projects': False},
                 'description': 'Rol para usuarios con acceso solo a memoria de conversación'
             },
             {
                 'name': 'Usuario Avanzado',
-                'level': 2,
+                'allowed_levels': [2],
                 'capabilities': {'memory': True, 'knowledge_base': True, 'metrics': False, 'projects': True},
                 'description': 'Rol para usuarios con acceso a memoria y conocimiento (propiedades, noticias)'
             },
             {
                 'name': 'Administrador/Gerencia',
-                'level': 3,
+                'allowed_levels': [3],
                 'capabilities': {'memory': True, 'knowledge_base': True, 'metrics': True, 'projects': True},
                 'description': 'Rol para administradores con acceso completo a memoria, conocimiento y métricas'
             },
             {
                 'name': 'Agente Inmobiliario',
-                'level': 2,
+                'allowed_levels': [2],
                 'capabilities': {'memory': True, 'knowledge_base': True, 'metrics': False, 'projects': True},
                 'description': 'Rol para agentes inmobiliarios con acceso a propiedades y memoria de clientes'
             }
@@ -46,7 +46,8 @@ class Command(BaseCommand):
             )
             if created:
                 roles_created += 1
-                self.stdout.write(f'   [OK] Rol creado: {role.name} (Nivel {role.level})')
+                levels_str = ",".join(str(l) for l in role.allowed_levels)
+                self.stdout.write(f'   [OK] Rol creado: {role.name} (Niveles {levels_str})')
             else:
                 self.stdout.write(f'   [-] Rol ya existente: {role.name}')
         

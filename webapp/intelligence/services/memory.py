@@ -25,6 +25,22 @@ class MemoryService:
     MAX_MESSAGES_BEFORE_SUMMARY = int(os.environ.get('MEMORY_MAX_MESSAGES_BEFORE_SUMMARY', 20))
     EXTRACT_FACTS_ENABLED = os.environ.get('MEMORY_EXTRACT_FACTS_ENABLED', 'true').lower() == 'true'
     
+    def __init__(self, user_id: str = None):
+        """
+        Constructor para MemoryService.
+        
+        Args:
+            user_id: ID del usuario (string UUID)
+        """
+        self.user_id = user_id
+        if user_id:
+            try:
+                self.user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                self.user = None
+        else:
+            self.user = None
+    
     @staticmethod
     def get_or_create_user(identifier: str, channel: str = 'unknown', metadata: Optional[Dict] = None) -> User:
         """
@@ -511,3 +527,123 @@ INSTRUCCIONES PARA EL ASISTENTE:
 5. Si no sabes algo, admítelo y ofrece buscar la información.
 
 Ahora responde al último mensaje del usuario."""
+        
+        return prompt
+    
+    def get_relevant_context(self, query: str, limit: int = 5) -> List[Dict]:
+        """
+        Obtiene contexto relevante de la memoria del usuario basado en la consulta.
+        
+        Args:
+            query: Consulta del usuario
+            limit: Número máximo de hechos/conversaciones a retornar
+            
+        Returns:
+            Lista de diccionarios con contexto relevante
+        """
+        if not self.user:
+            return []
+        
+        # Obtener hechos del usuario
+        facts = Fact.objects.filter(
+            user=self.user,
+            is_active=True
+        ).order_by('-confidence')[:limit]
+        
+        # Obtener conversaciones recientes
+        conversations = Conversation.objects.filter(
+            user=self.user,
+            is_active=True
+        ).order_by('-last_message_at')[:3]
+        
+        context_items = []
+        
+        # Agregar hechos
+        for fact in facts:
+            context_items.append({
+                'type': 'fact',
+                'content': f"{fact.subject} {fact.relation} {fact.object}",
+                'confidence': fact.confidence,
+                'source': 'memory',
+                'timestamp': fact.created_at.isoformat() if fact.created_at else None
+            })
+        
+        # Agregar mensajes recientes de conversaciones
+        for conv in conversations:
+            if conv.messages:
+                recent_messages = conv.messages[-3:]  # Últimos 3 mensajes
+                for msg in recent_messages:
+                    role = msg.get('role', 'unknown')
+                    content = msg.get('content', '')
+                    if content:
+                        context_items.append({
+                            'type': 'conversation',
+                            'role': role,
+                            'content': content[:200],  # Limitar longitud
+                            'source': 'conversation',
+                            'conversation_id': str(conv.id),
+                            'timestamp': msg.get('timestamp')
+                        })
+        
+        # Filtrar por relevancia simple (búsqueda de palabras clave)
+        query_lower = query.lower()
+        relevant_items = []
+        for item in context_items:
+            content = item.get('content', '').lower()
+            # Verificar si la consulta contiene palabras relevantes
+            if any(word in content for word in query_lower.split()[:5]):
+                relevant_items.append(item)
+        
+        # Si no hay items relevantes, devolver los más recientes
+        if not relevant_items and context_items:
+            relevant_items = context_items[:limit]
+        
+        return relevant_items[:limit]
+    
+    def add_fact(self, fact_text: str, category: str, confidence_score: float,
+                 source: str = 'chat_web', metadata: Dict = None) -> Dict:
+        """
+        Agrega un hecho a la memoria del usuario.
+        
+        Args:
+            fact_text: Texto del hecho
+            category: Categoría del hecho
+            confidence_score: Puntuación de confianza (0.0-1.0)
+            source: Fuente del hecho
+            metadata: Metadatos adicionales
+            
+        Returns:
+            Diccionario con información del hecho creado
+        """
+        if not self.user:
+            return {'error': 'Usuario no disponible'}
+        
+        # Parsear fact_text para extraer subject, relation, object si es posible
+        # Implementación simple: tratar todo como subject
+        subject = 'usuario'
+        relation = 'mencionó'
+        object_text = fact_text[:100]  # Limitar longitud
+        
+        fact = Fact.objects.create(
+            user=self.user,
+            subject=subject,
+            relation=relation,
+            object=object_text,
+            confidence=confidence_score,
+            category=category,
+            metadata={
+                'source': source,
+                'added_at': timezone.now().isoformat(),
+                'original_text': fact_text,
+                **(metadata or {})
+            }
+        )
+        
+        return {
+            'id': str(fact.id),
+            'subject': fact.subject,
+            'relation': fact.relation,
+            'object': fact.object,
+            'confidence': fact.confidence,
+            'category': fact.category
+        }

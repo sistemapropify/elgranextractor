@@ -13,11 +13,12 @@ from typing import List, Dict, Optional, Tuple, Any
 from datetime import datetime
 import logging
 
-from django.db import connection
+from django.db import connection, connections
 from django.utils import timezone
 from django.conf import settings
 
 from ..models import IntelligenceCollection, IntelligenceDocument
+from .schema_discovery import SchemaDiscoveryService
 
 # Configuración de logging
 logger = logging.getLogger(__name__)
@@ -117,14 +118,80 @@ class RAGService:
     def calculate_content_hash(cls, content: str) -> str:
         """
         Calcula hash SHA256 del contenido para detectar cambios.
-        
+
         Args:
             content: Contenido del documento
-            
+
         Returns:
             Hash SHA256 en hexadecimal
         """
         return hashlib.sha256(content.encode('utf-8')).hexdigest()
+    
+    @classmethod
+    def _serialize_row_dict(cls, row_dict):
+        """
+        Serializa un diccionario de fila de base de datos a JSON,
+        convirtiendo tipos no serializables como Decimal, Date, etc.
+        Especialmente diseñado para ser compatible con SQL Server ISJSON.
+        
+        Args:
+            row_dict: Diccionario con valores de fila
+            
+        Returns:
+            Diccionario serializable a JSON compatible con SQL Server
+        """
+        import decimal
+        import datetime
+        import math
+        from django.utils.timezone import is_aware
+        
+        serializable_dict = {}
+        for key, value in row_dict.items():
+            if value is None:
+                serializable_dict[key] = None
+            elif isinstance(value, decimal.Decimal):
+                # Convertir Decimal a float, manejando valores especiales
+                float_val = float(value)
+                # SQL Server no acepta NaN o Infinity en JSON
+                if math.isnan(float_val) or math.isinf(float_val):
+                    serializable_dict[key] = None
+                else:
+                    serializable_dict[key] = float_val
+            elif isinstance(value, (datetime.date, datetime.datetime)):
+                # Convertir fechas a string formato compatible con SQL Server
+                # Usar formato YYYY-MM-DD HH:MM:SS para mejor compatibilidad
+                if isinstance(value, datetime.datetime):
+                    if is_aware(value):
+                        value = value.astimezone(datetime.timezone.utc)
+                    # Formato: YYYY-MM-DD HH:MM:SS
+                    serializable_dict[key] = value.strftime('%Y-%m-%d %H:%M:%S')
+                else:  # datetime.date
+                    serializable_dict[key] = value.strftime('%Y-%m-%d')
+            elif isinstance(value, str):
+                # Limpiar strings de caracteres de control (excepto tab, newline, carriage return)
+                # SQL Server ISJSON puede rechazar ciertos caracteres de control
+                cleaned = ''.join(
+                    char for char in value
+                    if ord(char) >= 32 or char in '\t\n\r'
+                )
+                serializable_dict[key] = cleaned
+            elif isinstance(value, (int, bool)):
+                # Tipos básicos JSON
+                serializable_dict[key] = value
+            elif isinstance(value, float):
+                # Manejar float especiales para SQL Server
+                if math.isnan(value) or math.isinf(value):
+                    serializable_dict[key] = None
+                else:
+                    serializable_dict[key] = value
+            else:
+                # Para cualquier otro tipo, convertirlo a string
+                try:
+                    serializable_dict[key] = str(value)
+                except:
+                    serializable_dict[key] = None
+        
+        return serializable_dict
     
     @classmethod
     def create_collection(
@@ -167,7 +234,7 @@ class RAGService:
             collection = IntelligenceCollection.objects.create(
                 name=name,
                 source_sql=source_sql,
-                embedding_fields=json.dumps(embedding_fields),
+                embedding_fields=embedding_fields,  # JSONField acepta listas directamente
                 access_level=access_level,
                 description=description,
                 is_active=is_active
@@ -181,6 +248,40 @@ class RAGService:
             return False, f"Error al crear colección: {str(e)}", None
     
     @classmethod
+    def _get_connection_for_collection(cls, collection):
+        """
+        Determina qué conexión de base de datos usar para una colección.
+        
+        Args:
+            collection: IntelligenceCollection object
+            
+        Returns:
+            Django database connection object
+        """
+        # Por defecto usar conexión 'default'
+        conn = connections['default']
+        
+        # Si la colección es de Propifai o hace referencia a tabla 'properties'
+        # o si el SQL hace referencia a la base de datos propifai
+        collection_name_lower = collection.name.lower()
+        source_sql_lower = collection.source_sql.lower()
+        
+        if ('propifai' in collection_name_lower or
+            'properties' in source_sql_lower or
+            'from propifai.' in source_sql_lower or
+            'from [propifai].' in source_sql_lower or
+            'dbpropifai' in source_sql_lower):
+            
+            # Verificar si existe conexión 'propifai'
+            if 'propifai' in connections:
+                conn = connections['propifai']
+                logger.debug(f"Usando conexión 'propifai' para colección: {collection.name}")
+            else:
+                logger.warning(f"Conexión 'propifai' no encontrada, usando 'default' para colección: {collection.name}")
+        
+        return conn
+    
+    @classmethod
     def sync_collection(
         cls,
         collection_id: int,
@@ -189,11 +290,11 @@ class RAGService:
         """
         Sincroniza una colección ejecutando la consulta SQL fuente,
         generando embeddings para documentos nuevos/modificados.
-        
+
         Args:
             collection_id: ID de la colección a sincronizar
             force_full_sync: Si True, regenera embeddings para todos los documentos
-            
+
         Returns:
             Tuple (success, message, stats)
         """
@@ -211,8 +312,11 @@ class RAGService:
             
             logger.info(f"Iniciando sincronización de colección: {collection.name}")
             
+            # Obtener conexión apropiada
+            conn = cls._get_connection_for_collection(collection)
+            
             # Ejecutar consulta SQL
-            with connection.cursor() as cursor:
+            with conn.cursor() as cursor:
                 cursor.execute(collection.source_sql)
                 columns = [col[0] for col in cursor.description]
                 rows = cursor.fetchall()
@@ -230,7 +334,7 @@ class RAGService:
                     
                     # Construir contenido concatenando campos de embedding
                     content_parts = []
-                    embedding_fields = json.loads(collection.embedding_fields)
+                    embedding_fields = collection.embedding_fields  # Ya es una lista, no necesita json.loads
                     
                     for field in embedding_fields:
                         if field in row_dict and row_dict[field]:
@@ -261,7 +365,7 @@ class RAGService:
                         # Actualizar documento existente
                         document.content = content
                         document.content_hash = content_hash
-                        document.metadata_json = json.dumps(row_dict)
+                        document.metadata_json = json.dumps(cls._serialize_row_dict(row_dict))
                         
                         # Regenerar embedding si el contenido cambió o force_full_sync
                         if document.content_hash != content_hash or force_full_sync:
@@ -283,7 +387,7 @@ class RAGService:
                             content=content,
                             content_hash=content_hash,
                             embedding=embedding,
-                            metadata_json=json.dumps(row_dict)
+                            metadata_json=json.dumps(cls._serialize_row_dict(row_dict))
                         )
                         stats['created'] += 1
                         logger.debug(f"Documento creado: {source_id}")
@@ -645,3 +749,431 @@ class RAGService:
         )
         
         return results
+    
+    # ============================================================================
+    # MÉTODOS NUEVOS PARA SPEC-003: SISTEMA RAG CON CAMPOS DINÁMICOS
+    # ============================================================================
+    
+    @classmethod
+    def get_available_tables(cls, schema: str = None, database_alias: str = 'default', force_refresh: bool = False) -> List[str]:
+        """
+        Retorna tablas disponibles en Azure SQL.
+        
+        Args:
+            schema: Esquema a consultar (default: 'dbo')
+            database_alias: Alias de la conexión de base de datos (default: 'default', 'propifai' para dbpropify)
+            force_refresh: Si True, ignora la caché y vuelve a consultar la base de datos
+            
+        Returns:
+            Lista de nombres de tablas
+        """
+        try:
+            import sys
+            print(f"[DEBUG] RAGService.get_available_tables: schema={schema}, database_alias={database_alias}, force_refresh={force_refresh}", file=sys.stderr)
+            logger.info(f"RAGService.get_available_tables: schema={schema}, database_alias={database_alias}, force_refresh={force_refresh}")
+            return SchemaDiscoveryService.list_tables(schema=schema, database_alias=database_alias, force_refresh=force_refresh)
+        except Exception as e:
+            logger.error(f"Error obteniendo tablas disponibles: {e}")
+            return []
+    
+    @classmethod
+    def analyze_table_schema(cls, table_name: str, schema: str = None, database_alias: str = 'default') -> Dict[str, Any]:
+        """
+        Retorna estructura completa de una tabla.
+        
+        Args:
+            table_name: Nombre de la tabla
+            schema: Esquema de la tabla
+            database_alias: Alias de la conexión de base de datos (default: 'default', 'propifai' para dbpropify)
+            
+        Returns:
+            Diccionario con análisis completo de la tabla
+        """
+        try:
+            return SchemaDiscoveryService.analyze_table_schema(table_name, schema=schema, database_alias=database_alias)
+        except Exception as e:
+            logger.error(f"Error analizando esquema de tabla '{table_name}': {e}")
+            return {
+                'table_name': table_name,
+                'schema': schema or 'dbo',
+                'database': database_alias,
+                'exists': False,
+                'error': str(e)
+            }
+    
+    @classmethod
+    def create_collection_dynamic(
+        cls,
+        name: str,
+        table_name: str,
+        embedding_fields: List[str],
+        display_fields: List[str],
+        filter_fields: List[str],
+        access_level: int = 2,
+        description: str = "",
+        schema: str = None
+    ) -> Tuple[bool, str, Optional[IntelligenceCollection]]:
+        """
+        Crea colección con campos dinámicos según SPEC-003.
+        
+        Args:
+            name: Nombre único de la colección
+            table_name: Nombre exacto de la tabla en Azure SQL
+            embedding_fields: Lista de campos (nombres reales) usados para embedding
+            display_fields: Lista de campos (nombres reales) a mostrar en resultados
+            filter_fields: Lista de campos (nombres reales) que se pueden filtrar
+            access_level: Nivel de acceso requerido (1, 2, 3)
+            description: Descripción opcional
+            schema: Esquema de la tabla
+            
+        Returns:
+            Tuple (success, message, collection)
+        """
+        try:
+            # Validar nombre único
+            if IntelligenceCollection.objects.filter(name=name).exists():
+                return False, f"Ya existe una colección con el nombre '{name}'", None
+            
+            # Validar que la tabla existe
+            if not SchemaDiscoveryService.validate_table(table_name, schema=schema):
+                return False, f"Tabla '{table_name}' no encontrada en esquema '{schema or 'dbo'}'", None
+            
+            # Obtener field_definitions de la tabla
+            schema_analysis = SchemaDiscoveryService.analyze_table_schema(table_name, schema=schema)
+            if not schema_analysis.get('exists', False):
+                return False, f"No se pudo analizar la tabla '{table_name}': {schema_analysis.get('error', 'Error desconocido')}", None
+            
+            field_definitions = schema_analysis.get('field_definitions', {})
+            primary_key = schema_analysis.get('primary_key', 'id')
+            
+            # Validar que los campos especificados existen en la tabla
+            all_columns = [col['name'] for col in schema_analysis.get('columns', [])]
+            
+            for field_list, field_type in [
+                (embedding_fields, 'embedding'),
+                (display_fields, 'display'),
+                (filter_fields, 'filter')
+            ]:
+                for field in field_list:
+                    if field not in all_columns:
+                        return False, f"Campo '{field}' no existe en la tabla '{table_name}' para {field_type}", None
+            
+            # Crear SQL automático si no se proporciona
+            source_sql = f"SELECT * FROM [{schema or 'dbo'}].[{table_name}]"
+            
+            # Crear colección
+            collection = IntelligenceCollection.objects.create(
+                name=name,
+                table_name=table_name,
+                description=description,
+                source_sql=source_sql,
+                field_definitions=field_definitions,
+                embedding_fields=embedding_fields,
+                display_fields=display_fields,
+                filter_fields=filter_fields,
+                access_level=access_level,
+                is_active=True
+            )
+            
+            logger.info(f"Colección dinámica creada: {name} (Tabla: {table_name}, ID: {collection.id})")
+            return True, f"Colección '{name}' creada exitosamente con {len(field_definitions)} campos", collection
+            
+        except Exception as e:
+            logger.error(f"Error al crear colección dinámica '{name}': {e}")
+            return False, f"Error al crear colección: {str(e)}", None
+    
+    @classmethod
+    def sync_collection_dynamic(
+        cls,
+        collection_name: str,
+        force_full_sync: bool = False
+    ) -> Tuple[bool, str, Dict[str, int]]:
+        """
+        Sincroniza una colección usando los nombres de campos REALES de la tabla.
+        
+        Args:
+            collection_name: Nombre de la colección a sincronizar
+            force_full_sync: Si True, regenera embeddings para todos los documentos
+            
+        Returns:
+            Tuple (success, message, stats)
+        """
+        stats = {
+            'total_processed': 0,
+            'created': 0,
+            'updated': 0,
+            'skipped': 0,
+            'errors': 0
+        }
+        
+        try:
+            # Obtener colección
+            collection = IntelligenceCollection.objects.get(name=collection_name, is_active=True)
+            
+            if not collection.table_name:
+                return False, "Esta colección no tiene table_name configurado (no es dinámica)", stats
+            
+            logger.info(f"Iniciando sincronización dinámica de colección: {collection.name} (Tabla: {collection.table_name})")
+            
+            # Obtener conexión apropiada
+            conn = cls._get_connection_for_collection(collection)
+            
+            # Construir consulta SQL automática
+            schema = 'dbo'  # Por defecto, podría extraerse de field_definitions en el futuro
+            table_name = collection.table_name
+            sql = f"SELECT * FROM [{schema}].[{table_name}]"
+            
+            # Ejecutar consulta SQL
+            with conn.cursor() as cursor:
+                cursor.execute(sql)
+                columns = [col[0] for col in cursor.description]
+                rows = cursor.fetchall()
+            
+            logger.info(f"Consulta SQL devolvió {len(rows)} registros de '{table_name}'")
+            
+            # Obtener field_definitions de la colección
+            field_definitions = collection.field_definitions or {}
+            
+            # Determinar campo ID
+            primary_key = None
+            for field_name, field_def in field_definitions.items():
+                if field_def.get('is_primary', False):
+                    primary_key = field_name
+                    break
+            
+            if not primary_key:
+                # Buscar campo llamado 'id' (case insensitive)
+                for col in columns:
+                    if col.lower() == 'id':
+                        primary_key = col
+                        break
+            
+            if not primary_key and columns:
+                primary_key = columns[0]  # Usar primera columna como fallback
+            
+            # Procesar cada registro
+            for i, row in enumerate(rows):
+                try:
+                    # Convertir a diccionario
+                    row_dict = dict(zip(columns, row))
+                    
+                    # Extraer source_id usando el campo primary_key
+                    source_id = str(row_dict.get(primary_key) if primary_key in row_dict else i)
+                    
+                    # Construir field_values con TODOS los campos reales
+                    field_values = {}
+                    for col_name in columns:
+                        value = row_dict[col_name]
+                        # Convertir tipos no serializables
+                        if hasattr(value, 'isoformat'):  # Para datetime/date
+                            value = value.isoformat()
+                        elif value is None:
+                            value = None
+                        field_values[col_name] = value
+                    
+                    # Construir texto para embedding usando solo los campos en embedding_fields
+                    content_parts = []
+                    for field in collection.embedding_fields:
+                        if field in row_dict and row_dict[field]:
+                            content_parts.append(str(row_dict[field]))
+                    
+                    content = " ".join(content_parts)
+                    
+                    if not content.strip():
+                        logger.warning(f"Registro {source_id} sin contenido para embedding, saltando")
+                        stats['skipped'] += 1
+                        continue
+                    
+                    # Calcular hash del contenido
+                    content_hash = cls.calculate_content_hash(content)
+                    
+                    # Buscar documento existente
+                    try:
+                        document = IntelligenceDocument.objects.get(
+                            collection=collection,
+                            source_id=source_id
+                        )
+                        
+                        # Verificar si el contenido cambió
+                        if document.content_hash == content_hash and not force_full_sync:
+                            stats['skipped'] += 1
+                            continue
+                        
+                        # Actualizar documento existente
+                        document.content = content
+                        document.content_hash = content_hash
+                        document.field_values = field_values
+                        
+                        # Regenerar embedding si el contenido cambió o force_full_sync
+                        if document.content_hash != content_hash or force_full_sync:
+                            embedding = cls.generate_embedding(content)
+                            if embedding:
+                                document.embedding = embedding
+                        
+                        document.save()
+                        stats['updated'] += 1
+                        logger.debug(f"Documento actualizado: {source_id}")
+                        
+                    except IntelligenceDocument.DoesNotExist:
+                        # Crear nuevo documento
+                        embedding = cls.generate_embedding(content)
+                        
+                        document = IntelligenceDocument.objects.create(
+                            collection=collection,
+                            source_id=source_id,
+                            content=content,
+                            content_hash=content_hash,
+                            embedding=embedding,
+                            field_values=field_values
+                        )
+                        stats['created'] += 1
+                        logger.debug(f"Documento creado: {source_id}")
+                    
+                    stats['total_processed'] += 1
+                    
+                    # Log cada 100 registros
+                    if stats['total_processed'] % 100 == 0:
+                        logger.info(f"Procesados {stats['total_processed']} registros...")
+                    
+                except Exception as e:
+                    logger.error(f"Error procesando registro {i}: {e}")
+                    stats['errors'] += 1
+            
+            # Actualizar estadísticas de la colección
+            collection.last_sync_at = timezone.now()
+            collection.last_sync_count = stats['total_processed']
+            collection.save()
+            
+            logger.info(
+                f"Sincronización dinámica completada para '{collection.name}': "
+                f"{stats['created']} creados, {stats['updated']} actualizados, "
+                f"{stats['skipped']} saltados, {stats['errors']} errores"
+            )
+            
+            return True, "Sincronización dinámica completada exitosamente", stats
+            
+        except IntelligenceCollection.DoesNotExist:
+            return False, f"Colección '{collection_name}' no encontrada o inactiva", stats
+        except Exception as e:
+            logger.error(f"Error en sync_collection_dynamic: {e}")
+            return False, f"Error en sincronización dinámica: {str(e)}", stats
+    
+    @classmethod
+    def search_dynamic(
+        cls,
+        query: str,
+        collection_names: List[str],
+        filters: Dict[str, Any] = None,
+        top_k: int = 5
+    ) -> List[Dict[str, Any]]:
+        """
+        Busca en colecciones dinámicas y retorna field_values con nombres REALES.
+        
+        Args:
+            query: Texto de búsqueda
+            collection_names: Nombres de colecciones a buscar
+            filters: Diccionario con filtros a aplicar {campo: valor}
+            top_k: Número máximo de resultados
+            
+        Returns:
+            Lista de diccionarios con resultados
+        """
+        if not query or not query.strip():
+            return []
+        
+        try:
+            # Generar embedding para la query
+            query_embedding = cls.generate_embedding(query)
+            if not query_embedding:
+                logger.error("No se pudo generar embedding para la query")
+                return []
+            
+            # Convertir embedding a numpy array
+            query_vector = np.frombuffer(query_embedding, dtype=np.float32)
+            
+            # Obtener colecciones
+            collections = IntelligenceCollection.objects.filter(
+                name__in=collection_names,
+                is_active=True
+            )
+            
+            if not collections.exists():
+                logger.warning(f"No se encontraron colecciones con nombres: {collection_names}")
+                return []
+            
+            # Obtener todos los documentos de las colecciones
+            documents = IntelligenceDocument.objects.filter(
+                collection__in=collections,
+                embedding__isnull=False
+            ).select_related('collection')
+            
+            # Aplicar filtros si se proporcionan
+            if filters:
+                # Filtrado básico por campo (igualdad exacta)
+                for field_name, field_value in filters.items():
+                    # Filtrar documentos cuyo field_values[field_name] == field_value
+                    # Esto es ineficiente para muchos documentos, pero funciona para demostración
+                    filtered_docs = []
+                    for doc in documents:
+                        if field_name in doc.field_values and doc.field_values[field_name] == field_value:
+                            filtered_docs.append(doc)
+                    documents = filtered_docs
+            
+            if not documents:
+                return []
+            
+            # Calcular similitud para cada documento
+            results = []
+            threshold = cls.SIMILARITY_THRESHOLD
+            
+            for doc in documents:
+                try:
+                    # Convertir embedding del documento a numpy
+                    doc_vector = np.frombuffer(doc.embedding, dtype=np.float32)
+                    
+                    # Calcular similitud de coseno
+                    similarity = np.dot(query_vector, doc_vector) / (
+                        np.linalg.norm(query_vector) * np.linalg.norm(doc_vector)
+                    )
+                    
+                    # Filtrar por umbral
+                    if similarity >= threshold:
+                        # Obtener solo los campos display_fields de la colección
+                        display_fields = doc.collection.display_fields or []
+                        field_values_to_display = {}
+                        
+                        if display_fields:
+                            for field in display_fields:
+                                if field in doc.field_values:
+                                    field_values_to_display[field] = doc.field_values[field]
+                        else:
+                            # Si no hay display_fields definidos, mostrar todos
+                            field_values_to_display = doc.field_values
+                        
+                        result = {
+                            'document_id': str(doc.id),
+                            'collection_name': doc.collection.name,
+                            'source_id': doc.source_id,
+                            'similarity': float(similarity),
+                            'field_values': field_values_to_display,
+                            'content': doc.content[:200] + '...' if len(doc.content) > 200 else doc.content,
+                            'created_at': doc.created_at.isoformat() if doc.created_at else None
+                        }
+                        results.append(result)
+                        
+                except Exception as e:
+                    logger.warning(f"Error calculando similitud para documento {doc.id}: {e}")
+                    continue
+            
+            # Ordenar por similitud descendente
+            results.sort(key=lambda x: x['similarity'], reverse=True)
+            
+            # Limitar resultados
+            results = results[:top_k]
+            
+            logger.info(f"Búsqueda dinámica completada: {len(results)} resultados para query: '{query[:50]}...'")
+            return results
+            
+        except Exception as e:
+            logger.error(f"Error en búsqueda dinámica RAG: {e}")
+            return []

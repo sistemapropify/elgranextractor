@@ -5,13 +5,13 @@ from .models import Role, User, AppConfig, Conversation, Fact
 
 @admin.register(Role)
 class RoleAdmin(admin.ModelAdmin):
-    list_display = ('name', 'level', 'created_at', 'updated_at')
-    list_filter = ('level',)
+    list_display = ('name', 'allowed_levels_display', 'created_at', 'updated_at')
+    list_filter = ('allowed_levels',)
     search_fields = ('name', 'description')
     readonly_fields = ('id', 'created_at', 'updated_at')
     fieldsets = (
         ('Información Básica', {
-            'fields': ('id', 'name', 'level', 'description')
+            'fields': ('id', 'name', 'allowed_levels', 'description')
         }),
         ('Capacidades', {
             'fields': ('capabilities',),
@@ -22,6 +22,13 @@ class RoleAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
+    
+    def allowed_levels_display(self, obj):
+        """Muestra los niveles permitidos de forma legible"""
+        if not obj.allowed_levels:
+            return "Sin niveles"
+        return ", ".join(str(level) for level in obj.allowed_levels)
+    allowed_levels_display.short_description = "Niveles permitidos"
 
 
 @admin.register(User)

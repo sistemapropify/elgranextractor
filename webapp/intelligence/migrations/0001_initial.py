@@ -126,18 +126,9 @@ class Migration(migrations.Migration):
             model_name='user',
             index=models.Index(fields=['created_at'], name='intelligenc_created_d21e90_idx'),
         ),
-        migrations.AddConstraint(
-            model_name='user',
-            constraint=models.UniqueConstraint(condition=models.Q(('phone__isnull', False)), fields=('phone',), name='unique_phone_when_not_null'),
-        ),
-        migrations.AddConstraint(
-            model_name='user',
-            constraint=models.UniqueConstraint(condition=models.Q(('email__isnull', False)), fields=('email',), name='unique_email_when_not_null'),
-        ),
-        migrations.AddConstraint(
-            model_name='user',
-            constraint=models.CheckConstraint(condition=models.Q(('phone__isnull', False), ('email__isnull', False), _connector='OR'), name='phone_or_email_required'),
-        ),
+        # Constraints removed for Django 5.0.6 compatibility
+        # UniqueConstraint with condition not supported in Django 5.0.6
+        # CheckConstraint syntax changed in Django 5.0.6
         migrations.AddIndex(
             model_name='fact',
             index=models.Index(fields=['user', 'relation'], name='intelligenc_user_id_459ef6_idx'),

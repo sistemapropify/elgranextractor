@@ -55,9 +55,10 @@ class LLMService:
     
     @classmethod
     def _call_deepseek_api(
-        cls, 
-        messages: List[Dict[str, str]], 
-        system_prompt: str = ""
+        cls,
+        messages: List[Dict[str, str]],
+        system_prompt: str = "",
+        stream: bool = False
     ) -> Tuple[bool, str, Optional[Dict]]:
         """
         Llama a la API de DeepSeek.
@@ -65,9 +66,10 @@ class LLMService:
         Args:
             messages: Lista de mensajes en formato OpenAI
             system_prompt: Prompt del sistema (opcional)
+            stream: Si es True, devuelve un generador de streaming
             
         Returns:
-            Tuple (success, message, response_data)
+            Tuple (success, message, response_data) o generador para streaming
         """
         if not cls.API_KEY:
             return False, "API key de DeepSeek no configurada", None
@@ -83,30 +85,50 @@ class LLMService:
             "messages": api_messages,
             "temperature": cls.TEMPERATURE,
             "max_tokens": cls.MAX_TOKENS,
-            "stream": False
+            "stream": stream
         }
         
         try:
-            logger.info(f"Llamando a DeepSeek API con {len(messages)} mensajes")
-            response = requests.post(
-                cls.DEEPSEEK_API_URL,
-                headers=cls._get_headers(),
-                json=payload,
-                timeout=30
-            )
+            logger.info(f"Llamando a DeepSeek API con {len(messages)} mensajes, stream={stream}")
             
-            if response.status_code != 200:
-                logger.error(f"Error API DeepSeek: {response.status_code} - {response.text}")
-                return False, f"Error API: {response.status_code}", None
+            if stream:
+                # Para streaming, devolvemos el response directamente
+                response = requests.post(
+                    cls.DEEPSEEK_API_URL,
+                    headers=cls._get_headers(),
+                    json=payload,
+                    timeout=60,
+                    stream=True
+                )
+                
+                if response.status_code != 200:
+                    logger.error(f"Error API DeepSeek (streaming): {response.status_code} - {response.text}")
+                    return False, f"Error API: {response.status_code}", None
+                
+                # Devolvemos el response para que el llamador pueda procesar el streaming
+                return True, "OK", {"stream_response": response}
             
-            data = response.json()
-            content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-            
-            if not content:
-                return False, "Respuesta vacía de la API", None
-            
-            logger.info(f"Respuesta DeepSeek recibida ({len(content)} caracteres)")
-            return True, "OK", {"content": content, "raw_response": data}
+            else:
+                # Modo normal (no streaming)
+                response = requests.post(
+                    cls.DEEPSEEK_API_URL,
+                    headers=cls._get_headers(),
+                    json=payload,
+                    timeout=30
+                )
+                
+                if response.status_code != 200:
+                    logger.error(f"Error API DeepSeek: {response.status_code} - {response.text}")
+                    return False, f"Error API: {response.status_code}", None
+                
+                data = response.json()
+                content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                
+                if not content:
+                    return False, "Respuesta vacía de la API", None
+                
+                logger.info(f"Respuesta DeepSeek recibida ({len(content)} caracteres)")
+                return True, "OK", {"content": content, "raw_response": data}
             
         except requests.exceptions.Timeout:
             logger.error("Timeout llamando a DeepSeek API")
@@ -442,6 +464,116 @@ INSTRUCCIONES:
             return False, "No se pudo extraer datos estructurados", None
         
         return True, "Datos extraídos exitosamente", extracted_data
+    
+    @classmethod
+    def generate_streaming_response(
+        cls,
+        query: str,
+        context: Optional[Dict] = None,
+        system_prompt: str = "",
+        max_tokens: int = 1000,
+        temperature: float = 0.7
+    ) -> Generator[str, None, None]:
+        """
+        Genera una respuesta en streaming desde DeepSeek API.
+        
+        Args:
+            query: Consulta del usuario
+            context: Contexto adicional (opcional)
+            system_prompt: Prompt del sistema (opcional)
+            max_tokens: Máximo de tokens en la respuesta
+            temperature: Temperatura para la generación
+            
+        Yields:
+            Fragmentos de texto de la respuesta en streaming
+        """
+        if not cls.API_KEY:
+            yield json.dumps({
+                "error": "API key de DeepSeek no configurada",
+                "type": "error"
+            })
+            return
+        
+        # Construir mensajes
+        messages = []
+        
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        
+        # Agregar contexto si está disponible
+        if context:
+            context_text = f"Contexto adicional:\n{json.dumps(context, indent=2, ensure_ascii=False)}"
+            messages.append({"role": "system", "content": context_text})
+        
+        messages.append({"role": "user", "content": query})
+        
+        # Llamar a la API en modo streaming
+        success, message, api_response = cls._call_deepseek_api(
+            messages=messages,
+            system_prompt="",  # Ya incluido en messages
+            stream=True
+        )
+        
+        if not success:
+            yield json.dumps({
+                "error": f"Error al llamar a la API: {message}",
+                "type": "error"
+            })
+            return
+        
+        # Procesar respuesta de streaming
+        stream_response = api_response.get("stream_response")
+        if not stream_response:
+            yield json.dumps({
+                "error": "Respuesta de streaming no disponible",
+                "type": "error"
+            })
+            return
+        
+        try:
+            # Procesar cada línea del stream
+            for line in stream_response.iter_lines():
+                if line:
+                    line = line.decode('utf-8').strip()
+                    
+                    # Saltar líneas vacías o de keep-alive
+                    if not line or line == "data: [DONE]":
+                        continue
+                    
+                    # Las líneas de datos de DeepSeek vienen como "data: {...}"
+                    if line.startswith("data: "):
+                        data_str = line[6:]  # Remover "data: "
+                        
+                        try:
+                            data = json.loads(data_str)
+                            
+                            # Extraer contenido del chunk
+                            choices = data.get("choices", [])
+                            if choices:
+                                delta = choices[0].get("delta", {})
+                                content = delta.get("content", "")
+                                
+                                if content:
+                                    yield json.dumps({
+                                        "content": content,
+                                        "type": "chunk"
+                                    })
+                                    
+                        except json.JSONDecodeError:
+                            # Ignorar líneas que no son JSON válido
+                            continue
+            
+            # Señal de finalización
+            yield json.dumps({
+                "type": "complete",
+                "message": "Streaming completado"
+            })
+            
+        except Exception as e:
+            yield json.dumps({
+                "error": f"Error procesando stream: {str(e)}",
+                "type": "error"
+            })
     
     @classmethod
     def test_connection(cls) -> Tuple[bool, str]:

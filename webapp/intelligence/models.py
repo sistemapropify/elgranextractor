@@ -9,12 +9,10 @@ class Role(models.Model):
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100, unique=True, verbose_name="Nombre del rol")
-    level = models.IntegerField(
-        choices=[(1, 'Nivel 1 - Memoria pura'), 
-                 (2, 'Nivel 2 - Memoria + Conocimiento'), 
-                 (3, 'Nivel 3 - Memoria + Conocimiento + Métricas')],
-        default=1,
-        verbose_name="Nivel de acceso"
+    allowed_levels = models.JSONField(
+        default=list,
+        verbose_name="Niveles permitidos",
+        help_text="Lista de niveles permitidos para este rol (ej: [1, 2, 3])"
     )
     capabilities = models.JSONField(
         default=dict,
@@ -29,10 +27,13 @@ class Role(models.Model):
         db_table = 'intelligence_roles'
         verbose_name = 'Rol'
         verbose_name_plural = 'Roles'
-        ordering = ['level']
+        ordering = ['name']
 
     def __str__(self):
-        return f"{self.name} (Nivel {self.level})"
+        if self.allowed_levels:
+            levels_str = ",".join(str(l) for l in self.allowed_levels)
+            return f"{self.name} (Niveles {levels_str})"
+        return f"{self.name} (Sin niveles)"
 
 
 class User(models.Model):
@@ -83,11 +84,14 @@ class AppConfig(models.Model):
     id = models.CharField(max_length=100, primary_key=True, verbose_name="ID de la app")
     name = models.CharField(max_length=200, verbose_name="Nombre descriptivo")
     level = models.IntegerField(
-        choices=[(1, 'Nivel 1 - Memoria pura'), 
-                 (2, 'Nivel 2 - Memoria + Conocimiento'), 
-                 (3, 'Nivel 3 - Memoria + Conocimiento + Métricas')],
+        choices=[(1, 'Nivel 1 - Memoria pura'),
+                 (2, 'Nivel 2 - Memoria + Conocimiento'),
+                 (3, 'Nivel 3 - Memoria + Conocimiento + Métricas'),
+                 (4, 'Nivel 4 - Acceso completo + Analytics'),
+                 (5, 'Nivel 5 - Administrador total')],
         default=1,
-        verbose_name="Nivel de la app"
+        verbose_name="Nivel de la app",
+        help_text="Nivel de acceso (1-5) según SPEC-005"
     )
     capabilities = models.JSONField(
         default=dict,
@@ -200,8 +204,8 @@ class Fact(models.Model):
 
 class IntelligenceCollection(models.Model):
     """
-    Configuración de colecciones vectoriales para RAG.
-    Define origen de datos, campos a embedder y nivel de acceso.
+    Configuración de colecciones vectoriales para RAG con campos dinámicos.
+    Define origen de datos (tabla Azure SQL), campos a embedder y nivel de acceso.
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(
@@ -210,21 +214,62 @@ class IntelligenceCollection(models.Model):
         verbose_name="Nombre de colección",
         help_text="Nombre único de la colección (ej: 'propiedades_propifai')"
     )
+    table_name = models.CharField(
+        max_length=200,
+        null=True,
+        blank=True,
+        verbose_name="Nombre de tabla",
+        help_text="Nombre exacto de la tabla en Azure SQL (ej: 'propiedadraw'). Dejar vacío para colecciones manuales."
+    )
+    description = models.TextField(
+        blank=True,
+        verbose_name="Descripción",
+        help_text="Descripción de la colección y su propósito"
+    )
     source_sql = models.TextField(
+        blank=True,
         verbose_name="SQL de origen",
-        help_text="Query SQL contra Azure SQL que retorna id, y campos para embedding"
+        help_text="Query SQL contra Azure SQL que retorna id, y campos para embedding (opcional, se genera automáticamente si está vacío)"
+    )
+    field_definitions = models.JSONField(
+        default=dict,
+        verbose_name="Definiciones de campos",
+        help_text="Diccionario con definición de TODOS los campos de la tabla: {'nombre_campo': {'type': 'string', 'nullable': false, ...}}"
     )
     embedding_fields = models.JSONField(
         default=list,
         verbose_name="Campos para embedding",
-        help_text="Lista de campos a concatenar (ej: ['titulo', 'descripcion', 'zona'])"
+        help_text="Lista de campos (nombres reales) usados para embedding (ej: ['titulo', 'descripcion', 'zona'])"
+    )
+    display_fields = models.JSONField(
+        default=list,
+        verbose_name="Campos a mostrar",
+        help_text="Lista de campos (nombres reales) a mostrar en resultados de búsqueda"
+    )
+    filter_fields = models.JSONField(
+        default=list,
+        verbose_name="Campos filtrables",
+        help_text="Lista de campos (nombres reales) que se pueden usar como filtros"
     )
     access_level = models.IntegerField(
         choices=[(1, 'Nivel 1 - Memoria pura'),
                  (2, 'Nivel 2 - Memoria + Conocimiento'),
-                 (3, 'Nivel 3 - Memoria + Conocimiento + Métricas')],
+                 (3, 'Nivel 3 - Memoria + Conocimiento + Métricas'),
+                 (4, 'Nivel 4 - Acceso completo + Analytics'),
+                 (5, 'Nivel 5 - Administrador total')],
         default=2,
-        verbose_name="Nivel de acceso mínimo"
+        verbose_name="Nivel de acceso mínimo",
+        help_text="Nivel mínimo requerido para acceder a esta colección (1-5)"
+    )
+    roles_con_acceso = models.JSONField(
+        default=list,
+        verbose_name="Roles con acceso",
+        help_text="Lista de IDs de roles que pueden acceder a esta colección"
+    )
+    apps_con_acceso = models.JSONField(
+        default=list,
+        verbose_name="Apps con acceso",
+        help_text="Lista de IDs de apps que pueden acceder a esta colección"
     )
     is_active = models.BooleanField(default=True, verbose_name="Activa")
     last_sync_at = models.DateTimeField(null=True, blank=True, verbose_name="Última sincronización")
@@ -244,8 +289,8 @@ class IntelligenceCollection(models.Model):
 
 class IntelligenceDocument(models.Model):
     """
-    Documentos vectorizados para búsqueda semántica RAG.
-    Almacena contenido, embedding y metadata.
+    Documentos vectorizados para búsqueda semántica RAG con campos dinámicos.
+    Almacena field_values con nombres REALES de campos de la tabla origen.
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     collection = models.ForeignKey(
@@ -257,7 +302,12 @@ class IntelligenceDocument(models.Model):
     source_id = models.CharField(
         max_length=200,
         verbose_name="ID original",
-        help_text="ID original en tabla origen"
+        help_text="Valor del campo ID en la tabla origen"
+    )
+    field_values = models.JSONField(
+        default=dict,
+        verbose_name="Valores de campos",
+        help_text="Diccionario con nombres REALES de campos y sus valores de la tabla origen"
     )
     content = models.TextField(
         verbose_name="Contenido embeddeado",
@@ -268,11 +318,6 @@ class IntelligenceDocument(models.Model):
         blank=True,
         verbose_name="Vector embedding",
         help_text="Vector de 384 dimensiones (all-MiniLM-L6-v2)"
-    )
-    metadata_json = models.JSONField(
-        default=dict,
-        verbose_name="Metadatos",
-        help_text="Datos adicionales (precio, zona, fecha, etc.)"
     )
     content_hash = models.CharField(
         max_length=64,
