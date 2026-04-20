@@ -1,2 +1,6 @@
 [config]
 SCM_DO_BUILD_DURING_DEPLOYMENT = true
+PYTHON_VERSION = 3.12
+PYTHON_APP_PATH = webapp
+PYTHON_STARTUP_FILE = application.py
+PYTHON_STARTUP_COMMAND = gunicorn --bind=0.0.0.0 --timeout 600 --access-logfile '-' --error-logfile '-' webapp.wsgi:application
