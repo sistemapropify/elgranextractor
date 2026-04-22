@@ -9,7 +9,7 @@ import os
 import json
 import re
 import logging
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Tuple, Any, Generator
 from datetime import datetime
 
 import requests

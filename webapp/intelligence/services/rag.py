@@ -811,7 +811,8 @@ class RAGService:
         filter_fields: List[str],
         access_level: int = 2,
         description: str = "",
-        schema: str = None
+        schema: str = None,
+        database_alias: str = 'default'
     ) -> Tuple[bool, str, Optional[IntelligenceCollection]]:
         """
         Crea colección con campos dinámicos según SPEC-003.
@@ -825,21 +826,25 @@ class RAGService:
             access_level: Nivel de acceso requerido (1, 2, 3)
             description: Descripción opcional
             schema: Esquema de la tabla
+            database_alias: Alias de la conexión de base de datos (default: 'default', 'propifai' para dbpropify)
             
         Returns:
             Tuple (success, message, collection)
         """
         try:
+            import sys
+            print(f"[DEBUG RAGService] create_collection_dynamic: table={table_name}, schema={schema}, database_alias={database_alias}", file=sys.stderr)
+            
             # Validar nombre único
             if IntelligenceCollection.objects.filter(name=name).exists():
                 return False, f"Ya existe una colección con el nombre '{name}'", None
             
             # Validar que la tabla existe
-            if not SchemaDiscoveryService.validate_table(table_name, schema=schema):
-                return False, f"Tabla '{table_name}' no encontrada en esquema '{schema or 'dbo'}'", None
+            if not SchemaDiscoveryService.validate_table(table_name, schema=schema, database_alias=database_alias):
+                return False, f"Tabla '{table_name}' no encontrada en esquema '{schema or 'dbo'}' (base de datos: {database_alias})", None
             
             # Obtener field_definitions de la tabla
-            schema_analysis = SchemaDiscoveryService.analyze_table_schema(table_name, schema=schema)
+            schema_analysis = SchemaDiscoveryService.analyze_table_schema(table_name, schema=schema, database_alias=database_alias)
             if not schema_analysis.get('exists', False):
                 return False, f"No se pudo analizar la tabla '{table_name}': {schema_analysis.get('error', 'Error desconocido')}", None
             
@@ -886,7 +891,8 @@ class RAGService:
     def sync_collection_dynamic(
         cls,
         collection_name: str,
-        force_full_sync: bool = False
+        force_full_sync: bool = False,
+        database_alias: str = None
     ) -> Tuple[bool, str, Dict[str, int]]:
         """
         Sincroniza una colección usando los nombres de campos REALES de la tabla.
@@ -894,6 +900,7 @@ class RAGService:
         Args:
             collection_name: Nombre de la colección a sincronizar
             force_full_sync: Si True, regenera embeddings para todos los documentos
+            database_alias: Alias de la base de datos (opcional, se detecta automáticamente)
             
         Returns:
             Tuple (success, message, stats)
@@ -916,7 +923,17 @@ class RAGService:
             logger.info(f"Iniciando sincronización dinámica de colección: {collection.name} (Tabla: {collection.table_name})")
             
             # Obtener conexión apropiada
-            conn = cls._get_connection_for_collection(collection)
+            if database_alias:
+                # Usar el database_alias proporcionado
+                try:
+                    conn = connections[database_alias]
+                    logger.info(f"Usando conexión específica: {database_alias}")
+                except Exception as e:
+                    logger.warning(f"No se pudo usar conexión '{database_alias}': {e}, usando detección automática")
+                    conn = cls._get_connection_for_collection(collection)
+            else:
+                # Detectar automáticamente
+                conn = cls._get_connection_for_collection(collection)
             
             # Construir consulta SQL automática
             schema = 'dbo'  # Por defecto, podría extraerse de field_definitions en el futuro
@@ -961,15 +978,8 @@ class RAGService:
                     source_id = str(row_dict.get(primary_key) if primary_key in row_dict else i)
                     
                     # Construir field_values con TODOS los campos reales
-                    field_values = {}
-                    for col_name in columns:
-                        value = row_dict[col_name]
-                        # Convertir tipos no serializables
-                        if hasattr(value, 'isoformat'):  # Para datetime/date
-                            value = value.isoformat()
-                        elif value is None:
-                            value = None
-                        field_values[col_name] = value
+                    # Usar _serialize_row_dict para manejar Decimal y otros tipos no serializables
+                    field_values = cls._serialize_row_dict(row_dict)
                     
                     # Construir texto para embedding usando solo los campos en embedding_fields
                     content_parts = []

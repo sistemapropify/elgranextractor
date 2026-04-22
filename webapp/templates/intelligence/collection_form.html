@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% if collection %}Editar Colección{% else %}Crear Colección RAG{% endif %} - Propifai Intelligence Layer</title>
+    <title>Crear Colección RAG Dinámica - Propifai Intelligence Layer</title>
     <style>
         * {
             margin: 0;
@@ -76,15 +76,6 @@
             background-color: #3c444d;
         }
         
-        .btn-danger {
-            background-color: #da3633;
-            color: white;
-        }
-        
-        .btn-danger:hover {
-            background-color: #f85149;
-        }
-        
         .btn-sm {
             padding: 6px 12px;
             font-size: 12px;
@@ -112,12 +103,6 @@
             border: 1px solid #f85149;
         }
         
-        .alert-warning {
-            background-color: #9e6a03;
-            color: white;
-            border: 1px solid #d29922;
-        }
-        
         .alert-info {
             background-color: #1f6feb;
             color: white;
@@ -133,25 +118,34 @@
         
         .form-section {
             margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #30363d;
+        }
+        
+        .form-section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
         }
         
         .form-section h2 {
             color: #58a6ff;
             font-size: 20px;
             margin-bottom: 15px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #30363d;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
         
         .form-group {
             margin-bottom: 20px;
         }
         
-        .form-label {
+        .form-group label {
             display: block;
             margin-bottom: 8px;
+            color: #8b949e;
             font-weight: 500;
-            color: #c9d1d9;
         }
         
         .form-control {
@@ -167,40 +161,115 @@
         .form-control:focus {
             outline: none;
             border-color: #58a6ff;
-            box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.1);
-        }
-        
-        .form-text {
-            font-size: 12px;
-            color: #8b949e;
-            margin-top: 5px;
+            box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2);
         }
         
         .form-check {
             display: flex;
             align-items: center;
             gap: 10px;
-            margin-bottom: 10px;
         }
         
         .form-check-input {
             width: 18px;
             height: 18px;
+            accent-color: #238636;
         }
         
         .form-check-label {
             color: #c9d1d9;
+            font-size: 14px;
         }
         
-        .select-multiple {
-            height: 150px;
-            padding: 8px;
-        }
-        
-        .select-multiple option {
-            padding: 8px;
+        .dynamic-fields-section {
             background-color: #0d1117;
-            color: #c9d1d9;
+            border-radius: 6px;
+            padding: 20px;
+            border: 1px solid #30363d;
+            margin-top: 20px;
+        }
+        
+        .dynamic-fields-section.hidden {
+            display: none;
+        }
+        
+        .fields-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .field-card {
+            background-color: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 15px;
+        }
+        
+        .field-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #30363d;
+        }
+        
+        .field-name {
+            font-weight: 600;
+            color: #58a6ff;
+        }
+        
+        .field-type {
+            font-size: 12px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            background-color: #30363d;
+            color: #8b949e;
+        }
+        
+        .field-options {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .field-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .field-option label {
+            font-size: 13px;
+            color: #8b949e;
+            cursor: pointer;
+        }
+        
+        .text-field .field-type {
+            background-color: #0c2d6b;
+            color: #58a6ff;
+        }
+        
+        .numeric-field .field-type {
+            background-color: #1a7f37;
+            color: #7ee787;
+        }
+        
+        .date-field .field-type {
+            background-color: #8957e5;
+            color: #d2a8ff;
+        }
+        
+        .boolean-field .field-type {
+            background-color: #da3633;
+            color: #ffa198;
+        }
+        
+        .other-field .field-type {
+            background-color: #6e7681;
+            color: #b1bac4;
         }
         
         .form-actions {
@@ -212,374 +281,207 @@
             border-top: 1px solid #30363d;
         }
         
-        .sql-editor {
-            font-family: 'Courier New', monospace;
-            font-size: 13px;
-            line-height: 1.4;
-            min-height: 150px;
-            resize: vertical;
-        }
-        
-        .creation-mode-selector {
-            display: flex;
-            gap: 20px;
-            margin-bottom: 30px;
-            border-bottom: 1px solid #30363d;
-            padding-bottom: 20px;
-        }
-        
-        .mode-option {
-            flex: 1;
-            padding: 20px;
-            background-color: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        
-        .mode-option:hover {
-            border-color: #58a6ff;
-            background-color: #1c2128;
-        }
-        
-        .mode-option.selected {
-            border-color: #238636;
-            background-color: #1c2b1f;
-        }
-        
-        .mode-option h3 {
-            color: #58a6ff;
-            margin-bottom: 10px;
-        }
-        
-        .mode-option p {
-            color: #8b949e;
-            font-size: 14px;
-        }
-        
-        .dynamic-fields-section {
-            background-color: #1c2128;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            padding: 20px;
-            margin-top: 20px;
-        }
-        
-        .fields-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 15px;
-            margin-top: 15px;
-        }
-        
-        .field-card {
-            background-color: #0d1117;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            padding: 15px;
-        }
-        
-        .field-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-        
-        .field-name {
-            font-weight: bold;
-            color: #58a6ff;
-        }
-        
-        .field-type {
+        .help-text {
             font-size: 12px;
             color: #8b949e;
-            background-color: #30363d;
-            padding: 2px 8px;
-            border-radius: 12px;
+            margin-top: 5px;
         }
         
-        .field-options {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            margin-top: 10px;
+        .select-multiple {
+            min-height: 120px;
         }
         
-        .field-option {
-            display: flex;
-            align-items: center;
-            gap: 8px;
+        .select-multiple option {
+            padding: 8px 12px;
         }
         
-        .field-option input[type="checkbox"] {
-            width: 16px;
-            height: 16px;
-        }
-        
-        .field-option label {
-            font-size: 14px;
-            color: #c9d1d9;
-        }
-        
-        .preview-section {
-            background-color: #1c2128;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            padding: 20px;
-            margin-top: 20px;
-        }
-        
-        .preview-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 15px;
-        }
-        
-        .preview-table th {
-            background-color: #30363d;
-            color: #c9d1d9;
-            padding: 10px;
-            text-align: left;
-            font-weight: 500;
-            border: 1px solid #444c56;
-        }
-        
-        .preview-table td {
-            padding: 10px;
-            border: 1px solid #444c56;
-            color: #c9d1d9;
-        }
-        
-        .preview-table tr:nth-child(even) {
-            background-color: #161b22;
-        }
-        
-        .hidden {
-            display: none;
+        .select-multiple option:checked {
+            background-color: #238636;
+            color: white;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>{% if collection %}Editar Colección "{{ collection.name }}"{% else %}Crear Nueva Colección RAG{% endif %}</h1>
+            <h1>📚 Crear Nueva Colección RAG</h1>
             <div class="header-actions">
-                <a href="{% url 'intelligence:collection_list' %}" class="btn btn-secondary">
-                    ← Volver a Colecciones
-                </a>
+                <a href="/intelligence/collections/" class="btn btn-secondary">← Volver a Colecciones</a>
+                <a href="/intelligence/" class="btn btn-secondary">🏠 Dashboard</a>
             </div>
         </div>
         
         <div class="messages">
             {% if messages %}
                 {% for message in messages %}
-                    <div class="alert alert-{{ message.tags }}">
-                        {{ message }}
-                    </div>
+                    <div class="alert alert-{{ message.tags }}">{{ message }}</div>
                 {% endfor %}
             {% endif %}
-        </div>
-        
-        <div class="creation-mode-selector">
-            <div class="mode-option selected" id="mode-dynamic" onclick="selectMode('dynamic')">
-                <h3>📊 Colección Dinámica (Recomendado)</h3>
-                <p>Selecciona una tabla de la base de datos y el sistema automáticamente detectará sus campos. Ideal para tablas existentes con estructura conocida.</p>
-                <ul style="color: #8b949e; font-size: 13px; margin-top: 10px;">
-                    <li>Descubre automáticamente todas las tablas disponibles</li>
-                    <li>Analiza la estructura real de campos</li>
-                    <li>Configura campos para embedding, visualización y filtrado</li>
-                    <li>Sincronización automática con datos reales</li>
-                </ul>
-            </div>
-            
-            <div class="mode-option" id="mode-manual" onclick="selectMode('manual')">
-                <h3>✏️ Colección Manual</h3>
-                <p>Define manualmente una consulta SQL. Para casos especiales donde necesitas un control total sobre los datos.</p>
-                <ul style="color: #8b949e; font-size: 13px; margin-top: 10px;">
-                    <li>Consulta SQL personalizada</li>
-                    <li>Control total sobre los campos</li>
-                    <li>Flexibilidad para transformaciones complejas</li>
-                    <li>Requiere conocimiento de SQL</li>
-                </ul>
-            </div>
         </div>
         
         <form method="post" id="collection-form">
             {% csrf_token %}
             
-            <input type="hidden" id="creation-mode" name="creation_mode" value="dynamic">
-            
             <div class="form-container">
                 <!-- Sección 1: Información Básica -->
                 <div class="form-section">
-                    <h2>Información Básica</h2>
+                    <h2>📋 Información Básica</h2>
                     
                     <div class="form-group">
-                        <label for="name" class="form-label">Nombre de la Colección *</label>
-                        <input type="text" id="name" name="name" class="form-control" 
-                               value="{{ collection.name|default:'' }}" required
-                               placeholder="Ej: Propiedades en Venta, Requerimientos de Clientes">
-                        <div class="form-text">Nombre único para identificar esta colección. No puede contener espacios especiales.</div>
+                        <label for="name">Nombre de la Colección *</label>
+                        <input type="text" id="name" name="name" class="form-control" required 
+                               placeholder="Ej: Propiedades Urbania 2024" maxlength="200">
+                        <div class="help-text">Nombre descriptivo para identificar la colección</div>
                     </div>
                     
                     <div class="form-group">
-                        <label for="description" class="form-label">Descripción</label>
-                        <textarea id="description" name="description" class="form-control" rows="3"
-                                  placeholder="Describe el propósito de esta colección...">{{ collection.description|default:'' }}</textarea>
-                        <div class="form-text">Opcional. Breve descripción de qué datos contiene esta colección.</div>
+                        <label for="description">Descripción</label>
+                        <textarea id="description" name="description" class="form-control" rows="3" 
+                                  placeholder="Describe el propósito y contenido de esta colección"></textarea>
+                        <div class="help-text">Opcional: información adicional sobre la colección</div>
                     </div>
                     
                     <div class="form-group">
-                        <label for="access_level" class="form-label">Nivel de Acceso *</label>
+                        <label for="access_level">Nivel de Acceso *</label>
                         <select id="access_level" name="access_level" class="form-control" required>
-                            {% for level, label in level_choices %}
-                                <option value="{{ level }}" {% if collection.access_level == level %}selected{% endif %}>
-                                    {{ label }}
-                                </option>
-                            {% endfor %}
+                            <option value="">Seleccionar nivel de acceso</option>
+                            <option value="1">1 - Público</option>
+                            <option value="2">2 - Interno</option>
+                            <option value="3">3 - Administrador</option>
+                            <option value="4">4 - Superusuario</option>
                         </select>
-                        <div class="form-text">Define quién puede acceder a esta colección. Nivel 5 = Administrador total.</div>
+                        <div class="help-text">Controla quién puede acceder a esta colección</div>
                     </div>
                     
                     <div class="form-check">
-                        <input type="checkbox" id="is_active" name="is_active" class="form-check-input" 
-                               {% if collection.is_active or not collection %}checked{% endif %}>
+                        <input type="checkbox" id="is_active" name="is_active" class="form-check-input" checked>
                         <label for="is_active" class="form-check-label">Colección activa</label>
+                        <div class="help-text">Si está desactivada, no estará disponible para búsquedas</div>
                     </div>
                 </div>
                 
-                <!-- Sección 2: Configuración Dinámica (solo para modo dinámico) -->
-                <div class="form-section" id="dynamic-config-section">
-                    <h2>Configuración de Tabla Dinámica</h2>
+                <!-- Sección 2: Configuración de Origen de Datos -->
+                <div class="form-section">
+                    <h2>🗃️ Configuración de Origen de Datos</h2>
                     
                     <div class="form-group">
-                        <label for="table_name" class="form-label">Seleccionar Tabla *</label>
-                        <select id="table_name" name="table_name" class="form-control" required>
-                            <option value="">-- Selecciona una tabla --</option>
-                            <!-- Las opciones se cargarán dinámicamente via JavaScript -->
-                        </select>
-                        <div class="form-text">Tabla de Azure SQL que contiene los datos para esta colección.</div>
-                        <button type="button" id="refresh-tables-btn" class="btn btn-secondary btn-sm" style="margin-top: 10px;">
-                            🔄 Actualizar Lista de Tablas
-                        </button>
+                        <label for="table_name">Tabla de Base de Datos *</label>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <select id="table_name" name="table_name" class="form-control" required>
+                                <option value="">Seleccionar tabla...</option>
+                            </select>
+                            <button type="button" id="refreshTablesBtn" class="btn btn-secondary btn-sm">
+                                🔄 Actualizar Lista de Tablas
+                            </button>
+                        </div>
+                        <div class="help-text">Selecciona la tabla que contiene los datos para esta colección</div>
                     </div>
                     
                     <div class="form-group">
-                        <label for="schema" class="form-label">Esquema (opcional)</label>
-                        <input type="text" id="schema" name="schema" class="form-control"
-                               placeholder="dbo (predeterminado)">
-                        <div class="form-text">Dejar vacío para usar el esquema predeterminado (dbo).</div>
+                        <label for="schema_name">Esquema (Schema)</label>
+                        <input type="text" id="schema_name" name="schema_name" class="form-control"
+                               placeholder="Ej: dbo (dejar vacío para default)" value="dbo">
+                        <div class="help-text">Nombre del esquema de la tabla (generalmente 'dbo' para SQL Server)</div>
                     </div>
                     
                     <div class="form-group">
-                        <label for="database" class="form-label">Base de Datos *</label>
-                        <select id="database" name="database" class="form-control" required>
-                            <option value="default">Base de datos principal (default)</option>
-                            <option value="propifai">Propifai (dbpropify)</option>
-                        </select>
-                        <div class="form-text">Selecciona la base de datos donde se encuentra la tabla.</div>
+                        <label for="database_name">Base de Datos (Database)</label>
+                        <input type="text" id="database_name" name="database" class="form-control"
+                               placeholder="Ej: propifai (dejar vacío para default)" value="propifai">
+                        <div class="help-text">Alias de la base de datos ('default' o 'propifai' para dbpropify)</div>
                     </div>
                     
                     <div class="form-group">
-                        <button type="button" id="analyze-table-btn" class="btn btn-secondary">
+                        <button type="button" id="analyzeTableBtn" class="btn btn-primary">
                             🔍 Analizar Estructura de la Tabla
                         </button>
-                        <div class="form-text">Haz clic para analizar los campos de la tabla seleccionada.</div>
+                        <div class="help-text">Analiza la estructura de la tabla seleccionada para detectar campos automáticamente</div>
+                    </div>
+                </div>
+                
+                <!-- Sección 3: Campos Detectados (dinámica) -->
+                <div id="fields-container" class="dynamic-fields-section hidden">
+                    <h2>📊 Campos Detectados</h2>
+                    <div class="help-text" style="margin-bottom: 15px;">
+                        Campos detectados en la tabla. El sistema analiza automáticamente los tipos de campo y sugiere configuraciones.
                     </div>
                     
-                    <!-- Campos detectados dinámicamente -->
-                    <div id="fields-container" class="dynamic-fields-section hidden">
-                        <h3 style="color: #58a6ff; margin-bottom: 15px;">Campos Detectados</h3>
-                        <div id="fields-grid" class="fields-grid">
-                            <!-- Los campos se insertarán aquí dinámicamente -->
+                    <!-- Botón para configuración automática -->
+                    <div class="alert alert-info" style="margin-bottom: 20px;">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>💡 Configuración Automática</strong>
+                                <p class="mb-0">El sistema puede sugerir configuraciones basadas en el análisis de tipos de campo.</p>
+                            </div>
+                            <button type="button" id="autoConfigBtn" class="btn btn-sm btn-outline-primary">
+                                🚀 Sugerir Configuración Automática
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="fields-grid" class="fields-grid">
+                        <!-- Los campos se insertarán aquí dinámicamente -->
+                    </div>
+                    
+                    <div class="form-group" style="margin-top: 20px;">
+                        <h3>⚙️ Configuración de Campos Clave</h3>
+                        <div class="help-text" style="margin-bottom: 15px;">
+                            Selecciona los campos que se usarán para diferentes propósitos (puedes usar la sugerencia automática):
                         </div>
                         
-                        <div class="form-group" style="margin-top: 20px;">
-                            <label class="form-label">Configuración de Campos Clave</label>
-                            <div class="form-text" style="margin-bottom: 10px;">
-                                Selecciona los campos que se usarán para diferentes propósitos:
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="embedding_fields">Campos para Embedding (Búsqueda Semántica) *</label>
+                                    <select id="embedding_fields" name="embedding_fields" class="form-control select-multiple" multiple required>
+                                        <!-- Opciones se insertarán dinámicamente -->
+                                    </select>
+                                    <div class="help-text">Campos de texto para búsqueda semántica (nvarchar, text, etc.)</div>
+                                </div>
                             </div>
-                            
-                            <div class="form-group">
-                                <label for="embedding_fields" class="form-label">Campos para Embedding (Búsqueda Semántica)</label>
-                                <select id="embedding_fields" name="embedding_fields" class="form-control select-multiple" multiple>
-                                    <!-- Se llenará dinámicamente -->
-                                </select>
-                                <div class="form-text">Selecciona los campos cuyo contenido se usará para búsqueda semántica. Generalmente campos de texto descriptivo.</div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="display_fields">Campos para Visualización</label>
+                                    <select id="display_fields" name="display_fields" class="form-control select-multiple" multiple>
+                                        <!-- Opciones se insertarán dinámicamente -->
+                                    </select>
+                                    <div class="help-text">Campos informativos para mostrar resultados (texto, números, fechas)</div>
+                                </div>
                             </div>
-                            
-                            <div class="form-group">
-                                <label for="display_fields" class="form-label">Campos para Visualización</label>
-                                <select id="display_fields" name="display_fields" class="form-control select-multiple" multiple>
-                                    <!-- Se llenará dinámicamente -->
-                                </select>
-                                <div class="form-text">Selecciona los campos que se mostrarán en los resultados de búsqueda.</div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="filter_fields">Campos para Filtrado</label>
+                                    <select id="filter_fields" name="filter_fields" class="form-control select-multiple" multiple>
+                                        <!-- Opciones se insertarán dinámicamente -->
+                                    </select>
+                                    <div class="help-text">Campos categóricos para filtrar (categorías, estados, tipos)</div>
+                                </div>
                             </div>
-                            
-                            <div class="form-group">
-                                <label for="filter_fields" class="form-label">Campos para Filtrado</label>
-                                <select id="filter_fields" name="filter_fields" class="form-control select-multiple" multiple>
-                                    <!-- Se llenará dinámicamente -->
-                                </select>
-                                <div class="form-text">Selecciona los campos que se pueden usar para filtrar resultados.</div>
+                        </div>
+                        
+                        <!-- Resumen de configuración -->
+                        <div class="alert alert-light border" id="config-summary" style="display: none;">
+                            <h6>📋 Resumen de Configuración</h6>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <strong>Embedding:</strong> <span id="embedding-count">0</span> campos
+                                </div>
+                                <div class="col-md-4">
+                                    <strong>Visualización:</strong> <span id="display-count">0</span> campos
+                                </div>
+                                <div class="col-md-4">
+                                    <strong>Filtrado:</strong> <span id="filter-count">0</span> campos
+                                </div>
                             </div>
+                            <div class="mt-2 small text-muted" id="config-validation"></div>
                         </div>
                     </div>
                 </div>
                 
-                <!-- Sección 3: Configuración Manual (solo para modo manual) -->
-                <div class="form-section hidden" id="manual-config-section">
-                    <h2>Configuración Manual SQL</h2>
-                    
-                    <div class="form-group">
-                        <label for="sql_query" class="form-label">Consulta SQL *</label>
-                        <textarea id="sql_query" name="sql_query" class="form-control sql-editor" rows="8"
-                                  placeholder="SELECT id, titulo, descripcion FROM mi_tabla WHERE activo = 1">{{ collection.sql_query|default:'' }}</textarea>
-                        <div class="form-text">
-                            Consulta SQL que retorna los datos para esta colección. Debe incluir al menos un campo ID único.
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Sección 4: Acceso y Permisos -->
-                <div class="form-section">
-                    <h2>Acceso y Permisos</h2>
-                    
-                    <div class="form-group">
-                        <label for="roles_con_acceso" class="form-label">Roles con Acceso</label>
-                        <select id="roles_con_acceso" name="roles_con_acceso" class="form-control select-multiple" multiple>
-                            {% for role in roles %}
-                                <option value="{{ role.id }}" {% if role.id in collection.roles_con_acceso %}selected{% endif %}>
-                                    {{ role.name }}
-                                </option>
-                            {% endfor %}
-                        </select>
-                        <div class="form-text">Selecciona los roles que pueden acceder a esta colección.</div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="apps_con_acceso" class="form-label">Apps con Acceso</label>
-                        <select id="apps_con_acceso" name="apps_con_acceso" class="form-control select-multiple" multiple>
-                            {% for app in apps %}
-                                <option value="{{ app.id }}" {% if app.id in collection.apps_con_acceso %}selected{% endif %}>
-                                    {{ app.name }}
-                                </option>
-                            {% endfor %}
-                        </select>
-                        <div class="form-text">Selecciona las apps que pueden acceder a esta colección.</div>
-                    </div>
-                </div>
-                
-                <!-- Sección 5: Acciones -->
+                <!-- Sección 4: Acciones -->
                 <div class="form-actions">
-                    <a href="{% url 'intelligence:collection_list' %}" class="btn btn-secondary">
-                        Cancelar
-                    </a>
-                    <button type="submit" class="btn btn-primary" id="submit-btn">
-                        {% if collection %}Guardar Cambios{% else %}Crear Colección{% endif %}
-                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="window.history.back()">Cancelar</button>
+                    <button type="submit" id="submitBtn" class="btn btn-primary">Crear Colección</button>
                 </div>
             </div>
         </form>
@@ -588,40 +490,49 @@
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const tableSelect = document.getElementById('table_name');
-            const refreshBtn = document.getElementById('refresh-tables-btn');
-            const analyzeBtn = document.getElementById('analyze-table-btn');
+            const refreshBtn = document.getElementById('refreshTablesBtn');
+            const analyzeBtn = document.getElementById('analyzeTableBtn');
+            const autoConfigBtn = document.getElementById('autoConfigBtn');
             const fieldsContainer = document.getElementById('fields-container');
             const fieldsGrid = document.getElementById('fields-grid');
             const embeddingSelect = document.getElementById('embedding_fields');
             const displaySelect = document.getElementById('display_fields');
             const filterSelect = document.getElementById('filter_fields');
-            const schemaInput = document.getElementById('schema');
-            const databaseSelect = document.getElementById('database');
-            const submitBtn = document.getElementById('submit-btn');
+            const submitBtn = document.getElementById('submitBtn');
+            const configSummary = document.getElementById('config-summary');
+            const configValidation = document.getElementById('config-validation');
             
             let currentFields = [];
+            let currentAnalysis = null;
+            let currentSuggestions = null;
             
-            // Cargar tablas al iniciar
+            // Cargar tablas al inicio
             loadTables();
             
             // Evento para refrescar tablas
             refreshBtn.addEventListener('click', loadTables);
             
-            // Evento para recargar tablas cuando cambia la base de datos
-            databaseSelect.addEventListener('change', loadTables);
-            
             // Evento para analizar tabla
             analyzeBtn.addEventListener('click', function() {
                 const tableName = tableSelect.value;
-                const schema = schemaInput.value || 'dbo';
-                const database = databaseSelect.value;
+                const schema = document.getElementById('schema_name').value || 'dbo';
                 
                 if (!tableName) {
                     alert('Por favor selecciona una tabla primero.');
                     return;
                 }
                 
-                analyzeTable(tableName, schema, database);
+                analyzeTable(tableName, schema);
+            });
+            
+            // Evento para configuración automática
+            autoConfigBtn.addEventListener('click', function() {
+                if (!currentAnalysis || !currentSuggestions) {
+                    alert('Primero analiza la estructura de la tabla.');
+                    return;
+                }
+                
+                applyAutoConfiguration();
             });
             
             // Función para cargar tablas
@@ -629,22 +540,23 @@
                 refreshBtn.disabled = true;
                 refreshBtn.innerHTML = '🔄 Cargando...';
                 
-                const schema = schemaInput.value || 'dbo';
-                const database = databaseSelect.value;
+                // Obtener parámetros de base de datos
+                const database = document.getElementById('database_name').value || 'propifai';
                 
-                // Construir URL con parámetros
-                let url = `/api/v1/intelligence/rag/tables/?schema=${encodeURIComponent(schema)}&database=${encodeURIComponent(database)}`;
+                console.log(`[DEBUG] Cargando tablas con database=${database}`);
                 
-                // Usar el endpoint correcto
-                fetch(url)
+                fetch(`/api/v1/intelligence/rag/tables/?database=${database}`)
                     .then(response => response.json())
                     .then(data => {
+                        console.log('[DEBUG] Tablas recibidas:', data);
+                        
                         if (data.success) {
-                            tableSelect.innerHTML = '<option value="">-- Selecciona una tabla --</option>';
+                            tableSelect.innerHTML = '<option value="">Seleccionar tabla...</option>';
+                            
                             data.tables.forEach(table => {
                                 const option = document.createElement('option');
-                                option.value = table;
-                                option.textContent = table;
+                                option.value = table.name;
+                                option.textContent = `${table.name} (${table.rows} filas)`;
                                 tableSelect.appendChild(option);
                             });
                             
@@ -656,7 +568,7 @@
                         }
                     })
                     .catch(error => {
-                        console.error('Error:', error);
+                        console.error('[DEBUG] Error:', error);
                         alert('Error de conexión al cargar tablas.');
                     })
                     .finally(() => {
@@ -666,30 +578,68 @@
             }
             
             // Función para analizar tabla
-            function analyzeTable(tableName, schema, database) {
+            function analyzeTable(tableName, schema) {
                 analyzeBtn.disabled = true;
                 analyzeBtn.innerHTML = '🔍 Analizando...';
                 fieldsContainer.classList.add('hidden');
+                configSummary.style.display = 'none';
                 
-                const url = `/api/v1/intelligence/rag/tables/${tableName}/schema/?schema=${encodeURIComponent(schema)}&database=${encodeURIComponent(database)}`;
+                // Obtener parámetros de base de datos
+                const database = document.getElementById('database_name').value || 'propifai';
                 
-                fetch(url)
-                    .then(response => response.json())
+                console.log(`[DEBUG] Analizando tabla: ${tableName}, schema: ${schema}, database: ${database}`);
+                
+                fetch(`/api/v1/intelligence/rag/tables/${tableName}/schema/?schema=${schema}&database=${database}`)
+                    .then(response => {
+                        console.log(`[DEBUG] Respuesta HTTP: ${response.status}`);
+                        return response.json();
+                    })
                     .then(data => {
+                        console.log('[DEBUG] Datos recibidos:', data);
+                        
                         if (data.success) {
-                            currentFields = data.analysis.fields || [];
-                            renderFields(currentFields);
+                            // Guardar análisis completo
+                            currentAnalysis = data.analysis;
+                            currentSuggestions = data.analysis?.suggestions || null;
+                            
+                            // La API devuelve los campos en data.analysis.columns
+                            console.log('[DEBUG] analysis.columns:', data.analysis?.columns);
+                            console.log('[DEBUG] field_analysis:', data.analysis?.field_analysis);
+                            console.log('[DEBUG] suggestions:', data.analysis?.suggestions);
+                            
+                            currentFields = data.analysis.columns.map(col => ({
+                                name: col.name,
+                                type: col.type,
+                                is_primary: col.is_primary || false,
+                                is_identity: col.is_identity || false,
+                                nullable: col.nullable || false,
+                                max_length: col.max_length
+                            }));
+                            
+                            console.log('[DEBUG] currentFields mapeados:', currentFields);
+                            renderFields(currentFields, data.analysis?.field_analysis);
                             populateSelectOptions();
                             fieldsContainer.classList.remove('hidden');
                             
+                            // Mostrar advertencias si existen
+                            if (currentSuggestions && currentSuggestions.validation_warnings && currentSuggestions.validation_warnings.length > 0) {
+                                showValidationWarnings(currentSuggestions.validation_warnings);
+                            }
+                            
                             // Scroll a la sección de campos
                             fieldsContainer.scrollIntoView({ behavior: 'smooth' });
+                            
+                            // Habilitar botón de configuración automática
+                            autoConfigBtn.disabled = false;
+                            autoConfigBtn.innerHTML = '🚀 Sugerir Configuración Automática';
+                            
                         } else {
+                            console.error('[DEBUG] Error en respuesta:', data.error);
                             alert('Error al analizar tabla: ' + data.error);
                         }
                     })
                     .catch(error => {
-                        console.error('Error:', error);
+                        console.error('[DEBUG] Error en fetch:', error);
                         alert('Error de conexión al analizar tabla.');
                     })
                     .finally(() => {
@@ -698,31 +648,64 @@
                     });
             }
             
-            // Función para renderizar campos
-            function renderFields(fields) {
+            // Función para renderizar campos con análisis
+            function renderFields(fields, fieldAnalysis = null) {
                 fieldsGrid.innerHTML = '';
                 
                 fields.forEach(field => {
                     const fieldCard = document.createElement('div');
                     fieldCard.className = 'field-card';
                     
+                    const fieldTypeClass = getFieldTypeClass(field.type);
+                    const analysis = fieldAnalysis ? fieldAnalysis[field.name] : null;
+                    const category = analysis ? analysis.category : 'other';
+                    const notes = analysis ? analysis.notes : '';
+                    const serializationSafe = analysis ? analysis.serialization_safe : true;
+                    
+                    // Determinar icono según categoría
+                    const categoryIcon = getCategoryIcon(category);
+                    const serializationIcon = serializationSafe ? '✅' : '⚠️';
+                    const serializationTitle = serializationSafe ? 'Serialización segura' : 'Requiere serialización especial';
+                    
                     fieldCard.innerHTML = `
                         <div class="field-header">
-                            <span class="field-name">${field.name}</span>
-                            <span class="field-type">${field.type}</span>
+                            <div class="field-name-type">
+                                <span class="field-name">${field.name}</span>
+                                <span class="field-type ${fieldTypeClass}">${field.type}</span>
+                                ${field.is_primary ? '<span class="badge bg-primary">PK</span>' : ''}
+                                ${field.is_identity ? '<span class="badge bg-info">ID</span>' : ''}
+                                ${!field.nullable ? '<span class="badge bg-warning">NOT NULL</span>' : ''}
+                            </div>
+                            <div class="field-analysis">
+                                <span class="field-category" title="${category}">${categoryIcon} ${category}</span>
+                                <span class="field-serialization" title="${serializationTitle}">${serializationIcon}</span>
+                            </div>
                         </div>
+                        ${notes ? `<div class="field-notes">${notes}</div>` : ''}
                         <div class="field-options">
                             <div class="field-option">
-                                <input type="checkbox" id="embed_${field.name}" data-field="${field.name}">
-                                <label for="embed_${field.name}">Usar para embedding</label>
+                                <input type="checkbox" id="embed_${field.name}" data-field="${field.name}"
+                                       ${analysis && analysis.suggested_for_embedding ? 'data-suggested="true"' : ''}>
+                                <label for="embed_${field.name}">
+                                    <span>Usar para embedding</span>
+                                    ${analysis && analysis.suggested_for_embedding ? '<span class="suggestion-badge">💡 Sugerido</span>' : ''}
+                                </label>
                             </div>
                             <div class="field-option">
-                                <input type="checkbox" id="display_${field.name}" data-field="${field.name}">
-                                <label for="display_${field.name}">Mostrar en resultados</label>
+                                <input type="checkbox" id="display_${field.name}" data-field="${field.name}"
+                                       ${analysis && analysis.suggested_for_display ? 'data-suggested="true"' : ''}>
+                                <label for="display_${field.name}">
+                                    <span>Mostrar en resultados</span>
+                                    ${analysis && analysis.suggested_for_display ? '<span class="suggestion-badge">💡 Sugerido</span>' : ''}
+                                </label>
                             </div>
                             <div class="field-option">
-                                <input type="checkbox" id="filter_${field.name}" data-field="${field.name}">
-                                <label for="filter_${field.name}">Usar para filtrado</label>
+                                <input type="checkbox" id="filter_${field.name}" data-field="${field.name}"
+                                       ${analysis && analysis.suggested_for_filtering ? 'data-suggested="true"' : ''}>
+                                <label for="filter_${field.name}">
+                                    <span>Usar para filtrado</span>
+                                    ${analysis && analysis.suggested_for_filtering ? '<span class="suggestion-badge">💡 Sugerido</span>' : ''}
+                                </label>
                             </div>
                         </div>
                     `;
@@ -734,10 +717,51 @@
                     const displayCheckbox = fieldCard.querySelector(`#display_${field.name}`);
                     const filterCheckbox = fieldCard.querySelector(`#filter_${field.name}`);
                     
-                    embedCheckbox.addEventListener('change', updateSelectOptions);
-                    displayCheckbox.addEventListener('change', updateSelectOptions);
-                    filterCheckbox.addEventListener('change', updateSelectOptions);
+                    embedCheckbox.addEventListener('change', function() {
+                        updateSelectOptions();
+                        updateConfigSummary();
+                    });
+                    
+                    displayCheckbox.addEventListener('change', function() {
+                        updateSelectOptions();
+                        updateConfigSummary();
+                    });
+                    
+                    filterCheckbox.addEventListener('change', function() {
+                        updateSelectOptions();
+                        updateConfigSummary();
+                    });
+                    
+                    // Marcar checkboxes sugeridos
+                    if (analysis && analysis.suggested_for_embedding) {
+                        embedCheckbox.checked = true;
+                    }
+                    if (analysis && analysis.suggested_for_display) {
+                        displayCheckbox.checked = true;
+                    }
+                    if (analysis && analysis.suggested_for_filtering) {
+                        filterCheckbox.checked = true;
+                    }
                 });
+                
+                // Actualizar selects y resumen después de renderizar
+                updateSelectOptions();
+                updateConfigSummary();
+            }
+            
+            // Función para obtener clase CSS según tipo de campo
+            function getFieldTypeClass(fieldType) {
+                if (fieldType.includes('char') || fieldType.includes('text') || fieldType.includes('varchar')) {
+                    return 'text-field';
+                } else if (fieldType.includes('int') || fieldType.includes('decimal') || fieldType.includes('numeric')) {
+                    return 'numeric-field';
+                } else if (fieldType.includes('date') || fieldType.includes('time') || fieldType.includes('datetime')) {
+                    return 'date-field';
+                } else if (fieldType.includes('bit') || fieldType.includes('bool')) {
+                    return 'boolean-field';
+                } else {
+                    return 'other-field';
+                }
             }
             
             // Función para poblar opciones de selects
@@ -806,33 +830,184 @@
                 });
             }
             
-            // Manejar cambio de modo
-            function selectMode(mode) {
-                const dynamicOption = document.getElementById('mode-dynamic');
-                const manualOption = document.getElementById('mode-manual');
-                const dynamicSection = document.getElementById('dynamic-config-section');
-                const manualSection = document.getElementById('manual-config-section');
-                const creationModeInput = document.getElementById('creation-mode');
-                
-                if (mode === 'dynamic') {
-                    dynamicOption.classList.add('selected');
-                    manualOption.classList.remove('selected');
-                    dynamicSection.classList.remove('hidden');
-                    manualSection.classList.add('hidden');
-                    creationModeInput.value = 'dynamic';
-                    tableSelect.required = true;
-                } else {
-                    dynamicOption.classList.remove('selected');
-                    manualOption.classList.add('selected');
-                    dynamicSection.classList.add('hidden');
-                    manualSection.classList.remove('hidden');
-                    creationModeInput.value = 'manual';
-                    tableSelect.required = false;
+            // Función para obtener icono según categoría
+            function getCategoryIcon(category) {
+                switch(category) {
+                    case 'text': return '📝';
+                    case 'numeric': return '🔢';
+                    case 'date': return '📅';
+                    case 'boolean': return '✅';
+                    case 'identifier': return '🆔';
+                    case 'categorical': return '🏷️';
+                    default: return '❓';
                 }
             }
             
-            // Inicializar modo
-            selectMode('dynamic');
+            // Función para mostrar advertencias de validación
+            function showValidationWarnings(warnings) {
+                if (!warnings || warnings.length === 0) return;
+                
+                let warningHtml = '<div class="alert alert-warning mt-3">';
+                warningHtml += '<strong>⚠️ Advertencias de Validación:</strong><ul class="mb-0">';
+                
+                warnings.forEach(warning => {
+                    warningHtml += `<li>${warning}</li>`;
+                });
+                
+                warningHtml += '</ul></div>';
+                
+                // Insertar después del botón de configuración automática
+                const autoConfigAlert = document.querySelector('.alert.alert-info');
+                if (autoConfigAlert) {
+                    autoConfigAlert.insertAdjacentHTML('afterend', warningHtml);
+                }
+            }
+            
+            // Función para aplicar configuración automática
+            function applyAutoConfiguration() {
+                if (!currentSuggestions) {
+                    alert('No hay sugerencias de configuración disponibles.');
+                    return;
+                }
+                
+                // Limpiar todas las selecciones primero
+                currentFields.forEach(field => {
+                    const embedCheckbox = document.querySelector(`#embed_${field.name}`);
+                    const displayCheckbox = document.querySelector(`#display_${field.name}`);
+                    const filterCheckbox = document.querySelector(`#filter_${field.name}`);
+                    
+                    if (embedCheckbox) embedCheckbox.checked = false;
+                    if (displayCheckbox) displayCheckbox.checked = false;
+                    if (filterCheckbox) filterCheckbox.checked = false;
+                });
+                
+                // Aplicar sugerencias de embedding
+                if (currentSuggestions.embedding_fields && currentSuggestions.embedding_fields.length > 0) {
+                    currentSuggestions.embedding_fields.forEach(fieldName => {
+                        const checkbox = document.querySelector(`#embed_${fieldName}`);
+                        if (checkbox) checkbox.checked = true;
+                    });
+                }
+                
+                // Aplicar sugerencias de visualización
+                if (currentSuggestions.display_fields && currentSuggestions.display_fields.length > 0) {
+                    currentSuggestions.display_fields.forEach(fieldName => {
+                        const checkbox = document.querySelector(`#display_${fieldName}`);
+                        if (checkbox) checkbox.checked = true;
+                    });
+                }
+                
+                // Aplicar sugerencias de filtrado
+                if (currentSuggestions.filter_fields && currentSuggestions.filter_fields.length > 0) {
+                    currentSuggestions.filter_fields.forEach(fieldName => {
+                        const checkbox = document.querySelector(`#filter_${fieldName}`);
+                        if (checkbox) checkbox.checked = true;
+                    });
+                }
+                
+                // Actualizar selects y resumen
+                updateSelectOptions();
+                updateConfigSummary();
+                
+                // Mostrar mensaje de éxito
+                alert(`Configuración automática aplicada:\n- ${currentSuggestions.embedding_fields.length} campos para embedding\n- ${currentSuggestions.display_fields.length} campos para visualización\n- ${currentSuggestions.filter_fields.length} campos para filtrado`);
+            }
+            
+            // Función para actualizar resumen de configuración
+            function updateConfigSummary() {
+                const selectedEmbedFields = Array.from(embeddingSelect.selectedOptions).map(opt => opt.value);
+                const selectedDisplayFields = Array.from(displaySelect.selectedOptions).map(opt => opt.value);
+                const selectedFilterFields = Array.from(filterSelect.selectedOptions).map(opt => opt.value);
+                
+                // Actualizar contadores
+                document.getElementById('embedding-count').textContent = selectedEmbedFields.length;
+                document.getElementById('display-count').textContent = selectedDisplayFields.length;
+                document.getElementById('filter-count').textContent = selectedFilterFields.length;
+                
+                // Mostrar/ocultar resumen
+                if (selectedEmbedFields.length > 0 || selectedDisplayFields.length > 0 || selectedFilterFields.length > 0) {
+                    configSummary.style.display = 'block';
+                    
+                    // Validaciones
+                    const validationMessages = [];
+                    
+                    if (selectedEmbedFields.length === 0) {
+                        validationMessages.push('⚠️ No hay campos seleccionados para embedding. La búsqueda semántica no funcionará.');
+                    } else if (selectedEmbedFields.length > 3) {
+                        validationMessages.push('💡 Muchos campos para embedding pueden afectar el rendimiento.');
+                    }
+                    
+                    if (selectedDisplayFields.length === 0) {
+                        validationMessages.push('💡 Considera agregar campos para visualización en resultados.');
+                    }
+                    
+                    // Mostrar mensajes de validación
+                    if (validationMessages.length > 0) {
+                        configValidation.innerHTML = validationMessages.map(msg => `<div class="small">${msg}</div>`).join('');
+                        configValidation.style.display = 'block';
+                    } else {
+                        configValidation.innerHTML = '✅ Configuración válida';
+                        configValidation.style.display = 'block';
+                    }
+                } else {
+                    configSummary.style.display = 'none';
+                }
+            }
+            
+            // Manejar envío del formulario
+            document.getElementById('collection-form').addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                // Validar que se haya seleccionado al menos un campo para embedding
+                const selectedEmbedFields = Array.from(embeddingSelect.selectedOptions).map(opt => opt.value);
+                if (selectedEmbedFields.length === 0) {
+                    alert('Debes seleccionar al menos un campo para embedding (búsqueda semántica).');
+                    return;
+                }
+                
+                // Crear objeto con los datos del formulario
+                const formData = new FormData(this);
+                
+                // Agregar field_definitions como JSON
+                const fieldDefinitions = currentFields.map(field => ({
+                    name: field.name,
+                    type: field.type,
+                    is_nullable: field.nullable || false,
+                    max_length: field.max_length || null,
+                    is_primary: field.is_primary || false,
+                    is_identity: field.is_identity || false
+                }));
+                
+                formData.append('field_definitions', JSON.stringify(fieldDefinitions));
+                
+                // Enviar formulario
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = 'Creando...';
+                
+                fetch('/api/v1/intelligence/rag/collections/', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        window.location.href = '/api/v1/intelligence/collections/';
+                    } else {
+                        alert('Error al crear colección: ' + data.error);
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = 'Crear Colección';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error de conexión al crear colección.');
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = 'Crear Colección';
+                });
+            });
         });
     </script>
 </body>

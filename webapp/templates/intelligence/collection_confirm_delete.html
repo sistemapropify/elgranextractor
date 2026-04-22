@@ -1,0 +1,173 @@
+{% extends 'base.html' %}
+
+{% block title %}Confirmar Eliminación de Colección - Propifai{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Confirmar Eliminación de Colección
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning">
+                        <h5 class="alert-heading">
+                            <i class="fas fa-warning me-2"></i>
+                            ¡ADVERTENCIA!
+                        </h5>
+                        <p class="mb-0">
+                            Estás a punto de eliminar permanentemente la colección <strong>"{{ collection.name }}"</strong>.
+                            Esta acción no se puede deshacer.
+                        </p>
+                    </div>
+
+                    <div class="mb-4">
+                        <h5>Detalles de la Colección</h5>
+                        <table class="table table-sm">
+                            <tbody>
+                                <tr>
+                                    <th scope="row" style="width: 30%;">Nombre:</th>
+                                    <td>{{ collection.name }}</td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">ID:</th>
+                                    <td><code>{{ collection.id }}</code></td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">Descripción:</th>
+                                    <td>{{ collection.description|default:"Sin descripción" }}</td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">Documentos:</th>
+                                    <td>
+                                        <span class="badge bg-primary">{{ document_count }}</span>
+                                        {% if document_count > 0 %}
+                                        <small class="text-muted ms-2">(todos serán eliminados)</small>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">Creada:</th>
+                                    <td>{{ collection.created_at|date:"d/m/Y H:i" }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {% if document_count > 0 %}
+                    <div class="alert alert-danger">
+                        <h6 class="alert-heading">
+                            <i class="fas fa-file-alt me-2"></i>
+                            Documentos que serán eliminados
+                        </h6>
+                        <p class="mb-0">
+                            Esta colección contiene <strong>{{ document_count }}</strong> documento(s). 
+                            Todos los documentos asociados serán eliminados permanentemente junto con la colección.
+                        </p>
+                    </div>
+                    {% endif %}
+
+                    <div class="alert alert-info">
+                        <h6 class="alert-heading">
+                            <i class="fas fa-shield-alt me-2"></i>
+                            Confirmación de Seguridad
+                        </h6>
+                        <p class="mb-2">
+                            Para confirmar que realmente deseas eliminar esta colección, 
+                            escribe <strong>ELIMINAR</strong> en el campo de abajo.
+                        </p>
+                    </div>
+
+                    <form method="post" id="deleteForm">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label for="confirmation_text" class="form-label">
+                                Escribe <strong>ELIMINAR</strong> para confirmar:
+                            </label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="confirmation_text" 
+                                   name="confirmation_text" 
+                                   required
+                                   placeholder="ELIMINAR"
+                                   autocomplete="off">
+                            <div class="form-text">
+                                Debe coincidir exactamente con "ELIMINAR" (en mayúsculas).
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <a href="{% url 'intelligence:collection_list' %}" class="btn btn-outline-secondary">
+                                    <i class="fas fa-arrow-left me-1"></i>
+                                    Cancelar y Volver
+                                </a>
+                            </div>
+                            <div>
+                                <button type="submit" 
+                                        class="btn btn-danger" 
+                                        id="deleteButton"
+                                        disabled>
+                                    <i class="fas fa-trash-alt me-1"></i>
+                                    Eliminar Permanentemente
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const confirmationInput = document.getElementById('confirmation_text');
+        const deleteButton = document.getElementById('deleteButton');
+        const deleteForm = document.getElementById('deleteForm');
+        
+        // Validar entrada en tiempo real
+        confirmationInput.addEventListener('input', function() {
+            if (this.value.trim().toUpperCase() === 'ELIMINAR') {
+                deleteButton.disabled = false;
+                deleteButton.classList.remove('btn-secondary');
+                deleteButton.classList.add('btn-danger');
+            } else {
+                deleteButton.disabled = true;
+                deleteButton.classList.remove('btn-danger');
+                deleteButton.classList.add('btn-secondary');
+            }
+        });
+        
+        // Validar antes de enviar
+        deleteForm.addEventListener('submit', function(e) {
+            if (confirmationInput.value.trim().toUpperCase() !== 'ELIMINAR') {
+                e.preventDefault();
+                alert('Debes escribir "ELIMINAR" para confirmar la eliminación.');
+                confirmationInput.focus();
+                return false;
+            }
+            
+            // Confirmación adicional
+            if (!confirm('¿Estás absolutamente seguro de que deseas eliminar esta colección y todos sus documentos? Esta acción no se puede deshacer.')) {
+                e.preventDefault();
+                return false;
+            }
+            
+            // Mostrar indicador de carga
+            deleteButton.disabled = true;
+            deleteButton.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Eliminando...';
+        });
+        
+        // Enfocar el campo de confirmación
+        confirmationInput.focus();
+    });
+</script>
+{% endblock %}

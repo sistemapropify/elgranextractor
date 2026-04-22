@@ -877,7 +877,7 @@ def collection_create(request):
         'apps': apps
     }
     
-    return render(request, 'intelligence/collection_form.html', context)
+    return render(request, 'intelligence/collection_create_dynamic.html', context)
 
 
 @admin_required
@@ -1430,7 +1430,7 @@ def rag_discovery_tables(request):
     
     try:
         schema = request.GET.get('schema', 'dbo')
-        database = request.GET.get('database', 'default')
+        database = request.GET.get('database', 'propifai')  # Cambiado de 'default' a 'propifai'
         force_refresh = 'nocache' in request.GET
         
         print(f"[DEBUG VISTA] rag_discovery_tables: schema={schema}, database={database}, force_refresh={force_refresh}", file=sys.stderr)
@@ -1473,11 +1473,21 @@ def rag_discovery_table_schema(request, table_name):
     - database: Alias de la base de datos ('default' o 'propifai')
     """
     from .services.rag import RAGService
+    import logging
+    import sys
+    
+    logger = logging.getLogger(__name__)
     
     try:
         schema = request.GET.get('schema', 'dbo')
-        database = request.GET.get('database', 'default')
+        database = request.GET.get('database', 'propifai')  # Cambiado de 'default' a 'propifai'
+        
+        print(f"[DEBUG VISTA] rag_discovery_table_schema: table={table_name}, schema={schema}, database={database}", file=sys.stderr)
+        logger.info(f"rag_discovery_table_schema: table={table_name}, schema={schema}, database={database}")
+        
         schema_analysis = RAGService.analyze_table_schema(table_name, schema=schema, database_alias=database)
+        
+        print(f"[DEBUG VISTA] Análisis obtenido: {len(schema_analysis.get('columns', []))} columnas", file=sys.stderr)
         
         return Response({
             'success': True,
@@ -1489,6 +1499,7 @@ def rag_discovery_table_schema(request, table_name):
         })
         
     except Exception as e:
+        logger.error(f"rag_discovery_table_schema error: {e}")
         return Response({
             'success': False,
             'error': str(e),
@@ -1556,10 +1567,18 @@ def rag_create_collection_dynamic(request):
     from .services.rag import RAGService
     
     try:
+        import json
+        import sys
+        
+        # Log para depuración
+        print(f"[DEBUG CREATE] Datos recibidos: {request.data}", file=sys.stderr)
+        print(f"[DEBUG CREATE] Tipo de request.data: {type(request.data)}", file=sys.stderr)
+        
         # Validar datos requeridos
         required_fields = ['name', 'table_name', 'embedding_fields']
         for field in required_fields:
             if field not in request.data:
+                print(f"[DEBUG CREATE] Campo faltante: {field}", file=sys.stderr)
                 return Response({
                     'success': False,
                     'error': f'Campo requerido faltante: {field}'
@@ -1567,30 +1586,54 @@ def rag_create_collection_dynamic(request):
         
         name = request.data['name']
         table_name = request.data['table_name']
-        embedding_fields = request.data['embedding_fields']
-        display_fields = request.data.get('display_fields', [])
-        filter_fields = request.data.get('filter_fields', [])
+        
+        # Parsear campos que pueden venir como strings JSON
+        def parse_field_list(field_data):
+            print(f"[DEBUG CREATE] parse_field_list input: {field_data}, tipo: {type(field_data)}", file=sys.stderr)
+            if isinstance(field_data, list):
+                print(f"[DEBUG CREATE] Es lista: {field_data}", file=sys.stderr)
+                return field_data
+            elif isinstance(field_data, str):
+                try:
+                    parsed = json.loads(field_data)
+                    print(f"[DEBUG CREATE] JSON parseado: {parsed}", file=sys.stderr)
+                    return parsed
+                except json.JSONDecodeError:
+                    # Si no es JSON válido, tratar como string separado por comas
+                    print(f"[DEBUG CREATE] No es JSON válido, tratando como string separado por comas", file=sys.stderr)
+                    if field_data.strip():
+                        result = [item.strip() for item in field_data.split(',') if item.strip()]
+                        print(f"[DEBUG CREATE] Resultado split: {result}", file=sys.stderr)
+                        return result
+                    else:
+                        return []
+            else:
+                print(f"[DEBUG CREATE] Tipo no manejado: {type(field_data)}", file=sys.stderr)
+                return []
+        
+        embedding_fields = parse_field_list(request.data['embedding_fields'])
+        display_fields = parse_field_list(request.data.get('display_fields', []))
+        filter_fields = parse_field_list(request.data.get('filter_fields', []))
+        
+        print(f"[DEBUG CREATE] embedding_fields final: {embedding_fields}", file=sys.stderr)
+        print(f"[DEBUG CREATE] display_fields final: {display_fields}", file=sys.stderr)
+        print(f"[DEBUG CREATE] filter_fields final: {filter_fields}", file=sys.stderr)
+        
         access_level = request.data.get('access_level', 2)
         description = request.data.get('description', '')
         schema = request.data.get('schema', 'dbo')
+        database = request.data.get('database', 'propifai')  # Usar 'propifai' por defecto
         
-        # Validar tipos
-        if not isinstance(embedding_fields, list):
+        print(f"[DEBUG CREATE] Parámetros finales: name={name}, table={table_name}, schema={schema}, database={database}", file=sys.stderr)
+        print(f"[DEBUG CREATE] embedding_fields: {embedding_fields}", file=sys.stderr)
+        print(f"[DEBUG CREATE] display_fields: {display_fields}", file=sys.stderr)
+        print(f"[DEBUG CREATE] filter_fields: {filter_fields}", file=sys.stderr)
+        
+        # Validar que embedding_fields no esté vacío
+        if not embedding_fields:
             return Response({
                 'success': False,
-                'error': 'embedding_fields debe ser una lista'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        if not isinstance(display_fields, list):
-            return Response({
-                'success': False,
-                'error': 'display_fields debe ser una lista'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        if not isinstance(filter_fields, list):
-            return Response({
-                'success': False,
-                'error': 'filter_fields debe ser una lista'
+                'error': 'Debe seleccionar al menos un campo para embedding'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Crear colección dinámica
@@ -1602,7 +1645,8 @@ def rag_create_collection_dynamic(request):
             filter_fields=filter_fields,
             access_level=access_level,
             description=description,
-            schema=schema
+            schema=schema,
+            database_alias=database
         )
         
         if not success:
@@ -1612,9 +1656,25 @@ def rag_create_collection_dynamic(request):
                 'collection': None
             }, status=status.HTTP_400_BAD_REQUEST)
         
+        # Intentar sincronizar la colección automáticamente después de crearla
+        sync_success = False
+        sync_message = ""
+        try:
+            print(f"[DEBUG CREATE] Intentando sincronizar colección {collection.name}...", file=sys.stderr)
+            sync_success, sync_message = RAGService.sync_collection_dynamic(
+                collection_name=collection.name,
+                database_alias=database
+            )
+            print(f"[DEBUG CREATE] Resultado sincronización: success={sync_success}, message={sync_message}", file=sys.stderr)
+        except Exception as sync_error:
+            print(f"[DEBUG CREATE] Error en sincronización automática: {sync_error}", file=sys.stderr)
+            sync_message = f"Error en sincronización automática: {sync_error}"
+        
         return Response({
             'success': True,
             'message': message,
+            'sync_success': sync_success,
+            'sync_message': sync_message,
             'collection': {
                 'id': str(collection.id),
                 'name': collection.name,
