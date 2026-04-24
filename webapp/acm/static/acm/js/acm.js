@@ -18,6 +18,7 @@ const ICONO_PROPIFAI_SELECCIONADO = 'https://maps.google.com/mapfiles/ms/icons/p
 
 // Inicializar mapa ACM
 function initACMMap() {
+    console.log('initACMMap called');
     const defaultCenter = { lat: -16.4090, lng: -71.5375 }; // Arequipa, Perú
     acmMap = new google.maps.Map(document.getElementById('acmMap'), {
         center: defaultCenter,
@@ -37,6 +38,9 @@ function initACMMap() {
     acmMap.addListener('click', (event) => {
         colocarMarcadorPrincipal(event.latLng);
     });
+
+    // Inicializar buscador de direcciones con Google Places Autocomplete + Geocoding
+    inicializarBuscadorDirecciones();
 
     // Inicializar eventos del formulario
     inicializarEventos();
@@ -135,8 +139,16 @@ function inicializarEventos() {
         radioValue.textContent = radioSlider.value;
     });
 
-    // Botón de búsqueda
+    // Botón de búsqueda (ambos, desktop y móvil)
     document.getElementById('btnBuscar').addEventListener('click', buscarComparables);
+    const btnBuscarMobile = document.getElementById('btnBuscarMobile');
+    if (btnBuscarMobile) {
+        btnBuscarMobile.addEventListener('click', buscarComparables);
+    }
+    const btnBuscarMap = document.getElementById('btnBuscarMap');
+    if (btnBuscarMap) {
+        btnBuscarMap.addEventListener('click', buscarComparables);
+    }
 
     // Botón para eliminar todos los comparables seleccionados
     const btnEliminarTodos = document.getElementById('btnEliminarTodos');
@@ -202,11 +214,20 @@ async function buscarComparables() {
         return;
     }
 
-    // Mostrar indicador de carga
-    const btnBuscar = document.getElementById('btnBuscar');
-    const originalText = btnBuscar.innerHTML;
-    btnBuscar.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Buscando...';
-    btnBuscar.disabled = true;
+    // Mostrar indicador de carga en ambos botones
+    const btnsBuscar = [
+        document.getElementById('btnBuscar'),
+        document.getElementById('btnBuscarMobile'),
+        document.getElementById('btnBuscarMap')
+    ].filter(Boolean);
+    const estadosOriginales = btnsBuscar.map(btn => ({
+        html: btn.innerHTML,
+        disabled: btn.disabled
+    }));
+    btnsBuscar.forEach(btn => {
+        btn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Buscando...';
+        btn.disabled = true;
+    });
 
     try {
         // Enviar solicitud AJAX
@@ -272,9 +293,11 @@ async function buscarComparables() {
         console.error('Error buscando comparables:', error);
         mostrarToast('danger', `Error: ${error.message}`);
     } finally {
-        // Restaurar botón
-        btnBuscar.innerHTML = originalText;
-        btnBuscar.disabled = false;
+        // Restaurar ambos botones
+        btnsBuscar.forEach((btn, i) => {
+            btn.innerHTML = estadosOriginales[i].html;
+            btn.disabled = estadosOriginales[i].disabled;
+        });
     }
 }
 
@@ -842,12 +865,131 @@ function getCSRFToken() {
     return csrfToken ? csrfToken.value : '';
 }
 
-// Inicializar cuando el DOM esté listo
-document.addEventListener('DOMContentLoaded', () => {
-    // Verificar si Google Maps está cargado
-    if (typeof google !== 'undefined' && google.maps) {
-        initACMMap();
-    } else {
-        console.error('Google Maps no está cargado');
+// Inicializar buscador de direcciones con Google Places Autocomplete + Geocoding
+function inicializarBuscadorDirecciones() {
+    const searchInput = document.getElementById('acmSearchBox');
+    const searchBtn = document.getElementById('btnSearchAddress');
+    if (!searchInput) {
+        console.error('No se encontró el input acmSearchBox');
+        return;
     }
-});
+
+    console.log('Inicializando buscador de direcciones...');
+
+    // --- Google Places Autocomplete ---
+    let autocomplete = null;
+    try {
+        if (!google || !google.maps || !google.maps.places) {
+            throw new Error('Google Maps Places API no disponible');
+        }
+
+        console.log('Creando Autocomplete sin bounds específicos');
+
+        autocomplete = new google.maps.places.Autocomplete(searchInput, {
+            types: ['geocode', 'establishment'],
+            componentRestrictions: { country: 'PE' },
+            fields: ['formatted_address', 'geometry', 'name', 'address_components']
+        });
+
+        // Bind to map bounds for better suggestions
+        autocomplete.bindTo('bounds', acmMap);
+
+        console.log('Autocomplete creado exitosamente');
+
+        // Cuando el usuario selecciona una sugerencia del autocomplete
+        autocomplete.addListener('place_changed', () => {
+            console.log('Place changed event fired');
+            const place = autocomplete.getPlace();
+            if (!place.geometry) {
+                console.warn('Place sin geometría, usando geocoding manual');
+                // Si no tiene geometría, hacer geocoding manual
+                geocodeAddress(searchInput.value);
+                return;
+            }
+            
+            const location = place.geometry.location;
+            console.log('Ubicación seleccionada:', location.lat(), location.lng());
+            
+            // Centrar mapa en la ubicación seleccionada
+            if (place.geometry.viewport) {
+                acmMap.fitBounds(place.geometry.viewport);
+            } else {
+                acmMap.setCenter(location);
+                acmMap.setZoom(16);
+            }
+            
+            // Colocar marcador principal
+            colocarMarcadorPrincipal(location);
+            searchInput.blur();
+        });
+
+        // Estilo personalizado para el dropdown de Places
+        setTimeout(() => {
+            const pacContainer = document.querySelector('.pac-container');
+            if (pacContainer) {
+                pacContainer.style.zIndex = '99999';
+                console.log('Z-index aplicado al pac-container');
+            } else {
+                console.warn('No se encontró .pac-container');
+            }
+        }, 1000);
+
+    } catch (e) {
+        console.warn('Google Places Autocomplete no disponible, usando solo Geocoding:', e);
+    }
+
+    // --- Geocoding function (fallback + búsqueda manual) ---
+    function geocodeAddress(query) {
+        if (!query || query.trim() === '') return;
+        
+        const geocoder = new google.maps.Geocoder();
+        // Agregar "Arequipa, Perú" para restringir la búsqueda
+        const fullQuery = query.toLowerCase().includes('arequipa') ? query : `${query}, Arequipa, Perú`;
+        
+        geocoder.geocode({
+            address: fullQuery,
+            region: 'PE'
+        }, (results, status) => {
+            if (status === 'OK' && results.length > 0) {
+                const location = results[0].geometry.location;
+                
+                // Centrar mapa en la ubicación
+                if (results[0].geometry.viewport) {
+                    acmMap.fitBounds(results[0].geometry.viewport);
+                } else {
+                    acmMap.setCenter(location);
+                    acmMap.setZoom(16);
+                }
+                
+                // Colocar marcador principal
+                colocarMarcadorPrincipal(location);
+                
+                searchInput.blur();
+            } else {
+                console.warn('Geocoder no encontró resultados para:', fullQuery, status);
+                mostrarToast('warning', 'No se encontró la dirección. Intenta con otro término (ej: "Cayma", "Yanahuara", "Plaza de Armas Arequipa").');
+            }
+        });
+    }
+
+    // --- Event Listeners ---
+
+    // Botón de búsqueda (Geocoding manual)
+    if (searchBtn) {
+        searchBtn.addEventListener('click', () => {
+            geocodeAddress(searchInput.value);
+        });
+    }
+
+    // Enter en el input (solo si NO se usó Autocomplete)
+    searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            // Si hay un autocomplete activo y se seleccionó una sugerencia,
+            // el evento 'place_changed' ya se encargó. Si no, hacemos geocoding.
+            if (!autocomplete || !document.querySelector('.pac-container.pac-logo:not(.pac-container-shadow)')) {
+                geocodeAddress(searchInput.value);
+            }
+        }
+    });
+}

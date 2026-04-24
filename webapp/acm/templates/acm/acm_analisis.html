@@ -3,17 +3,20 @@
 
 {% block acm_content %}
 <div class="container-fluid py-2">
-    <!-- Layout de 3 columnas -->
+    <!-- Layout responsive mejorado -->
     <div class="row g-3">
-        <!-- Panel izquierdo: Formulario compacto -->
-        <div class="col-lg-3">
+        <!-- Panel de parámetros - Mitad superior en móvil -->
+        <div class="col-12 col-lg-3 mobile-params-panel">
             <div class="card border-0 shadow-sm h-100">
-                <div class="card-header bg-white border-bottom py-2">
+                <div class="card-header bg-white border-bottom py-2 d-flex justify-content-between align-items-center">
                     <h6 class="mb-0">
                         <i class="bi bi-sliders me-2"></i>Parámetros de Búsqueda
                     </h6>
+                    <button type="button" class="btn btn-sm btn-outline-secondary d-lg-none" id="toggleParamsPanel">
+                        <i class="bi bi-chevron-down"></i>
+                    </button>
                 </div>
-                <div class="card-body p-2">
+                <div class="card-body p-2" id="paramsPanelContent" style="padding: 0.5rem !important;">
                     <form id="acmForm">
                         <!-- Tipo de propiedad -->
                         <div class="mb-1">
@@ -26,46 +29,32 @@
                             </select>
                         </div>
 
-                        <!-- Metros construcción y terreno en fila -->
-                        <div class="row g-1 mb-1">
-                            <div class="col-6">
-                                <label for="metrosConstruccion" class="form-label small">m² construcción</label>
-                                <input type="number" class="form-control form-control-sm" id="metrosConstruccion"
+                        <!-- Metros construcción, terreno, piso, habitaciones, baños - TODOS EN UNA SOLA LÍNEA -->
+                        <div class="row g-1 mb-1 acm-all-fields-row">
+                            <div class="col acm-field-col">
+                                <label for="metrosConstruccion" class="form-label small acm-field-label">m² const.</label>
+                                <input type="number" class="form-control form-control-sm acm-field-input" id="metrosConstruccion"
                                        name="metros_construccion" min="0" step="0.1" placeholder="120">
                             </div>
-                            <div class="col-6">
-                                <label for="metrosTerreno" class="form-label small">m² terreno</label>
-                                <input type="number" class="form-control form-control-sm" id="metrosTerreno"
+                            <div class="col acm-field-col">
+                                <label for="metrosTerreno" class="form-label small acm-field-label">m² terr.</label>
+                                <input type="number" class="form-control form-control-sm acm-field-input" id="metrosTerreno"
                                        name="metros_terreno" min="0" step="0.1" placeholder="200">
                             </div>
-                        </div>
-                        <div class="row g-1 mb-2">
-                            <div class="col-12">
-                                <small class="form-text text-muted small">Para Casa/Depto/Terreno</small>
+                            <div class="col acm-field-col">
+                                <label for="piso" class="form-label small acm-field-label">Piso</label>
+                                <input type="number" class="form-control form-control-sm acm-field-input" id="piso"
+                                       name="piso" min="0" placeholder="3" title="Número de piso">
                             </div>
-                        </div>
-
-                        <!-- Piso, Habitaciones, Baños en fila -->
-                        <div class="row g-1 mb-1">
-                            <div class="col-4">
-                                <label for="piso" class="form-label small">Piso</label>
-                                <input type="number" class="form-control form-control-sm" id="piso"
-                                       name="piso" min="0" placeholder="3">
+                            <div class="col acm-field-col">
+                                <label for="habitaciones" class="form-label small acm-field-label">Hab.</label>
+                                <input type="number" class="form-control form-control-sm acm-field-input" id="habitaciones"
+                                       name="habitaciones" min="0" placeholder="3" title="Número de habitaciones">
                             </div>
-                            <div class="col-4">
-                                <label for="habitaciones" class="form-label small">Hab.</label>
-                                <input type="number" class="form-control form-control-sm" id="habitaciones"
-                                       name="habitaciones" min="0" placeholder="3">
-                            </div>
-                            <div class="col-4">
-                                <label for="banios" class="form-label small">Baños</label>
-                                <input type="number" class="form-control form-control-sm" id="banios"
-                                       name="banios" min="0" step="0.5" placeholder="2.5">
-                            </div>
-                        </div>
-                        <div class="row g-1 mb-2">
-                            <div class="col-12">
-                                <small class="form-text text-muted small">Acepta medio baño (0.5)</small>
+                            <div class="col acm-field-col">
+                                <label for="banios" class="form-label small acm-field-label">Baños</label>
+                                <input type="number" class="form-control form-control-sm acm-field-input" id="banios"
+                                       name="banios" min="0" step="0.5" placeholder="2.5" title="Número de baños (acepta 0.5)">
                             </div>
                         </div>
 
@@ -88,9 +77,9 @@
                         <input type="hidden" id="latitud" name="latitud">
                         <input type="hidden" id="longitud" name="longitud">
 
-                        <!-- Botón de búsqueda -->
-                        <div class="d-grid">
-                            <button type="button" id="btnBuscar" class="btn btn-primary btn-sm">
+                        <!-- Botón de búsqueda - visible en desktop, oculto en móvil -->
+                        <div class="d-grid d-none d-lg-block">
+                            <button type="button" id="btnBuscar" class="btn btn-primary btn-sm" form="acmForm">
                                 <i class="bi bi-search me-1"></i>Buscar Comparables
                             </button>
                         </div>
@@ -111,8 +100,8 @@
             </div>
         </div>
 
-        <!-- Panel central: Mapa -->
-        <div class="col-lg-6">
+        <!-- Panel del mapa - Mitad inferior en móvil -->
+        <div class="col-12 col-lg-6 mobile-map-panel">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">
@@ -122,14 +111,31 @@
                         <span id="contadorPropiedades">0</span> propiedades encontradas
                     </div>
                 </div>
+                <!-- Buscador de direcciones Google Places -->
+                <div class="px-2 pt-2 pb-1">
+                    <div class="acm-search-box">
+                        <i class="bi bi-geo-alt text-muted"></i>
+                        <input type="text" id="acmSearchBox" class="form-control form-control-sm"
+                               placeholder="Buscar dirección en Arequipa...">
+                        <button type="button" id="btnSearchAddress" class="btn btn-primary btn-sm" title="Buscar dirección">
+                            <i class="bi bi-search"></i>
+                        </button>
+                    </div>
+                </div>
                 <div class="card-body p-0">
-                    <div id="acmMap" style="height: 400px; width: 100%;"></div>
+                    <div id="acmMap" style="height: 400px; width: 100%;" class="acm-map-container"></div>
+                    <!-- Botón de búsqueda debajo del mapa -->
+                    <div class="d-grid p-2">
+                        <button type="button" id="btnBuscarMap" class="btn btn-primary btn-sm" form="acmForm">
+                            <i class="bi bi-search me-1"></i>Buscar Comparables
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- Panel derecho: Comparables seleccionados -->
-        <div class="col-lg-3">
+        <!-- Panel derecho: Comparables seleccionados (oculto en móvil) -->
+        <div class="col-lg-3 d-none d-lg-block">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-header bg-white border-bottom">
                     <div class="d-flex justify-content-between align-items-center">
@@ -180,10 +186,39 @@
             </div>
         </div>
     </div>
+
+    <!-- Botón flotante para mostrar comparables en móvil -->
+    <div class="d-lg-none fixed-bottom p-3">
+        <div class="d-flex justify-content-center">
+            <button type="button" class="btn btn-primary btn-lg shadow-lg" id="mobileComparablesBtn" data-bs-toggle="offcanvas" data-bs-target="#mobileComparablesDrawer">
+                <i class="bi bi-list-check me-2"></i>
+                <span id="mobileComparablesCount">0</span> Comparables
+                <span class="badge bg-light text-dark ms-2" id="mobileComparablesBadge">Ver</span>
+            </button>
+        </div>
+    </div>
 </div>
 
-<!-- Google Maps API -->
-<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&libraries=places,geometry&callback=initACMMap" async defer></script>
+<!-- Drawer para comparables en móvil -->
+<div class="offcanvas offcanvas-bottom" tabindex="-1" id="mobileComparablesDrawer" aria-labelledby="mobileComparablesDrawerLabel">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="mobileComparablesDrawerLabel">
+            <i class="bi bi-list-check me-2"></i>Comparables Seleccionados
+        </h5>
+        <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body">
+        <div class="comparables-container-mobile" id="comparablesContainerMobile"
+             style="max-height: 60vh; overflow-y: auto;">
+            <!-- Las tarjetas de propiedades se insertarán aquí dinámicamente -->
+            <div class="text-center py-5 text-muted" id="sinSeleccionadosMobile">
+                <i class="bi bi-house-door display-6 mb-3"></i>
+                <p class="mb-0">No hay propiedades seleccionadas</p>
+                <small>Haz clic en los marcadores azules del mapa para seleccionar</small>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Template para tarjeta de propiedad -->
 <template id="templatePropiedad">
