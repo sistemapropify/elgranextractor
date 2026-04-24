@@ -1,0 +1,64 @@
+WARNING:market_analysis.charts:Matplotlib no está instalado. Los gráficos no estarán disponibles.
+ERROR 2026-04-24 09:10:17,393 log: Internal Server Error: /api/v1/intelligence/chat-web/api/
+Traceback (most recent call last):
+  File "C:\Users\USUARIO\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\USUARIO\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\USUARIO\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\django\utils\decorators.py", line 48, in _wrapper
+    return bound_method(*args, **kwargs)
+TypeError: View.as_view.<locals>.view() missing 1 required positional argument: 'request'
+ERROR:django.request:Internal Server Error: /api/v1/intelligence/chat-web/api/
+Traceback (most recent call last):
+  File "C:\Users\USUARIO\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\USUARIO\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\USUARIO\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\django\utils\decorators.py", line 48, in _wrapper
+    return bound_method(*args, **kwargs)
+TypeError: View.as_view.<locals>.view() missing 1 required positional argument: 'request'
+ERROR 2026-04-24 09:10:17,394 basehttp: "POST /api/v1/intelligence/chat-web/api/ HTTP/1.1" 500 81254
+ERROR:django.server:"POST /api/v1/intelligence/chat-web/api/ HTTP/1.1" 500 81254
+INFO 2026-04-24 09:10:17,411 basehttp: - Broken pipe from ('127.0.0.1', 51308)
+INFO:django.server:- Broken pipe from ('127.0.0.1', 51308)
+INFO 2026-04-24 09:10:29,001 views: [CHAT_WEB] Inicio de vista chat_web. Session: h9t18c8cstn4v6ww56ixelrbfpeqrcgp
+DEBUG 2026-04-24 09:10:29,001 views: [CHAT_WEB] Usuario autenticado: 86c4be45-e1f9-442b-8fea-2c180f1d93a3 (mercurio2008)
+DEBUG 2026-04-24 09:10:29,001 views: [CHAT_WEB] Calculando nivel del usuario...
+DEBUG 2026-04-24 09:10:29,227 views: [CHAT_WEB] Nivel del usuario (max allowed_levels): 5
+DEBUG 2026-04-24 09:10:29,227 views: [CHAT_WEB] Obteniendo memoria del usuario...
+DEBUG 2026-04-24 09:10:30,746 views: [CHAT_WEB] Contexto cargado de conversación: 76eb4b2d-61cf-413e-b5ba-25f4c4cb1e80
+INFO 2026-04-24 09:10:30,746 views: [CHAT_WEB] Memoria obtenida en 1.52s, cantidad: 1
+DEBUG 2026-04-24 09:10:30,746 views: [CHAT_WEB] Obteniendo colecciones accesibles...
+INFO 2026-04-24 09:10:30,979 views: [CHAT_WEB] Colecciones obtenidas en 0.00s, cantidad: 3
+DEBUG 2026-04-24 09:10:30,979 views: [CHAT_WEB] Obteniendo conversaciones recientes...
+INFO 2026-04-24 09:10:31,807 views: [CHAT_WEB] Conversaciones obtenidas en 0.83s, cantidad: 5
+DEBUG 2026-04-24 09:10:31,807 views: [CHAT_WEB] Obteniendo hechos del usuario...
+INFO 2026-04-24 09:10:32,022 views: [CHAT_WEB] Hechos obtenidos en 0.21s, cantidad: 15
+DEBUG 2026-04-24 09:10:32,022 views: [CHAT_WEB] Construyendo contexto de template...
+INFO 2026-04-24 09:10:32,022 views: [CHAT_WEB] Vista completada en 3.02s. Renderizando template.
+INFO 2026-04-24 09:10:32,026 basehttp: "GET /api/v1/intelligence/chat-web/ HTTP/1.1" 200 33026
+INFO:django.server:"GET /api/v1/intelligence/chat-web/ HTTP/1.1" 200 33026
+INFO 2026-04-24 09:10:32,101 basehttp: "GET /static/intelligence/chat.js?v=1777039832 HTTP/1.1" 200 29419
+INFO:django.server:"GET /static/intelligence/chat.js?v=1777039832 HTTP/1.1" 200 29419
+INFO 2026-04-24 09:10:34,132 basehttp: "GET /api/v1/intelligence/episodic-memory/?user_id=86c4be45-e1f9-442b-8fea-2c180f1d93a3&limit=10 HTTP/1.1" 200 6056
+INFO:django.server:"GET /api/v1/intelligence/episodic-memory/?user_id=86c4be45-e1f9-442b-8fea-2c180f1d93a3&limit=10 HTTP/1.1" 200 6056
+ERROR 2026-04-24 09:10:43,191 log: Internal Server Error: /api/v1/intelligence/chat-web/api/
+Traceback (most recent call last):
+  File "C:\Users\USUARIO\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\USUARIO\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\USUARIO\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\django\utils\decorators.py", line 48, in _wrapper
+    return bound_method(*args, **kwargs)
+TypeError: View.as_view.<locals>.view() missing 1 required positional argument: 'request'
+ERROR:django.request:Internal Server Error: /api/v1/intelligence/chat-web/api/
+Traceback (most recent call last):
+  File "C:\Users\USUARIO\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\USUARIO\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "C:\Users\USUARIO\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\django\utils\decorators.py", line 48, in _wrapper
+    return bound_method(*args, **kwargs)
+TypeError: View.as_view.<locals>.view() missing 1 required positional argument: 'request'
+ERROR 2026-04-24 09:10:43,191 basehttp: "POST /api/v1/intelligence/chat-web/api/ HTTP/1.1" 500 83758
+ERROR:django.server:"POST /api/v1/intelligence/chat-web/api/ HTTP/1.1" 500 83758

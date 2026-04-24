@@ -1,0 +1,23 @@
+WARNING:market_analysis.charts:Matplotlib no está instalado. Los gráficos no estarán disponibles.
+WARNING 2026-04-24 02:52:12,457 log: Forbidden (CSRF cookie not set.): /api/v1/intelligence/chat-web/
+WARNING:django.security.csrf:Forbidden (CSRF cookie not set.): /api/v1/intelligence/chat-web/
+WARNING 2026-04-24 02:52:12,457 basehttp: "POST /api/v1/intelligence/chat-web/ HTTP/1.1" 403 2855
+WARNING:django.server:"POST /api/v1/intelligence/chat-web/ HTTP/1.1" 403 2855
+WARNING 2026-04-24 03:01:55,031 log: Bad Request: /api/v1/intelligence/chat-web/api/
+WARNING:django.request:Bad Request: /api/v1/intelligence/chat-web/api/
+WARNING 2026-04-24 03:01:55,031 basehttp: "POST /api/v1/intelligence/chat-web/api/ HTTP/1.1" 400 137
+WARNING:django.server:"POST /api/v1/intelligence/chat-web/api/ HTTP/1.1" 400 137
+WARNING 2026-04-24 03:05:17,220 log: Unauthorized: /api/v1/intelligence/chat-web/api/
+WARNING:django.request:Unauthorized: /api/v1/intelligence/chat-web/api/
+WARNING 2026-04-24 03:05:17,220 basehttp: "POST /api/v1/intelligence/chat-web/api/ HTTP/1.1" 401 92
+WARNING:django.server:"POST /api/v1/intelligence/chat-web/api/ HTTP/1.1" 401 92
+INFO 2026-04-24 03:06:57,792 views: [CHAT_WEB] Inicio de vista chat_web. Session: None
+WARNING 2026-04-24 03:06:57,792 views: [CHAT_WEB] No hay usuario autenticado, redirigiendo a login.
+INFO 2026-04-24 03:06:57,805 basehttp: "GET /api/v1/intelligence/chat-web/ HTTP/1.1" 302 0
+INFO:django.server:"GET /api/v1/intelligence/chat-web/ HTTP/1.1" 302 0
+INFO 2026-04-24 03:06:57,809 basehttp: "GET /login/?next=/api/v1/intelligence/chat-web/ HTTP/1.1" 200 5879
+INFO:django.server:"GET /login/?next=/api/v1/intelligence/chat-web/ HTTP/1.1" 200 5879
+WARNING 2026-04-24 03:06:57,811 log: Unauthorized: /api/v1/intelligence/chat-web/api/
+WARNING:django.request:Unauthorized: /api/v1/intelligence/chat-web/api/
+WARNING 2026-04-24 03:06:57,811 basehttp: "POST /api/v1/intelligence/chat-web/api/ HTTP/1.1" 401 92
+WARNING:django.server:"POST /api/v1/intelligence/chat-web/api/ HTTP/1.1" 401 92

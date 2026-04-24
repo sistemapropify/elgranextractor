@@ -1,11 +1,16 @@
 """
 Vistas para el dashboard de Meta Ads.
 """
-from django.views.generic import TemplateView
+from django.views.generic import TemplateView, View
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.utils import timezone
 from django.db.models import Sum, Avg, F, Q
+from django.shortcuts import redirect
+from django.contrib import messages
 from datetime import datetime, timedelta
+import subprocess
+import sys
+import os
 
 from .models import MetaCampaign, MetaCampaignInsight
 
@@ -355,22 +360,51 @@ class MetaCampaignListView(LoginRequiredMixin, TemplateView):
         return context
 
 
-class MetaSyncView(LoginRequiredMixin, TemplateView):
+class MetaSyncView(LoginRequiredMixin, View):
     """
     Vista para sincronización manual de datos.
     """
     template_name = 'meta_ads/sync.html'
     login_url = '/admin/login/'
     
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
+    def get(self, request, *args, **kwargs):
+        """
+        Muestra la página de sincronización.
+        """
+        context = self._get_sync_context()
+        from django.shortcuts import render
+        return render(request, self.template_name, context)
+    
+    def post(self, request, *args, **kwargs):
+        """
+        Ejecuta la sincronización manual.
+        """
+        try:
+            # Ejecutar el comando de sincronización
+            from django.core.management import call_command
+            
+            # Ejecutar el comando sync_meta_ads
+            call_command('sync_meta_ads', '--days', '30', '--verbose')
+            
+            # Agregar mensaje de éxito
+            messages.success(request, '✅ Sincronización completada exitosamente')
+            
+        except Exception as e:
+            # Agregar mensaje de error
+            messages.error(request, f'❌ Error durante la sincronización: {str(e)}')
         
+        # Redirigir de vuelta a la página de sincronización
+        return redirect('meta_ads:sync')
+    
+    def _get_sync_context(self):
+        """
+        Obtiene el contexto para la página de sincronización.
+        """
         # Información básica sobre sincronización
         last_sync = MetaCampaignInsight.objects.order_by('-date').first()
         
-        context.update({
+        return {
             'last_sync_date': last_sync.date if last_sync else None,
             'total_campaigns': MetaCampaign.objects.count(),
             'total_insights': MetaCampaignInsight.objects.count(),
-        })
-        return context
+        }

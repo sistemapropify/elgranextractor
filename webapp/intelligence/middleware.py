@@ -18,6 +18,7 @@ PUBLIC_PATHS = [
     r'^/api/',
     r'^/admin/',
     r'^/static/',
+    r'^/acm/',                   # ACM - Análisis Comparativo de Mercado (público)
 ]
 
 

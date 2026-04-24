@@ -9,7 +9,7 @@ from decimal import Decimal
 from django.utils import timezone
 from django.db import transaction
 
-from .models import MetaCampaign, MetaCampaignInsight
+from .models import MetaCampaign, MetaCampaignInsight, MetaAd
 
 logger = logging.getLogger(__name__)
 
@@ -278,6 +278,110 @@ class MetaAdsSyncService:
             logger.error(f"  ❌ Error obteniendo insights para campaña {campaign.campaign_id}: {e}")
             return 0, 0
     
+    def sync_ads(self):
+        """
+        Sincroniza todos los anuncios desde la API de Meta.
+        
+        Returns:
+            tuple: (anuncios_creados, anuncios_actualizados)
+        """
+        try:
+            logger.info("🔄 Sincronizando anuncios desde Meta API...")
+            
+            # Importar Ad dinámicamente
+            from facebook_business.adobjects.ad import Ad
+            
+            # Obtener todos los anuncios
+            fields = [
+                'id', 'name', 'status', 'adset_id', 'adset_name',
+                'creative', 'created_time'
+            ]
+            params = {
+                'limit': 1000
+            }
+            
+            ads = self.account.get_ads(fields=fields, params=params)
+            
+            creados = 0
+            actualizados = 0
+            
+            for ad_data in ads:
+                try:
+                    ad_id = ad_data.get('id')
+                    if not ad_id:
+                        continue
+                    
+                    # Buscar campaña a la que pertenece este anuncio
+                    # Necesitamos obtener la campaña del adset o del ad
+                    # Por simplicidad, primero intentamos obtener la campaña del adset
+                    # Si no, podemos buscar por nombre o relación
+                    campaign = None
+                    
+                    # Intentar obtener insights para determinar la campaña
+                    # Por ahora, vamos a crear un método más simple
+                    # y sincronizar anuncios por campaña más adelante
+                    
+                    # Parsear fecha de creación
+                    created_time_str = ad_data.get('created_time', '')
+                    created_at_meta = None
+                    if created_time_str:
+                        try:
+                            created_at_meta = datetime.strptime(
+                                created_time_str[:10], '%Y-%m-%d'
+                            ).date()
+                        except (ValueError, TypeError):
+                            pass
+                    
+                    # Datos de creatividad
+                    creative_data = ad_data.get('creative', {})
+                    creative_id = creative_data.get('id', '') if creative_data else ''
+                    creative_name = creative_data.get('name', '') if creative_data else ''
+                    
+                    # Buscar si el anuncio ya existe
+                    ad, created = MetaAd.objects.get_or_create(
+                        ad_id=ad_id,
+                        defaults={
+                            'name': ad_data.get('name', ''),
+                            'status': ad_data.get('status', 'ACTIVE'),
+                            'adset_id': ad_data.get('adset_id', ''),
+                            'adset_name': ad_data.get('adset_name', ''),
+                            'creative_id': creative_id,
+                            'creative_name': creative_name,
+                            'creative_type': creative_data.get('creative_type', '') if creative_data else '',
+                            'created_at_meta': created_at_meta,
+                        }
+                    )
+                    
+                    if created:
+                        creados += 1
+                        logger.debug(f"  ✅ Anuncio creado: {ad.name}")
+                    else:
+                        # Actualizar campos
+                        ad.name = ad_data.get('name', ad.name)
+                        ad.status = ad_data.get('status', ad.status)
+                        ad.adset_id = ad_data.get('adset_id', ad.adset_id)
+                        ad.adset_name = ad_data.get('adset_name', ad.adset_name)
+                        ad.creative_id = creative_id
+                        ad.creative_name = creative_name
+                        if creative_data:
+                            ad.creative_type = creative_data.get('creative_type', ad.creative_type)
+                        if created_at_meta:
+                            ad.created_at_meta = created_at_meta
+                        ad.save()
+                        actualizados += 1
+                        logger.debug(f"  🔄 Anuncio actualizado: {ad.name}")
+                        
+                except Exception as e:
+                    logger.error(f"    ❌ Error procesando anuncio {ad_data.get('id', 'unknown')}: {e}")
+                    continue
+            
+            logger.info(f"✅ Sincronización de anuncios completada: {creados} creados, {actualizados} actualizados")
+            return creados, actualizados
+            
+        except Exception as e:
+            logger.error(f"❌ Error en sync_ads: {e}")
+            return 0, 0
+    
     def sync_all(self, days=30):
         """
         Ejecuta la sincronización completa de campañas e insights.
@@ -297,6 +401,9 @@ class MetaAdsSyncService:
             # Sincronizar insights
             insights_created, insights_updated = self.sync_insights(days)
             
+            # Sincronizar anuncios
+            ads_created, ads_updated = self.sync_ads()
+            
             # Resumen
             summary = {
                 'campañas_creadas': campaigns_created,
@@ -305,6 +412,9 @@ class MetaAdsSyncService:
                 'insights_creados': insights_created,
                 'insights_actualizados': insights_updated,
                 'insights_totales': insights_created + insights_updated,
+                'anuncios_creados': ads_created,
+                'anuncios_actualizados': ads_updated,
+                'anuncios_totales': ads_created + ads_updated,
                 'dias_sincronizados': days,
                 'fecha_sincronizacion': timezone.now().isoformat(),
                 'estado': 'completado'
@@ -325,6 +435,9 @@ class MetaAdsSyncService:
                 'insights_creados': 0,
                 'insights_actualizados': 0,
                 'insights_totales': 0,
+                'anuncios_creados': 0,
+                'anuncios_actualizados': 0,
+                'anuncios_totales': 0,
                 'dias_sincronizados': days,
                 'fecha_sincronizacion': timezone.now().isoformat(),
                 'estado': 'error',

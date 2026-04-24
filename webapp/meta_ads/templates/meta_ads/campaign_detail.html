@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Propify — Detalle de Campaña</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f0f0f;
+    --bg2: #161616;
+    --bg3: #1e1e1e;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.14);
+    --text: #f0ede8;
+    --text2: #888884;
+    --text3: #555552;
+    --green: #1fc97a;
+    --green-bg: rgba(31,201,122,0.1);
+    --amber: #f5a623;
+    --amber-bg: rgba(245,166,35,0.1);
+    --red: #ff4d4d;
+    --red-bg: rgba(255,77,77,0.1);
+    --blue: #4d9fff;
+    --blue-bg: rgba(77,159,255,0.1);
+    --propify: #1D9E75;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    min-height: 100vh;
+    padding: 24px;
+  }
+  .mono { font-family: 'DM Mono', monospace; }
+
+  /* Header */
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 28px;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .logo-mark {
+    width: 32px;
+    height: 32px;
+    background: var(--propify);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'DM Mono', monospace;
+    font-weight: 600;
+    font-size: 16px;
+    color: white;
+  }
+  .logo-name {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .logo-sub {
+    font-size: 11px;
+    color: var(--text2);
+    margin-top: 2px;
+  }
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .back-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: var(--bg2);
+    border: 0.5px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 12px;
+    font-family: 'DM Sans', sans-serif;
+    text-decoration: none;
+    transition: background 0.2s;
+  }
+  .back-button:hover {
+    background: var(--bg3);
+  }
+
+  /* Campaign header */
+  .campaign-header {
+    background: var(--bg2);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-bottom: 24px;
+    border: 0.5px solid var(--border);
+  }
+  .campaign-title {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--text);
+  }
+  .campaign-meta {
+    display: flex;
+    gap: 20px;
+    margin-top: 12px;
+    font-size: 12px;
+    color: var(--text2);
+  }
+  .campaign-meta-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .campaign-status {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 500;
+    margin-left: 10px;
+  }
+  .status-active { background: var(--green-bg); color: var(--green); }
+  .status-paused { background: var(--amber-bg); color: var(--amber); }
+  .status-archived { background: var(--bg3); color: var(--text2); }
+
+  /* KPIs */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .kpi {
+    background: var(--bg2);
+    border-radius: 10px;
+    padding: 18px;
+    border: 0.5px solid var(--border);
+  }
+  .kpi-label {
+    font-size: 11px;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    margin-bottom: 6px;
+  }
+  .kpi-val {
+    font-size: 24px;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+  .kpi-sub {
+    font-size: 11px;
+    color: var(--text2);
+  }
+  .kpi.green .kpi-val { color: var(--green); }
+  .kpi.blue .kpi-val { color: var(--blue); }
+  .kpi.amber .kpi-val { color: var(--amber); }
+  .kpi.red .kpi-val { color: var(--red); }
+
+  /* Table */
+  .card {
+    background: var(--bg2);
+    border-radius: 10px;
+    border: 0.5px solid var(--border);
+    margin-bottom: 24px;
+    overflow: hidden;
+  }
+  .card-head {
+    padding: 16px 20px;
+    border-bottom: 0.5px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .card-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+  }
+  .badge {
+    font-size: 10px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background: var(--bg3);
+    color: var(--text2);
+    border: 0.5px solid var(--border);
+  }
+  .table-scroll-container {
+    max-height: 500px;
+    overflow-y: auto;
+    border-radius: 0 0 10px 10px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  th {
+    padding: 12px 20px;
+    text-align: left;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    border-bottom: 0.5px solid var(--border);
+    background: var(--bg2);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  td {
+    padding: 14px 20px;
+    font-size: 12px;
+    border-bottom: 0.5px solid var(--border);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+  td.name { font-family: 'DM Sans', sans-serif; font-weight: 500; }
+  td.ok { color: var(--green); }
+  td.warn { color: var(--amber); }
+  td.bad { color: var(--red); }
+
+  /* Status pill */
+  .pill {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 500;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .pill-ok { background: var(--green-bg); color: var(--green); }
+  .pill-warn { background: var(--amber-bg); color: var(--amber); }
+  .pill-bad { background: var(--red-bg); color: var(--red); }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text2);
+  }
+  .empty-state-icon {
+    font-size: 32px;
+    margin-bottom: 12px;
+    opacity: 0.5;
+  }
+  .empty-state-text {
+    font-size: 13px;
+  }
+
+  /* Error */
+  .error-box {
+    background: var(--red-bg);
+    border: 0.5px solid rgba(255,77,77,0.3);
+    border-radius: 10px;
+    padding: 20px;
+    color: var(--red);
+    margin-bottom: 24px;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">
+    <div class="logo-mark">P</div>
+    <div>
+      <div class="logo-name">Propify</div>
+      <div class="logo-sub">Detalle de campaña · Facebook Ads</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <a href="{% url 'meta_ads:meta_ads_dashboard_rediseno' %}" class="back-button">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M19 12H5M12 19l-7-7 7-7"/>
+      </svg>
+      Volver al dashboard
+    </a>
+  </div>
+</div>
+
+{% if error %}
+<div class="error-box">
+  <strong>Error:</strong> {{ error }}
+</div>
+{% elif campaign %}
+
+<!-- Campaign header -->
+<div class="campaign-header">
+  <div class="campaign-title">
+    {{ campaign.name }}
+    <span class="campaign-status status-{{ campaign.status|lower }}">
+      {% if campaign.status == 'ACTIVE' %}Activa
+      {% elif campaign.status == 'PAUSED' %}Pausada
+      {% elif campaign.status == 'ARCHIVED' %}Archivada
+      {% else %}{{ campaign.status }}{% endif %}
+    </span>
+  </div>
+  <div class="campaign-meta">
+    <div class="campaign-meta-item">
+      <span>ID:</span>
+      <span class="mono">{{ campaign.campaign_id }}</span>
+    </div>
+    <div class="campaign-meta-item">
+      <span>Objetivo:</span>
+      <span>{{ campaign.objective|default:"No especificado" }}</span>
+    </div>
+    <div class="campaign-meta-item">
+      <span>Presupuesto diario:</span>
+      <span class="mono">S/. {{ campaign.daily_budget|default:"0.00"|floatformat:2 }}</span>
+    </div>
+    <div class="campaign-meta-item">
+      <span>Creada:</span>
+      <span>{{ campaign.created_at_meta|date:"d/m/Y"|default:"Desconocida" }}</span>
+    </div>
+  </div>
+</div>
+
+<!-- KPIs -->
+<div class="kpi-grid">
+  <div class="kpi green">
+    <div class="kpi-label">Gasto este mes</div>
+    <div class="kpi-val mono">S/. {{ total_spend|floatformat:2 }}</div>
+    <div class="kpi-sub">S/. {{ today_spend|floatformat:2 }} hoy</div>
+  </div>
+  <div class="kpi blue">
+    <div class="kpi-label">Clics este mes</div>
+    <div class="kpi-val mono">{{ total_clicks|floatformat:0 }}</div>
+    <div class="kpi-sub">{{ today_clicks|floatformat:0 }} clics hoy</div>
+  </div>
+  <div class="kpi amber">
+    <div class="kpi-label">CPC promedio</div>
+    <div class="kpi-val mono">S/. {{ cpc|floatformat:2 }}</div>
+    <div class="kpi-sub">Costo por clic</div>
+  </div>
+  <div class="kpi red">
+    <div class="kpi-label">CTR promedio</div>
+    <div class="kpi-val mono">{{ ctr|floatformat:2 }}%</div>
+    <div class="kpi-sub">Tasa de clics</div>
+  </div>
+</div>
+
+<!-- Ads table -->
+<div class="card">
+  <div class="card-head">
+    <span class="card-title">Anuncios de la campaña</span>
+    <span class="badge">{{ ads|length }} anuncios</span>
+  </div>
+  {% if ads %}
+  <div class="table-scroll-container">
+    <table>
+      <thead>
+        <tr>
+          <th>Nombre del anuncio</th>
+          <th>Conjunto</th>
+          <th>Estado</th>
+          <th>Gasto</th>
+          <th>Clics</th>
+          <th>Impresiones</th>
+          <th>CPC</th>
+          <th>CTR</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ad_metrics in ads_with_metrics %}
+        <tr>
+          <td class="name">{{ ad_metrics.ad.name|truncatechars:30 }}</td>
+          <td>{{ ad_metrics.ad.adset_name|truncatechars:20|default:"-" }}</td>
+          <td>
+            <span class="pill pill-{% if ad_metrics.ad.status == 'ACTIVE' %}ok{% elif ad_metrics.ad.status == 'PAUSED' %}warn{% else %}bad{% endif %}">
+              {% if ad_metrics.ad.status == 'ACTIVE' %}Activo
+              {% elif ad_metrics.ad.status == 'PAUSED' %}Pausado
+              {% elif ad_metrics.ad.status == 'ARCHIVED' %}Archivado
+              {% else %}{{ ad_metrics.ad.status }}{% endif %}
+            </span>
+          </td>
+          <td>S/. {{ ad_metrics.spend|floatformat:2 }}</td>
+          <td>{{ ad_metrics.clicks|floatformat:0 }}</td>
+          <td>{{ ad_metrics.impressions|floatformat:0 }}</td>
+          <td class="{% if ad_metrics.cpc < 0.5 %}ok{% elif ad_metrics.cpc < 1.0 %}warn{% else %}bad{% endif %}">
+            S/. {{ ad_metrics.cpc|floatformat:2 }}
+          </td>
+          <td class="{% if ad_metrics.ctr > 2.0 %}ok{% elif ad_metrics.ctr > 1.0 %}warn{% else %}bad{% endif %}">
+            {{ ad_metrics.ctr|floatformat:2 }}%
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-state-icon">📭</div>
+    <div class="empty-state-text">No hay anuncios sincronizados para esta campaña.</div>
+    <div style="margin-top: 12px; font-size: 11px; color: var(--text3);">
+      Ejecuta la sincronización desde el dashboard para traer los anuncios.
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+{% else %}
+<div class="empty-state">
+  <div class="empty-state-icon">❌</div>
+  <div class="empty-state-text">Campaña no encontrada.</div>
+</div>
+{% endif %}
+
+</body>
+</html>

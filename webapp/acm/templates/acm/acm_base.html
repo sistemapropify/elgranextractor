@@ -5,6 +5,7 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'acm/css/acm.css' %}">
+<link rel="stylesheet" href="{% static 'acm/css/acm-mobile-ultra.css' %}">
 {% endblock %}
 
 {% block content %}
@@ -16,4 +17,9 @@
 
 {% block extra_js %}
 <script src="{% static 'acm/js/acm.js' %}"></script>
+<script src="{% static 'acm/js/acm-mobile.js' %}"></script>
+{% if google_maps_api_key %}
+<!-- Google Maps API - Se carga con callback después de acm.js -->
+<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&libraries=places,geometry&callback=initACMMap" defer></script>
+{% endif %}
 {% endblock %}

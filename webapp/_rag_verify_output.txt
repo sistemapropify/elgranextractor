@@ -1,0 +1,43 @@
+=== PRIMEROS 5 DOCUMENTOS ===
+source_id=102, title=PROYECTO LUXURY TOWERS ENTREGA INMEDIATA
+  district_id=4, district_name=NO TIENE
+  content[:200]: PROYECTO LUXURY TOWERS ENTREGA INMEDIATA LUXURY TOWERS.
+
+EL LUJO DE VIVIR BIEN
+
+Mereces un espacio que tenga todo lo que necesitas; lo que tu familia necesita. Mereces tener un espacio para compar
+---
+source_id=22, title=Casa En Challapampa - Cerro Colorado
+  district_id=4, district_name=NO TIENE
+  content[:200]: Casa En Challapampa - Cerro Colorado 🏡 EN VENTA – RESIDENCIA DE LUJO EN CHALLAPAMPA, CERRO COLORADO
+
+✨ Una casa única, pensada para vivir con espacio, confort y exclusividad, en una de las zonas más
+---
+source_id=38, title=Terreno En Urbanización Mirasol En Cayma
+  district_id=3, district_name=NO TIENE
+  content[:200]: Terreno En Urbanización Mirasol En Cayma 🏘 Construye en una urbanización privada en Cayma baja o C.Colorado
+El terreno que estabas buscando para tu nuevo hogar 👨‍👩‍👧‍👦
+
+Opción 1: 132 m2 en la Urb. 
+---
+source_id=6, title=Casona En Puente Grau
+  district_id=1, district_name=NO TIENE
+  content[:200]: Casona En Puente Grau 🏛️ Invierte en una casona en pleno centro de Arequipa 🚀
+Una propiedad imponente en la calle Puente Grau con parámetros para 5 pisos
+
+📐 346.03 m2 de terreno
+🏗️ Parámetros para
+---
+source_id=18, title=Dúplex Con Terraza Cerca De Av. Dolores
+  district_id=8, district_name=NO TIENE
+  content[:200]: Dúplex Con Terraza Cerca De Av. Dolores 🏡 Vive en una casa completa en forma de duplex
+📍 A solo una cuadra de la Av. Dolores, en una zona tranquila y súper bien conectada.
+
+📐 Dos niveles amplios de
+---
+
+=== BUSCANDO 'Yanahuara' EN field_values ===
+Documentos con Yanahuara: 0
+
+=== BUSCANDO 'Cayma' EN field_values ===
+Documentos con Cayma: 0

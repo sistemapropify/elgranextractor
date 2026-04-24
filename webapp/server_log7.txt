@@ -1,0 +1,7 @@
+WARNING:market_analysis.charts:Matplotlib no está instalado. Los gráficos no estarán disponibles.
+WARNING 2026-04-24 09:14:21,073 log: Unauthorized: /api/v1/intelligence/chat-web/api/
+WARNING:django.request:Unauthorized: /api/v1/intelligence/chat-web/api/
+WARNING 2026-04-24 09:14:21,073 basehttp: "POST /api/v1/intelligence/chat-web/api/ HTTP/1.1" 401 92
+WARNING:django.server:"POST /api/v1/intelligence/chat-web/api/ HTTP/1.1" 401 92
+INFO 2026-04-24 09:14:21,084 basehttp: - Broken pipe from ('127.0.0.1', 60235)
+INFO:django.server:- Broken pipe from ('127.0.0.1', 60235)

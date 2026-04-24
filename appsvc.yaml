@@ -2,4 +2,4 @@
 # Forces Python platform detection
 platform: python
 platform_version: '3.12'
-startup_command: "export PYTHONPATH=$(pwd):$(pwd)/webapp && python webapp/manage.py collectstatic --noinput && gunicorn --bind=0.0.0.0 --timeout 600 --access-logfile '-' --error-logfile '-' webapp.wsgi:application"
+startup_command: "cd /home/site/wwwroot && python -m webapp.manage collectstatic --noinput && gunicorn --bind=0.0.0.0 --timeout 600 --access-logfile '-' --error-logfile '-' webapp.wsgi:application"

@@ -1,0 +1,2 @@
+---
+Total lines in function: 10

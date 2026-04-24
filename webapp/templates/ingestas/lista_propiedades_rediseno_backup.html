@@ -306,6 +306,46 @@
         font-size: 0.75rem;
     }
 
+    /* Optimización para móviles: área construcción y terreno en misma línea */
+    @media (max-width: 768px) {
+        .property-features {
+            gap: 0.5rem;
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            padding-bottom: 2px;
+        }
+        
+        .feature-item {
+            font-size: 0.65rem;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        
+        .feature-item i {
+            font-size: 0.7rem;
+        }
+        
+        /* Reducir altura de tarjetas */
+        .property-card {
+            padding: 0.5rem;
+        }
+        
+        .property-title {
+            font-size: 0.85rem;
+            margin-bottom: 0.25rem;
+        }
+        
+        .property-location {
+            font-size: 0.7rem;
+            margin-bottom: 0.25rem;
+        }
+        
+        .property-footer {
+            padding-top: 0.25rem;
+            margin-top: 0.25rem;
+        }
+    }
+
     .property-footer {
         display: flex;
         justify-content: space-between;

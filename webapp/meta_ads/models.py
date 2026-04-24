@@ -206,3 +206,162 @@ class MetaCampaignInsight(models.Model):
         if self.ctr:
             return f"{self.ctr:.2f}%"
         return "0.00%"
+
+
+class MetaAd(models.Model):
+    """
+    Modelo que representa un anuncio individual de Meta (Facebook/Instagram).
+    """
+    # Estados posibles de un anuncio
+    STATUS_ACTIVE = 'ACTIVE'
+    STATUS_PAUSED = 'PAUSED'
+    STATUS_ARCHIVED = 'ARCHIVED'
+    STATUS_DELETED = 'DELETED'
+    
+    STATUS_CHOICES = [
+        (STATUS_ACTIVE, 'Activo'),
+        (STATUS_PAUSED, 'Pausado'),
+        (STATUS_ARCHIVED, 'Archivado'),
+        (STATUS_DELETED, 'Eliminado'),
+    ]
+    
+    # Relación con la campaña
+    campaign = models.ForeignKey(
+        MetaCampaign,
+        on_delete=models.CASCADE,
+        related_name='ads',
+        verbose_name='Campaña'
+    )
+    
+    # Campos principales
+    ad_id = models.CharField(
+        max_length=50,
+        unique=True,
+        verbose_name='ID del anuncio en Meta'
+    )
+    name = models.CharField(
+        max_length=255,
+        verbose_name='Nombre del anuncio'
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_ACTIVE,
+        verbose_name='Estado'
+    )
+    
+    # Información del anuncio
+    adset_id = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name='ID del conjunto de anuncios'
+    )
+    adset_name = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name='Nombre del conjunto de anuncios'
+    )
+    
+    # Creatividad
+    creative_id = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name='ID de la creatividad'
+    )
+    creative_name = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name='Nombre de la creatividad'
+    )
+    creative_type = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name='Tipo de creatividad'
+    )
+    
+    # Métricas (podrían ser calculadas o sincronizadas)
+    impressions = models.IntegerField(
+        default=0,
+        verbose_name='Impresiones'
+    )
+    clicks = models.IntegerField(
+        default=0,
+        verbose_name='Clics'
+    )
+    spend = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        verbose_name='Gasto'
+    )
+    ctr = models.DecimalField(
+        max_digits=6,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name='Tasa de clics (CTR)'
+    )
+    cpc = models.DecimalField(
+        max_digits=10,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name='Costo por clic (CPC)'
+    )
+    
+    # Fechas
+    created_at_meta = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name='Fecha de creación en Meta'
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name='Fecha de última actualización'
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='Fecha de creación'
+    )
+    
+    class Meta:
+        verbose_name = 'Anuncio Meta'
+        verbose_name_plural = 'Anuncios Meta'
+        ordering = ['-created_at_meta', 'name']
+    
+    def __str__(self):
+        return f"{self.name} ({self.ad_id})"
+    
+    @property
+    def is_active(self):
+        """Retorna True si el anuncio está activo."""
+        return self.status == self.STATUS_ACTIVE
+    
+    @property
+    def ctr_percentage(self):
+        """Retorna el CTR como porcentaje formateado."""
+        if self.ctr:
+            return f"{self.ctr:.2f}%"
+        return "0.00%"
+    
+    def update_metrics_from_insights(self, insights_data):
+        """
+        Actualiza las métricas del anuncio a partir de datos de insights.
+        insights_data debe ser un diccionario con campos como:
+        - impressions
+        - clicks
+        - spend
+        - ctr
+        - cpc
+        """
+        if 'impressions' in insights_data:
+            self.impressions = insights_data['impressions']
+        if 'clicks' in insights_data:
+            self.clicks = insights_data['clicks']
+        if 'spend' in insights_data:
+            self.spend = insights_data['spend']
+        if 'ctr' in insights_data:
+            self.ctr = insights_data['ctr']
+        if 'cpc' in insights_data:
+            self.cpc = insights_data['cpc']
+        self.save()

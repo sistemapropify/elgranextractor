@@ -1,0 +1,5 @@
+Type: <class 'function'>
+Has __wrapped__: True
+Wrapped: <function View.as_view.<locals>.view at 0x000001F9B2013110>
+Has __closure__: True
+Source lines: 10

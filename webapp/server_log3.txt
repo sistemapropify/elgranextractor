@@ -1,0 +1,1 @@
+WARNING:market_analysis.charts:Matplotlib no está instalado. Los gráficos no estarán disponibles.
