@@ -32,7 +32,10 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-g76()bgf_)1ygr$!a1s-i
 DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
 # Allow all hosts for now, but you should restrict this in production
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'granextractorservice-emehaffsf8e2c7eg.brazilsouth-01.azurewebsites.net,localhost,127.0.0.1').split(',')
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'granextractorservice-emehaffsf8e2c7eg.brazilsouth-01.azurewebsites.net,acm.propifai.com,localhost,127.0.0.1').split(',')
+
+# CSRF trusted origins for production (prevents 403 errors on POST requests)
+CSRF_TRUSTED_ORIGINS = os.environ.get('CSRF_TRUSTED_ORIGINS', 'https://acm.propifai.com,https://granextractorservice-emehaffsf8e2c7eg.brazilsouth-01.azurewebsites.net').split(',')
 
 
 # Application definition
@@ -186,8 +189,12 @@ X_FRAME_OPTIONS = 'DENY'
 
 # For HTTPS in production (uncomment when you have SSL)
 # SECURE_SSL_REDIRECT = True
-# SESSION_COOKIE_SECURE = True
-# CSRF_COOKIE_SECURE = True
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+
+# Proxy configuration for Azure App Service (terminates SSL at proxy level)
+# This tells Django to trust the X-Forwarded-Proto header from Azure's proxy
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # Celery Configuration
 CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'memory://')
