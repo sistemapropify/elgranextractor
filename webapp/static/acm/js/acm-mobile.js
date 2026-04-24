@@ -328,12 +328,53 @@ document.addEventListener('DOMContentLoaded', function() {
         return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     }
     
+    // ============================================================
+    // Lógica: Ocultar/mostrar campos según tipo de propiedad
+    // ============================================================
+    const tipoPropiedadSelect = document.getElementById('tipoPropiedad');
+    const fieldConstruccion = document.querySelector('.acm-field-construccion');
+    const fieldPiso = document.querySelector('.acm-field-piso');
+    const fieldHabitaciones = document.querySelector('.acm-field-habitaciones');
+    const fieldBanos = document.querySelector('.acm-field-banos');
+    
+    /**
+     * Actualiza la visibilidad de los campos según el tipo de propiedad seleccionado.
+     * Si es "Terreno", oculta: m² const., Piso, Hab., Baños
+     * Si es cualquier otro tipo (o vacío), muestra todos los campos.
+     */
+    function actualizarCamposPorTipo() {
+        const tipo = tipoPropiedadSelect ? tipoPropiedadSelect.value.toLowerCase().trim() : '';
+        const esTerreno = tipo === 'terreno';
+        
+        // Mostrar/ocultar cada campo
+        if (fieldConstruccion) {
+            fieldConstruccion.style.display = esTerreno ? 'none' : '';
+        }
+        if (fieldPiso) {
+            fieldPiso.style.display = esTerreno ? 'none' : '';
+        }
+        if (fieldHabitaciones) {
+            fieldHabitaciones.style.display = esTerreno ? 'none' : '';
+        }
+        if (fieldBanos) {
+            fieldBanos.style.display = esTerreno ? 'none' : '';
+        }
+    }
+    
+    // Escuchar cambios en el selector de tipo de propiedad
+    if (tipoPropiedadSelect) {
+        tipoPropiedadSelect.addEventListener('change', actualizarCamposPorTipo);
+        // Ejecutar al inicio para aplicar estado inicial
+        actualizarCamposPorTipo();
+    }
+    
     // Exponer funciones útiles globalmente
     window.acmMobile = {
         toggleParamsPanel: toggleParamsPanel,
         adjustMapHeight: adjustMapHeight,
         syncComparablesToMobile: syncComparablesToMobile,
-        updateMobileComparablesCount: updateMobileComparablesCount
+        updateMobileComparablesCount: updateMobileComparablesCount,
+        actualizarCamposPorTipo: actualizarCamposPorTipo
     };
     
     console.log('✅ ACM Mobile Interactivity inicializado');
