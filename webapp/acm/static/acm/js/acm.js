@@ -16,6 +16,89 @@ const ICONO_SELECCIONADO = 'https://maps.google.com/mapfiles/ms/icons/red-dot.pn
 const ICONO_PROPIFAI = 'https://maps.google.com/mapfiles/ms/icons/purple-dot.png';
 const ICONO_PROPIFAI_SELECCIONADO = 'https://maps.google.com/mapfiles/ms/icons/pink-dot.png';
 
+// Inicializar eventos del formulario y controles (independiente de Google Maps)
+function inicializarEventos() {
+    // Slider de radio
+    const radioSlider = document.getElementById('radioBusqueda');
+    const radioValue = document.getElementById('radioValue');
+    
+    if (radioSlider) {
+        radioSlider.addEventListener('input', () => {
+            radioValue.textContent = radioSlider.value;
+        });
+    }
+
+    // Botón de búsqueda (único, debajo del mapa)
+    const btnBuscarMap = document.getElementById('btnBuscarMap');
+    if (btnBuscarMap) {
+        btnBuscarMap.addEventListener('click', buscarComparables);
+    }
+
+    // Botón para eliminar todos los comparables seleccionados
+    const btnEliminarTodos = document.getElementById('btnEliminarTodos');
+    if (btnEliminarTodos) {
+        btnEliminarTodos.addEventListener('click', limpiarPropiedadesSeleccionadas);
+    }
+
+    // Cambio en tipo de propiedad para mostrar/ocultar campos
+    const tipoPropiedad = document.getElementById('tipoPropiedad');
+    if (tipoPropiedad) {
+        tipoPropiedad.addEventListener('change', function() {
+            const tipo = this.value.toLowerCase();
+            const esTerreno = tipo === 'terreno';
+            
+            // Campos que deben ocultarse cuando es Terreno:
+            // m² const., Piso, Hab., Baños — los terrenos no tienen estas características
+            var camposAOcultar = [
+                'acm-field-construccion',
+                'acm-field-piso',
+                'acm-field-habitaciones',
+                'acm-field-banos'
+            ];
+            
+            camposAOcultar.forEach(function(className) {
+                var elementos = document.getElementsByClassName(className);
+                Array.from(elementos).forEach(function(el) {
+                    if (esTerreno) {
+                        el.classList.add('acm-field-hidden');
+                    } else {
+                        el.classList.remove('acm-field-hidden');
+                    }
+                });
+            });
+            
+            // El campo m² terr. siempre debe estar visible
+            // (los terrenos usan área de terreno, no construcción)
+        });
+    }
+
+    // Event listeners para actualizar resumen cuando cambien los parámetros
+    const metrosConstruccionInput = document.getElementById('metrosConstruccion');
+    const metrosTerrenoInput = document.getElementById('metrosTerreno');
+    const pisoInput = document.getElementById('piso');
+
+    function actualizarResumenSiHaySeleccionados() {
+        if (propiedadesSeleccionadas.size > 0) {
+            actualizarResumenACM();
+        }
+    }
+
+    if (metrosConstruccionInput) {
+        metrosConstruccionInput.addEventListener('input', actualizarResumenSiHaySeleccionados);
+        metrosConstruccionInput.addEventListener('change', actualizarResumenSiHaySeleccionados);
+    }
+
+    if (metrosTerrenoInput) {
+        metrosTerrenoInput.addEventListener('input', actualizarResumenSiHaySeleccionados);
+        metrosTerrenoInput.addEventListener('change', actualizarResumenSiHaySeleccionados);
+    }
+
+    if (pisoInput) {
+        pisoInput.addEventListener('input', actualizarResumenSiHaySeleccionados);
+        pisoInput.addEventListener('change', actualizarResumenSiHaySeleccionados);
+    }
+}
+
 // Inicializar mapa ACM
 function initACMMap() {
     console.log('initACMMap called');
@@ -41,9 +124,6 @@ function initACMMap() {
 
     // Inicializar buscador de direcciones con Google Places Autocomplete + Geocoding
     inicializarBuscadorDirecciones();
-
-    // Inicializar eventos del formulario
-    inicializarEventos();
 }
 
 // Colocar marcador principal en el mapa
@@ -129,88 +209,6 @@ function colocarMarcadorPrincipal(latLng) {
     actualizarResumenACM();
 }
 
-// Inicializar eventos del formulario y controles
-function inicializarEventos() {
-    // Slider de radio
-    const radioSlider = document.getElementById('radioBusqueda');
-    const radioValue = document.getElementById('radioValue');
-    
-    radioSlider.addEventListener('input', () => {
-        radioValue.textContent = radioSlider.value;
-    });
-
-    // Botón de búsqueda (ambos, desktop y móvil)
-    document.getElementById('btnBuscar').addEventListener('click', buscarComparables);
-    const btnBuscarMobile = document.getElementById('btnBuscarMobile');
-    if (btnBuscarMobile) {
-        btnBuscarMobile.addEventListener('click', buscarComparables);
-    }
-    const btnBuscarMap = document.getElementById('btnBuscarMap');
-    if (btnBuscarMap) {
-        btnBuscarMap.addEventListener('click', buscarComparables);
-    }
-
-    // Botón para eliminar todos los comparables seleccionados
-    const btnEliminarTodos = document.getElementById('btnEliminarTodos');
-    if (btnEliminarTodos) {
-        btnEliminarTodos.addEventListener('click', limpiarPropiedadesSeleccionadas);
-    }
-
-    // Cambio en tipo de propiedad para mostrar/ocultar campos
-    document.getElementById('tipoPropiedad').addEventListener('change', function() {
-        const tipo = this.value.toLowerCase();
-        const esTerreno = tipo === 'terreno';
-        
-        // Campos que deben ocultarse cuando es Terreno:
-        // m² const., Piso, Hab., Baños — los terrenos no tienen estas características
-        var camposAOcultar = [
-            'acm-field-construccion',
-            'acm-field-piso',
-            'acm-field-habitaciones',
-            'acm-field-banos'
-        ];
-        
-        camposAOcultar.forEach(function(className) {
-            var elementos = document.getElementsByClassName(className);
-            Array.from(elementos).forEach(function(el) {
-                if (esTerreno) {
-                    el.classList.add('acm-field-hidden');
-                } else {
-                    el.classList.remove('acm-field-hidden');
-                }
-            });
-        });
-        
-        // El campo m² terr. siempre debe estar visible
-        // (los terrenos usan área de terreno, no construcción)
-    });
-
-    // Event listeners para actualizar resumen cuando cambien los parámetros
-    const metrosConstruccionInput = document.getElementById('metrosConstruccion');
-    const metrosTerrenoInput = document.getElementById('metrosTerreno');
-    const pisoInput = document.getElementById('piso');
-
-    function actualizarResumenSiHaySeleccionados() {
-        if (propiedadesSeleccionadas.size > 0) {
-            actualizarResumenACM();
-        }
-    }
-
-    if (metrosConstruccionInput) {
-        metrosConstruccionInput.addEventListener('input', actualizarResumenSiHaySeleccionados);
-        metrosConstruccionInput.addEventListener('change', actualizarResumenSiHaySeleccionados);
-    }
-
-    if (metrosTerrenoInput) {
-        metrosTerrenoInput.addEventListener('input', actualizarResumenSiHaySeleccionados);
-        metrosTerrenoInput.addEventListener('change', actualizarResumenSiHaySeleccionados);
-    }
-
-    if (pisoInput) {
-        pisoInput.addEventListener('input', actualizarResumenSiHaySeleccionados);
-        pisoInput.addEventListener('change', actualizarResumenSiHaySeleccionados);
-    }
-}
 
 // Buscar propiedades comparables
 async function buscarComparables() {
@@ -232,10 +230,8 @@ async function buscarComparables() {
         return;
     }
 
-    // Mostrar indicador de carga en ambos botones
+    // Mostrar indicador de carga en el botón de búsqueda
     const btnsBuscar = [
-        document.getElementById('btnBuscar'),
-        document.getElementById('btnBuscarMobile'),
         document.getElementById('btnBuscarMap')
     ].filter(Boolean);
     const estadosOriginales = btnsBuscar.map(btn => ({
@@ -334,48 +330,40 @@ function crearMarcadorComparable(propiedad) {
     // Tamaño diferente para Propifai (más grande para destacar)
     const tamanoIcono = esPropifai ? 36 : 32;
     
+    // Calcular precio por m² para mostrar en la etiqueta del marcador
+    const precioM2 = propiedad.precio_m2_final || propiedad.precio_m2;
+    let labelText = '';
+    if (precioM2 && precioM2 > 0) {
+        // Mostrar precio/m² en dólares, ej: "$850/m²"
+        labelText = '$' + Math.round(precioM2).toString() + '/m²';
+    } else {
+        labelText = esPropifai ? 'P' : '?';
+    }
+    
+    // Crear elemento personalizado para el marcador con precio/m² visible
+    const markerIcon = {
+        url: iconoUrl,
+        scaledSize: new google.maps.Size(tamanoIcono, tamanoIcono),
+        labelOrigin: new google.maps.Point(tamanoIcono / 2, tamanoIcono + 14)
+    };
+    
     const marker = new google.maps.Marker({
         position: { lat: propiedad.lat, lng: propiedad.lng },
         map: acmMap,
-        title: `${propiedad.tipo} - ${propiedad.distrito}${esPropifai ? ' (PROPIFAI)' : ' (Local)'}`,
-        icon: {
-            url: iconoUrl,
-            scaledSize: new google.maps.Size(tamanoIcono, tamanoIcono)
-        },
-        // Agregar etiqueta visual para Propifai
-        label: esPropifai ? {
-            text: "P",
-            color: "white",
-            fontSize: "12px",
+        title: `${propiedad.tipo} - ${propiedad.distrito}${esPropifai ? ' (PROPIFAI)' : ' (Local)'} - $${precioM2 ? precioM2.toFixed(2) : 'N/A'}/m²`,
+        icon: markerIcon,
+        // Mostrar precio por m² en dólares como etiqueta del marcador (debajo del icono)
+        label: {
+            text: labelText,
+            color: "#ffffff",
+            fontSize: "11px",
             fontWeight: "bold"
-        } : null
+        }
     });
 
-    // InfoWindow al hacer clic - hacer más claro la fuente
-    const fuenteTexto = esPropifai ? '<span style="color: purple; font-weight: bold;">PROPIFAI</span>' : '<span style="color: blue; font-weight: bold;">Local</span>';
-    const infoWindow = new google.maps.InfoWindow({
-        content: `
-            <div class="map-info-window">
-                <div style="border-left: 4px solid ${esPropifai ? 'purple' : 'blue'}; padding-left: 8px;">
-                    <h6 style="margin: 0 0 5px 0;">${propiedad.tipo}</h6>
-                    <div style="font-size: 12px; color: #666; margin-bottom: 8px;">
-                        Fuente: ${fuenteTexto}
-                    </div>
-                    <p class="mb-1"><strong>${formatearPrecio(propiedad.precio)}</strong></p>
-                    <p class="mb-1">${propiedad.metros_construccion ? 'Construcción: ' + propiedad.metros_construccion + ' m²' : ''}</p>
-                    <p class="mb-1">${propiedad.metros_terreno ? 'Terreno: ' + propiedad.metros_terreno + ' m²' : ''}</p>
-                    <p class="mb-1">Distancia: ${propiedad.distancia_metros} m</p>
-                    <p class="mb-1 small text-muted">${propiedad.distrito}, ${propiedad.provincia}</p>
-                    <button class="btn btn-sm btn-primary mt-1" onclick="toggleSeleccionarPropiedad(${propiedad.id})">
-                        ${propiedadesSeleccionadas.has(propiedad.id) ? 'Deseleccionar' : 'Seleccionar'}
-                    </button>
-                </div>
-            </div>
-        `,
-    });
-
+    // Click en marcador: seleccionar/deseleccionar directamente (sin InfoWindow)
     marker.addListener('click', () => {
-        infoWindow.open(acmMap, marker);
+        toggleSeleccionarPropiedad(propiedad.id);
     });
 
     // Almacenar referencia
@@ -383,16 +371,11 @@ function crearMarcadorComparable(propiedad) {
         marker,
         data: propiedad,
         seleccionado: false,
-        infoWindow,
         iconoUrl,
         iconoSeleccionadoUrl,
         esPropifai,
         tamanoIcono,
-    });
-
-    // Doble clic para seleccionar/deseleccionar
-    marker.addListener('dblclick', () => {
-        toggleSeleccionarPropiedad(propiedad.id);
+        labelText: labelText,  // Guardar texto de la etiqueta para restaurarlo al deseleccionar
     });
 }
 
@@ -411,22 +394,16 @@ function toggleSeleccionarPropiedad(id) {
             url: marcadorInfo.iconoUrl || ICONO_COMPARABLE,
             scaledSize: new google.maps.Size(tamanoIcono, tamanoIcono)
         });
-        // Restaurar etiqueta original: para Propifai "P", para locales null
-        if (marcadorInfo.esPropifai) {
-            marcadorInfo.marker.setLabel({
-                text: "P",
-                color: "white",
-                fontSize: "12px",
-                fontWeight: "bold"
-            });
-        } else {
-            marcadorInfo.marker.setLabel(null);
-        }
+        // Restaurar etiqueta con precio/m² (guardado en labelText)
+        const labelText = marcadorInfo.labelText || (marcadorInfo.esPropifai ? 'P' : '?');
+        marcadorInfo.marker.setLabel({
+            text: labelText,
+            color: "white",
+            fontSize: "11px",
+            fontWeight: "bold"
+        });
         marcadorInfo.seleccionado = false;
         propiedadesSeleccionadas.delete(id);
-        
-        // Cerrar infoWindow si está abierto
-        marcadorInfo.infoWindow.close();
         
         // Eliminar tarjeta
         eliminarTarjetaPropiedad(id);
@@ -704,9 +681,6 @@ function actualizarResumenACM() {
 function limpiarMarcadoresComparables() {
     marcadoresComparables.forEach((info, id) => {
         info.marker.setMap(null);
-        if (info.infoWindow) {
-            info.infoWindow.close();
-        }
     });
     marcadoresComparables.clear();
 }
@@ -1013,3 +987,8 @@ function inicializarBuscadorDirecciones() {
         }
     });
 }
+
+// Auto-inicializar eventos cuando el DOM esté listo (independiente de Google Maps)
+document.addEventListener('DOMContentLoaded', function() {
+    inicializarEventos();
+});
