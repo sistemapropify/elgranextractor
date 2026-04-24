@@ -159,12 +159,30 @@ function inicializarEventos() {
     // Cambio en tipo de propiedad para mostrar/ocultar campos
     document.getElementById('tipoPropiedad').addEventListener('change', function() {
         const tipo = this.value.toLowerCase();
-        const metrosConstruccion = document.getElementById('metrosConstruccion');
-        const metrosTerreno = document.getElementById('metrosTerreno');
-        const piso = document.getElementById('piso');
+        const esTerreno = tipo === 'terreno';
         
-        // Lógica para habilitar/deshabilitar campos según tipo
-        // (puede expandirse según necesidades)
+        // Campos que deben ocultarse cuando es Terreno:
+        // m² const., Piso, Hab., Baños — los terrenos no tienen estas características
+        var camposAOcultar = [
+            'acm-field-construccion',
+            'acm-field-piso',
+            'acm-field-habitaciones',
+            'acm-field-banos'
+        ];
+        
+        camposAOcultar.forEach(function(className) {
+            var elementos = document.getElementsByClassName(className);
+            Array.from(elementos).forEach(function(el) {
+                if (esTerreno) {
+                    el.classList.add('acm-field-hidden');
+                } else {
+                    el.classList.remove('acm-field-hidden');
+                }
+            });
+        });
+        
+        // El campo m² terr. siempre debe estar visible
+        // (los terrenos usan área de terreno, no construcción)
     });
 
     // Event listeners para actualizar resumen cuando cambien los parámetros
@@ -587,9 +605,11 @@ function actualizarResumenACM() {
     const promedioPonderado = sumaPesos > 0 ? sumaPonderada / sumaPesos : promedio;
     
     // Obtener metros a valuar del formulario
+    const tipoPropiedad = document.getElementById('tipoPropiedad').value.toLowerCase();
+    const esTerreno = tipoPropiedad === 'terreno';
     const metrosConstruccion = parseFloat(document.getElementById('metrosConstruccion').value) || 0;
     const metrosTerreno = parseFloat(document.getElementById('metrosTerreno').value) || 0;
-    const metros = metrosConstruccion || metrosTerreno;
+    const metros = esTerreno ? metrosTerreno : (metrosConstruccion || metrosTerreno);
     
     // Calcular estimación
     const estimacionMin = metros * min;
@@ -671,7 +691,7 @@ function actualizarResumenACM() {
         <div class="row mt-3">
             <div class="col-12">
                 <div class="text-muted small">
-                    Basado en ${metros.toFixed(0)} m² y ${propiedades.length} propiedades comparables.
+                    Basado en ${metros.toFixed(0)} m²${esTerreno ? ' de terreno' : ' de construcción'} y ${propiedades.length} propiedades comparables.
                 </div>
             </div>
         </div>

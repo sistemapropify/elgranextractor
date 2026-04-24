@@ -229,3 +229,33 @@
 .pac-matched {
     font-weight: 600;
 }
+
+/* Ocultar campos cuando se selecciona "Terreno" en tipo de propiedad */
+.acm-field-hidden {
+    display: none !important;
+}
+
+/* Placeholders de los inputs en gris claro (plomo) */
+.acm-field-input::placeholder {
+    color: #6c757d !important;
+    opacity: 1 !important;
+    font-size: 0.8rem;
+}
+
+.acm-field-input::-webkit-input-placeholder {
+    color: #6c757d !important;
+    opacity: 1 !important;
+    font-size: 0.8rem;
+}
+
+.acm-field-input::-moz-placeholder {
+    color: #6c757d !important;
+    opacity: 1 !important;
+    font-size: 0.8rem;
+}
+
+.acm-field-input:-ms-input-placeholder {
+    color: #6c757d !important;
+    opacity: 1 !important;
+    font-size: 0.8rem;
+}
