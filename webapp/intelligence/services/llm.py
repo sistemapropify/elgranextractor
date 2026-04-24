@@ -163,13 +163,14 @@ class LLMService:
     
     @classmethod
     def _build_rag_context(
-        cls, 
-        query: str, 
+        cls,
+        query: str,
         user_access_level: int = 1,
         collection_names: Optional[List[str]] = None
     ) -> Tuple[str, List[Dict]]:
         """
         Construye contexto RAG para una consulta.
+        Usa search_dynamic para compatibilidad con field_values (colecciones dinámicas).
         
         Args:
             query: Consulta del usuario
@@ -179,58 +180,72 @@ class LLMService:
         Returns:
             Tuple (context_text, retrieved_documents)
         """
-        # Determinar IDs de colecciones si se especifican nombres
-        collection_ids = None
-        if collection_names:
+        if not collection_names:
+            # Si no se especifican colecciones, buscar en todas las activas
             collections = IntelligenceCollection.objects.filter(
-                name__in=collection_names,
                 is_active=True,
                 access_level__lte=user_access_level
             )
-            collection_ids = list(collections.values_list('id', flat=True))
+            collection_names = list(collections.values_list('name', flat=True))
         
-        # Realizar búsqueda RAG
-        success, message, results = RAGService.search(
+        if not collection_names:
+            logger.info("No hay colecciones disponibles para búsqueda")
+            return "", []
+        
+        # Usar search_dynamic que es compatible con field_values
+        results = RAGService.search_dynamic(
             query=query,
-            collection_ids=collection_ids,
-            access_level=user_access_level,
-            limit=cls.MAX_RAG_CONTEXT_DOCUMENTS,
-            similarity_threshold=cls.MIN_SIMILARITY_THRESHOLD
+            collection_names=collection_names,
+            top_k=cls.MAX_RAG_CONTEXT_DOCUMENTS
         )
         
-        if not success or not results:
+        if not results:
             logger.info(f"No se encontraron documentos RAG para la consulta: {query}")
             return "", []
         
         # Construir texto de contexto
         context_parts = []
         for i, doc in enumerate(results, 1):
-            # Extraer información relevante del documento
-            metadata = doc.get('metadata', {})
             collection_name = doc.get('collection_name', 'Desconocida')
             similarity = doc.get('similarity', 0)
+            field_values = doc.get('field_values', {})
             
             # Formatear información según el tipo de colección
             if 'propiedades' in collection_name.lower():
-                # Información de propiedad
+                # Mapeo de nombres de campo (inglés de BD → español para el prompt)
+                titulo = field_values.get('title') or field_values.get('titulo', 'Sin título')
+                descripcion = field_values.get('description') or field_values.get('descripcion', 'Sin descripción')
+                direccion = field_values.get('real_address') or field_values.get('exact_address') or field_values.get('direccion', 'Sin dirección')
+                distrito = field_values.get('district_name') or field_values.get('district') or field_values.get('distrito', 'Sin distrito')
+                precio = field_values.get('price') or field_values.get('precio', 'N/A')
+                moneda = field_values.get('currency_id') or field_values.get('moneda', '')
+                area_construida = field_values.get('built_area') or field_values.get('area_construida', 'N/A')
+                tipo = field_values.get('property_type_id') or field_values.get('tipo_propiedad', 'Sin tipo')
+                habitaciones = field_values.get('bedrooms', 'N/A')
+                banos = field_values.get('bathrooms', 'N/A')
+                terreno = field_values.get('land_area', 'N/A')
+                
                 context_parts.append(
                     f"[Documento {i} - Propiedad - Similitud: {similarity:.2f}]\n"
-                    f"Título: {metadata.get('titulo', 'Sin título')}\n"
-                    f"Descripción: {metadata.get('descripcion', 'Sin descripción')}\n"
-                    f"Dirección: {metadata.get('direccion', 'Sin dirección')}\n"
-                    f"Distrito: {metadata.get('distrito', 'Sin distrito')}\n"
-                    f"Tipo: {metadata.get('tipo_propiedad', 'Sin tipo')}\n"
-                    f"Precio: {metadata.get('precio', 'N/A')} {metadata.get('moneda', '')}\n"
-                    f"Área construida: {metadata.get('area_construida', 'N/A')} m²\n"
+                    f"Título: {titulo}\n"
+                    f"Descripción: {descripcion}\n"
+                    f"Dirección: {direccion}\n"
+                    f"Distrito: {distrito}\n"
+                    f"Tipo: {tipo}\n"
+                    f"Precio: {precio} {moneda}\n"
+                    f"Área construida: {area_construida} m²\n"
+                    f"Habitaciones: {habitaciones}\n"
+                    f"Baños: {banos}\n"
+                    f"Área de terreno: {terreno} m²\n"
                 )
             elif 'noticias' in collection_name.lower():
                 # Información de noticia
                 context_parts.append(
                     f"[Documento {i} - Noticia - Similitud: {similarity:.2f}]\n"
-                    f"Título: {metadata.get('titulo', 'Sin título')}\n"
-                    f"Contenido: {metadata.get('contenido', 'Sin contenido')[:500]}...\n"
-                    f"Fuente: {metadata.get('fuente', 'Desconocida')}\n"
-                    f"Fecha: {metadata.get('fecha_publicacion', 'Desconocida')}\n"
+                    f"Título: {field_values.get('titulo', 'Sin título')}\n"
+                    f"Contenido: {field_values.get('contenido', 'Sin contenido')[:500]}...\n"
+                    f"Fuente: {field_values.get('fuente', 'Desconocida')}\n"
+                    f"Fecha: {field_values.get('fecha_publicacion', 'Desconocida')}\n"
                 )
             else:
                 # Documento genérico
@@ -276,24 +291,6 @@ class LLMService:
         )
         
         # 2. Construir prompt del sistema
-        system_prompt = """Eres Propifai Assistant, un experto asistente inmobiliario especializado en el mercado de Arequipa, Perú.
-
-Tu conocimiento incluye:
-- Propiedades disponibles (propias y de competencia)
-- Noticias y análisis del mercado inmobiliario
-- Información sobre zonas, precios y tendencias
-
-INSTRUCCIONES CRÍTICAS:
-1. Usa EXCLUSIVAMENTE la información proporcionada en el contexto para responder.
-2. Si el contexto no contiene información relevante, di claramente "No tengo información sobre eso en mi base de datos actual".
-3. Sé preciso con precios, ubicaciones y características.
-4. Para propiedades, menciona siempre: precio, ubicación (distrito), tipo de propiedad y características principales.
-5. Para noticias, menciona la fuente y fecha si están disponibles.
-6. Responde en español claro y profesional.
-7. Si se te pide comparar o analizar, usa solo los datos del contexto.
-
-CONTEXTO DISPONIBLE:"""
-        
         # 3. Construir mensajes
         messages = []
         
@@ -302,14 +299,33 @@ CONTEXTO DISPONIBLE:"""
             for msg in conversation_history[-6:]:  # Últimos 6 mensajes como contexto
                 messages.append(msg)
         
-        # Agregar contexto RAG y consulta actual
-        user_message = f"Consulta del usuario: {query}\n\n"
+        # Construir system prompt con contexto RAG incluido
+        system_prompt = """Eres Propifai Assistant, un experto asistente inmobiliario especializado en el mercado de Arequipa, Perú.
+
+Tu conocimiento incluye:
+- Propiedades disponibles (propias y de competencia)
+- Noticias y análisis del mercado inmobiliario
+- Información sobre zonas, precios y tendencias
+
+INSTRUCCIONES CRÍTICAS:
+1. Usa EXCLUSIVAMENTE la información del CONTEXTO DISPONIBLE para responder.
+2. SIEMPRE que el contexto contenga propiedades, responde con la información real: precios, distritos, tipos, áreas.
+3. NUNCA digas que no tienes información si el contexto SÍ contiene datos relevantes.
+4. Sé preciso con precios, ubicaciones y características.
+5. Para propiedades, menciona siempre: precio, ubicación (distrito), tipo de propiedad y características principales.
+6. Para noticias, menciona la fuente y fecha si están disponibles.
+7. Responde en español claro y profesional.
+8. Si se te pide comparar o analizar, usa solo los datos del contexto.
+
+CONTEXTO DISPONIBLE:"""
         
         if rag_context:
-            user_message += f"INFORMACIÓN RELEVANTE DE LA BASE DE DATOS:\n{rag_context}\n\n"
-            user_message += "Basándote en esta información, responde a la consulta del usuario."
+            system_prompt += f"\n\n{rag_context}"
         else:
-            user_message += "No tengo información específica en mi base de datos sobre este tema. Responde de manera general si es apropiado."
+            system_prompt += "\n\nNo hay información específica disponible en este momento."
+        
+        # Agregar consulta del usuario
+        user_message = f"Consulta del usuario: {query}"
         
         messages.append({"role": "user", "content": user_message})
         

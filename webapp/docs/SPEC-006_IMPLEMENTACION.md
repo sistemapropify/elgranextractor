@@ -1,10 +1,21 @@
 # SPEC-006: INTEGRACIÓN DEEPSEEK (PIL v1.0) - IMPLEMENTACIÓN
 
 ## Fecha de Implementación
-Abril 2026
+**Inicial:** Abril 2026
+**Última actualización:** 23/Abr/2026
 
 ## Estado
-✅ **COMPLETADO** - Servicio LLM completo integrado con DeepSeek API
+✅ **COMPLETADO** (v1.1 con correcciones post-implementación)
+
+## Historial de Cambios
+
+| Fecha | Versión | Cambio | Autor |
+|-------|---------|--------|-------|
+| Abr/2026 | v1.0 | Implementación inicial SPEC-006 | Roo |
+| 23/Abr/2026 | v1.1 | **Corrección**: Se movió el contexto RAG del mensaje de usuario al `CONTEXTO DISPONIBLE:` dentro del system prompt. Anteriormente el contexto se pasaba como parte del mensaje del usuario, pero DeepSeek priorizaba la instrucción del system prompt que decía "Usa EXCLUSIVAMENTE la información del CONTEXTO DISPONIBLE" cuando este estaba vacío. | Roo |
+| 23/Abr/2026 | v1.1 | **Corrección**: Se agregaron instrucciones explícitas "NUNCA digas que no tienes información si el contexto SÍ contiene datos relevantes" para evitar que DeepSeek ignore el contexto RAG. | Roo |
+| 23/Abr/2026 | v1.1 | **Corrección**: Se implementó `generate_streaming_response()` para respuestas en tiempo real con Server-Sent Events (SSE). | Roo |
+| 23/Abr/2026 | v1.1 | **Corrección**: En `chat_web_api`, se corrigió el paso de parámetros a `generate_rag_response()` — se pasaba `full_prompt` en lugar de `message`, causando que el RAG buscara sobre el prompt completo en lugar de la consulta del usuario. | Roo |
 
 ## Resumen Ejecutivo
 Implementación completa del servicio LLM con DeepSeek como proveedor de inteligencia artificial, incluyendo generación de respuestas, extracción de hechos, resumen de conversaciones y manejo robusto de errores. Este servicio integra las capacidades de IA real con los sistemas de memoria y RAG existentes.
@@ -22,17 +33,20 @@ Implementación completa del servicio LLM con DeepSeek como proveedor de intelig
 
 #### Clase: `LLMService`
 
-**Métodos implementados:**
+**Métodos implementados (v1.1):**
 
 | Método | Parámetros | Retorno | Descripción |
 |--------|------------|---------|-------------|
 | `__init__` | None | None | Inicializa cliente HTTP, carga config desde env |
-| `generate_response` | messages: list, temperature: float = 0.7, max_tokens: int = 1000 | str | Envía conversación a DeepSeek, retorna respuesta |
-| `extract_facts` | user_message: str, assistant_response: str, existing_facts: list = None | list[dict] | Extrae hechos como tripletas (sujeto-relación-objeto) |
-| `summarize_conversation` | messages: list, max_sentences: int = 3 | str | Genera resumen de 2-3 oraciones de la conversación |
-| `classify_intent` | message: str, user_level: int | dict | Clasifica intención del usuario (saludo, consulta, etc.) |
-| `generate_rag_response` | query: str, user_access_level: int, include_sources: bool = True | tuple[bool, str, dict] | Genera respuesta enriquecida con contexto RAG |
-| `test_connection` | None | tuple[bool, str] | Prueba conexión con DeepSeek API |
+| `_get_headers()` | None | Dict[str, str] | Construye headers para API DeepSeek |
+| `_call_deepseek_api()` | messages, system_prompt, stream=False | tuple[bool, str, dict] | Llama a DeepSeek API con manejo de errores y retry |
+| `_extract_json_from_response()` | content: str | Optional[Dict] | Extrae JSON de respuesta del LLM |
+| `_build_rag_context()` | query, user_access_level, collection_names | tuple[str, list] | **(v1.1)** Construye contexto RAG usando `search_dynamic()` con mapeo inglés→español |
+| `generate_rag_response()` | query, conversation_history, user_access_level, collection_names, include_sources | tuple[bool, str, dict] | **(v1.1)** Genera respuesta con contexto RAG en system prompt |
+| `analyze_query_intent()` | query: str | tuple[bool, str, dict] | Analiza intención de consulta para routing a colecciones |
+| `extract_structured_data()` | text: str | tuple[bool, str, dict] | Extrae datos estructurados de texto usando LLM |
+| `generate_streaming_response()` | query, conversation_history, user_access_level, collection_names | Generator | **(NUEVO v1.1)** Genera respuesta en streaming con Server-Sent Events (SSE) |
+| `test_connection()` | None | tuple[bool, str] | Prueba conexión con DeepSeek API |
 
 ### 2. Configuración DeepSeek
 
@@ -300,7 +314,7 @@ webapp/requirements.txt                          # Dependencias: tenacity, reque
 ## Próximos Pasos Recomendados
 
 ### Fase A (Corto plazo)
-1. **Implementar streaming**: Respuestas en tiempo real con Server-Sent Events
+1. ~~**Implementar streaming**~~: ✅ **COMPLETADO v1.1** — `generate_streaming_response()` con SSE
 2. **Fine-tuning**: Modelo especializado en español inmobiliario peruano
 3. **Cache distribuido**: Redis para cache de respuestas frecuentes
 4. **Dashboard de monitoreo**: Métricas de uso, costos, performance
@@ -319,21 +333,24 @@ webapp/requirements.txt                          # Dependencias: tenacity, reque
 
 ## Conclusión
 
-La SPEC-006 (Integración DeepSeek) ha sido implementada exitosamente, proporcionando capacidades de IA real al Propifai Intelligence Layer. El sistema ahora puede:
+La SPEC-006 (Integración DeepSeek) ha sido implementada exitosamente (v1.1), proporcionando capacidades de IA real al Propifai Intelligence Layer. El sistema ahora puede:
 
-1. **Generar respuestas inteligentes** usando DeepSeek API
+1. **Generar respuestas inteligentes** usando DeepSeek API con contexto RAG en system prompt
 2. **Extraer hechos estructurados** de conversaciones naturales
 3. **Resumir conversaciones largas** manteniendo contexto esencial
 4. **Clasificar intenciones** para routing inteligente
 5. **Manejar errores robustamente** con fallbacks apropiados
 6. **Integrarse completamente** con MemoryService y RAGService
+7. **Streaming en tiempo real** con Server-Sent Events (SSE) — NUEVO v1.1
+8. **Contexto RAG efectivo** con mapeo de campos inglés→español — CORREGIDO v1.1
 
-**Estado**: ✅ IMPLEMENTADO Y OPERATIVO  
-**Impacto**: Transforma PIL de sistema básico a asistente de IA real  
+**Estado**: ✅ IMPLEMENTADO Y OPERATIVO (v1.1)
+**Impacto**: Transforma PIL de sistema básico a asistente de IA real
 **Próxima fase**: SPEC-007 - Chat Web Interactivo para exponer estas capacidades a usuarios finales
 
 ---
 
-**Firma de implementación:**  
-✅ SPEC-006 COMPLETADO — Integración DeepSeek operativa  
-**Fecha:**
+**Firma de implementación:**
+✅ SPEC-006 COMPLETADO — Integración DeepSeek operativa (v1.1)
+**Fecha inicial:** Abril 2026
+**Última actualización:** 23/Abr/2026

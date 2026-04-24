@@ -506,6 +506,151 @@
             border-color: var(--accent-blue);
         }
         
+        /* Timeline de memoria episódica (SPEC-008 - Fase 4.1) */
+        .episodic-timeline {
+            max-height: 300px;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: var(--border-color) transparent;
+        }
+        
+        .episodic-timeline::-webkit-scrollbar {
+            width: 4px;
+        }
+        
+        .episodic-timeline::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        
+        .episodic-timeline::-webkit-scrollbar-thumb {
+            background-color: var(--border-color);
+            border-radius: 2px;
+        }
+        
+        .timeline-item {
+            display: flex;
+            gap: 12px;
+            padding: 10px 0;
+            border-left: 2px solid var(--border-color);
+            padding-left: 16px;
+            margin-left: 8px;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .timeline-item:hover {
+            border-left-color: var(--accent-blue);
+            background-color: rgba(88, 166, 255, 0.05);
+            border-radius: 0 8px 8px 0;
+        }
+        
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -6px;
+            top: 14px;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: var(--bg-tertiary);
+            border: 2px solid var(--border-color);
+        }
+        
+        .timeline-item:hover::before {
+            background-color: var(--accent-blue);
+            border-color: var(--accent-blue);
+        }
+        
+        .timeline-item:last-child {
+            border-left-color: transparent;
+        }
+        
+        .timeline-icon {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            flex-shrink: 0;
+            background-color: var(--bg-tertiary);
+        }
+        
+        .timeline-icon.property_search { color: #58a6ff; }
+        .timeline-icon.property_detail { color: #3fb950; }
+        .timeline-icon.price_inquiry { color: #d29922; }
+        .timeline-icon.matching { color: #a371f7; }
+        .timeline-icon.acm_analysis { color: #f78166; }
+        .timeline-icon.general { color: #8b949e; }
+        .timeline-icon.fact_extraction { color: #79c0ff; }
+        .timeline-icon.user_preference { color: #ff7b72; }
+        
+        .timeline-content {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .timeline-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2px;
+        }
+        
+        .timeline-type {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+        
+        .timeline-time {
+            font-size: 11px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+        
+        .timeline-message {
+            font-size: 13px;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .timeline-importance {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            margin-right: 4px;
+        }
+        
+        .timeline-importance.high { background-color: #f78166; }
+        .timeline-importance.medium { background-color: #d29922; }
+        .timeline-importance.low { background-color: #8b949e; }
+        
+        .timeline-empty {
+            text-align: center;
+            padding: 20px;
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+        
+        .timeline-loading {
+            text-align: center;
+            padding: 20px;
+            color: var(--text-secondary);
+        }
+        
+        .timeline-error {
+            text-align: center;
+            padding: 20px;
+            color: var(--accent-orange);
+            font-size: 13px;
+        }
+        
         /* Responsive */
         @media (max-width: 768px) {
             .sidebar {
@@ -608,6 +753,20 @@
                     </div>
                 </div>
             </div>
+            
+            <!-- Sección de timeline de memoria episódica (SPEC-008 - Fase 4.1) -->
+            <div class="sidebar-section">
+                <div class="section-title">
+                    <span><i class="fas fa-history"></i> Historial de Episodios</span>
+                    <i class="fas fa-sync-alt" id="refresh-timeline" title="Actualizar timeline"></i>
+                </div>
+                <div class="episodic-timeline" id="episodic-timeline">
+                    <div class="timeline-loading" id="timeline-loading">
+                        <div class="spinner" style="margin: 0 auto 8px;"></div>
+                        <div>Cargando historial...</div>
+                    </div>
+                </div>
+            </div>
         </div>
         
         <!-- Área principal del chat (70%) -->
@@ -683,7 +842,7 @@
     
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="/static/intelligence/chat.js"></script>
+    <script src="/static/intelligence/chat.js?v={{ cache_timestamp }}"></script>
     
     <!-- Pasar datos de Django a JavaScript de forma simple -->
     <script>
@@ -694,6 +853,127 @@
             user_level: "{{ user_level|default:'1'|escapejs }}",
             initial_message: "{{ initial_message|default:'¡Hola! Soy el asistente de Propifai. ¿En qué puedo ayudarte hoy?'|escapejs }}"
         };
+    </script>
+    
+    <!-- Timeline de memoria episódica (SPEC-008 - Fase 4.1) -->
+    <script>
+        (function() {
+            'use strict';
+            
+            const timelineEl = document.getElementById('episodic-timeline');
+            const refreshBtn = document.getElementById('refresh-timeline');
+            
+            // Iconos por tipo de episodio
+            const TYPE_ICONS = {
+                property_search: 'fa-search',
+                property_detail: 'fa-building',
+                price_inquiry: 'fa-tag',
+                matching: 'fa-handshake',
+                acm_analysis: 'fa-chart-bar',
+                general: 'fa-comment',
+                fact_extraction: 'fa-lightbulb',
+                user_preference: 'fa-heart'
+            };
+            
+            // Nombres legibles por tipo
+            const TYPE_NAMES = {
+                property_search: 'Búsqueda',
+                property_detail: 'Detalle',
+                price_inquiry: 'Precio',
+                matching: 'Matching',
+                acm_analysis: 'ACM',
+                general: 'General',
+                fact_extraction: 'Hecho',
+                user_preference: 'Preferencia'
+            };
+            
+            function getImportanceLevel(score) {
+                if (score >= 0.7) return 'high';
+                if (score >= 0.4) return 'medium';
+                return 'low';
+            }
+            
+            function formatTime(isoString) {
+                if (!isoString) return '';
+                const date = new Date(isoString);
+                const now = new Date();
+                const diffMs = now - date;
+                const diffMins = Math.floor(diffMs / 60000);
+                const diffHours = Math.floor(diffMs / 3600000);
+                const diffDays = Math.floor(diffMs / 86400000);
+                
+                if (diffMins < 1) return 'Ahora';
+                if (diffMins < 60) return `Hace ${diffMins} min`;
+                if (diffHours < 24) return `Hace ${diffHours}h`;
+                if (diffDays < 7) return `Hace ${diffDays}d`;
+                return date.toLocaleDateString('es-PE', { day: 'numeric', month: 'short' });
+            }
+            
+            function loadTimeline() {
+                const userId = window.djangoContext?.user_id;
+                if (!userId) {
+                    timelineEl.innerHTML = '<div class="timeline-empty">Inicia sesión para ver el historial</div>';
+                    return;
+                }
+                
+                timelineEl.innerHTML = '<div class="timeline-loading"><div class="spinner" style="margin: 0 auto 8px;"></div><div>Cargando historial...</div></div>';
+                
+                fetch(`/api/v1/intelligence/episodic-memory/?user_id=${encodeURIComponent(userId)}&limit=10`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (!data.success || !data.results || data.results.length === 0) {
+                            timelineEl.innerHTML = '<div class="timeline-empty">No hay episodios registrados aún</div>';
+                            return;
+                        }
+                        
+                        let html = '';
+                        data.results.forEach(ep => {
+                            const icon = TYPE_ICONS[ep.episode_type] || 'fa-comment';
+                            const typeName = TYPE_NAMES[ep.episode_type] || ep.episode_type;
+                            const importance = getImportanceLevel(ep.importance_score);
+                            const message = ep.user_message || '';
+                            const timeStr = formatTime(ep.timestamp);
+                            
+                            html += `
+                                <div class="timeline-item" title="${ep.episode_type_display || typeName}: ${message}">
+                                    <div class="timeline-icon ${ep.episode_type}">
+                                        <i class="fas ${icon}"></i>
+                                    </div>
+                                    <div class="timeline-content">
+                                        <div class="timeline-header">
+                                            <span class="timeline-type">
+                                                <span class="timeline-importance ${importance}"></span>
+                                                ${typeName}
+                                            </span>
+                                            <span class="timeline-time">${timeStr}</span>
+                                        </div>
+                                        <div class="timeline-message">${message}</div>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        
+                        timelineEl.innerHTML = html;
+                    })
+                    .catch(error => {
+                        console.error('Error loading episodic timeline:', error);
+                        timelineEl.innerHTML = '<div class="timeline-error">Error al cargar historial</div>';
+                    });
+            }
+            
+            // Cargar timeline al iniciar
+            if (timelineEl) {
+                loadTimeline();
+            }
+            
+            // Recargar al hacer clic en refresh
+            if (refreshBtn) {
+                refreshBtn.addEventListener('click', loadTimeline);
+            }
+            
+            // Recargar después de cada mensaje enviado (opcional)
+            document.addEventListener('episodicMemorySaved', loadTimeline);
+        })();
     </script>
 </body>
 </html>

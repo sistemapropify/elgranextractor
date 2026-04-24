@@ -18,6 +18,7 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 import views
+from intelligence import views as intelligence_views
 
 urlpatterns = [
     # Página principal
@@ -82,4 +83,9 @@ urlpatterns = [
     
     # Meta Ads - Dashboard de campañas publicitarias de Meta
     path('meta-ads/', include('meta_ads.urls')),  # Dashboard de campañas publicitarias de Meta
+
+    # Autenticación (SPEC-009) — rutas a nivel raíz
+    path('register/', intelligence_views.register_view, name='register'),
+    path('login/', intelligence_views.login_view, name='login'),
+    path('logout/', intelligence_views.logout_view, name='logout'),
 ]

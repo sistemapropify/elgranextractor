@@ -297,11 +297,15 @@
             
             <div class="nav-links">
                 <a href="{% url 'intelligence:dashboard' %}" class="nav-link active">Dashboard</a>
+                <a href="{% url 'intelligence:user_list' %}" class="nav-link">Usuarios</a>
                 <a href="{% url 'intelligence:role_list' %}" class="nav-link">Roles</a>
                 <a href="{% url 'intelligence:collection_list' %}" class="nav-link">Colecciones</a>
                 <a href="{% url 'intelligence:user_simulator' %}" class="nav-link">Simulador</a>
                 <a href="{% url 'intelligence:system_stats' %}" class="nav-link">Estadísticas</a>
                 <a href="{% url 'intelligence:activity_logs' %}" class="nav-link">Logs</a>
+                <a href="{% url 'intelligence:chat_web' %}" class="nav-link" style="border-color: var(--accent-green); color: var(--accent-green);">
+                    💬 Chat Web
+                </a>
             </div>
         </div>
         

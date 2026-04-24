@@ -355,13 +355,13 @@ class MemoryService:
     def extract_and_save_facts(user_id: uuid.UUID, message: str, response: str) -> List[Dict]:
         """
         Extrae hechos implícitos del mensaje y respuesta usando LLM.
-        En esta implementación, usa reglas simples. En producción, se integraría con DeepSeek.
-        
+        Primero intenta usar DeepSeek API, si falla usa reglas simples.
+
         Args:
             user_id: ID del usuario
             message: mensaje del usuario
             response: respuesta del asistente
-            
+
         Returns:
             Lista de hechos extraídos
         """
@@ -373,14 +373,210 @@ class MemoryService:
         except User.DoesNotExist:
             return []
         
-        # Hechos predefinidos a detectar (implementación simplificada)
+        # Intentar extracción con DeepSeek primero
+        deepseek_facts = MemoryService._extract_facts_with_deepseek(message, response)
+        
+        # Si DeepSeek extrajo hechos, usarlos
+        if deepseek_facts:
+            facts = deepseek_facts
+        else:
+            # Fallback a reglas simples
+            facts = MemoryService._extract_facts_with_rules(message)
+        
+        # Guardar hechos en la base de datos
+        saved_facts = []
+        for fact_data in facts:
+            # Verificar si el hecho ya existe
+            existing = Fact.objects.filter(
+                user=user,
+                subject=fact_data['subject'],
+                relation=fact_data['relation'],
+                object=fact_data['object']
+            ).first()
+            
+            if not existing:
+                fact = Fact.objects.create(
+                    user=user,
+                    subject=fact_data['subject'],
+                    relation=fact_data['relation'],
+                    object=fact_data['object'],
+                    confidence=fact_data['confidence'],
+                    metadata={
+                        'source': 'deepseek_extraction' if deepseek_facts else 'rule_extraction',
+                        'extracted_at': timezone.now().isoformat(),
+                        'original_message': message[:500]  # Guardar parte del mensaje original
+                    }
+                )
+                saved_facts.append({
+                    'id': str(fact.id),
+                    'subject': fact.subject,
+                    'relation': fact.relation,
+                    'object': fact.object,
+                    'confidence': fact.confidence
+                })
+        
+        return saved_facts
+    
+    @staticmethod
+    def _extract_facts_with_deepseek(message: str, response: str) -> List[Dict]:
+        """
+        Extrae hechos relevantes usando DeepSeek API con enfoque flexible.
+        Identifica cualquier información relevante sobre el usuario, sus preferencias,
+        experiencias, o contexto mencionado en la conversación.
+        
+        Args:
+            message: Mensaje del usuario
+            response: Respuesta del asistente
+            
+        Returns:
+            Lista de hechos extraídos en formato (sujeto, relación, objeto) o lista vacía si falla
+        """
+        try:
+            from .llm import LLMService
+            
+            # Combinar mensaje y respuesta para contexto
+            combined_text = f"Usuario: {message}\nAsistente: {response}"
+            
+            # Prompt para extracción flexible de hechos
+            system_prompt = """Eres un experto en extracción de información relevante de conversaciones.
+Tu tarea es identificar hechos importantes, preferencias, experiencias o información contextual
+que el usuario ha compartido en esta conversación.
+
+INSTRUCCIONES:
+1. Analiza el texto y extrae cualquier información relevante sobre:
+   - El usuario (nombre, trabajo, intereses, experiencias, preferencias)
+   - Contexto personal (dónde vive, trabaja, estudia)
+   - Eventos mencionados (pasados, presentes o futuros)
+   - Preferencias y gustos personales
+   - Cualquier dato que pueda ser útil para futuras interacciones
+
+2. Para cada hecho identificado, estructura la información como una tripleta:
+   - SUJETO: Entidad principal (usualmente "usuario" o entidad mencionada)
+   - RELACIÓN: Tipo de información (ej: "trabaja_en", "vive_en", "le_gusta", "mencionó", "tiene", "prefiere")
+   - OBJETO: Valor o descripción del hecho
+
+3. Considera relevante cualquier información que:
+   - Sea personal o única al usuario
+   - Podría ser útil recordar en futuras conversaciones
+   - Muestra preferencias, hábitos o contexto personal
+   - Incluye eventos o experiencias compartidas
+
+4. Ejemplos de hechos válidos:
+   - Usuario mencionó que trabaja en el área de sistemas → (usuario, trabaja_en_area, sistemas)
+   - Usuario dijo que vive en Arequipa → (usuario, vive_en, Arequipa)
+   - Usuario compartió que ayer fue a comer sushi → (usuario, mencionó_evento, ayer fue a comer sushi)
+   - Usuario expresó interés en departamentos en Cayma → (usuario, interesa_propiedades_en, Cayma)
+   - Usuario mencionó que le gusta el café → (usuario, le_gusta, café)
+
+5. Devuelve SOLO un array JSON con objetos que tengan: subject, relation, object, confidence
+   - confidence: 0.0 a 1.0 basado en qué tan explícita es la información
+
+FORMATO DE SALIDA:
+[
+  {
+    "subject": "usuario",
+    "relation": "trabaja_en_area",
+    "object": "sistemas",
+    "confidence": 0.9
+  },
+  {
+    "subject": "usuario",
+    "relation": "vive_en",
+    "object": "Arequipa",
+    "confidence": 0.85
+  }
+]"""
+            
+            messages = [
+                {"role": "user", "content": f"Extrae hechos relevantes de esta conversación:\n\n{combined_text}"}
+            ]
+            
+            # Llamar a DeepSeek con prompt personalizado
+            success, api_message, api_response = LLMService._call_deepseek_api(
+                messages=messages,
+                system_prompt=system_prompt
+            )
+            
+            if not success or not api_response:
+                return []
+            
+            # Extraer JSON de la respuesta
+            content = api_response.get("content", "")
+            if not content:
+                return []
+            
+            # Buscar JSON en la respuesta (puede estar entre ```json ``` o directamente)
+            import json
+            import re
+            
+            # Intentar encontrar JSON en la respuesta
+            json_match = re.search(r'\[\s*\{.*\}\s*\]', content, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(0)
+                try:
+                    facts = json.loads(json_str)
+                    # Validar estructura básica
+                    if isinstance(facts, list):
+                        validated_facts = []
+                        for fact in facts:
+                            if all(key in fact for key in ['subject', 'relation', 'object']):
+                                # Asegurar confidence
+                                if 'confidence' not in fact:
+                                    fact['confidence'] = 0.8
+                                validated_facts.append(fact)
+                        return validated_facts
+                except json.JSONDecodeError:
+                    pass
+            
+            # Si no se pudo extraer JSON estructurado, intentar análisis más simple
+            # Buscar patrones de tripletas en texto plano
+            facts = []
+            lines = content.split('\n')
+            for line in lines:
+                line = line.strip()
+                # Buscar patrones como "usuario trabaja_en_area sistemas"
+                if 'usuario' in line.lower() and any(rel in line.lower() for rel in ['trabaja', 'vive', 'le gusta', 'mencionó', 'tiene', 'prefiere']):
+                    # Extraer partes
+                    parts = line.split()
+                    if len(parts) >= 3:
+                        # Intentar inferir estructura
+                        subject = 'usuario'
+                        relation = parts[1] if len(parts) > 1 else 'mencionó'
+                        object_text = ' '.join(parts[2:])[:150]
+                        
+                        facts.append({
+                            'subject': subject,
+                            'relation': relation,
+                            'object': object_text,
+                            'confidence': 0.7
+                        })
+            
+            return facts
+            
+        except Exception as e:
+            # Log error pero continuar con reglas simples
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error en extracción flexible con DeepSeek: {str(e)}")
+            return []
+    
+    @staticmethod
+    def _extract_facts_with_rules(message: str) -> List[Dict]:
+        """
+        Extrae hechos usando reglas simples (fallback).
+        
+        Args:
+            message: Mensaje del usuario
+            
+        Returns:
+            Lista de hechos extraídos
+        """
         facts = []
         
         # Detectar nombre
         name_keywords = ['me llamo', 'soy', 'nombre es', 'mi nombre']
         for keyword in name_keywords:
             if keyword in message.lower():
-                # Extraer nombre (implementación simple)
                 parts = message.lower().split(keyword)
                 if len(parts) > 1:
                     name = parts[1].strip().split()[0].capitalize()
@@ -392,6 +588,48 @@ class MemoryService:
                             'confidence': 0.9
                         })
                         break
+        
+        # Detectar área de trabajo
+        work_keywords = ['trabajo en', 'soy de', 'área de', 'departamento de', 'trabajo en el área']
+        for keyword in work_keywords:
+            if keyword in message.lower():
+                parts = message.lower().split(keyword)
+                if len(parts) > 1:
+                    area = parts[1].strip().split('.')[0].split(',')[0].strip()
+                    if area and len(area) > 2:
+                        facts.append({
+                            'subject': 'usuario',
+                            'relation': 'trabaja_en_area',
+                            'object': area.capitalize(),
+                            'confidence': 0.85
+                        })
+                        break
+        
+        # Detectar empresa/inmobiliaria
+        company_keywords = ['inmobiliaria', 'propify', 'propifai', 'empresa', 'trabajo en']
+        for keyword in company_keywords:
+            if keyword in message.lower():
+                # Buscar contexto de empresa
+                if 'propify' in message.lower() or 'propifai' in message.lower():
+                    facts.append({
+                        'subject': 'usuario',
+                        'relation': 'trabaja_en',
+                        'object': 'Propifai',
+                        'confidence': 0.9
+                    })
+                    break
+        
+        # Detectar ubicación
+        location_keywords = ['cayma', 'yanahuara', 'cercado', 'sachaca', 'miraflores', 'paucarpata', 'arequipa', 'vivo en', 'vivo en']
+        for keyword in location_keywords:
+            if keyword in message.lower():
+                facts.append({
+                    'subject': 'usuario',
+                    'relation': 'vive_en',
+                    'object': keyword.capitalize(),
+                    'confidence': 0.75
+                })
+                break
         
         # Detectar búsqueda de propiedad
         property_keywords = ['departamento', 'casa', 'propiedad', 'inmueble', 'terreno', 'local']
@@ -425,50 +663,37 @@ class MemoryService:
                     })
                     break
         
-        # Detectar ubicación
-        location_keywords = ['cayma', 'yanahuara', 'cercado', 'sachaca', 'miraflores', 'paucarpata']
-        for keyword in location_keywords:
-            if keyword in message.lower():
-                facts.append({
-                    'subject': 'usuario',
-                    'relation': 'ubicacion_preferida',
-                    'object': keyword.capitalize(),
-                    'confidence': 0.75
-                })
-                break
+        # Detectar eventos personales (ej: "ayer fui a comer")
+        event_patterns = [
+            r'(ayer|hoy|mañana|la semana pasada)\s+(fui|fuimos|voy|vamos|comí|comimos|estuve|estuvimos)',
+            r'(me gusta|disfruto|me encanta)\s+[a-záéíóúñ\s]+',
+        ]
         
-        # Guardar hechos en la base de datos
-        saved_facts = []
-        for fact_data in facts:
-            # Verificar si el hecho ya existe
-            existing = Fact.objects.filter(
-                user=user,
-                subject=fact_data['subject'],
-                relation=fact_data['relation'],
-                object=fact_data['object']
-            ).first()
-            
-            if not existing:
-                fact = Fact.objects.create(
-                    user=user,
-                    subject=fact_data['subject'],
-                    relation=fact_data['relation'],
-                    object=fact_data['object'],
-                    confidence=fact_data['confidence'],
-                    metadata={
-                        'source': 'auto_extraction',
-                        'extracted_at': timezone.now().isoformat()
-                    }
-                )
-                saved_facts.append({
-                    'id': str(fact.id),
-                    'subject': fact.subject,
-                    'relation': fact.relation,
-                    'object': fact.object,
-                    'confidence': fact.confidence
-                })
+        for pattern in event_patterns:
+            matches = re.findall(pattern, message, re.IGNORECASE)
+            if matches:
+                # Extraer fragmento relevante
+                for match in matches:
+                    if isinstance(match, tuple):
+                        event_text = ' '.join(match)
+                    else:
+                        event_text = match
+                    
+                    # Buscar contexto alrededor del match
+                    start = max(0, message.lower().find(event_text) - 50)
+                    end = min(len(message), start + 100)
+                    context = message[start:end].strip()
+                    
+                    if context:
+                        facts.append({
+                            'subject': 'usuario',
+                            'relation': 'menciono_evento',
+                            'object': context[:150],
+                            'confidence': 0.7
+                        })
+                        break
         
-        return saved_facts
+        return facts
     
     @staticmethod
     def build_prompt_with_memory(context: Dict[str, Any], capability_instructions: str = '') -> str:
@@ -530,6 +755,103 @@ Ahora responde al último mensaje del usuario."""
         
         return prompt
     
+    def _normalize_text(self, text: str) -> str:
+        """
+        Normaliza texto para comparación: minúsculas, elimina tildes y caracteres especiales.
+        
+        Args:
+            text: Texto a normalizar
+            
+        Returns:
+            Texto normalizado
+        """
+        if not text:
+            return ""
+        
+        # Convertir a minúsculas
+        text = text.lower()
+        
+        # Reemplazar tildes (implementación básica)
+        replacements = {
+            'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u', 'ñ': 'n',
+            'ü': 'u', '¿': '', '?': '', '¡': '', '!': '', '.': '', ',': '',
+            ';': '', ':': '', '(': '', ')': '', '[': '', ']': '', '{': '',
+            '}': '', '"': '', "'": '', '`': '', '~': '', '@': '', '#': '',
+            '$': '', '%': '', '^': '', '&': '', '*': '', '+': '', '=': '',
+            '<': '', '>': '', '/': '', '\\': '', '|': ''
+        }
+        
+        for old, new in replacements.items():
+            text = text.replace(old, new)
+        
+        # Eliminar espacios extra
+        text = ' '.join(text.split())
+        
+        return text
+    
+    def _calculate_relevance_score(self, query: str, text: str, base_confidence: float) -> float:
+        """
+        Calcula puntuación de relevancia entre consulta y texto.
+        
+        Args:
+            query: Consulta del usuario (normalizada)
+            text: Texto a comparar (normalizado)
+            base_confidence: Confianza base del hecho (0.0-1.0)
+            
+        Returns:
+            Puntuación de relevancia (0.0-1.0)
+        """
+        if not query or not text:
+            return 0.0
+        
+        # Peso de la confianza base
+        confidence_weight = 0.3
+        
+        # Peso de coincidencia exacta de palabras
+        exact_match_weight = 0.4
+        
+        # Peso de coincidencia parcial (substrings)
+        partial_match_weight = 0.3
+        
+        score = 0.0
+        
+        # Contribución de la confianza base
+        score += base_confidence * confidence_weight
+        
+        # Dividir en palabras
+        query_words = set(query.split())
+        text_words = set(text.split())
+        
+        # Coincidencia exacta de palabras
+        common_words = query_words.intersection(text_words)
+        if common_words:
+            exact_match_ratio = len(common_words) / max(len(query_words), 1)
+            score += exact_match_ratio * exact_match_weight
+        
+        # Coincidencia parcial (substrings)
+        # Verificar si palabras de la consulta aparecen como substrings en el texto
+        partial_matches = 0
+        for q_word in query_words:
+            if len(q_word) > 2 and q_word in text:
+                partial_matches += 1
+        
+        if partial_matches > 0:
+            partial_match_ratio = partial_matches / max(len(query_words), 1)
+            score += partial_match_ratio * partial_match_weight
+        
+        # Bonus por coincidencia de palabras clave importantes
+        important_keywords = ['trabajo', 'trabaja', 'area', 'área', 'sistemas', 'empresa',
+                             'propify', 'vive', 'yanahuara', 'cayma', 'nombre', 'llama',
+                             'presupuesto', 'familia', 'evento', 'comer', 'sushi']
+        
+        for keyword in important_keywords:
+            normalized_keyword = self._normalize_text(keyword)
+            if normalized_keyword in query and normalized_keyword in text:
+                score += 0.1  # Bonus pequeño
+        
+        # Asegurar que el score esté entre 0.0 y 1.0
+        return min(max(score, 0.0), 1.0)
+    
     def get_relevant_context(self, query: str, limit: int = 5) -> List[Dict]:
         """
         Obtiene contexto relevante de la memoria del usuario basado en la consulta.
@@ -544,11 +866,11 @@ Ahora responde al último mensaje del usuario."""
         if not self.user:
             return []
         
-        # Obtener hechos del usuario
+        # Obtener todos los hechos del usuario (más de los necesarios para filtrar)
         facts = Fact.objects.filter(
             user=self.user,
             is_active=True
-        ).order_by('-confidence')[:limit]
+        ).order_by('-confidence')[:20]  # Obtener más para filtrar
         
         # Obtener conversaciones recientes
         conversations = Conversation.objects.filter(
@@ -558,14 +880,25 @@ Ahora responde al último mensaje del usuario."""
         
         context_items = []
         
-        # Agregar hechos
+        # Agregar hechos con puntuación de relevancia
+        query_lower = self._normalize_text(query)
         for fact in facts:
+            fact_text = f"{fact.subject} {fact.relation} {fact.object}"
+            normalized_fact = self._normalize_text(fact_text)
+            
+            # Calcular puntuación de relevancia
+            relevance_score = self._calculate_relevance_score(
+                query_lower, normalized_fact, fact.confidence
+            )
+            
             context_items.append({
                 'type': 'fact',
-                'content': f"{fact.subject} {fact.relation} {fact.object}",
+                'content': fact_text,
                 'confidence': fact.confidence,
+                'relevance_score': relevance_score,
                 'source': 'memory',
-                'timestamp': fact.created_at.isoformat() if fact.created_at else None
+                'timestamp': fact.created_at.isoformat() if fact.created_at else None,
+                'fact_id': fact.id
             })
         
         # Agregar mensajes recientes de conversaciones
@@ -576,27 +909,46 @@ Ahora responde al último mensaje del usuario."""
                     role = msg.get('role', 'unknown')
                     content = msg.get('content', '')
                     if content:
+                        normalized_content = self._normalize_text(content)
+                        relevance_score = self._calculate_relevance_score(
+                            query_lower, normalized_content, 0.5
+                        )
+                        
                         context_items.append({
                             'type': 'conversation',
                             'role': role,
                             'content': content[:200],  # Limitar longitud
+                            'relevance_score': relevance_score,
                             'source': 'conversation',
                             'conversation_id': str(conv.id),
                             'timestamp': msg.get('timestamp')
                         })
         
-        # Filtrar por relevancia simple (búsqueda de palabras clave)
-        query_lower = query.lower()
-        relevant_items = []
-        for item in context_items:
-            content = item.get('content', '').lower()
-            # Verificar si la consulta contiene palabras relevantes
-            if any(word in content for word in query_lower.split()[:5]):
-                relevant_items.append(item)
+        # Ordenar por puntuación de relevancia (más relevante primero)
+        context_items.sort(key=lambda x: x.get('relevance_score', 0), reverse=True)
         
-        # Si no hay items relevantes, devolver los más recientes
-        if not relevant_items and context_items:
-            relevant_items = context_items[:limit]
+        # Tomar los más relevantes
+        relevant_items = context_items[:limit]
+        
+        # Si no hay items con relevancia > 0, devolver los más recientes/hechos con mayor confianza
+        if not relevant_items or all(item.get('relevance_score', 0) <= 0 for item in relevant_items):
+            # Devolver hechos recientes con mayor confianza
+            recent_facts = Fact.objects.filter(
+                user=self.user,
+                is_active=True
+            ).order_by('-created_at', '-confidence')[:limit]
+            
+            relevant_items = []
+            for fact in recent_facts:
+                relevant_items.append({
+                    'type': 'fact',
+                    'content': f"{fact.subject} {fact.relation} {fact.object}",
+                    'confidence': fact.confidence,
+                    'relevance_score': 0.1,  # Puntuación baja para indicar que no es muy relevante
+                    'source': 'memory',
+                    'timestamp': fact.created_at.isoformat() if fact.created_at else None,
+                    'fact_id': fact.id
+                })
         
         return relevant_items[:limit]
     

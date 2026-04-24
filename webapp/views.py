@@ -24,12 +24,16 @@ def home(request):
     # Obtener cambios recientes
     cambios_recientes = EventoDeteccion.objects.select_related('captura', 'captura__fuente').order_by('-fecha_deteccion')[:5]
     
+    # Usuario actual (establecido por middleware)
+    current_user = getattr(request, 'current_user', None)
+    
     context = {
         'total_fuentes': total_fuentes,
         'total_capturas': total_capturas,
         'cambios_detectados': cambios_detectados,
         'fuentes_activas': fuentes_activas,
         'cambios_recientes': cambios_recientes,
+        'current_user': current_user,
     }
     
     return render(request, 'index.html', context)

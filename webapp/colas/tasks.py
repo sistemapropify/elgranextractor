@@ -21,6 +21,8 @@ from semillas.models import FuenteWeb
 from captura.models import CapturaCruda, EventoDeteccion
 from captura.diff_engine import MotorDiferencias
 
+from intelligence.services.episodic_memory import EpisodicMemoryService
+
 logger = logging.getLogger(__name__)
 
 
@@ -676,3 +678,50 @@ def generar_reporte_estadisticas(dias: int = 7) -> Dict[str, Any]:
                f"{cambios_totales} cambios, {tasa_exito:.1f}% éxito")
     
     return reporte
+
+
+# =============================================================================
+# Tareas de mantenimiento - Memoria Episódica (SPEC-008 - Fase 4.3)
+# =============================================================================
+
+@shared_task(bind=True)
+def prune_episodic_memory_weekly(self, dry_run: bool = False) -> Dict[str, Any]:
+    """
+    Tarea Celery programada semanalmente para podar memorias episódicas.
+    Ejecuta prune_old_episodes y enforce_max_per_user.
+    
+    Args:
+        dry_run: Si True, solo reporta sin eliminar
+        
+    Returns:
+        Diccionario con resultados de la poda
+    """
+    try:
+        logger.info(f"Iniciando prune semanal de memoria episódica (dry_run={dry_run})")
+        
+        # Paso 1: Podar episodios viejos (>90 días, baja importancia)
+        prune_result = EpisodicMemoryService.prune_old_episodes(dry_run=dry_run)
+        logger.info(f"Prune old episodes: {prune_result}")
+        
+        # Paso 2: Limitar episodios por usuario (máximo 500)
+        enforce_result = EpisodicMemoryService.enforce_max_per_user(dry_run=dry_run)
+        logger.info(f"Enforce max per user: {enforce_result}")
+        
+        result = {
+            'status': 'success',
+            'dry_run': dry_run,
+            'prune_result': prune_result,
+            'enforce_result': enforce_result,
+            'timestamp': timezone.now().isoformat()
+        }
+        
+        logger.info(f"Prune semanal completado: {result}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error en prune_episodic_memory_weekly: {e}")
+        return {
+            'status': 'error',
+            'error': str(e),
+            'timestamp': timezone.now().isoformat()
+        }

@@ -4,6 +4,12 @@ y gestión de colecciones vectoriales.
 
 Implementa el sistema de embeddings y búsqueda por similitud de coseno
 para documentos almacenados en IntelligenceDocument.
+
+OPTIMIZACIONES IMPLEMENTADAS (SPEC-013):
+1. Singleton robusto para modelo de embeddings
+2. Caché LRU para embeddings de consultas frecuentes
+3. Pre-carga opcional del modelo
+4. Monitoreo de estado del singleton
 """
 import os
 import json
@@ -12,6 +18,7 @@ import numpy as np
 from typing import List, Dict, Optional, Tuple, Any
 from datetime import datetime
 import logging
+from functools import lru_cache
 
 from django.db import connection, connections
 from django.utils import timezone
@@ -31,35 +38,68 @@ class RAGService:
     - Gestión de colecciones
     - Sincronización de datos
     - Búsqueda semántica
+    
+    OPTIMIZACIONES:
+    - Singleton thread-safe para modelo de embeddings
+    - Caché LRU para embeddings de consultas
+    - Pre-carga opcional del modelo
+    - Monitoreo de estado
     """
     
-    # Modelo de embeddings (all-MiniLM-L6-v2)
-    EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+    # Modelo de embeddings (jaimevera1107/all-MiniLM-L6-v2-similarity-es)
+    # Versión fine-tuned para similitud semántica en español
+    EMBEDDING_MODEL = "jaimevera1107/all-MiniLM-L6-v2-similarity-es"
     EMBEDDING_DIMENSIONS = 384
     
     # Configuración desde variables de entorno
-    SIMILARITY_THRESHOLD = float(os.environ.get('RAG_SIMILARITY_THRESHOLD', 0.7))
+    # NOTA: El modelo jaimevera1107/all-MiniLM-L6-v2-similarity-es (español) es más discriminativo
+    # que all-MiniLM-L6-v2 (inglés). Los scores de similitud son más bajos pero más precisos.
+    # Threshold reducido a 0.2 para capturar resultados relevantes en español.
+    SIMILARITY_THRESHOLD = float(os.environ.get('RAG_SIMILARITY_THRESHOLD', 0.2))
     MAX_RESULTS = int(os.environ.get('RAG_MAX_RESULTS', 10))
     BATCH_SIZE = int(os.environ.get('RAG_BATCH_SIZE', 100))
+    ENABLE_TEXT_FALLBACK = os.environ.get('RAG_ENABLE_TEXT_FALLBACK', 'true').lower() == 'true'
     
     # Singleton para el modelo de embeddings
     _embedder = None
+    _embedder_lock = False  # Lock simple para evitar inicialización concurrente
+    
+    # Caché para embeddings de consultas frecuentes
+    _embedding_cache = {}
+    _max_cache_size = int(os.environ.get('RAG_EMBEDDING_CACHE_SIZE', 100))
     
     @classmethod
-    def initialize_embedder(cls):
+    def initialize_embedder(cls, force: bool = False):
         """
         Inicializa el modelo de embeddings (sentence-transformers).
         Usa lazy loading para evitar cargar el modelo si no se necesita.
         
+        Args:
+            force: Forzar reinicialización incluso si ya está cargado
+            
         Returns:
             Modelo de embeddings cargado
         """
-        if cls._embedder is None:
+        if cls._embedder is None or force:
+            # Evitar inicialización concurrente
+            if cls._embedder_lock:
+                while cls._embedder_lock:
+                    import time
+                    time.sleep(0.01)
+                return cls._embedder
+            
+            cls._embedder_lock = True
             try:
                 from sentence_transformers import SentenceTransformer
                 logger.info(f"Inicializando modelo de embeddings: {cls.EMBEDDING_MODEL}")
                 cls._embedder = SentenceTransformer(cls.EMBEDDING_MODEL)
                 logger.info(f"Modelo de embeddings inicializado ({cls.EMBEDDING_DIMENSIONS} dimensiones)")
+                
+                # Limpiar caché si se fuerza reinicialización
+                if force:
+                    cls._embedding_cache.clear()
+                    logger.info("Caché de embeddings limpiado por reinicialización forzada")
+                    
             except ImportError as e:
                 logger.error(f"Error al importar sentence-transformers: {e}")
                 raise ImportError(
@@ -69,6 +109,8 @@ class RAGService:
             except Exception as e:
                 logger.error(f"Error al inicializar modelo de embeddings: {e}")
                 raise
+            finally:
+                cls._embedder_lock = False
         
         return cls._embedder
     
@@ -78,18 +120,67 @@ class RAGService:
         return cls.initialize_embedder()
     
     @classmethod
-    def generate_embedding(cls, text: str) -> Optional[bytes]:
+    def preload_embedder(cls):
         """
-        Genera embedding vectorial para un texto.
+        Pre-carga el modelo de embeddings al inicio de la aplicación.
+        Útil para evitar latencia en la primera consulta.
+        
+        Returns:
+            True si se cargó exitosamente, False si hubo error
+        """
+        try:
+            embedder = cls.initialize_embedder()
+            if embedder:
+                logger.info("Modelo de embeddings pre-cargado exitosamente")
+                return True
+        except Exception as e:
+            logger.error(f"Error al pre-cargar modelo de embeddings: {e}")
+        
+        return False
+    
+    @classmethod
+    def get_embedder_status(cls) -> Dict[str, Any]:
+        """
+        Obtiene estado del singleton de embeddings.
+        
+        Returns:
+            Dict con información de estado
+        """
+        return {
+            'loaded': cls._embedder is not None,
+            'model': cls.EMBEDDING_MODEL,
+            'dimensions': cls.EMBEDDING_DIMENSIONS,
+            'cache_size': len(cls._embedding_cache),
+            'cache_hits': getattr(cls, '_cache_hits', 0),
+            'cache_misses': getattr(cls, '_cache_misses', 0),
+        }
+    
+    @classmethod
+    def generate_embedding(cls, text: str, use_cache: bool = True) -> Optional[bytes]:
+        """
+        Genera embedding vectorial para un texto con caché LRU.
         
         Args:
             text: Texto a convertir en embedding
+            use_cache: Usar caché para consultas frecuentes
             
         Returns:
             Bytes del embedding (384 dimensiones) o None si hay error
         """
         if not text or not text.strip():
             return None
+        
+        # Verificar caché si está habilitado
+        if use_cache:
+            cache_key = hashlib.md5(text.encode('utf-8')).hexdigest()
+            if cache_key in cls._embedding_cache:
+                # Actualizar estadísticas de caché
+                cls._cache_hits = getattr(cls, '_cache_hits', 0) + 1
+                logger.debug(f"Embedding obtenido de caché para: '{text[:50]}...'")
+                return cls._embedding_cache[cache_key]
+            
+            # Actualizar estadísticas de caché
+            cls._cache_misses = getattr(cls, '_cache_misses', 0) + 1
         
         try:
             embedder = cls.get_embedder()
@@ -108,11 +199,37 @@ class RAGService:
                     embedding_np = np.concatenate([embedding_np, padding])
             
             # Convertir a bytes para almacenar en BinaryField
-            return embedding_np.tobytes()
+            embedding_bytes = embedding_np.tobytes()
+            
+            # Almacenar en caché si está habilitado
+            if use_cache:
+                # Gestionar tamaño de caché (LRU simple)
+                if len(cls._embedding_cache) >= cls._max_cache_size:
+                    # Eliminar el primer elemento (más antiguo)
+                    oldest_key = next(iter(cls._embedding_cache))
+                    del cls._embedding_cache[oldest_key]
+                
+                cls._embedding_cache[cache_key] = embedding_bytes
+                logger.debug(f"Embedding almacenado en caché para: '{text[:50]}...'")
+            
+            return embedding_bytes
             
         except Exception as e:
             logger.error(f"Error al generar embedding: {e}")
             return None
+    
+    @classmethod
+    def clear_embedding_cache(cls):
+        """
+        Limpia la caché de embeddings.
+        
+        Returns:
+            Número de elementos eliminados
+        """
+        count = len(cls._embedding_cache)
+        cls._embedding_cache.clear()
+        logger.info(f"Caché de embeddings limpiada ({count} elementos eliminados)")
+        return count
     
     @classmethod
     def calculate_content_hash(cls, content: str) -> str:
@@ -935,10 +1052,15 @@ class RAGService:
                 # Detectar automáticamente
                 conn = cls._get_connection_for_collection(collection)
             
-            # Construir consulta SQL automática
-            schema = 'dbo'  # Por defecto, podría extraerse de field_definitions en el futuro
-            table_name = collection.table_name
-            sql = f"SELECT * FROM [{schema}].[{table_name}]"
+            # Usar source_sql personalizado si existe, de lo contrario construir consulta automática
+            if collection.source_sql and collection.source_sql.strip():
+                sql = collection.source_sql
+                table_name = collection.table_name
+                logger.info(f"Usando source_sql personalizado para colección: {collection.name}")
+            else:
+                schema = 'dbo'  # Por defecto, podría extraerse de field_definitions en el futuro
+                table_name = collection.table_name
+                sql = f"SELECT * FROM [{schema}].[{table_name}]"
             
             # Ejecutar consulta SQL
             with conn.cursor() as cursor:
@@ -1069,6 +1191,111 @@ class RAGService:
             return False, f"Error en sincronización dinámica: {str(e)}", stats
     
     @classmethod
+    def _text_search_fallback(
+        cls,
+        query: str,
+        collections,
+        filters: Dict[str, Any] = None,
+        limit: int = 5
+    ) -> List[Dict[str, Any]]:
+        """
+        Búsqueda por texto como fallback cuando la búsqueda vectorial no encuentra resultados.
+        Busca palabras clave de la query en el contenido de los documentos.
+        
+        Args:
+            query: Texto de búsqueda
+            collections: QuerySet de colecciones
+            filters: Filtros adicionales
+            limit: Número máximo de resultados
+            
+        Returns:
+            Lista de diccionarios con resultados
+        """
+        if not query or not query.strip():
+            return []
+        
+        try:
+            # Extraer palabras clave de la query (ignorar palabras comunes)
+            stop_words = {'que', 'en', 'el', 'la', 'los', 'las', 'de', 'del', 'para', 'con',
+                         'por', 'un', 'una', 'y', 'e', 'o', 'a', 'al', 'es', 'se', 'no',
+                         'me', 'te', 'le', 'lo', 'tu', 'su', 'como', 'mas', 'pero',
+                         'tienes', 'puedes', 'quiero', 'necesito', 'hay', 'esta', 'este'}
+            
+            words = query.lower().split()
+            keywords = [w for w in words if w not in stop_words and len(w) > 2]
+            
+            if not keywords:
+                logger.info(f"No se extrajeron palabras clave de la query: '{query}'")
+                return []
+            
+            logger.info(f"Búsqueda por texto con palabras clave: {keywords}")
+            
+            # Construir query de búsqueda por contenido
+            from django.db.models import Q
+            
+            text_query = Q()
+            for keyword in keywords:
+                text_query |= Q(content__icontains=keyword)
+            
+            # Obtener documentos que coincidan
+            documents = IntelligenceDocument.objects.filter(
+                collection__in=collections,
+                embedding__isnull=False  # Solo documentos con embedding
+            ).filter(text_query).select_related('collection')[:limit * 3]  # Obtener más para filtrar
+            
+            if not documents:
+                logger.info(f"No se encontraron documentos con palabras clave: {keywords}")
+                return []
+            
+            # Calcular score de relevancia basado en cuántas palabras clave coinciden
+            results = []
+            for doc in documents:
+                content_lower = doc.content.lower()
+                match_count = sum(1 for kw in keywords if kw in content_lower)
+                match_ratio = match_count / len(keywords) if keywords else 0
+                
+                # Score: 0.5 base + bonus por coincidencias
+                score = 0.5 + (match_ratio * 0.3)
+                
+                # Obtener field_values
+                display_fields = doc.collection.display_fields or []
+                field_values_to_display = {}
+                
+                if display_fields:
+                    for field in display_fields:
+                        if field in doc.field_values:
+                            field_values_to_display[field] = doc.field_values[field]
+                else:
+                    field_values_to_display = doc.field_values
+                
+                result = {
+                    'document_id': str(doc.id),
+                    'collection_name': doc.collection.name,
+                    'source_id': doc.source_id,
+                    'similarity': min(score, 0.99),  # No superar 0.99
+                    'field_values': field_values_to_display,
+                    'content': doc.content[:200] + '...' if len(doc.content) > 200 else doc.content,
+                    'created_at': doc.created_at.isoformat() if doc.created_at else None,
+                    'search_type': 'text',
+                    'match_keywords': match_count,
+                    'total_keywords': len(keywords)
+                }
+                results.append(result)
+            
+            # Ordenar por score descendente
+            results.sort(key=lambda x: x['similarity'], reverse=True)
+            
+            # Limitar resultados
+            results = results[:limit]
+            
+            logger.info(f"Búsqueda por texto: {len(results)} resultados para keywords: {keywords}")
+            return results
+            
+        except Exception as e:
+            logger.error(f"Error en búsqueda por texto fallback: {e}")
+            return []
+    
+    @classmethod
     def search_dynamic(
         cls,
         query: str,
@@ -1167,7 +1394,8 @@ class RAGService:
                             'similarity': float(similarity),
                             'field_values': field_values_to_display,
                             'content': doc.content[:200] + '...' if len(doc.content) > 200 else doc.content,
-                            'created_at': doc.created_at.isoformat() if doc.created_at else None
+                            'created_at': doc.created_at.isoformat() if doc.created_at else None,
+                            'search_type': 'vector'
                         }
                         results.append(result)
                         
@@ -1175,13 +1403,37 @@ class RAGService:
                     logger.warning(f"Error calculando similitud para documento {doc.id}: {e}")
                     continue
             
-            # Ordenar por similitud descendente
+            # Si no hay suficientes resultados con búsqueda vectorial y está habilitado el fallback de texto
+            if len(results) < top_k and cls.ENABLE_TEXT_FALLBACK:
+                logger.info(f"Búsqueda vectorial encontró solo {len(results)} resultados. Activando fallback de texto...")
+                
+                # Búsqueda por texto en el contenido
+                text_results = cls._text_search_fallback(
+                    query=query,
+                    collections=collections,
+                    filters=filters,
+                    limit=top_k - len(results)
+                )
+                
+                # Agregar resultados de texto
+                for text_result in text_results:
+                    text_result['search_type'] = 'text'
+                    results.append(text_result)
+            
+            # Ordenar por similitud descendente (los resultados de texto tendrán similarity=0.5)
             results.sort(key=lambda x: x['similarity'], reverse=True)
             
             # Limitar resultados
             results = results[:top_k]
             
-            logger.info(f"Búsqueda dinámica completada: {len(results)} resultados para query: '{query[:50]}...'")
+            # Log detallado
+            vector_count = sum(1 for r in results if r.get('search_type') == 'vector')
+            text_count = sum(1 for r in results if r.get('search_type') == 'text')
+            
+            logger.info(
+                f"Búsqueda dinámica completada: {len(results)} resultados "
+                f"(vector: {vector_count}, texto: {text_count}) para query: '{query[:50]}...'"
+            )
             return results
             
         except Exception as e:

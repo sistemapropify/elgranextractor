@@ -1,4 +1,5 @@
 from django.urls import path, re_path
+from django.views.decorators.csrf import csrf_exempt
 from . import views
 import uuid
 
@@ -42,7 +43,23 @@ urlpatterns = [
     
     # Chat Web Interactivo (SPEC-007)
     path('chat-web/', views.chat_web, name='chat_web'),
-    path('chat-web/api/', views.chat_web_api, name='chat_web_api'),
-    path('chat-web/stream/', views.chat_web_stream, name='chat_web_stream'),
-    path('chat-web/upload/', views.chat_web_upload, name='chat_web_upload'),
+    path('chat-web/api/', csrf_exempt(views.chat_web_api), name='chat_web_api'),
+    path('chat-web/stream/', csrf_exempt(views.chat_web_stream), name='chat_web_stream'),
+    path('chat-web/upload/', csrf_exempt(views.chat_web_upload), name='chat_web_upload'),
+    # Episodic Memory API (SPEC-008 - Fase 4.4)
+    path('episodic-memory/', views.episodic_memory_list, name='episodic_memory_list'),
+    path('episodic-memory/stats/', views.episodic_memory_stats, name='episodic_memory_stats'),
+    path('episodic-memory/<uuid:episode_id>/', views.episodic_memory_detail, name='episodic_memory_detail'),
+    path('episodic-memory/<uuid:episode_id>/feedback/', views.episodic_memory_feedback, name='episodic_memory_feedback'),
+
+    # Autenticación (SPEC-009)
+    path('register/', views.register_view, name='register'),
+    path('login/', views.login_view, name='login'),
+    path('logout/', views.logout_view, name='logout'),
+
+    # CRUD de usuarios (SPEC-009 - Fase 7)
+    path('users/', views.user_list, name='user_list'),
+    path('users/create/', views.user_create, name='user_create'),
+    path('users/<uuid:user_id>/edit/', views.user_edit, name='user_edit'),
+    path('users/<uuid:user_id>/toggle-active/', views.user_toggle_active, name='user_toggle_active'),
 ]

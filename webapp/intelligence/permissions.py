@@ -16,52 +16,32 @@ from .models import Role, AppConfig, IntelligenceCollection
 
 def get_user_role(request):
     """
-    Obtiene el rol del usuario actual desde la sesión.
-    En un sistema real, esto vendría de la autenticación.
-    Para el dashboard de configuración, usamos un rol simulado.
+    Obtiene el rol del usuario actual.
+    Prioridad:
+    1. request.current_user.role (usuario autenticado vía middleware)
+    2. Rol simulado desde sesión (para testing/simulador)
+    3. None si no hay usuario
     """
-    # Por ahora, simulamos un rol de administrador
-    # En producción, esto vendría de request.user.groups o similar
+    # 1. Usuario autenticado vía middleware
+    if hasattr(request, 'current_user') and request.current_user and request.current_user.role:
+        return request.current_user.role
+    
+    # 2. Rol simulado (para el simulador de usuario)
     if 'simulated_role_id' in request.session:
         try:
             return Role.objects.get(id=request.session['simulated_role_id'])
         except Role.DoesNotExist:
             pass
     
-    # Rol por defecto: Administrador (si existe)
-    try:
-        # Buscar cualquier rol que contenga 'admin' o 'administrador' (case insensitive)
-        admin_role = Role.objects.filter(name__icontains='admin').first()
-        if admin_role:
-            return admin_role
-        
-        # Si no encuentra, buscar por 'administrador'
-        admin_role = Role.objects.filter(name__icontains='administrador').first()
-        if admin_role:
-            return admin_role
-        
-        # Si aún no encuentra, tomar el primer rol disponible
-        first_role = Role.objects.first()
-        if first_role:
-            return first_role
-        
-        # Si no hay roles, crear uno por defecto
-        import uuid
-        from django.utils import timezone
-        default_role = Role.objects.create(
-            id=uuid.uuid4(),
-            name='Administrador',
-            description='Rol de administrador creado automáticamente',
-            allowed_levels=[1, 2, 3, 4, 5],
-            capabilities={'admin': True},
-            created_at=timezone.now(),
-            updated_at=timezone.now()
-        )
-        return default_role
-    except Exception as e:
-        # En caso de error, devolver None (pero esto causará redirección)
-        print(f"Error en get_user_role: {e}")
-        return None
+    # 3. Fallback: buscar rol por nombre de usuario en sesión
+    user_role_name = request.session.get('user_role', '')
+    if user_role_name:
+        try:
+            return Role.objects.get(name=user_role_name)
+        except Role.DoesNotExist:
+            pass
+    
+    return None
 
 
 def has_permission(required_levels=None, required_apps=None, permission_type='view'):

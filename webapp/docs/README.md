@@ -18,15 +18,15 @@ docs/
 
 ## Estado de Implementación
 
-| SPEC | Título | Estado | Fecha | Notas |
-|------|--------|--------|-------|-------|
-| 001 | Propifai Intelligence Layer (PIL v1.0) | ✅ COMPLETADO | 15/Abr/2026 | App Django completa con modelos, API, admin |
-| 002 | Sistema de Memoria de Conversación | ✅ COMPLETADO | 15/Abr/2026 | MemoryService con gestión de contexto y hechos |
-| 003 | Sistema RAG y Colecciones Vectoriales | ✅ COMPLETADO | Abr/2026 | RAGService con embeddings y búsqueda semántica |
-| 004 | Integración WhatsApp Business | ⏸️ PENDIENTE | 17/Abr/2026 | Postergado, diseño completo listo |
-| 005 | Dashboard de Configuración | ✅ IMPLEMENTADO | 17/Abr/2026 | 92% completitud, variaciones aceptables |
-| 006 | Integración DeepSeek (PIL v1.0) | ✅ COMPLETADO | Abr/2026 | LLMService con extracción de hechos y clasificación |
-| 007 | Chat Web Interactivo (PIL v1.0) | 📋 PLANIFICADO | 17/Abr/2026 | Plan de implementación creado |
+| SPEC | Título | Versión | Estado | Fecha | Notas |
+|------|--------|---------|--------|-------|-------|
+| 001 | Propifai Intelligence Layer (PIL v1.0) | v1.0 | ✅ COMPLETADO | 15/Abr/2026 | App Django completa con modelos, API, admin |
+| 002 | Sistema de Memoria de Conversación | v1.0 | ✅ COMPLETADO | 15/Abr/2026 | MemoryService con gestión de contexto y hechos |
+| 003 | Sistema RAG y Colecciones Vectoriales | **v1.1** | ✅ COMPLETADO + MEJORAS | 23/Abr/2026 | Modelo embeddings español, umbral 0.2, search_dynamic, mapeo inglés→español |
+| 004 | Integración WhatsApp Business | — | ⏸️ PENDIENTE | 17/Abr/2026 | Postergado, diseño completo listo |
+| 005 | Dashboard de Configuración | v1.0 | ✅ IMPLEMENTADO | 17/Abr/2026 | 92% completitud, variaciones aceptables |
+| 006 | Integración DeepSeek (PIL v1.0) | **v1.1** | ✅ COMPLETADO + MEJORAS | 23/Abr/2026 | Contexto RAG en system prompt, streaming SSE, corrección paso de parámetros |
+| 007 | Chat Web Interactivo (PIL v1.0) | v1.0 | 📋 PLANIFICADO | 17/Abr/2026 | Plan de implementación creado |
 
 ## Cómo Actualizar la Documentación
 
@@ -56,4 +56,4 @@ docs/
 
 ---
 
-*Última actualización: 17 de Abril de 2026*
+*Última actualización: 23 de Abril de 2026*

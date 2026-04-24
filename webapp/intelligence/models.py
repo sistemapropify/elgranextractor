@@ -38,13 +38,17 @@ class Role(models.Model):
 
 class User(models.Model):
     """
-    Usuarios identificados por phone o email (uno de los dos).
-    Cada usuario tiene un rol asignado.
+    Usuarios del sistema. Ahora con username, nombre, apellido, password y last_login
+    para soportar registro y autenticación por username + password.
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    username = models.CharField(max_length=50, unique=True, verbose_name="Nombre de usuario", default='')
+    first_name = models.CharField(max_length=100, blank=True, verbose_name="Nombre")
+    last_name = models.CharField(max_length=100, blank=True, verbose_name="Apellido")
     phone = models.CharField(max_length=20, blank=True, null=True, unique=True, verbose_name="Teléfono")
     email = models.EmailField(blank=True, null=True, unique=True, verbose_name="Email")
-    # Un usuario debe tener al menos phone o email
+    password = models.CharField(max_length=128, blank=True, null=True, verbose_name="Contraseña")
+    last_login = models.DateTimeField(blank=True, null=True, verbose_name="Último login")
     role = models.ForeignKey(Role, on_delete=models.PROTECT, related_name='users', verbose_name="Rol")
     metadata = models.JSONField(default=dict, verbose_name="Metadatos adicionales")
     is_active = models.BooleanField(default=True, verbose_name="Activo")
@@ -66,14 +70,26 @@ class User(models.Model):
             )
         ]
         indexes = [
+            models.Index(fields=['username']),
             models.Index(fields=['phone']),
             models.Index(fields=['email']),
             models.Index(fields=['created_at']),
         ]
 
+    def set_password(self, raw_password):
+        """Hashea y guarda la contraseña usando el sistema de hash de Django."""
+        from django.contrib.auth.hashers import make_password
+        self.password = make_password(raw_password)
+
+    def check_password(self, raw_password):
+        """Verifica la contraseña contra el hash almacenado."""
+        from django.contrib.auth.hashers import check_password
+        return check_password(raw_password, self.password)
+
     def __str__(self):
-        identifier = self.phone or self.email or str(self.id)[:8]
-        return f"Usuario {identifier}"
+        if self.first_name and self.last_name:
+            return f"{self.first_name} {self.last_name} (@{self.username})"
+        return f"@{self.username}"
 
 
 class AppConfig(models.Model):
@@ -345,3 +361,138 @@ class IntelligenceDocument(models.Model):
 
     def __str__(self):
         return f"{self.collection.name}: {self.source_id}"
+
+
+class EpisodicMemory(models.Model):
+    """
+    Memoria episódica: eventos completos de interacción usuario-sistema.
+    Cada "episodio" es una interacción atómica (mensaje + respuesta + contexto completo).
+    """
+    EPISODE_TYPES = [
+        ('property_search', 'Búsqueda de propiedad'),
+        ('property_detail', 'Consulta de detalle'),
+        ('price_inquiry', 'Consulta de precio'),
+        ('matching', 'Matching oferta-demanda'),
+        ('acm_analysis', 'Análisis ACM'),
+        ('general', 'Consulta general'),
+        ('fact_extraction', 'Extracción de hecho'),
+        ('user_preference', 'Preferencia del usuario'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        related_name='episodic_memories',
+        verbose_name="Usuario"
+    )
+    conversation = models.ForeignKey(
+        Conversation, on_delete=models.CASCADE,
+        related_name='episodic_memories',
+        verbose_name="Conversación"
+    )
+
+    # --- El episodio en sí ---
+    user_message = models.TextField(verbose_name="Mensaje del usuario")
+    user_message_embedding = models.BinaryField(
+        null=True, blank=True,
+        verbose_name="Embedding del mensaje",
+        help_text="Vector de 384 dimensiones para búsqueda semántica"
+    )
+    assistant_response = models.TextField(verbose_name="Respuesta del asistente")
+    timestamp = models.DateTimeField(
+        db_index=True,
+        verbose_name="Momento de la interacción"
+    )
+
+    # --- Clasificación ---
+    episode_type = models.CharField(
+        max_length=50, db_index=True,
+        choices=EPISODE_TYPES,
+        default='general',
+        verbose_name="Tipo de episodio"
+    )
+    intent_detected = models.CharField(
+        max_length=100, blank=True, default='',
+        verbose_name="Intención detectada"
+    )
+
+    # --- Contexto enriquecido (JSON) ---
+    context = models.JSONField(
+        default=dict, blank=True,
+        verbose_name="Contexto del episodio",
+        help_text="""Almacena:
+            - entities: {districts, property_types, price_range, ...}
+            - topics: [temas detectados]
+            - sentiment: positivo/neutral/negativo
+            - user_actions: [acciones del usuario]
+        """
+    )
+
+    # --- RAG context usado ---
+    rag_context_used = models.JSONField(
+        default=dict, blank=True,
+        verbose_name="Contexto RAG utilizado",
+        help_text="""Almacena:
+            - collections_queried: [nombres de colecciones]
+            - documents_retrieved: [{id, title, score}]
+            - search_type: vector | text | hybrid
+            - total_results: número total de resultados
+        """
+    )
+
+    # --- Memory context usado ---
+    memory_context_used = models.JSONField(
+        default=dict, blank=True,
+        verbose_name="Contexto de memoria utilizado",
+        help_text="""Almacena:
+            - facts_retrieved: [hechos usados]
+            - conversations_retrieved: [conversaciones usadas]
+        """
+    )
+
+    # --- Feedback del usuario ---
+    feedback = models.JSONField(
+        default=dict, blank=True,
+        verbose_name="Feedback del usuario",
+        help_text="""Almacena:
+            - thumbs_up: bool | null
+            - thumbs_down: bool | null
+            - user_comment: str | null
+            - collected_at: timestamp | null
+        """
+    )
+
+    # --- Métricas de rendimiento ---
+    latency_ms = models.IntegerField(
+        null=True, blank=True,
+        verbose_name="Latencia (ms)",
+        help_text="Tiempo de generación de la respuesta en milisegundos"
+    )
+
+    # --- Importancia ---
+    importance_score = models.FloatField(
+        default=0.5,
+        validators=[MinValueValidator(0.0), MaxValueValidator(1.0)],
+        verbose_name="Puntuación de importancia",
+        help_text="0.0 = trivial, 1.0 = muy importante. Se calcula automáticamente."
+    )
+
+    # --- Control ---
+    is_active = models.BooleanField(default=True, verbose_name="Activo")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'intelligence_episodic_memory'
+        verbose_name = 'Memoria Episódica'
+        verbose_name_plural = 'Memorias Episódicas'
+        indexes = [
+            models.Index(fields=['user', '-timestamp']),
+            models.Index(fields=['user', 'episode_type']),
+            models.Index(fields=['user', 'importance_score']),
+            models.Index(fields=['timestamp']),
+        ]
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"Episodio {self.episode_type} ({self.user}) - {self.timestamp.strftime('%d/%m/%Y %H:%M') if self.timestamp else 'sin fecha'}"

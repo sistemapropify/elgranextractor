@@ -112,6 +112,13 @@ app.conf.update(
             'options': {'queue': 'default'},
             'kwargs': {'days_old': 30}
         },
+        # Tareas de memoria episódica (SPEC-008 - Fase 4.3)
+        'prune-episodic-memory-semanal': {
+            'task': 'colas.tasks.prune_episodic_memory_weekly',
+            'schedule': 604800.0,  # Cada 7 días (semanal)
+            'options': {'queue': 'default'},
+            'kwargs': {'dry_run': False},
+        },
     },
     
     # Configuración de resultados

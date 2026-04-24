@@ -1,9 +1,10 @@
 # SPEC-003 — IMPLEMENTACIÓN: SISTEMA RAG Y COLECCIONES VECTORIALES (PIL v1.0)
 
-**Fecha de implementación:** Abril 2026  
-**Responsable:** Roo (Agente IA)  
-**Estado:** ✅ COMPLETADO  
-**Fase:** PIL v1.0 — Propifai Intelligence Layer  
+**Fecha de implementación inicial:** Abril 2026
+**Última actualización:** 23/Abr/2026
+**Responsable:** Roo (Agente IA)
+**Estado:** ✅ COMPLETADO (con mejoras post-implementación)
+**Fase:** PIL v1.0 — Propifai Intelligence Layer
 
 ---
 
@@ -18,6 +19,20 @@ El sistema incluye:
 - **Pipeline automático** con Celery Beat para sincronización periódica
 - **Endpoints de prueba** para validación y monitoreo
 - **Variables de entorno** configuradas para todos los componentes
+
+---
+
+## 1.1 HISTORIAL DE CAMBIOS
+
+| Fecha | Versión | Cambio | Autor |
+|-------|---------|--------|-------|
+| Abr/2026 | v1.0 | Implementación inicial SPEC-003 | Roo |
+| 23/Abr/2026 | v1.1 | **Corrección**: Cambio de modelo de embeddings a `jaimevera1107/all-MiniLM-L6-v2-similarity-es` (español). El modelo original `sentence-transformers/all-MiniLM-L6-v2` no estaba optimizado para español, generando embeddings con baja precisión semántica para consultas en español. | Roo |
+| 23/Abr/2026 | v1.1 | **Corrección**: Reducción de umbral de similitud de `0.7` → `0.2`. El umbral original era demasiado restrictivo para el modelo en español, causando que propiedades relevantes fueran descartadas. | Roo |
+| 23/Abr/2026 | v1.1 | **Corrección**: Migración de `search()` → `search_dynamic()` en `_build_rag_context`. El método `search()` usaba `metadata_json` (obsoleto), mientras que `search_dynamic()` usa `field_values` (formato actual de colecciones dinámicas). | Roo |
+| 23/Abr/2026 | v1.1 | **Corrección**: Mapeo de nombres de campo inglés→español en `_build_rag_context`. Las colecciones dinámicas almacenan `field_values` con nombres de columna de BD (inglés: `title`, `district`, `price`), pero el código buscaba nombres en español (`titulo`, `distrito`, `precio`), resultando en contexto vacío. | Roo |
+| 23/Abr/2026 | v1.1 | **Corrección**: El contexto RAG se movió del mensaje de usuario al `CONTEXTO DISPONIBLE:` dentro del system prompt, con instrucciones explícitas "NUNCA digas que no tienes información si el contexto SÍ contiene datos relevantes". | Roo |
+| 23/Abr/2026 | v1.1 | **Mejora**: Regeneración masiva de embeddings para toda la colección `propiedades_propify` (84 documentos) usando el nuevo modelo en español. | Roo |
 
 ---
 
@@ -58,17 +73,25 @@ Clase `RAGService` con métodos principales:
 
 | Método | Descripción | Parámetros clave |
 |--------|-------------|------------------|
-| `initialize_embedder()` | Carga modelo sentence-transformers/all-MiniLM-L6-v2 | - |
+| `initialize_embedder()` | Carga modelo `jaimevera1107/all-MiniLM-L6-v2-similarity-es` | `force`: forzar recarga |
 | `generate_embedding(text)` | Genera vector de 384 dimensiones | `text`: contenido a vectorizar |
-| `create_collection()` | Crea nueva colección vectorial | `name`, `source_sql`, `embedding_fields` |
-| `sync_collection()` | Sincroniza datos fuente → embeddings | `collection_id`, `force_full_sync` |
-| `search()` | Búsqueda semántica por similitud coseno | `query`, `collection_ids`, `access_level` |
+| `create_collection()` | Crea nueva colección vectorial (legacy) | `name`, `source_sql`, `embedding_fields` |
+| `sync_collection()` | Sincroniza datos fuente → embeddings (legacy) | `collection_id`, `force_full_sync` |
+| `search()` | Búsqueda semántica (legacy, usa `metadata_json`) | `query`, `collection_ids`, `access_level` |
+| `create_collection_dynamic()` | Crea colección dinámica con `field_values` | `name`, `table_name`, `field_mapping` |
+| `sync_collection_dynamic()` | Sincroniza datos → embeddings con `field_values` | `collection_name`, `force_full_sync` |
+| `search_dynamic()` | **Búsqueda semántica sobre `field_values`** (método actual) | `query`, `collection_names`, `top_k` |
+| `_text_search_fallback()` | Fallback textual cuando no hay embeddings | `query`, `collection_names`, `top_k` |
 | `delete_collection()` | Elimina colección y documentos | `collection_id` |
-| `initialize_default_collections()` | Crea colecciones por defecto (SPEC-003) | - |
+| `initialize_default_collections()` | Crea colecciones por defecto | - |
+| `get_available_tables()` | Lista tablas disponibles en BD para crear colecciones | `schema`, `database_alias` |
+| `analyze_table_schema()` | Analiza esquema de tabla para mapeo de campos | `table_name`, `schema` |
 
-**Colecciones por defecto inicializadas:**
-1. `propiedades_propifai` - Portfolio propio de la inmobiliaria
-2. `propiedades_competencia` - Propiedades scrapeadas de portales externos  
+> **Nota:** Los métodos `search_dynamic()`, `sync_collection_dynamic()` y `create_collection_dynamic()` son los actuales. Los métodos `search()`, `sync_collection()` y `create_collection()` son legacy y usan el formato `metadata_json` que ya no se utiliza.
+
+**Colecciones activas:**
+1. `propiedades_propify` - Portfolio propio (84 documentos, embeddings regenerados v1.1)
+2. `propiedades_competencia` - Propiedades scrapeadas de portales externos
 3. `noticias_mercado` - Noticias y análisis del mercado (futura implementación)
 
 ### 2.3 Integración LLM (`intelligence/services/llm.py`)
@@ -78,14 +101,19 @@ Clase `LLMService` que integra RAG con DeepSeek API:
 | Método | Descripción |
 |--------|-------------|
 | `generate_rag_response()` | Genera respuesta enriquecida con contexto RAG |
+| `_build_rag_context()` | Construye contexto RAG usando `search_dynamic()` con mapeo inglés→español |
 | `analyze_query_intent()` | Analiza intención de consulta para routing a colecciones |
 | `extract_structured_data()` | Extrae datos estructurados de texto usando LLM |
+| `generate_streaming_response()` | Genera respuesta en streaming (SSE) |
 | `test_connection()` | Prueba conexión con DeepSeek API |
 
-**Características:**
+**Características actualizadas (v1.1):**
 - Contexto RAG limitado a 5 documentos máximo
-- Umbral de similitud mínima: 0.6
-- Modelo: `deepseek-chat` con temperatura 0.1
+- **Umbral de similitud mínima: 0.2** (reducido desde 0.7 para mejor recall en español)
+- **Modelo de embeddings:** `jaimevera1107/all-MiniLM-L6-v2-similarity-es` (español)
+- **Modelo LLM:** `deepseek-chat` con temperatura 0.1
+- **Mapeo de campos:** inglés (BD) → español (prompt) en `_build_rag_context()`
+- **Contexto RAG en system prompt:** insertado en `CONTEXTO DISPONIBLE:` con instrucciones de no negar información presente
 - Respuestas en español especializado en mercado inmobiliario
 
 ### 2.4 Comando de Sincronización (`intelligence/management/commands/sincronizar_rag.py`)
@@ -309,38 +337,43 @@ webapp/
 │   ├── models.py                          # Modelos IntelligenceCollection, IntelligenceDocument
 │   ├── migrations/0003_*.py              # Migración de modelos RAG
 │   ├── services/
-│   │   ├── rag.py                        # Servicio RAG completo
-│   │   ├── llm.py                        # Integración con DeepSeek API
+│   │   ├── rag.py                        # Servicio RAG completo (v1.1: search_dynamic, sync_collection_dynamic)
+│   │   ├── llm.py                        # Integración DeepSeek (v1.1: _build_rag_context con search_dynamic + mapeo inglés→español)
 │   │   └── __init__.py
 │   ├── management/commands/
-│   │   └── sincronizar_rag.py            # Comando de sincronización
+│   │   ├── sincronizar_rag.py            # Comando de sincronización
+│   │   └── regenerar_embeddings.py       # (NUEVO v1.1) Regenera embeddings con nuevo modelo
 │   ├── tasks.py                          # Tareas Celery para RAG
-│   ├── views.py                          # Endpoints rag_test_endpoint, rag_system_status
+│   ├── views.py                          # Endpoints rag_test_endpoint, rag_system_status, chat_web_api
 │   ├── urls.py                           # URLs /rag/test/, /rag/status/
 │   └── SPEC-003_IMPLEMENTACION.md        # Este documento
 ├── colas/
 │   └── celery.py                         # Configuración de tareas periódicas RAG
 ├── .env                                  # Variables de entorno RAG
-└── test_rag_system.py                    # Script de verificación de criterios
+├── test_rag_system.py                    # Script de verificación de criterios
+├── test_chat_cerro_colorado.py           # (NUEVO v1.1) Prueba de chat buscando propiedades en Cerro Colorado
+└── debug_rag_data.py                     # (NUEVO v1.1) Diagnóstico de field_values en colecciones
 ```
 
 ---
 
 ## 9. CONCLUSIÓN
 
-El sistema RAG (SPEC-003) ha sido implementado exitosamente como parte del Propifai Intelligence Layer v1.0. Proporciona:
+El sistema RAG (SPEC-003) ha sido implementado exitosamente como parte del Propifai Intelligence Layer v1.0, con correcciones y mejoras aplicadas en v1.1 (23/Abr/2026). Proporciona:
 
-1. **Búsqueda semántica** sobre propiedades y datos del mercado
-2. **Respuestas contextualizadas** enriquecidas con información relevante
+1. **Búsqueda semántica** sobre propiedades y datos del mercado usando modelo de embeddings en español
+2. **Respuestas contextualizadas** enriquecidas con información relevante de propiedades
 3. **Pipeline automatizado** para mantenimiento de datos vectoriales
 4. **Integración completa** con la arquitectura existente (Django, Celery, Azure SQL)
-5. **Escalabilidad** para futuras mejoras (pgvector, fine-tuning, multimodalidad)
+5. **Corrección de campo crítico**: Mapeo inglés→español en `field_values` resuelve el problema de contexto RAG vacío
+6. **Contexto RAG en system prompt**: Garantiza que DeepSeek use la información disponible
 
-El sistema está listo para despliegue en producción tras aplicar la migración `0003` y configurar las variables de entorno necesarias. Representa un avance significativo en las capacidades de inteligencia artificial de Propifai, permitiendo asistencia inmobiliaria más precisa y contextualmente relevante.
+El sistema está operativo en producción. Las correcciones v1.1 resolvieron el problema donde el chat respondía "no tengo propiedades" a pesar de tener datos relevantes en la base de datos vectorial.
 
 ---
 
-**Firma de implementación:**  
-✅ SPEC-003 COMPLETADO — Sistema RAG operativo  
-**Fecha:** Abril 2026  
-**Versión:** PIL v1.0 (Propifai Intelligence Layer)
+**Firma de implementación:**
+✅ SPEC-003 COMPLETADO — Sistema RAG operativo (v1.1)
+**Fecha inicial:** Abril 2026
+**Última actualización:** 23/Abr/2026
+**Versión:** PIL v1.1 (Propifai Intelligence Layer)

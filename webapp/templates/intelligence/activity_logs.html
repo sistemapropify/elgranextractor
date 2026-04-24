@@ -307,6 +307,62 @@
             color: var(--accent-red);
         }
         
+        /* Estilos para tipos de logs */
+        .log-type {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            margin-left: 8px;
+        }
+        
+        .type-error {
+            background-color: rgba(248, 81, 73, 0.2);
+            color: var(--accent-red);
+            border: 1px solid rgba(248, 81, 73, 0.4);
+        }
+        
+        .type-process-start {
+            background-color: rgba(88, 166, 255, 0.2);
+            color: var(--accent-blue);
+            border: 1px solid rgba(88, 166, 255, 0.4);
+        }
+        
+        .type-process-step {
+            background-color: rgba(88, 166, 255, 0.15);
+            color: var(--accent-blue);
+            border: 1px solid rgba(88, 166, 255, 0.3);
+        }
+        
+        .type-subprocess {
+            background-color: rgba(210, 153, 34, 0.2);
+            color: var(--accent-yellow);
+            border: 1px solid rgba(210, 153, 34, 0.4);
+        }
+        
+        /* Estilos para filas de tabla según tipo de log */
+        .log-row-error {
+            border-left: 4px solid var(--accent-red);
+            background-color: rgba(248, 81, 73, 0.05);
+        }
+        
+        .log-row-process-start {
+            border-left: 4px solid var(--accent-blue);
+            background-color: rgba(88, 166, 255, 0.05);
+        }
+        
+        .log-row-process-step {
+            border-left: 4px solid var(--accent-blue);
+        }
+        
+        .log-row-subprocess {
+            border-left: 4px solid var(--accent-yellow);
+            background-color: rgba(210, 153, 34, 0.05);
+        }
+        
         .log-user {
             display: flex;
             align-items: center;
@@ -524,6 +580,17 @@
                     </select>
                 </div>
                 
+                <div class="filter-group">
+                    <label class="filter-label">Tipo de Log</label>
+                    <select class="filter-select" id="typeFilter" onchange="applyTypeFilter(this.value)">
+                        <option value="">Todos los tipos</option>
+                        <option value="error" {% if type_filter == 'error' %}selected{% endif %}>Error (rojo)</option>
+                        <option value="process_start" {% if type_filter == 'process_start' %}selected{% endif %}>Inicio Proceso (azul)</option>
+                        <option value="process_step" {% if type_filter == 'process_step' %}selected{% endif %}>Etapa Proceso (azul)</option>
+                        <option value="subprocess" {% if type_filter == 'subprocess' %}selected{% endif %}>Subproceso (amarillo)</option>
+                    </select>
+                </div>
+                
                 <div class="filter-group" style="align-self: flex-end;">
                     <button class="btn btn-primary" onclick="applyFilters()">
                         🔍 Aplicar Filtros
@@ -537,7 +604,7 @@
         
         <div class="logs-table-container">
             <div class="table-header">
-                <h2>Registros de Actividad</h2>
+                <h2>Registros de Actividad del Sistema</h2>
                 <div class="table-actions">
                     <button class="btn btn-secondary" onclick="exportLogs()">
                         📥 Exportar CSV
@@ -546,6 +613,16 @@
                         🗑️ Limpiar Logs Antiguos
                     </button>
                 </div>
+            </div>
+            
+            <div class="table-info">
+                <p style="font-size: 13px; color: var(--text-secondary); padding: 10px 20px; border-bottom: 1px solid var(--border-color);">
+                    <strong>Leyenda de colores:</strong>
+                    <span class="log-type type-error" style="margin-right: 10px;">Error</span>
+                    <span class="log-type type-process-start" style="margin-right: 10px;">Inicio Proceso</span>
+                    <span class="log-type type-process-step" style="margin-right: 10px;">Etapa Proceso</span>
+                    <span class="log-type type-subprocess">Subproceso</span>
+                </p>
             </div>
             
             {% if logs %}
@@ -557,13 +634,14 @@
                         <th>Usuario</th>
                         <th>Acción</th>
                         <th>Estado</th>
+                        <th>Tipo</th>
                         <th>Duración</th>
                         <th>Detalles</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for log in logs %}
-                    <tr>
+                    <tr class="log-row-{{ log.log_type|default:'process_step' }}">
                         <td>{{ log.id }}</td>
                         <td>{{ log.timestamp|date:"Y-m-d H:i:s" }}</td>
                         <td>
@@ -580,8 +658,30 @@
                                 {{ log.status|upper }}
                             </span>
                         </td>
+                        <td>
+                            {% if log.log_type %}
+                            <span class="log-type type-{{ log.log_type }}">
+                                {% if log.log_type == 'error' %}Error
+                                {% elif log.log_type == 'process_start' %}Inicio
+                                {% elif log.log_type == 'process_step' %}Etapa
+                                {% elif log.log_type == 'subprocess' %}Subproceso
+                                {% else %}{{ log.log_type }}{% endif %}
+                            </span>
+                            {% else %}
+                            <span class="log-type type-process-step">Etapa</span>
+                            {% endif %}
+                        </td>
                         <td>{{ log.duration_ms }} ms</td>
-                        <td>{{ log.details }}</td>
+                        <td>
+                            <div class="log-details">
+                                {{ log.details }}
+                                {% if log.log_type == 'error' %}
+                                <div style="margin-top: 5px; font-size: 12px; color: var(--accent-red);">
+                                    <strong>⚠️ Este es un error del sistema que necesita atención.</strong>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -589,7 +689,7 @@
             
             <div class="pagination">
                 {% if page > 1 %}
-                <a href="?page={{ page|add:'-1' }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if user_filter %}&user={{ user_filter }}{% endif %}" class="pagination-btn">
+                <a href="?page={{ page|add:'-1' }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if user_filter %}&user={{ user_filter }}{% endif %}{% if type_filter %}&type={{ type_filter }}{% endif %}" class="pagination-btn">
                     ← Anterior
                 </a>
                 {% else %}
@@ -601,7 +701,7 @@
                 </span>
                 
                 {% if page < total_pages %}
-                <a href="?page={{ page|add:'1' }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if user_filter %}&user={{ user_filter }}{% endif %}" class="pagination-btn">
+                <a href="?page={{ page|add:'1' }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if user_filter %}&user={{ user_filter }}{% endif %}{% if type_filter %}&type={{ type_filter }}{% endif %}" class="pagination-btn">
                     Siguiente →
                 </a>
                 {% else %}
@@ -621,6 +721,12 @@
         <div class="footer">
             <p>© 2026 Propifai - Sistema de Inteligencia Inmobiliaria</p>
             <p>Última actualización: {% now "Y-m-d H:i:s" %}</p>
+            <p style="font-size: 12px; margin-top: 10px;">
+                <strong>Nota:</strong> Estos logs muestran el funcionamiento interno del sistema.
+                Los errores en rojo indican problemas que necesitan atención.
+                Los procesos en azul muestran el flujo del sistema.
+                Los subprocesos en amarillo son operaciones internas.
+            </p>
         </div>
     </div>
     
@@ -651,9 +757,21 @@
             window.location.href = url.toString();
         }
         
+        function applyTypeFilter(type) {
+            const url = new URL(window.location);
+            if (type) {
+                url.searchParams.set('type', type);
+            } else {
+                url.searchParams.delete('type');
+            }
+            url.searchParams.delete('page'); // Volver a página 1
+            window.location.href = url.toString();
+        }
+        
         function applyFilters() {
             const status = document.getElementById('statusFilter').value;
             const user = document.getElementById('userFilter').value;
+            const type = document.getElementById('typeFilter').value;
             
             const url = new URL(window.location);
             if (status) {
@@ -666,6 +784,12 @@
                 url.searchParams.set('user', user);
             } else {
                 url.searchParams.delete('user');
+            }
+            
+            if (type) {
+                url.searchParams.set('type', type);
+            } else {
+                url.searchParams.delete('type');
             }
             
             url.searchParams.delete('page'); // Volver a página 1
@@ -685,6 +809,16 @@
                 alert('Función de limpieza en desarrollo. Los logs antiguos serán eliminados.');
             }
         }
+        
+        // Expandir detalles al hacer clic en una fila
+        document.addEventListener('DOMContentLoaded', function() {
+            const rows = document.querySelectorAll('.logs-table tbody tr');
+            rows.forEach(row => {
+                row.addEventListener('click', function() {
+                    this.classList.toggle('expanded');
+                });
+            });
+        });
     </script>
 </body>
 </html>

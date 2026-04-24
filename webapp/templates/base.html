@@ -327,6 +327,22 @@
         </div>
         
         <div class="ms-auto d-flex align-items-center">
+            {% if request.current_user %}
+                <span class="text-success me-2 small d-none d-md-inline">
+                    <i class="bi bi-person-circle"></i>
+                    {{ request.current_user.first_name|default:request.current_user.username }}
+                </span>
+                <a href="/logout/" class="btn btn-outline-danger btn-sm me-2">
+                    <i class="bi bi-box-arrow-right"></i> Cerrar sesión
+                </a>
+            {% else %}
+                <a href="/register/" class="btn btn-outline-primary btn-sm me-2">
+                    <i class="bi bi-person-plus"></i> Registrarse
+                </a>
+                <a href="/login/" class="btn btn-outline-success btn-sm me-2">
+                    <i class="bi bi-box-arrow-in-right"></i> Iniciar sesión
+                </a>
+            {% endif %}
             <a href="/admin/" class="btn btn-outline-secondary btn-sm me-2" target="_blank">
                 <i class="bi bi-gear"></i> Admin
             </a>
@@ -446,7 +462,7 @@
                 </a>
                 <ul class="submenu">
                     <li>
-                        <a href="/meta-ads/dashboard/" class="{% if '/meta-ads/dashboard/' in request.path %}active{% endif %}">
+                        <a href="/meta-ads/dashboard/exacto/" class="{% if '/meta-ads/dashboard/' in request.path or '/meta-ads/dashboard/exacto/' in request.path %}active{% endif %}">
                             <i class="bi bi-speedometer"></i>
                             <span>Dashboard Principal</span>
                         </a>
@@ -458,7 +474,7 @@
                         </a>
                     </li>
                     <li>
-                        <a href="/meta-ads/campañas/" class="{% if '/meta-ads/campañas/' in request.path and '/dashboard/' not in request.path and '/analisis/' not in request.path %}active{% endif %}">
+                        <a href="/meta-ads/campañas/" class="{% if '/meta-ads/campañas/' in request.path and '/dashboard/' not in request.path and '/dashboard/rediseno/' not in request.path and '/dashboard/exacto/' not in request.path and '/analisis/' not in request.path %}active{% endif %}">
                             <i class="bi bi-list-ul"></i>
                             <span>Lista de Campañas</span>
                         </a>
