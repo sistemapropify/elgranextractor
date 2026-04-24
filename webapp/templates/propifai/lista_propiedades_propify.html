@@ -259,17 +259,17 @@
                             </div>
                             {% endif %}
                             
-                            {% if propiedad.area_construida %}
-                            <div class="feature-item">
-                                <i class="fas fa-ruler-combined"></i>
-                                <span>{{ propiedad.area_construida|floatformat:0 }} m² const.</span>
-                            </div>
-                            {% endif %}
-                            
                             {% if propiedad.area_terreno %}
                             <div class="feature-item">
                                 <i class="fas fa-vector-square"></i>
                                 <span>{{ propiedad.area_terreno|floatformat:0 }} m² terreno</span>
+                            </div>
+                            {% endif %}
+                            
+                            {% if propiedad.area_construida %}
+                            <div class="feature-item">
+                                <i class="fas fa-ruler-combined"></i>
+                                <span>{{ propiedad.area_construida|floatformat:0 }} m² const.</span>
                             </div>
                             {% endif %}
                             

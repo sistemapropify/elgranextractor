@@ -138,15 +138,15 @@
                                         {% endif %}
                                     </td>
                                     <td>
-                                        {% if propiedad.area_construida %}
-                                            {{ propiedad.area_construida|floatformat:1 }} m²
+                                        {% if propiedad.area_terreno %}
+                                            {{ propiedad.area_terreno|floatformat:1 }} m²
                                         {% else %}
                                             <span class="text-muted">-</span>
                                         {% endif %}
                                     </td>
                                     <td>
-                                        {% if propiedad.area_terreno %}
-                                            {{ propiedad.area_terreno|floatformat:1 }} m²
+                                        {% if propiedad.area_construida %}
+                                            {{ propiedad.area_construida|floatformat:1 }} m²
                                         {% else %}
                                             <span class="text-muted">-</span>
                                         {% endif %}

@@ -56,12 +56,24 @@
                         <div class="col-md-6">
                             <div class="property-features">
                                 <div class="row g-3">
+                                    {% if propiedad.area_terreno %}
+                                    <div class="col-6">
+                                        <div class="feature-item text-center p-2 border rounded">
+                                            <i class="fas fa-vector-square text-primary"></i>
+                                            <div class="mt-1">
+                                                <small class="text-muted">Terreno</small>
+                                                <div class="fw-bold">{{ propiedad.area_terreno|floatformat:0 }} m²</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                    
                                     {% if propiedad.area_construida %}
                                     <div class="col-6">
                                         <div class="feature-item text-center p-2 border rounded">
                                             <i class="fas fa-ruler-combined text-primary"></i>
                                             <div class="mt-1">
-                                                <small class="text-muted">Área</small>
+                                                <small class="text-muted">Área construida</small>
                                                 <div class="fw-bold">{{ propiedad.area_construida|floatformat:0 }} m²</div>
                                             </div>
                                         </div>
