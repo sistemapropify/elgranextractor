@@ -403,6 +403,9 @@
 {% endblock %}
 
 {% block extra_js %}
+<!-- Google Maps API con librería de visualización -->
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBrL1QF7vTl9zF8FmCUumfRpFJcaYokO7Q&libraries=visualization&callback=initMap" async defer></script>
+
 <script>
 // Variables globales
 let map;
@@ -411,7 +414,6 @@ let markers = [];
 let markerLabels = [];
 let heatmapData = JSON.parse('{{ heatmap_data_json|escapejs }}');
 let zonasData = JSON.parse('{{ zonas_json|escapejs }}');
-let googleMapsApiKey = 'AIzaSyBrL1QF7vTl9zF8FmCUumfRpFJcaYokO7Q';
 let mapCenter = { lat: -16.409047, lng: -71.537451 }; // Centro en Arequipa
 let mapZoom = 13;
 
@@ -419,24 +421,6 @@ let mapZoom = 13;
 let zonaPoligonos = [];
 let zonaLabels = [];
 let zonaInfoWindows = [];
-
-// Cargar Google Maps API dinámicamente
-function loadGoogleMapsAPI() {
-    return new Promise((resolve, reject) => {
-        if (typeof google !== 'undefined' && google.maps) {
-            resolve();
-            return;
-        }
-        
-        const script = document.createElement('script');
-        script.src = `https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&libraries=visualization`;
-        script.async = true;
-        script.defer = true;
-        script.onload = () => resolve();
-        script.onerror = () => reject(new Error('Error cargando Google Maps API'));
-        document.head.appendChild(script);
-    });
-}
 
 // Calcular el centro y bounds de todas las propiedades
 function calculateMapBounds() {
@@ -492,8 +476,8 @@ function calculateMapBounds() {
     };
 }
 
-// Inicializar mapa
-function initMap() {
+// Inicializar mapa (llamado por initMap cuando Google Maps carga)
+function initMapCore() {
     // Crear mapa centrado en Arequipa
     map = new google.maps.Map(document.getElementById('heatmapMap'), {
         center: { lat: -16.409047, lng: -71.537451 }, // Centro en Arequipa
@@ -915,23 +899,26 @@ function loadZonasPoligonos() {
     console.log(`[INFO] ${zonaPoligonos.length} polígonos y ${zonaLabels.length} etiquetas creados`);
 }
 
-// Inicializar cuando el DOM esté listo
-document.addEventListener('DOMContentLoaded', () => {
-    loadGoogleMapsAPI()
-        .then(() => {
-            initMap();
-            console.log('Heatmap cargado con', heatmapData.length, 'propiedades');
-        })
-        .catch(error => {
-            console.error('Error cargando Google Maps:', error);
-            document.getElementById('heatmapMap').innerHTML = `
-                <div class="alert alert-danger m-3">
-                    <h6>Error cargando el mapa</h6>
-                    <p>${error.message}</p>
-                    <p>Por favor, verifique su conexión a internet e intente nuevamente.</p>
-                </div>
-            `;
+// Inicializar cuando Google Maps API cargue (callback del script)
+function initMap() {
+    // Verificar que el DOM esté listo
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            initMapWhenReady();
         });
-});
+    } else {
+        initMapWhenReady();
+    }
+}
+
+function initMapWhenReady() {
+    const mapDiv = document.getElementById('heatmapMap');
+    if (!mapDiv) {
+        console.error('[ERROR] Elemento heatmapMap no encontrado en el DOM');
+        return;
+    }
+    initMapCore();
+    console.log('Heatmap cargado con', heatmapData.length, 'propiedades');
+}
 </script>
 {% endblock %}
