@@ -478,6 +478,7 @@ function calculateMapBounds() {
 
 // Inicializar mapa (llamado por initMap cuando Google Maps carga)
 function initMapCore() {
+    console.log('[DEBUG] initMapCore started');
     // Crear mapa centrado en Arequipa
     map = new google.maps.Map(document.getElementById('heatmapMap'), {
         center: { lat: -16.409047, lng: -71.537451 }, // Centro en Arequipa
@@ -492,6 +493,7 @@ function initMapCore() {
             }
         ]
     });
+    console.log('[DEBUG] Map created successfully');
 
     // Prevenir que el scroll de la página intercepte el wheel en el mapa
     const mapDiv = document.getElementById('heatmapMap');
@@ -901,24 +903,19 @@ function loadZonasPoligonos() {
 
 // Inicializar cuando Google Maps API cargue (callback del script)
 function initMap() {
-    // Verificar que el DOM esté listo
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            initMapWhenReady();
-        });
-    } else {
-        initMapWhenReady();
-    }
-}
-
-function initMapWhenReady() {
+    console.log('[DEBUG] initMap called');
     const mapDiv = document.getElementById('heatmapMap');
     if (!mapDiv) {
         console.error('[ERROR] Elemento heatmapMap no encontrado en el DOM');
         return;
     }
-    initMapCore();
-    console.log('Heatmap cargado con', heatmapData.length, 'propiedades');
+    console.log('[DEBUG] heatmapMap element found, calling initMapCore');
+    try {
+        initMapCore();
+        console.log('Heatmap cargado con', heatmapData.length, 'propiedades');
+    } catch (error) {
+        console.error('[ERROR] Error in initMapCore:', error);
+    }
 }
 </script>
 {% endblock %}
