@@ -429,25 +429,5 @@ function initMap() {
 
     console.log('[DEBUG] Map initialized successfully - basic version');
 }
-
-// Inicializar mapa (igual que en mapa_zonas.html)
-function initMap() {
-    const defaultCenter = { lat: -16.4090, lng: -71.5375 }; // Arequipa, Perú
-
-    map = new google.maps.Map(document.getElementById('heatmapMap'), {
-        center: defaultCenter,
-        zoom: 13,
-        mapTypeId: 'roadmap',
-        styles: [
-            {
-                featureType: "poi",
-                elementType: "labels",
-                stylers: [{ visibility: "off" }]
-            }
-        ]
-    });
-
-    console.log('[DEBUG] Map initialized successfully - basic version');
-}
 </script>
 {% endblock %}
