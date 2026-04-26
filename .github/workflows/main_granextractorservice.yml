@@ -67,34 +67,69 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_0FA92F15F0804AE197DC2EECF943B7DB }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_C521A0DD71BB48CE88443464F4F718FB }}
 
-      - name: 'Deploy to Azure Web App'
+      - name: Wait for previous deployments to complete
+        run: |
+          echo "Checking deployment status..."
+          for i in {1..12}; do
+            DEPLOYMENT_STATUS=$(az webapp deployment slot list -n granextractorservice -g DefaultResourceGroup-brazilsouth --query "[?name=='Production'].state" -o tsv 2>/dev/null || echo "unknown")
+            echo "Deployment attempt $i - Status: $DEPLOYMENT_STATUS"
+            if [ "$DEPLOYMENT_STATUS" = "Running" ] || [ "$DEPLOYMENT_STATUS" = "unknown" ]; then
+              echo "Waiting for slot to be ready... ($i/12)"
+              sleep 10
+            else
+              echo "Slot is ready for deployment"
+              break
+            fi
+          done
+
+      - name: 'Deploy to Azure Web App (Attempt 1)'
         uses: azure/webapps-deploy@v3
-        id: deploy-to-webapp
+        id: deploy-attempt-1
         with:
           app-name: 'granextractorservice'
           slot-name: 'Production'
         continue-on-error: true
 
-      - name: Retry deployment on conflict
-        if: steps.deploy-to-webapp.outcome == 'failure'
+      - name: Wait before retry
+        if: steps.deploy-attempt-1.outcome == 'failure'
         run: |
-          echo "Initial deployment failed, waiting 30 seconds before retry..."
-          sleep 30
-          
-      - name: 'Retry Deploy to Azure Web App'
-        if: steps.deploy-to-webapp.outcome == 'failure'
+          echo "Deployment failed, waiting 60 seconds before retry..."
+          sleep 60
+
+      - name: 'Deploy to Azure Web App (Attempt 2)'
+        if: steps.deploy-attempt-1.outcome == 'failure'
         uses: azure/webapps-deploy@v3
+        id: deploy-attempt-2
+        with:
+          app-name: 'granextractorservice'
+          slot-name: 'Production'
+        continue-on-error: true
+
+      - name: Wait before final retry
+        if: steps.deploy-attempt-2.outcome == 'failure'
+        run: |
+          echo "Second deployment attempt failed, waiting 90 seconds before final retry..."
+          sleep 90
+
+      - name: 'Deploy to Azure Web App (Attempt 3 - Final)'
+        if: steps.deploy-attempt-2.outcome == 'failure'
+        uses: azure/webapps-deploy@v3
+        id: deploy-attempt-3
         with:
           app-name: 'granextractorservice'
           slot-name: 'Production'
 
-      - name: Check deployment status
+      - name: Verify deployment
+        if: success()
         run: |
-          echo "Deployment completed. Checking app status..."
-          # You can add curl commands here to check if the app is responding
+          echo "Deployment completed successfully"
           echo "App URL: https://granextractorservice-emehaffsf8e2c7eg.brazilsouth-01.azurewebsites.net"
+          # Wait a moment for app to be fully ready
+          sleep 10
+          # Optional: Verify the app is responding
+          curl -s -o /dev/null -w "HTTP Status: %{http_code}\n" https://granextractorservice-emehaffsf8e2c7eg.brazilsouth-01.azurewebsites.net || echo "App URL not yet responding (this is expected immediately after deployment)"
 
       - name: Logout from Azure
+        if: always()
         run: |
-          az logout
-          
+          az logout || true
