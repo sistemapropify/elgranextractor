@@ -21,9 +21,6 @@ BASE_DIR = Path(__file__).resolve().parent
 env = environ.Env()
 environ.Env.read_env(BASE_DIR / '.env')
 
-# Google Maps API Key
-GOOGLE_MAPS_API_KEY = env('GOOGLE_MAPS_API_KEY', default='')
-
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/

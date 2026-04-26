@@ -1,4 +1,3 @@
-from django.conf import settings
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.db.models import Q, F, FloatField, ExpressionWrapper, Count
@@ -28,7 +27,7 @@ except ImportError as e:
 def heatmap_view(request):
     """Vista principal para el heatmap de precio por m² - VERSIÓN ULTRA VISIBLE CON DATOS 100% REALES"""
     # Obtener datos reales de propiedades para el heatmap - SIN DATOS INVENTADOS
-    google_maps_api_key = settings.GOOGLE_MAPS_API_KEY
+    google_maps_api_key = "AIzaSyBrL1QF7vTl9zF8FmCUumfRpFJcaYokO7Q"
     heatmap_points = []
     local_count = 0
     propifai_count = 0
