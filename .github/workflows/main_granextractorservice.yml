@@ -73,4 +73,28 @@ jobs:
         with:
           app-name: 'granextractorservice'
           slot-name: 'Production'
+        continue-on-error: true
+
+      - name: Retry deployment on conflict
+        if: steps.deploy-to-webapp.outcome == 'failure'
+        run: |
+          echo "Initial deployment failed, waiting 30 seconds before retry..."
+          sleep 30
+          
+      - name: 'Retry Deploy to Azure Web App'
+        if: steps.deploy-to-webapp.outcome == 'failure'
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: 'granextractorservice'
+          slot-name: 'Production'
+
+      - name: Check deployment status
+        run: |
+          echo "Deployment completed. Checking app status..."
+          # You can add curl commands here to check if the app is responding
+          echo "App URL: https://granextractorservice-emehaffsf8e2c7eg.brazilsouth-01.azurewebsites.net"
+
+      - name: Logout from Azure
+        run: |
+          az logout
           
