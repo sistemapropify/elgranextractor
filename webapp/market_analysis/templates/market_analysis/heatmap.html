@@ -156,8 +156,8 @@
                         <label class="form-label small mb-1">Mostrar heatmap</label>
                         <div class="toggle-switch">
                             <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" id="toggleHeatmap" disabled>
-                                <label class="form-check-label small text-muted" for="toggleHeatmap">Activar mapa de calor (deshabilitado)</label>
+                                <input class="form-check-input" type="checkbox" id="toggleHeatmap">
+                                <label class="form-check-label small" for="toggleHeatmap">Activar mapa de calor</label>
                             </div>
                         </div>
                     </div>
@@ -166,8 +166,8 @@
                         <label class="form-label small mb-1">Mostrar marcadores</label>
                         <div class="toggle-switch">
                             <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" id="toggleMarkers" disabled>
-                                <label class="form-check-label small text-muted" for="toggleMarkers">Activar marcadores (deshabilitado)</label>
+                                <input class="form-check-input" type="checkbox" id="toggleMarkers" checked>
+                                <label class="form-check-label small" for="toggleMarkers">Activar marcadores</label>
                             </div>
                         </div>
                     </div>
@@ -176,8 +176,8 @@
                         <label class="form-label small mb-1">Mostrar precios en marcadores</label>
                         <div class="toggle-switch">
                             <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" id="toggleLabels" disabled>
-                                <label class="form-check-label small text-muted" for="toggleLabels">$800/m2 (T/C) (deshabilitado)</label>
+                                <input class="form-check-input" type="checkbox" id="toggleLabels" checked>
+                                <label class="form-check-label small" for="toggleLabels">$800/m2 (T/C)</label>
                             </div>
                         </div>
                     </div>
@@ -186,15 +186,15 @@
                         <label class="form-label small mb-1">Mostrar cuadrantes (zonas)</label>
                         <div class="toggle-switch">
                             <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" id="toggleZonas" disabled>
-                                <label class="form-check-label small text-muted" for="toggleZonas">Activar cuadrantes (deshabilitado)</label>
+                                <input class="form-check-input" type="checkbox" id="toggleZonas" checked>
+                                <label class="form-check-label small" for="toggleZonas">Activar cuadrantes</label>
                             </div>
                         </div>
                     </div>
                     
                     <div class="mb-3">
                         <label class="form-label small mb-1">Opacidad del heatmap</label>
-                        <input type="range" class="form-range" id="heatmapOpacity" min="0" max="1" step="0.1" value="0.6" disabled>
+                        <input type="range" class="form-range" id="heatmapOpacity" min="0" max="1" step="0.1" value="0.6">
                         <div class="d-flex justify-content-between small text-muted">
                             <span>Baja</span>
                             <span>Alta</span>
@@ -403,8 +403,8 @@
 {% endblock %}
 
 {% block extra_js %}
-<!-- Google Maps API sin librería de visualización (temporal para testing) -->
-<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBrL1QF7vTl9zF8FmCUumfRpFJcaYokO7Q&callback=initMap" async defer></script>
+<!-- Google Maps API con librería de visualización -->
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBrL1QF7vTl9zF8FmCUumfRpFJcaYokO7Q&libraries=visualization&callback=initMap" async defer></script>
 
 <script>
 // Variables globales
@@ -478,7 +478,7 @@ function calculateMapBounds() {
 
 // Inicializar mapa (llamado por initMap cuando Google Maps carga)
 function initMapCore() {
-    console.log('[DEBUG] initMapCore started - basic map only');
+    console.log('[DEBUG] initMapCore started');
     // Crear mapa centrado en Arequipa
     map = new google.maps.Map(document.getElementById('heatmapMap'), {
         center: { lat: -16.409047, lng: -71.537451 }, // Centro en Arequipa
@@ -493,10 +493,65 @@ function initMapCore() {
             }
         ]
     });
-    console.log('[DEBUG] Basic map created successfully');
+    console.log('[DEBUG] Map created successfully');
+
+    // Prevenir que el scroll de la página intercepte el wheel en el mapa
+    const mapDiv = document.getElementById('heatmapMap');
+    mapDiv.addEventListener('wheel', function(e) {
+        e.stopPropagation();
+        e.preventDefault();
+    }, { passive: false });
+    mapDiv.addEventListener('mouseenter', function() {
+        document.body.style.overflow = 'hidden';
+    });
+    mapDiv.addEventListener('mouseleave', function() {
+        document.body.style.overflow = '';
+    });
     
-    // Configurar controles básicos
-    setupBasicControls();
+    // Preparar datos del heatmap pero NO mostrarlo inicialmente
+    let heatmapPoints = [];
+    if (heatmapData && heatmapData.length > 0) {
+        console.log(`[DEBUG] Preparando ${heatmapData.length} puntos para heatmap`);
+        
+        heatmapPoints = heatmapData.map(point => {
+            return {
+                location: new google.maps.LatLng(point.lat, point.lng),
+                weight: point.weight || 0.5
+            };
+        });
+        
+        // Crear heatmap SIN asignarlo al mapa (map: null) - se activa con el toggle
+        heatmap = new google.maps.visualization.HeatmapLayer({
+            data: heatmapPoints,
+            map: null,  // No mostrar inicialmente
+            radius: 80,
+            opacity: 0.9,
+            dissipating: false,
+            maxIntensity: 2.0,
+            gradient: [
+                'rgba(0, 0, 255, 0)',
+                'rgba(0, 255, 255, 0.5)',
+                'rgba(0, 255, 0, 0.8)',
+                'rgba(255, 255, 0, 0.9)',
+                'rgba(255, 0, 0, 1)'
+            ]
+        });
+        
+        console.log(`[DEBUG] Heatmap creado (oculto inicialmente) con ${heatmapPoints.length} puntos`);
+    }
+    
+    // Centrar mapa en Arequipa con zoom adecuado
+    map.setCenter({ lat: -16.409047, lng: -71.537451 });
+    map.setZoom(13);
+    
+    // Crear marcadores
+    createMarkers();
+    
+    // Cargar polígonos de zonas/cuadrantes
+    loadZonasPoligonos();
+    
+    // Configurar controles
+    setupControls();
 }
 
 // Clase personalizada para labels de precio con tamaño real de 100px
@@ -662,8 +717,8 @@ function createMarkers() {
     document.getElementById('toggleMarkers').checked = true;
 }
 
-// Configurar controles básicos de la interfaz (sin heatmap)
-function setupBasicControls() {
+// Configurar controles de la interfaz
+function setupControls() {
     // Botón de zoom in
     document.getElementById('btnZoomIn').addEventListener('click', () => {
         map.setZoom(map.getZoom() + 1);
@@ -676,8 +731,63 @@ function setupBasicControls() {
     
     // Botón de reset view
     document.getElementById('btnResetView').addEventListener('click', () => {
-        map.setCenter({ lat: -16.409047, lng: -71.537451 });
-        map.setZoom(13);
+        // Recalcular bounds por si hay nuevos datos
+        const mapConfig = calculateMapBounds();
+        map.setCenter(mapConfig.center);
+        map.setZoom(mapConfig.zoom);
+        
+        // Ajustar bounds exactos si existen
+        if (mapConfig.bounds) {
+            map.fitBounds(mapConfig.bounds);
+        }
+    });
+    
+    // Toggle heatmap
+    document.getElementById('toggleHeatmap').addEventListener('change', (e) => {
+        if (heatmap) {
+            heatmap.setMap(e.target.checked ? map : null);
+            console.log(`[INFO] Heatmap ${e.target.checked ? 'activado' : 'desactivado'}`);
+        }
+    });
+    
+    // Toggle markers (también oculta/muestra los labels de precio)
+    document.getElementById('toggleMarkers').addEventListener('change', (e) => {
+        const visible = e.target.checked;
+        markers.forEach(marker => {
+            marker.setMap(visible ? map : null);
+        });
+        // También ocultar/mostrar los overlays de precio
+        markerLabels.forEach(overlay => {
+            if (overlay.div_) {
+                overlay.div_.style.display = (visible && overlay._visible !== false) ? 'block' : 'none';
+            }
+        });
+    });
+    
+    // Toggle labels de precio (usando overlays personalizados)
+    document.getElementById('toggleLabels').addEventListener('change', (e) => {
+        const showLabels = e.target.checked;
+        markerLabels.forEach(overlay => {
+            if (overlay.div_) {
+                overlay.div_.style.display = showLabels ? 'block' : 'none';
+            }
+            overlay._visible = showLabels;
+        });
+    });
+    
+    // Toggle zonas/cuadrantes
+    document.getElementById('toggleZonas').addEventListener('change', (e) => {
+        const visible = e.target.checked;
+        zonaPoligonos.forEach(poly => poly.setMap(visible ? map : null));
+        zonaLabels.forEach(label => label.setMap(visible ? map : null));
+        console.log(`[INFO] Cuadrantes ${visible ? 'activados' : 'desactivados'}`);
+    });
+    
+    // Control de opacidad
+    document.getElementById('heatmapOpacity').addEventListener('input', (e) => {
+        if (heatmap) {
+            heatmap.set('opacity', parseFloat(e.target.value));
+        }
     });
     
     // Botón de ayuda
@@ -691,7 +801,10 @@ function setupBasicControls() {
         location.reload();
     });
     
-    console.log('[DEBUG] Basic controls configured');
+    // Botón de aplicar filtros
+    document.getElementById('btnAplicarFiltros').addEventListener('click', () => {
+        alert('Los filtros se aplicarán en una futura implementación');
+    });
 }
 
 // Cargar polígonos de zonas/cuadrantes
