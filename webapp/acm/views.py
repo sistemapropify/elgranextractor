@@ -78,10 +78,9 @@ def buscar_comparables(request):
         
         # Filtrar por tipo si se especifica
         if tipo_propiedad:
+            # Filtro exacto (case-insensitive) sobre tipo_propiedad
             propiedades_locales = propiedades_locales.filter(
-                Q(tipo_propiedad__icontains=tipo_propiedad) |
-                Q(atributos_extras__tipo_propiedad__icontains=tipo_propiedad) |
-                Q(atributos_extras__tipo__icontains=tipo_propiedad)
+                Q(tipo_propiedad__iexact=tipo_propiedad)
             )
         
         # Convertir a lista para procesar
@@ -126,17 +125,11 @@ def buscar_comparables(request):
             }
             
             # Obtener TODAS las propiedades de Propifai primero
-            # No podemos filtrar por latitude/longitude en la consulta porque son propiedades Python
+            # Obtener TODAS las propiedades de Propifai (el filtro por tipo se hace en Python
+            # para mantener consistencia con la lógica de determinación de tipo por título)
             propiedades_propifai = PropifaiProperty.objects.using('propifai').all()
             
-            # Filtrar por tipo si se especifica
-            # Nota: PropifaiProperty no tiene campo property_type, usamos title
-            if tipo_propiedad:
-                propiedades_propifai = propiedades_propifai.filter(
-                    Q(title__icontains=tipo_propiedad)
-                )
-            
-            # Convertir a lista y procesar
+            # Convertir a lista
             todas_propifai = list(propiedades_propifai)
             propiedades_propifai_list = []
             propiedades_sin_coordenadas = []
@@ -298,6 +291,10 @@ def buscar_comparables(request):
                         tipo_propiedad_valor = 'Terreno'
                     elif any(tipo in titulo_lower for tipo in ['oficina', 'office', 'local']):
                         tipo_propiedad_valor = 'Oficina'
+                
+                # Filtrar por tipo si se especificó (consistente con la lógica de determinación)
+                if tipo_propiedad and tipo_propiedad_valor.lower() != tipo_propiedad.lower():
+                    continue
                 
                 propiedad_dict = {
                     'id': prop.id,

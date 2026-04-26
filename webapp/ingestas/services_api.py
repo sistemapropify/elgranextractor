@@ -16,7 +16,7 @@ class APIExternaService:
     def __init__(self, api_url: str = None, api_key: str = None):
         self.api_url = api_url or getattr(settings, 'API_EXTERNA_URL', 'http://localhost/dashboard/api/properties/with-docs/')
         self.api_key = api_key or getattr(settings, 'API_EXTERNA_KEY', 'ItBJSnE6F7gIG5uhnPh0mtXmQ9yjE8ZgqtIjTU')
-        self.timeout = getattr(settings, 'API_EXTERNA_TIMEOUT', 10)
+        self.timeout = getattr(settings, 'API_EXTERNA_TIMEOUT', 3)  # Reducido de 10s a 3s para no bloquear la página
     
     def obtener_propiedades(self) -> List[Dict[str, Any]]:
         """

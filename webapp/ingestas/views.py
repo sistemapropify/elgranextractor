@@ -1253,15 +1253,16 @@ class ListaPropiedadesView(ListView):
         context['campos_dinamicos'] = CampoDinamico.objects.all()
         
         # Obtener todas las propiedades según los filtros
+        # NOTA: _obtener_todas_propiedades() ya obtiene propiedades_externas y propifai internamente
         todas_propiedades = self._obtener_todas_propiedades()
         
-        # Obtener propiedades externas y Propifai para los filtros
+        # Obtener propiedades externas para los filtros (solo si no se obtuvieron ya)
         from ingestas.services_api import obtener_propiedades_externas
         propiedades_externas = obtener_propiedades_externas()
         
         try:
             from propifai.models import PropifaiProperty
-            propiedades_propifai = list(PropifaiProperty.objects.all()[:100])
+            propiedades_propifai = list(PropifaiProperty.objects.using('propifai').all()[:100])
             propiedades_propifai_dict = [self._convertir_propiedad_propifai_a_dict(prop) for prop in propiedades_propifai]
         except Exception as e:
             print(f"Error obteniendo propiedades de Propifai: {e}")

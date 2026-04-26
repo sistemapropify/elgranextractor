@@ -19,6 +19,8 @@ PUBLIC_PATHS = [
     r'^/admin/',
     r'^/static/',
     r'^/acm/',                   # ACM - Análisis Comparativo de Mercado (público)
+    r'^/ingestas/propiedades/',  # Catálogo público de propiedades
+    r'^/market-analysis/',       # Market analysis (heatmap, dashboard) público
 ]
 
 

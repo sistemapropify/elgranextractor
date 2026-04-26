@@ -18,20 +18,27 @@ const ICONO_PROPIFAI_SELECCIONADO = 'https://maps.google.com/mapfiles/ms/icons/p
 
 // Inicializar eventos del formulario y controles (independiente de Google Maps)
 function inicializarEventos() {
+    console.log('ACM: inicializarEventos()');
+    
     // Slider de radio
     const radioSlider = document.getElementById('radioBusqueda');
     const radioValue = document.getElementById('radioValue');
     
-    if (radioSlider) {
+    if (radioSlider && radioValue) {
         radioSlider.addEventListener('input', () => {
             radioValue.textContent = radioSlider.value;
         });
+    } else {
+        console.warn('ACM: No se encontraron elementos del slider de radio');
     }
 
     // Botón de búsqueda (único, debajo del mapa)
     const btnBuscarMap = document.getElementById('btnBuscarMap');
     if (btnBuscarMap) {
+        console.log('ACM: Asignando evento click a btnBuscarMap');
         btnBuscarMap.addEventListener('click', buscarComparables);
+    } else {
+        console.error('ACM: NO se encontró el botón btnBuscarMap');
     }
 
     // Botón para eliminar todos los comparables seleccionados
@@ -355,8 +362,8 @@ function crearMarcadorComparable(propiedad) {
         // Mostrar precio por m² en dólares como etiqueta del marcador (debajo del icono)
         label: {
             text: labelText,
-            color: "#ffffff",
-            fontSize: "11px",
+            color: "#dc3545",
+            fontSize: "12px",
             fontWeight: "bold"
         }
     });
@@ -398,8 +405,8 @@ function toggleSeleccionarPropiedad(id) {
         const labelText = marcadorInfo.labelText || (marcadorInfo.esPropifai ? 'P' : '?');
         marcadorInfo.marker.setLabel({
             text: labelText,
-            color: "white",
-            fontSize: "11px",
+            color: "#dc3545",
+            fontSize: "12px",
             fontWeight: "bold"
         });
         marcadorInfo.seleccionado = false;

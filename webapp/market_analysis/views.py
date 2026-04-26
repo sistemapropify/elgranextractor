@@ -68,18 +68,24 @@ def heatmap_view(request):
                         'land', 'lot', 'plot', 'ground', 'solar', 'vacant'
                     ])
                     
+                    # Determinar tipo de área usada para el cálculo de precio/m²
+                    tipo_area = None  # 'T' = terreno, 'C' = construccion
+                    
                     # Si es terreno, usar solo área de terreno
                     if es_terreno:
                         if prop.area_terreno and prop.area_terreno > 0:
                             area = float(prop.area_terreno)
+                            tipo_area = 'T'
                         # Si no hay área de terreno pero sí área construida, no usar área construida para terrenos
                         # (dejar area = None para que no calcule precio/m²)
                     else:
                         # Para otros tipos, priorizar área construida
                         if prop.area_construida and prop.area_construida > 0:
                             area = float(prop.area_construida)
+                            tipo_area = 'C'
                         elif prop.area_terreno and prop.area_terreno > 0:
                             area = float(prop.area_terreno)
+                            tipo_area = 'T'
                     
                     # Calcular peso basado en precio - GARANTIZAR QUE TODAS LAS PROPIEDADES SEAN VISIBLES
                     # Peso mínimo para TODAS las propiedades: 1.0 (en lugar de 0.5)
@@ -129,7 +135,8 @@ def heatmap_view(request):
                         'direccion': prop.direccion if hasattr(prop, 'direccion') and prop.direccion else None,
                         'tipo_propiedad': prop.tipo_propiedad if hasattr(prop, 'tipo_propiedad') and prop.tipo_propiedad else None,
                         'habitaciones': prop.habitaciones if hasattr(prop, 'habitaciones') else None,
-                        'banos': prop.banos if hasattr(prop, 'banos') else None
+                        'banos': prop.banos if hasattr(prop, 'banos') else None,
+                        'tipo_area': tipo_area
                     })
                     local_count += 1
                     props_added += 1
@@ -210,18 +217,24 @@ def heatmap_view(request):
                     # Combinar detecciones - si cualquiera dice que es terreno, lo tratamos como terreno
                     es_terreno = es_terreno_texto or es_terreno_heuristico
                     
+                    # Determinar tipo de área usada para el cálculo de precio/m²
+                    tipo_area = None  # 'T' = terreno, 'C' = construccion
+                    
                     # SI ES TERRENO: usar SOLO land_area (nunca built_area)
                     if es_terreno:
                         if prop.land_area and prop.land_area > 0:
                             area = float(prop.land_area)
+                            tipo_area = 'T'
                         # Si no hay land_area, NO usar built_area bajo ninguna circunstancia
                         # (dejar area = None, no calcular precio/m²)
                     else:
                         # Para NO terrenos, priorizar built_area con fallback a land_area
                         if prop.built_area and prop.built_area > 0:
                             area = float(prop.built_area)
+                            tipo_area = 'C'
                         elif prop.land_area and prop.land_area > 0:
                             area = float(prop.land_area)
+                            tipo_area = 'T'
                     
                     # Calcular peso basado en precio
                     if prop.price and prop.price > 0:
@@ -265,7 +278,8 @@ def heatmap_view(request):
                         'property_type': prop.zoning if hasattr(prop, 'zoning') and prop.zoning else None,
                         'bedrooms': prop.bedrooms if hasattr(prop, 'bedrooms') else None,
                         'bathrooms': prop.bathrooms if hasattr(prop, 'bathrooms') else None,
-                        'title': prop.title if hasattr(prop, 'title') and prop.title else None
+                        'title': prop.title if hasattr(prop, 'title') and prop.title else None,
+                        'tipo_area': tipo_area
                     })
                     propifai_count += 1
                     props_added_propifai += 1
@@ -282,8 +296,30 @@ def heatmap_view(request):
         print(f"[DEBUG] Detalle del error: {type(e).__name__}: {str(e)}")
         # Continuar sin propiedades Propifai - al menos mostraremos las de Remax
     
+    # Obtener zonas/cuadrantes de cuadrantizacion
+    zonas_json = '[]'
+    try:
+        from cuadrantizacion.models import ZonaValor
+        from cuadrantizacion.serializers import ZonaValorSerializer
+        
+        # Obtener todas las zonas activas con coordenadas no nulas
+        zonas_qs = ZonaValor.objects.filter(
+            activo=True,
+            coordenadas__isnull=False
+        )
+        
+        # Filtrar en Python para evitar problemas con JSONField en mssql
+        zonas = [z for z in zonas_qs if z.coordenadas and len(z.coordenadas) >= 3]
+        
+        serializer = ZonaValorSerializer(zonas, many=True)
+        zonas_json = json.dumps(serializer.data)
+        print(f"[DEBUG HEATMAP] Zonas cargadas: {len(serializer.data)}")
+    except Exception as e:
+        print(f"[DEBUG] Error obteniendo zonas: {e}")
+        import traceback
+        traceback.print_exc()
+    
     # Convertir a JSON para incrustar en JavaScript
-    import json
     heatmap_data_json = json.dumps(heatmap_points)
     
     # Contar propiedades por fuente
@@ -306,6 +342,7 @@ def heatmap_view(request):
         'local_count': local_count,
         'propifai_count': propifai_count,
         'heatmap_data_json': heatmap_data_json,
+        'zonas_json': zonas_json,
         'google_maps_api_key': google_maps_api_key,
         'title': '🔥 HEATMAP CON DATOS REALES - Precio por m² - El Gran Extractor',
     }

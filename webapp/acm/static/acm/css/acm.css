@@ -126,18 +126,234 @@
     border-radius: 3px;
 }
 
-/* Responsive */
-@media (max-width: 992px) {
-    .acm-container .row {
-        flex-direction: column;
-    }
-    
-    .acm-container .col-lg-3,
-    .acm-container .col-lg-6 {
+/* Responsive - Móvil y Tablet (< 992px) */
+@media (max-width: 991.98px) {
+    /* Mapa ocupa todo el ancho disponible */
+    .acm-container .row > [class*="col-"] {
         width: 100%;
-        margin-bottom: 1rem;
+        margin-bottom: 0.5rem;
     }
     
+    #acmMap {
+        height: 50vh !important;
+        min-height: 350px !important;
+        max-height: 500px !important;
+    }
+    
+    /* Panel de parámetros - ultra compacto */
+    .mobile-params-panel .card {
+        margin-bottom: 0 !important;
+    }
+    
+    .mobile-params-panel .card-header {
+        cursor: pointer;
+        padding: 0.3rem 0.6rem !important;
+    }
+    
+    .mobile-params-panel .card-header h6 {
+        font-size: 0.78rem !important;
+        margin: 0 !important;
+    }
+    
+    .mobile-params-panel .card-header h6 i {
+        font-size: 0.7rem;
+    }
+    
+    .mobile-params-panel .card-body {
+        padding: 0.3rem 0.5rem !important;
+    }
+    
+    /* Labels ultra compactos */
+    .mobile-params-panel label.form-label {
+        font-size: 0.65rem !important;
+        margin-bottom: 0.05rem !important;
+    }
+    
+    /* Inputs ultra compactos */
+    .acm-field-input {
+        font-size: 0.7rem !important;
+        padding: 0.15rem 0.25rem !important;
+        height: auto !important;
+        min-height: unset !important;
+    }
+    
+    .acm-field-label {
+        font-size: 0.6rem !important;
+        margin-bottom: 0.05rem !important;
+    }
+    
+    .acm-all-fields-row {
+        margin-bottom: 0.2rem !important;
+    }
+    
+    .acm-all-fields-row .col {
+        padding: 0 1px !important;
+    }
+    
+    /* Select ultra compacto */
+    .mobile-params-panel .form-select-sm {
+        font-size: 0.7rem !important;
+        padding: 0.15rem 1.2rem 0.15rem 0.3rem !important;
+        height: auto !important;
+        min-height: unset !important;
+    }
+    
+    /* Radio range ultra compacto */
+    .mobile-params-panel .form-range {
+        height: 0.8rem !important;
+        padding: 0 !important;
+    }
+    
+    .mobile-params-panel .mb-1 {
+        margin-bottom: 0.15rem !important;
+    }
+    
+    .mobile-params-panel .mb-2 {
+        margin-bottom: 0.2rem !important;
+    }
+    
+    .mobile-params-panel .d-flex small {
+        font-size: 0.55rem !important;
+    }
+    
+    /* Alerta de punto seleccionado compacta */
+    #puntoSeleccionadoAlert {
+        margin-top: 0.2rem !important;
+        padding: 0.2rem 0.4rem !important;
+    }
+    
+    #puntoSeleccionadoAlert .small {
+        font-size: 0.65rem !important;
+    }
+    
+    #puntoSeleccionadoAlert i {
+        font-size: 0.7rem;
+    }
+    
+    /* Botón flotante de comparables */
+    .fixed-bottom.p-3 {
+        padding: 0.5rem 1rem !important;
+    }
+    
+    .fixed-bottom .btn-lg {
+        font-size: 0.9rem;
+        padding: 0.5rem 1.5rem;
+        border-radius: 50px;
+        max-width: 350px;
+    }
+    
+    /* Offcanvas drawer */
+    .offcanvas-bottom.d-lg-none {
+        height: 50vh !important;
+    }
+    
+    .offcanvas-bottom.d-lg-none .offcanvas-body {
+        padding: 0.3rem 0.75rem;
+    }
+    
+    /* Tarjetas de propiedad en el drawer */
+    .propiedad-card {
+        padding: 0.5rem !important;
+    }
+    
+    .propiedad-card .propiedad-imagen {
+        height: 60px;
+    }
+    
+    .propiedad-card .propiedad-tipo {
+        font-size: 0.8rem;
+    }
+    
+    .propiedad-card .propiedad-precio {
+        font-size: 0.85rem;
+    }
+    
+    /* Resumen ACM */
+    .resumen-acm .valor-estimado {
+        font-size: 1.1rem;
+        padding: 0.5rem;
+    }
+    
+    .resumen-acm .estadistica-item {
+        padding: 0.4rem;
+    }
+    
+    .resumen-acm .estadistica-valor {
+        font-size: 1rem;
+    }
+}
+
+/* Ajustes específicos para tablet (768px - 991px) */
+@media (min-width: 768px) and (max-width: 991.98px) {
+    /* Mapa más grande en tablet */
+    #acmMap {
+        height: 55vh !important;
+        min-height: 400px !important;
+        max-height: 600px !important;
+    }
+    
+    /* Panel de parámetros ligeramente más espaciado que en móvil */
+    .mobile-params-panel .card-body {
+        padding: 0.4rem 0.6rem !important;
+    }
+    
+    .mobile-params-panel .card-header {
+        padding: 0.35rem 0.6rem !important;
+    }
+    
+    .mobile-params-panel .card-header h6 {
+        font-size: 0.82rem !important;
+    }
+    
+    .acm-field-input {
+        font-size: 0.75rem !important;
+        padding: 0.2rem 0.3rem !important;
+    }
+    
+    .mobile-params-panel .form-select-sm {
+        font-size: 0.75rem !important;
+        padding: 0.2rem 1.2rem 0.2rem 0.3rem !important;
+    }
+    
+    /* Botón de búsqueda */
+    #btnBuscarMap {
+        font-size: 0.85rem;
+        padding: 0.4rem 0.75rem;
+    }
+    
+    /* Buscador de direcciones */
+    .acm-search-box input {
+        font-size: 0.85rem;
+    }
+    
+    /* Header del mapa */
+    .mobile-map-panel .card-header h5 {
+        font-size: 0.95rem;
+    }
+    
+    /* Botón flotante */
+    .fixed-bottom .btn-lg {
+        font-size: 1rem;
+        padding: 0.6rem 2rem;
+        max-width: 400px;
+    }
+    
+    /* Offcanvas */
+    .offcanvas-bottom.d-lg-none {
+        height: 45vh !important;
+    }
+}
+
+/* Ajustes específicos para móvil (< 768px) */
+@media (max-width: 767.98px) {
+    #acmMap {
+        height: 45vh !important;
+        min-height: 300px !important;
+    }
+}
+
+/* Responsive - Desktop (≥ 992px) */
+@media (min-width: 992px) {
     #acmMap {
         height: 400px !important;
     }

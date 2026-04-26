@@ -2,10 +2,13 @@
 {% load static %}
 
 {% block acm_content %}
-<div class="container-fluid py-2">
-    <!-- Layout responsive mejorado -->
+<!-- Contenedor de toasts para notificaciones -->
+<div id="toastContainer" class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 9999;"></div>
+
+<div class="container-fluid py-2 px-2 px-md-3 px-lg-3">
+    <!-- Layout responsive -->
     <div class="row g-3">
-        <!-- Panel de parámetros - Mitad superior en móvil -->
+        <!-- Panel de parámetros - Colapsable en móvil/tablet, columna izquierda en desktop -->
         <div class="col-12 col-lg-3 mobile-params-panel">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-header bg-white border-bottom py-2 d-flex justify-content-between align-items-center">
@@ -18,6 +21,7 @@
                 </div>
                 <div class="card-body p-2" id="paramsPanelContent" style="padding: 0.5rem !important;">
                     <form id="acmForm">
+                        {% csrf_token %}
                         <!-- Tipo de propiedad -->
                         <div class="mb-1">
                             <label for="tipoPropiedad" class="form-label small">Tipo de propiedad</label>
@@ -93,7 +97,7 @@
             </div>
         </div>
 
-        <!-- Panel del mapa - Mitad inferior en móvil -->
+        <!-- Panel del mapa - Ancho completo en móvil/tablet, columna central en desktop -->
         <div class="col-12 col-lg-6 mobile-map-panel">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
@@ -119,7 +123,7 @@
                     <div id="acmMap" style="height: 400px; width: 100%;" class="acm-map-container"></div>
                     <!-- Botón de búsqueda debajo del mapa -->
                     <div class="d-grid p-2">
-                        <button type="button" id="btnBuscarMap" class="btn btn-primary btn-sm" form="acmForm">
+                        <button type="button" id="btnBuscarMap" class="btn btn-primary btn-sm">
                             <i class="bi bi-search me-1"></i>Buscar Comparables
                         </button>
                     </div>
@@ -127,7 +131,7 @@
             </div>
         </div>
 
-        <!-- Panel derecho: Comparables seleccionados (oculto en móvil) -->
+        <!-- Panel derecho: Comparables seleccionados (oculto en móvil/tablet, visible en desktop) -->
         <div class="col-lg-3 d-none d-lg-block">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-header bg-white border-bottom">
@@ -180,7 +184,7 @@
         </div>
     </div>
 
-    <!-- Botón flotante para mostrar comparables en móvil -->
+    <!-- Botón flotante para mostrar comparables en móvil/tablet (oculto en desktop) -->
     <div class="d-lg-none fixed-bottom p-3">
         <div class="d-flex justify-content-center">
             <button type="button" class="btn btn-primary btn-lg shadow-lg" id="mobileComparablesBtn" data-bs-toggle="offcanvas" data-bs-target="#mobileComparablesDrawer">
@@ -192,8 +196,8 @@
     </div>
 </div>
 
-<!-- Drawer para comparables en móvil -->
-<div class="offcanvas offcanvas-bottom" tabindex="-1" id="mobileComparablesDrawer" aria-labelledby="mobileComparablesDrawerLabel">
+<!-- Drawer para comparables en móvil/tablet (oculto en desktop) -->
+<div class="offcanvas offcanvas-bottom d-lg-none" tabindex="-1" id="mobileComparablesDrawer" aria-labelledby="mobileComparablesDrawerLabel">
     <div class="offcanvas-header">
         <h5 class="offcanvas-title" id="mobileComparablesDrawerLabel">
             <i class="bi bi-list-check me-2"></i>Comparables Seleccionados
