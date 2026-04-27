@@ -47,11 +47,30 @@ function inicializarEventos() {
         btnEliminarTodos.addEventListener('click', limpiarPropiedadesSeleccionadas);
     }
 
+    // Función para abrir el modal de Resumen ACM
+    function abrirModalResumenACM() {
+        actualizarResumenACM();
+        const modal = new bootstrap.Modal(document.getElementById('modalResumenACM'));
+        modal.show();
+    }
+
+    // Botón "Resumen ACM" móvil - abre el modal con el resumen
+    const btnResumenACM = document.getElementById('btnResumenACM');
+    if (btnResumenACM) {
+        btnResumenACM.addEventListener('click', abrirModalResumenACM);
+    }
+
+    // Botón "Resumen ACM" desktop - abre el modal con el resumen
+    const btnResumenACMDesktop = document.getElementById('btnResumenACMDesktop');
+    if (btnResumenACMDesktop) {
+        btnResumenACMDesktop.addEventListener('click', abrirModalResumenACM);
+    }
+
     // Cambio en tipo de propiedad para mostrar/ocultar campos
     const tipoPropiedad = document.getElementById('tipoPropiedad');
     if (tipoPropiedad) {
-        tipoPropiedad.addEventListener('change', function() {
-            const tipo = this.value.toLowerCase();
+        function actualizarCamposPorTipo() {
+            const tipo = tipoPropiedad.value.toLowerCase();
             const esTerreno = tipo === 'terreno';
             
             // Campos que deben ocultarse cuando es Terreno:
@@ -66,17 +85,17 @@ function inicializarEventos() {
             camposAOcultar.forEach(function(className) {
                 var elementos = document.getElementsByClassName(className);
                 Array.from(elementos).forEach(function(el) {
-                    if (esTerreno) {
-                        el.classList.add('acm-field-hidden');
-                    } else {
-                        el.classList.remove('acm-field-hidden');
-                    }
+                    el.style.display = esTerreno ? 'none' : '';
                 });
             });
             
             // El campo m² terr. siempre debe estar visible
             // (los terrenos usan área de terreno, no construcción)
-        });
+        }
+        
+        tipoPropiedad.addEventListener('change', actualizarCamposPorTipo);
+        // Ejecutar también al cargar la página para estado inicial
+        actualizarCamposPorTipo();
     }
 
     // Event listeners para actualizar resumen cuando cambien los parámetros
@@ -519,6 +538,16 @@ function actualizarContadores() {
     const mobileBadge = document.getElementById('mobileComparablesBadge');
     if (mobileBadge) {
         mobileBadge.textContent = propiedadesSeleccionadas.size > 0 ? 'Ver' : '0';
+    }
+    // Habilitar/deshabilitar botón "Resumen ACM" (móvil)
+    const btnResumenACM = document.getElementById('btnResumenACM');
+    if (btnResumenACM) {
+        btnResumenACM.disabled = propiedadesSeleccionadas.size === 0;
+    }
+    // Habilitar/deshabilitar botón "Resumen ACM" (desktop)
+    const btnResumenACMDesktop = document.getElementById('btnResumenACMDesktop');
+    if (btnResumenACMDesktop) {
+        btnResumenACMDesktop.disabled = propiedadesSeleccionadas.size === 0;
     }
 }
 
