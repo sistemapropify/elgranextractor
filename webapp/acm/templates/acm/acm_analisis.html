@@ -32,18 +32,172 @@
     .acm-container .mb-2 {
         margin-bottom: 0.35rem !important;
     }
-    /* FORZAR altura automática de TODAS las cards en tablet */
-    @media (min-width: 768px) and (max-width: 991.98px) {
-        .acm-container .row {
-            align-items: flex-start !important;
+    /* Layout tablet (768px-1024px) - SIN margen entre tarjetas, mapa ocupa casi todo */
+    /* Cubre tablets estándar (768-991px) y iPad Pro (1024px) */
+    @media (min-width: 768px) and (max-width: 1024px) {
+        /* ============================================
+           PASO 1: Forzar sidebar OCULTA en tablet
+           ============================================ */
+        .app-sidebar {
+            transform: translateX(-100%) !important;
         }
+        .app-content {
+            margin-left: 0 !important;
+        }
+        .sidebar-toggle {
+            display: block !important;
+        }
+        
+        /* ============================================
+           PASO 2: Neutralizar COMPLETAMENTE el acm.css
+           Usamos el mismo selector que acm.css para
+           garantizar que lo sobreescribimos
+           ============================================ */
         .acm-container .row > [class*="col-"] {
-            align-self: auto !important;
+            width: 100% !important;
+            margin-bottom: 0 !important;
         }
-        .mobile-params-panel .card,
-        .mobile-map-panel .card {
+        
+        /* ============================================
+           PASO 3: Contenedor principal - altura automática
+           (permite scroll para ver tarjetas debajo del mapa)
+           ============================================ */
+        .acm-container .container-fluid {
+            height: auto !important;
+            min-height: calc(100vh - var(--header-height, 60px));
+            padding: 0 !important;
+            margin: 0 !important;
+            overflow: visible;
+        }
+        
+        /* ============================================
+           PASO 4: Row en columna vertical, SIN gaps
+           ============================================ */
+        .acm-container .container-fluid > .row {
+            height: auto !important;
+            margin: 0 !important;
+            --bs-gutter-x: 0 !important;
+            gap: 0 !important;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* ============================================
+           PASO 5: Columnas sin padding
+           ============================================ */
+        .acm-container .container-fluid > .row > [class*="col-"] {
+            padding: 0 !important;
+        }
+        
+        /* ============================================
+           PASO 6: Panel parámetros - altura mínima
+           ============================================ */
+        .mobile-params-panel {
+            height: auto !important;
+            max-height: none !important;
+            flex-shrink: 0;
+            align-self: flex-start !important; /* Neutralizar acm.css */
+        }
+        .mobile-params-panel .card {
             height: auto !important;
             min-height: 0 !important;
+            margin-bottom: 0 !important;
+            border-radius: 0 !important;
+        }
+        .mobile-params-panel .card-body {
+            max-height: none !important;
+            overflow-y: visible !important;
+            padding: 0.1rem 0.3rem !important;
+        }
+        .mobile-params-panel .card-header {
+            padding: 0.15rem 0.5rem !important;
+        }
+        .mobile-params-panel .card-header h6 {
+            font-size: 0.75rem !important;
+        }
+        /* Compactar formulario al máximo */
+        .mobile-params-panel .mb-1 {
+            margin-bottom: 0.1rem !important;
+        }
+        .mobile-params-panel .mb-2 {
+            margin-bottom: 0.15rem !important;
+        }
+        .mobile-params-panel .form-label.small {
+            font-size: 0.6rem !important;
+            margin-bottom: 0 !important;
+        }
+        .mobile-params-panel .form-select-sm,
+        .mobile-params-panel .form-control-sm {
+            font-size: 0.65rem !important;
+            padding: 0.05rem 0.2rem !important;
+            height: 24px !important;
+        }
+        .mobile-params-panel .form-range {
+            height: 0.8rem !important;
+            margin: 0 !important;
+        }
+        .mobile-params-panel .d-flex.justify-content-between small {
+            font-size: 0.5rem !important;
+        }
+        /* Botón buscar compacto */
+        #btnBuscarMap {
+            font-size: 0.7rem !important;
+            padding: 0.15rem !important;
+        }
+        
+        /* ============================================
+           PASO 7: Panel mapa - altura controlada para
+           que quepan header + mapa + botón en pantalla
+           ============================================ */
+        .mobile-map-panel {
+            flex: 1;
+            min-height: 0;
+            margin: 0 !important;
+            padding: 0 !important;
+            display: flex;
+            flex-direction: column;
+        }
+        .mobile-map-panel .card {
+            flex: 1;
+            margin-bottom: 0 !important;
+            border-radius: 0 !important;
+            display: flex;
+            flex-direction: column;
+        }
+        .mobile-map-panel .card-header {
+            display: flex !important;
+            padding: 0.2rem 0.5rem !important;
+            flex-shrink: 0;
+        }
+        .mobile-map-panel .card-header h6 {
+            font-size: 0.75rem !important;
+            margin: 0 !important;
+        }
+        .mobile-map-panel .card-body {
+            flex: 1;
+            padding: 0 !important;
+            display: flex;
+            flex-direction: column;
+        }
+        /* Ocultar buscador de direcciones en tablet */
+        .acm-search-box {
+            display: none !important;
+        }
+        /* Botón buscar debajo del mapa - SIEMPRE visible */
+        .mobile-map-panel .d-grid.p-2 {
+            display: block !important;
+            padding: 0.3rem 0.5rem !important;
+            flex-shrink: 0;
+        }
+        #acmMap {
+            height: 45vh !important;
+            min-height: 250px !important;
+            max-height: 400px !important;
+        }
+        
+        /* Ocultar Comparables Seleccionados en tablet (hasta 1024px) */
+        .d-none.d-lg-block.mt-3 {
+            display: none !important;
         }
     }
 </style>
@@ -132,7 +286,7 @@
         </div>
 
         <!-- Panel del mapa - Ancho completo en móvil/tablet, columna central en desktop -->
-        <div class="col-12 col-lg-6 mobile-map-panel mb-4">
+        <div class="col-12 col-lg-6 mobile-map-panel">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-1">
                     <h6 class="mb-0">
@@ -190,8 +344,8 @@
         </div>
     </div>
 
-    <!-- Sección de comparables seleccionados visible en tablet (oculto en móvil/desktop) -->
-    <div class="d-none d-md-block d-lg-none mt-3">
+    <!-- Sección de comparables seleccionados SOLO visible en desktop (oculto en móvil y tablet) -->
+    <div class="d-none d-lg-block mt-3">
         <div class="card border-0 shadow-sm">
             <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-2">
                 <h6 class="mb-0">
@@ -215,8 +369,8 @@
         </div>
     </div>
 
-    <!-- Sección de Resultado ACM visible en tablet (oculto en móvil/desktop) -->
-    <div class="d-none d-md-block d-lg-none mt-3 mb-5">
+    <!-- Sección de Resultado ACM visible en desktop y tablet (oculto solo en móvil) -->
+    <div class="d-none d-md-block mt-2 mb-3">
         <div class="card border-0 shadow-sm">
             <div class="card-header bg-white border-bottom py-2">
                 <h6 class="mb-0">
