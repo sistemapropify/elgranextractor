@@ -136,6 +136,10 @@
     .mobile-params-panel {
         align-self: flex-start;
     }
+    .mobile-params-panel .card {
+        height: auto !important;
+        min-height: 0 !important;
+    }
 }
 
 /* Responsive - Móvil (< 768px) */
