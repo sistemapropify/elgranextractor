@@ -158,16 +158,6 @@
                     <h6 class="mb-3"><i class="bi bi-layers me-1"></i>Controles de capa</h6>
                     
                     <div class="mb-3">
-                        <label class="form-label small mb-1">Mostrar heatmap</label>
-                        <div class="toggle-switch">
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" id="toggleHeatmap">
-                                <label class="form-check-label small" for="toggleHeatmap">Activar mapa de calor</label>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="mb-3">
                         <label class="form-label small mb-1">Mostrar marcadores</label>
                         <div class="toggle-switch">
                             <div class="form-check form-switch">
@@ -194,15 +184,6 @@
                                 <input class="form-check-input" type="checkbox" id="toggleZonas" checked>
                                 <label class="form-check-label small" for="toggleZonas">Activar cuadrantes</label>
                             </div>
-                        </div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label small mb-1">Opacidad del heatmap</label>
-                        <input type="range" class="form-range" id="heatmapOpacity" min="0" max="1" step="0.1" value="0.6">
-                        <div class="d-flex justify-content-between small text-muted">
-                            <span>Baja</span>
-                            <span>Alta</span>
                         </div>
                     </div>
                     
@@ -410,36 +391,17 @@
 {% block extra_js %}
 <!-- Google Maps API con visualization para heatmap -->
 <script>
-// Variables globales - definidas ANTES de que Google Maps cargue
+// Variables globales
 let map;
 let markers = [];
 let markerLabels = [];
-let heatmapLayer = null;
-let heatmapData = [];
-let zonasData = [];
+let heatmapData = JSON.parse('{{ heatmap_data_json|escapejs }}');
+let zonasData = JSON.parse('{{ zonas_json|escapejs }}');
 
 // Variables para polígonos de zonas
 let zonaPoligonos = [];
 let zonaLabels = [];
 let zonaInfoWindows = [];
-
-// Inicializar datos desde el backend (con try-catch por si hay error de parsing)
-try {
-    heatmapData = JSON.parse('{{ heatmap_data_json|escapejs }}');
-} catch(e) {
-    console.error('[ERROR] Error parsing heatmap_data_json:', e);
-    heatmapData = [];
-}
-
-try {
-    zonasData = JSON.parse('{{ zonas_json|escapejs }}');
-} catch(e) {
-    console.error('[ERROR] Error parsing zonas_json:', e);
-    zonasData = [];
-}
-
-console.log('[DEBUG] Heatmap data loaded:', heatmapData.length, 'points');
-console.log('[DEBUG] Zonas data loaded:', zonasData.length, 'zonas');
 
 // Clase personalizada para labels de precio
 class PriceLabelOverlay extends google.maps.OverlayView {
@@ -494,9 +456,34 @@ class PriceLabelOverlay extends google.maps.OverlayView {
     }
 }
 
-// Inicializar mapa
+// Inicializar mapa (igual que en mapa_zonas.html)
 function initMap() {
     const defaultCenter = { lat: -16.4090, lng: -71.5375 }; // Arequipa, Perú
+
+    map = new google.maps.Map(document.getElementById('heatmapMap'), {
+        center: defaultCenter,
+        zoom: 13,
+        mapTypeId: 'roadmap',
+        styles: [
+            {
+                featureType: "poi",
+                elementType: "labels",
+                stylers: [{ visibility: "off" }]
+            }
+        ]
+    });
+
+    console.log('[DEBUG] Map initialized successfully');
+
+    // Crear marcadores de propiedades
+    createMarkers();
+
+    // Cargar polígonos de zonas/cuadrantes
+    loadZonasPoligonos();
+
+    // Configurar controles
+    setupControls();
+}
 
     map = new google.maps.Map(document.getElementById('heatmapMap'), {
         center: defaultCenter,
@@ -529,49 +516,259 @@ function initMap() {
     updateStats();
 }
 
-// Crear capa de heatmap
-function createHeatmapLayer() {
+// Crear marcadores para TODAS las propiedades
+function createMarkers() {
+    // Limpiar marcadores anteriores
+    markers.forEach(marker => marker.setMap(null));
+    markers = [];
+    markerLabels.forEach(l => { if (l.setMap) l.setMap(null); });
+    markerLabels = [];
+
     if (!heatmapData || heatmapData.length === 0) {
-        console.log('[INFO] Sin datos para heatmap');
+        console.log('[INFO] Sin datos de propiedades para mostrar');
         return;
     }
-    
-    // Verificar que visualization esté disponible
-    if (!google.maps.visualization || !google.maps.visualization.HeatmapLayer) {
-        console.error('[ERROR] google.maps.visualization.HeatmapLayer no está disponible. Falta la librería visualization.');
-        return;
+
+    console.log(`[DEBUG] Creando marcadores para ${heatmapData.length} propiedades`);
+
+    let markersCreated = 0;
+    let markersSkipped = 0;
+
+    // Crear marcadores para TODAS las propiedades
+    for (let i = 0; i < heatmapData.length; i++) {
+        const point = heatmapData[i];
+        if (!point.lat || !point.lng) {
+            markersSkipped++;
+            continue;
+        }
+
+        // Determinar icono según la fuente
+        let iconUrl = '';
+        let labelColor = '#4285F4';
+        if (point.fuente === 'propifai') {
+            iconUrl = '/static/requerimientos/data/Pin-propify.png';
+            labelColor = '#0B6623'; // Verde para Propifai
+        } else if (point.fuente === 'local') {
+            iconUrl = '/static/requerimientos/data/pin-remax.png';
+            labelColor = '#EA4335'; // Rojo para Remax
+        }
+
+        // Crear label de precio/m² si la propiedad tiene precio y área
+        let labelText = '';
+        if (point.precio_m2 && point.precio_m2 > 0 && point.tipo_area) {
+            const precioFormateado = Math.round(point.precio_m2);
+            const tipoLabel = point.tipo_area === 'T' ? 'T' : 'C';
+            labelText = `$${precioFormateado}/m² (${tipoLabel})`;
+        }
+
+        const marker = new google.maps.Marker({
+            position: { lat: point.lat, lng: point.lng },
+            map: map,  // Mostrar en el mapa por defecto
+            title: `Propiedad ${point.id || i+1}`,
+            icon: iconUrl ? {
+                url: iconUrl,
+                scaledSize: new google.maps.Size(40, 40),
+                origin: new google.maps.Point(0, 0),
+                anchor: new google.maps.Point(20, 40)
+            } : undefined,
+            propertyData: point
+        });
+
+        // Crear overlay de texto para precio
+        if (labelText) {
+            const overlay = new PriceLabelOverlay(
+                { lat: point.lat, lng: point.lng },
+                labelText,
+                labelColor,
+                map
+            );
+            overlay._visible = true;
+            markerLabels.push(overlay);
+        }
+
+        // Info window con información detallada
+        const infoContent = `
+            <div style="padding: 10px; max-width: 300px; font-size: 14px;">
+                <h6 style="margin: 0 0 8px 0; color: #1a73e8;">Propiedad ${point.id || i+1}</h6>
+                ${point.tipo_propiedad ? `<p style="margin: 0 0 4px 0;"><strong>Tipo:</strong> ${point.tipo_propiedad}</p>` : ''}
+                ${point.precio_usd ? `<p style="margin: 0 0 4px 0;"><strong>Precio:</strong> $${point.precio_usd.toLocaleString()} USD</p>` : ''}
+                ${point.area_construida ? `<p style="margin: 0 0 4px 0;"><strong>Área construida:</strong> ${point.area_construida} m²</p>` : ''}
+                ${point.area_terreno ? `<p style="margin: 0 0 4px 0;"><strong>Área terreno:</strong> ${point.area_terreno} m²</p>` : ''}
+                ${point.precio_m2 ? `<p style="margin: 0 0 4px 0;"><strong>Precio/m²:</strong> $${point.precio_m2.toFixed(2)} USD</p>` : ''}
+                ${point.habitaciones ? `<p style="margin: 0 0 4px 0;"><strong>Habitaciones:</strong> ${point.habitaciones}</p>` : ''}
+                ${point.banos ? `<p style="margin: 0 0 4px 0;"><strong>Baños:</strong> ${point.banos}</p>` : ''}
+                ${point.direccion ? `<p style="margin: 0 0 4px 0;"><strong>Dirección:</strong> ${point.direccion}</p>` : ''}
+                ${point.fuente ? `<p style="margin: 0 0 4px 0;"><strong>Fuente:</strong> ${point.fuente === 'local' ? 'Remax' : 'Propify'}</p>` : ''}
+            </div>
+        `;
+
+        const infoWindow = new google.maps.InfoWindow({
+            content: infoContent
+        });
+
+        marker.addListener('click', () => {
+            markers.forEach(m => {
+                if (m.infoWindow) m.infoWindow.close();
+            });
+            infoWindow.open(map, marker);
+            marker.infoWindow = infoWindow;
+        });
+
+        markers.push(marker);
+        markersCreated++;
     }
-    
-    console.log('[DEBUG] Creando heatmap con', heatmapData.length, 'puntos');
-    
-    // Preparar datos para el heatmap
-    const heatmapPoints = heatmapData.map(function(point) {
-        return {
-            location: new google.maps.LatLng(point.lat, point.lng),
-            weight: point.weight || 1.0
-        };
-    });
-    
-    // Crear el heatmap
-    heatmapLayer = new google.maps.visualization.HeatmapLayer({
-        data: heatmapPoints,
-        map: map,
-        radius: 30,
-        opacity: 0.6,
-        gradient: [
-            'rgba(0, 0, 255, 0)',
-            'rgba(0, 0, 255, 1)',
-            'rgba(0, 255, 255, 1)',
-            'rgba(0, 255, 0, 1)',
-            'rgba(255, 255, 0, 1)',
-            'rgba(255, 0, 0, 1)'
-        ]
-    });
-    
-    console.log('[DEBUG] Heatmap layer created successfully');
+
+    console.log(`[INFO] Total marcadores creados: ${markersCreated}, omitidos: ${markersSkipped}`);
 }
 
-// Crear marcadores para TODAS las propiedades
+// Configurar controles de la interfaz
+function setupControls() {
+    // Botón de zoom in
+    document.getElementById('btnZoomIn').addEventListener('click', () => {
+        map.setZoom(map.getZoom() + 1);
+    });
+
+    // Botón de zoom out
+    document.getElementById('btnZoomOut').addEventListener('click', () => {
+        map.setZoom(map.getZoom() - 1);
+    });
+
+    // Botón de reset view
+    document.getElementById('btnResetView').addEventListener('click', () => {
+        map.setCenter({ lat: -16.4090, lng: -71.5375 });
+        map.setZoom(13);
+    });
+
+    // Toggle markers
+    document.getElementById('toggleMarkers').addEventListener('change', (e) => {
+        const visible = e.target.checked;
+        markers.forEach(marker => {
+            marker.setMap(visible ? map : null);
+        });
+        markerLabels.forEach(overlay => {
+            if (overlay.div_) {
+                overlay.div_.style.display = (visible && overlay._visible !== false) ? 'block' : 'none';
+            }
+        });
+    });
+
+    // Toggle labels de precio
+    document.getElementById('toggleLabels').addEventListener('change', (e) => {
+        const showLabels = e.target.checked;
+        markerLabels.forEach(overlay => {
+            if (overlay.div_) {
+                overlay.div_.style.display = showLabels ? 'block' : 'none';
+            }
+            overlay._visible = showLabels;
+        });
+    });
+
+    // Toggle zonas/cuadrantes
+    document.getElementById('toggleZonas').addEventListener('change', (e) => {
+        const visible = e.target.checked;
+        zonaPoligonos.forEach(poly => poly.setMap(visible ? map : null));
+        zonaLabels.forEach(label => label.setMap(visible ? map : null));
+    });
+
+    // Botón de ayuda
+    document.getElementById('btnHelp').addEventListener('click', () => {
+        const helpModal = new bootstrap.Modal(document.getElementById('helpModal'));
+        helpModal.show();
+    });
+
+    // Botón de refresh
+    document.getElementById('btnRefresh').addEventListener('click', () => {
+        location.reload();
+    });
+}
+
+// Cargar polígonos de zonas/cuadrantes
+function loadZonasPoligonos() {
+    if (!zonasData || zonasData.length === 0) {
+        console.log('[INFO] No hay zonas para dibujar');
+        return;
+    }
+
+    console.log(`[INFO] Cargando ${zonasData.length} zonas/cuadrantes`);
+
+    zonasData.forEach((zona, index) => {
+        if (!zona.coordenadas || zona.coordenadas.length < 3) {
+            console.log(`[DEBUG] Zona "${zona.nombre_zona}" sin coordenadas válidas, saltando`);
+            return;
+        }
+
+        // Convertir coordenadas [[lat,lng],...] a objetos {lat, lng}
+        const paths = zona.coordenadas.map(coord => ({
+            lat: parseFloat(coord[0]),
+            lng: parseFloat(coord[1])
+        }));
+
+        // Crear polígono
+        const polygon = new google.maps.Polygon({
+            paths: paths,
+            strokeColor: zona.color_borde || '#1976D2',
+            strokeOpacity: 0.8,
+            strokeWeight: 2,
+            fillColor: zona.color_fill || '#2196F3',
+            fillOpacity: zona.opacidad || 0.15,
+            editable: false,
+            draggable: false,
+            map: map,
+            zonaData: zona
+        });
+
+        // Crear InfoWindow para el polígono
+        const infoContent = `
+            <div style="padding: 8px; max-width: 250px; font-size: 13px;">
+                <h6 style="margin: 0 0 6px 0; color: #1976D2;">${zona.nombre_zona}</h6>
+                ${zona.nivel ? `<p style="margin: 0 0 3px 0;"><strong>Nivel:</strong> ${zona.nivel}</p>` : ''}
+                ${zona.precio_promedio_m2 ? `<p style="margin: 0 0 3px 0;"><strong>Precio/m² promedio:</strong> S/ ${parseFloat(zona.precio_promedio_m2).toFixed(2)}</p>` : ''}
+                ${zona.cantidad_propiedades_analizadas ? `<p style="margin: 0 0 3px 0;"><strong>Propiedades analizadas:</strong> ${zona.cantidad_propiedades_analizadas}</p>` : ''}
+            </div>
+        `;
+
+        const infoWindow = new google.maps.InfoWindow({
+            content: infoContent
+        });
+
+        polygon.addListener('click', (e) => {
+            zonaInfoWindows.forEach(iw => iw.close());
+            infoWindow.setPosition(e.latLng);
+            infoWindow.open(map);
+        });
+
+        zonaInfoWindows.push(infoWindow);
+        zonaPoligonos.push(polygon);
+
+        // Crear etiqueta en el centro del polígono
+        const bounds = new google.maps.LatLngBounds();
+        paths.forEach(p => bounds.extend(p));
+        const center = bounds.getCenter();
+
+        const labelMarker = new google.maps.Marker({
+            position: center,
+            map: map,
+            icon: {
+                path: google.maps.SymbolPath.CIRCLE,
+                scale: 0,
+                fillOpacity: 0,
+                strokeOpacity: 0
+            },
+            label: {
+                text: zona.nombre_zona,
+                color: zona.color_borde || '#1976D2',
+                fontSize: '12px',
+                fontWeight: 'bold',
+                fontFamily: 'Arial, sans-serif'
+            },
+            zIndex: 1000,
+            clickable: false
+        });
+
+        zonaLabels.push(labelMarker);
+    });
+}
+
 function createMarkers() {
     // Limpiar marcadores anteriores
     markers.forEach(function(marker) { marker.setMap(null); });
@@ -899,6 +1096,6 @@ function setupControls() {
 
 </script>
 
-<!-- Google Maps API - Cargar DESPUÉS de definir initMap -->
+<!-- Google Maps API con las mismas librerías que mapa_zonas.html -->
 <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBrL1QF7vTl9zF8FmCUumfRpFJcaYokO7Q&libraries=drawing,places&callback=initMap" async defer></script>
 {% endblock %}
