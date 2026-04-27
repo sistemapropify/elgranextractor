@@ -156,12 +156,6 @@ function colocarMarcadorPrincipal(latLng) {
     // Actualizar inputs hidden
     document.getElementById('latitud').value = latLng.lat();
     document.getElementById('longitud').value = latLng.lng();
-    
-    // Mostrar alerta con coordenadas
-    const alerta = document.getElementById('puntoSeleccionadoAlert');
-    const texto = document.getElementById('coordenadasTexto');
-    texto.textContent = `Lat: ${latLng.lat().toFixed(6)}, Lng: ${latLng.lng().toFixed(6)}`;
-    alerta.classList.remove('d-none');
 
     // Listener para arrastrar marcador
     marcadorPrincipal.addListener('dragend', (event) => {
@@ -169,7 +163,6 @@ function colocarMarcadorPrincipal(latLng) {
         const newLatLng = event.latLng;
         document.getElementById('latitud').value = newLatLng.lat();
         document.getElementById('longitud').value = newLatLng.lng();
-        texto.textContent = `Lat: ${newLatLng.lat().toFixed(6)}, Lng: ${newLatLng.lng().toFixed(6)}`;
         
         console.log(`Propiedades seleccionadas: ${propiedadesSeleccionadas.size}`);
         
