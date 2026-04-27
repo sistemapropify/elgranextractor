@@ -515,7 +515,10 @@ function eliminarTarjetaPropiedad(id) {
 
 // Actualizar contadores
 function actualizarContadores() {
-    document.getElementById('contadorSeleccionados').textContent = propiedadesSeleccionadas.size;
+    const contador = document.getElementById('contadorSeleccionados');
+    if (contador) {
+        contador.textContent = propiedadesSeleccionadas.size;
+    }
 }
 
 // Actualizar números secuenciales en marcadores y tarjetas
