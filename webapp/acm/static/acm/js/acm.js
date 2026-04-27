@@ -509,6 +509,56 @@ function crearTarjetaPropiedad(propiedad) {
     if (container) {
         container.prepend(clone);
     }
+    
+    // También insertar en contenedor tablet (inline)
+    const containerTablet = document.getElementById('comparablesContainerTablet');
+    const sinSeleccionadosTablet = document.getElementById('sinSeleccionadosTablet');
+    
+    if (sinSeleccionadosTablet) {
+        sinSeleccionadosTablet.style.display = 'none';
+    }
+    
+    if (containerTablet) {
+        // Clonar el template nuevamente para tablet
+        const template = document.getElementById('templatePropiedad');
+        const cloneTablet = template.content.cloneNode(true);
+        const cardTablet = cloneTablet.querySelector('.propiedad-card');
+        cardTablet.id = `propiedad-tablet-${propiedad.id}`;
+        
+        // Rellenar datos
+        const imgT = cloneTablet.querySelector('.propiedad-imagen');
+        imgT.src = propiedad.imagen_url || '/static/acm/img/no-image.svg';
+        cloneTablet.querySelector('.propiedad-tipo').textContent = propiedad.tipo;
+        cloneTablet.querySelector('.propiedad-estado').textContent = propiedad.estado;
+        cloneTablet.querySelector('.propiedad-ubicacion').textContent =
+            `${propiedad.distrito}, ${propiedad.provincia}`;
+        cloneTablet.querySelector('.propiedad-precio').textContent =
+            `Precio: ${formatearPrecio(propiedad.precio)}`;
+        if (propiedad.precio_final) {
+            cloneTablet.querySelector('.propiedad-precio-final').textContent =
+                `Precio final: ${formatearPrecio(propiedad.precio_final)}`;
+        } else {
+            cloneTablet.querySelector('.propiedad-precio-final').style.display = 'none';
+        }
+        const precioM2T = propiedad.precio_m2_final || propiedad.precio_m2;
+        if (precioM2T) {
+            cloneTablet.querySelector('.propiedad-precio-m2').textContent =
+                `US$ ${precioM2T.toFixed(2)}/m²`;
+        }
+        
+        // Botón para quitar
+        const btnQuitarT = cloneTablet.querySelector('.btn-quitar');
+        btnQuitarT.addEventListener('click', () => {
+            toggleSeleccionarPropiedad(propiedad.id);
+        });
+        // Botón para ver detalles
+        const btnDetalleT = cloneTablet.querySelector('.btn-detalle');
+        btnDetalleT.addEventListener('click', () => {
+            mostrarDetallePropiedad(propiedad);
+        });
+        
+        containerTablet.prepend(cloneTablet);
+    }
 }
 
 // Eliminar tarjeta de propiedad
@@ -518,16 +568,26 @@ function eliminarTarjetaPropiedad(id) {
         card.remove();
     }
     
+    // También eliminar tarjeta tablet
+    const cardTablet = document.getElementById(`propiedad-tablet-${id}`);
+    if (cardTablet) {
+        cardTablet.remove();
+    }
+    
     // Mostrar mensaje si no hay seleccionados
     if (propiedadesSeleccionadas.size === 0) {
         const sinSeleccionados = document.getElementById('sinSeleccionadosMobile');
         if (sinSeleccionados) {
             sinSeleccionados.style.display = 'block';
         }
+        const sinSeleccionadosTablet = document.getElementById('sinSeleccionadosTablet');
+        if (sinSeleccionadosTablet) {
+            sinSeleccionadosTablet.style.display = 'block';
+        }
     }
 }
 
-// Actualizar contadores (mobile y desktop)
+// Actualizar contadores (mobile, tablet y desktop)
 function actualizarContadores() {
     // Actualizar contador del botón flotante mobile
     const mobileCount = document.getElementById('mobileComparablesCount');
@@ -538,6 +598,11 @@ function actualizarContadores() {
     const mobileBadge = document.getElementById('mobileComparablesBadge');
     if (mobileBadge) {
         mobileBadge.textContent = propiedadesSeleccionadas.size > 0 ? 'Ver' : '0';
+    }
+    // Actualizar contador tablet
+    const tabletCount = document.getElementById('tabletComparablesCount');
+    if (tabletCount) {
+        tabletCount.textContent = propiedadesSeleccionadas.size;
     }
     // Habilitar/deshabilitar botón "Resumen ACM" (móvil)
     const btnResumenACM = document.getElementById('btnResumenACM');
@@ -583,12 +648,16 @@ function actualizarResumenACM() {
     
     if (propiedades.length === 0) {
         // Mostrar estado vacío
-        document.getElementById('resumenACM').innerHTML = `
+        const emptyHtml = `
             <div class="col-12 text-center py-4 text-muted">
                 <i class="bi bi-graph-up display-6 mb-3"></i>
                 <p class="mb-0">Selecciona propiedades comparables para ver el análisis</p>
             </div>
         `;
+        const resumenACM = document.getElementById('resumenACM');
+        if (resumenACM) resumenACM.innerHTML = emptyHtml;
+        const tabletResumenACM = document.getElementById('tabletResumenACM');
+        if (tabletResumenACM) tabletResumenACM.innerHTML = emptyHtml;
         return;
     }
     
@@ -644,7 +713,7 @@ function actualizarResumenACM() {
     }
     
     // Generar HTML del resumen compacto - 3 tarjetas de valor
-    document.getElementById('resumenACM').innerHTML = `
+    const resumenHtml = `
         <!-- Fila: 3 tarjetas (izquierda: precio venta sugerido, centro: estimación principal, derecha: valor realización inmediata) -->
         <div class="row g-2">
             <div class="col-md-4">
@@ -686,6 +755,14 @@ function actualizarResumenACM() {
             </div>
         </div>
     `;
+    
+    // Actualizar modal resumen ACM
+    const resumenACM = document.getElementById('resumenACM');
+    if (resumenACM) resumenACM.innerHTML = resumenHtml;
+    
+    // Actualizar resumen ACM inline para tablet
+    const tabletResumenACM = document.getElementById('tabletResumenACM');
+    if (tabletResumenACM) tabletResumenACM.innerHTML = resumenHtml;
 }
 
 // Funciones auxiliares

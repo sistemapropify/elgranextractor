@@ -39,14 +39,14 @@
 <div class="container-fluid py-0 px-2 px-md-3 px-lg-3">
     <!-- Layout responsive -->
     <div class="row g-2">
-        <!-- Panel de parámetros - Colapsable en móvil, columna izquierda en tablet/desktop -->
-        <div class="col-12 col-md-4 col-lg-3 mobile-params-panel">
+        <!-- Panel de parámetros - Colapsable en móvil/tablet, columna izquierda en desktop -->
+        <div class="col-12 col-lg-3 mobile-params-panel">
             <div class="card border-0 shadow-sm">
                 <div class="card-header bg-white border-bottom py-2 d-flex justify-content-between align-items-center">
                     <h6 class="mb-0">
                         <i class="bi bi-sliders me-2"></i>Parámetros de Búsqueda
                     </h6>
-                    <button type="button" class="btn btn-sm btn-outline-secondary d-md-none" id="toggleParamsPanel">
+                    <button type="button" class="btn btn-sm btn-outline-secondary d-lg-none" id="toggleParamsPanel">
                         <i class="bi bi-chevron-down"></i>
                     </button>
                 </div>
@@ -117,8 +117,8 @@
             </div>
         </div>
 
-        <!-- Panel del mapa - Ancho completo en móvil, columna central en tablet/desktop -->
-        <div class="col-12 col-md-8 col-lg-6 mobile-map-panel mb-4">
+        <!-- Panel del mapa - Ancho completo en móvil/tablet, columna central en desktop -->
+        <div class="col-12 col-lg-6 mobile-map-panel mb-4">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-1">
                     <h6 class="mb-0">
@@ -153,8 +153,8 @@
 
     </div>
 
-    <!-- Botones flotantes para móvil/tablet (oculto en desktop) -->
-    <div class="d-md-none fixed-bottom p-2" style="z-index: 1050;">
+    <!-- Botones flotantes solo para móvil (oculto en tablet/desktop) -->
+    <div class="d-lg-none fixed-bottom p-2" style="z-index: 1050;">
         <div class="d-flex flex-row align-items-center gap-2 justify-content-center">
             <button type="button" class="btn btn-primary btn-sm shadow-lg flex-fill" id="mobileComparablesBtn" data-bs-toggle="offcanvas" data-bs-target="#mobileComparablesDrawer" style="max-width: 200px;">
                 <i class="bi bi-list-check me-1"></i>
@@ -167,18 +167,61 @@
         </div>
     </div>
 
-    <!-- Botón flotante Resumen ACM para tablet/desktop (visible solo en md+) -->
-    <div class="d-none d-md-block fixed-bottom p-3" style="z-index: 1050; pointer-events: none;">
+    <!-- Botón flotante Resumen ACM para desktop (visible solo en lg+) -->
+    <div class="d-none d-lg-block fixed-bottom p-3" style="z-index: 1050; pointer-events: none;">
         <div class="d-flex justify-content-end">
             <button type="button" class="btn btn-success btn shadow-lg" id="btnResumenACMDesktop" disabled style="pointer-events: auto;">
-                <i class="bi bi-bar-chart-line me-1"></i>Resumen ACM
+                <i class="bi bi-bar-chart-line me-1"></i>Resultado ACM
             </button>
         </div>
     </div>
+
+    <!-- Sección de comparables seleccionados visible en tablet (oculto en móvil/desktop) -->
+    <div class="d-none d-md-block d-lg-none mt-3">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-2">
+                <h6 class="mb-0">
+                    <i class="bi bi-list-check me-2"></i>Comparables Seleccionados
+                    <span class="badge bg-primary ms-2" id="tabletComparablesCount">0</span>
+                </h6>
+                <button type="button" class="btn btn-sm btn-outline-danger" id="btnEliminarTodosTablet" style="display: none;">
+                    <i class="bi bi-trash me-1"></i>Limpiar
+                </button>
+            </div>
+            <div class="card-body p-2">
+                <div class="comparables-container-tablet" id="comparablesContainerTablet"
+                     style="max-height: 300px; overflow-y: auto;">
+                    <div class="text-center py-4 text-muted" id="sinSeleccionadosTablet">
+                        <i class="bi bi-house-door display-6 mb-2"></i>
+                        <p class="mb-0">No hay propiedades seleccionadas</p>
+                        <small>Haz clic en los marcadores del mapa para seleccionar</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sección de Resultado ACM visible en tablet (oculto en móvil/desktop) -->
+    <div class="d-none d-md-block d-lg-none mt-3 mb-5">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white border-bottom py-2">
+                <h6 class="mb-0">
+                    <i class="bi bi-bar-chart-line me-2"></i>Resultado ACM
+                </h6>
+            </div>
+            <div class="card-body p-3" id="tabletResumenACM">
+                <div class="text-center py-4 text-muted">
+                    <i class="bi bi-graph-up display-6 mb-2"></i>
+                    <p class="mb-0">Selecciona propiedades comparables para ver el análisis</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 <!-- Drawer para comparables en móvil (oculto en tablet/desktop) -->
-<div class="offcanvas offcanvas-bottom d-md-none" tabindex="-1" id="mobileComparablesDrawer" aria-labelledby="mobileComparablesDrawerLabel" style="height: 75vh !important;">
+<div class="offcanvas offcanvas-bottom d-lg-none" tabindex="-1" id="mobileComparablesDrawer" aria-labelledby="mobileComparablesDrawerLabel" style="height: 75vh !important;">
     <div class="offcanvas-header">
         <h5 class="offcanvas-title" id="mobileComparablesDrawerLabel">
             <i class="bi bi-list-check me-2"></i>Comparables Seleccionados

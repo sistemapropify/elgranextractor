@@ -2471,7 +2471,12 @@ REGLAS CRÍTICAS:
             )
             
             if success:
-                response_text = api_response.get('content', 'Lo siento, no pude generar una respuesta.')
+                # Asegurar que api_response sea un diccionario antes de llamar a .get()
+                if isinstance(api_response, dict):
+                    response_text = api_response.get('content', 'Lo siento, no pude generar una respuesta.')
+                else:
+                    logger.warning(f"api_response inesperado: type={type(api_response)}, value={api_response}")
+                    response_text = 'Lo siento, no pude generar una respuesta.'
                 response_metadata = {
                     'response': response_text,
                     'rag_context_used': bool(rag_context),

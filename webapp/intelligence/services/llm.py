@@ -122,7 +122,17 @@ class LLMService:
                     return False, f"Error API: {response.status_code}", None
                 
                 data = response.json()
-                content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                # Proteger contra respuestas inesperadas de la API
+                choices = data.get("choices", [{}])
+                if choices and isinstance(choices, list) and len(choices) > 0:
+                    first_choice = choices[0]
+                    if isinstance(first_choice, dict):
+                        content = first_choice.get("message", {}).get("content", "")
+                    else:
+                        logger.error(f"Formato inesperado en choices[0]: type={type(first_choice)}")
+                        content = ""
+                else:
+                    content = ""
                 
                 if not content:
                     return False, "Respuesta vacía de la API", None

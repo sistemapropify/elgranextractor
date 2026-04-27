@@ -126,13 +126,20 @@
     border-radius: 3px;
 }
 
-/* Responsive - Móvil (< 768px) */
-@media (max-width: 767.98px) {
-    /* Mapa ocupa todo el ancho disponible */
+/* Responsive - Móvil y Tablet (< 992px) - columnas apiladas */
+@media (max-width: 991.98px) {
     .acm-container .row > [class*="col-"] {
         width: 100%;
         margin-bottom: 0.5rem;
     }
+    /* Evitar que la card de parámetros se estire al alto del mapa */
+    .mobile-params-panel {
+        align-self: flex-start;
+    }
+}
+
+/* Responsive - Móvil (< 768px) */
+@media (max-width: 767.98px) {
     
     /* Padding inferior para que el botón flotante fixed-bottom no tape el botón Buscar Comparables */
     .container-fluid.py-2 {
@@ -250,16 +257,16 @@
 
 /* Ajustes específicos para tablet (768px - 991px) */
 @media (min-width: 768px) and (max-width: 991.98px) {
-    /* Padding inferior para botones flotantes */
+    /* Padding inferior para el botón flotante de desktop */
     .container-fluid.py-2 {
         padding-bottom: 80px !important;
     }
     
     /* Mapa más grande en tablet */
     #acmMap {
-        height: 55vh !important;
-        min-height: 400px !important;
-        max-height: 600px !important;
+        height: 50vh !important;
+        min-height: 350px !important;
+        max-height: 500px !important;
     }
     
     /* Panel de parámetros ligeramente más espaciado que en móvil */
@@ -301,16 +308,37 @@
         font-size: 0.95rem;
     }
     
-    /* Botón flotante */
-    .fixed-bottom .btn-lg {
-        font-size: 1rem;
-        padding: 0.6rem 2rem;
-        max-width: 400px;
+    /* Contenedor de comparables en tablet - tarjetas horizontales */
+    .comparables-container-tablet .propiedad-card {
+        padding: 0.6rem !important;
     }
     
-    /* Offcanvas */
-    .offcanvas-bottom.d-lg-none {
-        height: 45vh !important;
+    .comparables-container-tablet .propiedad-card .propiedad-imagen {
+        height: 70px;
+        width: 100%;
+        object-fit: cover;
+    }
+    
+    .comparables-container-tablet .propiedad-card .propiedad-tipo {
+        font-size: 0.85rem;
+    }
+    
+    .comparables-container-tablet .propiedad-card .propiedad-precio {
+        font-size: 0.9rem;
+    }
+    
+    /* Resultado ACM en tablet */
+    #tabletResumenACM .valor-estimado {
+        font-size: 1.2rem;
+        padding: 0.6rem;
+    }
+    
+    #tabletResumenACM .estadistica-item {
+        padding: 0.5rem;
+    }
+    
+    #tabletResumenACM .estadistica-valor {
+        font-size: 1.1rem;
     }
 }
 

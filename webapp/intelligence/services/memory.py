@@ -501,7 +501,12 @@ FORMATO DE SALIDA:
                 return []
             
             # Extraer JSON de la respuesta
-            content = api_response.get("content", "")
+            # Asegurar que api_response sea un diccionario antes de llamar a .get()
+            if isinstance(api_response, dict):
+                content = api_response.get("content", "")
+            else:
+                logger.warning(f"api_response inesperado en extract_facts: type={type(api_response)}")
+                content = ""
             if not content:
                 return []
             

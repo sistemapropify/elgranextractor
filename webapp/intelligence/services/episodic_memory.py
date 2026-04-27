@@ -398,7 +398,12 @@ Responde SOLO con JSON: {"episode_type": "...", "intent": "..."}"""
             )
 
             if success and api_response:
-                content = api_response.get("content", "")
+                # Asegurar que api_response sea un diccionario antes de llamar a .get()
+                if isinstance(api_response, dict):
+                    content = api_response.get("content", "")
+                else:
+                    logger.warning(f"api_response inesperado en classify_episode: type={type(api_response)}")
+                    content = ""
                 json_match = re.search(r'\{[^}]+\}', content)
                 if json_match:
                     data = json.loads(json_match.group(0))
