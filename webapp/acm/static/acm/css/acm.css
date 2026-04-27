@@ -126,24 +126,23 @@
     border-radius: 3px;
 }
 
-/* Responsive - Móvil y Tablet (< 992px) */
-@media (max-width: 991.98px) {
+/* Responsive - Móvil (< 768px) */
+@media (max-width: 767.98px) {
     /* Mapa ocupa todo el ancho disponible */
     .acm-container .row > [class*="col-"] {
         width: 100%;
         margin-bottom: 0.5rem;
     }
     
-    /* En móvil/tablet, el panel de comparables en la fila inferior se oculta
-       porque se usa el offcanvas flotante en su lugar */
-    .acm-container .row.mt-2 > .col-lg-3 {
-        display: none;
+    /* Padding inferior para que el botón flotante fixed-bottom no tape el botón Buscar Comparables */
+    .container-fluid.py-2 {
+        padding-bottom: 80px !important;
     }
     
     #acmMap {
-        height: 50vh !important;
-        min-height: 350px !important;
-        max-height: 500px !important;
+        height: 35vh !important;
+        min-height: 250px !important;
+        max-height: 350px !important;
     }
     
     /* Panel de parámetros - ultra compacto */
@@ -247,50 +246,15 @@
         border-radius: 50px;
         max-width: 350px;
     }
-    
-    /* Offcanvas drawer */
-    .offcanvas-bottom.d-lg-none {
-        height: 50vh !important;
-    }
-    
-    .offcanvas-bottom.d-lg-none .offcanvas-body {
-        padding: 0.3rem 0.75rem;
-    }
-    
-    /* Tarjetas de propiedad en el drawer */
-    .propiedad-card {
-        padding: 0.5rem !important;
-    }
-    
-    .propiedad-card .propiedad-imagen {
-        height: 60px;
-    }
-    
-    .propiedad-card .propiedad-tipo {
-        font-size: 0.8rem;
-    }
-    
-    .propiedad-card .propiedad-precio {
-        font-size: 0.85rem;
-    }
-    
-    /* Resumen ACM */
-    .resumen-acm .valor-estimado {
-        font-size: 1.1rem;
-        padding: 0.5rem;
-    }
-    
-    .resumen-acm .estadistica-item {
-        padding: 0.4rem;
-    }
-    
-    .resumen-acm .estadistica-valor {
-        font-size: 1rem;
-    }
 }
 
 /* Ajustes específicos para tablet (768px - 991px) */
 @media (min-width: 768px) and (max-width: 991.98px) {
+    /* Padding inferior para botones flotantes */
+    .container-fluid.py-2 {
+        padding-bottom: 80px !important;
+    }
+    
     /* Mapa más grande en tablet */
     #acmMap {
         height: 55vh !important;
@@ -353,8 +317,9 @@
 /* Ajustes específicos para móvil (< 768px) */
 @media (max-width: 767.98px) {
     #acmMap {
-        height: 45vh !important;
-        min-height: 300px !important;
+        height: 30vh !important;
+        min-height: 200px !important;
+        max-height: 300px !important;
     }
 }
 
