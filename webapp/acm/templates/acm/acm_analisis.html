@@ -100,12 +100,17 @@
         <!-- Panel del mapa - Ancho completo en móvil/tablet, columna central en desktop -->
         <div class="col-12 col-lg-6 mobile-map-panel">
             <div class="card border-0 shadow-sm h-100">
-                <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+                <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center flex-wrap gap-1">
                     <h5 class="mb-0">
                         <i class="bi bi-map me-2"></i>Mapa de Propiedades
                     </h5>
-                    <div class="text-muted small">
-                        <span id="contadorPropiedades">0</span> propiedades encontradas
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <span class="text-muted small">
+                            <span id="contadorPropiedades">0</span> propiedades
+                        </span>
+                        <button type="button" id="btnBuscarMap" class="btn btn-primary btn-sm">
+                            <i class="bi bi-search me-1"></i>Buscar Comparables
+                        </button>
                     </div>
                 </div>
                 <!-- Buscador de direcciones Google Places -->
@@ -121,12 +126,6 @@
                 </div>
                 <div class="card-body p-0">
                     <div id="acmMap" style="height: 400px; width: 100%;" class="acm-map-container"></div>
-                    <!-- Botón de búsqueda debajo del mapa -->
-                    <div class="d-grid p-2">
-                        <button type="button" id="btnBuscarMap" class="btn btn-primary btn-sm">
-                            <i class="bi bi-search me-1"></i>Buscar Comparables
-                        </button>
-                    </div>
                 </div>
             </div>
         </div>

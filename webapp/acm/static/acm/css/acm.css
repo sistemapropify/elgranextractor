@@ -357,6 +357,11 @@
     #acmMap {
         height: 400px !important;
     }
+    
+    /* Botón Buscar Comparables en el header del mapa */
+    .mobile-map-panel .card-header #btnBuscarMap {
+        white-space: nowrap;
+    }
 }
 
 /* Animaciones */
