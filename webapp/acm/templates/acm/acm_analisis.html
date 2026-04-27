@@ -2,12 +2,43 @@
 {% load static %}
 
 {% block acm_content %}
+<style>
+    /* Eliminar padding superior del contenido principal solo para ACM */
+    .app-content {
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+    }
+    /* Eliminar todo margen/padding extra en las cards del ACM */
+    .acm-container .card {
+        margin-bottom: 0 !important;
+    }
+    /* Reducir espacio entre card-header y card-body */
+    .acm-container .card-header {
+        padding-top: 0.25rem !important;
+        padding-bottom: 0.25rem !important;
+    }
+    .acm-container .card-body {
+        padding-top: 0.25rem !important;
+        padding-bottom: 0.25rem !important;
+    }
+    /* Reducir espacio de los labels */
+    .acm-container .form-label {
+        margin-bottom: 0.1rem !important;
+    }
+    /* Reducir espacio entre filas de formulario */
+    .acm-container .mb-1 {
+        margin-bottom: 0.25rem !important;
+    }
+    .acm-container .mb-2 {
+        margin-bottom: 0.35rem !important;
+    }
+</style>
 <!-- Contenedor de toasts para notificaciones -->
 <div id="toastContainer" class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 9999;"></div>
 
-<div class="container-fluid py-2 px-2 px-md-3 px-lg-3">
+<div class="container-fluid py-0 px-2 px-md-3 px-lg-3">
     <!-- Layout responsive -->
-    <div class="row g-3">
+    <div class="row g-2">
         <!-- Panel de parámetros - Colapsable en móvil/tablet, columna izquierda en desktop -->
         <div class="col-12 col-lg-3 mobile-params-panel">
             <div class="card border-0 shadow-sm">
@@ -89,13 +120,13 @@
         <!-- Panel del mapa - Ancho completo en móvil/tablet, columna central en desktop -->
         <div class="col-12 col-lg-6 mobile-map-panel mb-4">
             <div class="card border-0 shadow-sm h-100">
-                <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">
-                        <i class="bi bi-map me-2"></i>Mapa de Propiedades
-                    </h5>
-                    <div class="text-muted small">
-                        <span id="contadorPropiedades">0</span> propiedades encontradas
-                    </div>
+                <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-1">
+                    <h6 class="mb-0">
+                        <i class="bi bi-map me-1"></i>Mapa de Propiedades
+                        <span class="text-muted small ms-2">
+                            <span id="contadorPropiedades">0</span> encontradas
+                        </span>
+                    </h6>
                 </div>
                 <!-- Buscador de direcciones Google Places -->
                 <div class="px-2 pt-2 pb-1">
@@ -122,36 +153,25 @@
 
     </div>
 
-    <!-- Fila inferior: Resumen ACM -->
-    <div class="row g-3 mt-5 pt-4">
-        <!-- Resumen ACM -->
-        <div class="col-12">
-            <div class="card border-0 shadow-sm">
-                <div class="card-header bg-white border-bottom py-2">
-                    <h6 class="mb-0">
-                        <i class="bi bi-bar-chart-line me-2"></i>Resumen del Análisis Comparativo
-                    </h6>
-                </div>
-                <div class="card-body p-3">
-                    <div class="row" id="resumenACM">
-                        <!-- Aquí se cargará dinámicamente el resumen -->
-                        <div class="col-12 text-center py-3 text-muted">
-                            <i class="bi bi-graph-up display-5 mb-2"></i>
-                            <p class="mb-0 small">Selecciona propiedades comparables para ver el análisis</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
+    <!-- Botones flotantes para móvil/tablet (oculto en desktop) -->
+    <div class="d-lg-none fixed-bottom p-2" style="z-index: 1050;">
+        <div class="d-flex flex-row align-items-center gap-2 justify-content-center">
+            <button type="button" class="btn btn-primary btn-sm shadow-lg flex-fill" id="mobileComparablesBtn" data-bs-toggle="offcanvas" data-bs-target="#mobileComparablesDrawer" style="max-width: 200px;">
+                <i class="bi bi-list-check me-1"></i>
+                <span id="mobileComparablesCount">0</span> Comparables
+                <span class="badge bg-light text-dark ms-1" id="mobileComparablesBadge">Ver</span>
+            </button>
+            <button type="button" class="btn btn-primary btn-sm shadow-lg flex-fill" id="btnResumenACM" disabled style="max-width: 200px;">
+                <i class="bi bi-bar-chart-line me-1"></i>Resultado ACM
+            </button>
         </div>
     </div>
 
-    <!-- Botón flotante para mostrar comparables en móvil/tablet (oculto en desktop) -->
-    <div class="d-lg-none fixed-bottom p-3">
-        <div class="d-flex justify-content-center">
-            <button type="button" class="btn btn-primary btn-lg shadow-lg" id="mobileComparablesBtn" data-bs-toggle="offcanvas" data-bs-target="#mobileComparablesDrawer">
-                <i class="bi bi-list-check me-2"></i>
-                <span id="mobileComparablesCount">0</span> Comparables
-                <span class="badge bg-light text-dark ms-2" id="mobileComparablesBadge">Ver</span>
+    <!-- Botón flotante Resumen ACM para desktop (visible solo en lg+) -->
+    <div class="d-none d-lg-block fixed-bottom p-3" style="z-index: 1050; pointer-events: none;">
+        <div class="d-flex justify-content-end">
+            <button type="button" class="btn btn-success btn shadow-lg" id="btnResumenACMDesktop" disabled style="pointer-events: auto;">
+                <i class="bi bi-bar-chart-line me-1"></i>Resumen ACM
             </button>
         </div>
     </div>
@@ -308,6 +328,32 @@
                                 </div>
                             </div>
                         </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Resumen ACM (tarjeta emergente) -->
+<div class="modal fade" id="modalResumenACM" tabindex="-1" aria-labelledby="modalResumenACMLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="modalResumenACMLabel">
+                    <i class="bi bi-bar-chart-line me-2"></i>Resumen del Análisis Comparativo
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="row" id="resumenACM">
+                    <!-- Aquí se cargará dinámicamente el resumen -->
+                    <div class="col-12 text-center py-4 text-muted">
+                        <i class="bi bi-graph-up display-6 mb-3"></i>
+                        <p class="mb-0">Selecciona propiedades comparables para ver el análisis</p>
                     </div>
                 </div>
             </div>
