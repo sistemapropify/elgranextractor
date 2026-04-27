@@ -434,7 +434,7 @@ function toggleSeleccionarPropiedad(id) {
     actualizarResumenACM();
 }
 
-// Crear tarjeta de propiedad en panel lateral
+// Crear tarjeta de propiedad en panel lateral (mobile offcanvas)
 function crearTarjetaPropiedad(propiedad) {
     const template = document.getElementById('templatePropiedad');
     const clone = template.content.cloneNode(true);
@@ -452,16 +452,16 @@ function crearTarjetaPropiedad(propiedad) {
     clone.querySelector('.propiedad-estado').textContent = propiedad.estado;
     
     // Ubicación
-    clone.querySelector('.propiedad-ubicacion').textContent = 
+    clone.querySelector('.propiedad-ubicacion').textContent =
         `${propiedad.distrito}, ${propiedad.provincia}`;
     
     // Precio
-    clone.querySelector('.propiedad-precio').textContent = 
+    clone.querySelector('.propiedad-precio').textContent =
         `Precio: ${formatearPrecio(propiedad.precio)}`;
     
     // Precio final (si existe)
     if (propiedad.precio_final) {
-        clone.querySelector('.propiedad-precio-final').textContent = 
+        clone.querySelector('.propiedad-precio-final').textContent =
             `Precio final: ${formatearPrecio(propiedad.precio_final)}`;
     } else {
         clone.querySelector('.propiedad-precio-final').style.display = 'none';
@@ -486,15 +486,17 @@ function crearTarjetaPropiedad(propiedad) {
         mostrarDetallePropiedad(propiedad);
     });
     
-    // Insertar en contenedor
-    const container = document.getElementById('comparablesContainer');
-    const sinSeleccionados = document.getElementById('sinSeleccionados');
+    // Insertar en contenedor mobile (offcanvas)
+    const container = document.getElementById('comparablesContainerMobile');
+    const sinSeleccionados = document.getElementById('sinSeleccionadosMobile');
     
     if (sinSeleccionados) {
         sinSeleccionados.style.display = 'none';
     }
     
-    container.prepend(clone);
+    if (container) {
+        container.prepend(clone);
+    }
 }
 
 // Eliminar tarjeta de propiedad
@@ -506,18 +508,24 @@ function eliminarTarjetaPropiedad(id) {
     
     // Mostrar mensaje si no hay seleccionados
     if (propiedadesSeleccionadas.size === 0) {
-        const sinSeleccionados = document.getElementById('sinSeleccionados');
+        const sinSeleccionados = document.getElementById('sinSeleccionadosMobile');
         if (sinSeleccionados) {
             sinSeleccionados.style.display = 'block';
         }
     }
 }
 
-// Actualizar contadores
+// Actualizar contadores (mobile y desktop)
 function actualizarContadores() {
-    const contador = document.getElementById('contadorSeleccionados');
-    if (contador) {
-        contador.textContent = propiedadesSeleccionadas.size;
+    // Actualizar contador del botón flotante mobile
+    const mobileCount = document.getElementById('mobileComparablesCount');
+    if (mobileCount) {
+        mobileCount.textContent = propiedadesSeleccionadas.size;
+    }
+    // Actualizar badge del botón flotante mobile
+    const mobileBadge = document.getElementById('mobileComparablesBadge');
+    if (mobileBadge) {
+        mobileBadge.textContent = propiedadesSeleccionadas.size > 0 ? 'Ver' : '0';
     }
 }
 
@@ -708,8 +716,8 @@ function limpiarPropiedadesSeleccionadas() {
     // Limpiar el Map de propiedades seleccionadas
     propiedadesSeleccionadas.clear();
     
-    // Mostrar mensaje de "sin seleccionados"
-    const sinSeleccionados = document.getElementById('sinSeleccionados');
+    // Mostrar mensaje de "sin seleccionados" en mobile
+    const sinSeleccionados = document.getElementById('sinSeleccionadosMobile');
     if (sinSeleccionados) {
         sinSeleccionados.style.display = 'block';
     }
