@@ -98,7 +98,7 @@
         </div>
 
         <!-- Panel del mapa - Ancho completo en móvil/tablet, columna central en desktop -->
-        <div class="col-12 col-lg-6 mobile-map-panel">
+        <div class="col-12 col-lg-6 mobile-map-panel mb-4">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">
@@ -133,40 +133,10 @@
 
     </div>
 
-    <!-- Fila inferior: Comparables Seleccionados (izquierda) + Resumen ACM (derecha) -->
-    <div class="row g-3 mt-2">
-        <!-- Panel de comparables seleccionados - visible en desktop -->
-        <div class="col-lg-3">
-            <div class="card border-0 shadow-sm">
-                <div class="card-header bg-white border-bottom">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">
-                            <i class="bi bi-list-check me-2"></i>Comparables Seleccionados
-                        </h5>
-                        <div>
-                            <span class="badge bg-primary me-2" id="contadorSeleccionados">0</span>
-                            <button type="button" class="btn btn-sm btn-outline-danger" id="btnEliminarTodos" title="Eliminar todos los comparables seleccionados">
-                                <i class="bi bi-trash"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                <div class="card-body p-0">
-                    <div class="comparables-container" id="comparablesContainer"
-                         style="max-height: 400px; overflow-y: auto;">
-                        <!-- Las tarjetas de propiedades se insertarán aquí dinámicamente -->
-                        <div class="text-center py-5 text-muted" id="sinSeleccionados">
-                            <i class="bi bi-house-door display-6 mb-3"></i>
-                            <p class="mb-0">No hay propiedades seleccionadas</p>
-                            <small>Haz clic en los marcadores azules del mapa para seleccionar</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
+    <!-- Fila inferior: Resumen ACM -->
+    <div class="row g-3 mt-5 pt-4">
         <!-- Resumen ACM -->
-        <div class="col-lg-9">
+        <div class="col-12">
             <div class="card border-0 shadow-sm">
                 <div class="card-header bg-white border-bottom py-2">
                     <h6 class="mb-0">
