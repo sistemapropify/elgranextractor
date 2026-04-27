@@ -2303,13 +2303,13 @@ En venta 2 departamentos + aires ubicados en …</div>
                         
                             
                             <li class="page-item">
-                                <a class="page-link" href="?page=2">2</a>
+                                <a class="page-link" href="?page=2&_t=2">2</a>
                             </li>
                             
                         
                             
                             <li class="page-item">
-                                <a class="page-link" href="?page=3">3</a>
+                                <a class="page-link" href="?page=3&_t=2">3</a>
                             </li>
                             
                         
@@ -2590,7 +2590,7 @@ En venta 2 departamentos + aires ubicados en …</div>
 
                         
                         <li class="page-item">
-                            <a class="page-link" href="?page=2">
+                            <a class="page-link" href="?page=2&_t=2">
                                 <i class="fas fa-chevron-right"></i>
                             </a>
                         </li>

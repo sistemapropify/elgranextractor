@@ -61,6 +61,11 @@
     .property-item:last-child {
         border-bottom: none;
     }
+
+    /* Estilos para el mensaje de error de Google Maps */
+    #heatmapMap .gm-style {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
 </style>
 {% endblock %}
 
@@ -403,21 +408,38 @@
 {% endblock %}
 
 {% block extra_js %}
-<!-- Google Maps API con las mismas librerías que mapa_zonas.html -->
-<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBrL1QF7vTl9zF8FmCUumfRpFJcaYokO7Q&libraries=drawing,places&callback=initMap" async defer></script>
-
+<!-- Google Maps API con visualization para heatmap -->
 <script>
-// Variables globales
+// Variables globales - definidas ANTES de que Google Maps cargue
 let map;
 let markers = [];
 let markerLabels = [];
-let heatmapData = JSON.parse('{{ heatmap_data_json|escapejs }}');
-let zonasData = JSON.parse('{{ zonas_json|escapejs }}');
+let heatmapLayer = null;
+let heatmapData = [];
+let zonasData = [];
 
 // Variables para polígonos de zonas
 let zonaPoligonos = [];
 let zonaLabels = [];
 let zonaInfoWindows = [];
+
+// Inicializar datos desde el backend (con try-catch por si hay error de parsing)
+try {
+    heatmapData = JSON.parse('{{ heatmap_data_json|escapejs }}');
+} catch(e) {
+    console.error('[ERROR] Error parsing heatmap_data_json:', e);
+    heatmapData = [];
+}
+
+try {
+    zonasData = JSON.parse('{{ zonas_json|escapejs }}');
+} catch(e) {
+    console.error('[ERROR] Error parsing zonas_json:', e);
+    zonasData = [];
+}
+
+console.log('[DEBUG] Heatmap data loaded:', heatmapData.length, 'points');
+console.log('[DEBUG] Zonas data loaded:', zonasData.length, 'zonas');
 
 // Clase personalizada para labels de precio
 class PriceLabelOverlay extends google.maps.OverlayView {
@@ -433,19 +455,20 @@ class PriceLabelOverlay extends google.maps.OverlayView {
     onAdd() {
         const div = document.createElement('div');
         div.style.position = 'absolute';
-        div.style.transform = 'translate(-50%, -50%)';
-        div.style.fontSize = '14px';
+        div.style.transform = 'translate(-50%, 0)';
+        div.style.fontSize = '12px';
         div.style.fontWeight = 'bold';
-        div.style.color = this.color_;
-        div.style.textShadow = '1px 1px 2px rgba(0,0,0,0.7), -1px -1px 1px rgba(255,255,255,0.8)';
+        div.style.color = '#FFFFFF';
+        div.style.textShadow = '1px 1px 2px rgba(0,0,0,0.9), -1px -1px 1px rgba(0,0,0,0.9)';
         div.style.whiteSpace = 'nowrap';
         div.style.fontFamily = 'Arial, sans-serif';
         div.style.pointerEvents = 'none';
         div.style.userSelect = 'none';
         div.style.zIndex = '999';
-        div.style.padding = '2px 4px';
-        div.style.background = 'rgba(255, 255, 255, 0.8)';
+        div.style.padding = '2px 6px';
+        div.style.background = 'rgba(0, 0, 0, 0.6)';
         div.style.borderRadius = '3px';
+        div.style.marginTop = '42px';
         div.textContent = this.text_;
         this.div_ = div;
 
@@ -471,7 +494,7 @@ class PriceLabelOverlay extends google.maps.OverlayView {
     }
 }
 
-// Inicializar mapa (igual que en mapa_zonas.html)
+// Inicializar mapa
 function initMap() {
     const defaultCenter = { lat: -16.4090, lng: -71.5375 }; // Arequipa, Perú
 
@@ -490,6 +513,9 @@ function initMap() {
 
     console.log('[DEBUG] Map initialized successfully');
     
+    // Crear capa de heatmap (AHORA CON visualization)
+    createHeatmapLayer();
+    
     // Crear marcadores de propiedades
     createMarkers();
     
@@ -498,14 +524,59 @@ function initMap() {
     
     // Configurar controles
     setupControls();
+    
+    // Actualizar estadísticas
+    updateStats();
+}
+
+// Crear capa de heatmap
+function createHeatmapLayer() {
+    if (!heatmapData || heatmapData.length === 0) {
+        console.log('[INFO] Sin datos para heatmap');
+        return;
+    }
+    
+    // Verificar que visualization esté disponible
+    if (!google.maps.visualization || !google.maps.visualization.HeatmapLayer) {
+        console.error('[ERROR] google.maps.visualization.HeatmapLayer no está disponible. Falta la librería visualization.');
+        return;
+    }
+    
+    console.log('[DEBUG] Creando heatmap con', heatmapData.length, 'puntos');
+    
+    // Preparar datos para el heatmap
+    const heatmapPoints = heatmapData.map(function(point) {
+        return {
+            location: new google.maps.LatLng(point.lat, point.lng),
+            weight: point.weight || 1.0
+        };
+    });
+    
+    // Crear el heatmap
+    heatmapLayer = new google.maps.visualization.HeatmapLayer({
+        data: heatmapPoints,
+        map: map,
+        radius: 30,
+        opacity: 0.6,
+        gradient: [
+            'rgba(0, 0, 255, 0)',
+            'rgba(0, 0, 255, 1)',
+            'rgba(0, 255, 255, 1)',
+            'rgba(0, 255, 0, 1)',
+            'rgba(255, 255, 0, 1)',
+            'rgba(255, 0, 0, 1)'
+        ]
+    });
+    
+    console.log('[DEBUG] Heatmap layer created successfully');
 }
 
 // Crear marcadores para TODAS las propiedades
 function createMarkers() {
     // Limpiar marcadores anteriores
-    markers.forEach(marker => marker.setMap(null));
+    markers.forEach(function(marker) { marker.setMap(null); });
     markers = [];
-    markerLabels.forEach(l => { if (l.setMap) l.setMap(null); });
+    markerLabels.forEach(function(l) { if (l.setMap) l.setMap(null); });
     markerLabels = [];
     
     if (!heatmapData || heatmapData.length === 0) {
@@ -513,52 +584,50 @@ function createMarkers() {
         return;
     }
     
-    console.log(`[DEBUG] Creando marcadores para ${heatmapData.length} propiedades`);
+    console.log('[DEBUG] Creando marcadores para', heatmapData.length, 'propiedades');
     
-    let markersCreated = 0;
-    let markersSkipped = 0;
+    var markersCreated = 0;
+    var markersSkipped = 0;
     
-    // Crear marcadores para TODAS las propiedades
-    for (let i = 0; i < heatmapData.length; i++) {
-        const point = heatmapData[i];
+    for (var i = 0; i < heatmapData.length; i++) {
+        var point = heatmapData[i];
         if (!point.lat || !point.lng) {
             markersSkipped++;
             continue;
         }
         
-        // Determinar icono según la fuente
-        let iconUrl = '';
-        let labelColor = '#4285F4';
+        var iconUrl = '';
+        var labelColor = '#4285F4';
         if (point.fuente === 'propifai') {
             iconUrl = '/static/requerimientos/data/Pin-propify.png';
-            labelColor = '#0B6623'; // Verde para Propifai
+            labelColor = '#0B6623';
         } else if (point.fuente === 'local') {
             iconUrl = '/static/requerimientos/data/pin-remax.png';
-            labelColor = '#EA4335'; // Rojo para Remax
+            labelColor = '#EA4335';
         }
         
-        // Crear label de precio/m² si la propiedad tiene precio y área
-        let labelText = '';
+        var labelText = '';
         if (point.precio_m2 && point.precio_m2 > 0 && point.tipo_area) {
-            const precioFormateado = Math.round(point.precio_m2);
-            const tipoLabel = point.tipo_area === 'T' ? 'T' : 'C';
-            labelText = `$${precioFormateado}/m² (${tipoLabel})`;
+            var precioFormateado = Math.round(point.precio_m2);
+            var tipoLabel = point.tipo_area === 'T' ? 'T' : 'C';
+            labelText = '$' + precioFormateado + '/m² (' + tipoLabel + ')';
         }
         
-        const marker = new google.maps.Marker({
+        var marker = new google.maps.Marker({
             position: { lat: point.lat, lng: point.lng },
-            map: map,  // Mostrar en el mapa por defecto
-            title: `Propiedad ${point.id || i+1}`,
-            icon: {
+            map: map,
+            title: 'Propiedad ' + (point.id || (i+1)),
+            icon: iconUrl ? {
                 url: iconUrl,
-                scaledSize: new google.maps.Size(32, 32)
-            },
+                scaledSize: new google.maps.Size(40, 40),
+                origin: new google.maps.Point(0, 0),
+                anchor: new google.maps.Point(20, 40)
+            } : undefined,
             propertyData: point
         });
         
-        // Crear overlay de texto para precio
         if (labelText) {
-            const overlay = new PriceLabelOverlay(
+            var overlay = new PriceLabelOverlay(
                 { lat: point.lat, lng: point.lng },
                 labelText,
                 labelColor,
@@ -568,188 +637,268 @@ function createMarkers() {
             markerLabels.push(overlay);
         }
         
-        // Info window con información detallada
-        const infoContent = `
-            <div style="padding: 10px; max-width: 300px; font-size: 14px;">
-                <h6 style="margin: 0 0 8px 0; color: #1a73e8;">Propiedad ${point.id || i+1}</h6>
-                ${point.tipo_propiedad ? `<p style="margin: 0 0 4px 0;"><strong>Tipo:</strong> ${point.tipo_propiedad}</p>` : ''}
-                ${point.precio_usd ? `<p style="margin: 0 0 4px 0;"><strong>Precio:</strong> $${point.precio_usd.toLocaleString()} USD</p>` : ''}
-                ${point.area_construida ? `<p style="margin: 0 0 4px 0;"><strong>Área construida:</strong> ${point.area_construida} m²</p>` : ''}
-                ${point.area_terreno ? `<p style="margin: 0 0 4px 0;"><strong>Área terreno:</strong> ${point.area_terreno} m²</p>` : ''}
-                ${point.precio_m2 ? `<p style="margin: 0 0 4px 0;"><strong>Precio/m²:</strong> $${point.precio_m2.toFixed(2)} USD</p>` : ''}
-                ${point.habitaciones ? `<p style="margin: 0 0 4px 0;"><strong>Habitaciones:</strong> ${point.habitaciones}</p>` : ''}
-                ${point.banos ? `<p style="margin: 0 0 4px 0;"><strong>Baños:</strong> ${point.banos}</p>` : ''}
-                ${point.direccion ? `<p style="margin: 0 0 4px 0;"><strong>Dirección:</strong> ${point.direccion}</p>` : ''}
-                ${point.fuente ? `<p style="margin: 0 0 4px 0;"><strong>Fuente:</strong> ${point.fuente === 'local' ? 'Remax' : 'Propify'}</p>` : ''}
-            </div>
-        `;
+        var infoContent = '<div style="padding: 10px; max-width: 300px; font-size: 14px;">' +
+            '<h6 style="margin: 0 0 8px 0; color: #1a73e8;">Propiedad ' + (point.id || (i+1)) + '</h6>' +
+            (point.tipo_propiedad ? '<p style="margin: 0 0 4px 0;"><strong>Tipo:</strong> ' + point.tipo_propiedad + '</p>' : '') +
+            (point.precio_usd ? '<p style="margin: 0 0 4px 0;"><strong>Precio:</strong> $' + Number(point.precio_usd).toLocaleString() + ' USD</p>' : '') +
+            (point.area_construida ? '<p style="margin: 0 0 4px 0;"><strong>Área construida:</strong> ' + point.area_construida + ' m²</p>' : '') +
+            (point.area_terreno ? '<p style="margin: 0 0 4px 0;"><strong>Área terreno:</strong> ' + point.area_terreno + ' m²</p>' : '') +
+            (point.precio_m2 ? '<p style="margin: 0 0 4px 0;"><strong>Precio/m²:</strong> $' + Number(point.precio_m2).toFixed(2) + ' USD</p>' : '') +
+            (point.habitaciones ? '<p style="margin: 0 0 4px 0;"><strong>Habitaciones:</strong> ' + point.habitaciones + '</p>' : '') +
+            (point.banos ? '<p style="margin: 0 0 4px 0;"><strong>Baños:</strong> ' + point.banos + '</p>' : '') +
+            (point.direccion ? '<p style="margin: 0 0 4px 0;"><strong>Dirección:</strong> ' + point.direccion + '</p>' : '') +
+            (point.fuente ? '<p style="margin: 0 0 4px 0;"><strong>Fuente:</strong> ' + (point.fuente === 'local' ? 'Remax' : 'Propify') + '</p>' : '') +
+            '</div>';
         
-        const infoWindow = new google.maps.InfoWindow({
+        var infoWindow = new google.maps.InfoWindow({
             content: infoContent
         });
         
-        marker.addListener('click', () => {
-            markers.forEach(m => {
-                if (m.infoWindow) m.infoWindow.close();
-            });
-            infoWindow.open(map, marker);
-            marker.infoWindow = infoWindow;
-        });
+        marker.addListener('click', (function(m, iw) {
+            return function() {
+                markers.forEach(function(m2) {
+                    if (m2.infoWindow) m2.infoWindow.close();
+                });
+                iw.open(map, m);
+                m.infoWindow = iw;
+            };
+        })(marker, infoWindow));
         
         markers.push(marker);
         markersCreated++;
     }
     
-    console.log(`[INFO] Total marcadores creados: ${markersCreated}, omitidos: ${markersSkipped}`);
+    console.log('[INFO] Total marcadores creados:', markersCreated, 'omitidos:', markersSkipped);
 }
 
-// Configurar controles de la interfaz
-function setupControls() {
-    // Botón de zoom in
-    document.getElementById('btnZoomIn').addEventListener('click', () => {
-        map.setZoom(map.getZoom() + 1);
-    });
+// Actualizar estadísticas en la UI
+function updateStats() {
+    if (!heatmapData || heatmapData.length === 0) return;
     
-    // Botón de zoom out
-    document.getElementById('btnZoomOut').addEventListener('click', () => {
-        map.setZoom(map.getZoom() - 1);
-    });
+    var totalPrecioM2 = 0;
+    var countPrecioM2 = 0;
     
-    // Botón de reset view
-    document.getElementById('btnResetView').addEventListener('click', () => {
-        map.setCenter({ lat: -16.4090, lng: -71.5375 });
-        map.setZoom(13);
-    });
+    for (var i = 0; i < heatmapData.length; i++) {
+        var p = heatmapData[i];
+        if (p.precio_m2 && p.precio_m2 > 0) {
+            totalPrecioM2 += p.precio_m2;
+            countPrecioM2++;
+        }
+    }
     
-    // Toggle markers
-    document.getElementById('toggleMarkers').addEventListener('change', (e) => {
-        const visible = e.target.checked;
-        markers.forEach(marker => {
-            marker.setMap(visible ? map : null);
-        });
-        markerLabels.forEach(overlay => {
-            if (overlay.div_) {
-                overlay.div_.style.display = (visible && overlay._visible !== false) ? 'block' : 'none';
-            }
-        });
-    });
+    var avgPrecioM2 = countPrecioM2 > 0 ? (totalPrecioM2 / countPrecioM2) : 0;
     
-    // Toggle labels de precio
-    document.getElementById('toggleLabels').addEventListener('change', (e) => {
-        const showLabels = e.target.checked;
-        markerLabels.forEach(overlay => {
-            if (overlay.div_) {
-                overlay.div_.style.display = showLabels ? 'block' : 'none';
-            }
-            overlay._visible = showLabels;
-        });
-    });
-    
-    // Toggle zonas/cuadrantes
-    document.getElementById('toggleZonas').addEventListener('change', (e) => {
-        const visible = e.target.checked;
-        zonaPoligonos.forEach(poly => poly.setMap(visible ? map : null));
-        zonaLabels.forEach(label => label.setMap(visible ? map : null));
-    });
-    
-    // Botón de ayuda
-    document.getElementById('btnHelp').addEventListener('click', () => {
-        const helpModal = new bootstrap.Modal(document.getElementById('helpModal'));
-        helpModal.show();
-    });
-    
-    // Botón de refresh
-    document.getElementById('btnRefresh').addEventListener('click', () => {
-        location.reload();
-    });
+    var statEl = document.getElementById('statPrecioM2Promedio');
+    if (statEl) {
+        statEl.textContent = '$' + Math.round(avgPrecioM2);
+    }
 }
 
 // Cargar polígonos de zonas/cuadrantes
 function loadZonasPoligonos() {
     if (!zonasData || zonasData.length === 0) {
-        console.log('[INFO] No hay zonas para dibujar');
+        console.log('[INFO] Sin datos de zonas para dibujar');
         return;
     }
     
-    console.log(`[INFO] Cargando ${zonasData.length} zonas/cuadrantes`);
+    console.log('[DEBUG] Cargando', zonasData.length, 'polígonos de zonas');
     
-    zonasData.forEach((zona, index) => {
-        if (!zona.coordenadas || zona.coordenadas.length < 3) {
-            console.log(`[DEBUG] Zona "${zona.nombre_zona}" sin coordenadas válidas, saltando`);
-            return;
-        }
+    for (var i = 0; i < zonasData.length; i++) {
+        var zona = zonasData[i];
+        if (!zona.coordenadas || zona.coordenadas.length < 3) continue;
         
-        // Convertir coordenadas [[lat,lng],...] a objetos {lat, lng}
-        const paths = zona.coordenadas.map(coord => ({
-            lat: parseFloat(coord[0]),
-            lng: parseFloat(coord[1])
-        }));
+        var coords = zona.coordenadas.map(function(c) {
+            return { lat: parseFloat(c.lat), lng: parseFloat(c.lng) };
+        });
         
-        // Crear polígono
-        const polygon = new google.maps.Polygon({
-            paths: paths,
-            strokeColor: zona.color_borde || '#1976D2',
+        var color = zona.color || '#FF6B35';
+        var opacity = zona.opacity || 0.15;
+        
+        var polygon = new google.maps.Polygon({
+            paths: coords,
+            strokeColor: color,
             strokeOpacity: 0.8,
             strokeWeight: 2,
-            fillColor: zona.color_fill || '#2196F3',
-            fillOpacity: zona.opacidad || 0.15,
-            editable: false,
-            draggable: false,
+            fillColor: color,
+            fillOpacity: opacity,
             map: map,
             zonaData: zona
         });
         
-        // Crear InfoWindow para el polígono
-        const infoContent = `
-            <div style="padding: 8px; max-width: 250px; font-size: 13px;">
-                <h6 style="margin: 0 0 6px 0; color: #1976D2;">${zona.nombre_zona}</h6>
-                ${zona.nivel ? `<p style="margin: 0 0 3px 0;"><strong>Nivel:</strong> ${zona.nivel}</p>` : ''}
-                ${zona.precio_promedio_m2 ? `<p style="margin: 0 0 3px 0;"><strong>Precio/m² promedio:</strong> S/ ${parseFloat(zona.precio_promedio_m2).toFixed(2)}</p>` : ''}
-                ${zona.cantidad_propiedades_analizadas ? `<p style="margin: 0 0 3px 0;"><strong>Propiedades analizadas:</strong> ${zona.cantidad_propiedades_analizadas}</p>` : ''}
-            </div>
-        `;
+        polygon.addListener('click', (function(z) {
+            return function() {
+                var infoContent = '<div style="padding: 10px; max-width: 250px;">' +
+                    '<h6 style="margin: 0 0 5px 0; color: #333;">' + (z.nombre || 'Zona sin nombre') + '</h6>' +
+                    (z.distrito ? '<p style="margin: 0 0 3px 0; font-size: 13px;"><strong>Distrito:</strong> ' + z.distrito + '</p>' : '') +
+                    (z.precio_promedio ? '<p style="margin: 0 0 3px 0; font-size: 13px;"><strong>Precio prom./m²:</strong> $' + Number(z.precio_promedio).toFixed(2) + '</p>' : '') +
+                    (z.total_propiedades ? '<p style="margin: 0 0 3px 0; font-size: 13px;"><strong>Propiedades:</strong> ' + z.total_propiedades + '</p>' : '') +
+                    '</div>';
+                
+                var infoWindow = new google.maps.InfoWindow({
+                    content: infoContent
+                });
+                infoWindow.open(map, this);
+            };
+        })(zona));
         
-        const infoWindow = new google.maps.InfoWindow({
-            content: infoContent
-        });
-        
-        polygon.addListener('click', (e) => {
-            zonaInfoWindows.forEach(iw => iw.close());
-            infoWindow.setPosition(e.latLng);
-            infoWindow.open(map);
-        });
-        
-        zonaInfoWindows.push(infoWindow);
         zonaPoligonos.push(polygon);
         
-        // Crear etiqueta en el centro del polígono
-        const bounds = new google.maps.LatLngBounds();
-        paths.forEach(p => bounds.extend(p));
-        const center = bounds.getCenter();
-        
-        const labelMarker = new google.maps.Marker({
-            position: center,
-            map: map,
-            icon: {
-                path: google.maps.SymbolPath.CIRCLE,
-                scale: 0,
-                fillOpacity: 0,
-                strokeOpacity: 0
-            },
-            label: {
-                text: zona.nombre_zona,
-                color: zona.color_borde || '#1976D2',
-                fontSize: '12px',
-                fontWeight: 'bold',
-                fontFamily: 'Arial, sans-serif'
-            },
-            zIndex: 1000,
-            clickable: false
+        // Añadir label de zona si tiene nombre
+        if (zona.nombre && zona.centroide) {
+            var label = new google.maps.Marker({
+                position: { lat: parseFloat(zona.centroide.lat), lng: parseFloat(zona.centroide.lng) },
+                map: map,
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 0,
+                    labelOrigin: new google.maps.Point(0, 0)
+                },
+                label: {
+                    text: zona.nombre,
+                    color: color,
+                    fontSize: '13px',
+                    fontWeight: 'bold'
+                },
+                zIndex: 1000
+            });
+            zonaLabels.push(label);
+        }
+    }
+    
+    console.log('[DEBUG] Polígonos de zonas cargados:', zonaPoligonos.length);
+}
+
+// Configurar controles de la interfaz
+function setupControls() {
+    // Botón de zoom in
+    var btnZoomIn = document.getElementById('btnZoomIn');
+    if (btnZoomIn) {
+        btnZoomIn.addEventListener('click', function() {
+            map.setZoom(map.getZoom() + 1);
         });
-        
-        zonaLabels.push(labelMarker);
-    });
+    }
+    
+    // Botón de zoom out
+    var btnZoomOut = document.getElementById('btnZoomOut');
+    if (btnZoomOut) {
+        btnZoomOut.addEventListener('click', function() {
+            map.setZoom(map.getZoom() - 1);
+        });
+    }
+    
+    // Botón de reset view
+    var btnResetView = document.getElementById('btnResetView');
+    if (btnResetView) {
+        btnResetView.addEventListener('click', function() {
+            map.setCenter({ lat: -16.4090, lng: -71.5375 });
+            map.setZoom(13);
+        });
+    }
+    
+    // Toggle heatmap
+    var toggleHeatmap = document.getElementById('toggleHeatmap');
+    if (toggleHeatmap) {
+        toggleHeatmap.addEventListener('change', function(e) {
+            if (heatmapLayer) {
+                heatmapLayer.setMap(e.target.checked ? map : null);
+            }
+        });
+    }
+    
+    // Toggle markers
+    var toggleMarkers = document.getElementById('toggleMarkers');
+    if (toggleMarkers) {
+        toggleMarkers.addEventListener('change', function(e) {
+            var visible = e.target.checked;
+            markers.forEach(function(marker) {
+                marker.setMap(visible ? map : null);
+            });
+            markerLabels.forEach(function(overlay) {
+                if (overlay.div_) {
+                    overlay.div_.style.display = (visible && overlay._visible !== false) ? 'block' : 'none';
+                }
+            });
+        });
+    }
+    
+    // Toggle labels de precio
+    var toggleLabels = document.getElementById('toggleLabels');
+    if (toggleLabels) {
+        toggleLabels.addEventListener('change', function(e) {
+            var showLabels = e.target.checked;
+            markerLabels.forEach(function(overlay) {
+                if (overlay.div_) {
+                    overlay.div_.style.display = showLabels ? 'block' : 'none';
+                }
+                overlay._visible = showLabels;
+            });
+        });
+    }
+    
+    // Toggle zonas/cuadrantes
+    var toggleZonas = document.getElementById('toggleZonas');
+    if (toggleZonas) {
+        toggleZonas.addEventListener('change', function(e) {
+            var visible = e.target.checked;
+            zonaPoligonos.forEach(function(poly) { poly.setMap(visible ? map : null); });
+            zonaLabels.forEach(function(label) { label.setMap(visible ? map : null); });
+        });
+    }
+    
+    // Control de opacidad del heatmap
+    var heatmapOpacity = document.getElementById('heatmapOpacity');
+    if (heatmapOpacity) {
+        heatmapOpacity.addEventListener('input', function() {
+            if (heatmapLayer) {
+                heatmapLayer.set('opacity', parseFloat(this.value));
+            }
+        });
+    }
+    
+    // Botón de ayuda
+    var btnHelp = document.getElementById('btnHelp');
+    if (btnHelp) {
+        btnHelp.addEventListener('click', function() {
+            var helpModal = new bootstrap.Modal(document.getElementById('helpModal'));
+            helpModal.show();
+        });
+    }
+    
+    // Botón de refresh
+    var btnRefresh = document.getElementById('btnRefresh');
+    if (btnRefresh) {
+        btnRefresh.addEventListener('click', function() {
+            location.reload();
+        });
+    }
+    
+    // Botón aplicar filtros
+    var btnAplicarFiltros = document.getElementById('btnAplicarFiltros');
+    if (btnAplicarFiltros) {
+        btnAplicarFiltros.addEventListener('click', function() {
+            var params = new URLSearchParams();
+            var tipoProp = document.getElementById('filterTipoPropiedad');
+            var precioMin = document.getElementById('filterPrecioMin');
+            var precioMax = document.getElementById('filterPrecioMax');
+            var areaMin = document.getElementById('filterAreaMin');
+            var areaMax = document.getElementById('filterAreaMax');
+            var fuente = document.getElementById('filterFuente');
+            
+            if (tipoProp && tipoProp.value) params.set('tipo', tipoProp.value);
+            if (precioMin && precioMin.value) params.set('precio_min', precioMin.value);
+            if (precioMax && precioMax.value) params.set('precio_max', precioMax.value);
+            if (areaMin && areaMin.value) params.set('area_min', areaMin.value);
+            if (areaMax && areaMax.value) params.set('area_max', areaMax.value);
+            if (fuente && fuente.value && fuente.value !== 'todas') params.set('fuente', fuente.value);
+            
+            var queryString = params.toString();
+            window.location.href = window.location.pathname + (queryString ? '?' + queryString : '');
+        });
+    }
 }
 
 </script>
+
+<!-- Google Maps API - Cargar DESPUÉS de definir initMap -->
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBrL1QF7vTl9zF8FmCUumfRpFJcaYokO7Q&libraries=drawing,places&callback=initMap" async defer></script>
 {% endblock %}
