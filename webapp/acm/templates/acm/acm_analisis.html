@@ -32,6 +32,16 @@
     .acm-container .mb-2 {
         margin-bottom: 0.35rem !important;
     }
+    /* FORZAR altura automática de la card de parámetros en tablet */
+    @media (min-width: 768px) and (max-width: 991.98px) {
+        .mobile-params-panel .card {
+            height: auto !important;
+            min-height: 0 !important;
+        }
+        .mobile-params-panel {
+            align-self: flex-start !important;
+        }
+    }
 </style>
 <!-- Contenedor de toasts para notificaciones -->
 <div id="toastContainer" class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 9999;"></div>
