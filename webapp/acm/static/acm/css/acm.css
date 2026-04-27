@@ -134,6 +134,12 @@
         margin-bottom: 0.5rem;
     }
     
+    /* En móvil/tablet, el panel de comparables en la fila inferior se oculta
+       porque se usa el offcanvas flotante en su lugar */
+    .acm-container .row.mt-2 > .col-lg-3 {
+        display: none;
+    }
+    
     #acmMap {
         height: 50vh !important;
         min-height: 350px !important;
