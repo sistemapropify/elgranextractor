@@ -32,14 +32,18 @@
     .acm-container .mb-2 {
         margin-bottom: 0.35rem !important;
     }
-    /* FORZAR altura automática de la card de parámetros en tablet */
+    /* FORZAR altura automática de TODAS las cards en tablet */
     @media (min-width: 768px) and (max-width: 991.98px) {
-        .mobile-params-panel .card {
+        .acm-container .row {
+            align-items: flex-start !important;
+        }
+        .acm-container .row > [class*="col-"] {
+            align-self: auto !important;
+        }
+        .mobile-params-panel .card,
+        .mobile-map-panel .card {
             height: auto !important;
             min-height: 0 !important;
-        }
-        .mobile-params-panel {
-            align-self: flex-start !important;
         }
     }
 </style>
