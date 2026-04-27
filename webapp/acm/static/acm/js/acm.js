@@ -614,37 +614,9 @@ function actualizarResumenACM() {
         return `US$ ${valor.toLocaleString('es-PE', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     }
     
-    // Generar HTML del resumen compacto - 2 filas: métricas + 3 tarjetas
+    // Generar HTML del resumen compacto - 3 tarjetas de valor
     document.getElementById('resumenACM').innerHTML = `
-        <!-- Fila 1: Métricas -->
-        <div class="row g-2 mb-3">
-            <div class="col-md-3 col-6">
-                <div class="estadistica-item p-2">
-                    <div class="estadistica-valor small">${propiedades.length}</div>
-                    <div class="estadistica-label small">Propiedades Analizadas</div>
-                </div>
-            </div>
-            <div class="col-md-3 col-6">
-                <div class="estadistica-item p-2">
-                    <div class="estadistica-valor small">${formatearMoneda(min)}</div>
-                    <div class="estadistica-label small">Precio/m² Mínimo</div>
-                </div>
-            </div>
-            <div class="col-md-3 col-6">
-                <div class="estadistica-item p-2">
-                    <div class="estadistica-valor small">${formatearMoneda(promedioPonderado)}</div>
-                    <div class="estadistica-label small">Precio/m² Promedio</div>
-                </div>
-            </div>
-            <div class="col-md-3 col-6">
-                <div class="estadistica-item p-2">
-                    <div class="estadistica-valor small">${formatearMoneda(max)}</div>
-                    <div class="estadistica-label small">Precio/m² Máximo</div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Fila 2: 3 tarjetas (izquierda: precio venta sugerido, centro: estimación principal, derecha: valor realización inmediata) -->
+        <!-- Fila: 3 tarjetas (izquierda: precio venta sugerido, centro: estimación principal, derecha: valor realización inmediata) -->
         <div class="row g-2">
             <div class="col-md-4">
                 <div class="card border-0 bg-light h-100">
@@ -661,6 +633,7 @@ function actualizarResumenACM() {
                         <div class="small mb-1">ESTIMACIÓN PARA TU PROPIEDAD</div>
                         <div class="h4 mb-1">${formatearMoneda(valorComercial)}</div>
                         <div class="small opacity-75">Valor Comercial (100%)</div>
+                        <div class="small mt-1" style="color: #ff4444; font-weight: bold;">Precio/m²: ${formatearMoneda(promedioPonderado)}</div>
                     </div>
                 </div>
             </div>
