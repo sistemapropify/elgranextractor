@@ -179,20 +179,7 @@
     }
 }
 
-/* Estilos para tablet (entre 768px y 992px) */
-@media (min-width: 768px) and (max-width: 991.98px) {
-    .mobile-params-panel {
-        height: 40vh;
-    }
-    
-    .mobile-map-panel {
-        height: 60vh;
-    }
-    
-    #acmMap {
-        height: calc(60vh - 60px) !important;
-    }
-}
+/* Estilos para tablet (entre 768px y 992px) - ahora manejado desde acm_analisis.html inline */
 
 /* Estilos para escritorio (lg y superior) */
 @media (min-width: 992px) {
