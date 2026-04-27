@@ -19,10 +19,11 @@ from django.contrib import admin
 from django.urls import path, include
 import views
 from intelligence import views as intelligence_views
+from acm import views as acm_views
 
 urlpatterns = [
-    # Página principal
-    path('', views.home, name='home'),
+    # Página principal - ACM Dashboard
+    path('', acm_views.acm_dashboard, name='home'),
     
     # Fuentes Web
     path('fuentes-web/', views.fuentes_web, name='fuentes_web'),

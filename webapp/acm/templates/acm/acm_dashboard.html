@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Propifai ACM - Análisis Comparativo de Mercado</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #21262d;
+            --border-color: #30363d;
+            --text-primary: #f0f6fc;
+            --text-secondary: #8b949e;
+            --accent-blue: #58a6ff;
+            --accent-green: #238636;
+            --accent-purple: #8957e5;
+            --accent-orange: #f78166;
+            --sidebar-width: 260px;
+            --header-height: 60px;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        /* ===== LAYOUT ===== */
+        .app-layout {
+            display: flex;
+            min-height: 100vh;
+        }
+        
+        /* ===== SIDEBAR ===== */
+        .app-sidebar {
+            width: var(--sidebar-width);
+            min-width: var(--sidebar-width);
+            background-color: var(--bg-secondary);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            position: sticky;
+            top: 0;
+            overflow-y: auto;
+            z-index: 100;
+        }
+        
+        .sidebar-brand {
+            padding: 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .sidebar-brand .brand-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: white;
+            flex-shrink: 0;
+        }
+        
+        .sidebar-brand .brand-text {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-primary);
+            line-height: 1.2;
+        }
+        
+        .sidebar-brand .brand-subtext {
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-weight: 400;
+        }
+        
+        .sidebar-nav {
+            padding: 12px 0;
+            flex: 1;
+        }
+        
+        .nav-section-title {
+            padding: 8px 20px 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+        }
+        
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 20px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 14px;
+            transition: all 0.2s ease;
+            border-left: 3px solid transparent;
+            cursor: pointer;
+        }
+        
+        .nav-item:hover {
+            background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+        
+        .nav-item.active {
+            background-color: rgba(88, 166, 255, 0.1);
+            color: var(--accent-blue);
+            border-left-color: var(--accent-blue);
+        }
+        
+        .nav-item i {
+            width: 20px;
+            text-align: center;
+            font-size: 16px;
+        }
+        
+        .nav-item .nav-badge {
+            margin-left: auto;
+            background-color: var(--bg-tertiary);
+            color: var(--text-secondary);
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+        
+        .nav-item.active .nav-badge {
+            background-color: rgba(88, 166, 255, 0.2);
+            color: var(--accent-blue);
+        }
+        
+        /* ===== MAIN CONTENT ===== */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+        
+        /* ===== HEADER ===== */
+        .app-header {
+            height: var(--header-height);
+            background-color: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            padding: 0 24px;
+            gap: 16px;
+            position: sticky;
+            top: 0;
+            z-index: 99;
+        }
+        
+        .header-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        
+        .header-title span {
+            color: var(--text-secondary);
+            font-weight: 400;
+        }
+        
+        .header-actions {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .header-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-tertiary);
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .header-btn:hover {
+            background-color: var(--border-color);
+            color: var(--text-primary);
+        }
+        
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: white;
+            font-weight: 600;
+        }
+        
+        /* ===== CONTENT AREA ===== */
+        .content-area {
+            padding: 24px;
+            flex: 1;
+        }
+        
+        /* ===== STATS ROW ===== */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        
+        .stat-card {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            transition: border-color 0.2s ease;
+        }
+        
+        .stat-card:hover {
+            border-color: var(--text-secondary);
+        }
+        
+        .stat-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+        
+        .stat-icon.blue {
+            background-color: rgba(88, 166, 255, 0.15);
+            color: var(--accent-blue);
+        }
+        
+        .stat-icon.green {
+            background-color: rgba(35, 134, 54, 0.15);
+            color: var(--accent-green);
+        }
+        
+        .stat-icon.purple {
+            background-color: rgba(137, 87, 229, 0.15);
+            color: var(--accent-purple);
+        }
+        
+        .stat-icon.orange {
+            background-color: rgba(247, 129, 102, 0.15);
+            color: var(--accent-orange);
+        }
+        
+        .stat-info h3 {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin: 0;
+            line-height: 1.2;
+        }
+        
+        .stat-info p {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin: 4px 0 0 0;
+        }
+        
+        /* ===== CARDS ===== */
+        .dashboard-card {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 24px;
+        }
+        
+        .card-header-custom {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .card-header-custom h5 {
+            margin: 0;
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .card-header-custom h5 i {
+            color: var(--accent-blue);
+        }
+        
+        .card-body-custom {
+            padding: 20px;
+        }
+        
+        /* ===== ACM HISTORY CARD ===== */
+        .acm-history-card {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        
+        .acm-history-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .acm-history-header h4 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .acm-history-header h4 i {
+            color: var(--accent-blue);
+        }
+        
+        .acm-history-body {
+            padding: 20px;
+        }
+        
+        /* ===== HISTORY ITEMS ===== */
+        .history-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 14px 16px;
+            border-radius: 8px;
+            background-color: var(--bg-tertiary);
+            margin-bottom: 10px;
+            transition: background-color 0.2s ease;
+            cursor: pointer;
+        }
+        
+        .history-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .history-item:hover {
+            background-color: var(--border-color);
+        }
+        
+        .history-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            background-color: rgba(88, 166, 255, 0.1);
+            color: var(--accent-blue);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+        
+        .history-info {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .history-info .history-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 2px;
+        }
+        
+        .history-info .history-meta {
+            font-size: 12px;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .history-info .history-meta span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .history-status {
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 500;
+            flex-shrink: 0;
+        }
+        
+        .history-status.completed {
+            background-color: rgba(35, 134, 54, 0.15);
+            color: #3fb950;
+        }
+        
+        .history-status.pending {
+            background-color: rgba(247, 129, 102, 0.15);
+            color: var(--accent-orange);
+        }
+        
+        /* ===== EMPTY STATE ===== */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+        }
+        
+        .empty-state i {
+            font-size: 48px;
+            color: var(--bg-tertiary);
+            margin-bottom: 16px;
+        }
+        
+        .empty-state h5 {
+            color: var(--text-primary);
+            font-size: 16px;
+            margin-bottom: 8px;
+        }
+        
+        .empty-state p {
+            color: var(--text-secondary);
+            font-size: 13px;
+            margin-bottom: 20px;
+        }
+        
+        /* ===== BUTTONS ===== */
+        .btn-acm {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+        }
+        
+        .btn-acm-primary {
+            background: linear-gradient(135deg, var(--accent-blue), #1a6bc4);
+            color: white;
+        }
+        
+        .btn-acm-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(88, 166, 255, 0.3);
+            color: white;
+        }
+        
+        .btn-acm-secondary {
+            background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+        
+        .btn-acm-secondary:hover {
+            background-color: var(--border-color);
+            color: var(--text-primary);
+        }
+        
+        .btn-acm-lg {
+            padding: 14px 32px;
+            font-size: 16px;
+        }
+        
+        /* ===== HERO SECTION ===== */
+        .hero-section {
+            background: linear-gradient(135deg, rgba(88, 166, 255, 0.08), rgba(137, 87, 229, 0.08));
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 32px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 24px;
+        }
+        
+        .hero-content h1 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        
+        .hero-content h1 i {
+            color: var(--accent-blue);
+            margin-right: 8px;
+        }
+        
+        .hero-content p {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin: 0;
+            max-width: 500px;
+            line-height: 1.6;
+        }
+        
+        .hero-actions {
+            display: flex;
+            gap: 12px;
+            flex-shrink: 0;
+        }
+        
+        /* ===== QUICK ACTIONS ===== */
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        
+        .quick-action-card {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            color: var(--text-primary);
+        }
+        
+        .quick-action-card:hover {
+            border-color: var(--accent-blue);
+            transform: translateY(-2px);
+            color: var(--text-primary);
+        }
+        
+        .quick-action-card i {
+            font-size: 24px;
+            color: var(--accent-blue);
+            margin-bottom: 8px;
+        }
+        
+        .quick-action-card h6 {
+            font-size: 13px;
+            font-weight: 500;
+            margin: 0;
+        }
+        
+        .quick-action-card p {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin: 4px 0 0 0;
+        }
+        
+        /* ===== SCROLLBAR ===== */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: var(--bg-primary);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--border-color);
+        }
+        
+        /* ===== RESPONSIVE ===== */
+        @media (max-width: 768px) {
+            .app-sidebar {
+                display: none;
+            }
+            
+            .app-sidebar.mobile-open {
+                display: flex;
+                position: fixed;
+                width: 100%;
+                height: 100vh;
+                z-index: 1000;
+            }
+            
+            .hero-section {
+                flex-direction: column;
+                text-align: center;
+                padding: 24px;
+            }
+            
+            .hero-content p {
+                max-width: 100%;
+            }
+            
+            .hero-actions {
+                width: 100%;
+            }
+            
+            .hero-actions .btn-acm {
+                flex: 1;
+                justify-content: center;
+            }
+            
+            .stats-row {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .content-area {
+                padding: 16px;
+            }
+            
+            .mobile-menu-btn {
+                display: flex !important;
+            }
+        }
+        
+        @media (min-width: 769px) {
+            .mobile-menu-btn {
+                display: none !important;
+            }
+        }
+        
+        .mobile-menu-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-tertiary);
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        
+        /* ===== OVERLAY ===== */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+        
+        .sidebar-overlay.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <!-- Overlay for mobile -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <div class="app-layout">
+        <!-- ===== SIDEBAR ===== -->
+        <nav class="app-sidebar" id="appSidebar">
+            <div class="sidebar-brand">
+                <div class="brand-icon">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <div>
+                    <div class="brand-text">Propifai ACM</div>
+                    <div class="brand-subtext">Análisis Comparativo de Mercado</div>
+                </div>
+            </div>
+            
+            <div class="sidebar-nav">
+                <div class="nav-section-title">Navegación</div>
+                
+                <a href="/acm/" class="nav-item active">
+                    <i class="fas fa-home"></i>
+                    Dashboard
+                </a>
+                
+                <a href="/acm/analisis/" class="nav-item">
+                    <i class="fas fa-search"></i>
+                    Nuevo Análisis
+                </a>
+                
+                <a href="/acm/historial/" class="nav-item">
+                    <i class="fas fa-history"></i>
+                    Historial
+                    <span class="nav-badge">{{ historial_count|default:"0" }}</span>
+                </a>
+                
+                <div class="nav-section-title" style="margin-top: 16px;">Herramientas</div>
+                
+                <a href="/market-analysis/heatmap/" class="nav-item">
+                    <i class="fas fa-fire"></i>
+                    Heatmap de Precios
+                </a>
+                
+                <a href="/market-analysis/dashboard/" class="nav-item">
+                    <i class="fas fa-chart-bar"></i>
+                    Dashboard Mercado
+                </a>
+                
+                <a href="/cuadrantizacion/mapa/" class="nav-item">
+                    <i class="fas fa-map-marked-alt"></i>
+                    Cuadrantización
+                </a>
+                
+                <div class="nav-section-title" style="margin-top: 16px;">Sistema</div>
+                
+                <a href="/" class="nav-item">
+                    <i class="fas fa-arrow-left"></i>
+                    Volver al Inicio
+                </a>
+            </div>
+        </nav>
+        
+        <!-- ===== MAIN CONTENT ===== -->
+        <div class="main-content">
+            <!-- Header -->
+            <header class="app-header">
+                <button class="mobile-menu-btn" id="mobileMenuBtn">
+                    <i class="fas fa-bars"></i>
+                </button>
+                
+                {% load static %}
+                <a href="/acm/" class="d-flex align-items-center text-decoration-none">
+                    <img src="{% static 'img/logo.png' %}" alt="Propifai" height="36">
+                </a>
+                
+                <div class="header-actions">
+                    <button class="header-btn" title="Actualizar">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                    <button class="header-btn" title="Notificaciones">
+                        <i class="fas fa-bell"></i>
+                    </button>
+                    <div class="user-avatar">P</div>
+                </div>
+            </header>
+            
+            <!-- Content -->
+            <div class="content-area">
+                <!-- Hero Section -->
+                <div class="hero-section">
+                    <div class="hero-content">
+                        <h1>
+                            <i class="fas fa-balance-scale"></i>
+                            ACM - Análisis Comparativo de Mercado
+                        </h1>
+                        <p>
+                            Encuentra propiedades comparables en zonas cercanas, calcula precios por m², 
+                            y obtén análisis inteligentes para tomar mejores decisiones de valoración inmobiliaria.
+                        </p>
+                    </div>
+                    <div class="hero-actions">
+                        <a href="/acm/analisis/" class="btn-acm btn-acm-primary btn-acm-lg">
+                            <i class="fas fa-plus-circle"></i>
+                            Nuevo Análisis
+                        </a>
+                    </div>
+                </div>
+                
+                <!-- Stats Row -->
+                <div class="stats-row">
+                    <div class="stat-card">
+                        <div class="stat-icon blue">
+                            <i class="fas fa-search"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3>{{ total_analisis|default:"0" }}</h3>
+                            <p>Análisis Realizados</p>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon green">
+                            <i class="fas fa-building"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3>{{ total_comparables|default:"0" }}</h3>
+                            <p>Comparables Encontrados</p>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon purple">
+                            <i class="fas fa-map-marker-alt"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3>{{ zonas_cubiertas|default:"0" }}</h3>
+                            <p>Zonas Cubiertas</p>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon orange">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3>{{ ultimo_analisis|default:"--" }}</h3>
+                            <p>Último Análisis</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Quick Actions -->
+                <div class="quick-actions">
+                    <a href="/acm/analisis/" class="quick-action-card">
+                        <i class="fas fa-plus-circle"></i>
+                        <h6>Nuevo Análisis</h6>
+                        <p>Buscar propiedades comparables</p>
+                    </a>
+                    
+                    <a href="/acm/analisis/?tipo=Terreno" class="quick-action-card">
+                        <i class="fas fa-tree"></i>
+                        <h6>Analizar Terrenos</h6>
+                        <p>Comparativa de terrenos</p>
+                    </a>
+                    
+                    <a href="/acm/analisis/?tipo=Casa" class="quick-action-card">
+                        <i class="fas fa-home"></i>
+                        <h6>Analizar Casas</h6>
+                        <p>Comparativa de casas</p>
+                    </a>
+                    
+                    <a href="/acm/analisis/?tipo=Departamento" class="quick-action-card">
+                        <i class="fas fa-building"></i>
+                        <h6>Analizar Departamentos</h6>
+                        <p>Comparativa de departamentos</p>
+                    </a>
+                </div>
+                
+                <!-- ACM History Card -->
+                <div class="acm-history-card">
+                    <div class="acm-history-header">
+                        <h4>
+                            <i class="fas fa-history"></i>
+                            Historial de Análisis ACM
+                        </h4>
+                        <a href="/acm/analisis/" class="btn-acm btn-acm-primary">
+                            <i class="fas fa-plus"></i>
+                            Nuevo Análisis
+                        </a>
+                    </div>
+                    <div class="acm-history-body">
+                        {% if historial %}
+                            {% for item in historial %}
+                            <div class="history-item">
+                                <div class="history-icon">
+                                    <i class="fas fa-file-alt"></i>
+                                </div>
+                                <div class="history-info">
+                                    <div class="history-title">{{ item.titulo }}</div>
+                                    <div class="history-meta">
+                                        <span><i class="far fa-calendar-alt"></i> {{ item.fecha }}</span>
+                                        <span><i class="fas fa-tag"></i> {{ item.tipo }}</span>
+                                        <span><i class="fas fa-map-marker-alt"></i> {{ item.zona }}</span>
+                                    </div>
+                                </div>
+                                <div class="history-status {{ item.estado_clase }}">
+                                    {{ item.estado }}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="empty-state">
+                                <i class="fas fa-inbox"></i>
+                                <h5>No hay análisis aún</h5>
+                                <p>Realiza tu primer análisis comparativo de mercado para ver el historial aquí.</p>
+                                <a href="/acm/analisis/" class="btn-acm btn-acm-primary">
+                                    <i class="fas fa-plus-circle"></i>
+                                    Comenzar Análisis
+                                </a>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // Mobile sidebar toggle
+        const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+        const sidebar = document.getElementById('appSidebar');
+        const overlay = document.getElementById('sidebarOverlay');
+        
+        function toggleSidebar() {
+            sidebar.classList.toggle('mobile-open');
+            overlay.classList.toggle('active');
+        }
+        
+        mobileMenuBtn.addEventListener('click', toggleSidebar);
+        overlay.addEventListener('click', toggleSidebar);
+        
+        // Refresh button
+        document.querySelector('.header-btn[title="Actualizar"]')?.addEventListener('click', function() {
+            location.reload();
+        });
+    </script>
+</body>
+</html>

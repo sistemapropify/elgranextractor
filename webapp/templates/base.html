@@ -320,13 +320,16 @@
         </button>
         
         <div class="logo-container">
-            <div class="logo-placeholder">
-                <i class="bi bi-binoculars-fill"></i>
-            </div>
-            <a href="/" class="logo-text ms-2">El Gran Extractor</a>
+            {% load static %}
+            <a href="/" class="d-flex align-items-center text-decoration-none">
+                <img src="{% static 'img/logo.png' %}" alt="Propifai" height="32" class="me-2">
+            </a>
+            {% block header_title %}
+            {% endblock %}
         </div>
         
         <div class="ms-auto d-flex align-items-center">
+            {% block header_actions %}
             {% if request.current_user %}
                 <span class="text-success me-2 small d-none d-md-inline">
                     <i class="bi bi-person-circle"></i>
@@ -351,10 +354,12 @@
                 <i class="bi bi-code-slash"></i> API
             </a>
             {% endif %}
+            {% endblock %}
         </div>
     </header>
     
     <!-- Barra lateral delgada -->
+    {% block sidebar %}
     <nav class="app-sidebar" id="appSidebar">
         <ul class="sidebar-menu">
             <li>
@@ -521,6 +526,7 @@
             </li>
         </ul>
     </nav>
+    {% endblock %}
     
     <!-- Contenido principal -->
     <main class="app-content" id="appContent">

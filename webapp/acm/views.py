@@ -8,6 +8,51 @@ from ingestas.models import PropiedadRaw
 from .utils import haversine, calcular_precio_m2
 
 
+def acm_dashboard(request):
+    """
+    Vista del dashboard principal del módulo ACM.
+    Renderiza el template con el historial de análisis y estadísticas.
+    """
+    # Obtener tipos de propiedad únicos para estadísticas
+    tipos_locales = PropiedadRaw.objects.exclude(
+        tipo_propiedad__isnull=True
+    ).exclude(
+        tipo_propiedad=''
+    ).values_list('tipo_propiedad', flat=True).distinct()
+    
+    # Contar propiedades totales como "comparables disponibles"
+    total_comparables = PropiedadRaw.objects.count()
+    
+    # Obtener zonas/distritos únicos
+    zonas = PropiedadRaw.objects.exclude(
+        distrito__isnull=True
+    ).exclude(
+        distrito=''
+    ).values_list('distrito', flat=True).distinct()
+    
+    # Intentar obtener datos de Propifai
+    total_propifai = 0
+    try:
+        from propifai.models import PropifaiProperty
+        total_propifai = PropifaiProperty.objects.using('propifai').count()
+    except Exception:
+        pass
+    
+    # Historial de ejemplo (mientras no tengamos modelo de historial ACM)
+    # En el futuro, esto vendrá de un modelo ACMHistory
+    historial = []
+    
+    context = {
+        'total_analisis': 0,
+        'total_comparables': total_comparables + total_propifai,
+        'zonas_cubiertas': len(zonas),
+        'ultimo_analisis': '--',
+        'historial': historial,
+        'historial_count': len(historial),
+    }
+    return render(request, 'acm/acm_dashboard.html', context)
+
+
 def acm_view(request):
     """
     Vista principal del módulo ACM.

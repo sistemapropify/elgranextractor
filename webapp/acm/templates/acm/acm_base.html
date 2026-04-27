@@ -3,8 +3,348 @@
 
 {% block title %}ACM - Análisis Comparativo de Mercado{% endblock %}
 
+{% block sidebar %}
+<nav class="app-sidebar" id="appSidebar">
+    <div class="sidebar-brand">
+        {% load static %}
+        <img src="{% static 'img/logo.png' %}" alt="Propifai" height="32" class="me-2">
+        <div>
+            <div class="brand-title">Propifai ACM</div>
+            <div class="brand-subtitle">Análisis Comparativo de Mercado</div>
+        </div>
+    </div>
+    <div class="sidebar-nav">
+        <div class="nav-section-label">Navegación</div>
+        <a href="/acm/" class="nav-item">
+            <i class="fas fa-home"></i> Dashboard
+        </a>
+        <a href="/acm/analisis/" class="nav-item active">
+            <i class="fas fa-search"></i> Nuevo Análisis
+        </a>
+        <a href="/acm/historial/" class="nav-item">
+            <i class="fas fa-history"></i> Historial
+            <span class="nav-badge">{{ historial_count|default:"0" }}</span>
+        </a>
+        <div class="nav-section-label">Herramientas</div>
+        <a href="/market-analysis/heatmap/" class="nav-item">
+            <i class="fas fa-fire"></i> Heatmap de Precios
+        </a>
+        <a href="/market-analysis/dashboard/" class="nav-item">
+            <i class="fas fa-chart-bar"></i> Dashboard Mercado
+        </a>
+        <a href="/cuadrantizacion/mapa/" class="nav-item">
+            <i class="fas fa-map-marked-alt"></i> Cuadrantización
+        </a>
+        <div class="nav-section-label">Sistema</div>
+        <a href="/" class="nav-item">
+            <i class="fas fa-arrow-left"></i> Volver al Inicio
+        </a>
+    </div>
+</nav>
+{% endblock %}
+
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'acm/css/acm.css' %}?v=11">
+<link rel="stylesheet" href="{% static 'acm/css/acm.css' %}?v=13">
+<style>
+    /* ============================================
+       TEMA OSCURO GLOBAL para ACM
+       ============================================ */
+    :root {
+        --header-height: 60px;
+        --sidebar-width: 250px;
+        --primary-color: #58a6ff !important;
+        --secondary-color: #4a90e0 !important;
+        --accent-color: #58a6ff !important;
+        --light-teal: #30363d !important;
+        --very-light-teal: #21262d !important;
+        --sidebar-bg: #161b22 !important;
+        --header-bg: #161b22 !important;
+        --content-bg: #0d1117 !important;
+        --card-bg: #161b22 !important;
+        --text-dark: #f0f6fc !important;
+        --text-light: #f0f6fc !important;
+        /* Variables ACM */
+        --acm-bg-primary: #0d1117;
+        --acm-bg-secondary: #161b22;
+        --acm-bg-tertiary: #21262d;
+        --acm-border-color: #30363d;
+        --acm-text-primary: #f0f6fc;
+        --acm-text-secondary: #8b949e;
+        --acm-accent: #58a6ff;
+        --acm-card-bg: #161b22;
+        --acm-card-header-bg: #1c2333;
+        --acm-input-bg: #0d1117;
+        --acm-input-border: #30363d;
+        --acm-input-text: #f0f6fc;
+    }
+
+    /* Body oscuro */
+    body {
+        background-color: #0d1117 !important;
+        color: #f0f6fc !important;
+    }
+    .app-content {
+        background-color: #0d1117 !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+    }
+
+    /* Header oscuro */
+    .app-header {
+        background-color: #161b22 !important;
+        border-bottom: 1px solid #30363d !important;
+        box-shadow: none !important;
+    }
+    .app-header .logo-text {
+        color: #f0f6fc !important;
+    }
+    .app-header .logo-text:hover {
+        color: #58a6ff !important;
+    }
+    .app-header .sidebar-toggle {
+        color: #f0f6fc !important;
+        display: block !important;
+    }
+
+    /* ============================================
+       SIDEBAR OSCURO (reemplaza completamente el de base.html)
+       ============================================ */
+    /* Ocultar el menú original de base.html */
+    .app-sidebar .sidebar-menu {
+        display: none !important;
+    }
+
+    /* Estilo del nuevo sidebar */
+    .app-sidebar {
+        background-color: #161b22 !important;
+        border-right: 1px solid #30363d !important;
+        width: 260px !important;
+        min-width: 260px !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+    }
+
+    .sidebar-brand {
+        padding: 20px 16px;
+        border-bottom: 1px solid #30363d;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    .brand-icon {
+        width: 36px;
+        height: 36px;
+        background: #21262d;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #58a6ff;
+        font-size: 18px;
+        flex-shrink: 0;
+    }
+    .brand-title {
+        font-weight: 600;
+        font-size: 15px;
+        color: #f0f6fc;
+    }
+    .brand-subtitle {
+        font-size: 11px;
+        color: #8b949e;
+    }
+
+    .sidebar-nav {
+        padding: 12px 0;
+    }
+    .nav-section-label {
+        padding: 8px 16px 4px;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #8b949e;
+        font-weight: 600;
+    }
+    .nav-item {
+        display: flex !important;
+        align-items: center !important;
+        gap: 10px !important;
+        padding: 10px 16px !important;
+        color: #8b949e !important;
+        text-decoration: none !important;
+        font-size: 14px !important;
+        border-left: 3px solid transparent !important;
+        transition: all 0.2s !important;
+    }
+    .nav-item i {
+        width: 18px;
+        text-align: center;
+        flex-shrink: 0;
+    }
+    .nav-item:hover {
+        background: #1c2333 !important;
+        color: #f0f6fc !important;
+    }
+    .nav-item.active {
+        color: #58a6ff !important;
+        background: #1c2333 !important;
+        border-left-color: #58a6ff !important;
+    }
+    .nav-item.active:hover {
+        color: #58a6ff !important;
+    }
+    .nav-badge {
+        margin-left: auto;
+        background: #21262d;
+        color: #8b949e;
+        padding: 1px 8px;
+        border-radius: 10px;
+        font-size: 11px;
+    }
+
+    /* ============================================
+       MÓVIL: Sidebar como overlay
+       ============================================ */
+    @media (max-width: 1024px) {
+        .app-sidebar {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            height: 100vh !important;
+            width: 280px !important;
+            min-width: 280px !important;
+            z-index: 1050 !important;
+            transform: translateX(-100%) !important;
+            transition: transform 0.3s ease !important;
+            box-shadow: 4px 0 20px rgba(0,0,0,0.5) !important;
+        }
+        body.sidebar-open .app-sidebar {
+            transform: translateX(0) !important;
+        }
+        body.sidebar-open .app-content {
+            margin-left: 0 !important;
+        }
+        /* Overlay oscuro cuando el sidebar está abierto */
+        body.sidebar-open::after {
+            content: '' !important;
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            background: rgba(0,0,0,0.6) !important;
+            z-index: 1049 !important;
+            pointer-events: auto !important;
+        }
+    }
+
+    /* ============================================
+       NEUTRALIZAR COLORES VERDES DEL BASE.HTML
+       ============================================ */
+    a, a:hover { color: #58a6ff !important; }
+    hr { border-color: #30363d !important; }
+    .text-success { color: #58a6ff !important; }
+    .btn-outline-success {
+        color: #58a6ff !important;
+        border-color: #58a6ff !important;
+    }
+    .btn-outline-success:hover {
+        background-color: #58a6ff !important;
+        color: #ffffff !important;
+    }
+    .btn-primary {
+        background: #58a6ff !important;
+        border: none !important;
+    }
+    .btn-primary:hover { background: #4a90e0 !important; }
+    .btn-outline-primary {
+        color: #58a6ff !important;
+        border-color: #58a6ff !important;
+    }
+    .btn-outline-primary:hover {
+        background-color: #58a6ff !important;
+        color: #ffffff !important;
+    }
+    .btn-outline-secondary {
+        border-color: #30363d !important;
+        color: #8b949e !important;
+    }
+    .btn-outline-info {
+        border-color: #30363d !important;
+        color: #58a6ff !important;
+    }
+    .btn-outline-danger {
+        border-color: #f85149 !important;
+        color: #f85149 !important;
+    }
+    .card {
+        background-color: #161b22 !important;
+        border-color: #30363d !important;
+        box-shadow: none !important;
+    }
+    /* Labels de formularios en blanco para que se vean sobre fondo oscuro */
+    .form-label, label {
+        color: #f0f6fc !important;
+    }
+    /* Placeholders en gris claro para que sean legibles */
+    .form-control::placeholder, .form-select::placeholder {
+        color: #8b949e !important;
+        opacity: 1 !important;
+    }
+    /* Inputs específicos de ACM */
+    .acm-field-label {
+        color: #f0f6fc !important;
+    }
+    .acm-field-input::placeholder {
+        color: #8b949e !important;
+        opacity: 1 !important;
+    }
+    .form-control, .form-select {
+        background-color: #0d1117 !important;
+        border-color: #30363d !important;
+        color: #f0f6fc !important;
+    }
+    .form-control:focus, .form-select:focus {
+        border-color: #58a6ff !important;
+        box-shadow: 0 0 0 0.2rem rgba(88, 166, 255, 0.25) !important;
+    }
+    .stat-number { color: #58a6ff !important; }
+    .alert-info {
+        background-color: rgba(88, 166, 255, 0.1) !important;
+        border-color: #30363d !important;
+        color: #f0f6fc !important;
+    }
+    .logo-placeholder {
+        background: #21262d !important;
+        color: #f0f6fc !important;
+    }
+    .app-sidebar .sidebar-menu a {
+        color: #8b949e !important;
+    }
+    .app-sidebar .sidebar-menu a:hover {
+        background-color: #1c2333 !important;
+        color: #f0f6fc !important;
+    }
+    .app-sidebar .sidebar-menu a.active {
+        background-color: #1c2333 !important;
+        color: #58a6ff !important;
+        border-left: 3px solid #58a6ff !important;
+    }
+    .app-sidebar .sidebar-menu li {
+        border-bottom: 1px solid #21262d !important;
+    }
+    .app-sidebar .submenu {
+        background-color: #0d1117 !important;
+    }
+    .app-sidebar .submenu a {
+        color: #8b949e !important;
+    }
+    .app-sidebar .submenu a.active {
+        border-left: 3px solid #58a6ff !important;
+    }
+    .app-sidebar .has-submenu > a .bi-chevron-down {
+        color: #8b949e !important;
+    }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -15,7 +355,47 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'acm/js/acm.js' %}?v=8"></script>
+<script src="{% static 'acm/js/acm.js' %}?v=9"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const sidebarToggle = document.getElementById('sidebarToggle');
+        const appSidebar = document.getElementById('appSidebar');
+        
+        function closeSidebar() {
+            document.body.classList.remove('sidebar-open');
+        }
+        
+        // El toggle ya lo maneja base.html (línea 547-549)
+        // Solo agregamos: cerrar al hacer clic fuera del sidebar en móvil
+        document.addEventListener('click', function(e) {
+            if (window.innerWidth <= 1024 && document.body.classList.contains('sidebar-open')) {
+                // No cerrar si se hizo clic dentro del sidebar O en el toggle button
+                const clickedInsideSidebar = appSidebar && appSidebar.contains(e.target);
+                const clickedOnToggle = sidebarToggle && sidebarToggle.contains(e.target);
+                if (!clickedInsideSidebar && !clickedOnToggle) {
+                    closeSidebar();
+                }
+            }
+        });
+        
+        // Swipe para cerrar sidebar (deslizar el dedo hacia la izquierda)
+        if (appSidebar) {
+            let touchStartX = 0;
+            
+            appSidebar.addEventListener('touchstart', function(e) {
+                touchStartX = e.changedTouches[0].screenX;
+            }, { passive: true });
+            
+            appSidebar.addEventListener('touchend', function(e) {
+                const touchEndX = e.changedTouches[0].screenX;
+                const swipeDistance = touchStartX - touchEndX;
+                if (swipeDistance > 80 && document.body.classList.contains('sidebar-open')) {
+                    closeSidebar();
+                }
+            }, { passive: true });
+        }
+    });
+</script>
 {% if google_maps_api_key %}
 <!-- Google Maps API - Se carga con callback después de acm.js -->
 <script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&libraries=places,geometry&callback=initACMMap" defer></script>

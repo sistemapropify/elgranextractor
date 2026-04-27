@@ -163,7 +163,8 @@ function colocarMarcadorPrincipal(latLng) {
     marcadorPrincipal = new google.maps.Marker({
         position: latLng,
         map: acmMap,
-        title: 'Punto a valuar',
+        title: '',
+        clickable: false,
         icon: {
             url: ICONO_PRINCIPAL,
             scaledSize: new google.maps.Size(40, 40)
@@ -369,7 +370,7 @@ function crearMarcadorComparable(propiedad) {
     const marker = new google.maps.Marker({
         position: { lat: propiedad.lat, lng: propiedad.lng },
         map: acmMap,
-        title: `${propiedad.tipo} - ${propiedad.distrito}${esPropifai ? ' (PROPIFAI)' : ' (Local)'} - $${precioM2 ? precioM2.toFixed(2) : 'N/A'}/m²`,
+        title: '',
         icon: markerIcon,
         // Mostrar precio por m² en dólares como etiqueta del marcador (debajo del icono)
         label: {
@@ -592,12 +593,7 @@ function actualizarContadores() {
     // Actualizar contador del botón flotante mobile
     const mobileCount = document.getElementById('mobileComparablesCount');
     if (mobileCount) {
-        mobileCount.textContent = propiedadesSeleccionadas.size;
-    }
-    // Actualizar badge del botón flotante mobile
-    const mobileBadge = document.getElementById('mobileComparablesBadge');
-    if (mobileBadge) {
-        mobileBadge.textContent = propiedadesSeleccionadas.size > 0 ? 'Ver' : '0';
+        mobileCount.textContent = '(' + propiedadesSeleccionadas.size + ')';
     }
     // Actualizar contador tablet
     const tabletCount = document.getElementById('tabletComparablesCount');
