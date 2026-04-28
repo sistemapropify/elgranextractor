@@ -323,7 +323,7 @@
             {% load static %}
             <a href="/" class="d-flex align-items-center text-decoration-none">
                 <img src="{% static 'img/logo.png' %}" alt="Propifai" height="32" class="me-2"
-                     onerror="this.onerror=null; this.style.display='none'; this.parentElement.innerHTML += '<div class=\'logo-placeholder me-2\' style=\'width:32px;height:32px;font-size:0.9rem;\'>P</div>'">
+                     onerror="this.onerror=null;this.style.display='none';var d=document.createElement('div');d.className='logo-placeholder me-2';d.style.cssText='width:32px;height:32px;font-size:0.9rem;display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#58a6ff,#8957e5);border-radius:6px;color:white;font-weight:bold;';d.textContent='P';this.parentElement.appendChild(d)">
             </a>
             {% block header_title %}
             {% endblock %}

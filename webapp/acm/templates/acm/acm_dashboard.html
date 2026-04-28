@@ -779,7 +779,7 @@
                 {% load static %}
                 <a href="/acm/" class="d-flex align-items-center text-decoration-none">
                     <img src="{% static 'img/logo.png' %}" alt="Propifai" height="36"
-                         onerror="this.onerror=null; this.style.display='none'; this.parentElement.innerHTML += '<div class=\'sidebar-brand\' style=\'width:36px;height:36px;font-size:16px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--accent-blue),var(--accent-purple));border-radius:10px;color:white;font-weight:bold;\'>P</div>'">
+                         onerror="this.onerror=null;this.style.display='none';var d=document.createElement('div');d.style.cssText='width:36px;height:36px;font-size:16px;display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--accent-blue),var(--accent-purple));border-radius:10px;color:white;font-weight:bold;';d.textContent='P';this.parentElement.appendChild(d)">
                 </a>
                 
                 <div class="header-actions">
