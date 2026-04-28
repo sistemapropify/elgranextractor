@@ -1,0 +1,197 @@
+/* ============================================================
+   PALETA DE COLORES - PROJECTO PROMETEO (PROPIFAI)
+   ============================================================
+   Última actualización: Abril 2026
+   Mantén este archivo como referencia para nuevos templates.
+   ============================================================ */
+
+/* ============================================================
+   PALETA 1: TEMA VERDE ESMERALDA (Dashboard principal)
+   Usado en: dashboard_output.html, heatmap_*.html, full_dashboard.html
+   ============================================================ */
+:root {
+    /* === Colores primarios (Verde esmeralda) === */
+    --primary-color:   #10b981;   /* Verde esmeralda brillante - color principal */
+    --secondary-color: #059669;   /* Verde esmeralda medio - hover, sidebar bg */
+    --accent-color:    #34d399;   /* Verde esmeralda claro - active borders */
+
+    /* === Tonos verdes claros (fondos, bordes) === */
+    --light-teal:      #a7f3d0;   /* Verde muy claro - bordes suaves */
+    --very-light-teal: #d1fae5;   /* Verde super claro - fondos alternativos */
+
+    /* === Fondos === */
+    --sidebar-bg:  #059669;       /* Verde medio - sidebar */
+    --header-bg:   #ffffff;       /* Blanco - header */
+    --content-bg:  rgba(16, 185, 129, 0.08);  /* Verde con transparencia - fondo contenido */
+    --card-bg:     #ffffff;       /* Blanco - cards */
+
+    /* === Textos === */
+    --text-dark:   #065f46;       /* Verde oscuro - títulos, texto principal */
+    --text-light:  #ffffff;       /* Blanco - texto sobre fondos oscuros */
+
+    /* === Sombras === */
+    --shadow-color: rgba(3, 94, 94, 0.1);    /* Sombra verde tenue */
+    --shadow-card:  rgba(0, 0, 0, 0.05);     /* Sombra card */
+    --shadow-hover: rgba(0, 0, 0, 0.1);      /* Sombra hover */
+
+    /* === Estados de propiedades === */
+    --color-disponible:     #28a745;   /* Verde - Disponible */
+    --color-vendida:        #6f42c1;   /* Púrpura - Vendida */
+    --color-reservada:      #007bff;   /* Azul - Reservada */
+    --color-negociacion:    #ffc107;   /* Amarillo - En Negociación */
+    --color-retirada:       #6c757d;   /* Gris - Retirada */
+
+    /* === Estados de eventos/actividades === */
+    --color-visita:         #007bff;   /* Azul - Visita */
+    --color-seguimiento:    #ffc107;   /* Amarillo - Seguimiento */
+    --color-propuesta:      #6f42c1;   /* Púrpura - Propuesta */
+    --color-llamada:        #28a745;   /* Verde - Llamada */
+    --color-cierre:         #20c997;   /* Verde esmeralda - Cierre */
+
+    /* === Badges de calidad de datos === */
+    --badge-excelente:  #198754;   /* Verde oscuro */
+    --badge-buena:      #20c997;   /* Verde turquesa */
+    --badge-regular:    #ffc107;   /* Amarillo */
+    --badge-incompleta: #dc3545;   /* Rojo */
+
+    /* === Matriz ACM === */
+    --teal-primary:  #047d7d;     /* Teal oscuro - headers de matriz */
+    --teal-hover:    rgba(4, 125, 125, 0.05);  /* Teal hover */
+    --empty-cell-bg: #fff5f5;     /* Fondo celda vacía */
+    --empty-cell-text: #dee2e6;   /* Texto celda vacía */
+
+    /* === Heatmap gradient (precios) === */
+    --heatmap-low:  #00ff00;      /* Verde - precio bajo */
+    --heatmap-mid:  #ffff00;      /* Amarillo - precio medio */
+    --heatmap-high: #ff0000;      /* Rojo - precio alto */
+}
+
+/* ============================================================
+   PALETA 2: TEMA OSCURO (ACM Dashboard / Chat IA)
+   Usado en: acm_dashboard.html, acm.css, chat.css
+   ============================================================ */
+.theme-dark {
+    /* === Fondos === */
+    --bg-primary:   #0d1117;      /* Casi negro - fondo principal */
+    --bg-secondary: #161b22;      /* Gris muy oscuro - cards, sidebar */
+    --bg-tertiary:  #21262d;      /* Gris oscuro - bordes, elementos secundarios */
+    --border-color: #30363d;      /* Gris medio - bordes */
+
+    /* === Textos === */
+    --text-primary:   #f0f6fc;    /* Blanco azulado - texto principal */
+    --text-secondary: #8b949e;    /* Gris claro - texto secundario */
+
+    /* === Colores de acento === */
+    --accent-blue:   #58a6ff;     /* Azul brillante - color principal */
+    --accent-green:  #238636;     /* Verde oscuro - éxito */
+    --accent-purple: #8957e5;     /* Púrpura - acento secundario */
+    --accent-orange: #f78166;     /* Naranja - advertencia */
+    --accent-red:    #f85149;     /* Rojo - error/peligro */
+    --accent-yellow: #d29922;     /* Amarillo - advertencia */
+
+    /* === Botones === */
+    --btn-primary-bg:     #58a6ff;
+    --btn-primary-hover:  #388bfd;
+    --btn-danger-bg:      #f85149;
+    --btn-danger-hover:   #da3633;
+
+    /* === Sombras === */
+    --shadow-dark: rgba(0, 0, 0, 0.3);   /* Sombra oscura para modales */
+    --shadow-card-dark: rgba(0, 0, 0, 0.5); /* Sombra sidebar móvil */
+}
+
+/* ============================================================
+   PALETA 3: GRÁFICOS MATPLOTLIB (charts.py)
+   Usado en: market_analysis/charts.py
+   ============================================================ */
+:root {
+    /* === Colores para visualizaciones === */
+    --chart-green:  #2ecc71;      /* Verde - datos completos, calidad alta */
+    --chart-red:    #e74c3c;      /* Rojo - datos vacíos, calidad baja */
+    --chart-yellow: #f39c12;      /* Amarillo - calidad media */
+    --chart-blue:   #3498db;      /* Azul - boxplots precio */
+    --chart-green2: #2ecc71;      /* Verde - boxplots área */
+
+    /* === Gradiente para SVG fallback === */
+    --grad-start: #4a90e2;        /* Azul - inicio gradiente */
+    --grad-end:   #2ecc71;        /* Verde - fin gradiente */
+}
+
+/* ============================================================
+   PALETA 4: CUADRANTIZACIÓN (Mapa de zonas)
+   Usado en: cuadrantizacion/utils.py
+   ============================================================ */
+:root {
+    /* === Rangos de precio por m² === */
+    --price-very-low:  #4CAF50;   /* Verde - < $1000/m² */
+    --price-low:       #388E3C;   /* Verde oscuro - < $1000/m² (borde) */
+    --price-medium:    #FFC107;   /* Amarillo - $1000-$2000/m² */
+    --price-medium-border: #FFA000; /* Amarillo oscuro - borde */
+    --price-high:      #FF9800;   /* Naranja - $2000-$3000/m² */
+    --price-very-high: #F44336;   /* Rojo - > $3000/m² */
+    --price-very-high-border: #D32F2F; /* Rojo oscuro - borde */
+    --price-no-data:   #9E9E9E;   /* Gris - sin datos */
+
+    /* === Colores por defecto de zonas === */
+    --zone-fill:   #2196F3;       /* Azul - relleno zona */
+    --zone-border: #1976D2;       /* Azul oscuro - borde zona */
+}
+
+/* ============================================================
+   PALETA 5: GRÁFICOS DE EVENTOS (Chart.js)
+   Usado en: eventos/views.py
+   ============================================================ */
+:root {
+    /* === Colores predefinidos para gráficos Chart.js === */
+    --chart-coral:      #FF6384;   /* Rojo coral */
+    --chart-blue:       #36A2EB;   /* Azul brillante */
+    --chart-yellow:     #FFCE56;   /* Amarillo */
+    --chart-turquoise:  #4BC0C0;   /* Turquesa */
+    --chart-purple:     #9966FF;   /* Púrpura */
+    --chart-orange:     #FF9F40;   /* Naranja */
+    --chart-lime:       #8AC926;   /* Verde lima */
+    --chart-darkblue:   #1982C4;   /* Azul oscuro */
+    --chart-violet:     #6A4C93;   /* Violeta */
+    --chart-red:        #FF595E;   /* Rojo vibrante */
+    --chart-brightyellow: #FFCA3A; /* Amarillo brillante */
+    --chart-teal:       #118AB2;   /* Azul verdoso */
+    --chart-pink:       #EF476F;   /* Rosa */
+    --chart-emerald:    #06D6A0;   /* Verde esmeralda */
+    --chart-deeppurple: #7209B7;   /* Púrpura intenso */
+    --chart-hotpink:    #F15BB5;   /* Rosa fuerte */
+}
+
+/* ============================================================
+   USO RÁPIDO - CSS Variables esenciales para nuevos templates
+   ============================================================
+   Copia este bloque en tu nuevo template y ajusta según necesites:
+
+   :root {
+       --primary-color: #10b981;
+       --secondary-color: #059669;
+       --accent-color: #34d399;
+       --light-teal: #a7f3d0;
+       --very-light-teal: #d1fae5;
+       --sidebar-bg: #059669;
+       --header-bg: #ffffff;
+       --content-bg: rgba(16, 185, 129, 0.08);
+       --card-bg: #ffffff;
+       --text-dark: #065f46;
+       --text-light: #ffffff;
+   }
+
+   Para tema oscuro (ACM), usa:
+
+   :root {
+       --bg-primary: #0d1117;
+       --bg-secondary: #161b22;
+       --bg-tertiary: #21262d;
+       --border-color: #30363d;
+       --text-primary: #f0f6fc;
+       --text-secondary: #8b949e;
+       --accent-blue: #58a6ff;
+       --accent-green: #238636;
+       --accent-purple: #8957e5;
+       --accent-orange: #f78166;
+   }
+   ============================================================ */

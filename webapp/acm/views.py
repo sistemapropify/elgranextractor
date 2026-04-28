@@ -44,17 +44,21 @@ def acm_dashboard(request):
     except Exception:
         pass
     
-    # Historial de ejemplo (mientras no tengamos modelo de historial ACM)
-    # En el futuro, esto vendrá de un modelo ACMHistory
+    # Obtener historial real de ACMs del usuario actual
+    current_user = getattr(request, 'current_user', None)
     historial = []
+    total_analisis = 0
+    if current_user:
+        historial = ACMLink.objects.filter(user=current_user)[:5]
+        total_analisis = ACMLink.objects.filter(user=current_user).count()
     
     context = {
-        'total_analisis': 0,
+        'total_analisis': total_analisis,
         'total_comparables': total_comparables + total_propifai,
         'zonas_cubiertas': len(zonas),
-        'ultimo_analisis': '--',
+        'ultimo_analisis': historial[0].created_at.strftime('%d/%m/%Y') if historial else '--',
         'historial': historial,
-        'historial_count': len(historial),
+        'historial_count': total_analisis,
     }
     return render(request, 'acm/acm_dashboard.html', context)
 
@@ -98,16 +102,19 @@ def acm_view(request):
     # (establecido por AuthenticationMiddleware)
     user_id = None
     user_phone = None
+    historial_count = 0
     current_user = getattr(request, 'current_user', None)
     if current_user:
         user_id = str(current_user.id)
         user_phone = current_user.phone
+        historial_count = ACMLink.objects.filter(user=current_user).count()
     
     context = {
         'tipos_propiedad': tipos_comunes,
         'google_maps_api_key': 'AIzaSyBrL1QF7vTl9zF8FmCUumfRpFJcaYokO7Q',  # Reutilizar la misma key del proyecto
         'user_id': user_id,
         'user_phone': user_phone,
+        'historial_count': historial_count,
     }
     return render(request, 'acm/acm_analisis.html', context)
 
@@ -408,7 +415,7 @@ def generar_enlace_acm(request):
     """
     Genera un enlace único con UUID para compartir el resultado ACM.
     Recibe los mismos datos del análisis y crea un registro ACMLink.
-    Retorna: {status, uuid, enlace_publico, whatsapp_url}
+    Retorna: {status, uuid, codigo, enlace_publico, whatsapp_url}
     """
     try:
         data = json.loads(request.body)
@@ -440,9 +447,12 @@ def generar_enlace_acm(request):
             if field not in data:
                 return JsonResponse({'status': 'error', 'message': f'Campo requerido: {field}'}, status=400)
         
-        # Crear el registro ACMLink
+        # Crear el registro ACMLink con código único y origen 'compartir'
+        from .models import generar_codigo_acm
         acm_link = ACMLink.objects.create(
             user=user,
+            codigo=generar_codigo_acm(),
+            origen='compartir',
             tipo_propiedad=data['tipo_propiedad'],
             area_m2=data['area_m2'],
             es_terreno=data.get('es_terreno', False),
@@ -489,10 +499,6 @@ def generar_enlace_acm(request):
         mensaje_codificado = quote(mensaje_completo, safe='/:?=&')
         
         # URL de WhatsApp
-        # Usamos api.whatsapp.com/send en lugar de wa.me porque:
-        # - En móvil, detecta mejor si la app está instalada y redirige a ella
-        # - En desktop, abre WhatsApp Web
-        # - wa.me a veces abre la página de descarga en lugar de la app
         if telefono_limpio:
             whatsapp_url = f"https://api.whatsapp.com/send?phone={telefono_limpio}&text={mensaje_codificado}"
         else:
@@ -501,6 +507,7 @@ def generar_enlace_acm(request):
         return JsonResponse({
             'status': 'ok',
             'uuid': str(acm_link.id),
+            'codigo': acm_link.codigo,
             'short_id': acm_link.short_id,
             'enlace_publico': enlace_publico,
             'enlace_utm': enlace_utm,
@@ -512,6 +519,107 @@ def generar_enlace_acm(request):
         return JsonResponse({'status': 'error', 'message': 'JSON inválido'}, status=400)
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': f'Error interno: {str(e)}'}, status=500)
+
+
+@require_POST
+@csrf_exempt
+def guardar_acm(request):
+    """
+    Guarda un análisis ACM en el historial del usuario (desde "Generar PDF").
+    Es idéntico a generar_enlace_acm pero:
+    - origen = 'pdf' (no 'compartir')
+    - No genera URL de WhatsApp
+    - Retorna {status, uuid, codigo, enlace_publico}
+    """
+    try:
+        data = json.loads(request.body)
+        
+        # Obtener usuario
+        user = None
+        user_id = data.get('user_id')
+        if user_id:
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return JsonResponse({'status': 'error', 'message': 'Usuario no encontrado'}, status=404)
+        else:
+            current_user = getattr(request, 'current_user', None)
+            if current_user:
+                user = current_user
+            else:
+                return JsonResponse({'status': 'error', 'message': 'Usuario no autenticado'}, status=401)
+        
+        # Validar datos requeridos
+        required_fields = ['tipo_propiedad', 'area_m2', 'precio_min_m2', 'precio_max_m2',
+                          'precio_promedio_m2', 'precio_promedio_ponderado_m2',
+                          'valor_comercial', 'precio_venta_sugerido', 'valor_realizacion',
+                          'num_comparables', 'propiedades']
+        
+        for field in required_fields:
+            if field not in data:
+                return JsonResponse({'status': 'error', 'message': f'Campo requerido: {field}'}, status=400)
+        
+        # Crear el registro ACMLink con código único y origen 'pdf'
+        from .models import generar_codigo_acm
+        acm_link = ACMLink.objects.create(
+            user=user,
+            codigo=generar_codigo_acm(),
+            origen='pdf',
+            tipo_propiedad=data['tipo_propiedad'],
+            area_m2=data['area_m2'],
+            es_terreno=data.get('es_terreno', False),
+            precio_min_m2=data['precio_min_m2'],
+            precio_max_m2=data['precio_max_m2'],
+            precio_promedio_m2=data['precio_promedio_m2'],
+            precio_promedio_ponderado_m2=data['precio_promedio_ponderado_m2'],
+            valor_comercial=data['valor_comercial'],
+            precio_venta_sugerido=data['precio_venta_sugerido'],
+            valor_realizacion=data['valor_realizacion'],
+            num_comparables=data['num_comparables'],
+            propiedades_json=data['propiedades'],
+        )
+        
+        # Construir enlace público (apunta directamente al PDF)
+        base_url = getattr(settings, 'BASE_URL', request.build_absolute_uri('/')[:-1])
+        enlace_publico = f"{base_url}/acm/ver-pdf/{acm_link.id}/"
+        
+        return JsonResponse({
+            'status': 'ok',
+            'uuid': str(acm_link.id),
+            'codigo': acm_link.codigo,
+            'short_id': acm_link.short_id,
+            'enlace_publico': enlace_publico,
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'JSON inválido'}, status=400)
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': f'Error interno: {str(e)}'}, status=500)
+
+
+def historial_acm(request):
+    """
+    Vista del historial de ACMs guardados por el usuario.
+    Muestra una tabla con todos los análisis ACM que el usuario ha guardado.
+    """
+    current_user = getattr(request, 'current_user', None)
+    if not current_user:
+        return render(request, 'acm/acm_historial.html', {
+            'acms': [],
+            'historial_count': 0,
+            'error': 'Usuario no autenticado'
+        })
+    
+    acms = ACMLink.objects.filter(user=current_user)
+    historial_count = acms.count()
+    
+    context = {
+        'acms': acms,
+        'historial_count': historial_count,
+        'user_id': str(current_user.id),
+        'user_phone': current_user.phone or '',
+    }
+    return render(request, 'acm/acm_historial.html', context)
 
 
 def ver_pdf_acm(request, uuid):

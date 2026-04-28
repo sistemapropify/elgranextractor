@@ -322,7 +322,8 @@
         <div class="logo-container">
             {% load static %}
             <a href="/" class="d-flex align-items-center text-decoration-none">
-                <img src="{% static 'img/logo.png' %}" alt="Propifai" height="32" class="me-2">
+                <img src="{% static 'img/logo.png' %}" alt="Propifai" height="32" class="me-2"
+                     onerror="this.onerror=null; this.style.display='none'; this.parentElement.innerHTML += '<div class=\'logo-placeholder me-2\' style=\'width:32px;height:32px;font-size:0.9rem;\'>P</div>'">
             </a>
             {% block header_title %}
             {% endblock %}
@@ -432,27 +433,9 @@
                 </a>
             </li>
             <li>
-                <a href="/cuadrantizacion/mapa/" class="{% if '/cuadrantizacion/' in request.path %}active{% endif %}">
-                    <i class="bi bi-map"></i>
-                    <span>Cuadrantización</span>
-                </a>
-            </li>
-            <li>
                 <a href="/acm/analisis/" class="{% if '/acm/' in request.path %}active{% endif %}">
                     <i class="bi bi-graph-up"></i>
                     <span>Análisis Comparativo (ACM)</span>
-                </a>
-            </li>
-            <li>
-                <a href="/market-analysis/dashboard/" class="{% if '/market-analysis/dashboard/' in request.path %}active{% endif %}">
-                    <i class="bi bi-speedometer"></i>
-                    <span>Dashboard Mercado</span>
-                </a>
-            </li>
-            <li>
-                <a href="/market-analysis/heatmap/" class="{% if '/market-analysis/' in request.path and '/dashboard/' not in request.path %}active{% endif %}">
-                    <i class="bi bi-thermometer-high"></i>
-                    <span>Heatmap Mercado</span>
                 </a>
             </li>
             <li>

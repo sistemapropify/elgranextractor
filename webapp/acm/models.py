@@ -1,6 +1,18 @@
 import uuid
+import random
 from django.db import models
 from django.conf import settings
+
+
+def generar_codigo_acm():
+    """
+    Genera un código único para ACM con formato ACM####### (ej: ACM9342453).
+    Usa 7 dígitos aleatorios para evitar colisiones de concurrencia.
+    """
+    while True:
+        codigo = f"ACM{random.randint(1000000, 9999999)}"
+        if not ACMLink.objects.filter(codigo=codigo).exists():
+            return codigo
 
 
 class ACMLink(models.Model):
@@ -9,7 +21,21 @@ class ACMLink(models.Model):
     Cada vez que se genera un análisis ACM, se crea un registro con un UUID único.
     El enlace público permite ver el PDF y trackear clicks.
     """
+    ORIGEN_CHOICES = [
+        ('pdf', 'Generar PDF'),
+        ('compartir', 'Compartir WhatsApp'),
+        ('ambos', 'Ambos'),
+    ]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    codigo = models.CharField(
+        max_length=20, unique=True, null=True, blank=True,
+        verbose_name='Código ACM (ej: ACM9342453)'
+    )
+    origen = models.CharField(
+        max_length=20, choices=ORIGEN_CHOICES, default='compartir',
+        verbose_name='Origen del guardado'
+    )
     user = models.ForeignKey(
         'intelligence.User',
         on_delete=models.CASCADE,
@@ -44,10 +70,12 @@ class ACMLink(models.Model):
         indexes = [
             models.Index(fields=['user', '-created_at']),
             models.Index(fields=['created_at']),
+            models.Index(fields=['codigo']),
         ]
 
     def __str__(self):
-        return f"ACM-{str(self.id)[:8]} - {self.tipo_propiedad} - {self.user.username}"
+        codigo_str = self.codigo or str(self.id)[:8]
+        return f"{codigo_str} - {self.tipo_propiedad} - {self.user.username}"
 
     def registrar_click(self):
         """Incrementa el contador de clicks y actualiza la fecha del último click."""
@@ -60,3 +88,8 @@ class ACMLink(models.Model):
     def short_id(self):
         """Retorna los primeros 8 caracteres del UUID para identificación rápida."""
         return str(self.id)[:8]
+
+    @property
+    def codigo_display(self):
+        """Retorna el código ACM o un fallback con UUID corto."""
+        return self.codigo or f"ACM-{self.short_id}"

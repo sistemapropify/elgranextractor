@@ -500,7 +500,8 @@ def generar_pdf_acm(acm_link):
     else:
         fecha_str = datetime.now().strftime('%d/%m/%Y')
     
-    elements.append(Paragraph(f'ID: {acm_link.short_id} | {fecha_str}', style_footer))
+    codigo_display = acm_link.codigo or acm_link.short_id
+    elements.append(Paragraph(f'{codigo_display} | {fecha_str}', style_footer))
     
     # Generar PDF
     doc.build(elements)

@@ -8,5 +8,7 @@ urlpatterns = [
     path('analisis/', views.acm_view, name='acm_analisis'),
     path('buscar-comparables/', views.buscar_comparables, name='buscar_comparables'),
     path('generar-enlace/', views.generar_enlace_acm, name='generar_enlace_acm'),
+    path('guardar-acm/', views.guardar_acm, name='guardar_acm'),
+    path('historial/', views.historial_acm, name='historial_acm'),
     path('ver-pdf/<uuid:uuid>/', views.ver_pdf_acm, name='ver_pdf_acm'),
 ]
