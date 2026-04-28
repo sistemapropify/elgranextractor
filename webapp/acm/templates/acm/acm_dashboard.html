@@ -893,15 +893,16 @@
                                     <i class="fas fa-file-alt"></i>
                                 </div>
                                 <div class="history-info">
-                                    <div class="history-title">{{ item.titulo }}</div>
+                                    <div class="history-title">{{ item.codigo|default:item.short_id }} - {{ item.tipo_propiedad|capfirst }}</div>
                                     <div class="history-meta">
-                                        <span><i class="far fa-calendar-alt"></i> {{ item.fecha }}</span>
-                                        <span><i class="fas fa-tag"></i> {{ item.tipo }}</span>
-                                        <span><i class="fas fa-map-marker-alt"></i> {{ item.zona }}</span>
+                                        <span><i class="far fa-calendar-alt"></i> {{ item.created_at|date:'d/m/Y' }}</span>
+                                        <span><i class="fas fa-tag"></i> {{ item.tipo_propiedad|capfirst }}</span>
+                                        <span><i class="fas fa-ruler-combined"></i> {{ item.area_m2|floatformat:0 }} m²</span>
+                                        <span><i class="fas fa-dollar-sign"></i> US$ {{ item.valor_comercial|floatformat:0 }}</span>
                                     </div>
                                 </div>
-                                <div class="history-status {{ item.estado_clase }}">
-                                    {{ item.estado }}
+                                <div class="history-status" style="color: #10b981; font-size: 12px;">
+                                    {{ item.num_comparables }} comparables
                                 </div>
                             </div>
                             {% endfor %}
