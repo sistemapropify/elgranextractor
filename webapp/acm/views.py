@@ -489,8 +489,12 @@ def generar_enlace_acm(request):
         mensaje_codificado = quote(mensaje_completo, safe='/:?=&')
         
         # URL de WhatsApp
+        # Usamos api.whatsapp.com/send en lugar de wa.me porque:
+        # - En móvil, detecta mejor si la app está instalada y redirige a ella
+        # - En desktop, abre WhatsApp Web
+        # - wa.me a veces abre la página de descarga en lugar de la app
         if telefono_limpio:
-            whatsapp_url = f"https://wa.me/{telefono_limpio}?text={mensaje_codificado}"
+            whatsapp_url = f"https://api.whatsapp.com/send?phone={telefono_limpio}&text={mensaje_codificado}"
         else:
             whatsapp_url = ''
         
