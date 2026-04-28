@@ -1198,35 +1198,11 @@ async function compartirACM_WhatsApp() {
         if (data.status === 'ok') {
             // Abrir WhatsApp con el enlace
             if (data.whatsapp_url) {
-                // Detectar si es dispositivo móvil
-                const isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-                
-                if (isMobile) {
-                    // En móvil: intentar abrir la app nativa primero
-                    // Extraer phone y text de la URL de api.whatsapp.com
-                    const urlObj = new URL(data.whatsapp_url);
-                    const phone = urlObj.searchParams.get('phone') || '';
-                    const text = urlObj.searchParams.get('text') || '';
-                    
-                    // Intentar con esquema nativo whatsapp:// (funciona en Android e iOS)
-                    const nativeUrl = `whatsapp://send?phone=${phone}&text=${encodeURIComponent(decodeURIComponent(text))}`;
-                    
-                    // Crear un enlace temporal y hacer click para mejor compatibilidad
-                    const link = document.createElement('a');
-                    link.href = nativeUrl;
-                    link.style.display = 'none';
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    
-                    // Fallback: si después de 500ms no abrió la app, usar api.whatsapp.com
-                    setTimeout(() => {
-                        window.location.href = data.whatsapp_url;
-                    }, 500);
-                } else {
-                    // En desktop: abrir WhatsApp Web directamente
-                    window.location.href = data.whatsapp_url;
-                }
+                // Usar api.whatsapp.com/send directamente:
+                // - En móvil: redirige automáticamente a la app nativa si está instalada
+                // - En desktop: abre WhatsApp Web
+                // - NO usar intent whatsapp:// porque causa error en muchos navegadores
+                window.location.href = data.whatsapp_url;
             } else {
                 // Si no hay teléfono, copiar enlace al portapapeles
                 if (navigator.clipboard && data.enlace_utm) {
