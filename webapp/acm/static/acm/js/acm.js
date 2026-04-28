@@ -1198,11 +1198,45 @@ async function compartirACM_WhatsApp() {
         if (data.status === 'ok') {
             // Abrir WhatsApp con el enlace
             if (data.whatsapp_url) {
-                // Usar api.whatsapp.com/send directamente:
-                // - En móvil: redirige automáticamente a la app nativa si está instalada
-                // - En desktop: abre WhatsApp Web
-                // - NO usar intent whatsapp:// porque causa error en muchos navegadores
-                window.location.href = data.whatsapp_url;
+                // Detectar si es dispositivo móvil
+                const isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                const isAndroid = /Android/i.test(navigator.userAgent);
+                const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+                
+                if (isMobile) {
+                    // Extraer phone y text de la URL de api.whatsapp.com
+                    const urlObj = new URL(data.whatsapp_url);
+                    const phone = urlObj.searchParams.get('phone') || '';
+                    const textRaw = urlObj.searchParams.get('text') || '';
+                    // El texto ya viene codificado del backend, decodificarlo para re-codificarlo correctamente
+                    const textDecoded = decodeURIComponent(textRaw);
+                    const textEncoded = encodeURIComponent(textDecoded);
+                    
+                    if (isAndroid) {
+                        // Android: usar intent:// que abre la app nativa directamente
+                        // Formato: intent://send?phone=X&text=Y#Intent;scheme=whatsapp;package=com.whatsapp;end
+                        const intentUrl = `intent://send?phone=${phone}&text=${textEncoded}#Intent;scheme=whatsapp;package=com.whatsapp;end`;
+                        window.location.href = intentUrl;
+                        // Fallback: si no abre la app, usar api.whatsapp.com después de 1.5s
+                        setTimeout(() => {
+                            window.location.href = data.whatsapp_url;
+                        }, 1500);
+                    } else if (isIOS) {
+                        // iOS: usar whatsapp:// que funciona en Safari
+                        const iosUrl = `whatsapp://send?phone=${phone}&text=${textEncoded}`;
+                        window.location.href = iosUrl;
+                        // Fallback
+                        setTimeout(() => {
+                            window.location.href = data.whatsapp_url;
+                        }, 1500);
+                    } else {
+                        // Otros móviles: api.whatsapp.com
+                        window.location.href = data.whatsapp_url;
+                    }
+                } else {
+                    // Desktop: abrir WhatsApp Web directamente
+                    window.location.href = data.whatsapp_url;
+                }
             } else {
                 // Si no hay teléfono, copiar enlace al portapapeles
                 if (navigator.clipboard && data.enlace_utm) {
