@@ -59,6 +59,35 @@
             top: 0;
             overflow-y: auto;
             z-index: 100;
+            transition: width 0.3s ease, min-width 0.3s ease;
+        }
+        
+        .app-sidebar.collapsed {
+            width: 60px;
+            min-width: 60px;
+        }
+        
+        .app-sidebar.collapsed .sidebar-brand .brand-text,
+        .app-sidebar.collapsed .sidebar-brand .brand-subtext,
+        .app-sidebar.collapsed .nav-section-title,
+        .app-sidebar.collapsed .nav-item span:not(.nav-badge),
+        .app-sidebar.collapsed .nav-item .nav-badge {
+            display: none;
+        }
+        
+        .app-sidebar.collapsed .sidebar-brand {
+            justify-content: center;
+            padding: 20px 10px;
+        }
+        
+        .app-sidebar.collapsed .nav-item {
+            justify-content: center;
+            padding: 10px 0;
+        }
+        
+        .app-sidebar.collapsed .nav-item i {
+            margin: 0;
+            font-size: 18px;
         }
         
         .sidebar-brand {
@@ -612,18 +641,57 @@
             background: var(--border-color);
         }
         
+        /* ===== TOGGLE BUTTONS ===== */
+        .sidebar-toggle-desktop {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-tertiary);
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+        }
+        
+        .sidebar-toggle-desktop:hover {
+            background-color: var(--border-color);
+            color: var(--text-primary);
+        }
+        
+        .mobile-menu-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-tertiary);
+            color: var(--text-secondary);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        
         /* ===== RESPONSIVE ===== */
         @media (max-width: 768px) {
             .app-sidebar {
-                display: none;
+                position: fixed;
+                left: 0;
+                top: 0;
+                width: 85%;
+                max-width: 300px;
+                height: 100vh;
+                z-index: 1000;
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+                display: flex !important;
             }
             
             .app-sidebar.mobile-open {
-                display: flex;
-                position: fixed;
-                width: 100%;
-                height: 100vh;
-                z-index: 1000;
+                transform: translateX(0);
             }
             
             .hero-section {
@@ -656,25 +724,19 @@
             .mobile-menu-btn {
                 display: flex !important;
             }
+            
+            .sidebar-toggle-desktop {
+                display: none !important;
+            }
         }
         
         @media (min-width: 769px) {
             .mobile-menu-btn {
                 display: none !important;
             }
-        }
-        
-        .mobile-menu-btn {
-            width: 36px;
-            height: 36px;
-            border-radius: 8px;
-            border: 1px solid var(--border-color);
-            background-color: var(--bg-tertiary);
-            color: var(--text-secondary);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
+            .sidebar-toggle-desktop {
+                display: flex !important;
+            }
         }
         
         /* ===== OVERLAY ===== */
@@ -772,7 +834,11 @@
         <div class="main-content">
             <!-- Header -->
             <header class="app-header">
-                <button class="mobile-menu-btn" id="mobileMenuBtn">
+                <button class="mobile-menu-btn" id="mobileMenuBtn" type="button">
+                    <i class="fas fa-bars"></i>
+                </button>
+                
+                <button class="sidebar-toggle-desktop" id="sidebarToggleDesktop" type="button" title="Colapsar sidebar">
                     <i class="fas fa-bars"></i>
                 </button>
                 
@@ -939,18 +1005,35 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
     <script>
-        // Mobile sidebar toggle
-        const mobileMenuBtn = document.getElementById('mobileMenuBtn');
-        const sidebar = document.getElementById('appSidebar');
-        const overlay = document.getElementById('sidebarOverlay');
-        
-        function toggleSidebar() {
-            sidebar.classList.toggle('mobile-open');
-            overlay.classList.toggle('active');
-        }
-        
-        mobileMenuBtn.addEventListener('click', toggleSidebar);
-        overlay.addEventListener('click', toggleSidebar);
+        (function() {
+            'use strict';
+            
+            var mobileMenuBtn = document.getElementById('mobileMenuBtn');
+            var sidebarToggleDesktop = document.getElementById('sidebarToggleDesktop');
+            var sidebar = document.getElementById('appSidebar');
+            var overlay = document.getElementById('sidebarOverlay');
+            
+            function toggleMobileSidebar() {
+                sidebar.classList.toggle('mobile-open');
+                overlay.classList.toggle('active');
+            }
+            
+            function toggleDesktopSidebar() {
+                sidebar.classList.toggle('collapsed');
+            }
+            
+            if (mobileMenuBtn) {
+                mobileMenuBtn.addEventListener('click', toggleMobileSidebar);
+            }
+            
+            if (sidebarToggleDesktop) {
+                sidebarToggleDesktop.addEventListener('click', toggleDesktopSidebar);
+            }
+            
+            if (overlay) {
+                overlay.addEventListener('click', toggleMobileSidebar);
+            }
+        })();
         
         // Refresh button
         document.querySelector('.header-btn[title="Actualizar"]')?.addEventListener('click', function() {
