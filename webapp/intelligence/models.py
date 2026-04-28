@@ -55,6 +55,10 @@ class User(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Campos requeridos por Django para AUTH_USER_MODEL
+    USERNAME_FIELD = 'username'
+    REQUIRED_FIELDS = ['phone']
+
     class Meta:
         db_table = 'intelligence_users'
         verbose_name = 'Usuario'
@@ -85,6 +89,14 @@ class User(models.Model):
         """Verifica la contraseña contra el hash almacenado."""
         from django.contrib.auth.hashers import check_password
         return check_password(raw_password, self.password)
+
+    @property
+    def is_anonymous(self):
+        return False
+
+    @property
+    def is_authenticated(self):
+        return True
 
     def __str__(self):
         if self.first_name and self.last_name:

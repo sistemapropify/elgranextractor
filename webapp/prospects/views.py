@@ -4,7 +4,7 @@ import logging
 import re
 from datetime import datetime
 
-import httpx
+import requests
 from django.contrib import messages
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -210,7 +210,7 @@ No incluyas explicaciones, solo el JSON."""
             },
         }
 
-        response = httpx.post(
+        response = requests.post(
             self.QWEN_API_URL,
             json=payload,
             headers=headers,

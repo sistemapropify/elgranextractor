@@ -1,5 +1,5 @@
+from django.conf import settings
 from django.db import models
-from django.contrib.auth.models import User
 
 
 class CampoDinamico(models.Model):
@@ -7,7 +7,7 @@ class CampoDinamico(models.Model):
     nombre_campo_bd = models.CharField(max_length=100, unique=True)
     titulo_display = models.CharField(max_length=150)
     tipo_dato = models.CharField(max_length=50)  # VARCHAR, INTEGER, DECIMAL, BOOLEAN, DATE
-    creado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    creado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
     creado_en = models.DateTimeField(auto_now_add=True)
 
     class Meta:
