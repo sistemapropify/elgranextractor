@@ -1,11 +1,17 @@
 import json
 import math
-from django.shortcuts import render
-from django.http import JsonResponse
+import uuid
+from django.shortcuts import render, get_object_or_404
+from django.http import JsonResponse, HttpResponse, Http404
 from django.views.decorators.csrf import csrf_exempt
-from django.db.models import Q
+from django.views.decorators.http import require_POST
+from django.db.models import Q, F
+from django.utils import timezone
+from django.conf import settings
 from ingestas.models import PropiedadRaw
+from intelligence.models import User
 from .utils import haversine, calcular_precio_m2
+from .models import ACMLink
 
 
 def acm_dashboard(request):
@@ -88,9 +94,20 @@ def acm_view(request):
     if not tipos_comunes:
         tipos_comunes = list(todos_tipos)[:10]  # Tomar primeros 10 si no hay coincidencias
     
+    # Obtener el ID del usuario de intelligence desde request.current_user
+    # (establecido por AuthenticationMiddleware)
+    user_id = None
+    user_phone = None
+    current_user = getattr(request, 'current_user', None)
+    if current_user:
+        user_id = str(current_user.id)
+        user_phone = current_user.phone
+    
     context = {
         'tipos_propiedad': tipos_comunes,
         'google_maps_api_key': 'AIzaSyBrL1QF7vTl9zF8FmCUumfRpFJcaYokO7Q',  # Reutilizar la misma key del proyecto
+        'user_id': user_id,
+        'user_phone': user_phone,
     }
     return render(request, 'acm/acm_analisis.html', context)
 
@@ -383,3 +400,146 @@ def buscar_comparables(request):
         return JsonResponse({'status': 'error', 'message': f'Error en los datos: {str(e)}'}, status=400)
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': f'Error interno: {str(e)}'}, status=500)
+
+
+@require_POST
+@csrf_exempt
+def generar_enlace_acm(request):
+    """
+    Genera un enlace único con UUID para compartir el resultado ACM.
+    Recibe los mismos datos del análisis y crea un registro ACMLink.
+    Retorna: {status, uuid, enlace_publico, whatsapp_url}
+    """
+    try:
+        data = json.loads(request.body)
+        
+        # Obtener usuario desde:
+        # 1. user_id enviado desde el frontend (prioridad)
+        # 2. request.current_user (establecido por AuthenticationMiddleware)
+        user = None
+        user_id = data.get('user_id')
+        if user_id:
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return JsonResponse({'status': 'error', 'message': 'Usuario no encontrado'}, status=404)
+        else:
+            current_user = getattr(request, 'current_user', None)
+            if current_user:
+                user = current_user
+            else:
+                return JsonResponse({'status': 'error', 'message': 'Usuario no autenticado'}, status=401)
+        
+        # Validar datos requeridos
+        required_fields = ['tipo_propiedad', 'area_m2', 'precio_min_m2', 'precio_max_m2',
+                          'precio_promedio_m2', 'precio_promedio_ponderado_m2',
+                          'valor_comercial', 'precio_venta_sugerido', 'valor_realizacion',
+                          'num_comparables', 'propiedades']
+        
+        for field in required_fields:
+            if field not in data:
+                return JsonResponse({'status': 'error', 'message': f'Campo requerido: {field}'}, status=400)
+        
+        # Crear el registro ACMLink
+        acm_link = ACMLink.objects.create(
+            user=user,
+            tipo_propiedad=data['tipo_propiedad'],
+            area_m2=data['area_m2'],
+            es_terreno=data.get('es_terreno', False),
+            precio_min_m2=data['precio_min_m2'],
+            precio_max_m2=data['precio_max_m2'],
+            precio_promedio_m2=data['precio_promedio_m2'],
+            precio_promedio_ponderado_m2=data['precio_promedio_ponderado_m2'],
+            valor_comercial=data['valor_comercial'],
+            precio_venta_sugerido=data['precio_venta_sugerido'],
+            valor_realizacion=data['valor_realizacion'],
+            num_comparables=data['num_comparables'],
+            propiedades_json=data['propiedades'],
+        )
+        
+        # Construir enlace público (apunta directamente al PDF)
+        base_url = getattr(settings, 'BASE_URL', request.build_absolute_uri('/')[:-1])
+        enlace_publico = f"{base_url}/acm/ver-pdf/{acm_link.id}/"
+        
+        # Construir enlace UTM
+        utm_params = "utm_source=whatsapp&utm_medium=social&utm_campaign=acm_compartir"
+        enlace_utm = f"{enlace_publico}?{utm_params}"
+        
+        # Obtener teléfono del usuario para WhatsApp
+        telefono = user.phone if user.phone else ''
+        # Limpiar formato: eliminar + y espacios
+        telefono_limpio = telefono.replace('+', '').replace(' ', '').replace('-', '') if telefono else ''
+        
+        # Mensaje para WhatsApp
+        from urllib.parse import quote
+        tipo_label = data['tipo_propiedad'].capitalize()
+        area_label = f"{data['area_m2']} m²"
+        valor_comercial_str = f"US$ {float(data['valor_comercial']):,.2f}"
+        
+        # Construir el mensaje: la URL va PRIMERO (en línea separada) para
+        # que WhatsApp la detecte como clickeable sin ambigüedad,
+        # luego el texto descriptivo debajo.
+        mensaje_completo = (
+            f"{enlace_publico}\n\n"
+            f"📊 ACM - Análisis Comparativo de Mercado\n"
+            f"🏠 {tipo_label} | {area_label}\n"
+            f"💰 Valor Comercial: {valor_comercial_str}"
+        )
+        # Codificar todo el mensaje preservando caracteres de URL
+        mensaje_codificado = quote(mensaje_completo, safe='/:?=&')
+        
+        # URL de WhatsApp
+        if telefono_limpio:
+            whatsapp_url = f"https://wa.me/{telefono_limpio}?text={mensaje_codificado}"
+        else:
+            whatsapp_url = ''
+        
+        return JsonResponse({
+            'status': 'ok',
+            'uuid': str(acm_link.id),
+            'short_id': acm_link.short_id,
+            'enlace_publico': enlace_publico,
+            'enlace_utm': enlace_utm,
+            'whatsapp_url': whatsapp_url,
+            'telefono': telefono,
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'JSON inválido'}, status=400)
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': f'Error interno: {str(e)}'}, status=500)
+
+
+def ver_pdf_acm(request, uuid):
+    """
+    Vista pública que genera y sirve el PDF del análisis ACM directamente.
+    Registra el click y retorna el PDF como descarga.
+    Si se accede con parámetros UTM, también los registra.
+    """
+    acm_link = get_object_or_404(ACMLink, id=uuid)
+    
+    # Registrar el click
+    ACMLink.objects.filter(id=uuid).update(
+        click_count=F('click_count') + 1,
+        last_click_at=timezone.now()
+    )
+    
+    # Obtener parámetros UTM si existen
+    utm_source = request.GET.get('utm_source', '')
+    utm_medium = request.GET.get('utm_medium', '')
+    utm_campaign = request.GET.get('utm_campaign', '')
+    
+    # Generar PDF del lado servidor con ReportLab
+    from .pdf_generator import generar_pdf_acm
+    pdf_buffer = generar_pdf_acm(acm_link)
+    
+    # Leer el contenido del PDF
+    pdf_content = pdf_buffer.read()
+    
+    # Crear respuesta HTTP con el PDF
+    nombre_archivo = f"ACM_Propifai_{acm_link.short_id}.pdf"
+    response = HttpResponse(pdf_content, content_type='application/pdf')
+    response['Content-Disposition'] = f'inline; filename="{nombre_archivo}"'
+    response['Content-Length'] = len(pdf_content)
+    
+    return response

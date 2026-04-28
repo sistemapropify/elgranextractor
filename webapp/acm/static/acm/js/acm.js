@@ -610,6 +610,26 @@ function actualizarContadores() {
     if (btnResumenACMDesktop) {
         btnResumenACMDesktop.disabled = propiedadesSeleccionadas.size === 0;
     }
+    // Habilitar/deshabilitar botón PDF (desktop/tablet)
+    const btnPDF = document.getElementById('btnPDF_ACM');
+    if (btnPDF) {
+        btnPDF.disabled = propiedadesSeleccionadas.size === 0;
+    }
+    // Habilitar/deshabilitar botón PDF (modal móvil)
+    const btnPDFModal = document.getElementById('btnPDF_ACM_modal');
+    if (btnPDFModal) {
+        btnPDFModal.disabled = propiedadesSeleccionadas.size === 0;
+    }
+    // Habilitar/deshabilitar botón Compartir (desktop/tablet)
+    const btnCompartir = document.getElementById('btnCompartirACM');
+    if (btnCompartir) {
+        btnCompartir.disabled = propiedadesSeleccionadas.size === 0;
+    }
+    // Habilitar/deshabilitar botón Compartir (modal móvil)
+    const btnCompartirModal = document.getElementById('btnCompartirACM_modal');
+    if (btnCompartirModal) {
+        btnCompartirModal.disabled = propiedadesSeleccionadas.size === 0;
+    }
 }
 
 // Actualizar números secuenciales en marcadores y tarjetas
@@ -1071,6 +1091,363 @@ function inicializarBuscadorDirecciones() {
                 geocodeAddress(searchInput.value);
             }
         }
+    });
+}
+
+// ============================================================
+// COMPARTIR ANÁLISIS ACM POR WHATSAPP CON ENLACE UTM
+// ============================================================
+
+/**
+ * Genera un enlace único con UUID, lo guarda en BD y abre WhatsApp
+ * con el enlace UTM para trackear clicks.
+ */
+async function compartirACM_WhatsApp() {
+    const propiedades = Array.from(propiedadesSeleccionadas.values());
+    if (propiedades.length === 0) {
+        mostrarToast('warning', 'Selecciona al menos una propiedad comparable para compartir.');
+        return;
+    }
+
+    // Mostrar indicador de carga
+    const btns = [
+        document.getElementById('btnCompartirACM'),
+        document.getElementById('btnCompartirACM_modal')
+    ].filter(Boolean);
+    const estadosOriginales = btns.map(btn => ({ html: btn.innerHTML, disabled: btn.disabled }));
+    btns.forEach(btn => {
+        btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Generando...';
+        btn.disabled = true;
+    });
+
+    try {
+        // Recalcular estadísticas (misma lógica que actualizarResumenACM)
+        const preciosM2 = propiedades
+            .map(p => p.precio_m2_final || p.precio_m2)
+            .filter(p => p && p > 0);
+
+        const min = Math.min(...preciosM2);
+        const max = Math.max(...preciosM2);
+        const promedio = preciosM2.reduce((a, b) => a + b, 0) / preciosM2.length;
+
+        let sumaPonderada = 0;
+        let sumaPesos = 0;
+        propiedades.forEach(p => {
+            const precio = p.precio_m2_final || p.precio_m2;
+            const distancia = p.distancia_metros || 1;
+            if (precio && precio > 0) {
+                const peso = 1 / (distancia + 1);
+                sumaPonderada += precio * peso;
+                sumaPesos += peso;
+            }
+        });
+        const promedioPonderado = sumaPesos > 0 ? sumaPonderada / sumaPesos : promedio;
+
+        const tipoPropiedad = document.getElementById('tipoPropiedad').value.toLowerCase();
+        const esTerreno = tipoPropiedad === 'terreno';
+        const metrosConstruccion = parseFloat(document.getElementById('metrosConstruccion').value) || 0;
+        const metrosTerreno = parseFloat(document.getElementById('metrosTerreno').value) || 0;
+        const metros = esTerreno ? metrosTerreno : (metrosConstruccion || metrosTerreno);
+
+        const estimacionPromedio = metros * promedioPonderado;
+        const valorComercial = estimacionPromedio;
+        const precioVentaSugerido = valorComercial * 0.9499;
+        const valorRealizacionInmediata = valorComercial * 0.90;
+
+        // Preparar datos para enviar al backend
+        const propiedadesData = propiedades.map(p => ({
+            id: p.id,
+            tipo: p.tipo,
+            distrito: p.distrito,
+            precio: p.precio,
+            precio_m2: p.precio_m2_final || p.precio_m2,
+            distancia_metros: p.distancia_metros,
+            fuente: p.es_propify || p.fuente === 'propifai' ? 'Propifai' : 'Externo',
+            es_propify: p.es_propify || false
+        }));
+
+        const payload = {
+            tipo_propiedad: tipoPropiedad,
+            area_m2: metros,
+            es_terreno: esTerreno,
+            precio_min_m2: min,
+            precio_max_m2: max,
+            precio_promedio_m2: promedio,
+            precio_promedio_ponderado_m2: promedioPonderado,
+            valor_comercial: valorComercial,
+            precio_venta_sugerido: precioVentaSugerido,
+            valor_realizacion: valorRealizacionInmediata,
+            num_comparables: propiedades.length,
+            propiedades: propiedadesData,
+            // Enviar el ID del usuario de intelligence para asociar el enlace
+            user_id: (typeof ACM_USER_ID !== 'undefined' && ACM_USER_ID !== null) ? ACM_USER_ID : undefined
+        };
+
+        // Enviar al backend para crear el enlace único
+        const response = await fetch('/acm/generar-enlace/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken(),
+            },
+            body: JSON.stringify(payload),
+        });
+
+        const data = await response.json();
+
+        if (data.status === 'ok') {
+            // Abrir WhatsApp con el enlace UTM
+            // Usar window.location.href en lugar de window.open para evitar bloqueo de popups
+            if (data.whatsapp_url) {
+                window.location.href = data.whatsapp_url;
+            } else {
+                // Si no hay teléfono, copiar enlace al portapapeles
+                if (navigator.clipboard && data.enlace_utm) {
+                    await navigator.clipboard.writeText(data.enlace_utm);
+                    mostrarToast('success', 'Enlace copiado al portapapeles (sin teléfono configurado).');
+                } else {
+                    mostrarToast('warning', 'No se pudo abrir WhatsApp. Verifica tu número de teléfono en tu perfil.');
+                }
+            }
+        } else {
+            throw new Error(data.message || 'Error al generar el enlace');
+        }
+    } catch (error) {
+        console.error('Error compartiendo ACM:', error);
+        mostrarToast('danger', 'Error: ' + error.message);
+    } finally {
+        // Restaurar botones
+        btns.forEach((btn, i) => {
+            btn.innerHTML = estadosOriginales[i].html;
+            btn.disabled = estadosOriginales[i].disabled;
+        });
+    }
+}
+
+// ============================================================
+// GENERACIÓN DE PDF DEL ANÁLISIS ACM
+// ============================================================
+
+/**
+ * Genera un PDF con el resumen del análisis ACM usando html2pdf.js
+ * Incluye: encabezado Propifai, 3 tarjetas de valoración, tabla de propiedades comparables
+ */
+function generarPDF_ACM() {
+    const propiedades = Array.from(propiedadesSeleccionadas.values());
+    if (propiedades.length === 0) {
+        mostrarToast('warning', 'Selecciona al menos una propiedad comparable para generar el PDF.');
+        return;
+    }
+
+    // Mostrar indicador de carga
+    const btnPDF = document.getElementById('btnPDF_ACM');
+    const originalHTML = btnPDF ? btnPDF.innerHTML : '';
+    if (btnPDF) {
+        btnPDF.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Generando...';
+        btnPDF.disabled = true;
+    }
+
+    // --- Recalcular estadísticas (misma lógica que actualizarResumenACM) ---
+    const preciosM2 = propiedades
+        .map(p => p.precio_m2_final || p.precio_m2)
+        .filter(p => p && p > 0);
+
+    const min = Math.min(...preciosM2);
+    const max = Math.max(...preciosM2);
+    const promedio = preciosM2.reduce((a, b) => a + b, 0) / preciosM2.length;
+
+    let sumaPonderada = 0;
+    let sumaPesos = 0;
+    propiedades.forEach(p => {
+        const precio = p.precio_m2_final || p.precio_m2;
+        const distancia = p.distancia_metros || 1;
+        if (precio && precio > 0) {
+            const peso = 1 / (distancia + 1);
+            sumaPonderada += precio * peso;
+            sumaPesos += peso;
+        }
+    });
+    const promedioPonderado = sumaPesos > 0 ? sumaPonderada / sumaPesos : promedio;
+
+    const tipoPropiedad = document.getElementById('tipoPropiedad').value.toLowerCase();
+    const esTerreno = tipoPropiedad === 'terreno';
+    const metrosConstruccion = parseFloat(document.getElementById('metrosConstruccion').value) || 0;
+    const metrosTerreno = parseFloat(document.getElementById('metrosTerreno').value) || 0;
+    const metros = esTerreno ? metrosTerreno : (metrosConstruccion || metrosTerreno);
+
+    const estimacionMin = metros * min;
+    const estimacionMax = metros * max;
+    const estimacionPromedio = metros * promedioPonderado;
+    const valorComercial = estimacionPromedio;
+    const precioVentaSugerido = valorComercial * 0.9499;
+    const valorRealizacionInmediata = valorComercial * 0.90;
+
+    function formatearMoneda(valor) {
+        return 'US$ ' + valor.toLocaleString('es-PE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+
+    function formatearPrecioLocal(precio) {
+        if (!precio) return 'US$ 0.00';
+        return 'US$ ' + parseFloat(precio).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    // --- Construir HTML del PDF ---
+    const fechaActual = new Date().toLocaleDateString('es-PE', {
+        year: 'numeric', month: 'long', day: 'numeric'
+    });
+
+    // Filas de propiedades para la tabla
+    let filasPropiedades = '';
+    propiedades.forEach((p, i) => {
+        const precioM2 = p.precio_m2_final || p.precio_m2;
+        const distancia = p.distancia_metros ? (p.distancia_metros.toFixed(0) + ' m') : '—';
+        const fuente = p.es_propify || p.fuente === 'propifai' ? 'Propifai' : 'Externo';
+        filasPropiedades += `
+            <tr>
+                <td style="padding:6px 8px;border:1px solid #ddd;font-size:11px;text-align:center;">${i + 1}</td>
+                <td style="padding:6px 8px;border:1px solid #ddd;font-size:11px;">${p.tipo || '—'}</td>
+                <td style="padding:6px 8px;border:1px solid #ddd;font-size:11px;">${p.distrito || '—'}</td>
+                <td style="padding:6px 8px;border:1px solid #ddd;font-size:11px;text-align:right;">${formatearPrecioLocal(p.precio)}</td>
+                <td style="padding:6px 8px;border:1px solid #ddd;font-size:11px;text-align:right;">${precioM2 ? 'US$ ' + precioM2.toFixed(2) : '—'}</td>
+                <td style="padding:6px 8px;border:1px solid #ddd;font-size:11px;text-align:right;">${distancia}</td>
+                <td style="padding:6px 8px;border:1px solid #ddd;font-size:11px;text-align:center;">${fuente}</td>
+            </tr>
+        `;
+    });
+
+    const pdfContent = `
+        <div id="pdf-acm-content" style="font-family:Arial,Helvetica,sans-serif;padding:30px;color:#1a1a2e;max-width:800px;margin:0 auto;">
+            <!-- Encabezado -->
+            <div style="text-align:center;margin-bottom:25px;padding-bottom:15px;border-bottom:3px solid #10b981;">
+                <h1 style="margin:0;font-size:22px;color:#10b981;font-weight:bold;">PROPIFAI</h1>
+                <p style="margin:4px 0 0 0;font-size:13px;color:#666;">Análisis Comparativo de Mercado (ACM)</p>
+                <p style="margin:2px 0 0 0;font-size:11px;color:#999;">Generado el ${fechaActual}</p>
+            </div>
+
+            <!-- Parámetros de búsqueda -->
+            <div style="margin-bottom:20px;padding:12px 15px;background:#f0fdf4;border-radius:8px;border-left:4px solid #10b981;">
+                <h3 style="margin:0 0 8px 0;font-size:14px;color:#065f46;">Parámetros del Análisis</h3>
+                <table style="width:100%;font-size:12px;border-collapse:collapse;">
+                    <tr>
+                        <td style="padding:2px 8px;color:#555;width:50%;"><strong>Tipo:</strong> ${tipoPropiedad.charAt(0).toUpperCase() + tipoPropiedad.slice(1)}</td>
+                        <td style="padding:2px 8px;color:#555;width:50%;"><strong>Área:</strong> ${metros.toFixed(0)} m²${esTerreno ? ' (terreno)' : ' (construcción)'}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:2px 8px;color:#555;"><strong>Comparables:</strong> ${propiedades.length} propiedades</td>
+                        <td style="padding:2px 8px;color:#555;"><strong>Rango precio/m²:</strong> US$ ${min.toFixed(2)} – US$ ${max.toFixed(2)}</td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- 3 Tarjetas de Valoración -->
+            <div style="margin-bottom:20px;">
+                <h3 style="margin:0 0 10px 0;font-size:14px;color:#065f46;">Valoración Estimada</h3>
+                <table style="width:100%;border-collapse:collapse;">
+                    <tr>
+                        <td style="width:33.33%;padding:6px;">
+                            <div style="background:#f8f9fa;border-radius:8px;padding:12px;text-align:center;border:1px solid #e5e7eb;">
+                                <div style="font-size:16px;font-weight:bold;color:#2563eb;">${formatearMoneda(precioVentaSugerido)}</div>
+                                <div style="font-size:10px;color:#666;margin-top:4px;">Precio Venta Sugerido</div>
+                                <div style="font-size:9px;color:#10b981;">94.99% del comercial</div>
+                            </div>
+                        </td>
+                        <td style="width:33.33%;padding:6px;">
+                            <div style="background:#10b981;border-radius:8px;padding:14px;text-align:center;color:white;">
+                                <div style="font-size:10px;margin-bottom:4px;">ESTIMACIÓN PARA TU PROPIEDAD</div>
+                                <div style="font-size:20px;font-weight:bold;">${formatearMoneda(valorComercial)}</div>
+                                <div style="font-size:10px;opacity:0.8;">Valor Comercial (100%)</div>
+                                <div style="font-size:10px;margin-top:4px;font-weight:bold;">Precio/m²: ${formatearMoneda(promedioPonderado)}</div>
+                            </div>
+                        </td>
+                        <td style="width:33.33%;padding:6px;">
+                            <div style="background:#f8f9fa;border-radius:8px;padding:12px;text-align:center;border:1px solid #e5e7eb;">
+                                <div style="font-size:16px;font-weight:bold;color:#2563eb;">${formatearMoneda(valorRealizacionInmediata)}</div>
+                                <div style="font-size:10px;color:#666;margin-top:4px;">Valor Realización Inmediata</div>
+                                <div style="font-size:9px;color:#10b981;">90.00% del comercial</div>
+                            </div>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- Tabla de propiedades comparables -->
+            <div style="margin-bottom:15px;">
+                <h3 style="margin:0 0 8px 0;font-size:14px;color:#065f46;">Propiedades Comparables</h3>
+                <table style="width:100%;border-collapse:collapse;font-size:11px;">
+                    <thead>
+                        <tr style="background:#10b981;color:white;">
+                            <th style="padding:7px 8px;border:1px solid #10b981;text-align:center;width:30px;">#</th>
+                            <th style="padding:7px 8px;border:1px solid #10b981;text-align:left;">Tipo</th>
+                            <th style="padding:7px 8px;border:1px solid #10b981;text-align:left;">Distrito</th>
+                            <th style="padding:7px 8px;border:1px solid #10b981;text-align:right;">Precio</th>
+                            <th style="padding:7px 8px;border:1px solid #10b981;text-align:right;">US$/m²</th>
+                            <th style="padding:7px 8px;border:1px solid #10b981;text-align:right;">Distancia</th>
+                            <th style="padding:7px 8px;border:1px solid #10b981;text-align:center;">Fuente</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${filasPropiedades}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Resumen de estadísticas -->
+            <div style="margin-top:15px;padding:12px 15px;background:#f8f9fa;border-radius:8px;border:1px solid #e5e7eb;">
+                <h3 style="margin:0 0 8px 0;font-size:13px;color:#065f46;">Estadísticas de Precio por m²</h3>
+                <table style="width:100%;font-size:12px;border-collapse:collapse;">
+                    <tr>
+                        <td style="padding:3px 8px;color:#555;"><strong>Mínimo:</strong> US$ ${min.toFixed(2)}/m²</td>
+                        <td style="padding:3px 8px;color:#555;"><strong>Máximo:</strong> US$ ${max.toFixed(2)}/m²</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:3px 8px;color:#555;"><strong>Promedio simple:</strong> US$ ${promedio.toFixed(2)}/m²</td>
+                        <td style="padding:3px 8px;color:#555;"><strong>Promedio ponderado:</strong> US$ ${promedioPonderado.toFixed(2)}/m²</td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- Footer -->
+            <div style="margin-top:25px;padding-top:12px;border-top:2px solid #10b981;text-align:center;font-size:10px;color:#999;">
+                <p style="margin:0;">Propifai — Inteligencia Inmobiliaria</p>
+                <p style="margin:2px 0 0 0;">Arequipa, Perú — Este informe es una estimación basada en datos comparables del mercado.</p>
+            </div>
+        </div>
+    `;
+
+    // Crear un contenedor temporal para el PDF
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = pdfContent;
+    tempDiv.style.position = 'absolute';
+    tempDiv.style.left = '-9999px';
+    tempDiv.style.top = '0';
+    document.body.appendChild(tempDiv);
+
+    // Opciones de html2pdf
+    const opt = {
+        margin:        [0.5, 0.5, 0.5, 0.5], // superior, derecho, inferior, izquierdo (en in)
+        filename:     `ACM_${tipoPropiedad}_${new Date().toISOString().split('T')[0]}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2, useCORS: true, logging: false },
+        jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
+    };
+
+    // Generar PDF
+    html2pdf().set(opt).from(tempDiv).save().then(function() {
+        // Limpiar
+        document.body.removeChild(tempDiv);
+        if (btnPDF) {
+            btnPDF.innerHTML = originalHTML;
+            btnPDF.disabled = false;
+        }
+        mostrarToast('success', 'PDF generado correctamente.');
+    }).catch(function(err) {
+        console.error('Error generando PDF:', err);
+        document.body.removeChild(tempDiv);
+        if (btnPDF) {
+            btnPDF.innerHTML = originalHTML;
+            btnPDF.disabled = false;
+        }
+        mostrarToast('danger', 'Error al generar el PDF: ' + err.message);
     });
 }
 

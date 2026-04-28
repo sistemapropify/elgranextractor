@@ -7,7 +7,8 @@
 <nav class="app-sidebar" id="appSidebar">
     <div class="sidebar-brand">
         {% load static %}
-        <img src="{% static 'img/logo.png' %}" alt="Propifai" height="32" class="me-2">
+        <img src="{% static 'img/logo.png' %}" alt="Propifai" height="32" class="me-2"
+             onerror="this.onerror=null; this.style.display='none'; this.parentElement.innerHTML += '<div class=\'brand-icon\' style=\'width:32px;height:32px;font-size:16px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#58a6ff,#8957e5);border-radius:8px;color:white;font-weight:bold;flex-shrink:0;\'>P</div>'">
         <div>
             <div class="brand-title">Propifai ACM</div>
             <div class="brand-subtitle">Análisis Comparativo de Mercado</div>
@@ -355,7 +356,24 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'acm/js/acm.js' %}?v=9"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>
+    // ============================================================
+    // VARIABLES GLOBALES PARA COMPARTIR ACM
+    // ============================================================
+    // ID del usuario de intelligence para asociar el enlace ACM (UUID string)
+    var ACM_USER_ID = null;
+    // Teléfono del usuario logueado (formato internacional, ej: +51999999999)
+    var ACM_USER_PHONE = '';
+    {% if user_id %}
+    // user_id es un UUID string, se asigna con comillas
+    ACM_USER_ID = '{{ user_id }}';
+    {% endif %}
+    {% if user_phone %}
+    ACM_USER_PHONE = '{{ user_phone }}';
+    {% endif %}
+</script>
+<script src="{% static 'acm/js/acm.js' %}?v=11"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const sidebarToggle = document.getElementById('sidebarToggle');

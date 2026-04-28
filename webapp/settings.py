@@ -37,6 +37,10 @@ ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'granextractorservice-emehaffsf8
 # CSRF trusted origins for production (prevents 403 errors on POST requests)
 CSRF_TRUSTED_ORIGINS = os.environ.get('CSRF_TRUSTED_ORIGINS', 'https://acm.propifai.com,https://granextractorservice-emehaffsf8e2c7eg.brazilsouth-01.azurewebsites.net').split(',')
 
+# Base URL for generating absolute links (e.g., for WhatsApp sharing, PDF links)
+# In production, set this to: https://acm.propifai.com
+BASE_URL = os.environ.get('BASE_URL', 'http://127.0.0.1:8000')
+
 
 # Application definition
 

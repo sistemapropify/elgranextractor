@@ -766,7 +766,8 @@
                 
                 {% load static %}
                 <a href="/acm/" class="d-flex align-items-center text-decoration-none">
-                    <img src="{% static 'img/logo.png' %}" alt="Propifai" height="36">
+                    <img src="{% static 'img/logo.png' %}" alt="Propifai" height="36"
+                         onerror="this.onerror=null; this.style.display='none'; this.parentElement.innerHTML += '<div class=\'sidebar-brand\' style=\'width:36px;height:36px;font-size:16px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--accent-blue),var(--accent-purple));border-radius:10px;color:white;font-weight:bold;\'>P</div>'">
                 </a>
                 
                 <div class="header-actions">
