@@ -510,10 +510,11 @@
       <div class="card">
         <div class="card-title">Foto del anuncio</div>
 
-        {# Zona de imagen — clic abre cámara #}
-        <div class="photo-zone {% if mode == 'detail' and prospect.photo %}has-photo{% endif %}"
+        {# Label envuelve todo para que el clic abra la cámara en móvil #}
+        <label class="photo-zone {% if mode == 'detail' and prospect.photo %}has-photo{% endif %}"
              id="photo-zone"
-             onclick="document.getElementById('photo-input').click()">
+             for="photo-input"
+             style="cursor:pointer;">
 
           {% if mode == 'detail' and prospect.photo %}
             <img id="photo-preview" src="{{ prospect.photo.url }}" alt="Foto del anuncio">
@@ -532,16 +533,17 @@
           {% endif %}
 
           {# Botones sobre la foto #}
-          <div class="photo-actions">
-            <button type="button" class="btn-outline" onclick="event.stopPropagation(); document.getElementById('photo-input').click()">
+          <div class="photo-actions" onclick="event.stopPropagation();">
+            <span class="btn-outline" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:var(--bg-card);color:var(--text);font-size:12px;cursor:pointer;">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
               Cambiar foto
-            </button>
+            </span>
           </div>
-        </div>
+        </label>
 
-        {# Input file oculto — capture=environment fuerza la cámara trasera #}
-        <input type="file" id="photo-input" accept="image/*" capture="environment">
+        {# Input file — visible pero oculto con opacidad, NO display:none #}
+        <input type="file" id="photo-input" accept="image/*" capture="environment"
+               style="position:absolute;opacity:0;width:1px;height:1px;pointer-events:none;">
 
         {# GPS strip #}
         <div class="gps-strip" id="gps-strip">
