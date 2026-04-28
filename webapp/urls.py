@@ -17,6 +17,8 @@ Including another URLconf
 
 from django.contrib import admin
 from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
 import views
 from intelligence import views as intelligence_views
 from acm import views as acm_views
@@ -89,4 +91,11 @@ urlpatterns = [
     path('register/', intelligence_views.register_view, name='register'),
     path('login/', intelligence_views.login_view, name='login'),
     path('logout/', intelligence_views.logout_view, name='logout'),
+    
+    # Prospects - Captura de prospectos inmobiliarios
+    path('prospects/', include('prospects.urls')),
 ]
+
+# Servir archivos media en desarrollo
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

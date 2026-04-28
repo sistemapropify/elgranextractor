@@ -2,11 +2,15 @@
 Middleware de autenticación para Prometeo.
 Establece request.current_user en cada request autenticado.
 Redirige a login si no hay sesión activa (excepto en rutas públicas).
+Limpia sesiones con IDs inválidos (ej: enteros pre-UUID) para evitar
+que Django auth falle al resolver request.user.
 """
 
 import re
+import uuid
 from django.shortcuts import redirect
 from django.urls import reverse
+from django.contrib.auth import SESSION_KEY
 from .authentication import get_authenticated_user
 
 
@@ -27,14 +31,20 @@ PUBLIC_PATHS = [
 class AuthenticationMiddleware:
     """
     Middleware que:
-    1. Establece request.current_user si hay sesión activa
-    2. Redirige a login si no hay sesión (excepto rutas públicas)
+    1. Limpia sesiones con IDs inválidos (pre-UUID) para evitar errores
+    2. Establece request.current_user si hay sesión activa
+    3. Redirige a login si no hay sesión (excepto rutas públicas)
     """
 
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
+        # 0. Limpiar _auth_user_id de Django si no es un UUID válido
+        #    Esto evita que django.contrib.auth.middleware falle al
+        #    resolver request.user con IDs enteros de sesiones pre-UUID.
+        self._cleanup_invalid_session(request)
+
         # 1. Establecer current_user desde la sesión
         request.current_user = get_authenticated_user(request)
 
@@ -48,6 +58,20 @@ class AuthenticationMiddleware:
 
         response = self.get_response(request)
         return response
+
+    def _cleanup_invalid_session(self, request):
+        """
+        Si la sesión tiene _auth_user_id (de Django auth) que no es un
+        UUID válido, lo elimina para evitar ValidationError al resolver
+        request.user en templates.
+        """
+        auth_user_id = request.session.get(SESSION_KEY)
+        if auth_user_id:
+            try:
+                uuid.UUID(str(auth_user_id))
+            except (ValueError, AttributeError):
+                # ID inválido → limpiar toda la sesión
+                request.session.flush()
 
     def _is_public_path(self, path: str) -> bool:
         """Verifica si una ruta es pública (no requiere autenticación)."""

@@ -57,9 +57,19 @@ def logout_user(request) -> None:
 def get_authenticated_user(request) -> User | None:
     """
     Retorna el User autenticado desde la sesión, o None.
+    Valida que user_id sea un UUID válido antes de consultar.
+    Si el ID no es un UUID válido (ej: ID entero de sesión antigua),
+    limpia la sesión para forzar un nuevo login.
     """
     user_id = request.session.get('user_id')
     if not user_id:
+        return None
+    # Validar que user_id sea un UUID válido antes de consultar
+    try:
+        uuid.UUID(str(user_id))
+    except (ValueError, AttributeError):
+        # ID inválido (ej: "1" de sesión antigua pre-UUID) → limpiar sesión
+        request.session.flush()
         return None
     try:
         return User.objects.get(id=user_id)

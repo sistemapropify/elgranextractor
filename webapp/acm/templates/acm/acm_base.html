@@ -36,6 +36,13 @@
         <a href="/cuadrantizacion/mapa/" class="nav-item">
             <i class="fas fa-map-marked-alt"></i> Cuadrantización
         </a>
+        <div class="nav-section-label">Prospección</div>
+        <a href="/prospects/capture/" class="nav-item {% if '/prospects/capture/' in request.path %}active{% endif %}">
+            <i class="fas fa-camera"></i> Captura
+        </a>
+        <a href="/prospects/" class="nav-item {% if '/prospects/' in request.path and '/capture/' not in request.path %}active{% endif %}">
+            <i class="fas fa-list"></i> Lista de Prospectos
+        </a>
         <div class="nav-section-label">Sistema</div>
         <a href="/" class="nav-item">
             <i class="fas fa-arrow-left"></i> Volver al Inicio
@@ -104,7 +111,6 @@
     }
     .app-header .sidebar-toggle {
         color: #f0f6fc !important;
-        display: block !important;
     }
 
     /* ============================================

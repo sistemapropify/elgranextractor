@@ -74,6 +74,7 @@ INSTALLED_APPS = [
     'eventos',
     'intelligence',
     'meta_ads',  # Habilitado para desarrollo - dashboard de Meta Ads
+    'prospects',  # Captura de prospectos inmobiliarios desde el celular
 ]
 
 MIDDLEWARE = [
@@ -82,8 +83,11 @@ MIDDLEWARE = [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    # Nuestro middleware ANTES que el de Django auth para limpiar
+    # sesiones con IDs inválidos (ej: enteros pre-UUID) antes de
+    # que Django intente resolver request.user y falle.
     'intelligence.middleware.AuthenticationMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -106,6 +110,9 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'wsgi.application'
+
+# Custom user model
+AUTH_USER_MODEL = 'intelligence.User'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
@@ -186,6 +193,10 @@ STATICFILES_DIRS = [
 # WhiteNoise configuration for static files
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
+# Media files (user uploads)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
 # Security settings for production
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
@@ -237,6 +248,9 @@ AZURE_STORAGE_ACCOUNT_KEY = env('AZURE_STORAGE_ACCOUNT_KEY', default='')
 API_EXTERNA_URL = env('API_EXTERNA_URL', default='http://localhost/dashboard/api/properties/with-docs/')
 API_EXTERNA_KEY = env('API_EXTERNA_KEY', default='ItBJSnE6F7gIG5uhnPh0mtXmQ9yjE8ZgqtIjTU')
 API_EXTERNA_TIMEOUT = env.int('API_EXTERNA_TIMEOUT', default=10)
+
+# Qwen3-VL API Key for AI processing of prospect images
+QWEN_API_KEY = env('QWEN_API_KEY', default='')
 
 # Monkey patch para corregir el error 'super' object has no attribute 'dicts'
 # en Django 5.0.6 con Python 3.14.2

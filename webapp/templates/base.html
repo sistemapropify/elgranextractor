@@ -393,6 +393,27 @@
                     <span>Propiedades</span>
                 </a>
             </li>
+            <li class="has-submenu {% if '/prospects/' in request.path %}active{% endif %}">
+                <a href="#">
+                    <i class="bi bi-binoculars-fill"></i>
+                    <span>Prospección</span>
+                    <i class="bi bi-chevron-down ms-auto"></i>
+                </a>
+                <ul class="submenu">
+                    <li>
+                        <a href="/prospects/capture/" class="{% if '/prospects/capture/' in request.path %}active{% endif %}">
+                            <i class="bi bi-camera-fill"></i>
+                            <span>Captura</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/prospects/" class="{% if '/prospects/' in request.path and '/capture/' not in request.path %}active{% endif %}">
+                            <i class="bi bi-list-ul"></i>
+                            <span>Lista de Prospectos</span>
+                        </a>
+                    </li>
+                </ul>
+            </li>
             <li class="has-submenu {% if '/propifai/' in request.path %}active{% endif %}">
                 <a href="#">
                     <i class="bi bi-house-door-fill"></i>
