@@ -162,8 +162,17 @@
     justify-content: center;
     gap: 8px;
     padding: 0 12px;
+    background: linear-gradient(to top, rgba(0,0,0,0.6), transparent);
+    padding-top: 20px;
+    padding-bottom: 12px;
   }
   .has-photo .photo-actions { display: flex; }
+  
+  /* Feedback visual para label clickeable */
+  .photo-zone:active { 
+    border-color: var(--accent-blue);
+    opacity: 0.9;
+  }
 
   /* ── Botón cámara grande (para celular) ── */
   .btn-camera {
@@ -464,8 +473,15 @@
   @media (max-width: 1023px) {
     .desktop-process-notice { display: none; }
   }
-  /* ── Input file oculto ── */
-  #photo-input { display: none; }
+  /* ── Input file oculto pero funcional para móvil ── */
+  #photo-input {
+    position: absolute;
+    left: -9999px;
+    opacity: 0;
+    pointer-events: auto;
+    width: 1px;
+    height: 1px;
+  }
 
   /* ── Divider ── */
   .divider {
@@ -528,6 +544,7 @@
               </div>
               <p>Toca para tomar la foto</p>
               <small>La cámara se abrirá directamente</small>
+              <small id="camera-attempt-text" style="display:none;color:var(--accent-orange);margin-top:8px;"></small>
             </div>
             <img id="photo-preview" src="" alt="" style="display:none; width:100%; border-radius:10px;">
           {% endif %}
@@ -541,9 +558,8 @@
           </div>
         </label>
 
-        {# Input file — visible pero oculto con opacidad, NO display:none #}
-        <input type="file" id="photo-input" accept="image/*" capture="environment"
-               style="position:absolute;opacity:0;width:1px;height:1px;pointer-events:none;">
+        {# Input file — oculto pero completamente funcional para móvil #}
+        <input type="file" id="photo-input" accept="image/*" capture="environment">
 
         {# GPS strip #}
         <div class="gps-strip" id="gps-strip">
@@ -1023,5 +1039,80 @@
 
   // ── Init ─────────────────────────────────────────────────────
   initGPS();
+  
+  // ── Abrir cámara automáticamente en modo nueva captura ──────
+  let cameraAttempts = 0;
+  let useFrontCamera = false;
+  const MAX_CAMERA_ATTEMPTS = 2;
+  
+  function openCameraAutomatically() {
+    const photoInput = document.getElementById('photo-input');
+    if (!photoInput) return;
+    
+    // Alternar entre cámara trasera y frontal según intentos
+    if (cameraAttempts > 0 && !useFrontCamera) {
+      photoInput.setAttribute('capture', 'user'); // Cámara frontal
+      useFrontCamera = true;
+      showToast('Intentando cámara frontal...', 'error');
+    } else {
+      photoInput.setAttribute('capture', 'environment'); // Cámara trasera
+      useFrontCamera = false;
+    }
+    
+    photoInput.click();
+  }
+  
+  function setupCameraInput() {
+    const photoInput = document.getElementById('photo-input');
+    if (!photoInput) return;
+    
+    // Cuando se selecciona un archivo exitosamente
+    photoInput.onchange = function(e) {
+      cameraAttempts = 0;
+      useFrontCamera = false;
+      // El resto del manejo está en el event listener del change
+    };
+    
+    // Agregar listener para detectar cancelación (compatible con navegadores modernos)
+    // Nota: el evento 'cancel' no es ampliamente soportado, usaremos un enfoque alternativo
+    const photoZone = document.getElementById('photo-zone');
+    if (photoZone) {
+      // Al hacer click en la zona, reiniciar intentos
+      photoZone.addEventListener('click', function(e) {
+        // Solo permitir click si no hay foto seleccionada aún
+        if (!photoSelected) {
+          cameraAttempts++;
+          if (cameraAttempts > MAX_CAMERA_ATTEMPTS) {
+            cameraAttempts = 0;
+            const attemptText = document.getElementById('camera-attempt-text');
+            if (attemptText) {
+              attemptText.textContent = 'Sigue intentando o permite la cámara en permisos del navegador';
+              attemptText.style.display = 'block';
+            }
+            showToast('Sin permisos de cámara - verifica en Configuración', 'error');
+            return;
+          }
+          openCameraAutomatically();
+        }
+      });
+    }
+  }
+
+  if (PROSPECT_ID === null) {
+    // Esperar a que el DOM esté listo
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function() {
+        setupCameraInput();
+        setTimeout(function() {
+          openCameraAutomatically();
+        }, 400);
+      });
+    } else {
+      setupCameraInput();
+      setTimeout(function() {
+        openCameraAutomatically();
+      }, 400);
+    }
+  }
 </script>
 {% endblock %}

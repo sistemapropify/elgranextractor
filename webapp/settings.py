@@ -193,9 +193,16 @@ STATICFILES_DIRS = [
 # WhiteNoise configuration for static files
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
-# Media files (user uploads)
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+# Media files (user uploads) — using Azure Blob Storage for prospects
+DEFAULT_FILE_STORAGE = 'storages.backends.azure_storage.AzureStorage'
+
+# Azure Storage Configuration for Media Files (Prospects Photos)
+AZURE_ACCOUNT_NAME = env('AZURE_STORAGE_ACCOUNT_NAME', default='granextractormedia')
+AZURE_ACCOUNT_KEY = env('AZURE_STORAGE_ACCOUNT_KEY', default='')
+AZURE_CONTAINER = env('AZURE_PHOTOS_CONTAINER', default='fotosprospecciones')
+AZURE_CUSTOM_DOMAIN = f'{AZURE_ACCOUNT_NAME}.blob.core.windows.net'
+MEDIA_URL = f'https://{AZURE_CUSTOM_DOMAIN}/{AZURE_CONTAINER}/'
+MEDIA_ROOT = None  # Not needed when using Azure Storage
 
 # Security settings for production
 SECURE_BROWSER_XSS_FILTER = True
@@ -238,10 +245,10 @@ SCRAPING_TIMEOUT = 30  # seconds
 # Storage for raw HTML (using database for simplicity, can be changed to Azure Blob Storage later)
 RAW_HTML_STORAGE = 'blob_storage'  # 'database' or 'blob_storage'
 
-# Azure Blob Storage Configuration
+# Azure Blob Storage Configuration (for raw documents)
 AZURE_STORAGE_CONNECTION_STRING = env('AZURE_STORAGE_CONNECTION_STRING', default='')
 AZURE_STORAGE_CONTAINER_NAME = env('AZURE_STORAGE_CONTAINER_NAME', default='documentoscrudos')
-AZURE_STORAGE_ACCOUNT_NAME = env('AZURE_STORAGE_ACCOUNT_NAME', default='')
+AZURE_STORAGE_ACCOUNT_NAME = env('AZURE_STORAGE_ACCOUNT_NAME', default='granextractormedia')
 AZURE_STORAGE_ACCOUNT_KEY = env('AZURE_STORAGE_ACCOUNT_KEY', default='')
 
 # External API Configuration for Property Integration
