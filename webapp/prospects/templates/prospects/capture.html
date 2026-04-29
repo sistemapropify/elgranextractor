@@ -476,11 +476,10 @@
   /* ── Input file oculto pero funcional para móvil ── */
   #photo-input {
     position: absolute;
-    left: -9999px;
     opacity: 0;
-    pointer-events: auto;
-    width: 1px;
-    height: 1px;
+    width: 0.1px;
+    height: 0.1px;
+    z-index: -1;
   }
 
   /* ── Divider ── */
@@ -526,11 +525,10 @@
       <div class="card">
         <div class="card-title">Foto del anuncio</div>
 
-        {# Label envuelve todo para que el clic abra la cámara en móvil #}
+        {# Label envuelve todo — el input file está DENTRO del label para máxima compatibilidad móvil #}
         <label class="photo-zone {% if mode == 'detail' and prospect.photo %}has-photo{% endif %}"
              id="photo-zone"
-             for="photo-input"
-             style="cursor:pointer;">
+             style="cursor:pointer;position:relative;">
 
           {% if mode == 'detail' and prospect.photo %}
             <img id="photo-preview" src="{{ prospect.photo.url }}" alt="Foto del anuncio">
@@ -549,6 +547,9 @@
             <img id="photo-preview" src="" alt="" style="display:none; width:100%; border-radius:10px;">
           {% endif %}
 
+          {# Input file DENTRO del label — así funciona en TODOS los navegadores móviles #}
+          <input type="file" id="photo-input" accept="image/*" capture="environment">
+
           {# Botones sobre la foto #}
           <div class="photo-actions" onclick="event.stopPropagation();">
             <span class="btn-outline" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:var(--bg-card);color:var(--text);font-size:12px;cursor:pointer;">
@@ -557,9 +558,6 @@
             </span>
           </div>
         </label>
-
-        {# Input file — oculto pero completamente funcional para móvil #}
-        <input type="file" id="photo-input" accept="image/*" capture="environment">
 
         {# GPS strip #}
         <div class="gps-strip" id="gps-strip">
