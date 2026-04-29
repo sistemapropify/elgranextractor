@@ -523,7 +523,7 @@
 
         {# Zona de foto: clic abre la cámara directamente #}
         <div class="photo-zone" id="photo-zone"
-             onclick="document.getElementById('photo-input').click();"
+             onclick="openCamera()"
              style="cursor:pointer;">
 
           {% if mode == 'detail' and prospect.photo %}
@@ -551,9 +551,10 @@
           </div>
         </div>
 
-        {# Input file — siempre visible pero con opacidad 0, para que el navegador lo reconozca #}
-        <input type="file" id="photo-input" accept="image/*" capture="environment"
-               style="position:fixed;top:0;left:0;width:100%;height:100%;opacity:0;pointer-events:none;z-index:9999;">
+        <input type="file" id="photo-input"
+               accept="image/*"
+               capture="environment"
+               style="display:none;">
 
         {# GPS strip #}
         <div class="gps-strip" id="gps-strip">
@@ -880,6 +881,14 @@
     );
   }
 
+  // ── CÁMARA: abrir input file ─────────────────────────────────
+  function openCamera() {
+    const input = document.getElementById('photo-input');
+    if (!input) return;
+    input.value = '';
+    input.click();
+  }
+
   function setGPSStatus(text, ok) {
     var el = document.getElementById('gps-text');
     if (el) el.textContent = text;
@@ -1034,79 +1043,5 @@
   // ── Init ─────────────────────────────────────────────────────
   initGPS();
   
-  // ── Abrir cámara automáticamente en modo nueva captura ──────
-  let cameraAttempts = 0;
-  let useFrontCamera = false;
-  const MAX_CAMERA_ATTEMPTS = 2;
-  
-  function openCameraAutomatically() {
-    const photoInput = document.getElementById('photo-input');
-    if (!photoInput) return;
-    
-    // Alternar entre cámara trasera y frontal según intentos
-    if (cameraAttempts > 0 && !useFrontCamera) {
-      photoInput.setAttribute('capture', 'user'); // Cámara frontal
-      useFrontCamera = true;
-      showToast('Intentando cámara frontal...', 'error');
-    } else {
-      photoInput.setAttribute('capture', 'environment'); // Cámara trasera
-      useFrontCamera = false;
-    }
-    
-    photoInput.click();
-  }
-  
-  function setupCameraInput() {
-    const photoInput = document.getElementById('photo-input');
-    if (!photoInput) return;
-    
-    // Cuando se selecciona un archivo exitosamente
-    photoInput.onchange = function(e) {
-      cameraAttempts = 0;
-      useFrontCamera = false;
-      // El resto del manejo está en el event listener del change
-    };
-    
-    // Agregar listener para detectar cancelación (compatible con navegadores modernos)
-    // Nota: el evento 'cancel' no es ampliamente soportado, usaremos un enfoque alternativo
-    const photoZone = document.getElementById('photo-zone');
-    if (photoZone) {
-      // Al hacer click en la zona, reiniciar intentos
-      photoZone.addEventListener('click', function(e) {
-        // Solo permitir click si no hay foto seleccionada aún
-        if (!photoSelected) {
-          cameraAttempts++;
-          if (cameraAttempts > MAX_CAMERA_ATTEMPTS) {
-            cameraAttempts = 0;
-            const attemptText = document.getElementById('camera-attempt-text');
-            if (attemptText) {
-              attemptText.textContent = 'Sigue intentando o permite la cámara en permisos del navegador';
-              attemptText.style.display = 'block';
-            }
-            showToast('Sin permisos de cámara - verifica en Configuración', 'error');
-            return;
-          }
-          openCameraAutomatically();
-        }
-      });
-    }
-  }
-
-  if (PROSPECT_ID === null) {
-    // Esperar a que el DOM esté listo
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', function() {
-        setupCameraInput();
-        setTimeout(function() {
-          openCameraAutomatically();
-        }, 400);
-      });
-    } else {
-      setupCameraInput();
-      setTimeout(function() {
-        openCameraAutomatically();
-      }, 400);
-    }
-  }
 </script>
 {% endblock %}
