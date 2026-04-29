@@ -475,11 +475,7 @@
   }
   /* ── Input file oculto pero funcional para móvil ── */
   #photo-input {
-    position: absolute;
-    opacity: 0;
-    width: 0.1px;
-    height: 0.1px;
-    z-index: -1;
+    /* Se usa inline style position:fixed;opacity:0;pointer-events:none */
   }
 
   /* ── Divider ── */
@@ -525,13 +521,13 @@
       <div class="card">
         <div class="card-title">Foto del anuncio</div>
 
-        {# Label envuelve todo — el input file está DENTRO del label para máxima compatibilidad móvil #}
-        <label class="photo-zone {% if mode == 'detail' and prospect.photo %}has-photo{% endif %}"
-             id="photo-zone"
-             style="cursor:pointer;position:relative;">
+        {# Zona de foto: clic abre la cámara directamente #}
+        <div class="photo-zone" id="photo-zone"
+             onclick="document.getElementById('photo-input').click();"
+             style="cursor:pointer;">
 
           {% if mode == 'detail' and prospect.photo %}
-            <img id="photo-preview" src="{{ prospect.photo.url }}" alt="Foto del anuncio">
+            <img id="photo-preview" src="{{ prospect.photo.url }}" alt="Foto del anuncio" style="width:100%;border-radius:10px;">
           {% else %}
             <div class="photo-placeholder" id="photo-placeholder">
               <div class="photo-icon">
@@ -547,17 +543,17 @@
             <img id="photo-preview" src="" alt="" style="display:none; width:100%; border-radius:10px;">
           {% endif %}
 
-          {# Input file DENTRO del label — así funciona en TODOS los navegadores móviles #}
-          <input type="file" id="photo-input" accept="image/*" capture="environment">
-
-          {# Botones sobre la foto #}
-          <div class="photo-actions" onclick="event.stopPropagation();">
+          <div class="photo-actions">
             <span class="btn-outline" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:var(--bg-card);color:var(--text);font-size:12px;cursor:pointer;">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
               Cambiar foto
             </span>
           </div>
-        </label>
+        </div>
+
+        {# Input file — siempre visible pero con opacidad 0, para que el navegador lo reconozca #}
+        <input type="file" id="photo-input" accept="image/*" capture="environment"
+               style="position:fixed;top:0;left:0;width:100%;height:100%;opacity:0;pointer-events:none;z-index:9999;">
 
         {# GPS strip #}
         <div class="gps-strip" id="gps-strip">

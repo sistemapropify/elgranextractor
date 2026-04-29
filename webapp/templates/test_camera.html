@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Test Cámara</title>
+</head>
+<body>
+  <h2>Test Cámara</h2>
+  <input type="file" accept="image/*" capture="environment" id="camInput">
+  <br><br>
+  <img id="preview" style="max-width:300px;display:none;">
+  <script>
+    document.getElementById('camInput').onchange = function(e) {
+      if (e.target.files && e.target.files[0]) {
+        var img = document.getElementById('preview');
+        img.src = URL.createObjectURL(e.target.files[0]);
+        img.style.display = 'block';
+      }
+    };
+  </script>
+</body>
+</html>
