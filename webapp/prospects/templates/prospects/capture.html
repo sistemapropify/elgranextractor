@@ -828,54 +828,83 @@
 
   // ── GPS ──────────────────────────────────────────────────────
   let gpsLat = null, gpsLng = null;
+  var gpsTimeout = null;
 
   function initGPS() {
     if (!navigator.geolocation) {
       setGPSStatus('GPS no disponible', false);
       return;
     }
+    
+    // Timeout de seguridad: si GPS no responde en 5s, continuar igual
+    gpsTimeout = setTimeout(function() {
+      setGPSStatus('GPS no disponible', false);
+      checkCaptureReady();
+    }, 5000);
+    
     navigator.geolocation.getCurrentPosition(
-      pos => {
+      function(pos) {
+        clearTimeout(gpsTimeout);
         gpsLat = pos.coords.latitude.toFixed(7);
         gpsLng = pos.coords.longitude.toFixed(7);
-        document.getElementById('lat-input').value = gpsLat;
-        document.getElementById('lng-input').value = gpsLng;
-        document.getElementById('gps-dot').classList.add('active');
-        document.getElementById('gps-text').textContent = 'GPS capturado';
-        document.getElementById('gps-coords').textContent = `${gpsLat}, ${gpsLng}`;
-        document.getElementById('coords-display') && (document.getElementById('coords-display').textContent = `${gpsLat}, ${gpsLng}`);
+        var latInput = document.getElementById('lat-input');
+        var lngInput = document.getElementById('lng-input');
+        if (latInput) latInput.value = gpsLat;
+        if (lngInput) lngInput.value = gpsLng;
+        var dot = document.getElementById('gps-dot');
+        if (dot) dot.classList.add('active');
+        var text = document.getElementById('gps-text');
+        if (text) text.textContent = 'GPS capturado';
+        var coords = document.getElementById('gps-coords');
+        if (coords) coords.textContent = gpsLat + ', ' + gpsLng;
+        var display = document.getElementById('coords-display');
+        if (display) display.textContent = gpsLat + ', ' + gpsLng;
         checkCaptureReady();
       },
-      err => setGPSStatus('No se pudo obtener GPS', false),
-      { enableHighAccuracy: true, timeout: 10000 }
+      function(err) {
+        clearTimeout(gpsTimeout);
+        setGPSStatus('GPS no disponible', false);
+        checkCaptureReady();
+      },
+      { enableHighAccuracy: true, timeout: 8000 }
     );
   }
 
   function setGPSStatus(text, ok) {
-    document.getElementById('gps-text').textContent = text;
-    if (ok) document.getElementById('gps-dot').classList.add('active');
+    var el = document.getElementById('gps-text');
+    if (el) el.textContent = text;
+    if (ok) {
+      var dot = document.getElementById('gps-dot');
+      if (dot) dot.classList.add('active');
+    }
   }
 
   // ── FOTO: preview al seleccionar ──────────────────────────────
-  let photoSelected = false;
+  var photoSelected = false;
+  var photoInput = document.getElementById('photo-input');
+  
+  if (photoInput) {
+    photoInput.addEventListener('change', function(e) {
+      var file = e.target.files[0];
+      if (!file) return;
+      var preview = document.getElementById('photo-preview');
+      var placeholder = document.getElementById('photo-placeholder');
+      if (preview) {
+        preview.src = URL.createObjectURL(file);
+        preview.style.display = 'block';
+      }
+      if (placeholder) placeholder.style.display = 'none';
+      var zone = document.getElementById('photo-zone');
+      if (zone) zone.classList.add('has-photo');
+      photoSelected = true;
+      checkCaptureReady();
+    });
+  }
 
-  document.getElementById('photo-input').addEventListener('change', function(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    const preview = document.getElementById('photo-preview');
-    const placeholder = document.getElementById('photo-placeholder');
-    preview.src = URL.createObjectURL(file);
-    preview.style.display = 'block';
-    if (placeholder) placeholder.style.display = 'none';
-    document.getElementById('photo-zone').classList.add('has-photo');
-    photoSelected = true;
-    checkCaptureReady();
-  });
-
-  // ── Habilitar botón capturar cuando hay foto + GPS ────────────
+  // ── Habilitar botón capturar cuando hay foto (GPS es opcional) ──
   function checkCaptureReady() {
-    const btn = document.getElementById('btn-capture-save');
-    if (btn) btn.disabled = !(photoSelected && gpsLat);
+    var btn = document.getElementById('btn-capture-save');
+    if (btn) btn.disabled = !photoSelected;
   }
 
   // ── GUARDAR FOTO + GPS (nueva captura) ───────────────────────

@@ -45,7 +45,9 @@ class CaptureView(View):
     """
 
     def get(self, request):
-        return render(request, 'prospects/capture.html')
+        return render(request, 'prospects/capture.html', {
+            'mode': 'new',
+        })
 
     def post(self, request):
         photo = request.FILES.get('photo')
