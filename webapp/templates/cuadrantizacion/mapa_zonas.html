@@ -1247,22 +1247,28 @@ function renderExistingZones(zones) {
                 });
                 var center = bounds.getCenter();
 
-                // Crear InfoWindow con el nombre de la zona
-                var infoWindow = new google.maps.InfoWindow({
-                    content: '<div style="color:#0d1117;font-weight:600;font-size:13px;padding:4px 8px;white-space:nowrap;">' +
-                        (zone.nombre_zona || 'Zona') + '</div>',
+                // Crear marcador personalizado con solo texto (sin globo)
+                var labelMarker = new google.maps.Marker({
                     position: center,
-                    pixelOffset: new google.maps.Size(0, 0),
-                    disableAutoPan: true
+                    map: map,
+                    icon: {
+                        path: google.maps.SymbolPath.CIRCLE,
+                        scale: 0.01,  // invisible
+                        fillOpacity: 0,
+                        strokeOpacity: 0
+                    },
+                    label: {
+                        text: zone.nombre_zona || 'Zona',
+                        color: '#ffffff',
+                        fontSize: '12px',
+                        fontWeight: '600',
+                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+                    },
+                    zIndex: 1000,
+                    clickable: false
                 });
 
-                // Mostrar la etiqueta siempre (sin necesidad de click)
-                // Usamos un timeout para evitar problemas de renderizado
-                setTimeout(function() {
-                    infoWindow.open(map);
-                }, 100);
-
-                // Al hacer click en el polígono, cerrar otras etiquetas y seleccionar
+                // Al hacer click en el polígono, seleccionar
                 google.maps.event.addListener(polygon, 'click', function() {
                     selectShape(this);
                 });
