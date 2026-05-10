@@ -9,6 +9,7 @@ Módulos principales:
 - mcp_server: Exposición MCP para clientes externos
 - examples: Skills de ejemplo
 """
+from __future__ import annotations
 
 __all__ = [
     'Skill', 'SkillResult', 'SkillParameter', 'SkillRegistry',

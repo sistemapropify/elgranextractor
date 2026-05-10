@@ -41,7 +41,17 @@ def login_user(request, user: User) -> None:
     request.session.flush()  # Renovar sesión (seguridad)
     request.session['user_id'] = str(user.id)
     request.session['username'] = user.username
-    request.session['user_role'] = user.role.name if user.role else ''
+    # Usar role_id + consulta específica para evitar SELECT * que fallaría
+    # si hay columnas eliminadas por migraciones no aplicadas (ej: allowed_levels)
+    if user.role_id:
+        from .models import Role
+        try:
+            role_name = Role.objects.only('name').get(id=user.role_id).name
+        except Exception:
+            role_name = ''
+    else:
+        role_name = ''
+    request.session['user_role'] = role_name
     request.session.set_expiry(86400 * 7)  # 7 días
 
     # Actualizar last_login
