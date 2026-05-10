@@ -75,6 +75,7 @@ INSTALLED_APPS = [
     'intelligence',
     'meta_ads',  # Habilitado para desarrollo - dashboard de Meta Ads
     'prospects',  # Captura de prospectos inmobiliarios desde el celular
+    'whatsapp_extractor',  # Extracción automática de requerimientos desde WhatsApp
 ]
 
 MIDDLEWARE = [

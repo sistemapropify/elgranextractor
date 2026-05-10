@@ -1,0 +1,47 @@
+{% extends "intelligence/base/base.html" %}
+
+{% block title %}Errores - Propifai Intelligence Layer{% endblock %}
+
+{% block active_section %}errors{% endblock %}
+
+{% block page_title %}Errores del Sistema{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Errores Recientes</h3>
+    </div>
+    <div class="card-body">
+        {% if errors %}
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Skill</th>
+                        <th>Status</th>
+                        <th>Error</th>
+                        <th>Fecha</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for error in errors %}
+                    <tr>
+                        <td>{{ error.id }}</td>
+                        <td>{{ error.skill_name }}</td>
+                        <td>
+                            <span class="badge badge-danger">{{ error.status }}</span>
+                        </td>
+                        <td class="small-text">{{ error.error_message }}</td>
+                        <td>{{ error.executed_at|date:"d/m/Y H:i" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p>No hay errores registrados.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

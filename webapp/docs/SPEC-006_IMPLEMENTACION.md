@@ -5,7 +5,7 @@
 **Última actualización:** 23/Abr/2026
 
 ## Estado
-✅ **COMPLETADO** (v1.1 con correcciones post-implementación)
+✅ **COMPLETADO** (v1.4 con pipelines de skills secuenciales y paralelas)
 
 ## Historial de Cambios
 
@@ -16,6 +16,9 @@
 | 23/Abr/2026 | v1.1 | **Corrección**: Se agregaron instrucciones explícitas "NUNCA digas que no tienes información si el contexto SÍ contiene datos relevantes" para evitar que DeepSeek ignore el contexto RAG. | Roo |
 | 23/Abr/2026 | v1.1 | **Corrección**: Se implementó `generate_streaming_response()` para respuestas en tiempo real con Server-Sent Events (SSE). | Roo |
 | 23/Abr/2026 | v1.1 | **Corrección**: En `chat_web_api`, se corrigió el paso de parámetros a `generate_rag_response()` — se pasaba `full_prompt` en lugar de `message`, causando que el RAG buscara sobre el prompt completo en lugar de la consulta del usuario. | Roo |
+| 29/Abr/2026 | v1.2 | **Extensión**: Documentación de Fase 3; integración del motor de skills en chat y nuevos endpoints `/skills/`. | Roo |
+| 30/Abr/2026 | v1.3 | **Fase 4**: Implementación de skills avanzadas `acm_analisis`, `matching_oferta_demanda`, `reporte_precios_zona`, `busqueda_exacta` y descubrimiento automático de skills. | Roo |
+| 01/May/2026 | v1.4 | **Fase 5**: Implementación de pipelines de skills secuenciales y paralelas. Soporte para ejecutar múltiples skills en secuencia o paralelo con `SkillPipelineStep`, `SkillPipelineResult` y `execute_skill_pipeline()`. | Roo |
 
 ## Resumen Ejecutivo
 Implementación completa del servicio LLM con DeepSeek como proveedor de inteligencia artificial, incluyendo generación de respuestas, extracción de hechos, resumen de conversaciones y manejo robusto de errores. Este servicio integra las capacidades de IA real con los sistemas de memoria y RAG existentes.
@@ -209,7 +212,149 @@ Flujo opcional implementado:
 - Usar `entities` como filtros en búsqueda vectorial
 - Retornar resultados filtrados por ubicación/precio
 
-### 9. Logging y Monitoreo
+### 9. Fase 3: Integración del motor de skills en el chat
+
+**Objetivo:** Extender el pipeline de chat para ejecutar skills independientes usando `SkillOrchestrator` y exponer APIs de skills.
+
+**Cambios implementados:**
+- `webapp/intelligence/services/chat_processor.py` ahora soporta `skill_name` y `skill_params` en `ChatContext`.
+- `ChatProcessor.process_message()` y `ChatProcessor.process_message_stream()` ejecutan la skill cuando se solicita y transforman el resultado en respuesta de chat.
+- Se agregó renderizado de `SkillResult` a texto legible y guardado en la conversación.
+- Se creó un flujo explícito para ejecutar skills en modo no streaming y streaming.
+- `webapp/intelligence/views.py` recibió nuevos endpoints:
+  - `GET /skills/` para listar skills disponibles
+  - `GET /skills/<skill_name>/` para consultar metadata
+  - `GET /skills/metrics/` para ver métricas de ejecución
+  - `POST /skills/execute/` para ejecutar una skill directamente
+- `webapp/intelligence/urls.py` incluye rutas para estos nuevos endpoints.
+- Se mantuvo compatibilidad con el chat actual, permitiendo ejecutar skills sin romper la generación LLM tradicional.
+
+**Beneficios:**
+- Separación clara entre IA conversacional y capacidades autónomas por skill.
+- Reuso de skills desde el chat y APIs REST.
+- Base lista para futuros agentes y capacidades de automatización.
+
+### 10. Fase 4: Skills avanzadas
+
+**Objetivo:** Implementar skills de negocio avanzadas que agregan valor estratégico y permiten análisis directo sobre datos de inmuebles.
+
+**Skills agregadas:**
+- `webapp/intelligence/skills/acm_analisis.py` — Análisis financiero ACM para propiedades
+- `webapp/intelligence/skills/matching.py` — Matching entre requerimientos y propiedades
+- `webapp/intelligence/skills/reporte_precios.py` — Reportes de precios por zona y tipo de propiedad
+- `webapp/intelligence/skills/busqueda_exacta.py` — Búsqueda exacta de propiedades por filtros estructurados
+
+**Cambios implementados:**
+- `webapp/intelligence/skills/__init__.py` ahora auto-descubre el paquete `intelligence.skills` completo, incluyendo módulos de Fase 4.
+- `webapp/intelligence/tests/test_skill_integration.py` incluye verificación de carga y ejecución de las nuevas skills avanzadas.
+- Verificado con `manage.py test intelligence.tests.test_skill_integration`, resultando en `OK`.
+
+**Beneficios:**
+- Habilita análisis financiero y matching específico de mercado inmobiliario.
+- Permite consultas directas de propiedades y reportes de precios sin necesidad de prompts adicionales.
+- Refuerza la arquitectura de skills como motor reutilizable y extensible.
+
+### 11. Fase 5: Pipelines de Skills Secuenciales y Paralelas
+
+**Objetivo:** Extender el sistema de skills para ejecutar múltiples skills en secuencia o paralelo, permitiendo flujos de trabajo complejos y análisis compuestos.
+
+**Nuevos componentes implementados:**
+
+#### a) `SkillPipelineStep` (dataclass)
+Define un paso individual en un pipeline:
+```python
+@dataclass
+class SkillPipelineStep:
+    name: str
+    parameters: Dict[str, Any] = field(default_factory=dict)
+    inject_previous_result: bool = False
+    result_key: Optional[str] = None
+```
+
+#### b) `SkillPipelineResult` (dataclass)
+Resultado agregado de un pipeline completo:
+```python
+@dataclass
+class SkillPipelineResult:
+    success: bool
+    steps: List[Dict[str, Any]] = field(default_factory=list)
+    data: Dict[str, Any] = field(default_factory=dict)
+    error_message: Optional[str] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+```
+
+#### c) `execute_skill_pipeline()` en `SkillOrchestrator`
+Método principal para ejecutar pipelines:
+```python
+def execute_skill_pipeline(
+    self,
+    steps: List[SkillPipelineStep],
+    context: ExecutionContext = None,
+    mode: str = 'sequential',  # 'sequential' o 'parallel'
+    stop_on_error: bool = True,
+) -> SkillPipelineResult
+```
+
+**Modos de ejecución:**
+
+| Modo | Descripción | Características |
+|------|-------------|----------------|
+| `sequential` | Ejecuta skills una tras otra | Puede inyectar resultado anterior, detiene en error |
+| `parallel` | Ejecuta skills simultáneamente | Máximo 4 workers, continúa en errores |
+
+**Ejemplos de uso:**
+
+```python
+# Pipeline secuencial
+steps = [
+    {'name': 'suma', 'parameters': {'a': 100, 'b': 200}, 'result_key': 'ingresos'},
+    {'name': 'suma', 'parameters': {'a': 50, 'b': 30}, 'result_key': 'gastos'},
+]
+result = orchestrator.execute_skill_pipeline(steps, mode='sequential')
+
+# Pipeline paralelo
+steps_par = [
+    {'name': 'suma', 'parameters': {'a': 1, 'b': 2}, 'result_key': 'p1'},
+    {'name': 'suma', 'parameters': {'a': 3, 'b': 4}, 'result_key': 'p2'},
+]
+result_par = orchestrator.execute_skill_pipeline(steps, mode='parallel')
+```
+
+**Integración con ChatProcessor:**
+
+- `ChatContext` extendido con campos `skill_pipeline`, `skill_pipeline_mode`, `skill_pipeline_abort_on_error`
+- Nuevo método `_process_skill_pipeline_request()` para manejar pipelines en chat
+- Soporte completo para streaming con pipelines
+- Renderizado de resultados de pipeline a texto legible
+
+**Ejemplo de integración con chat:**
+```python
+ctx = ChatContext(
+    user=user,
+    message='Calcular métricas financieras',
+    conversation=conversation,
+    skill_pipeline=[
+        {'name': 'suma', 'parameters': {'a': 1000, 'b': 2000}, 'result_key': 'ventas_q1'},
+        {'name': 'suma', 'parameters': {'a': 1500, 'b': 1800}, 'result_key': 'ventas_q2'},
+    ],
+    skill_pipeline_mode='parallel',
+)
+result = ChatProcessor.process_message(ctx)
+```
+
+**Beneficios:**
+- Permite flujos de trabajo complejos con múltiples skills
+- Ejecución paralela para mejorar rendimiento
+- Composición de análisis (ej: calcular precios → generar reporte → enviar notificación)
+- Reutilización de skills en pipelines sin duplicar código
+- Compatibilidad backward completa con skills individuales
+
+**Persistencia y métricas:**
+- Cada skill individual se persiste en `SkillExecution`
+- Métricas agregadas por pipeline
+- Cache inteligente por skill (no por pipeline completo)
+
+### 12. Logging y Monitoreo
 
 **Eventos logueados:**
 
@@ -253,7 +398,18 @@ Flujo opcional implementado:
 - Errores de API se loguean apropiadamente
 - Respuestas de fallback apropiadas para el usuario
 
-### ✅ 6. Integración completa con servicios existentes
+### ✅ 7. Pipelines de skills funcionan correctamente
+- Ejecución secuencial mantiene orden y permite inyección de resultados
+- Ejecución paralela procesa múltiples skills simultáneamente (máx 4 workers)
+- Manejo robusto de errores con opción `stop_on_error`
+- Integración completa con ChatProcessor y streaming
+- Compatibilidad backward con skills individuales preservada
+
+### ✅ 8. Persistencia y métricas de pipelines
+- Cada skill individual se registra en `SkillExecution`
+- Métricas agregadas disponibles por pipeline
+- Cache funciona por skill individual
+- Dashboard muestra ejecución de pipelines correctamente
 - MemoryService usa LLMService para extracción de hechos
 - RAGService usa LLMService para clasificación de intención
 - API endpoint `/chat/` genera respuestas con DeepSeek real

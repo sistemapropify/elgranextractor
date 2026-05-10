@@ -1,17 +1,44 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import Role, User, AppConfig, Conversation, Fact, IntelligenceCollection, IntelligenceDocument, EpisodicMemory
+from .models import (
+    Role, User, AppConfig, Conversation, Fact,
+    IntelligenceCollection, IntelligenceDocument,
+    EpisodicMemory, UserIntelligenceProfile
+)
+
+# ─── Constantes para choices ────────────────────────────────────────────────
+LEVEL_CHOICES = [
+    (1, '1 - Consulta básica'),
+    (2, '2 - Consulta avanzada'),
+    (3, '3 - Análisis'),
+    (4, '4 - Edición'),
+    (5, '5 - Administración total'),
+]
+
+DOMAIN_CHOICES = [
+    ('publico', 'Público'),
+    ('legal', 'Legal'),
+    ('marketing', 'Marketing'),
+    ('escuela', 'Escuela'),
+    ('gerencia', 'Gerencia'),
+    ('ti', 'TI'),
+    ('general', 'General'),
+]
 
 
 @admin.register(Role)
 class RoleAdmin(admin.ModelAdmin):
-    list_display = ('name', 'allowed_levels_display', 'created_at', 'updated_at')
-    list_filter = ('allowed_levels',)
+    list_display = ('name', 'default_level', 'max_level', 'default_domains_display', 'created_at', 'updated_at')
+    list_filter = ('default_level', 'max_level')
     search_fields = ('name', 'description')
     readonly_fields = ('id', 'created_at', 'updated_at')
     fieldsets = (
         ('Información Básica', {
-            'fields': ('id', 'name', 'allowed_levels', 'description')
+            'fields': ('id', 'name', 'description')
+        }),
+        ('Niveles de Inteligencia', {
+            'fields': ('default_level', 'max_level', 'default_domains'),
+            'description': 'Configuración de niveles y dominios por defecto para usuarios de este rol'
         }),
         ('Capacidades', {
             'fields': ('capabilities',),
@@ -23,12 +50,13 @@ class RoleAdmin(admin.ModelAdmin):
         }),
     )
     
-    def allowed_levels_display(self, obj):
-        """Muestra los niveles permitidos de forma legible"""
-        if not obj.allowed_levels:
-            return "Sin niveles"
-        return ", ".join(str(level) for level in obj.allowed_levels)
-    allowed_levels_display.short_description = "Niveles permitidos"
+    def default_domains_display(self, obj):
+        """Muestra los dominios por defecto de forma legible"""
+        if not obj.default_domains:
+            return "Sin dominios"
+        domain_labels = dict(DOMAIN_CHOICES)
+        return ", ".join(domain_labels.get(d, d) for d in obj.default_domains)
+    default_domains_display.short_description = "Dominios por defecto"
 
 
 @admin.register(User)
@@ -121,13 +149,17 @@ class FactAdmin(admin.ModelAdmin):
 
 @admin.register(IntelligenceCollection)
 class IntelligenceCollectionAdmin(admin.ModelAdmin):
-    list_display = ('name', 'table_name', 'access_level', 'is_active', 'document_count', 'last_sync_at', 'created_at')
-    list_filter = ('access_level', 'is_active', 'created_at')
+    list_display = ('name', 'table_name', 'min_level', 'domain', 'is_public', 'is_active', 'document_count', 'last_sync_at', 'created_at')
+    list_filter = ('min_level', 'domain', 'is_public', 'is_active', 'created_at')
     search_fields = ('name', 'table_name', 'description')
     readonly_fields = ('id', 'created_at', 'updated_at', 'document_count', 'last_sync_count')
     fieldsets = (
         ('Identificación', {
-            'fields': ('id', 'name', 'table_name', 'description', 'access_level', 'is_active')
+            'fields': ('id', 'name', 'table_name', 'description', 'is_active')
+        }),
+        ('Nivel de Acceso', {
+            'fields': ('min_level', 'domain', 'is_public'),
+            'description': 'Configuración de nivel mínimo, dominio y visibilidad pública'
         }),
         ('Configuración SQL', {
             'fields': ('source_sql', 'field_definitions', 'embedding_fields', 'display_fields', 'filter_fields'),
@@ -283,3 +315,44 @@ class EpisodicMemoryAdmin(admin.ModelAdmin):
         updated = queryset.update(is_active=True)
         self.message_user(request, f"{updated} episodio(s) marcados como activos.")
     mark_as_active.short_description = "Marcar como activos"
+
+
+@admin.register(UserIntelligenceProfile)
+class UserIntelligenceProfileAdmin(admin.ModelAdmin):
+    list_display = ('user', 'level', 'allowed_domains_display', 'extra_count', 'blocked_count', 'created_at')
+    list_filter = ('level', 'created_at')
+    search_fields = ('user__phone', 'user__email')
+    readonly_fields = ('id', 'created_at', 'updated_at')
+    filter_horizontal = ('extra_collections', 'blocked_collections')
+    fieldsets = (
+        ('Identificación', {
+            'fields': ('id', 'user', 'level')
+        }),
+        ('Dominios Permitidos', {
+            'fields': ('allowed_domains',),
+            'description': 'Lista de dominios a los que el usuario tiene acceso (JSON)'
+        }),
+        ('Colecciones', {
+            'fields': ('extra_collections', 'blocked_collections'),
+            'description': 'Colecciones adicionales (extra) y bloqueadas (blocked)'
+        }),
+        ('Auditoría', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def allowed_domains_display(self, obj):
+        if not obj.allowed_domains:
+            return "Sin dominios"
+        domain_labels = dict(DOMAIN_CHOICES)
+        return ", ".join(domain_labels.get(d, d) for d in obj.allowed_domains)
+    allowed_domains_display.short_description = "Dominios"
+
+    def extra_count(self, obj):
+        return obj.extra_collections.count()
+    extra_count.short_description = "Extra"
+
+    def blocked_count(self, obj):
+        return obj.blocked_collections.count()
+    blocked_count.short_description = "Bloqueadas"

@@ -14,25 +14,33 @@ class Command(BaseCommand):
         roles_data = [
             {
                 'name': 'Usuario Básico',
-                'allowed_levels': [1],
+                'default_level': 1,
+                'max_level': 1,
+                'default_domains': ['general'],
                 'capabilities': {'memory': True, 'knowledge_base': False, 'metrics': False, 'projects': False},
                 'description': 'Rol para usuarios con acceso solo a memoria de conversación'
             },
             {
                 'name': 'Usuario Avanzado',
-                'allowed_levels': [2],
+                'default_level': 2,
+                'max_level': 2,
+                'default_domains': ['general', 'publico'],
                 'capabilities': {'memory': True, 'knowledge_base': True, 'metrics': False, 'projects': True},
                 'description': 'Rol para usuarios con acceso a memoria y conocimiento (propiedades, noticias)'
             },
             {
                 'name': 'Administrador/Gerencia',
-                'allowed_levels': [3],
+                'default_level': 3,
+                'max_level': 5,
+                'default_domains': ['general', 'publico', 'legal', 'marketing', 'gerencia'],
                 'capabilities': {'memory': True, 'knowledge_base': True, 'metrics': True, 'projects': True},
                 'description': 'Rol para administradores con acceso completo a memoria, conocimiento y métricas'
             },
             {
                 'name': 'Agente Inmobiliario',
-                'allowed_levels': [2],
+                'default_level': 2,
+                'max_level': 3,
+                'default_domains': ['general', 'publico', 'marketing'],
                 'capabilities': {'memory': True, 'knowledge_base': True, 'metrics': False, 'projects': True},
                 'description': 'Rol para agentes inmobiliarios con acceso a propiedades y memoria de clientes'
             }
@@ -46,8 +54,7 @@ class Command(BaseCommand):
             )
             if created:
                 roles_created += 1
-                levels_str = ",".join(str(l) for l in role.allowed_levels)
-                self.stdout.write(f'   [OK] Rol creado: {role.name} (Niveles {levels_str})')
+                self.stdout.write(f'   [OK] Rol creado: {role.name} (Nivel {role.default_level}, Max {role.max_level})')
             else:
                 self.stdout.write(f'   [-] Rol ya existente: {role.name}')
         

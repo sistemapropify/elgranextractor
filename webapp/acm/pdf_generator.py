@@ -5,7 +5,7 @@ Reemplaza la generación client-side con html2pdf.js.
 """
 import io
 import json
-from datetime import datetime
+from django.utils import timezone
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm, cm
@@ -498,7 +498,7 @@ def generar_pdf_acm(acm_link):
     if fecha_creacion:
         fecha_str = fecha_creacion.strftime('%d/%m/%Y')
     else:
-        fecha_str = datetime.now().strftime('%d/%m/%Y')
+        fecha_str = timezone.now().strftime('%d/%m/%Y')
     
     codigo_display = acm_link.codigo or acm_link.short_id
     elements.append(Paragraph(f'{codigo_display} | {fecha_str}', style_footer))

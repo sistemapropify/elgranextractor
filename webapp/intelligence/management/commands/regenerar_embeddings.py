@@ -95,8 +95,8 @@ class Command(BaseCommand):
                     error_count += 1
                     continue
                 
-                # Generar embedding usando RAGService (que maneja correctamente el formato bytes)
-                embedding_bytes = RAGService.generate_embedding(text_to_embed)
+                # Generar embedding usando RAGService (modo passage para documentos)
+                embedding_bytes = RAGService.generate_embedding(text_to_embed, mode='passage')
                 
                 if embedding_bytes is None:
                     self.stdout.write(self.style.WARNING(f'No se pudo generar embedding para documento {doc.id}'))

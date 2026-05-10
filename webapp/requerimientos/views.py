@@ -2,7 +2,7 @@ from django.views.generic import ListView, DetailView, RedirectView, TemplateVie
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.utils import timezone
-from datetime import datetime, timedelta
+from datetime import timedelta
 import json
 from .models import Requerimiento, FuenteChoices, CondicionChoices, TipoPropiedadChoices
 from .analytics import (
@@ -65,8 +65,16 @@ class ListaRequerimientosView(ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # Agregar opciones de filtro como listas de tuplas (value, label)
-        context['fuentes'] = FuenteChoices.choices
+        # Obtener fuentes reales desde la BD (valores distintos del campo 'fuente')
+        fuentes_reales = (
+            Requerimiento.objects.values_list('fuente', flat=True)
+            .exclude(fuente='')
+            .exclude(fuente__isnull=True)
+            .distinct()
+            .order_by('fuente')
+        )
+        # Convertir a lista de tuplas (value, label) para el template
+        context['fuentes'] = [(f, f) for f in fuentes_reales]
         context['condiciones'] = CondicionChoices.choices
         context['tipos_propiedad'] = TipoPropiedadChoices.choices
         return context
@@ -389,12 +397,12 @@ class ApiAnalisisTemporalView(TemplateView):
 
     def _devolver_datos_ejemplo(self):
         """Devuelve datos de ejemplo para demostración cuando la base de datos está vacía."""
-        from datetime import datetime, timedelta
+        from datetime import timedelta
         import random
         
         # Generar datos de ejemplo para los últimos 6 meses
         meses = []
-        fecha_actual = datetime.now().date()
+        fecha_actual = timezone.now().date()
         for i in range(6):
             mes = fecha_actual.replace(day=1) - timedelta(days=i*30)
             meses.append({

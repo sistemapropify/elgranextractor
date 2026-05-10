@@ -1,4 +1,4 @@
-{% extends 'base.html' %}
+{% extends 'intelligence/base/base.html' %}
 {% load static %}
 
 {% block title %}Confirmar Eliminación - Colección {{ collection.name }}{% endblock %}
@@ -69,7 +69,7 @@
                         </div>
                         
                         <div class="d-flex justify-content-between">
-                            <a href="{% url 'intelligence:collection_list' %}" class="btn btn-outline-secondary">
+                            <a href="{% url 'intelligence:collections_dashboard' %}" class="btn btn-outline-secondary">
                                 <i class="bi bi-arrow-left me-1"></i> Cancelar
                             </a>
                             <button type="submit" class="btn btn-danger">

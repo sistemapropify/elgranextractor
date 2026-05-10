@@ -1,0 +1,269 @@
+{% extends "intelligence/base/base.html" %}
+{% load static %}
+
+{% block title %}{{ skill.name }} — Propifai Skills{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --bg-dark: #0d1117;
+        --bg-card: #161b22;
+        --bg-input: #0d1117;
+        --border-color: #30363d;
+        --text-primary: #e6edf3;
+        --text-secondary: #8b949e;
+        --text-muted: #484f58;
+        --accent-blue: #58a6ff;
+        --accent-green: #238636;
+        --accent-green-hover: #2ea043;
+        --accent-red: #f85149;
+        --accent-orange: #d29922;
+        --accent-purple: #bc8cff;
+        --accent-cyan: #39d2c0;
+        --radius: 8px;
+        --radius-sm: 6px;
+    }
+    body { background: var(--bg-dark); color: var(--text-primary); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+    .header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+    .header h1 { font-size: 22px; font-weight: 700; margin: 0; }
+    .header-actions { margin-left: auto; display: flex; gap: 8px; }
+    .nav-links { display: flex; gap: 4px; margin-bottom: 24px; flex-wrap: wrap; }
+    .nav-link { padding: 6px 14px; border-radius: var(--radius-sm); font-size: 13px; color: var(--text-secondary); text-decoration: none; border: 1px solid var(--border-color); background: transparent; transition: all 0.15s; }
+    .nav-link:hover { color: var(--text-primary); background: rgba(255,255,255,0.05); }
+    .nav-link.active { color: var(--accent-blue); border-color: var(--accent-blue); background: rgba(88,166,255,0.1); }
+    .card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius); margin-bottom: 24px; overflow: hidden; }
+    .card-header { padding: 14px 20px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; }
+    .card-header h3 { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); }
+    .card-body { padding: 20px; }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+    .stat-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius); padding: 16px 20px; }
+    .stat-label { font-size: 12px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+    .stat-value { font-size: 24px; font-weight: 700; color: var(--text-primary); }
+    .stat-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .table th { text-align: left; padding: 10px 12px; color: var(--text-secondary); font-weight: 600; border-bottom: 1px solid var(--border-color); white-space: nowrap; }
+    .table td { padding: 10px 12px; border-bottom: 1px solid var(--border-color); color: var(--text-primary); }
+    .table tr:last-child td { border-bottom: none; }
+    .table tr:hover td { background: rgba(255,255,255,0.02); }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+    .badge-success { background: rgba(35,134,54,0.2); color: #3fb950; border: 1px solid rgba(35,134,54,0.3); }
+    .badge-danger { background: rgba(248,81,73,0.15); color: #f85149; border: 1px solid rgba(248,81,73,0.3); }
+    .badge-info { background: rgba(88,166,255,0.15); color: #58a6ff; border: 1px solid rgba(88,166,255,0.3); }
+    .badge-warning { background: rgba(210,153,34,0.15); color: #d29922; border: 1px solid rgba(210,153,34,0.3); }
+    .badge-purple { background: rgba(188,140,255,0.15); color: #bc8cff; border: 1px solid rgba(188,140,255,0.3); }
+    .badge-cyan { background: rgba(57,210,192,0.15); color: #39d2c0; border: 1px solid rgba(57,210,192,0.3); }
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500; text-decoration: none; border: 1px solid var(--border-color); background: transparent; color: var(--text-primary); cursor: pointer; transition: all 0.15s; }
+    .btn:hover { background: rgba(255,255,255,0.05); }
+    .btn-primary { background: var(--accent-green); border-color: var(--accent-green); color: #fff; }
+    .btn-primary:hover { background: var(--accent-green-hover); }
+    .btn-danger { background: transparent; border-color: var(--accent-red); color: var(--accent-red); }
+    .btn-danger:hover { background: rgba(248,81,73,0.1); }
+    .btn-sm { padding: 4px 10px; font-size: 12px; }
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+    .empty-state h3 { font-size: 18px; margin-bottom: 8px; color: var(--text-secondary); }
+    .empty-state p { font-size: 14px; }
+    .small-text { font-size: 12px; color: var(--text-secondary); }
+    .mono { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 12px; }
+    .info-table { width: 100%; border-collapse: collapse; }
+    .info-table td { padding: 10px 12px; border-bottom: 1px solid var(--border-color); font-size: 14px; }
+    .info-table td:first-child { color: var(--text-secondary); font-weight: 500; width: 140px; }
+    .info-table td:last-child { color: var(--text-primary); }
+    .info-table tr:last-child td { border-bottom: none; }
+    .section-title { font-size: 14px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color); }
+    @media (max-width: 768px) {
+        .grid-2 { grid-template-columns: 1fr; }
+        .header { flex-direction: column; align-items: flex-start; }
+        .header-actions { margin-left: 0; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <!-- Nav -->
+    <div class="nav-links">
+        <a href="{% url 'intelligence:skills_dashboard' %}" class="nav-link">← Dashboard</a>
+        <a href="{% url 'intelligence:skill_logs' %}" class="nav-link">📋 Logs</a>
+        <a href="{% url 'intelligence:skill_metrics_global' %}" class="nav-link">📊 Métricas</a>
+    </div>
+
+    <!-- Header -->
+    <div class="header">
+        <h1>⚙️ {{ skill.name }} <span class="small-text" style="font-weight:400;">v{{ skill.version|default:"1.0" }}</span></h1>
+        <div class="header-actions">
+            {% if user.role.level >= 4 %}
+            <a href="{% url 'intelligence:skill_edit' skill.name %}" class="btn btn-sm">✏️ Editar</a>
+            <a href="{% url 'intelligence:skill_clear_cache' skill.name %}" class="btn btn-sm btn-danger">🗑️ Limpiar Cache</a>
+            <a href="{% url 'intelligence:skill_toggle_active' skill.name %}" class="btn btn-sm">
+                {% if skill.is_active|default:True %}⏸️ Desactivar{% else %}▶️ Activar{% endif %}
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Info + Metrics Grid -->
+    <div class="grid-2" style="margin-bottom:24px;">
+        <!-- Info General -->
+        <div class="card">
+            <div class="card-header"><h3>📋 Información General</h3></div>
+            <div class="card-body">
+                <table class="info-table">
+                    <tr><td>Nombre</td><td style="font-weight:500;">{{ skill.name }}</td></tr>
+                    <tr><td>Descripción</td><td style="color:var(--text-secondary);">{{ skill.description|default:"—" }}</td></tr>
+                    <tr>
+                        <td>Categoría</td>
+                        <td>
+                            <span class="badge badge-info">{{ skill.category|default:"general" }}</span>
+                        </td>
+                    </tr>
+                    <tr><td>Versión</td><td>v{{ skill.version|default:"1.0" }}</td></tr>
+                    <tr>
+                        <td>Estado</td>
+                        <td>
+                            {% if skill.is_active|default:True %}
+                            <span class="badge badge-success">✓ Activa</span>
+                            {% else %}
+                            <span class="badge badge-danger">✗ Inactiva</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Nivel Requerido</td>
+                        <td><span class="badge badge-purple">Nivel {{ skill.required_level|default:"1" }}</span></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- Métricas -->
+        <div class="card">
+            <div class="card-header"><h3>📈 Métricas</h3></div>
+            <div class="card-body">
+                <div class="stats-grid" style="grid-template-columns:1fr 1fr;">
+                    <div class="stat-card" style="border-color:var(--accent-blue);">
+                        <div class="stat-label">Total Ejecuciones</div>
+                        <div class="stat-value" style="font-size:22px;">{{ total_execs }}</div>
+                    </div>
+                    <div class="stat-card" style="border-color:var(--accent-green);">
+                        <div class="stat-label">Tasa de Éxito</div>
+                        <div class="stat-value" style="font-size:22px;">{{ success_rate }}%</div>
+                    </div>
+                    <div class="stat-card" style="border-color:var(--accent-orange);">
+                        <div class="stat-label">Latencia Promedio</div>
+                        <div class="stat-value" style="font-size:22px;">{{ avg_latency }} ms</div>
+                    </div>
+                    <div class="stat-card" style="border-color:var(--accent-cyan);">
+                        <div class="stat-label">Cache Rate</div>
+                        <div class="stat-value" style="font-size:22px;">{{ cache_rate }}%</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Parámetros -->
+    {% if skill.parameters %}
+    <div class="card">
+        <div class="card-header"><h3>📥 Parámetros</h3></div>
+        <div class="card-body">
+            <div style="overflow-x:auto;">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>Tipo</th>
+                            <th>Requerido</th>
+                            <th>Descripción</th>
+                            <th>Default</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for param_name, param_info in skill.parameters.items %}
+                        <tr>
+                            <td style="font-weight:500;font-family:monospace;">{{ param_name }}</td>
+                            <td><span class="badge badge-cyan">{{ param_info.type|default:"string" }}</span></td>
+                            <td>
+                                {% if param_info.required %}
+                                <span class="badge badge-success">✓ Sí</span>
+                                {% else %}
+                                <span class="small-text">No</span>
+                                {% endif %}
+                            </td>
+                            <td class="small-text">{{ param_info.description|default:"—" }}</td>
+                            <td class="mono small-text">{{ param_info.default|default:"—" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Historial de Ejecuciones -->
+    <div class="card">
+        <div class="card-header">
+            <h3>📜 Historial de Ejecuciones</h3>
+            <span class="small-text">últimas 50</span>
+        </div>
+        <div class="card-body">
+            {% if executions %}
+            <div style="overflow-x:auto;">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Estado</th>
+                            <th>Latencia</th>
+                            <th>Cache</th>
+                            <th>Usuario</th>
+                            <th>Ejecutado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for exec in executions %}
+                        <tr>
+                            <td class="mono" style="font-size:11px;">
+                                <a href="{% url 'intelligence:skill_execution_detail' exec.id %}" style="color:var(--accent-blue);text-decoration:none;">
+                                    {{ exec.id|stringformat:"s"|truncatechars:8 }}
+                                </a>
+                            </td>
+                            <td>
+                                <span class="badge {% if exec.status == 'success' %}badge-success{% elif exec.status == 'error' %}badge-danger{% elif exec.status == 'cached' %}badge-warning{% else %}badge-info{% endif %}">
+                                    {% if exec.status == 'success' %}✓ Éxito{% elif exec.status == 'error' %}✗ Error{% elif exec.status == 'cached' %}⏳ Cache{% else %}{{ exec.status }}{% endif %}
+                                </span>
+                            </td>
+                            <td class="small-text">{{ exec.latency_ms|floatformat:0 }} ms</td>
+                            <td>
+                                {% if exec.cached %}
+                                <span class="badge badge-warning">Cache</span>
+                                {% else %}
+                                <span class="small-text">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="small-text">{{ exec.user_name|default:"Sistema" }}</td>
+                            <td class="small-text" style="white-space:nowrap;">{{ exec.executed_at|date:"d/m/Y H:i:s" }}</td>
+                        </tr>
+                        {% if exec.error_message %}
+                        <tr>
+                            <td colspan="6" style="padding:4px 12px 10px;color:var(--accent-red);font-size:12px;font-family:monospace;border-top:none;">
+                                ⚠️ {{ exec.error_message|truncatechars:200 }}
+                            </td>
+                        </tr>
+                        {% endif %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <h3>⏳ Sin ejecuciones</h3>
+                <p>Esta skill aún no ha sido ejecutada.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

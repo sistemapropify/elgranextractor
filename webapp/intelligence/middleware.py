@@ -25,6 +25,7 @@ PUBLIC_PATHS = [
     r'^/acm/',                   # ACM - Análisis Comparativo de Mercado (público)
     r'^/ingestas/propiedades/',  # Catálogo público de propiedades
     r'^/market-analysis/',       # Market analysis (heatmap, dashboard) público
+    r'^/whatsapp-extractor/',    # Extractor WhatsApp (upload, dashboard, logs)
 ]
 
 

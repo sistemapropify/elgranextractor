@@ -9,6 +9,10 @@ class FuenteChoices(models.TextChoices):
     EXITO        = 'exito_inmobiliario',  'Whatsapp Éxito Inmobiliario'
     UNIDAS       = 'inmobiliarias_unidas', 'Whatsapp Inmobiliarias Unidas'
     RED_INMOBILIARIA = 'red_inmobiliaria', 'WhatsApp Red Inmobiliaria Arequipa'
+    # Nuevos grupos WhatsApp para extracción automática
+    GRUPO_NUEVO_1 = 'grupo_whatsapp_1',  'Grupo WhatsApp Inmobiliario 1'
+    GRUPO_NUEVO_2 = 'grupo_whatsapp_2',  'Grupo WhatsApp Inmobiliario 2'
+    GRUPO_NUEVO_3 = 'grupo_whatsapp_3',  'Grupo WhatsApp Inmobiliario 3'
     OTRO         = 'otro',                'Otro'
 
 
@@ -67,12 +71,19 @@ class TernarioChoices(models.TextChoices):
 class Requerimiento(models.Model):
 
     # ── Trazabilidad / origen ─────────────────
+    extractor_log = models.ForeignKey(
+        'whatsapp_extractor.ExtractorLog',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        verbose_name='Log de extracción',
+        help_text='Log de extracción WhatsApp que originó este requerimiento',
+        related_name='requerimientos_generados',
+    )
     fuente = models.CharField(
         max_length=60,
-        choices=FuenteChoices.choices,
         default=FuenteChoices.OTRO,
         verbose_name='Grupo WhatsApp',
-        help_text='Grupo de WhatsApp de donde proviene el mensaje',
+        help_text='Grupo de WhatsApp de donde proviene el mensaje (nombre real del grupo)',
         db_index=True,
     )
     fecha = models.DateField(

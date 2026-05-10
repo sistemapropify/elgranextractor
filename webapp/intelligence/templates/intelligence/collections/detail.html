@@ -1,0 +1,895 @@
+{% load intelligence_extras %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detalle de Colección: {{ collection.name }} - Propifai Intelligence Layer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: #0d1117;
+            color: #c9d1d9;
+            line-height: 1.6;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #30363d;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .header h1 {
+            color: #58a6ff;
+            font-size: 28px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background-color: #238636;
+            color: white;
+        }
+        .btn-primary:hover { background-color: #2ea043; }
+
+        .btn-secondary {
+            background-color: #30363d;
+            color: #c9d1d9;
+        }
+        .btn-secondary:hover { background-color: #3c444d; }
+
+        .btn-danger {
+            background-color: #da3633;
+            color: white;
+        }
+        .btn-danger:hover { background-color: #f85149; }
+
+        .section {
+            background-color: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            overflow: hidden;
+        }
+
+        .section-header {
+            padding: 16px 20px;
+            background-color: #21262d;
+            border-bottom: 1px solid #30363d;
+            font-weight: 600;
+            color: #58a6ff;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-body {
+            padding: 20px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 16px;
+        }
+
+        .info-item {
+            padding: 12px;
+            background-color: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+        }
+
+        .info-item label {
+            display: block;
+            font-size: 12px;
+            color: #8b949e;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .info-item .value {
+            font-size: 14px;
+            color: #c9d1d9;
+            word-break: break-all;
+        }
+
+        .info-item .value.code {
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 13px;
+            color: #7ee787;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .badge-active { background-color: rgba(35, 134, 54, 0.2); color: #3fb950; }
+        .badge-inactive { background-color: rgba(110, 118, 129, 0.2); color: #8b949e; }
+        .badge-public { background-color: rgba(88, 166, 255, 0.2); color: #58a6ff; }
+        .badge-private { background-color: rgba(218, 54, 51, 0.2); color: #f85149; }
+
+        .stats-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+        }
+
+        .stat-card {
+            padding: 20px;
+            background-color: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-card .number {
+            font-size: 32px;
+            font-weight: 700;
+            color: #58a6ff;
+        }
+
+        .stat-card .label {
+            font-size: 13px;
+            color: #8b949e;
+            margin-top: 4px;
+        }
+
+        /* ===== TABLA DE DATOS ===== */
+        .table-wrapper {
+            overflow-x: auto;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            white-space: nowrap;
+        }
+
+        .data-table thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .data-table th {
+            text-align: left;
+            padding: 10px 12px;
+            background-color: #1c2128;
+            color: #58a6ff;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid #30363d;
+            cursor: pointer;
+            user-select: none;
+            min-width: 100px;
+            max-width: 300px;
+        }
+
+        .data-table th:hover {
+            background-color: #21262d;
+        }
+
+        .data-table th .sort-icon {
+            color: #8b949e;
+            font-size: 10px;
+            margin-left: 4px;
+        }
+
+        .data-table td {
+            padding: 8px 12px;
+            border-bottom: 1px solid #21262d;
+            font-size: 13px;
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .data-table tr:hover td {
+            background-color: #1c2128;
+        }
+
+        .data-table tr:nth-child(even) td {
+            background-color: #0d1117;
+        }
+
+        .data-table tr:nth-child(even):hover td {
+            background-color: #1c2128;
+        }
+
+        .cell-null {
+            color: #484f58;
+            font-style: italic;
+        }
+
+        .cell-number {
+            color: #d2a8ff;
+            font-family: 'Consolas', 'Courier New', monospace;
+            text-align: right;
+        }
+
+        .cell-text {
+            color: #c9d1d9;
+        }
+
+        .cell-boolean {
+            text-align: center;
+        }
+
+        .row-id {
+            color: #8b949e;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 11px;
+        }
+
+        .footer {
+            text-align: center;
+            color: #8b949e;
+            font-size: 14px;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #30363d;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #8b949e;
+        }
+
+        .empty-state h3 {
+            font-size: 18px;
+            margin-bottom: 8px;
+            color: #c9d1d9;
+        }
+
+        .search-bar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 16px;
+            align-items: center;
+        }
+
+        .search-bar input {
+            flex: 1;
+            padding: 10px 14px;
+            background-color: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            color: #c9d1d9;
+            font-size: 14px;
+        }
+
+        .search-bar input:focus {
+            outline: none;
+            border-color: #58a6ff;
+        }
+
+        .search-bar .record-count {
+            color: #8b949e;
+            font-size: 13px;
+            white-space: nowrap;
+        }
+
+        .desc-text {
+            color: #8b949e;
+            font-size: 14px;
+            line-height: 1.7;
+        }
+
+        .tab-nav {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #30363d;
+            flex-wrap: wrap;
+        }
+
+        .tab-btn {
+            padding: 10px 20px;
+            background: none;
+            border: none;
+            color: #8b949e;
+            cursor: pointer;
+            font-size: 14px;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .tab-btn:hover { color: #c9d1d9; }
+
+        .tab-btn.active {
+            color: #58a6ff;
+            border-bottom-color: #58a6ff;
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .expand-btn {
+            background: none;
+            border: 1px solid #30363d;
+            color: #58a6ff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .expand-btn:hover { background-color: #1c2128; }
+
+        .row-detail {
+            display: none;
+            background-color: #0d1117;
+        }
+        .row-detail.visible { display: table-row; }
+
+        .row-detail td {
+            padding: 16px 20px;
+            border-bottom: 2px solid #30363d;
+        }
+
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 8px;
+        }
+
+        .detail-item {
+            padding: 6px 10px;
+            background-color: #161b22;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        .detail-item .dk { color: #8b949e; }
+        .detail-item .dv {
+            color: #c9d1d9;
+            font-family: 'Consolas', 'Courier New', monospace;
+            word-break: break-all;
+        }
+
+        .content-preview {
+            grid-column: 1 / -1;
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 12px;
+            color: #7ee787;
+            background-color: #0d1117;
+            padding: 12px;
+            border-radius: 4px;
+            border: 1px solid #30363d;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📋 {{ collection.name }}</h1>
+            <div class="header-actions">
+                <a href="{% url 'intelligence:collections_dashboard' %}" class="btn btn-secondary">← Volver</a>
+                <a href="{% url 'intelligence:collection_edit' collection.id %}" class="btn btn-secondary">✏️ Editar</a>
+                <a href="{% url 'intelligence:collection_sync' collection.id %}" class="btn btn-primary">🔄 Sincronizar</a>
+            </div>
+        </div>
+
+        <!-- Información General -->
+        <div class="section">
+            <div class="section-header">📌 Información General</div>
+            <div class="section-body">
+                <div class="info-grid">
+                    <div class="info-item">
+                        <label>Nombre</label>
+                        <div class="value">{{ collection.name }}</div>
+                    </div>
+                    <div class="info-item">
+                        <label>Estado</label>
+                        <div class="value">
+                            <span class="badge {% if collection.is_active %}badge-active{% else %}badge-inactive{% endif %}">
+                                {% if collection.is_active %}✅ Activa{% else %}⏸️ Inactiva{% endif %}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="info-item">
+                        <label>Visibilidad</label>
+                        <div class="value">
+                            <span class="badge {% if collection.is_public %}badge-public{% else %}badge-private{% endif %}">
+                                {% if collection.is_public %}🔓 Pública{% else %}🔒 Privada{% endif %}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="info-item">
+                        <label>Nivel Mínimo</label>
+                        <div class="value">Nivel {{ collection.min_level }}</div>
+                    </div>
+                    <div class="info-item">
+                        <label>Dominio</label>
+                        <div class="value">{{ collection.get_domain_display|default:collection.domain }}</div>
+                    </div>
+                    <div class="info-item">
+                        <label>Tabla Origen</label>
+                        <div class="value code">{{ collection.table_name|default:"—" }}</div>
+                    </div>
+                    <div class="info-item">
+                        <label>Base de Datos</label>
+                        <div class="value code">{{ collection.database_alias }}</div>
+                    </div>
+                    <div class="info-item">
+                        <label>Última Sincronización</label>
+                        <div class="value">
+                            {% if collection.last_sync_at %}
+                                {{ collection.last_sync_at|date:"d/m/Y H:i:s" }}
+                            {% else %}
+                                Nunca
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="info-item">
+                        <label>Registros en Última Sincro</label>
+                        <div class="value">{{ collection.last_sync_count|default:"0" }}</div>
+                    </div>
+                    <div class="info-item" style="grid-column: span 2;">
+                        <label>Descripción</label>
+                        <div class="desc-text">{{ collection.description|default:"Sin descripción" }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SQL de Origen -->
+        {% if collection.source_sql %}
+        <div class="section">
+            <div class="section-header">🗄️ SQL de Origen</div>
+            <div class="section-body">
+                <div class="json-viewer" style="background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:16px;font-family:Consolas,monospace;font-size:13px;color:#7ee787;overflow-x:auto;white-space:pre-wrap;">{{ collection.source_sql }}</div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Navegación de Tabs -->
+        <div class="tab-nav">
+            <button class="tab-btn active" onclick="showTab('data')">📊 Datos ({{ total_docs }} registros)</button>
+            <button class="tab-btn" onclick="showTab('fields')">📋 Definición de Campos</button>
+            <button class="tab-btn" onclick="showTab('embedding')">🧠 Embeddings</button>
+            <button class="tab-btn" onclick="showTab('config')">⚙️ Configuración JSON</button>
+        </div>
+
+        <!-- ════════════════════════════════════════════════════════════════ -->
+        <!-- TAB: DATOS — TODOS LOS REGISTROS CON TODOS SUS CAMPOS -->
+        <!-- ════════════════════════════════════════════════════════════════ -->
+        <div id="tab-data" class="tab-content active">
+            <div class="section">
+                <div class="section-header">
+                    📊 Datos de la Colección
+                    <span style="font-size:13px;color:#8b949e;font-weight:normal;">
+                        ({{ total_docs }} documentos vectoriales — mostrando {{ documents|length }})
+                    </span>
+                </div>
+                <div class="section-body">
+                    {% if documents %}
+                    <div class="search-bar">
+                        <input type="text" id="filterInput" placeholder="🔍 Buscar en cualquier campo..." onkeyup="filterTable()">
+                        <span class="record-count">{{ documents|length }} registros</span>
+                    </div>
+                    <div class="table-wrapper">
+                        <table class="data-table" id="dataTable">
+                            <thead>
+                                <tr>
+                                    <th onclick="sortTable(0)" style="min-width:60px;"># <span class="sort-icon">↕</span></th>
+                                    <th onclick="sortTable(1)" style="min-width:50px;">🧬 <span class="sort-icon">↕</span></th>
+                                    {% for fname in field_names %}
+                                    <th onclick="sortTable({{ forloop.counter|add:2 }})" title="{{ fname }}">
+                                        {{ fname|truncatechars:25 }} <span class="sort-icon">↕</span>
+                                    </th>
+                                    {% endfor %}
+                                    <th style="min-width:80px;">🔍</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for doc in documents %}
+                                <tr>
+                                    <td class="row-id">{{ forloop.counter }}</td>
+                                    <td style="text-align:center; font-size:16px;">
+                                        {% if doc.has_embedding %}
+                                        <span title="Vector: {{ doc.embedding_size }} bytes">🧬</span>
+                                        {% else %}
+                                        <span title="Sin vector" style="opacity:0.3;">🧬</span>
+                                        {% endif %}
+                                    </td>
+                                    {% for fname in field_names %}
+                                    <td>
+                                        {% with val=doc.field_values|get_item:fname %}
+                                            {% if val is None or val == '' %}
+                                                <span class="cell-null">—</span>
+                                            {% elif val is True %}
+                                                <span class="cell-boolean">✅</span>
+                                            {% elif val is False %}
+                                                <span class="cell-boolean">❌</span>
+                                            {% elif val|stringformat:"s"|length > 80 %}
+                                                <span title="{{ val }}">{{ val|stringformat:"s"|truncatechars:80 }}</span>
+                                            {% else %}
+                                                {{ val }}
+                                            {% endif %}
+                                        {% endwith %}
+                                    </td>
+                                    {% endfor %}
+                                    <td>
+                                        <button class="expand-btn" onclick="toggleDetail('detail-{{ forloop.counter }}')">👁️</button>
+                                    </td>
+                                </tr>
+                                <tr id="detail-{{ forloop.counter }}" class="row-detail">
+                                    <td colspan="{{ field_names|length|add:3 }}">
+                                        <div class="detail-grid">
+                                            {% for fname in field_names %}
+                                            <div class="detail-item">
+                                                <div class="dk">{{ fname }}</div>
+                                                <div class="dv">
+                                                    {% with val=doc.field_values|get_item:fname %}
+                                                        {% if val is None or val == '' %}
+                                                            <span style="color:#484f58;">null</span>
+                                                        {% else %}
+                                                            {{ val }}
+                                                        {% endif %}
+                                                    {% endwith %}
+                                                </div>
+                                            </div>
+                                            {% endfor %}
+                                            <div class="detail-item" style="grid-column:1/-1;">
+                                                <div class="dk">Content (texto embedido)</div>
+                                                <div class="content-preview">{{ doc.content_preview }}{% if doc.content_length > 500 %}...{% endif %}</div>
+                                            </div>
+                                            <div class="detail-item">
+                                                <div class="dk">ID interno</div>
+                                                <div class="dv" style="font-size:11px;">{{ doc.id }}</div>
+                                            </div>
+                                            <div class="detail-item">
+                                                <div class="dk">source_id</div>
+                                                <div class="dv">{{ doc.source_id }}</div>
+                                            </div>
+                                            <div class="detail-item">
+                                                <div class="dk">Embedding</div>
+                                                <div class="dv">
+                                                    {% if doc.has_embedding %}
+                                                        ✅ {{ doc.embedding_size }} bytes
+                                                    {% else %}
+                                                        ❌ Sin embedding
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                            <div class="detail-item">
+                                                <div class="dk">Creado</div>
+                                                <div class="dv">{{ doc.created_at|date:"d/m/Y H:i:s" }}</div>
+                                            </div>
+                                            <div class="detail-item">
+                                                <div class="dk">Actualizado</div>
+                                                <div class="dv">{{ doc.updated_at|date:"d/m/Y H:i:s" }}</div>
+                                            </div>
+                                            <div class="detail-item">
+                                                <div class="dk">Content hash</div>
+                                                <div class="dv" style="font-size:11px;">{{ doc.content_hash }}</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="empty-state">
+                        <h3>📭 Sin datos</h3>
+                        <p>Esta colección no tiene documentos vectoriales. Usa el botón "Sincronizar" para importar datos desde la tabla origen.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- ════════════════════════════════════════════════════════════════ -->
+        <!-- TAB: DEFINICIÓN DE CAMPOS -->
+        <!-- ════════════════════════════════════════════════════════════════ -->
+        <div id="tab-fields" class="tab-content">
+            <div class="section">
+                <div class="section-header">
+                    📋 Definición de Campos
+                    <span style="font-size:13px;color:#8b949e;font-weight:normal;">
+                        ({{ field_definitions|length }} campos totales)
+                    </span>
+                </div>
+                <div class="section-body" style="padding:0;">
+                    {% if field_definitions %}
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Nombre del Campo</th>
+                                <th>Tipo</th>
+                                <th>Nullable</th>
+                                <th>Descripción</th>
+                                <th>Embedding</th>
+                                <th>Display</th>
+                                <th>Filtro</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for field_name, field_info in field_definitions.items %}
+                            <tr>
+                                <td style="color:#58a6ff;font-family:Consolas,monospace;">{{ field_name }}</td>
+                                <td><span style="color:#d2a8ff;font-family:Consolas,monospace;">{{ field_info.type|default:"unknown" }}</span></td>
+                                <td style="color:#8b949e;">
+                                    {% if field_info.nullable %}✅ Sí{% else %}❌ No{% endif %}
+                                </td>
+                                <td style="color:#8b949e;font-size:13px;">{{ field_info.description|default:"" }}</td>
+                                <td>
+                                    {% if field_name in collection.embedding_fields %}
+                                        <span class="badge badge-active">🧠 Sí</span>
+                                    {% else %}<span style="color:#484f58;">—</span>{% endif %}
+                                </td>
+                                <td>
+                                    {% if field_name in collection.display_fields %}
+                                        <span class="badge badge-public">👁️ Sí</span>
+                                    {% else %}<span style="color:#484f58;">—</span>{% endif %}
+                                </td>
+                                <td>
+                                    {% if field_name in collection.filter_fields %}
+                                        <span class="badge" style="background:rgba(210,168,255,0.2);color:#d2a8ff;">🔍 Sí</span>
+                                    {% else %}<span style="color:#484f58;">—</span>{% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <div class="empty-state">
+                        <h3>Sin definiciones de campos</h3>
+                        <p>Esta colección no tiene field_definitions configurados.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- ════════════════════════════════════════════════════════════════ -->
+        <!-- TAB: EMBEDDINGS -->
+        <!-- ════════════════════════════════════════════════════════════════ -->
+        <div id="tab-embedding" class="tab-content">
+            <div class="section">
+                <div class="section-header">🧠 Estado de Embeddings</div>
+                <div class="section-body">
+                    <div class="stats-cards" style="margin-bottom:20px;">
+                        <div class="stat-card">
+                            <div class="number">{{ total_docs }}</div>
+                            <div class="label">Total Documentos</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="number">{{ docs_with_embedding }}</div>
+                            <div class="label">Con Embedding</div>
+                            <div class="subtext" style="font-size:12px;color:#484f58;margin-top:2px;">
+                                {% if total_docs > 0 %}{{ docs_with_embedding|floatformat:0 }} / {{ total_docs }}{% endif %}
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="number">{{ collection.embedding_fields|length }}</div>
+                            <div class="label">Campos Embeddeados</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="number">{{ collection.display_fields|length }}</div>
+                            <div class="label">Campos a Mostrar</div>
+                        </div>
+                    </div>
+
+                    {% if embedding_info %}
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Campo</th>
+                                <th>Tipo</th>
+                                <th>Nullable</th>
+                                <th>Descripción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for field in embedding_info %}
+                            <tr>
+                                <td style="color:#58a6ff;font-family:Consolas,monospace;">{{ field.name }}</td>
+                                <td><span style="color:#d2a8ff;font-family:Consolas,monospace;">{{ field.type }}</span></td>
+                                <td style="color:#8b949e;">{% if field.nullable %}✅ Sí{% else %}❌ No{% endif %}</td>
+                                <td style="color:#8b949e;">{{ field.description|default:"" }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <div class="empty-state">
+                        <h3>Sin campos para embedding</h3>
+                        <p>No se han configurado campos para generar embeddings en esta colección.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- ════════════════════════════════════════════════════════════════ -->
+        <!-- TAB: CONFIGURACIÓN JSON -->
+        <!-- ════════════════════════════════════════════════════════════════ -->
+        <div id="tab-config" class="tab-content">
+            <div class="section">
+                <div class="section-header">⚙️ Configuración JSON Completa</div>
+                <div class="section-body">
+                    <div class="info-grid">
+                        <div class="info-item" style="grid-column: span 2;">
+                            <label>field_definitions</label>
+                            <div class="json-viewer" style="background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:16px;font-family:Consolas,monospace;font-size:13px;color:#7ee787;overflow-x:auto;white-space:pre-wrap;max-height:400px;overflow-y:auto;">{{ field_definitions|pprint }}</div>
+                        </div>
+                        <div class="info-item">
+                            <label>embedding_fields</label>
+                            <div class="json-viewer" style="background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:16px;font-family:Consolas,monospace;font-size:13px;color:#7ee787;overflow-x:auto;white-space:pre-wrap;">{{ collection.embedding_fields|pprint }}</div>
+                        </div>
+                        <div class="info-item">
+                            <label>display_fields</label>
+                            <div class="json-viewer" style="background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:16px;font-family:Consolas,monospace;font-size:13px;color:#7ee787;overflow-x:auto;white-space:pre-wrap;">{{ collection.display_fields|pprint }}</div>
+                        </div>
+                        <div class="info-item">
+                            <label>filter_fields</label>
+                            <div class="json-viewer" style="background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:16px;font-family:Consolas,monospace;font-size:13px;color:#7ee787;overflow-x:auto;white-space:pre-wrap;">{{ collection.filter_fields|pprint }}</div>
+                        </div>
+                        <div class="info-item">
+                            <label>roles_con_acceso</label>
+                            <div class="json-viewer" style="background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:16px;font-family:Consolas,monospace;font-size:13px;color:#7ee787;overflow-x:auto;white-space:pre-wrap;">{{ collection.roles_con_acceso|pprint }}</div>
+                        </div>
+                        <div class="info-item">
+                            <label>apps_con_acceso</label>
+                            <div class="json-viewer" style="background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:16px;font-family:Consolas,monospace;font-size:13px;color:#7ee787;overflow-x:auto;white-space:pre-wrap;">{{ collection.apps_con_acceso|pprint }}</div>
+                        </div>
+                        <div class="info-item" style="grid-column: span 2;">
+                            <label>table_relationships</label>
+                            <div class="json-viewer" style="background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:16px;font-family:Consolas,monospace;font-size:13px;color:#7ee787;overflow-x:auto;white-space:pre-wrap;">{{ collection.table_relationships|pprint }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Propifai Intelligence Layer • Detalle de Colección • {{ collection.name }}</p>
+        </div>
+    </div>
+
+    <script>
+        function showTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById('tab-' + tabName).classList.add('active');
+            document.querySelector(`.tab-btn[onclick="showTab('${tabName}')"]`).classList.add('active');
+        }
+
+        function toggleDetail(detailId) {
+            const row = document.getElementById(detailId);
+            row.classList.toggle('visible');
+        }
+
+        function filterTable() {
+            const input = document.getElementById('filterInput');
+            const filter = input.value.toLowerCase();
+            const table = document.getElementById('dataTable');
+            const rows = table.getElementsByTagName('tr');
+
+            for (let i = 1; i < rows.length; i++) {
+                const row = rows[i];
+                // Saltar filas de detalle
+                if (row.classList.contains('row-detail')) continue;
+                const cells = row.getElementsByTagName('td');
+                let found = false;
+                for (let j = 0; j < cells.length; j++) {
+                    if (cells[j].textContent.toLowerCase().includes(filter)) {
+                        found = true;
+                        break;
+                    }
+                }
+                row.style.display = found ? '' : 'none';
+                // También ocultar/mostrar la fila de detalle siguiente
+                const nextRow = row.nextElementSibling;
+                if (nextRow && nextRow.classList.contains('row-detail')) {
+                    nextRow.style.display = found ? (nextRow.classList.contains('visible') ? '' : 'none') : 'none';
+                }
+            }
+        }
+
+        function sortTable(colIndex) {
+            const table = document.getElementById('dataTable');
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            // Separar filas de datos y de detalle
+            const dataRows = [];
+            const detailRows = {};
+            for (let i = 0; i < rows.length; i++) {
+                if (rows[i].classList.contains('row-detail')) {
+                    if (dataRows.length > 0) {
+                        detailRows[dataRows.length - 1] = rows[i];
+                    }
+                } else {
+                    dataRows.push(rows[i]);
+                }
+            }
+
+            const isAsc = table.querySelectorAll('th')[colIndex].getAttribute('data-sort') !== 'asc';
+
+            dataRows.sort((a, b) => {
+                const aVal = a.cells[colIndex]?.textContent.trim() || '';
+                const bVal = b.cells[colIndex]?.textContent.trim() || '';
+                // Detectar números
+                const aNum = parseFloat(aVal.replace(/[^0-9.-]/g, ''));
+                const bNum = parseFloat(bVal.replace(/[^0-9.-]/g, ''));
+                if (!isNaN(aNum) && !isNaN(bNum)) {
+                    return isAsc ? aNum - bNum : bNum - aNum;
+                }
+                return isAsc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+            });
+
+            // Limpiar tbody y re-insertar en orden
+            while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+            dataRows.forEach((row, idx) => {
+                tbody.appendChild(row);
+                if (detailRows[idx]) {
+                    tbody.appendChild(detailRows[idx]);
+                }
+            });
+
+            // Actualizar iconos
+            table.querySelectorAll('th').forEach(th => {
+                th.querySelector('.sort-icon').textContent = '↕';
+                th.removeAttribute('data-sort');
+            });
+            const header = table.querySelectorAll('th')[colIndex];
+            header.querySelector('.sort-icon').textContent = isAsc ? '▲' : '▼';
+            header.setAttribute('data-sort', isAsc ? 'asc' : 'desc');
+        }
+    </script>
+</body>
+</html>

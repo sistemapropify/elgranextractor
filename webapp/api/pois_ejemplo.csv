@@ -1,0 +1,15 @@
+nombre,slug_categoria,latitud,longitud,direccion,descripcion,telefono,sitio_web
+Clínica Arequipa,hospital,-16.3988,-71.5375,Av. Ejército 205,Clínica privada,054-123456,https://clinicaarequipa.pe
+Hospital Regional Honorio Delgado,hospital,-16.4200,-71.5300,Av. Daniel Alcides Carrión s/n,Hospital público regional,054-123000,https://honoriodelgado.gob.pe
+Clínica San Pablo,hospital,-16.4000,-71.5500,Av. Parra 101,Clínica privada,054-124000,https://sanpablo.pe
+Farmacia Universal,farmacia,-16.3980,-71.5380,Av. Ejército 200,Farmacia de turno 24h,054-125000,
+Inkafarma,farmacia,-16.3990,-71.5360,Mercado San Camilo,Farmacia cadena nacional,054-126000,
+Mifarma,farmacia,-16.3970,-71.5390,Av. La Marina 150,Farmacia cadena nacional,054-127000,
+Real Plaza Arequipa,shopping,-16.4050,-71.5500,Av. Ejército 1000,Centro comercial,054-128000,https://realplaza.pe
+Mall Aventura Plaza,shopping,-16.4100,-71.5450,Av. Ejército 800,Centro comercial,054-129000,https://mallaventura.pe
+Colegio San José,colegio,-16.3950,-71.5350,Calle San José 100,Colegio particular,054-130000,
+Colegio La Salle,colegio,-16.4000,-71.5400,Av. La Salle 200,Colegio particular,054-131000,
+Universidad Católica San Pablo,universidad,-16.4100,-71.5600,Urb. Campiña Paisajista s/n,Universidad privada,054-132000,https://ucsp.edu.pe
+Universidad Nacional de San Agustín,universidad,-16.4200,-71.5350,Av. Independencia s/n,Universidad nacional,054-133000,https://unsa.edu.pe
+Comisaría Yanahuara,comisaria,-16.3970,-71.5370,Av. Ejército 300,Comisaría sectorial,054-134000,
+Municipalidad de Yanahuara,municipalidad,-16.3960,-71.5360,Plaza Yanahuara,Municipalidad distrital,054-135000,

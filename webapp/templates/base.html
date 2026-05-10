@@ -3,314 +3,209 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Meta tags para prevenir caché en desarrollo -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>{% block title %}El Gran Extractor{% endblock %}</title>
+    
+    <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    
     <style>
         :root {
-            --header-height: 60px;
+            --primary-color: #047d7d;
+            --secondary-color: #035e5e;
             --sidebar-width: 250px;
-            --primary-color: #10b981;          /* Verde esmeralda brillante */
-            --secondary-color: #059669;        /* Verde esmeralda medio */
-            --accent-color: #34d399;           /* Verde esmeralda claro */
-            --light-teal: #a7f3d0;             /* Verde muy claro */
-            --very-light-teal: #d1fae5;        /* Verde super claro */
-            --sidebar-bg: #059669;             /* Verde medio para sidebar */
-            --header-bg: #ffffff;              /* Blanco para header */
-            --content-bg: rgba(16, 185, 129, 0.08); /* Color base con transparencia */
-            --card-bg: #ffffff;                /* Blanco para cards */
-            --text-dark: #065f46;              /* Verde oscuro para texto */
-            --text-light: #ffffff;             /* Blanco para texto claro */
+            --header-height: 56px;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
         
         body {
-            background-color: var(--content-bg);
+            background-color: #f0f7f7;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 0;
-            overflow-x: hidden;
-            color: var(--text-dark);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
         }
         
         /* Header delgado */
         .app-header {
+            height: var(--header-height);
+            background: white;
+            border-bottom: 2px solid #047d7d;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
             position: fixed;
             top: 0;
             left: 0;
             right: 0;
-            height: var(--header-height);
-            background-color: var(--header-bg);
-            box-shadow: 0 2px 10px rgba(3, 94, 94, 0.1);
             z-index: 1000;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+        }
+        
+        .sidebar-toggle {
+            width: 36px;
+            height: 36px;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            background: white;
+            color: #047d7d;
             display: flex;
             align-items: center;
-            padding: 0 20px;
-            border-bottom: 1px solid var(--very-light-teal);
+            justify-content: center;
+            cursor: pointer;
+            margin-right: 12px;
+            transition: all 0.2s;
+        }
+        
+        .sidebar-toggle:hover {
+            background: #047d7d;
+            color: white;
         }
         
         .logo-container {
             display: flex;
             align-items: center;
-            height: 100%;
+            gap: 8px;
         }
         
-        .logo {
-            height: 40px;
-            width: auto;
-            margin-right: 10px;
-        }
-        
-        .logo-text {
-            font-weight: 700;
-            font-size: 1.5rem;
-            color: var(--primary-color);
-            text-decoration: none;
-        }
-        
-        .logo-text:hover {
-            color: var(--secondary-color);
-        }
-        
-        /* Barra lateral delgada */
-        .app-sidebar {
-            position: fixed;
-            top: var(--header-height);
-            left: 0;
-            width: var(--sidebar-width);
-            height: calc(100vh - var(--header-height));
-            background-color: var(--sidebar-bg);
-            color: var(--text-light);
-            overflow-y: auto;
-            transition: transform 0.3s ease;
-            z-index: 999;
-            border-right: 1px solid var(--light-teal);
-        }
-        
-        .sidebar-menu {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-        
-        .sidebar-menu li {
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .sidebar-menu a {
-            display: flex;
-            align-items: center;
-            padding: 15px 20px;
-            color: rgba(255, 255, 255, 0.9);
-            text-decoration: none;
-            transition: all 0.2s ease;
-        }
-        
-        .sidebar-menu a:hover {
-            background-color: rgba(255, 255, 255, 0.15);
-            color: white;
-        }
-        
-        .sidebar-menu a.active {
-            background-color: rgba(255, 255, 255, 0.2);
-            color: white;
-            border-left: 4px solid var(--accent-color);
-        }
-        
-        .sidebar-menu i {
-            margin-right: 10px;
-            font-size: 1.2rem;
-            width: 24px;
-            text-align: center;
-        }
-        
-        /* Contenido principal */
-        .app-content {
-            margin-left: var(--sidebar-width);
-            margin-top: var(--header-height);
-            padding: 20px;
-            min-height: calc(100vh - var(--header-height));
-            transition: margin-left 0.3s ease;
-            background-color: var(--content-bg);
-        }
-        
-        /* Responsive - ocultar sidebar en móvil y tablet (hasta 1024px, cubre iPad Pro) */
-        @media (max-width: 1024px) {
-            .app-sidebar {
-                transform: translateX(-100%);
-            }
-            
-            .app-content {
-                margin-left: 0;
-            }
-            
-            .sidebar-toggle {
-                display: block;
-            }
-            
-            .sidebar-open .app-sidebar {
-                transform: translateX(0);
-            }
-            
-            .sidebar-open .app-content {
-                margin-left: var(--sidebar-width);
-            }
-        }
-        
-        /* Botón para mostrar/ocultar sidebar en móviles */
-        .sidebar-toggle {
-            display: none;
-            background: none;
-            border: none;
-            color: var(--primary-color);
-            font-size: 1.5rem;
-            margin-right: 15px;
-            cursor: pointer;
-        }
-        
-        /* Estilos adicionales para contenido */
-        .card {
-            border: none;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(3, 94, 94, 0.1);
-            margin-bottom: 1.5rem;
-            background-color: var(--card-bg);
-            border: 1px solid var(--very-light-teal);
-        }
-        
-        .btn-primary {
-            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
-            border: none;
-        }
-        
-        .btn-primary:hover {
-            background: linear-gradient(135deg, var(--accent-color) 0%, var(--primary-color) 100%);
-        }
-        
-        .btn-outline-secondary {
-            border-color: var(--light-teal);
-            color: var(--primary-color);
-        }
-        
-        .btn-outline-info {
-            border-color: var(--light-teal);
-            color: var(--primary-color);
-        }
-        
-        .stat-card {
-            text-align: center;
-            padding: 1.5rem;
-            background-color: var(--card-bg);
-        }
-        
-        .stat-number {
-            font-size: 2.5rem;
-            font-weight: bold;
-            color: var(--primary-color);
-        }
-        
-        .footer {
-            margin-top: 3rem;
-            padding: 1.5rem 0;
-            background-color: var(--sidebar-bg);
-            color: var(--text-light);
-            text-align: center;
-            border-top: 1px solid var(--light-teal);
-        }
-        
-        /* Espacio para el logo placeholder */
         .logo-placeholder {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
-            border-radius: 8px;
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #047d7d, #035e5e);
+            border-radius: 6px;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
             font-weight: bold;
-            font-size: 1.2rem;
-        }
-        
-        /* Estilos para enlaces */
-        a {
-            color: var(--primary-color);
-            text-decoration: none;
-        }
-        
-        a:hover {
-            color: var(--secondary-color);
-        }
-        
-        /* Estilos para formularios */
-        .form-control {
-            border: 1px solid var(--light-teal);
-        }
-        
-        .form-control:focus {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 0.25rem rgba(4, 125, 125, 0.25);
-        }
-        
-        /* Estilos para alertas */
-        .alert-info {
-            background-color: rgba(4, 125, 125, 0.1);
-            border-color: var(--light-teal);
-            color: var(--text-dark);
-        }
-        
-        /* Estilos para bordes y separadores */
-        hr {
-            border-color: var(--very-light-teal);
-        }
-
-        /* Estilos para submenús en sidebar */
-        .has-submenu > a {
-            position: relative;
-        }
-        .has-submenu > a .bi-chevron-down {
-            transition: transform 0.3s ease;
             font-size: 0.9rem;
-            margin-left: auto;
         }
-        .has-submenu.active > a .bi-chevron-down {
+        
+        /* Sidebar delgada */
+        .app-sidebar {
+            width: var(--sidebar-width);
+            background: white;
+            border-right: 1px solid #dee2e6;
+            position: fixed;
+            top: var(--header-height);
+            left: 0;
+            bottom: 0;
+            overflow-y: auto;
+            z-index: 999;
+            transition: transform 0.3s ease;
+        }
+        
+        .app-sidebar.collapsed {
+            transform: translateX(-100%);
+        }
+        
+        .sidebar-menu {
+            list-style: none;
+            padding: 8px 0;
+            margin: 0;
+        }
+        
+        .sidebar-menu li {
+            margin: 0;
+        }
+        
+        .sidebar-menu li a {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 20px;
+            color: #495057;
+            text-decoration: none;
+            font-size: 14px;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+        }
+        
+        .sidebar-menu li a:hover {
+            background: #e8f5f5;
+            color: #047d7d;
+        }
+        
+        .sidebar-menu li a.active {
+            background: #e8f5f5;
+            color: #047d7d;
+            border-left-color: #047d7d;
+            font-weight: 600;
+        }
+        
+        .sidebar-menu li a i {
+            width: 20px;
+            text-align: center;
+            font-size: 16px;
+        }
+        
+        .sidebar-menu li.has-submenu > a {
+            cursor: pointer;
+        }
+        
+        .sidebar-menu li.has-submenu > a .bi-chevron-down {
+            transition: transform 0.2s;
+            font-size: 12px;
+        }
+        
+        .sidebar-menu li.has-submenu.open > a .bi-chevron-down {
             transform: rotate(180deg);
         }
+        
         .submenu {
             list-style: none;
             padding: 0;
             margin: 0;
-            background-color: rgba(0, 0, 0, 0.2);
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.3s ease;
+            display: none;
+            background: #f8fbfb;
         }
-        .has-submenu.active .submenu {
-            max-height: 200px;
+        
+        .has-submenu.open .submenu {
+            display: block;
         }
-        .submenu li {
-            border-bottom: none;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        .submenu a {
+        
+        .submenu li a {
             padding-left: 50px;
-            padding-top: 12px;
-            padding-bottom: 12px;
-            font-size: 0.95rem;
+            font-size: 13px;
         }
-        .submenu a.active {
-            background-color: rgba(255, 255, 255, 0.15);
-            border-left: 4px solid var(--accent-color);
+        
+        /* Contenido principal */
+        .app-content {
+            margin-top: var(--header-height);
+            margin-left: var(--sidebar-width);
+            padding: 24px;
+            min-height: calc(100vh - var(--header-height));
+            transition: margin-left 0.3s ease;
         }
-        .submenu i {
-            font-size: 1rem;
-            margin-right: 10px;
+        
+        .app-content.expanded {
+            margin-left: 0;
         }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .app-sidebar {
+                transform: translateX(-100%);
+            }
+            .app-sidebar.mobile-open {
+                transform: translateX(0);
+            }
+            .app-content {
+                margin-left: 0;
+            }
+        }
+        
+        {% block extra_css %}{% endblock %}
     </style>
-    {% block extra_css %}{% endblock %}
 </head>
 <body>
     <!-- Header delgado -->
@@ -320,10 +215,8 @@
         </button>
         
         <div class="logo-container">
-            {% load static %}
             <a href="/" class="d-flex align-items-center text-decoration-none">
-                <img src="{% static 'img/logo.png' %}" alt="Propifai" height="32" class="me-2"
-                     onerror="this.onerror=null;this.style.display='none';var d=document.createElement('div');d.className='logo-placeholder me-2';d.style.cssText='width:32px;height:32px;font-size:0.9rem;display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#58a6ff,#8957e5);border-radius:6px;color:white;font-weight:bold;';d.textContent='P';this.parentElement.appendChild(d)">
+                <div class="logo-placeholder">P</div>
             </a>
             {% block header_title %}
             {% endblock %}
@@ -331,10 +224,10 @@
         
         <div class="ms-auto d-flex align-items-center">
             {% block header_actions %}
-            {% if request.current_user %}
+            {% if user.is_authenticated %}
                 <span class="text-success me-2 small d-none d-md-inline">
                     <i class="bi bi-person-circle"></i>
-                    {{ request.current_user.first_name|default:request.current_user.username }}
+                    {{ user.username }}
                 </span>
                 <a href="/logout/" class="btn btn-outline-danger btn-sm me-2">
                     <i class="bi bi-box-arrow-right"></i> Cerrar sesión
@@ -350,9 +243,6 @@
             {% if user.is_staff %}
             <a href="/admin/" class="btn btn-outline-secondary btn-sm me-2" target="_blank">
                 <i class="bi bi-gear"></i> Admin
-            </a>
-            <a href="/api/" class="btn btn-outline-info btn-sm" target="_blank">
-                <i class="bi bi-code-slash"></i> API
             </a>
             {% endif %}
             {% endblock %}
@@ -459,11 +349,110 @@
                     <span>Análisis Comparativo (ACM)</span>
                 </a>
             </li>
-            <li>
-                <a href="/api/v1/intelligence/dashboard/" class="{% if '/intelligence/' in request.path %}active{% endif %}">
+            <li class="has-submenu {% if '/intelligence/' in request.path %}active{% endif %}">
+                <a href="#">
                     <i class="bi bi-cpu"></i>
                     <span>Intelligence Layer</span>
+                    <i class="bi bi-chevron-down ms-auto"></i>
                 </a>
+                <ul class="submenu">
+                    <li>
+                        <a href="/intelligence/dashboard/" class="{% if request.path == '/intelligence/' or request.path == '/intelligence/dashboard/' %}active{% endif %}">
+                            <i class="bi bi-speedometer2"></i>
+                            <span>Dashboard IA</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/skills/dashboard/" class="{% if '/intelligence/skills/' in request.path %}active{% endif %}">
+                            <i class="bi bi-lightning-charge-fill"></i>
+                            <span>Skills</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/collections/" class="{% if '/intelligence/collections/' in request.path %}active{% endif %}">
+                            <i class="bi bi-collection"></i>
+                            <span>Colecciones RAG</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/intent-evaluation/" class="{% if '/intelligence/intent-evaluation/' in request.path %}active{% endif %}">
+                            <i class="bi bi-bullseye"></i>
+                            <span>Evaluaci&oacute;n de Intenciones</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/chat-web/" class="{% if '/intelligence/chat-web/' in request.path %}active{% endif %}">
+                            <i class="bi bi-chat-dots"></i>
+                            <span>Chat Asistente</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/chat-workflows/manage/" class="{% if '/intelligence/chat-workflows/' in request.path %}active{% endif %}">
+                            <i class="bi bi-arrow-repeat"></i>
+                            <span>Flujos Conversacionales</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/episodic-memory/" class="{% if '/intelligence/episodic-memory/' in request.path %}active{% endif %}">
+                            <i class="bi bi-memory"></i>
+                            <span>Memoria Epis&oacute;dica</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/profiles/" class="{% if '/intelligence/profiles/' in request.path %}active{% endif %}">
+                            <i class="bi bi-person-badge"></i>
+                            <span>Perfiles de IA</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/users/" class="{% if '/intelligence/users/' in request.path %}active{% endif %}">
+                            <i class="bi bi-people"></i>
+                            <span>Usuarios</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/roles/" class="{% if '/intelligence/roles/' in request.path %}active{% endif %}">
+                            <i class="bi bi-shield-lock"></i>
+                            <span>Roles</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/simulator/" class="{% if '/intelligence/simulator/' in request.path %}active{% endif %}">
+                            <i class="bi bi-robot"></i>
+                            <span>Simulador</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/stats/" class="{% if '/intelligence/stats/' in request.path %}active{% endif %}">
+                            <i class="bi bi-bar-chart-line"></i>
+                            <span>Estad&iacute;sticas</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/logs/" class="{% if '/intelligence/logs/' in request.path %}active{% endif %}">
+                            <i class="bi bi-journal-text"></i>
+                            <span>Logs de Actividad</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/config/" class="{% if '/intelligence/config/' in request.path %}active{% endif %}">
+                            <i class="bi bi-gear"></i>
+                            <span>Configuraciones</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/errors/" class="{% if '/intelligence/errors/' in request.path %}active{% endif %}">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            <span>Errores</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/tests/" class="{% if '/intelligence/tests/' in request.path %}active{% endif %}">
+                            <i class="bi bi-flask"></i>
+                            <span>Tests</span>
+                        </a>
+                    </li>
+                </ul>
             </li>
             <li class="has-submenu {% if '/meta-ads/' in request.path %}active{% endif %}">
                 <a href="#">
@@ -542,56 +531,25 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // Toggle sidebar en móviles
-        document.addEventListener('DOMContentLoaded', function() {
-            const sidebarToggle = document.getElementById('sidebarToggle');
-            const appSidebar = document.getElementById('appSidebar');
-            const appContent = document.getElementById('appContent');
-            
-            if (sidebarToggle) {
-                sidebarToggle.addEventListener('click', function() {
-                    document.body.classList.toggle('sidebar-open');
-                });
+        document.getElementById('sidebarToggle')?.addEventListener('click', function() {
+            var sidebar = document.getElementById('appSidebar');
+            var content = document.getElementById('appContent');
+            sidebar.classList.toggle('mobile-open');
+            if (window.innerWidth > 768) {
+                sidebar.classList.toggle('collapsed');
+                content.classList.toggle('expanded');
             }
-            
-            // Cerrar sidebar al hacer clic fuera en móviles
-            appContent.addEventListener('click', function() {
-                if (window.innerWidth <= 768 && document.body.classList.contains('sidebar-open')) {
-                    document.body.classList.remove('sidebar-open');
-                }
-            });
-            
-            // Actualizar clase activa en menú
-            const currentPath = window.location.pathname;
-            const menuItems = document.querySelectorAll('.sidebar-menu a');
-            
-            menuItems.forEach(item => {
-                if (item.getAttribute('href') === currentPath) {
-                    item.classList.add('active');
-                }
-            });
-
-            // Submenús: alternar al hacer clic en el enlace padre
-            document.querySelectorAll('.has-submenu > a').forEach(link => {
-                link.addEventListener('click', function(e) {
-                    // Solo si el enlace no tiene href válido (es #)
-                    if (this.getAttribute('href') === '#') {
-                        e.preventDefault();
-                        const parentLi = this.parentElement;
-                        parentLi.classList.toggle('active');
-                    }
-                });
-            });
-
-            // Expandir submenú si alguna subpágina está activa
-            document.querySelectorAll('.has-submenu').forEach(li => {
-                const activeSub = li.querySelector('.submenu a.active');
-                if (activeSub) {
-                    li.classList.add('active');
-                }
+        });
+        
+        // Submenús
+        document.querySelectorAll('.has-submenu > a').forEach(function(link) {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                this.parentElement.classList.toggle('open');
             });
         });
+        
+        {% block extra_js %}{% endblock %}
     </script>
-    
-    {% block extra_js %}{% endblock %}
 </body>
 </html>

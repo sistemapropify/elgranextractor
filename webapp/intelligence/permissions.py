@@ -1,8 +1,15 @@
 """
-Sistema de permisos para el Propifai Intelligence Layer (PIL).
+Sistema de permisos v2 para el Propifai Intelligence Layer (PIL).
 
-Este módulo proporciona decoradores y funciones para controlar el acceso
-a las vistas del dashboard de configuración basado en roles y niveles.
+Basado en UserIntelligenceProfile (nivel + dominios) en lugar de
+Role.allowed_levels. Los decoradores ahora consultan el perfil
+de inteligencia del usuario para decidir acceso.
+
+Flujo de autorización:
+  1. Obtener UserIntelligenceProfile del usuario actual
+  2. Verificar nivel mínimo requerido
+  3. Verificar dominio requerido (si aplica)
+  4. Verificar colecciones extra/bloqueadas (si aplica)
 """
 
 from django.http import HttpResponseForbidden, JsonResponse
@@ -10,17 +17,83 @@ from django.shortcuts import redirect
 from django.contrib import messages
 from functools import wraps
 import json
+import logging
 
-from .models import Role, AppConfig, IntelligenceCollection
+from .models import Role, AppConfig, IntelligenceCollection, UserIntelligenceProfile
+
+logger = logging.getLogger(__name__)
+
+
+def get_user_profile(request):
+    """
+    Obtiene el UserIntelligenceProfile del usuario actual.
+    
+    Prioridad:
+    1. request.current_user.intelligence_profile (usuario autenticado)
+    2. Perfil simulado desde sesión (para testing/simulador)
+    3. None si no hay usuario ni perfil
+    
+    Returns:
+        UserIntelligenceProfile o None
+    """
+    # 1. Usuario autenticado vía middleware
+    if hasattr(request, 'current_user') and request.current_user:
+        try:
+            return request.current_user.intelligence_profile
+        except UserIntelligenceProfile.DoesNotExist:
+            # Auto-crear perfil si no existe (fallback)
+            try:
+                from .models import User
+                user = request.current_user
+                level = user.role.default_level if user.role else 1
+                domains = user.role.default_domains if user.role else ['general']
+                profile = UserIntelligenceProfile.objects.create(
+                    user=user,
+                    level=level,
+                    allowed_domains=domains,
+                )
+                logger.info(f"Perfil de inteligencia auto-creado para {user.username}")
+                return profile
+            except Exception as e:
+                logger.error(f"Error creando perfil de inteligencia: {e}")
+                return None
+    
+    # 2. Perfil simulado (para el simulador de usuario)
+    if 'simulated_profile_level' in request.session:
+        try:
+            # Construir un perfil simulado en memoria
+            class SimulatedProfile:
+                def __init__(self):
+                    self.level = request.session.get('simulated_profile_level', 1)
+                    self.allowed_domains = request.session.get('simulated_profile_domains', ['general'])
+                    self.extra_collections = []
+                    self.blocked_collections = []
+                    
+                def can_access_collection(self, collection):
+                    # Simular verificación de acceso
+                    if self.level < collection.min_level:
+                        return False, f"Nivel insuficiente: {self.level} < {collection.min_level}"
+                    if collection.is_public:
+                        return True, ""
+                    if collection.domain in self.allowed_domains:
+                        return True, ""
+                    return False, f"Dominio '{collection.domain}' no permitido"
+            
+            return SimulatedProfile()
+        except Exception as e:
+            logger.error(f"Error creando perfil simulado: {e}")
+            return None
+    
+    return None
 
 
 def get_user_role(request):
     """
-    Obtiene el rol del usuario actual.
-    Prioridad:
-    1. request.current_user.role (usuario autenticado vía middleware)
-    2. Rol simulado desde sesión (para testing/simulador)
-    3. None si no hay usuario
+    Obtiene el rol del usuario actual (compatibilidad hacia atrás).
+    Ahora obtiene el rol desde el perfil de inteligencia.
+    
+    Returns:
+        Role o None
     """
     # 1. Usuario autenticado vía middleware
     if hasattr(request, 'current_user') and request.current_user and request.current_user.role:
@@ -46,7 +119,7 @@ def get_user_role(request):
 
 def has_permission(required_levels=None, required_apps=None, permission_type='view'):
     """
-    Decorador para verificar permisos de acceso.
+    Decorador para verificar permisos de acceso basado en perfil de inteligencia.
     
     Args:
         required_levels: Lista de niveles requeridos (ej: [1, 2, 3])
@@ -59,44 +132,43 @@ def has_permission(required_levels=None, required_apps=None, permission_type='vi
     def decorator(view_func):
         @wraps(view_func)
         def _wrapped_view(request, *args, **kwargs):
-            # Obtener rol del usuario
-            user_role = get_user_role(request)
+            # Obtener perfil de inteligencia
+            profile = get_user_profile(request)
             
-            if not user_role:
-                messages.error(request, "No se pudo determinar su rol de usuario.")
-                return redirect('intelligence:dashboard')
+            if not profile:
+                messages.error(request, "No se pudo determinar su perfil de inteligencia.")
+                return redirect('intelligence:skills_dashboard')
             
             # Verificar niveles permitidos
             if required_levels:
-                user_levels = user_role.allowed_levels or []
-                if not any(level in user_levels for level in required_levels):
+                if profile.level not in required_levels:
                     messages.error(
                         request, 
                         f"No tiene permiso para acceder a esta sección. "
                         f"Niveles requeridos: {required_levels}. "
-                        f"Sus niveles: {user_levels}"
+                        f"Su nivel: {profile.level}"
                     )
-                    return redirect('intelligence:dashboard')
+                    return redirect('intelligence:skills_dashboard')
             
             # Verificar acceso a apps específicas
             if required_apps:
-                # En un sistema real, esto vendría de la relación usuario-app
-                # Por ahora, asumimos que el administrador tiene acceso a todas
-                if user_role.name.lower() != 'administrador':
+                user_role = get_user_role(request)
+                if user_role and user_role.name.lower() != 'administrador':
                     messages.error(
                         request,
                         f"No tiene acceso a las apps requeridas: {required_apps}"
                     )
-                    return redirect('intelligence:dashboard')
+                    return redirect('intelligence:skills_dashboard')
             
             # Verificar tipo de permiso específico
             if permission_type == 'admin':
-                if user_role.name.lower() != 'administrador':
+                user_role = get_user_role(request)
+                if not user_role or user_role.name.lower() != 'administrador':
                     messages.error(
                         request,
                         "Se requieren permisos de administrador para esta acción."
                     )
-                    return redirect('intelligence:dashboard')
+                    return redirect('intelligence:skills_dashboard')
             
             # Si pasa todas las verificaciones, ejecutar la vista
             return view_func(request, *args, **kwargs)
@@ -122,7 +194,7 @@ def role_required(role_names):
             
             if not user_role:
                 messages.error(request, "No se pudo determinar su rol de usuario.")
-                return redirect('intelligence:dashboard')
+                return redirect('intelligence:skills_dashboard')
             
             if user_role.name not in role_names:
                 messages.error(
@@ -130,7 +202,7 @@ def role_required(role_names):
                     f"Se requiere uno de los siguientes roles: {', '.join(role_names)}. "
                     f"Su rol actual: {user_role.name}"
                 )
-                return redirect('intelligence:dashboard')
+                return redirect('intelligence:skills_dashboard')
             
             return view_func(request, *args, **kwargs)
         
@@ -140,7 +212,7 @@ def role_required(role_names):
 
 def level_required(min_level, max_level=None):
     """
-    Decorador para requerir un rango de niveles.
+    Decorador para requerir un rango de niveles basado en UserIntelligenceProfile.
     
     Args:
         min_level: Nivel mínimo requerido
@@ -152,39 +224,31 @@ def level_required(min_level, max_level=None):
     def decorator(view_func):
         @wraps(view_func)
         def _wrapped_view(request, *args, **kwargs):
-            user_role = get_user_role(request)
+            profile = get_user_profile(request)
             
-            if not user_role:
-                messages.error(request, "No se pudo determinar su rol de usuario.")
-                return redirect('intelligence:dashboard')
+            if not profile:
+                messages.error(request, "No se pudo determinar su perfil de inteligencia.")
+                return redirect('intelligence:skills_dashboard')
             
-            user_levels = user_role.allowed_levels or []
+            user_level = profile.level
             
             # Verificar si tiene al menos el nivel mínimo
-            has_min_level = any(level >= min_level for level in user_levels)
-            
-            if not has_min_level:
+            if user_level < min_level:
                 messages.error(
                     request,
                     f"Se requiere nivel mínimo {min_level}. "
-                    f"Sus niveles: {user_levels}"
+                    f"Su nivel: {user_level}"
                 )
-                return redirect('intelligence:dashboard')
+                return redirect('intelligence:skills_dashboard')
             
             # Verificar nivel máximo si se especifica
-            if max_level is not None:
-                has_valid_levels = any(
-                    min_level <= level <= max_level 
-                    for level in user_levels
+            if max_level is not None and user_level > max_level:
+                messages.error(
+                    request,
+                    f"Se requieren niveles entre {min_level} y {max_level}. "
+                    f"Su nivel: {user_level}"
                 )
-                
-                if not has_valid_levels:
-                    messages.error(
-                        request,
-                        f"Se requieren niveles entre {min_level} y {max_level}. "
-                        f"Sus niveles: {user_levels}"
-                    )
-                    return redirect('intelligence:dashboard')
+                return redirect('intelligence:skills_dashboard')
             
             return view_func(request, *args, **kwargs)
         
@@ -195,6 +259,7 @@ def level_required(min_level, max_level=None):
 def collection_access_required(collection_id_param='collection_id'):
     """
     Decorador para verificar acceso a una colección específica.
+    Usa UserIntelligenceProfile.can_access_collection().
     
     Args:
         collection_id_param: Nombre del parámetro que contiene el ID de la colección
@@ -210,42 +275,41 @@ def collection_access_required(collection_id_param='collection_id'):
             
             if not collection_id:
                 messages.error(request, "No se especificó la colección.")
-                return redirect('intelligence:collection_list')
+                return redirect('intelligence:collections_dashboard')
             
             try:
                 collection = IntelligenceCollection.objects.get(id=collection_id)
             except IntelligenceCollection.DoesNotExist:
                 messages.error(request, f"La colección {collection_id} no existe.")
-                return redirect('intelligence:collection_list')
+                return redirect('intelligence:collections_dashboard')
             
-            # Obtener rol del usuario
-            user_role = get_user_role(request)
+            # Obtener perfil de inteligencia
+            profile = get_user_profile(request)
             
-            if not user_role:
-                messages.error(request, "No se pudo determinar su rol de usuario.")
+            if not profile:
+                messages.error(request, "No se pudo determinar su perfil de inteligencia.")
                 return redirect('intelligence:dashboard')
             
-            # Verificar si el rol tiene acceso a la colección
+            # Verificar acceso usando el método del perfil
+            can_access, reason = profile.can_access_collection(collection)
+            
+            if not can_access:
+                messages.error(
+                    request,
+                    f"No tiene acceso a la colección '{collection.name}'. Motivo: {reason}"
+                )
+                return redirect('intelligence:collections_dashboard')
+            
+            # Verificar roles_con_acceso si está configurado
             if collection.roles_con_acceso:
-                allowed_role_ids = collection.roles_con_acceso
-                if user_role.id not in allowed_role_ids:
+                user_role = get_user_role(request)
+                if user_role and user_role.id not in collection.roles_con_acceso:
                     messages.error(
                         request,
                         f"No tiene acceso a la colección '{collection.name}'. "
-                        f"Roles permitidos: {len(allowed_role_ids)} roles."
+                        f"Roles permitidos: {len(collection.roles_con_acceso)} roles."
                     )
-                    return redirect('intelligence:collection_list')
-            
-            # Verificar niveles
-            user_levels = user_role.allowed_levels or []
-            if collection.access_level not in user_levels:
-                messages.error(
-                    request,
-                    f"No tiene el nivel requerido para acceder a esta colección. "
-                    f"Nivel requerido: {collection.access_level}. "
-                    f"Sus niveles: {user_levels}"
-                )
-                return redirect('intelligence:collection_list')
+                    return redirect('intelligence:collections_dashboard')
             
             # Pasar la colección al contexto para uso en la vista
             request.collection = collection
@@ -259,26 +323,93 @@ def collection_access_required(collection_id_param='collection_id'):
 def api_permission_required(required_levels=None):
     """
     Decorador para APIs que devuelve JSON en lugar de redireccionar.
+    Basado en UserIntelligenceProfile.
     """
     def decorator(view_func):
         @wraps(view_func)
         def _wrapped_view(request, *args, **kwargs):
-            user_role = get_user_role(request)
+            profile = get_user_profile(request)
             
-            if not user_role:
+            if not profile:
                 return JsonResponse({
-                    'error': 'No se pudo determinar el rol de usuario',
-                    'code': 'NO_ROLE'
+                    'error': 'No se pudo determinar el perfil de inteligencia',
+                    'code': 'NO_PROFILE'
                 }, status=403)
             
             if required_levels:
-                user_levels = user_role.allowed_levels or []
-                if not any(level in user_levels for level in required_levels):
+                if profile.level not in required_levels:
                     return JsonResponse({
                         'error': f'Niveles insuficientes. Requeridos: {required_levels}',
-                        'user_levels': user_levels,
+                        'user_level': profile.level,
                         'code': 'INSUFFICIENT_LEVEL'
                     }, status=403)
+            
+            return view_func(request, *args, **kwargs)
+        
+        return _wrapped_view
+    return decorator
+
+
+# ── Nuevos decoradores para el sistema de dominios ──
+
+def domain_required(required_domains):
+    """
+    Decorador para requerir dominios específicos.
+    
+    Args:
+        required_domains: Lista de dominios requeridos (ej: ['legal', 'marketing'])
+    
+    Returns:
+        Función decorada que verifica si el usuario tiene al menos uno de los dominios.
+    """
+    def decorator(view_func):
+        @wraps(view_func)
+        def _wrapped_view(request, *args, **kwargs):
+            profile = get_user_profile(request)
+            
+            if not profile:
+                messages.error(request, "No se pudo determinar su perfil de inteligencia.")
+                return redirect('intelligence:dashboard')
+            
+            user_domains = profile.allowed_domains or []
+            
+            if not any(domain in user_domains for domain in required_domains):
+                messages.error(
+                    request,
+                    f"Se requiere uno de los siguientes dominios: {', '.join(required_domains)}. "
+                    f"Sus dominios: {user_domains}"
+                )
+                return redirect('intelligence:dashboard')
+            
+            return view_func(request, *args, **kwargs)
+        
+        return _wrapped_view
+    return decorator
+
+
+def api_domain_required(required_domains):
+    """
+    Decorador para APIs que requiere dominios específicos y devuelve JSON.
+    """
+    def decorator(view_func):
+        @wraps(view_func)
+        def _wrapped_view(request, *args, **kwargs):
+            profile = get_user_profile(request)
+            
+            if not profile:
+                return JsonResponse({
+                    'error': 'No se pudo determinar el perfil de inteligencia',
+                    'code': 'NO_PROFILE'
+                }, status=403)
+            
+            user_domains = profile.allowed_domains or []
+            
+            if not any(domain in user_domains for domain in required_domains):
+                return JsonResponse({
+                    'error': f'Dominios insuficientes. Requeridos: {required_domains}',
+                    'user_domains': user_domains,
+                    'code': 'INSUFFICIENT_DOMAIN'
+                }, status=403)
             
             return view_func(request, *args, **kwargs)
         

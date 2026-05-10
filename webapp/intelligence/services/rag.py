@@ -10,6 +10,13 @@ OPTIMIZACIONES IMPLEMENTADAS (SPEC-013):
 2. Caché LRU para embeddings de consultas frecuentes
 3. Pre-carga opcional del modelo
 4. Monitoreo de estado del singleton
+
+MEJORAS IMPLEMENTADAS (2026-05):
+1. Modelo migrado a intfloat/multilingual-e5-large (1024 dimensiones)
+2. Prefijos "query:" y "passage:" para el modelo E5
+3. FAISS HNSW index para búsqueda O(log n)
+4. Pre-filtrado en SQL para búsquedas con filtros
+5. Pipeline de ingesta de PDFs con chunking inteligente
 """
 import os
 import json
@@ -34,27 +41,28 @@ logger = logging.getLogger(__name__)
 class RAGService:
     """
     Servicio centralizado para operaciones RAG:
-    - Generación de embeddings
-    - Gestión de colecciones
-    - Sincronización de datos
-    - Búsqueda semántica
+    - Generación de embeddings (multilingual-e5-large, 1024 dimensiones)
+    - Gestión de colecciones vectoriales
+    - Sincronización de datos con resolución de FK
+    - Búsqueda semántica con FAISS HNSW (O(log n))
+    - Pre-filtrado en SQL para búsquedas con filtros
     
     OPTIMIZACIONES:
     - Singleton thread-safe para modelo de embeddings
     - Caché LRU para embeddings de consultas
     - Pre-carga opcional del modelo
     - Monitoreo de estado
+    - FAISS HNSW index para búsqueda vectorial eficiente
     """
     
-    # Modelo de embeddings (jaimevera1107/all-MiniLM-L6-v2-similarity-es)
-    # Versión fine-tuned para similitud semántica en español
-    EMBEDDING_MODEL = "jaimevera1107/all-MiniLM-L6-v2-similarity-es"
-    EMBEDDING_DIMENSIONS = 384
+    # Modelo de embeddings (intfloat/multilingual-e5-large)
+    # Modelo multilingüe de 1024 dimensiones con soporte para español.
+    # Requiere prefijos "query:" para búsquedas y "passage:" para documentos.
+    # Token máximo: 512 (vs 128 del modelo anterior).
+    EMBEDDING_MODEL = "intfloat/multilingual-e5-large"
+    EMBEDDING_DIMENSIONS = 1024
     
     # Configuración desde variables de entorno
-    # NOTA: El modelo jaimevera1107/all-MiniLM-L6-v2-similarity-es (español) es más discriminativo
-    # que all-MiniLM-L6-v2 (inglés). Los scores de similitud son más bajos pero más precisos.
-    # Threshold reducido a 0.2 para capturar resultados relevantes en español.
     SIMILARITY_THRESHOLD = float(os.environ.get('RAG_SIMILARITY_THRESHOLD', 0.2))
     MAX_RESULTS = int(os.environ.get('RAG_MAX_RESULTS', 10))
     BATCH_SIZE = int(os.environ.get('RAG_BATCH_SIZE', 100))
@@ -156,23 +164,34 @@ class RAGService:
         }
     
     @classmethod
-    def generate_embedding(cls, text: str, use_cache: bool = True) -> Optional[bytes]:
+    def generate_embedding(cls, text: str, use_cache: bool = True, mode: str = 'passage') -> Optional[bytes]:
         """
         Genera embedding vectorial para un texto con caché LRU.
+        
+        El modelo multilingual-e5-large requiere prefijos específicos:
+        - "query: {text}" para textos de búsqueda
+        - "passage: {text}" para documentos almacenados
         
         Args:
             text: Texto a convertir en embedding
             use_cache: Usar caché para consultas frecuentes
+            mode: 'passage' para documentos, 'query' para búsquedas
             
         Returns:
-            Bytes del embedding (384 dimensiones) o None si hay error
+            Bytes del embedding (1024 dimensiones) o None si hay error
         """
         if not text or not text.strip():
             return None
         
+        # Aplicar prefijo según modo (requerido por multilingual-e5-large)
+        if mode == 'query':
+            prefixed_text = f"query: {text}"
+        else:
+            prefixed_text = f"passage: {text}"
+        
         # Verificar caché si está habilitado
         if use_cache:
-            cache_key = hashlib.md5(text.encode('utf-8')).hexdigest()
+            cache_key = hashlib.md5(prefixed_text.encode('utf-8')).hexdigest()
             if cache_key in cls._embedding_cache:
                 # Actualizar estadísticas de caché
                 cls._cache_hits = getattr(cls, '_cache_hits', 0) + 1
@@ -184,8 +203,8 @@ class RAGService:
         
         try:
             embedder = cls.get_embedder()
-            # Generar embedding
-            embedding_np = embedder.encode(text, convert_to_numpy=True)
+            # Generar embedding con el texto prefijado
+            embedding_np = embedder.encode(prefixed_text, convert_to_numpy=True)
             
             # Verificar dimensiones
             if embedding_np.shape[0] != cls.EMBEDDING_DIMENSIONS:
@@ -316,7 +335,9 @@ class RAGService:
         name: str,
         source_sql: str,
         embedding_fields: List[str],
-        access_level: int = 1,
+        min_level: int = 1,
+        domain: str = 'general',
+        is_public: bool = False,
         description: str = "",
         is_active: bool = True
     ) -> Tuple[bool, str, Optional[IntelligenceCollection]]:
@@ -327,7 +348,9 @@ class RAGService:
             name: Nombre único de la colección
             source_sql: Consulta SQL que devuelve los datos fuente
             embedding_fields: Lista de campos a concatenar para embedding
-            access_level: Nivel de acceso requerido (1, 2, 3)
+            min_level: Nivel mínimo requerido (1-5)
+            domain: Dominio de la colección
+            is_public: Si es accesible públicamente
             description: Descripción opcional
             is_active: Si la colección está activa
             
@@ -351,8 +374,10 @@ class RAGService:
             collection = IntelligenceCollection.objects.create(
                 name=name,
                 source_sql=source_sql,
-                embedding_fields=embedding_fields,  # JSONField acepta listas directamente
-                access_level=access_level,
+                embedding_fields=embedding_fields,
+                min_level=min_level,
+                domain=domain,
+                is_public=is_public,
                 description=description,
                 is_active=is_active
             )
@@ -375,13 +400,18 @@ class RAGService:
         Returns:
             Django database connection object
         """
-        # Por defecto usar conexión 'default'
+        # Prioridad 1: Usar database_alias del modelo si está configurado
+        db_alias = getattr(collection, 'database_alias', None)
+        if db_alias and db_alias != 'default' and db_alias in connections:
+            logger.debug(f"Usando conexión '{db_alias}' desde collection.database_alias para: {collection.name}")
+            return connections[db_alias]
+        
+        # Prioridad 2: Por defecto usar conexión 'default'
         conn = connections['default']
         
-        # Si la colección es de Propifai o hace referencia a tabla 'properties'
-        # o si el SQL hace referencia a la base de datos propifai
+        # Prioridad 3: Detección automática por nombre/SQL (legacy)
         collection_name_lower = collection.name.lower()
-        source_sql_lower = collection.source_sql.lower()
+        source_sql_lower = (collection.source_sql or '').lower()
         
         if ('propifai' in collection_name_lower or
             'properties' in source_sql_lower or
@@ -392,7 +422,7 @@ class RAGService:
             # Verificar si existe conexión 'propifai'
             if 'propifai' in connections:
                 conn = connections['propifai']
-                logger.debug(f"Usando conexión 'propifai' para colección: {collection.name}")
+                logger.debug(f"Usando conexión 'propifai' (detección automática) para colección: {collection.name}")
             else:
                 logger.warning(f"Conexión 'propifai' no encontrada, usando 'default' para colección: {collection.name}")
         
@@ -545,7 +575,8 @@ class RAGService:
         collection_ids: Optional[List[int]] = None,
         access_level: int = 1,
         limit: Optional[int] = None,
-        similarity_threshold: Optional[float] = None
+        similarity_threshold: Optional[float] = None,
+        profile=None
     ) -> Tuple[bool, str, List[Dict[str, Any]]]:
         """
         Realiza búsqueda semántica por similitud de coseno.
@@ -553,9 +584,10 @@ class RAGService:
         Args:
             query: Texto de búsqueda
             collection_ids: IDs de colecciones a buscar (None = todas activas)
-            access_level: Nivel de acceso del usuario
+            access_level: Nivel de acceso del usuario (deprecated, usar profile)
             limit: Límite de resultados (None = usar valor por defecto)
             similarity_threshold: Umbral de similitud (None = usar valor por defecto)
+            profile: UserIntelligenceProfile para filtrar por permisos (reemplaza access_level)
             
         Returns:
             Tuple (success, message, results)
@@ -564,8 +596,8 @@ class RAGService:
             return False, "Query vacía", []
         
         try:
-            # Generar embedding para la query
-            query_embedding = cls.generate_embedding(query)
+            # Generar embedding para la query (modo query para multilingual-e5-large)
+            query_embedding = cls.generate_embedding(query, mode='query')
             if not query_embedding:
                 return False, "No se pudo generar embedding para la query", []
             
@@ -575,13 +607,29 @@ class RAGService:
             # Obtener colecciones filtradas
             collections_query = IntelligenceCollection.objects.filter(
                 is_active=True,
-                access_level__lte=access_level  # Usuario tiene acceso igual o mayor
             )
             
             if collection_ids:
                 collections_query = collections_query.filter(id__in=collection_ids)
             
             collections = list(collections_query)
+            
+            # Filtrar por perfil de inteligencia si se proporciona
+            if profile is not None:
+                filtered = []
+                extra_ids = set(profile.extra_collections.values_list('id', flat=True)) if hasattr(profile, 'extra_collections') else set()
+                blocked_ids_set = set(profile.blocked_collections.values_list('id', flat=True)) if hasattr(profile, 'blocked_collections') else set()
+                for coll in collections:
+                    if coll.id in blocked_ids_set:
+                        continue
+                    if profile.level < coll.min_level:
+                        continue
+                    if coll.is_public or coll.id in extra_ids or coll.domain in profile.allowed_domains:
+                        filtered.append(coll)
+                collections = filtered
+            else:
+                # Fallback legacy: filtrar por access_level usando min_level
+                collections = [c for c in collections if c.min_level <= access_level]
             
             if not collections:
                 return False, "No hay colecciones disponibles para búsqueda", []
@@ -697,7 +745,9 @@ class RAGService:
                 'id': collection.id,
                 'name': collection.name,
                 'description': collection.description,
-                'access_level': collection.access_level,
+                'min_level': collection.min_level,
+                'domain': collection.domain,
+                'is_public': collection.is_public,
                 'is_active': collection.is_active,
                 'last_sync_at': collection.last_sync_at,
                 'last_sync_count': collection.last_sync_count,
@@ -755,7 +805,9 @@ class RAGService:
                 """,
                 'embedding_fields': ['titulo', 'descripcion', 'direccion', 'distrito',
                                      'tipo_propiedad', 'condicion'],
-                'access_level': 1  # Nivel más bajo - acceso público
+                'min_level': 1,  # Nivel más bajo - acceso público
+                'domain': 'publico',
+                'is_public': True
             },
             {
                 'name': 'propiedades_competencia',
@@ -785,7 +837,9 @@ class RAGService:
                 """,
                 'embedding_fields': ['titulo', 'descripcion', 'direccion', 'distrito',
                                      'tipo_propiedad', 'condicion', 'fuente'],
-                'access_level': 2  # Nivel intermedio - acceso interno
+                'min_level': 2,  # Nivel intermedio - acceso interno
+                'domain': 'general',
+                'is_public': False
             },
             {
                 'name': 'noticias_mercado',
@@ -806,7 +860,9 @@ class RAGService:
                     LIMIT 0  -- Temporalmente vacío hasta que se implemente la tabla
                 """,
                 'embedding_fields': ['titulo', 'contenido', 'categoria', 'palabras_clave'],
-                'access_level': 3  # Nivel más alto - acceso estratégico
+                'min_level': 3,  # Nivel más alto - acceso estratégico
+                'domain': 'gerencia',
+                'is_public': False
             }
         ]
         
@@ -830,7 +886,9 @@ class RAGService:
                     name=collection_def['name'],
                     source_sql=collection_def['source_sql'],
                     embedding_fields=collection_def['embedding_fields'],
-                    access_level=collection_def['access_level'],
+                    min_level=collection_def['min_level'],
+                    domain=collection_def.get('domain', 'general'),
+                    is_public=collection_def.get('is_public', False),
                     description=collection_def['description'],
                     is_active=True
                 )
@@ -919,17 +977,42 @@ class RAGService:
             }
     
     @classmethod
+    def detect_foreign_keys(cls, table_name: str, schema: str = None, database_alias: str = 'default') -> List[Dict[str, Any]]:
+        """
+        Detecta foreign keys de una tabla.
+        
+        Args:
+            table_name: Nombre de la tabla
+            schema: Esquema de la tabla
+            database_alias: Alias de la conexión de base de datos
+            
+        Returns:
+            Lista de FK detectadas con columnas de tablas referenciadas
+        """
+        try:
+            return SchemaDiscoveryService.detect_foreign_keys(table_name, schema=schema, database_alias=database_alias)
+        except Exception as e:
+            logger.error(f"Error detectando foreign keys en '{table_name}': {e}")
+            return []
+    
+    @classmethod
     def create_collection_dynamic(
         cls,
         name: str,
         table_name: str,
         embedding_fields: List[str],
         display_fields: List[str],
-        filter_fields: List[str],
-        access_level: int = 2,
+        filter_fields: List[str] = None,
+        min_level: int = 2,
+        domain: str = 'general',
+        is_public: bool = False,
         description: str = "",
         schema: str = None,
-        database_alias: str = 'default'
+        database_alias: str = 'default',
+        field_definitions: List[Dict[str, Any]] = None,
+        table_relationships: List[Dict[str, Any]] = None,
+        is_active: bool = True,
+        key_field: str = 'id',
     ) -> Tuple[bool, str, Optional[IntelligenceCollection]]:
         """
         Crea colección con campos dinámicos según SPEC-003.
@@ -940,10 +1023,16 @@ class RAGService:
             embedding_fields: Lista de campos (nombres reales) usados para embedding
             display_fields: Lista de campos (nombres reales) a mostrar en resultados
             filter_fields: Lista de campos (nombres reales) que se pueden filtrar
-            access_level: Nivel de acceso requerido (1, 2, 3)
+            min_level: Nivel mínimo requerido (1-5)
+            domain: Dominio de la colección
+            is_public: Si es accesible públicamente
             description: Descripción opcional
             schema: Esquema de la tabla
             database_alias: Alias de la conexión de base de datos (default: 'default', 'propifai' para dbpropify)
+            field_definitions: Definiciones de campos (si se proporciona, se usa en lugar de analizar la tabla)
+            table_relationships: Lista de relaciones FK para resolver durante sync
+            is_active: Si la colección está activa
+            key_field: Campo clave primaria
             
         Returns:
             Tuple (success, message, collection)
@@ -960,28 +1049,39 @@ class RAGService:
             if not SchemaDiscoveryService.validate_table(table_name, schema=schema, database_alias=database_alias):
                 return False, f"Tabla '{table_name}' no encontrada en esquema '{schema or 'dbo'}' (base de datos: {database_alias})", None
             
-            # Obtener field_definitions de la tabla
-            schema_analysis = SchemaDiscoveryService.analyze_table_schema(table_name, schema=schema, database_alias=database_alias)
-            if not schema_analysis.get('exists', False):
-                return False, f"No se pudo analizar la tabla '{table_name}': {schema_analysis.get('error', 'Error desconocido')}", None
-            
-            field_definitions = schema_analysis.get('field_definitions', {})
-            primary_key = schema_analysis.get('primary_key', 'id')
+            # Si no se proporcionaron field_definitions, obtener de la tabla
+            if not field_definitions:
+                schema_analysis = SchemaDiscoveryService.analyze_table_schema(table_name, schema=schema, database_alias=database_alias)
+                if not schema_analysis.get('exists', False):
+                    return False, f"No se pudo analizar la tabla '{table_name}': {schema_analysis.get('error', 'Error desconocido')}", None
+                field_definitions = schema_analysis.get('field_definitions', {})
+                primary_key = schema_analysis.get('primary_key', 'id')
+            else:
+                primary_key = key_field or 'id'
             
             # Validar que los campos especificados existen en la tabla
-            all_columns = [col['name'] for col in schema_analysis.get('columns', [])]
+            if not field_definitions:
+                all_columns = []
+            elif isinstance(field_definitions, dict):
+                all_columns = list(field_definitions.keys())
+            else:
+                all_columns = [f.get('name', '') for f in field_definitions]
             
             for field_list, field_type in [
                 (embedding_fields, 'embedding'),
                 (display_fields, 'display'),
-                (filter_fields, 'filter')
+                ((filter_fields or []), 'filter')
             ]:
                 for field in field_list:
-                    if field not in all_columns:
+                    if all_columns and field not in all_columns:
                         return False, f"Campo '{field}' no existe en la tabla '{table_name}' para {field_type}", None
             
             # Crear SQL automático si no se proporciona
             source_sql = f"SELECT * FROM [{schema or 'dbo'}].[{table_name}]"
+            
+            # Normalizar table_relationships
+            if table_relationships is None:
+                table_relationships = []
             
             # Crear colección
             collection = IntelligenceCollection.objects.create(
@@ -992,13 +1092,17 @@ class RAGService:
                 field_definitions=field_definitions,
                 embedding_fields=embedding_fields,
                 display_fields=display_fields,
-                filter_fields=filter_fields,
-                access_level=access_level,
-                is_active=True
+                filter_fields=filter_fields or [],
+                min_level=min_level,
+                domain=domain,
+                is_public=is_public,
+                is_active=is_active,
+                table_relationships=table_relationships,
+                database_alias=database_alias,
             )
             
-            logger.info(f"Colección dinámica creada: {name} (Tabla: {table_name}, ID: {collection.id})")
-            return True, f"Colección '{name}' creada exitosamente con {len(field_definitions)} campos", collection
+            logger.info(f"Colección dinámica creada: {name} (Tabla: {table_name}, ID: {collection.id}, Relaciones: {len(table_relationships)})")
+            return True, f"Colección '{name}' creada exitosamente con {len(field_definitions)} campos y {len(table_relationships)} relaciones", collection
             
         except Exception as e:
             logger.error(f"Error al crear colección dinámica '{name}': {e}")
@@ -1040,16 +1144,15 @@ class RAGService:
             logger.info(f"Iniciando sincronización dinámica de colección: {collection.name} (Tabla: {collection.table_name})")
             
             # Obtener conexión apropiada
+            # Prioridad: 1) parámetro explícito, 2) collection.database_alias, 3) detección automática
             if database_alias:
-                # Usar el database_alias proporcionado
                 try:
                     conn = connections[database_alias]
-                    logger.info(f"Usando conexión específica: {database_alias}")
+                    logger.info(f"Usando conexión del parámetro: {database_alias}")
                 except Exception as e:
-                    logger.warning(f"No se pudo usar conexión '{database_alias}': {e}, usando detección automática")
+                    logger.warning(f"No se pudo usar conexión '{database_alias}': {e}, usando collection.database_alias")
                     conn = cls._get_connection_for_collection(collection)
             else:
-                # Detectar automáticamente
                 conn = cls._get_connection_for_collection(collection)
             
             # Usar source_sql personalizado si existe, de lo contrario construir consulta automática
@@ -1090,6 +1193,10 @@ class RAGService:
             if not primary_key and columns:
                 primary_key = columns[0]  # Usar primera columna como fallback
             
+            # Obtener relaciones entre tablas configuradas
+            table_relationships = collection.table_relationships or []
+            logger.info(f"Relaciones entre tablas configuradas: {len(table_relationships)}")
+            
             # Procesar cada registro
             for i, row in enumerate(rows):
                 try:
@@ -1103,11 +1210,80 @@ class RAGService:
                     # Usar _serialize_row_dict para manejar Decimal y otros tipos no serializables
                     field_values = cls._serialize_row_dict(row_dict)
                     
-                    # Construir texto para embedding usando solo los campos en embedding_fields
+                    # --- RESOLVER RELACIONES FK ---
+                    # Para cada relación configurada, consultar la tabla referenciada
+                    # y agregar texto enriquecido al contenido del embedding.
+                    # También actualiza field_values con los valores resueltos
+                    # para que el LLM vea nombres reales (ej: "Cayma") en lugar de IDs numéricos.
+                    for rel in table_relationships:
+                        try:
+                            fk_column = rel.get('column', '')
+                            ref_table = rel.get('referenced_table', '')
+                            ref_column = rel.get('referenced_column', 'id')
+                            ref_schema = rel.get('referenced_schema', 'dbo')
+                            display_fields = rel.get('display_fields', [])
+                            label = rel.get('label', fk_column)
+                            
+                            # Obtener el valor FK de la fila actual
+                            fk_value = row_dict.get(fk_column)
+                            
+                            # Solo resolver si el FK tiene un valor válido
+                            if fk_value is not None and fk_value != '' and ref_table:
+                                try:
+                                    resolved_text = cls._resolve_foreign_key(
+                                        fk_value=fk_value,
+                                        referenced_table=ref_table,
+                                        referenced_column=ref_column,
+                                        referenced_schema=ref_schema,
+                                        display_fields=display_fields,
+                                        label=label,
+                                        database_alias=database_alias or 'propifai',
+                                        conn=conn
+                                    )
+                                    if resolved_text:
+                                        # --- ACTUALIZAR field_values CON VALORES RESUELTOS ---
+                                        # Guardar SOLO el primer display_field como valor resuelto
+                                        # (ej: district_name="Sachaca"), sin duplicar todos los display_fields
+                                        if display_fields:
+                                            resolved_key = fk_column
+                                            for suffix in ['_fk_id', '_fk', '_id']:
+                                                if resolved_key.endswith(suffix):
+                                                    resolved_key = resolved_key[:-len(suffix)]
+                                            resolved_key = f"{resolved_key}_name"
+                                            
+                                            try:
+                                                if conn is None:
+                                                    conn = connections[database_alias or 'propifai']
+                                                display_cols = ', '.join([f'[{c}]' for c in display_fields])
+                                                sql = f"SELECT {display_cols} FROM [{ref_schema}].[{ref_table}] WHERE [{ref_column}] = %s"
+                                                with conn.cursor() as cursor:
+                                                    cursor.execute(sql, (fk_value,))
+                                                    row = cursor.fetchone()
+                                                    if row:
+                                                        # Guardar SOLO el primer campo como valor resuelto (sin duplicados)
+                                                        first_val = row[0]
+                                                        if first_val is not None:
+                                                            if hasattr(first_val, 'isoformat'):
+                                                                first_val = first_val.isoformat()
+                                                            elif isinstance(first_val, bytes):
+                                                                first_val = first_val.decode('utf-8', errors='replace')
+                                                            field_values[resolved_key] = str(first_val)
+                                            except Exception as fk_err:
+                                                logger.debug(f"No se pudo obtener valor resuelto para {fk_column}={fk_value}: {fk_err}")
+                                except Exception as rel_err:
+                                    logger.warning(f"Error resolviendo FK {fk_column}={fk_value} -> {ref_table}: {rel_err}")
+                        except Exception as rel_err:
+                            logger.warning(f"Error procesando relación: {rel_err}")
+                    
+                    # Construir texto para embedding usando los campos en embedding_fields
+                    # PRIMERO intenta con field_values actualizados (que tienen nombres resueltos),
+                    # LUEGO con row_dict original como fallback
                     content_parts = []
                     for field in collection.embedding_fields:
-                        if field in row_dict and row_dict[field]:
-                            content_parts.append(str(row_dict[field]))
+                        # Buscar primero en field_values (valores resueltos post-FK)
+                        val = field_values.get(field) or row_dict.get(field)
+                        if val is not None and val != '':
+                            content_parts.append(str(val))
                     
                     content = " ".join(content_parts)
                     
@@ -1138,7 +1314,7 @@ class RAGService:
                         
                         # Regenerar embedding si el contenido cambió o force_full_sync
                         if document.content_hash != content_hash or force_full_sync:
-                            embedding = cls.generate_embedding(content)
+                            embedding = cls.generate_embedding(content, mode='passage')
                             if embedding:
                                 document.embedding = embedding
                         
@@ -1148,7 +1324,7 @@ class RAGService:
                         
                     except IntelligenceDocument.DoesNotExist:
                         # Crear nuevo documento
-                        embedding = cls.generate_embedding(content)
+                        embedding = cls.generate_embedding(content, mode='passage')
                         
                         document = IntelligenceDocument.objects.create(
                             collection=collection,
@@ -1182,6 +1358,20 @@ class RAGService:
                 f"{stats['skipped']} saltados, {stats['errors']} errores"
             )
             
+            # Reconstruir índice FAISS después de sync (si está disponible)
+            try:
+                from .faiss_index import FAISSIndexManager
+                indexed = FAISSIndexManager.rebuild_for_collection(
+                    collection.name,
+                    cls.EMBEDDING_DIMENSIONS
+                )
+                if indexed > 0:
+                    logger.info(f"Índice FAISS reconstruido para '{collection.name}': {indexed} vectores")
+            except ImportError:
+                logger.debug("FAISS no disponible, saltando reconstrucción de índice")
+            except Exception as e:
+                logger.warning(f"Error reconstruyendo índice FAISS para '{collection.name}': {e}")
+            
             return True, "Sincronización dinámica completada exitosamente", stats
             
         except IntelligenceCollection.DoesNotExist:
@@ -1190,6 +1380,112 @@ class RAGService:
             logger.error(f"Error en sync_collection_dynamic: {e}")
             return False, f"Error en sincronización dinámica: {str(e)}", stats
     
+    @classmethod
+    def _resolve_foreign_key(
+        cls,
+        fk_value: Any,
+        referenced_table: str,
+        referenced_column: str = 'id',
+        referenced_schema: str = 'dbo',
+        display_fields: List[str] = None,
+        label: str = '',
+        database_alias: str = 'propifai',
+        conn = None
+    ) -> Optional[str]:
+        """
+        Resuelve un valor FK consultando la tabla referenciada y generando texto enriquecido.
+        
+        Args:
+            fk_value: Valor del FK a resolver
+            referenced_table: Nombre de la tabla referenciada
+            referenced_column: Columna de join en la tabla referenciada
+            referenced_schema: Esquema de la tabla referenciada
+            display_fields: Campos a incluir en el texto enriquecido
+            label: Etiqueta descriptiva para el texto generado
+            database_alias: Alias de la base de datos
+            conn: Conexión existente (opcional, para reutilizar)
+            
+        Returns:
+            Texto enriquecido o None si no se pudo resolver
+        """
+        if not fk_value or not referenced_table or not display_fields:
+            return None
+        
+        try:
+            # Obtener conexión
+            if conn is None:
+                conn = connections[database_alias]
+            
+            # Construir consulta para obtener los campos solicitados
+            display_cols = ', '.join([f'[{c}]' for c in display_fields])
+            sql = f"SELECT {display_cols} FROM [{referenced_schema}].[{referenced_table}] WHERE [{referenced_column}] = %s"
+            
+            with conn.cursor() as cursor:
+                cursor.execute(sql, (fk_value,))
+                row = cursor.fetchone()
+                
+                if row is None:
+                    logger.debug(f"FK {fk_value} no encontrado en {referenced_table}.{referenced_column}")
+                    return None
+                
+                # Construir texto enriquecido
+                parts = []
+                for i, field_name in enumerate(display_fields):
+                    val = row[i]
+                    if val is not None:
+                        # Serializar valores especiales
+                        if hasattr(val, 'isoformat'):
+                            val = val.isoformat()
+                        elif isinstance(val, bytes):
+                            val = val.decode('utf-8', errors='replace')
+                        parts.append(f"{field_name}: {val}")
+                
+                if not parts:
+                    return None
+                
+                # Formatear con label si existe
+                if label:
+                    enriched = f"{label}: {' | '.join(parts)}"
+                else:
+                    enriched = ' | '.join(parts)
+                
+                logger.debug(f"FK resuelto: {fk_value} -> {enriched[:100]}...")
+                return enriched
+                
+        except Exception as e:
+            logger.warning(f"Error resolviendo FK {fk_value} en {referenced_table}: {e}")
+            return None
+    
+    @classmethod
+    def _build_field_values_to_display(cls, doc) -> Dict[str, Any]:
+        """
+        Construye field_values para mostrar, incluyendo campos FK resueltos.
+        
+        Si la colección tiene display_fields configurados, solo incluye esos campos
+        MÁS los campos FK resueltos (los que terminan en '_name').
+        Si no hay display_fields, devuelve todos los field_values.
+        """
+        display_fields = doc.collection.display_fields or []
+        all_field_values = doc.field_values or {}
+        
+        if not display_fields:
+            return all_field_values
+        
+        field_values_to_display = {}
+        
+        # 1. Incluir campos explícitos de display_fields
+        for field in display_fields:
+            if field in all_field_values:
+                field_values_to_display[field] = all_field_values[field]
+        
+        # 2. Incluir automáticamente campos FK resueltos (_name)
+        #    para que el LLM vea nombres reales en lugar de IDs numéricos
+        for key, value in all_field_values.items():
+            if key.endswith('_name') and value is not None and value != '':
+                field_values_to_display[key] = value
+        
+        return field_values_to_display
+
     @classmethod
     def _text_search_fallback(
         cls,
@@ -1257,16 +1553,8 @@ class RAGService:
                 # Score: 0.5 base + bonus por coincidencias
                 score = 0.5 + (match_ratio * 0.3)
                 
-                # Obtener field_values
-                display_fields = doc.collection.display_fields or []
-                field_values_to_display = {}
-                
-                if display_fields:
-                    for field in display_fields:
-                        if field in doc.field_values:
-                            field_values_to_display[field] = doc.field_values[field]
-                else:
-                    field_values_to_display = doc.field_values
+                # Obtener field_values incluyendo FK resueltos
+                field_values_to_display = cls._build_field_values_to_display(doc)
                 
                 result = {
                     'document_id': str(doc.id),
@@ -1296,12 +1584,85 @@ class RAGService:
             return []
     
     @classmethod
+    def get_accessible_collections(cls, collection_names: List[str], profile=None) -> List:
+        """
+        Filtra colecciones según el perfil de inteligencia del usuario.
+        
+        Si no se proporciona profile, retorna todas las colecciones activas
+        (comportamiento original, sin filtro de permisos).
+        
+        Args:
+            collection_names: Nombres de colecciones solicitadas
+            profile: UserIntelligenceProfile opcional para filtrar por permisos
+            
+        Returns:
+            QuerySet de IntelligenceCollection filtrado
+        """
+        collections = IntelligenceCollection.objects.filter(
+            name__in=collection_names,
+            is_active=True
+        )
+        
+        if not collections.exists():
+            return collections
+        
+        if profile is None:
+            # Sin perfil: retornar todas (comportamiento legacy)
+            return collections
+        
+        # Filtrar por perfil de inteligencia
+        accessible_ids = []
+        blocked_ids = []
+        
+        # Obtener IDs de colecciones extra y bloqueadas del perfil
+        extra_ids = set(profile.extra_collections.values_list('id', flat=True)) if hasattr(profile, 'extra_collections') else set()
+        blocked_ids_set = set(profile.blocked_collections.values_list('id', flat=True)) if hasattr(profile, 'blocked_collections') else set()
+        
+        for coll in collections:
+            # 1. Bloqueo explícito
+            if coll.id in blocked_ids_set:
+                blocked_ids.append(str(coll.id))
+                continue
+            
+            # 2. Verificar nivel mínimo
+            if profile.level < coll.min_level:
+                logger.debug(f"Colección '{coll.name}': nivel insuficiente ({profile.level} < {coll.min_level})")
+                continue
+            
+            # 3. Colección pública → acceso concedido
+            if coll.is_public:
+                accessible_ids.append(coll.id)
+                continue
+            
+            # 4. Colección extra → acceso concedido
+            if coll.id in extra_ids:
+                accessible_ids.append(coll.id)
+                continue
+            
+            # 5. Verificar dominio
+            if coll.domain in profile.allowed_domains:
+                accessible_ids.append(coll.id)
+                continue
+            
+            logger.debug(f"Colección '{coll.name}': dominio '{coll.domain}' no permitido para el usuario")
+        
+        if blocked_ids:
+            logger.warning(f"Colecciones bloqueadas para el usuario: {blocked_ids}")
+        
+        if not accessible_ids:
+            logger.warning(f"El usuario no tiene acceso a ninguna de las colecciones solicitadas: {collection_names}")
+            return IntelligenceCollection.objects.none()
+        
+        return collections.filter(id__in=accessible_ids)
+    
+    @classmethod
     def search_dynamic(
         cls,
         query: str,
         collection_names: List[str],
         filters: Dict[str, Any] = None,
-        top_k: int = 5
+        top_k: int = 5,
+        profile=None
     ) -> List[Dict[str, Any]]:
         """
         Busca en colecciones dinámicas y retorna field_values con nombres REALES.
@@ -1311,6 +1672,7 @@ class RAGService:
             collection_names: Nombres de colecciones a buscar
             filters: Diccionario con filtros a aplicar {campo: valor}
             top_k: Número máximo de resultados
+            profile: UserIntelligenceProfile opcional para filtrar por permisos
             
         Returns:
             Lista de diccionarios con resultados
@@ -1319,8 +1681,8 @@ class RAGService:
             return []
         
         try:
-            # Generar embedding para la query
-            query_embedding = cls.generate_embedding(query)
+            # Generar embedding para la query (modo query para multilingual-e5-large)
+            query_embedding = cls.generate_embedding(query, mode='query')
             if not query_embedding:
                 logger.error("No se pudo generar embedding para la query")
                 return []
@@ -1328,80 +1690,132 @@ class RAGService:
             # Convertir embedding a numpy array
             query_vector = np.frombuffer(query_embedding, dtype=np.float32)
             
-            # Obtener colecciones
-            collections = IntelligenceCollection.objects.filter(
-                name__in=collection_names,
-                is_active=True
-            )
+            # Obtener colecciones filtradas por perfil de inteligencia
+            collections = cls.get_accessible_collections(collection_names, profile=profile)
             
             if not collections.exists():
-                logger.warning(f"No se encontraron colecciones con nombres: {collection_names}")
+                logger.warning(f"No se encontraron colecciones accesibles con nombres: {collection_names}")
                 return []
             
-            # Obtener todos los documentos de las colecciones
+            # --- PRE-FILTRADO EN SQL (P3) ---
+            # Aplicar filtros directamente en la BD usando JSONField lookups
+            # Esto evita cargar documentos no relevantes a memoria
             documents = IntelligenceDocument.objects.filter(
                 collection__in=collections,
                 embedding__isnull=False
             ).select_related('collection')
             
-            # Aplicar filtros si se proporcionan
             if filters:
-                # Filtrado básico por campo (igualdad exacta)
+                from django.db.models import Q
+                filter_q = Q()
                 for field_name, field_value in filters.items():
-                    # Filtrar documentos cuyo field_values[field_name] == field_value
-                    # Esto es ineficiente para muchos documentos, pero funciona para demostración
-                    filtered_docs = []
-                    for doc in documents:
-                        if field_name in doc.field_values and doc.field_values[field_name] == field_value:
-                            filtered_docs.append(doc)
-                    documents = filtered_docs
+                    # Usar JSONField key transform de Django
+                    # Se traduce a JSON_VALUE en SQL Server
+                    filter_q &= Q(**{f'field_values__{field_name}': field_value})
+                
+                documents = documents.filter(filter_q)
+                logger.debug(f"Filtros aplicados en SQL: {filters}, documentos restantes: {documents.count()}")
             
-            if not documents:
+            if not documents.exists():
                 return []
             
-            # Calcular similitud para cada documento
+            # --- BÚSQUEDA CON FAISS HNSW (P2) ---
+            # Intentar usar FAISS primero para búsqueda O(log n)
             results = []
             threshold = cls.SIMILARITY_THRESHOLD
             
-            for doc in documents:
-                try:
-                    # Convertir embedding del documento a numpy
-                    doc_vector = np.frombuffer(doc.embedding, dtype=np.float32)
-                    
-                    # Calcular similitud de coseno
-                    similarity = np.dot(query_vector, doc_vector) / (
-                        np.linalg.norm(query_vector) * np.linalg.norm(doc_vector)
+            try:
+                from .faiss_index import FAISSIndexManager
+                
+                # Procesar cada colección por separado (cada una tiene su propio índice FAISS)
+                for collection in collections:
+                    faiss_index = FAISSIndexManager.get_instance(
+                        collection.name,
+                        cls.EMBEDDING_DIMENSIONS
                     )
                     
-                    # Filtrar por umbral
-                    if similarity >= threshold:
-                        # Obtener solo los campos display_fields de la colección
-                        display_fields = doc.collection.display_fields or []
-                        field_values_to_display = {}
+                    if faiss_index.is_loaded:
+                        # Búsqueda FAISS (O(log n))
+                        faiss_results = faiss_index.search(query_vector, top_k=top_k)
                         
-                        if display_fields:
-                            for field in display_fields:
-                                if field in doc.field_values:
-                                    field_values_to_display[field] = doc.field_values[field]
-                        else:
-                            # Si no hay display_fields definidos, mostrar todos
-                            field_values_to_display = doc.field_values
+                        if faiss_results:
+                            # Obtener documentos completos desde BD
+                            doc_ids = [r['document_id'] for r in faiss_results]
+                            docs_map = {
+                                str(d.id): d
+                                for d in IntelligenceDocument.objects.filter(id__in=doc_ids)
+                            }
+                            
+                            for fr in faiss_results:
+                                doc = docs_map.get(fr['document_id'])
+                                if doc and fr['similarity'] >= threshold:
+                                    field_values_to_display = cls._build_field_values_to_display(doc)
+                                    
+                                    results.append({
+                                        'document_id': str(doc.id),
+                                        'collection_name': doc.collection.name,
+                                        'source_id': doc.source_id,
+                                        'similarity': fr['similarity'],
+                                        'field_values': field_values_to_display,
+                                        'content': doc.content[:200] + '...' if len(doc.content) > 200 else doc.content,
+                                        'created_at': doc.created_at.isoformat() if doc.created_at else None,
+                                        'search_type': 'vector_faiss'
+                                    })
+                    else:
+                        # Fallback: búsqueda O(n) para esta colección
+                        logger.debug(f"FAISS no disponible para '{collection.name}', usando búsqueda O(n)")
+                        collection_docs = documents.filter(collection=collection)
                         
-                        result = {
-                            'document_id': str(doc.id),
-                            'collection_name': doc.collection.name,
-                            'source_id': doc.source_id,
-                            'similarity': float(similarity),
-                            'field_values': field_values_to_display,
-                            'content': doc.content[:200] + '...' if len(doc.content) > 200 else doc.content,
-                            'created_at': doc.created_at.isoformat() if doc.created_at else None,
-                            'search_type': 'vector'
-                        }
-                        results.append(result)
+                        for doc in collection_docs:
+                            try:
+                                doc_vector = np.frombuffer(doc.embedding, dtype=np.float32)
+                                similarity = np.dot(query_vector, doc_vector) / (
+                                    np.linalg.norm(query_vector) * np.linalg.norm(doc_vector)
+                                )
+                                
+                                if similarity >= threshold:
+                                    field_values_to_display = cls._build_field_values_to_display(doc)
+                                    
+                                    results.append({
+                                        'document_id': str(doc.id),
+                                        'collection_name': doc.collection.name,
+                                        'source_id': doc.source_id,
+                                        'similarity': float(similarity),
+                                        'field_values': field_values_to_display,
+                                        'content': doc.content[:200] + '...' if len(doc.content) > 200 else doc.content,
+                                        'created_at': doc.created_at.isoformat() if doc.created_at else None,
+                                        'search_type': 'vector'
+                                    })
+                            except Exception as e:
+                                logger.warning(f"Error calculando similitud para documento {doc.id}: {e}")
+                                continue
+                
+            except ImportError:
+                # FAISS no instalado, usar búsqueda O(n) tradicional
+                logger.debug("FAISS no disponible, usando búsqueda O(n) tradicional")
+                for doc in documents:
+                    try:
+                        doc_vector = np.frombuffer(doc.embedding, dtype=np.float32)
+                        similarity = np.dot(query_vector, doc_vector) / (
+                            np.linalg.norm(query_vector) * np.linalg.norm(doc_vector)
+                        )
                         
-                except Exception as e:
-                    logger.warning(f"Error calculando similitud para documento {doc.id}: {e}")
-                    continue
+                        if similarity >= threshold:
+                            field_values_to_display = cls._build_field_values_to_display(doc)
+                            
+                            results.append({
+                                'document_id': str(doc.id),
+                                'collection_name': doc.collection.name,
+                                'source_id': doc.source_id,
+                                'similarity': float(similarity),
+                                'field_values': field_values_to_display,
+                                'content': doc.content[:200] + '...' if len(doc.content) > 200 else doc.content,
+                                'created_at': doc.created_at.isoformat() if doc.created_at else None,
+                                'search_type': 'vector'
+                            })
+                    except Exception as e:
+                        logger.warning(f"Error calculando similitud para documento {doc.id}: {e}")
+                        continue
             
             # Si no hay suficientes resultados con búsqueda vectorial y está habilitado el fallback de texto
             if len(results) < top_k and cls.ENABLE_TEXT_FALLBACK:
@@ -1439,3 +1853,61 @@ class RAGService:
         except Exception as e:
             logger.error(f"Error en búsqueda dinámica RAG: {e}")
             return []
+
+
+# =============================================================================
+# FUNCIÓN HELPER: get_collections_for_user
+# =============================================================================
+
+def get_collections_for_user(user) -> List[IntelligenceCollection]:
+    """
+    Obtiene todas las colecciones de inteligencia accesibles para un usuario.
+    
+    Usa el UserIntelligenceProfile del usuario para filtrar colecciones según:
+    - Nivel mínimo (min_level)
+    - Dominios permitidos (allowed_domains)
+    - Colecciones extra (extra_collections)
+    - Colecciones bloqueadas (blocked_collections)
+    - Flag is_public
+    
+    Args:
+        user: Instancia de User (de intelligence.models)
+        
+    Returns:
+        Lista de IntelligenceCollection accesibles para el usuario
+    """
+    from intelligence.models import UserIntelligenceProfile
+    
+    try:
+        profile = UserIntelligenceProfile.objects.get(user=user)
+    except UserIntelligenceProfile.DoesNotExist:
+        logger.warning(f"Usuario {user.id} no tiene perfil de inteligencia. Retornando colecciones públicas.")
+        return list(IntelligenceCollection.objects.filter(is_active=True, is_public=True))
+    
+    collections = list(IntelligenceCollection.objects.filter(is_active=True))
+    
+    extra_ids = set(profile.extra_collections.values_list('id', flat=True)) if hasattr(profile, 'extra_collections') else set()
+    blocked_ids_set = set(profile.blocked_collections.values_list('id', flat=True)) if hasattr(profile, 'blocked_collections') else set()
+    
+    accessible = []
+    for coll in collections:
+        # Bloqueo explícito
+        if coll.id in blocked_ids_set:
+            continue
+        
+        # Nivel mínimo
+        if profile.level < coll.min_level:
+            continue
+        
+        # Pública o extra → acceso directo
+        if coll.is_public or coll.id in extra_ids:
+            accessible.append(coll)
+            continue
+        
+        # Coincidencia de dominio
+        if coll.domain in profile.allowed_domains:
+            accessible.append(coll)
+            continue
+    
+    logger.info(f"get_collections_for_user(user={user.id}): {len(accessible)}/{len(collections)} colecciones accesibles")
+    return accessible

@@ -1,0 +1,219 @@
+{% extends "intelligence/base/base.html" %}
+{% load static %}
+
+{% block title %}Logs de Ejecución — Propifai Skills{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --bg-dark: #0d1117;
+        --bg-card: #161b22;
+        --bg-input: #0d1117;
+        --border-color: #30363d;
+        --text-primary: #e6edf3;
+        --text-secondary: #8b949e;
+        --text-muted: #484f58;
+        --accent-blue: #58a6ff;
+        --accent-green: #238636;
+        --accent-green-hover: #2ea043;
+        --accent-red: #f85149;
+        --accent-orange: #d29922;
+        --accent-purple: #bc8cff;
+        --accent-cyan: #39d2c0;
+        --radius: 8px;
+        --radius-sm: 6px;
+    }
+    body { background: var(--bg-dark); color: var(--text-primary); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+    .header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+    .header h1 { font-size: 22px; font-weight: 700; margin: 0; }
+    .header-actions { margin-left: auto; display: flex; gap: 8px; }
+    .nav-links { display: flex; gap: 4px; margin-bottom: 24px; flex-wrap: wrap; }
+    .nav-link { padding: 6px 14px; border-radius: var(--radius-sm); font-size: 13px; color: var(--text-secondary); text-decoration: none; border: 1px solid var(--border-color); background: transparent; transition: all 0.15s; }
+    .nav-link:hover { color: var(--text-primary); background: rgba(255,255,255,0.05); }
+    .nav-link.active { color: var(--accent-blue); border-color: var(--accent-blue); background: rgba(88,166,255,0.1); }
+    .card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius); margin-bottom: 24px; overflow: hidden; }
+    .card-header { padding: 14px 20px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; }
+    .card-header h3 { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); }
+    .card-body { padding: 20px; }
+    .table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .table th { text-align: left; padding: 10px 12px; color: var(--text-secondary); font-weight: 600; border-bottom: 1px solid var(--border-color); white-space: nowrap; }
+    .table td { padding: 10px 12px; border-bottom: 1px solid var(--border-color); color: var(--text-primary); }
+    .table tr:last-child td { border-bottom: none; }
+    .table tr:hover td { background: rgba(255,255,255,0.02); }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+    .badge-success { background: rgba(35,134,54,0.2); color: #3fb950; border: 1px solid rgba(35,134,54,0.3); }
+    .badge-danger { background: rgba(248,81,73,0.15); color: #f85149; border: 1px solid rgba(248,81,73,0.3); }
+    .badge-info { background: rgba(88,166,255,0.15); color: #58a6ff; border: 1px solid rgba(88,166,255,0.3); }
+    .badge-warning { background: rgba(210,153,34,0.15); color: #d29922; border: 1px solid rgba(210,153,34,0.3); }
+    .badge-purple { background: rgba(188,140,255,0.15); color: #bc8cff; border: 1px solid rgba(188,140,255,0.3); }
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500; text-decoration: none; border: 1px solid var(--border-color); background: transparent; color: var(--text-primary); cursor: pointer; transition: all 0.15s; }
+    .btn:hover { background: rgba(255,255,255,0.05); }
+    .btn-primary { background: var(--accent-green); border-color: var(--accent-green); color: #fff; }
+    .btn-primary:hover { background: var(--accent-green-hover); }
+    .btn-sm { padding: 4px 10px; font-size: 12px; }
+    .filter-bar { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+    .filter-group { display: flex; flex-direction: column; gap: 4px; }
+    .filter-group label { font-size: 12px; color: var(--text-secondary); font-weight: 500; }
+    .filter-input { background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 6px 10px; color: var(--text-primary); font-size: 13px; }
+    .filter-input:focus { outline: none; border-color: var(--accent-blue); }
+    .filter-select { background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 6px 10px; color: var(--text-primary); font-size: 13px; min-width: 140px; }
+    .filter-select:focus { outline: none; border-color: var(--accent-blue); }
+    .pagination { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 16px 0 0; }
+    .page-link { padding: 6px 12px; border-radius: var(--radius-sm); font-size: 13px; color: var(--accent-blue); text-decoration: none; border: 1px solid var(--border-color); }
+    .page-link:hover { background: rgba(88,166,255,0.1); }
+    .page-info { font-size: 13px; color: var(--text-secondary); }
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+    .empty-state h3 { font-size: 18px; margin-bottom: 8px; color: var(--text-secondary); }
+    .empty-state p { font-size: 14px; }
+    .small-text { font-size: 12px; color: var(--text-secondary); }
+    .mono { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 12px; }
+    @media (max-width: 768px) {
+        .header { flex-direction: column; align-items: flex-start; }
+        .header-actions { margin-left: 0; }
+        .filter-bar { flex-direction: column; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <!-- Nav -->
+    <div class="nav-links">
+        <a href="{% url 'intelligence:skills_dashboard' %}" class="nav-link">← Dashboard</a>
+        <a href="{% url 'intelligence:skill_logs' %}" class="nav-link active">📋 Logs</a>
+        <a href="{% url 'intelligence:skill_metrics_global' %}" class="nav-link">📊 Métricas</a>
+    </div>
+
+    <!-- Header -->
+    <div class="header">
+        <h1>📋 Logs de Ejecución</h1>
+        <div class="header-actions">
+            <a href="{% url 'intelligence:skills_dashboard' %}" class="btn btn-sm">📊 Dashboard</a>
+            <a href="{% url 'intelligence:skill_metrics_global' %}" class="btn btn-sm">📈 Métricas</a>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card">
+        <div class="card-body">
+            <form method="GET" action="{% url 'intelligence:skill_logs' %}">
+                <div class="filter-bar">
+                    <div class="filter-group">
+                        <label for="skill">Skill</label>
+                        <select id="skill" name="skill" class="filter-select">
+                            <option value="">Todas</option>
+                            {% for name in skill_names %}
+                            <option value="{{ name }}" {% if current_skill == name %}selected{% endif %}>{{ name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="status">Estado</label>
+                        <select id="status" name="status" class="filter-select">
+                            <option value="">Todos</option>
+                            <option value="success" {% if current_status == 'success' %}selected{% endif %}>Éxito</option>
+                            <option value="error" {% if current_status == 'error' %}selected{% endif %}>Error</option>
+                            <option value="cached" {% if current_status == 'cached' %}selected{% endif %}>Cache</option>
+                            <option value="timeout" {% if current_status == 'timeout' %}selected{% endif %}>Timeout</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="q">Buscar</label>
+                        <input type="text" id="q" name="q" class="filter-input"
+                               placeholder="skill, error, parámetros..."
+                               value="{{ current_query }}" style="min-width:200px;">
+                    </div>
+                    <button type="submit" class="btn btn-sm">🔍 Filtrar</button>
+                    <a href="{% url 'intelligence:skill_logs' %}" class="btn btn-sm">✕ Limpiar</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabla de Logs -->
+    <div class="card">
+        <div class="card-header">
+            <h3>Ejecuciones</h3>
+            <span class="small-text">{{ total }} registros</span>
+        </div>
+        <div class="card-body">
+            {% if executions %}
+            <div style="overflow-x:auto;">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Skill</th>
+                            <th>Estado</th>
+                            <th>Latencia</th>
+                            <th>Cache</th>
+                            <th>Usuario</th>
+                            <th>Error</th>
+                            <th>Ejecutado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for exec in executions %}
+                        <tr>
+                            <td class="mono" style="font-size:11px;">
+                                <a href="{% url 'intelligence:skill_execution_detail' exec.id %}" style="color:var(--accent-blue);text-decoration:none;">
+                                    {{ exec.id|stringformat:"s"|truncatechars:8 }}
+                                </a>
+                            </td>
+                            <td>
+                                <a href="{% url 'intelligence:skill_detail' exec.skill_name %}"
+                                   style="color:var(--accent-blue);text-decoration:none;font-weight:500;">
+                                    {{ exec.skill_name }}
+                                </a>
+                            </td>
+                            <td>
+                                <span class="badge {% if exec.status == 'success' %}badge-success{% elif exec.status == 'error' %}badge-danger{% elif exec.status == 'cached' %}badge-warning{% else %}badge-info{% endif %}">
+                                    {% if exec.status == 'success' %}✓ Éxito{% elif exec.status == 'error' %}✗ Error{% elif exec.status == 'cached' %}⏳ Cache{% else %}{{ exec.status }}{% endif %}
+                                </span>
+                            </td>
+                            <td class="small-text">{{ exec.latency_ms|floatformat:0 }} ms</td>
+                            <td>
+                                {% if exec.cached %}
+                                <span class="badge badge-warning">Cache</span>
+                                {% else %}
+                                <span class="small-text">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="small-text">{{ exec.user_name|default:"Sistema" }}</td>
+                            <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                                {% if exec.error_message %}
+                                <span style="color:var(--accent-red);font-size:12px;" title="{{ exec.error_message }}">
+                                    ⚠️ {{ exec.error_message|truncatechars:50 }}
+                                </span>
+                                {% else %}
+                                <span class="small-text">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="small-text" style="white-space:nowrap;">{{ exec.executed_at|date:"d/m/Y H:i:s" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginación -->
+            <div class="pagination">
+                {% if page > 1 %}
+                <a href="?page={{ page|add:-1 }}&skill={{ current_skill }}&status={{ current_status }}&q={{ current_query }}" class="page-link">← Anterior</a>
+                {% endif %}
+                <span class="page-info">Página {{ page }} de {{ total_pages }} ({{ total }} registros)</span>
+                {% if page < total_pages %}
+                <a href="?page={{ page|add:1 }}&skill={{ current_skill }}&status={{ current_status }}&q={{ current_query }}" class="page-link">Siguiente →</a>
+                {% endif %}
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <h3>🔍 Sin resultados</h3>
+                <p>No se encontraron ejecuciones con los filtros seleccionados.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -82,7 +82,9 @@ class Command(BaseCommand):
                     self.stdout.write(f'          Campos embedding: {len(collection.embedding_fields)}')
                     self.stdout.write(f'          Campos display: {len(collection.display_fields)}')
                     self.stdout.write(f'          Campos filtro: {len(collection.filter_fields)}')
-                    self.stdout.write(f'          Nivel acceso: {collection.access_level}{sync_info}')
+                    self.stdout.write(f'          Nivel mínimo: {collection.min_level}{sync_info}')
+                    self.stdout.write(f'          Dominio: {collection.domain}')
+                    self.stdout.write(f'          Público: {collection.is_public}')
                     self.stdout.write('')
             return
         

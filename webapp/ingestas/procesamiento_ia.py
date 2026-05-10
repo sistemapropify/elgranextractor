@@ -7,7 +7,7 @@ import sys
 import json
 import uuid
 import logging
-from datetime import datetime
+from django.utils import timezone
 from typing import Dict, List, Optional, Any
 
 # Configurar logging
@@ -23,7 +23,7 @@ class LoggerDetallado:
         """
         Registra un mensaje con formato: [YYYY-MM-DD HH:MM:SS] [NIVEL] [MÓDULO] Mensaje descriptivo
         """
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        timestamp = timezone.now().strftime('%Y-%m-%d %H:%M:%S')
         mensaje_formateado = f"[{timestamp}] [{nivel.upper()}] [{modulo}] {mensaje}"
         if datos:
             mensaje_formateado += f" | {json.dumps(datos, ensure_ascii=False)}"
@@ -525,7 +525,7 @@ class ProcesadorExcelIA:
                 'descripcion_cruda': resultado['texto_original'],
                 'campos_dinamicos': campos_normalizados,
                 'metadata_procesamiento': {
-                    'timestamp_analisis': datetime.now().isoformat(),
+                    'timestamp_analisis': timezone.now().isoformat(),
                     'modelo_ia_utilizado': 'mock',
                     'confianza_extraccion': resultado['resultado_ia'].get('confianza', 0),
                     'campos_no_parseados': []
@@ -539,7 +539,7 @@ class ProcesadorExcelIA:
             'filas_con_error': len(errores),
             'filas_exitosas': len(resultados),
             'campos_dinamicos_unicos': len(campos_unicos),
-            'tiempo_procesamiento': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'tiempo_procesamiento': timezone.now().strftime('%Y-%m-%d %H:%M:%S'),
             'top_campos': sorted(
                 [(campo, info['ocurrencias']) for campo, info in campos_unicos.items()],
                 key=lambda x: x[1],

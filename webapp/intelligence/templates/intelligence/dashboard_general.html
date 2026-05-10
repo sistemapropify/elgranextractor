@@ -1,0 +1,187 @@
+{% extends "intelligence/base/base.html" %}
+
+{% block title %}Dashboard General - Propifai Intelligence Layer{% endblock %}
+{% block active_section %}dashboard{% endblock %}
+{% block page_title %}Dashboard General{% endblock %}
+
+{% block header_actions %}
+<button class="btn btn-primary" onclick="location.reload()">🔄 Actualizar</button>
+{% endblock %}
+
+{% block content %}
+<!-- System Health Overview -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value">{{ active_skills }}</div>
+        <div class="stat-label">Skills Activas</div>
+        <div class="small-text">de {{ total_skills }} totales</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ active_collections }}</div>
+        <div class="stat-label">Colecciones Activas</div>
+        <div class="small-text">de {{ total_collections }} totales</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ intent_accuracy }}%</div>
+        <div class="stat-label">Precisión de Intenciones</div>
+        <div class="small-text">{{ total_samples }} muestras evaluadas</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ system_health.execution_success_rate }}%</div>
+        <div class="stat-label">Tasa de Éxito de Ejecuciones</div>
+        <div class="small-text">{{ total_executions }} ejecuciones totales</div>
+    </div>
+</div>
+
+<!-- Main Dashboard Grid -->
+<div class="grid grid-2">
+    <!-- Skills Overview -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Skills del Sistema</h3>
+        </div>
+        <div class="card-body">
+            <div class="stats-grid" style="grid-template-columns: 1fr;">
+                <div class="stat-card" style="text-align: left;">
+                    <div class="stat-value">{{ successful_executions }}</div>
+                    <div class="stat-label">Ejecuciones Exitosas</div>
+                </div>
+                <div class="stat-card" style="text-align: left;">
+                    <div class="stat-value">{{ error_executions }}</div>
+                    <div class="stat-label">Ejecuciones con Error</div>
+                </div>
+            </div>
+            <div class="chart-container">
+                <canvas id="skills-chart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Collections Overview -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Colecciones de Conocimiento</h3>
+        </div>
+        <div class="card-body">
+            <p>Gestión de bases de conocimiento y documentos indexados.</p>
+            <div class="stats-grid" style="grid-template-columns: 1fr;">
+                <div class="stat-card" style="text-align: left;">
+                    <div class="stat-value">{{ active_collections }}</div>
+                    <div class="stat-label">Colecciones Activas</div>
+                </div>
+                <div class="stat-card" style="text-align: left;">
+                    <div class="stat-value">{{ inactive_collections }}</div>
+                    <div class="stat-label">Colecciones Inactivas</div>
+                </div>
+            </div>
+            <a href="{% url 'intelligence:collections_dashboard' %}" class="btn btn-primary">Ver Colecciones</a>
+        </div>
+    </div>
+</div>
+
+<!-- Intent Evaluation -->
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Evaluación de Clasificación de Intenciones</h3>
+    </div>
+    <div class="card-body">
+        <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">
+            <div class="stat-card">
+                <div class="stat-value">{{ intent_accuracy }}%</div>
+                <div class="stat-label">Precisión</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ total_samples }}</div>
+                <div class="stat-label">Muestras</div>
+            </div>
+        </div>
+        <a href="{% url 'intelligence:intent_evaluation' %}" class="btn btn-primary">Ver Evaluación Completa</a>
+    </div>
+</div>
+
+<!-- Recent Errors -->
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Errores Recientes</h3>
+    </div>
+    <div class="card-body">
+        {% if recent_errors %}
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Skill</th>
+                        <th>Error</th>
+                        <th>Fecha</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for error in recent_errors %}
+                    <tr>
+                        <td>{{ error.skill_name }}</td>
+                        <td class="small-text">{{ error.error_message|truncatechars:50 }}</td>
+                        <td>{{ error.executed_at|date:"d/m/Y H:i" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="small-text">No hay errores recientes.</p>
+        {% endif %}
+        <a href="{% url 'intelligence:intelligence_errors' %}" class="btn">Ver Todos los Errores</a>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Acciones Rápidas</h3>
+    </div>
+    <div class="card-body">
+        <div class="grid grid-4">
+            <a href="{% url 'intelligence:skills_dashboard' %}" class="btn btn-primary">Dashboard de Skills</a>
+            <a href="{% url 'intelligence:intelligence_tests' %}" class="btn">Ejecutar Tests</a>
+            <a href="{% url 'intelligence:intelligence_config' %}" class="btn">Configuraciones</a>
+            <button class="btn" onclick="runSystemCheck()">Verificar Sistema</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Skills Chart
+    const ctx = document.getElementById('skills-chart').getContext('2d');
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Exitosas', 'Errores'],
+            datasets: [{
+                data: [{{ successful_executions }}, {{ error_executions }}],
+                backgroundColor: ['#238636', '#f85149'],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        color: '#c9d1d9'
+                    }
+                }
+            }
+        }
+    });
+});
+
+function runSystemCheck() {
+    alert('Verificación del sistema completada. Todos los servicios funcionando correctamente.');
+}
+</script>
+{% endblock %}

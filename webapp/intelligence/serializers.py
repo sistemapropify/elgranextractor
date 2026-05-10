@@ -1,5 +1,8 @@
 from rest_framework import serializers
-from .models import Role, User, AppConfig, Conversation, Fact
+from .models import (
+    Role, User, AppConfig, Conversation, Fact,
+    SkillExecution, ConversationFlow,
+)
 import uuid
 
 
@@ -77,10 +80,22 @@ class ChatMessageSerializer(serializers.Serializer):
 class ChatRequestSerializer(serializers.Serializer):
     message = serializers.CharField(required=True)
     session_id = serializers.CharField(required=False, allow_null=True)
+    conversation_id = serializers.UUIDField(required=False, allow_null=True)
     user_id = serializers.UUIDField(required=False, allow_null=True)
     phone = serializers.CharField(required=False, allow_null=True)
     email = serializers.EmailField(required=False, allow_null=True)
     metadata = serializers.JSONField(required=False, default=dict)
+    use_memory = serializers.BooleanField(required=False, default=True)
+    use_rag = serializers.BooleanField(required=False, default=True)
+    collections = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        default=list,
+    )
+    skill_name = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    skill_params = serializers.JSONField(required=False, default=dict)
+    flow_name = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    flow_params = serializers.JSONField(required=False, default=dict)
 
     def validate(self, data):
         # Al menos uno de user_id, phone o email debe estar presente
@@ -91,9 +106,48 @@ class ChatRequestSerializer(serializers.Serializer):
         return data
 
 
+class SkillExecuteRequestSerializer(serializers.Serializer):
+    skill_name = serializers.CharField(required=True)
+    parameters = serializers.JSONField(required=False, default=dict)
+    session_id = serializers.CharField(required=False, allow_null=True)
+    conversation_id = serializers.UUIDField(required=False, allow_null=True)
+    user_id = serializers.UUIDField(required=False, allow_null=True)
+    metadata = serializers.JSONField(required=False, default=dict)
+
+
 class ChatResponseSerializer(serializers.Serializer):
     response = serializers.CharField()
     session_id = serializers.CharField()
     user_id = serializers.UUIDField()
     conversation_id = serializers.UUIDField()
     timestamp = serializers.DateTimeField()
+
+
+class ConversationFlowSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ConversationFlow
+        fields = [
+            'id', 'name', 'description', 'states',
+            'initial_state', 'metadata', 'is_active',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class SkillExecutionSerializer(serializers.ModelSerializer):
+    """Serializer para el modelo SkillExecution."""
+    user_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SkillExecution
+        fields = [
+            'id', 'skill_name', 'user', 'user_name', 'conversation',
+            'parameters', 'result', 'status', 'latency_ms',
+            'error_message', 'cached', 'executed_at',
+        ]
+        read_only_fields = ['id', 'executed_at']
+
+    def get_user_name(self, obj):
+        if obj.user:
+            return obj.user.phone or obj.user.email or str(obj.user.id)
+        return 'Sistema'

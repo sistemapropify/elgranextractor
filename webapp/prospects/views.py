@@ -2,10 +2,10 @@ import base64
 import json
 import logging
 import re
-from datetime import datetime
 
 import requests
 from django.contrib import messages
+from django.utils import timezone
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
@@ -156,7 +156,7 @@ class ProcessImageView(View):
                 setattr(prospect, model_field, value)
 
         prospect.ocr_raw_text = extracted.get('raw_text', '')
-        prospect.ocr_processed_at = datetime.now()
+        prospect.ocr_processed_at = timezone.now()
         if prospect.status == 'borrador':
             prospect.status = 'pendiente'
         prospect.save()

@@ -1,0 +1,592 @@
+{% extends "intelligence/base/base.html" %}
+{% load static %}
+
+{% block title %}Dashboard — Extractor WhatsApp{% endblock %}
+
+{% block active_section %}dashboard{% endblock %}
+
+{% block page_title %}📱 Extractor WhatsApp{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --we-bg: #0d1117;
+        --we-bg-secondary: #161b22;
+        --we-bg-tertiary: #21262d;
+        --we-border: #30363d;
+        --we-text-primary: #f0f6fc;
+        --we-text-secondary: #8b949e;
+        --we-accent: #58a6ff;
+        --we-accent-hover: #1f6feb;
+        --we-green: #238636;
+        --we-green-bg: rgba(35, 134, 54, 0.15);
+        --we-red: #da3633;
+        --we-red-bg: rgba(218, 54, 51, 0.15);
+        --we-orange: #bb8009;
+        --we-orange-bg: rgba(187, 128, 9, 0.15);
+        --we-purple: #8957e5;
+        --we-cyan: #39d2c0;
+        --we-radius: 8px;
+        --we-transition: all 0.2s ease;
+    }
+    .we-container {
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+    .we-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    .we-header h2 {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--we-text-primary);
+    }
+    .we-header-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    /* KPI Grid */
+    .we-kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+        margin-bottom: 24px;
+    }
+    .we-kpi {
+        background: var(--we-bg-secondary);
+        border: 1px solid var(--we-border);
+        border-radius: var(--we-radius);
+        padding: 16px 20px;
+        transition: var(--we-transition);
+    }
+    .we-kpi:hover {
+        border-color: var(--we-accent);
+    }
+    .we-kpi-value {
+        font-size: 28px;
+        font-weight: 700;
+        color: var(--we-text-primary);
+        line-height: 1.2;
+    }
+    .we-kpi-label {
+        font-size: 13px;
+        color: var(--we-text-secondary);
+        margin-top: 4px;
+    }
+    .we-kpi-sub {
+        font-size: 11px;
+        color: var(--we-text-secondary);
+        margin-top: 2px;
+    }
+    .we-kpi-accent-blue .we-kpi-value { color: var(--we-accent); }
+    .we-kpi-accent-green .we-kpi-value { color: var(--we-green); }
+    .we-kpi-accent-red .we-kpi-value { color: var(--we-red); }
+    .we-kpi-accent-purple .we-kpi-value { color: var(--we-purple); }
+    .we-kpi-accent-orange .we-kpi-value { color: var(--we-orange); }
+    .we-kpi-accent-cyan .we-kpi-value { color: var(--we-cyan); }
+    /* Cards */
+    .we-card {
+        background: var(--we-bg-secondary);
+        border: 1px solid var(--we-border);
+        border-radius: var(--we-radius);
+        margin-bottom: 16px;
+    }
+    .we-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 14px 20px;
+        border-bottom: 1px solid var(--we-border);
+    }
+    .we-card-title {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--we-text-primary);
+    }
+    .we-card-body {
+        padding: 20px;
+    }
+    /* Grid */
+    .we-grid-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+    .we-grid-3 {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 16px;
+    }
+    @media (max-width: 1024px) {
+        .we-grid-2, .we-grid-3 { grid-template-columns: 1fr; }
+    }
+    /* Table */
+    .we-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .we-table th {
+        text-align: left;
+        padding: 10px 12px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--we-text-secondary);
+        border-bottom: 1px solid var(--we-border);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .we-table td {
+        padding: 10px 12px;
+        font-size: 14px;
+        color: var(--we-text-primary);
+        border-bottom: 1px solid var(--we-border);
+    }
+    .we-table tr:hover td {
+        background: rgba(255,255,255,0.02);
+    }
+    /* Badges */
+    .we-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 500;
+        gap: 4px;
+    }
+    .we-badge-green {
+        background: var(--we-green-bg);
+        color: var(--we-green);
+        border: 1px solid rgba(35, 134, 54, 0.3);
+    }
+    .we-badge-red {
+        background: var(--we-red-bg);
+        color: var(--we-red);
+        border: 1px solid rgba(218, 54, 51, 0.3);
+    }
+    .we-badge-orange {
+        background: var(--we-orange-bg);
+        color: var(--we-orange);
+        border: 1px solid rgba(187, 128, 9, 0.3);
+    }
+    .we-badge-blue {
+        background: rgba(88, 166, 255, 0.15);
+        color: var(--we-accent);
+        border: 1px solid rgba(88, 166, 255, 0.3);
+    }
+    .we-badge-gray {
+        background: rgba(139, 148, 158, 0.15);
+        color: var(--we-text-secondary);
+        border: 1px solid rgba(139, 148, 158, 0.3);
+    }
+    /* Buttons */
+    .we-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 14px;
+        border-radius: var(--we-radius);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--we-text-primary);
+        background: var(--we-bg-tertiary);
+        border: 1px solid var(--we-border);
+        cursor: pointer;
+        text-decoration: none;
+        transition: var(--we-transition);
+    }
+    .we-btn:hover {
+        background: rgba(255,255,255,0.05);
+        border-color: var(--we-text-secondary);
+        color: var(--we-text-primary);
+    }
+    .we-btn-primary {
+        background: var(--we-accent);
+        border-color: var(--we-accent);
+        color: #fff;
+    }
+    .we-btn-primary:hover {
+        background: var(--we-accent-hover);
+        border-color: var(--we-accent-hover);
+        color: #fff;
+    }
+    .we-btn-danger {
+        color: var(--we-red);
+    }
+    .we-btn-danger:hover {
+        background: var(--we-red-bg);
+        border-color: var(--we-red);
+    }
+    .we-btn-sm {
+        padding: 4px 10px;
+        font-size: 12px;
+    }
+    /* Empty state */
+    .we-empty {
+        text-align: center;
+        padding: 40px 20px;
+        color: var(--we-text-secondary);
+    }
+    .we-empty h3 {
+        font-size: 18px;
+        margin-bottom: 8px;
+        color: var(--we-text-primary);
+    }
+    .we-empty p {
+        font-size: 14px;
+        margin: 0;
+    }
+    /* Text helpers */
+    .we-text-small {
+        font-size: 12px;
+        color: var(--we-text-secondary);
+    }
+    .we-text-mono {
+        font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    }
+    .we-link {
+        color: var(--we-accent);
+        text-decoration: none;
+        font-weight: 500;
+    }
+    .we-link:hover {
+        color: var(--we-accent-hover);
+        text-decoration: underline;
+    }
+    .we-section {
+        margin-bottom: 24px;
+    }
+    /* Status indicator */
+    .we-status-dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 6px;
+    }
+    .we-status-dot-green { background: var(--we-green); }
+    .we-status-dot-red { background: var(--we-red); }
+    .we-status-dot-orange { background: var(--we-orange); }
+    .we-status-dot-gray { background: var(--we-text-secondary); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="we-container">
+
+    <!-- Header -->
+    <div class="we-header">
+        <h2>📱 Dashboard de Extracción WhatsApp</h2>
+        <div class="we-header-actions">
+            <span class="we-text-small">{{ grupos_activos }} grupos activos · {{ total_ejecuciones }} ejecuciones · {{ total_archivos }} archivos</span>
+            <a href="{% url 'whatsapp_extractor:upload_extract_file' %}" class="we-btn we-btn-primary we-btn-sm">📤 Subir archivo</a>
+            <a href="{% url 'whatsapp_extractor:file_management' %}" class="we-btn we-btn-sm">📁 Archivos</a>
+            <a href="{% url 'whatsapp_extractor:grupo_create' %}" class="we-btn we-btn-primary we-btn-sm">➕ Nuevo Grupo</a>
+            <a href="{% url 'whatsapp_extractor:grupo_list' %}" class="we-btn we-btn-sm">📋 Grupos</a>
+        </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="we-kpi-grid">
+        <div class="we-kpi we-kpi-accent-blue">
+            <div class="we-kpi-value">{{ total_extracciones }}</div>
+            <div class="we-kpi-label">Extracciones Totales</div>
+            <div class="we-kpi-sub">histórico completo</div>
+        </div>
+        <div class="we-kpi we-kpi-accent-green">
+            <div class="we-kpi-value">{{ tasa_exito }}%</div>
+            <div class="we-kpi-label">Tasa de Éxito</div>
+            <div class="we-kpi-sub">{{ extracciones_exitosas }} exitosas</div>
+        </div>
+        <div class="we-kpi we-kpi-accent-red">
+            <div class="we-kpi-value">{{ total_errores }}</div>
+            <div class="we-kpi-label">Errores</div>
+            <div class="we-kpi-sub">{{ total_errores }} totales</div>
+        </div>
+        <div class="we-kpi we-kpi-accent-purple">
+            <div class="we-kpi-value">{{ total_mensajes }}</div>
+            <div class="we-kpi-label">Mensajes Extraídos</div>
+            <div class="we-kpi-sub">suma total</div>
+        </div>
+        <div class="we-kpi we-kpi-accent-orange">
+            <div class="we-kpi-value">{{ requerimientos_nuevos }}</div>
+            <div class="we-kpi-label">Requerimientos Nuevos</div>
+            <div class="we-kpi-sub">generados en logs</div>
+        </div>
+        <div class="we-kpi we-kpi-accent-cyan">
+            <div class="we-kpi-value">{{ grupos_activos }}</div>
+            <div class="we-kpi-label">Grupos Activos</div>
+            <div class="we-kpi-sub">monitoreando</div>
+        </div>
+        <div class="we-kpi we-kpi-accent-purple">
+            <div class="we-kpi-value">{{ total_requerimientos_bd }}</div>
+            <div class="we-kpi-label">Total Requerimientos en BD</div>
+            <div class="we-kpi-sub">acumulados históricos</div>
+        </div>
+    </div>
+
+    <!-- Última ejecución + Grupos activos -->
+    <div class="we-grid-2">
+        <!-- Última ejecución -->
+        <div class="we-card">
+            <div class="we-card-header">
+                <h3 class="we-card-title">⏱️ Última Ejecución</h3>
+                {% if ultimo_log %}
+                <a href="{% url 'whatsapp_extractor:log_detail' ultimo_log.id %}" class="we-link we-text-small">Ver detalle →</a>
+                {% endif %}
+            </div>
+            <div class="we-card-body">
+                {% if ultimo_log %}
+                <div style="display:flex;flex-direction:column;gap:12px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <span class="we-text-small">Estado</span>
+                        <span class="we-badge {% if ultimo_log.estado == 'completed' %}we-badge-green{% elif ultimo_log.estado == 'error' %}we-badge-red{% elif ultimo_log.estado == 'running' %}we-badge-blue{% else %}we-badge-gray{% endif %}">
+                            {% if ultimo_log.estado == 'completed' %}✓ Completado{% elif ultimo_log.estado == 'error' %}✗ Error{% elif ultimo_log.estado == 'running' %}⏳ Ejecutando{% else %}⏸️ Pendiente{% endif %}
+                        </span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;">
+                        <span class="we-text-small">Fecha</span>
+                        <span style="font-size:13px;color:var(--we-text-primary);">{{ ultimo_log.ejecucion_fecha|date:"d/m/Y H:i:s" }}</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;">
+                        <span class="we-text-small">Mensajes extraídos</span>
+                        <span style="font-size:13px;color:var(--we-text-primary);">{{ ultimo_log.mensajes_extraidos_total }}</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;">
+                        <span class="we-text-small">Válidos</span>
+                        <span style="font-size:13px;color:var(--we-text-primary);">{{ ultimo_log.mensajes_validos }}</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;">
+                        <span class="we-text-small">Requerimientos nuevos</span>
+                        <span style="font-size:13px;color:var(--we-green);">{{ ultimo_log.requerimientos_nuevos }}</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;">
+                        <span class="we-text-small">Duplicados</span>
+                        <span style="font-size:13px;color:var(--we-orange);">{{ ultimo_log.requerimientos_duplicados }}</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;">
+                        <span class="we-text-small">Basura filtrada</span>
+                        <span style="font-size:13px;color:var(--we-text-secondary);">{{ ultimo_log.requerimientos_basura_filtrados }}</span>
+                    </div>
+                    {% if ultimo_log.tiempo_proceso_segundos %}
+                    <div style="display:flex;justify-content:space-between;">
+                        <span class="we-text-small">Duración</span>
+                        <span style="font-size:13px;color:var(--we-text-primary);">{{ ultimo_log.duracion_formateada }}</span>
+                    </div>
+                    {% endif %}
+                    {% if ultimo_log.mensaje_error %}
+                    <div style="background:var(--we-red-bg);border:1px solid rgba(218,54,51,0.3);border-radius:6px;padding:10px;margin-top:4px;">
+                        <span style="font-size:12px;color:var(--we-red);">{{ ultimo_log.mensaje_error|truncatechars:200 }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+                {% else %}
+                <div class="we-empty">
+                    <h3>⏳ Sin ejecuciones</h3>
+                    <p>No hay ejecuciones registradas aún. La primera extracción aparecerá aquí.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Grupos activos -->
+        <div class="we-card">
+            <div class="we-card-header">
+                <h3 class="we-card-title">👥 Grupos Activos</h3>
+                <a href="{% url 'whatsapp_extractor:grupo_list' %}" class="we-link we-text-small">Ver todos →</a>
+            </div>
+            <div class="we-card-body">
+                {% if grupos %}
+                <div style="display:flex;flex-direction:column;gap:8px;">
+                    {% for grupo in grupos %}
+                    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--we-bg-tertiary);border-radius:6px;">
+                        <div>
+                            <a href="{% url 'whatsapp_extractor:grupo_detail' grupo.id %}" class="we-link" style="font-size:14px;">
+                                {{ grupo.nombre_grupo }}
+                            </a>
+                            <div class="we-text-small" style="margin-top:2px;">
+                                {% if grupo.ultima_extraccion %}
+                                Última: {{ grupo.ultima_extraccion|date:"d/m/Y H:i" }}
+                                {% else %}
+                                Sin extracciones
+                                {% endif %}
+                            </div>
+                        </div>
+                        <span class="we-badge {% if grupo.activo %}we-badge-green{% else %}we-badge-gray{% endif %}">
+                            <span class="we-status-dot {% if grupo.activo %}we-status-dot-green{% else %}we-status-dot-gray{% endif %}"></span>
+                            {% if grupo.activo %}Activo{% else %}Inactivo{% endif %}
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="we-empty">
+                    <h3>👥 Sin grupos configurados</h3>
+                    <p>No hay grupos WhatsApp registrados.</p>
+                    <div style="margin-top:16px;">
+                        <a href="{% url 'whatsapp_extractor:grupo_create' %}" class="we-btn we-btn-primary">➕ Crear grupo</a>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Archivos recientes -->
+    <div class="we-section">
+        <div class="we-card">
+            <div class="we-card-header">
+                <h3 class="we-card-title">📁 Archivos Recientes</h3>
+                <a href="{% url 'whatsapp_extractor:file_management' %}" class="we-link we-text-small">Ver todos →</a>
+            </div>
+            <div class="we-card-body">
+                {% if archivos_recientes %}
+                <div style="overflow-x:auto;">
+                    <table class="we-table">
+                        <thead>
+                            <tr>
+                                <th>Nombre</th>
+                                <th>Fecha</th>
+                                <th>Tamaño</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for archivo in archivos_recientes %}
+                            <tr>
+                                <td>
+                                    <a href="{% url 'whatsapp_extractor:archivo_detail' archivo.id %}" class="we-link">
+                                        {{ archivo.nombre_archivo_original }}
+                                    </a>
+                                </td>
+                                <td style="white-space:nowrap;">{{ archivo.fecha_subida|date:"d/m/Y H:i" }}</td>
+                                <td class="we-text-small">{{ archivo.tamanio_formateado }}</td>
+                                <td>
+                                    {% if archivo.procesado %}
+                                    <span class="we-badge we-badge-green">
+                                        <span class="we-status-dot we-status-dot-green"></span>
+                                        Procesado
+                                    </span>
+                                    {% else %}
+                                    <span class="we-badge we-badge-orange">
+                                        <span class="we-status-dot we-status-dot-orange"></span>
+                                        Pendiente
+                                    </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{% url 'whatsapp_extractor:archivo_detail' archivo.id %}" class="we-btn we-btn-sm">Ver</a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="we-empty">
+                    <h3>📁 Sin archivos recientes</h3>
+                    <p>No hay archivos de extracción subidos aún.</p>
+                    <div style="margin-top:16px;">
+                        <a href="{% url 'whatsapp_extractor:upload_extract_file' %}" class="we-btn we-btn-primary">📤 Subir archivo</a>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Historial de ejecuciones -->
+    <div class="we-section">
+        <div class="we-card">
+            <div class="we-card-header">
+                <h3 class="we-card-title">📋 Historial de Ejecuciones</h3>
+                <span class="we-text-small">últimas {{ logs|length }}</span>
+            </div>
+            <div class="we-card-body">
+                {% if logs %}
+                <div style="overflow-x:auto;">
+                    <table class="we-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Fecha</th>
+                                <th>Estado</th>
+                                <th>Mensajes</th>
+                                <th>Válidos</th>
+                                <th>Nuevos</th>
+                                <th>Duplicados</th>
+                                <th>Duración</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in logs %}
+                            <tr>
+                                <td class="we-text-mono" style="font-size:11px;">#{{ log.id }}</td>
+                                <td style="white-space:nowrap;">{{ log.ejecucion_fecha|date:"d/m/Y H:i:s" }}</td>
+                                <td>
+                                    <span class="we-badge {% if log.estado == 'completed' %}we-badge-green{% elif log.estado == 'error' %}we-badge-red{% elif log.estado == 'running' %}we-badge-blue{% else %}we-badge-gray{% endif %}">
+                                        {% if log.estado == 'completed' %}✓{% elif log.estado == 'error' %}✗{% elif log.estado == 'running' %}⏳{% else %}⏸️{% endif %}
+                                        {{ log.get_estado_display }}
+                                    </span>
+                                </td>
+                                <td>{{ log.mensajes_extraidos_total }}</td>
+                                <td>{{ log.mensajes_validos }}</td>
+                                <td style="color:var(--we-green);">{{ log.requerimientos_nuevos }}</td>
+                                <td style="color:var(--we-orange);">{{ log.requerimientos_duplicados }}</td>
+                                <td class="we-text-small">{{ log.duracion_formateada|default:"—" }}</td>
+                                <td>
+                                    <a href="{% url 'whatsapp_extractor:log_detail' log.id %}" class="we-btn we-btn-sm">Ver</a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="we-empty">
+                    <h3>📋 Sin ejecuciones registradas</h3>
+                    <p>El historial de extracciones aparecerá aquí cuando se ejecuten las tareas.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    // Auto-refresh cada 30s
+    function doRefresh() {
+        fetch('{% url "whatsapp_extractor:api_ultimos_logs" %}')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                // Por ahora solo recargamos la página si hay cambios
+                if (data && data.length > 0) {
+                    var firstRow = document.querySelector('.we-table tbody tr');
+                    if (firstRow) {
+                        var firstId = firstRow.querySelector('td:first-child');
+                        if (firstId && firstId.textContent.trim() !== '#' + data[0].id) {
+                            location.reload();
+                        }
+                    }
+                }
+            })
+            .catch(function() {});
+    }
+    setInterval(doRefresh, 30000);
+})();
+</script>
+{% endblock %}

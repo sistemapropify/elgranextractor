@@ -628,7 +628,12 @@ Responde SOLO con JSON: {"episode_type": "...", "intent": "..."}"""
 
             # Agregar contexto de propiedades si existe
             rag_ctx = ep.get('rag_context_used', {})
-            docs = rag_ctx.get('documents_retrieved', [])
+            if isinstance(rag_ctx, dict):
+                docs = rag_ctx.get('documents_retrieved', [])
+            elif isinstance(rag_ctx, list):
+                docs = rag_ctx
+            else:
+                docs = []
             if docs:
                 titles = [d.get('title', d.get('id', '')) for d in docs[:3]]
                 lines.append(f"Propiedades mencionadas: {', '.join(titles)}")

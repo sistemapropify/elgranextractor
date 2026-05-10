@@ -1,0 +1,325 @@
+{% extends "intelligence/base/base.html" %}
+{% load static %}
+
+{% block title %}Subir Archivo — Extractor WhatsApp{% endblock %}
+
+{% block page_title %}📤 Subir Archivo de Extracción{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --we-bg: #0d1117;
+        --we-bg-secondary: #161b22;
+        --we-bg-tertiary: #21262d;
+        --we-border: #30363d;
+        --we-text-primary: #f0f6fc;
+        --we-text-secondary: #8b949e;
+        --we-accent: #58a6ff;
+        --we-accent-hover: #1f6feb;
+        --we-green: #238636;
+        --we-green-bg: rgba(35, 134, 54, 0.15);
+        --we-red: #da3633;
+        --we-red-bg: rgba(218, 54, 51, 0.15);
+        --we-orange: #bb8009;
+        --we-radius: 8px;
+        --we-transition: all 0.2s ease;
+    }
+    .we-container {
+        max-width: 800px;
+        margin: 0 auto;
+    }
+    .we-card {
+        background: var(--we-bg-secondary);
+        border: 1px solid var(--we-border);
+        border-radius: var(--we-radius);
+        margin-bottom: 16px;
+    }
+    .we-card-header {
+        padding: 14px 20px;
+        border-bottom: 1px solid var(--we-border);
+    }
+    .we-card-title {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--we-text-primary);
+    }
+    .we-card-body {
+        padding: 20px;
+    }
+    .we-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 16px;
+        border-radius: var(--we-radius);
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--we-text-primary);
+        background: var(--we-bg-tertiary);
+        border: 1px solid var(--we-border);
+        cursor: pointer;
+        text-decoration: none;
+        transition: var(--we-transition);
+    }
+    .we-btn:hover {
+        background: rgba(255,255,255,0.05);
+        border-color: var(--we-text-secondary);
+    }
+    .we-btn-primary {
+        background: var(--we-accent);
+        border-color: var(--we-accent);
+        color: #fff;
+    }
+    .we-btn-primary:hover {
+        background: var(--we-accent-hover);
+        border-color: var(--we-accent-hover);
+    }
+    .we-text-small {
+        font-size: 12px;
+        color: var(--we-text-secondary);
+    }
+    .we-link {
+        color: var(--we-accent);
+        text-decoration: none;
+    }
+    .we-link:hover {
+        text-decoration: underline;
+    }
+    /* Drop zone */
+    .drop-zone {
+        border: 2px dashed var(--we-border);
+        border-radius: var(--we-radius);
+        padding: 60px 20px;
+        text-align: center;
+        cursor: pointer;
+        transition: var(--we-transition);
+        background: var(--we-bg);
+    }
+    .drop-zone:hover,
+    .drop-zone.dragover {
+        border-color: var(--we-accent);
+        background: rgba(88, 166, 255, 0.05);
+    }
+    .drop-zone-icon {
+        font-size: 48px;
+        margin-bottom: 16px;
+    }
+    .drop-zone-text {
+        font-size: 16px;
+        color: var(--we-text-primary);
+        margin-bottom: 8px;
+    }
+    .drop-zone-hint {
+        font-size: 13px;
+        color: var(--we-text-secondary);
+    }
+    .drop-zone input[type="file"] {
+        display: none;
+    }
+    /* File info */
+    .file-info {
+        display: none;
+        background: var(--we-bg-tertiary);
+        border: 1px solid var(--we-border);
+        border-radius: var(--we-radius);
+        padding: 16px;
+        margin-top: 16px;
+    }
+    .file-info.visible {
+        display: block;
+    }
+    .file-info-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 4px 0;
+    }
+    .file-info-label {
+        color: var(--we-text-secondary);
+        font-size: 13px;
+    }
+    .file-info-value {
+        color: var(--we-text-primary);
+        font-size: 13px;
+    }
+    /* Messages */
+    .we-message {
+        padding: 12px 16px;
+        border-radius: var(--we-radius);
+        margin-bottom: 16px;
+        font-size: 14px;
+    }
+    .we-message-success {
+        background: var(--we-green-bg);
+        border: 1px solid rgba(35, 134, 54, 0.3);
+        color: var(--we-green);
+    }
+    .we-message-error {
+        background: var(--we-red-bg);
+        border: 1px solid rgba(218, 54, 51, 0.3);
+        color: var(--we-red);
+    }
+    .we-message-info {
+        background: rgba(88, 166, 255, 0.1);
+        border: 1px solid rgba(88, 166, 255, 0.3);
+        color: var(--we-accent);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="we-container">
+
+    <!-- Header -->
+    <div style="margin-bottom:24px;">
+        <h2 style="margin:0 0 8px 0;font-size:20px;font-weight:600;color:var(--we-text-primary);">📤 Subir Archivo de Extracción</h2>
+        <p style="margin:0;font-size:14px;color:var(--we-text-secondary);">
+            Sube un archivo <code>.txt</code> exportado de WhatsApp para procesarlo y extraer requerimientos inmobiliarios.
+        </p>
+    </div>
+
+    <!-- Messages -->
+    {% if messages %}
+    {% for message in messages %}
+    <div class="we-message we-message-{% if message.tags == 'success' %}success{% elif message.tags == 'error' %}error{% else %}info{% endif %}">
+        {{ message }}
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <!-- Upload form -->
+    <div class="we-card">
+        <div class="we-card-header">
+            <h3 class="we-card-title">Seleccionar archivo</h3>
+        </div>
+        <div class="we-card-body">
+            <form method="post" enctype="multipart/form-data" id="uploadForm">
+                {% csrf_token %}
+
+                <!-- Drop zone -->
+                <div class="drop-zone" id="dropZone">
+                    <div class="drop-zone-icon">📄</div>
+                    <div class="drop-zone-text">Arrastra tu archivo .txt aquí</div>
+                    <div class="drop-zone-hint">o haz clic para seleccionar un archivo</div>
+                    <input type="file" name="archivo_txt" id="fileInput" accept=".txt">
+                </div>
+
+                <!-- File info -->
+                <div class="file-info" id="fileInfo">
+                    <div class="file-info-row">
+                        <span class="file-info-label">Nombre</span>
+                        <span class="file-info-value" id="fileName">—</span>
+                    </div>
+                    <div class="file-info-row">
+                        <span class="file-info-label">Tamaño</span>
+                        <span class="file-info-value" id="fileSize">—</span>
+                    </div>
+                    <div class="file-info-row">
+                        <span class="file-info-label">Tipo</span>
+                        <span class="file-info-value" id="fileType">—</span>
+                    </div>
+                </div>
+
+                <!-- Submit -->
+                <div style="margin-top:20px;text-align:right;">
+                    <button type="submit" class="we-btn we-btn-primary" id="submitBtn" disabled>
+                        ⚡ Procesar archivo
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Instructions -->
+    <div class="we-card">
+        <div class="we-card-header">
+            <h3 class="we-card-title">📋 Instrucciones</h3>
+        </div>
+        <div class="we-card-body">
+            <ol style="margin:0;padding-left:20px;color:var(--we-text-secondary);font-size:14px;line-height:1.8;">
+                <li>Exporta el chat de WhatsApp como archivo <code>.txt</code> (sin archivos multimedia).</li>
+                <li>Arrastra el archivo al área de carga o haz clic para seleccionarlo.</li>
+                <li>Haz clic en <strong>"Procesar archivo"</strong> para iniciar el análisis.</li>
+                <li>El procesamiento se ejecuta en segundo plano. Puedes ver el progreso en el <a href="{% url 'whatsapp_extractor:dashboard' %}" class="we-link">Dashboard</a>.</li>
+            </ol>
+            <div style="margin-top:16px;padding:12px;background:rgba(88,166,255,0.1);border-radius:6px;font-size:13px;color:var(--we-accent);">
+                💡 <strong>Nota:</strong> El archivo debe ser una exportación de WhatsApp en formato texto. 
+                Los mensajes se procesarán automáticamente para extraer requerimientos inmobiliarios.
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const fileInfo = document.getElementById('fileInfo');
+    const fileName = document.getElementById('fileName');
+    const fileSize = document.getElementById('fileSize');
+    const fileType = document.getElementById('fileType');
+    const submitBtn = document.getElementById('submitBtn');
+
+    // Click on drop zone triggers file input
+    dropZone.addEventListener('click', function() {
+        fileInput.click();
+    });
+
+    // Drag events
+    dropZone.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        dropZone.classList.add('dragover');
+    });
+
+    dropZone.addEventListener('dragleave', function(e) {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+    });
+
+    dropZone.addEventListener('drop', function(e) {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        if (e.dataTransfer.files.length > 0) {
+            fileInput.files = e.dataTransfer.files;
+            handleFile(e.dataTransfer.files[0]);
+        }
+    });
+
+    // File input change
+    fileInput.addEventListener('change', function() {
+        if (fileInput.files.length > 0) {
+            handleFile(fileInput.files[0]);
+        }
+    });
+
+    function handleFile(file) {
+        // Validate extension
+        if (!file.name.endsWith('.txt')) {
+            alert('Solo se permiten archivos .txt');
+            fileInput.value = '';
+            fileInfo.classList.remove('visible');
+            submitBtn.disabled = true;
+            return;
+        }
+
+        // Show file info
+        fileName.textContent = file.name;
+        fileSize.textContent = formatSize(file.size);
+        fileType.textContent = file.type || 'text/plain';
+        fileInfo.classList.add('visible');
+        submitBtn.disabled = false;
+    }
+
+    function formatSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+})();
+</script>
+{% endblock %}

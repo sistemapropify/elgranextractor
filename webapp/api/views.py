@@ -1137,3 +1137,249 @@ class ComparablesAPIView(APIView):
                 {'error': 'Error interno del servidor', 'detalle': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+# ═══════════════════════════════════════════════════════════════
+#  SISTEMA DE PUNTOS DE INTERÉS (POIs) Y CAPAS DE CERCANÍA
+# ═══════════════════════════════════════════════════════════════
+
+from .poi_service import POIManager, resolver_coordenadas
+
+
+class NearbyPlacesAPIView(APIView):
+    """
+    GET /api/v1/nearby-places/
+    
+    Busca puntos de interés cercanos a una propiedad o coordenada.
+    
+    Parámetros:
+    - property_id (int, opcional): ID de la propiedad (resuelve coordenadas automáticamente)
+    - lat (float, opcional): Latitud del punto de origen
+    - lng (float, opcional): Longitud del punto de origen
+    - radius (int, opcional): Radio de búsqueda en metros (default: 500)
+    - capas (str, opcional): Slugs de capas separadas por coma (ej: hospital,pharmacy)
+    
+    Nota: Si se envía property_id, se ignoran lat/lng.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        try:
+            property_id = request.GET.get('property_id')
+            lat = request.GET.get('lat')
+            lng = request.GET.get('lng')
+            radius = request.GET.get('radius', '500')
+            capas_str = request.GET.get('capas')
+
+            # Validar radio
+            try:
+                radio_metros = float(radius)
+                if radio_metros <= 0 or radio_metros > 50000:
+                    return Response(
+                        {'error': 'El radio debe estar entre 1 y 50000 metros'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            except (ValueError, TypeError):
+                return Response(
+                    {'error': 'radius debe ser un número válido en metros'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Resolver coordenadas
+            coords = None
+            if property_id:
+                try:
+                    prop_id = int(property_id)
+                except (ValueError, TypeError):
+                    return Response(
+                        {'error': 'property_id debe ser un número entero'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                coords = resolver_coordenadas(prop_id)
+                if not coords:
+                    return Response(
+                        {'error': f'No se encontraron coordenadas para property_id={property_id}. '
+                                  f'Verifica que la propiedad exista y tenga coordenadas.'},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+            elif lat and lng:
+                try:
+                    coords = (float(lat), float(lng))
+                except (ValueError, TypeError):
+                    return Response(
+                        {'error': 'lat y lng deben ser números válidos'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            else:
+                return Response(
+                    {'error': 'Debes enviar property_id o (lat + lng)'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Parsear capas
+            capas = None
+            if capas_str:
+                capas = [c.strip() for c in capas_str.split(',') if c.strip()]
+                # Validar que las capas existan
+                from .models import CategoriaPOI
+                capas_validas = set(
+                    CategoriaPOI.objects.filter(
+                        slug__in=capas, is_active=True
+                    ).values_list('slug', flat=True)
+                )
+                capas_invalidas = set(capas) - capas_validas
+                if capas_invalidas:
+                    return Response(
+                        {'error': f'Capas no encontradas o inactivas: {", ".join(capas_invalidas)}'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            # Ejecutar búsqueda
+            manager = POIManager()
+            resultado = manager.buscar_cercanos(
+                lat=coords[0],
+                lng=coords[1],
+                radio_metros=radio_metros,
+                capas=capas,
+            )
+
+            return Response(resultado, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.exception("Error en NearbyPlacesAPIView")
+            return Response(
+                {'error': 'Error interno del servidor', 'detalle': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class ListarCapasAPIView(APIView):
+    """
+    GET /api/v1/pois/capas/
+    
+    Lista todas las categorías/capas disponibles con su metadata.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        try:
+            manager = POIManager()
+            capas = manager.get_capas_activas()
+            data = []
+            for capa in capas:
+                data.append({
+                    'id': capa.id,
+                    'nombre': capa.nombre,
+                    'slug': capa.slug,
+                    'icono': capa.icono,
+                    'color': capa.color,
+                    'descripcion': capa.descripcion,
+                    'orden': capa.orden,
+                    'total_pois': capa.puntos.count(),
+                })
+            return Response({
+                'capas': data,
+                'total': len(data),
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.exception("Error en ListarCapasAPIView")
+            return Response(
+                {'error': 'Error interno del servidor', 'detalle': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class ExportarCapaGeoJSONView(APIView):
+    """
+    GET /api/v1/pois/capa/{slug}.geojson
+    
+    Exporta una capa específica como GeoJSON FeatureCollection.
+    Útil para visualizar marcadores en Google Maps, Leaflet, Mapbox, QGIS, etc.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request, slug):
+        try:
+            from .models import CategoriaPOI
+            try:
+                capa = CategoriaPOI.objects.get(slug=slug, is_active=True)
+            except CategoriaPOI.DoesNotExist:
+                return Response(
+                    {'error': f'Capa "{slug}" no encontrada o inactiva'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            manager = POIManager()
+            geojson = manager.generar_geojson(capa_slug=slug)
+
+            # Metadata de la capa en la respuesta
+            geojson['capa'] = {
+                'nombre': capa.nombre,
+                'slug': capa.slug,
+                'icono': capa.icono,
+                'color': capa.color,
+                'total_pois': len(geojson.get('features', [])),
+            }
+
+            return Response(geojson, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.exception("Error en ExportarCapaGeoJSONView")
+            return Response(
+                {'error': 'Error interno del servidor', 'detalle': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class ExportarTodasCapasGeoJSONView(APIView):
+    """
+    GET /api/v1/pois/all.geojson
+    
+    Exporta TODAS las capas activas como un solo GeoJSON FeatureCollection.
+    Cada feature incluye categoria_slug y categoria_nombre en properties
+    para que el cliente pueda filtrar por capa.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        try:
+            manager = POIManager()
+            geojson = manager.generar_geojson()
+
+            # Metadata
+            capas = manager.get_capas_activas()
+            geojson['capas_disponibles'] = [
+                {
+                    'slug': c.slug,
+                    'nombre': c.nombre,
+                    'icono': c.icono,
+                    'color': c.color,
+                }
+                for c in capas
+            ]
+            geojson['total_pois'] = len(geojson.get('features', []))
+
+            return Response(geojson, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.exception("Error en ExportarTodasCapasGeoJSONView")
+            return Response(
+                {'error': 'Error interno del servidor', 'detalle': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class POIMapaTemplateView(APIView):
+    """
+    GET /api/v1/pois/mapa/
+
+    Sirve el template HTML del mapa interactivo de POIs.
+    Renderiza el mapa con Google Maps y la lista de capas disponibles.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        from django.shortcuts import render
+        # Usar la misma API key que el resto del proyecto
+        google_maps_api_key = 'AIzaSyBrL1QF7vTl9zF8FmCUumfRpFJcaYokO7Q'
+        return render(request, "api/poi_mapa.html", {
+            "google_maps_api_key": google_maps_api_key,
+        })
+

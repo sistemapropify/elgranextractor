@@ -4,7 +4,7 @@ import pandas as pd
 import sys
 import json
 import time
-from datetime import datetime
+from django.utils import timezone
 from django.shortcuts import render, redirect
 from django.views.generic import FormView, View, TemplateView, ListView, DetailView
 from django.contrib import messages
@@ -54,7 +54,7 @@ def agregar_log(request, nivel, mensaje, datos=None):
         'nivel': nivel,
         'mensaje': mensaje,
         'datos': datos_serializable,
-        'timestamp': datetime.now().isoformat()
+        'timestamp': timezone.now().isoformat()
     })
     request.session.modified = True
 
@@ -517,7 +517,7 @@ def vista_propiedades_propify_directa(request):
     """Vista que genera HTML directamente para mostrar propiedades Propify."""
     from django.http import HttpResponse
     from propifai.models import PropifaiProperty
-    from datetime import datetime
+    from django.utils import timezone
     
     try:
         # Obtener propiedades de Propifai
@@ -554,7 +554,7 @@ def vista_propiedades_propify_directa(request):
                 <div class="stats">
                     <div class="stat-item">Total propiedades: <span class="stat-value">{propiedades.count()}</span></div>
                     <div class="stat-item">Con coordenadas: <span class="stat-value">{sum(1 for p in propiedades if p.latitude and p.longitude)}</span></div>
-                    <div class="stat-item">Fecha: <span class="stat-value">{datetime.now().strftime("%d/%m/%Y %H:%M")}</span></div>
+                    <div class="stat-item">Fecha: <span class="stat-value">{timezone.now().strftime("%d/%m/%Y %H:%M")}</span></div>
                 </div>
         '''
         

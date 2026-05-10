@@ -1,0 +1,385 @@
+{% extends "intelligence/base/base.html" %}
+{% load static %}
+
+{% block title %}Log #{{ log.id }} — Extractor WhatsApp{% endblock %}
+
+{% block active_section %}dashboard{% endblock %}
+
+{% block page_title %}📋 Log de Extracción #{{ log.id }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --we-bg: #0d1117;
+        --we-bg-secondary: #161b22;
+        --we-bg-tertiary: #21262d;
+        --we-border: #30363d;
+        --we-text-primary: #f0f6fc;
+        --we-text-secondary: #8b949e;
+        --we-accent: #58a6ff;
+        --we-accent-hover: #1f6feb;
+        --we-green: #238636;
+        --we-green-bg: rgba(35, 134, 54, 0.15);
+        --we-red: #da3633;
+        --we-red-bg: rgba(218, 54, 51, 0.15);
+        --we-orange: #bb8009;
+        --we-orange-bg: rgba(187, 128, 9, 0.15);
+        --we-purple: #8957e5;
+        --we-cyan: #39d2c0;
+        --we-radius: 8px;
+        --we-transition: all 0.2s ease;
+    }
+    .we-container { max-width: 1000px; margin: 0 auto; }
+    .we-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    .we-header h2 { margin: 0; font-size: 20px; font-weight: 600; color: var(--we-text-primary); }
+    .we-header-actions { display: flex; align-items: center; gap: 12px; }
+    .we-card {
+        background: var(--we-bg-secondary);
+        border: 1px solid var(--we-border);
+        border-radius: var(--we-radius);
+        margin-bottom: 16px;
+    }
+    .we-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 14px 20px;
+        border-bottom: 1px solid var(--we-border);
+    }
+    .we-card-title { margin: 0; font-size: 15px; font-weight: 600; color: var(--we-text-primary); }
+    .we-card-body { padding: 20px; }
+    .we-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 768px) { .we-grid-2 { grid-template-columns: 1fr; } }
+    .we-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 500;
+        gap: 4px;
+    }
+    .we-badge-green { background: var(--we-green-bg); color: var(--we-green); border: 1px solid rgba(35, 134, 54, 0.3); }
+    .we-badge-red { background: var(--we-red-bg); color: var(--we-red); border: 1px solid rgba(218, 54, 51, 0.3); }
+    .we-badge-blue { background: rgba(88, 166, 255, 0.15); color: var(--we-accent); border: 1px solid rgba(88, 166, 255, 0.3); }
+    .we-badge-gray { background: rgba(139, 148, 158, 0.15); color: var(--we-text-secondary); border: 1px solid rgba(139, 148, 158, 0.3); }
+    .we-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 14px;
+        border-radius: var(--we-radius);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--we-text-primary);
+        background: var(--we-bg-tertiary);
+        border: 1px solid var(--we-border);
+        cursor: pointer;
+        text-decoration: none;
+        transition: var(--we-transition);
+    }
+    .we-btn:hover { background: rgba(255,255,255,0.05); border-color: var(--we-text-secondary); color: var(--we-text-primary); }
+    .we-text-small { font-size: 12px; color: var(--we-text-secondary); }
+    .we-text-mono { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; }
+    .we-link { color: var(--we-accent); text-decoration: none; font-weight: 500; }
+    .we-link:hover { color: var(--we-accent-hover); text-decoration: underline; }
+    .we-detail-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 10px 0;
+        border-bottom: 1px solid var(--we-border);
+    }
+    .we-detail-row:last-child { border-bottom: none; }
+    .we-detail-label { font-size: 13px; color: var(--we-text-secondary); }
+    .we-detail-value { font-size: 14px; color: var(--we-text-primary); font-weight: 500; }
+    .we-error-box {
+        background: var(--we-red-bg);
+        border: 1px solid rgba(218, 54, 51, 0.3);
+        border-radius: 6px;
+        padding: 16px;
+        margin-top: 16px;
+    }
+    .we-error-box pre {
+        margin: 8px 0 0;
+        font-size: 12px;
+        color: var(--we-red);
+        white-space: pre-wrap;
+        font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    }
+    .we-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+    }
+    .we-table th {
+        background: var(--we-bg-tertiary);
+        color: var(--we-text-secondary);
+        font-weight: 600;
+        text-align: left;
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--we-border);
+        white-space: nowrap;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+    .we-table td {
+        padding: 7px 10px;
+        border-bottom: 1px solid var(--we-border);
+        color: var(--we-text-primary);
+        vertical-align: top;
+    }
+    .we-table tr:hover td {
+        background: rgba(255,255,255,0.02);
+    }
+    .we-table-wrapper {
+        overflow-x: auto;
+        max-height: 600px;
+        overflow-y: auto;
+    }
+    .we-table-wrapper table {
+        min-width: 2000px;
+    }
+    .we-pagination {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 0 0;
+        border-top: 1px solid var(--we-border);
+        margin-top: 12px;
+    }
+    .we-pagination .step-links {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+    }
+    .we-pagination a {
+        color: var(--we-accent);
+        text-decoration: none;
+        padding: 4px 10px;
+        border: 1px solid var(--we-border);
+        border-radius: 4px;
+        font-size: 12px;
+    }
+    .we-pagination a:hover {
+        background: var(--we-bg-tertiary);
+        border-color: var(--we-accent);
+    }
+    .we-pagination .current {
+        color: var(--we-text-secondary);
+        font-size: 12px;
+        padding: 0 8px;
+    }
+    .we-text-muted { color: var(--we-text-secondary); font-size: 12px; }
+    .we-badge-info { background: rgba(88, 166, 255, 0.12); color: var(--we-accent); border: 1px solid rgba(88, 166, 255, 0.25); }
+    .we-badge-warning { background: var(--we-orange-bg); color: var(--we-orange); border: 1px solid rgba(187, 128, 9, 0.3); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="we-container">
+
+    <div class="we-header">
+        <h2>📋 Log de Extracción #{{ log.id }}</h2>
+        <div class="we-header-actions">
+            <a href="{% url 'whatsapp_extractor:dashboard' %}" class="we-btn we-btn-sm">← Dashboard</a>
+        </div>
+    </div>
+
+    <!-- Estado y métricas principales -->
+    <div class="we-grid-2">
+        <div class="we-card">
+            <div class="we-card-header">
+                <h3 class="we-card-title">📊 Estado</h3>
+            </div>
+            <div class="we-card-body">
+                <div class="we-detail-row">
+                    <span class="we-detail-label">Estado</span>
+                    <span class="we-badge {% if log.estado == 'completed' %}we-badge-green{% elif log.estado == 'error' %}we-badge-red{% elif log.estado == 'running' %}we-badge-blue{% else %}we-badge-gray{% endif %}">
+                        {% if log.estado == 'completed' %}✓ Completado{% elif log.estado == 'error' %}✗ Error{% elif log.estado == 'running' %}⏳ Ejecutando{% else %}⏸️ Pendiente{% endif %}
+                    </span>
+                </div>
+                <div class="we-detail-row">
+                    <span class="we-detail-label">Fecha de ejecución</span>
+                    <span class="we-detail-value">{{ log.ejecucion_fecha|date:"d/m/Y H:i:s" }}</span>
+                </div>
+                <div class="we-detail-row">
+                    <span class="we-detail-label">Duración</span>
+                    <span class="we-detail-value">{{ log.duracion_formateada|default:"—" }}</span>
+                </div>
+                <div class="we-detail-row">
+                    <span class="we-detail-label">Tasa de éxito</span>
+                    <span class="we-detail-value" style="color:{% if log.tasa_exito >= 80 %}var(--we-green){% elif log.tasa_exito >= 50 %}var(--we-orange){% else %}var(--we-red){% endif %};">{{ log.tasa_exito }}%</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="we-card">
+            <div class="we-card-header">
+                <h3 class="we-card-title">📈 Métricas</h3>
+            </div>
+            <div class="we-card-body">
+                <div class="we-detail-row">
+                    <span class="we-detail-label">Mensajes extraídos</span>
+                    <span class="we-detail-value">{{ log.mensajes_extraidos_total }}</span>
+                </div>
+                <div class="we-detail-row">
+                    <span class="we-detail-label">Mensajes válidos</span>
+                    <span class="we-detail-value">{{ log.mensajes_validos }}</span>
+                </div>
+                <div class="we-detail-row">
+                    <span class="we-detail-label">Requerimientos nuevos</span>
+                    <span class="we-detail-value" style="color:var(--we-green);">{{ log.requerimientos_nuevos }}</span>
+                </div>
+                <div class="we-detail-row">
+                    <span class="we-detail-label">Duplicados detectados</span>
+                    <span class="we-detail-value" style="color:var(--we-orange);">{{ log.requerimientos_duplicados }}</span>
+                </div>
+                <div class="we-detail-row">
+                    <span class="we-detail-label">Basura filtrada</span>
+                    <span class="we-detail-value" style="color:var(--we-text-secondary);">{{ log.requerimientos_basura_filtrados }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Grupos procesados -->
+    <div class="we-card">
+        <div class="we-card-header">
+            <h3 class="we-card-title">👥 Grupos Procesados</h3>
+        </div>
+        <div class="we-card-body">
+            {% if log.grupo_procesado_ids %}
+            <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                {% for gid in log.grupo_procesado_ids %}
+                <span class="we-badge we-badge-blue">Grupo #{{ gid }}</span>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="we-text-small">No se registraron grupos procesados</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Error (si existe) -->
+    {% if log.mensaje_error %}
+    <div class="we-card">
+        <div class="we-card-header">
+            <h3 class="we-card-title" style="color:var(--we-red);">🚨 Error</h3>
+        </div>
+        <div class="we-card-body">
+            <div class="we-error-box">
+                <strong style="color:var(--we-red);font-size:14px;">{{ log.mensaje_error }}</strong>
+                {% if log.stack_trace %}
+                <pre>{{ log.stack_trace }}</pre>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Requerimientos extraídos -->
+    {% if total_requerimientos > 0 %}
+    <div class="we-card">
+        <div class="we-card-header">
+            <h3 class="we-card-title">📋 Requerimientos Extraídos ({{ total_requerimientos }})</h3>
+            <span class="we-text-small">{{ requerimientos.start_index }}–{{ requerimientos.end_index }} de {{ total_requerimientos }}</span>
+        </div>
+        <div class="we-card-body" style="padding:0;">
+            <div class="we-table-wrapper">
+                <table class="we-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>📝 Requerimiento</th>
+                            <th>📋 Fuente</th>
+                            <th>👤 Agente</th>
+                            <th>📅 Fecha</th>
+                            <th>⏰ Hora</th>
+                            <th>🏷️ Condición</th>
+                            <th>🏠 Tipo</th>
+                            <th>💰 Presupuesto</th>
+                            <th>💲 Moneda</th>
+                            <th>💳 Pago</th>
+                            <th>🛏️ Dorm.</th>
+                            <th>🚿 Baños</th>
+                            <th>📐 Área</th>
+                            <th>📍 Distritos</th>
+                            <th>🚗 Cochera</th>
+                            <th>🛗 Ascensor</th>
+                            <th>🪑 Amueblado</th>
+                            <th>📝 Extra</th>
+                            <th>📞 Teléfono</th>
+                            <th>🕐 Creado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for req in requerimientos %}
+                        <tr>
+                            <td class="we-text-muted">{{ forloop.counter0|add:requerimientos.start_index }}</td>
+                            <td style="max-width:250px;white-space:pre-wrap;word-break:break-word;font-size:11px;">{{ req.requerimiento|truncatechars:150 }}</td>
+                            <td style="font-size:11px;">{{ req.fuente|default:"—" }}</td>
+                            <td style="font-size:11px;">{{ req.agente|default:"—" }}</td>
+                            <td style="font-size:11px;">{{ req.fecha|date:"d/m/Y"|default:"—" }}</td>
+                            <td style="font-size:11px;">{{ req.hora|time:"H:i"|default:"—" }}</td>
+                            <td><span class="we-badge we-badge-info">{{ req.get_condicion_display }}</span></td>
+                            <td><span class="we-badge we-badge-blue">{{ req.get_tipo_propiedad_display }}</span></td>
+                            <td style="font-size:11px;">{{ req.presupuesto_monto|default:"—" }}</td>
+                            <td style="font-size:11px;">{{ req.get_presupuesto_moneda_display|default:"—" }}</td>
+                            <td style="font-size:11px;">{{ req.get_presupuesto_forma_pago_display|default:"—" }}</td>
+                            <td style="font-size:11px;">{{ req.habitaciones|default:"—" }}</td>
+                            <td style="font-size:11px;">{{ req.banos|default:"—" }}</td>
+                            <td style="font-size:11px;">{{ req.area_m2|default:"—" }} m²</td>
+                            <td style="max-width:120px;font-size:11px;">{{ req.distritos|default:"—" }}</td>
+                            <td style="font-size:11px;">{{ req.get_cochera_display|default:"—" }}</td>
+                            <td style="font-size:11px;">{{ req.get_ascensor_display|default:"—" }}</td>
+                            <td style="font-size:11px;">{{ req.get_amueblado_display|default:"—" }}</td>
+                            <td style="max-width:100px;font-size:11px;">{{ req.caracteristicas_extra|default:"—" }}</td>
+                            <td style="font-size:11px;">{{ req.agente_telefono|default:"—" }}</td>
+                            <td class="we-text-muted" style="font-size:11px;">{{ req.creado_en|date:"d/m/Y H:i" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="21" class="we-empty" style="text-align:center;padding:20px;color:var(--we-text-secondary);">
+                                No se encontraron requerimientos vinculados a este log.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginación -->
+            {% if paginator.num_pages > 1 %}
+            <div class="we-pagination">
+                <span class="step-links">
+                    {% if requerimientos.has_previous %}
+                    <a href="?pagina=1">&laquo; Primera</a>
+                    <a href="?pagina={{ requerimientos.previous_page_number }}">‹ Anterior</a>
+                    {% endif %}
+
+                    <span class="current">
+                        Página {{ requerimientos.number }} de {{ paginator.num_pages }}
+                    </span>
+
+                    {% if requerimientos.has_next %}
+                    <a href="?pagina={{ requerimientos.next_page_number }}">Siguiente ›</a>
+                    <a href="?pagina={{ paginator.num_pages }}">Última &raquo;</a>
+                    {% endif %}
+                </span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}

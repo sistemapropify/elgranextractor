@@ -54,6 +54,23 @@ urlpatterns = [
     
     # Endpoint para buscar comparables
     path('comparables/', views.ComparablesAPIView.as_view(), name='comparables'),
+    
+    # ═══ Sistema de Puntos de Interés (POIs) y Capas de Cercanía ═══
+    
+    # Búsqueda de lugares cercanos a una propiedad
+    path('nearby-places/', views.NearbyPlacesAPIView.as_view(), name='nearby-places'),
+    
+    # Listar capas/categorías disponibles
+    path('pois/capas/', views.ListarCapasAPIView.as_view(), name='pois-capas'),
+    
+    # Exportar capa como GeoJSON (para Google Maps, Leaflet, Mapbox, QGIS)
+    path('pois/capa/<slug:slug>.geojson', views.ExportarCapaGeoJSONView.as_view(), name='pois-capa-geojson'),
+    
+    # Exportar todas las capas como GeoJSON
+    path('pois/all.geojson', views.ExportarTodasCapasGeoJSONView.as_view(), name='pois-all-geojson'),
+
+    # Mapa interactivo de POIs (template HTML)
+    path('pois/mapa/', views.POIMapaTemplateView.as_view(), name='pois-mapa'),
 ]
 
 # Agregar prefijo de versión (comentado porque ya hay prefijo en webapp/urls.py)

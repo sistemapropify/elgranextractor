@@ -83,6 +83,8 @@ urlpatterns = [
     
     # Intelligence - Propifai Intelligence Layer (PIL)
     path('api/v1/intelligence/', include('intelligence.urls')),
+    # Vistas HTML de intelligence (sin api/v1/ para acceso directo)
+    path('intelligence/', include('intelligence.urls')),
     
     # Meta Ads - Dashboard de campañas publicitarias de Meta
     path('meta-ads/', include('meta_ads.urls')),  # Dashboard de campañas publicitarias de Meta
@@ -94,6 +96,9 @@ urlpatterns = [
     
     # Prospects - Captura de prospectos inmobiliarios
     path('prospects/', include('prospects.urls')),
+
+    # WhatsApp Extractor - Extracción automática de requerimientos
+    path('whatsapp-extractor/', include('whatsapp_extractor.urls')),
 ]
 
 # Servir archivos media en desarrollo

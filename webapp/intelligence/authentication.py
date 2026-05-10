@@ -97,11 +97,13 @@ def register_user(
     if User.objects.filter(username=username).exists():
         raise ValueError(f"El nombre de usuario '{username}' ya está en uso.")
 
-    # Obtener o crear rol (sin campo 'level' que ya no existe en el modelo)
+    # Obtener o crear rol
     role, _ = Role.objects.get_or_create(
         name=role_name,
         defaults={
-            'allowed_levels': [1],
+            'default_level': 1,
+            'max_level': 1,
+            'default_domains': ['general'],
             'capabilities': {'view': True, 'memory': True, 'knowledge_base': False, 'metrics': False, 'projects': False},
             'description': 'Rol por defecto para usuarios registrados',
         }

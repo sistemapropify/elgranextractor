@@ -3,7 +3,7 @@ Utilidades para almacenar documentos crudos en Azure Blob Storage.
 """
 import os
 import logging
-from datetime import datetime
+from django.utils import timezone
 from django.conf import settings
 
 try:
@@ -89,7 +89,7 @@ def upload_raw_content(content, fuente_id, timestamp=None, tipo_documento='html'
         return None
     
     if timestamp is None:
-        timestamp = datetime.utcnow()
+        timestamp = timezone.now()
     
     # Determinar extensión del archivo
     extensiones = {

@@ -33,7 +33,9 @@ class Command(BaseCommand):
             name='Administrador',
             defaults={
                 'description': 'Acceso total al sistema',
-                'allowed_levels': [1, 2, 3, 4, 5],
+                'default_level': 5,
+                'max_level': 5,
+                'default_domains': ['general', 'publico', 'legal', 'marketing', 'escuela', 'gerencia', 'ti'],
                 'capabilities': {
                     'admin': True,
                     'view': True,
@@ -79,8 +81,7 @@ class Command(BaseCommand):
         self.stdout.write(f'  Username: {username}')
         self.stdout.write(f'  Password: {"*" * len(password)}')
         self.stdout.write(f'  Email: {email}')
-        levels_str = ",".join(str(l) for l in (admin_role.allowed_levels or []))
-        self.stdout.write(f'  Rol: {admin_role.name} (niveles {levels_str})')
+        self.stdout.write(f'  Rol: {admin_role.name} (nivel {admin_role.default_level}, max {admin_role.max_level})')
         self.stdout.write(f'  Activo: {user.is_active}')
         self.stdout.write('')
         self.stdout.write(self.style.SUCCESS('Admin listo. Inicia sesion en /login/'))

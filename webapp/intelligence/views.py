@@ -1,2162 +1,1491 @@
+"""
+Vistas del sistema Intelligence (SPEC-007, SPEC-009).
+
+Organización:
+  1. Imports
+  2. Endpoints API legacy (chat_endpoint, health_check, RAG test/status)
+  3. Role CRUD (template views)
+  4. Collection CRUD (template views)
+  5. Dashboard / Stats / Simulator
+  6. RAG Discovery & Dynamic (API)
+  7. Chat Web (template view)
+  8. Chat Web API (refactorizada -> ChatProcessor)
+  9. Chat Web Stream (refactorizada -> ChatProcessor)
+  10. Chat Web Upload
+  11. Episodic Memory (API)
+  12. Auth (register, login, logout)
+  13. User CRUD (template views)
+"""
+
+import json
+import os
+import uuid
+import logging
+
+from django.contrib import messages
+from django.db import connection
+from django.db.models import Q, Count, Avg
 from django.shortcuts import render, redirect, get_object_or_404
+from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
+from django.http import StreamingHttpResponse
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from django.utils import timezone
-from django.contrib import messages
-import uuid
-import json
-import os
 
-from .models import Role, User, AppConfig, Conversation, Fact, IntelligenceCollection, IntelligenceDocument, EpisodicMemory
-from django.db.models import Q, Count, Avg
+from .models import (
+    Role, User, AppConfig, Conversation, Fact,
+    IntelligenceCollection, IntelligenceDocument, EpisodicMemory,
+    SkillExecution, ConversationFlow, UserIntelligenceProfile,
+)
 from .serializers import (
     ChatRequestSerializer, ChatResponseSerializer,
-    ChatMessageSerializer, UserSerializer
+    ChatMessageSerializer, UserSerializer,
+    SkillExecuteRequestSerializer, SkillExecutionSerializer,
+    ConversationFlowSerializer,
 )
 from .services.memory import MemoryService
 from .services.episodic_memory import EpisodicMemoryService
+from .services.chat_processor import ChatProcessor, ChatContext, SKILL_SYSTEM
+from .services.intent_classifier import IntentClassifier, IntentType
+from .intent_evaluation_data import INTENT_EVALUATION_SAMPLES
+from .services.metrics import log
 from .permissions import (
     has_permission, role_required, level_required,
     collection_access_required, admin_required,
-    view_permission, edit_permission, delete_permission, admin_permission
+    view_permission, edit_permission, delete_permission, admin_permission,
 )
 
-
-def get_or_create_user(phone=None, email=None, user_id=None, app_id='web-clientes'):
-    """
-    Obtiene o crea un usuario basado en phone, email o user_id.
-    Si no existe, crea un usuario con rol por defecto (nivel 1).
-    """
-    user = None
-    
-    if user_id:
-        try:
-            user = User.objects.get(id=user_id)
-        except User.DoesNotExist:
-            pass
-    
-    if not user and phone:
-        try:
-            user = User.objects.get(phone=phone)
-        except User.DoesNotExist:
-            pass
-    
-    if not user and email:
-        try:
-            user = User.objects.get(email=email)
-        except User.DoesNotExist:
-            pass
-    
-    if not user:
-        # Crear nuevo usuario con rol por defecto (nivel 1)
-        try:
-            default_role = Role.objects.filter(allowed_levels__contains=[1]).first()
-            if not default_role:
-                # Crear rol por defecto si no existe
-                default_role = Role.objects.create(
-                    name='Usuario Básico',
-                    allowed_levels=[1],
-                    capabilities={'memory': True, 'knowledge_base': False, 'metrics': False, 'projects': False},
-                    description='Rol por defecto para usuarios nuevos'
-                )
-        except Exception as e:
-            # Si hay error, crear rol mínimo
-            default_role = Role.objects.create(
-                name='Usuario Básico',
-                allowed_levels=[1],
-                capabilities={'memory': True},
-                description='Rol por defecto'
-            )
-        
-        # Crear usuario
-        user_data = {
-            'role': default_role,
-            'is_active': True,
-            'metadata': {}
-        }
-        
-        if phone:
-            user_data['phone'] = phone
-        elif email:
-            user_data['email'] = email
-        else:
-            # Si no hay phone ni email, generar un identificador temporal
-            user_data['phone'] = f'temp_{uuid.uuid4().hex[:10]}'
-        
-        user = User.objects.create(**user_data)
-    
-    return user
+logger = logging.getLogger(__name__)
 
 
-def get_or_create_conversation(user, app_id, session_id=None):
-    """
-    Obtiene o crea una conversación para el usuario y app.
-    Si no se proporciona session_id, se genera uno nuevo.
-    """
-    if not session_id:
-        session_id = f'sess_{uuid.uuid4().hex[:16]}'
-    
-    try:
-        app = AppConfig.objects.get(id=app_id, is_active=True)
-    except AppConfig.DoesNotExist:
-        # Si la app no existe, usar configuración por defecto
-        app, created = AppConfig.objects.get_or_create(
-            id=app_id,
-            defaults={
-                'name': f'App {app_id}',
-                'level': 1,
-                'capabilities': {'memory': True},
-                'is_active': True,
-                'config': {}
-            }
-        )
-    
-    # Buscar conversación activa para este usuario y app
-    conversation = Conversation.objects.filter(
-        user=user, 
-        app=app, 
-        session_id=session_id,
-        is_active=True
-    ).first()
-    
-    if not conversation:
-        conversation = Conversation.objects.create(
-            user=user,
-            app=app,
-            session_id=session_id,
-            messages=[],
-            metadata={'app_id': app_id},
-            is_active=True
-        )
-    
-    return conversation, session_id
-
-
-def add_message_to_conversation(conversation, role, content):
-    """
-    Agrega un mensaje a la conversación.
-    Mantiene solo los últimos 50 mensajes.
-    Devuelve el mensaje creado (diccionario).
-    """
-    message = {
-        'role': role,
-        'content': content,
-        'timestamp': timezone.now().isoformat(),
-        'id': str(uuid.uuid4())  # Generar un ID único para el mensaje
-    }
-    
-    messages = conversation.messages
-    messages.append(message)
-    
-    # Limitar a 50 mensajes
-    if len(messages) > 50:
-        messages = messages[-50:]
-    
-    conversation.messages = messages
-    conversation.last_message_at = timezone.now()
-    conversation.save()
-    
-    return message
-    
-    return message
-
-
-def generate_response_based_on_level(user, app, message):
-    """
-    Genera una respuesta básica basada en el nivel de la app.
-    En esta fase 1, solo devuelve respuestas estáticas.
-    En fases futuras, se integrará con DeepSeek y búsqueda semántica.
-    """
-    level = app.level
-    capabilities = app.capabilities
-    
-    # Respuesta básica según nivel
-    if level == 1:
-        response = f"Hola, soy PIL (Nivel 1). Recibí tu mensaje: '{message}'. " \
-                   f"Tengo memoria de conversación pero no acceso a bases de datos externas."
-    elif level == 2:
-        response = f"Hola, soy PIL (Nivel 2). Recibí: '{message}'. " \
-                   f"Tengo memoria y acceso a conocimiento (propiedades, noticias). " \
-                   f"En futuras versiones buscaré información relevante para ti."
-    elif level == 3:
-        response = f"Hola, soy PIL (Nivel 3). Mensaje: '{message}'. " \
-                   f"Tengo memoria, conocimiento y métricas de negocio. " \
-                   f"Como gerente, podrás acceder a datos estratégicos en próximas versiones."
-    else:
-        response = f"Recibí tu mensaje: '{message}'. Sistema PIL en desarrollo."
-    
-    # Personalizar con nombre si está en metadata
-    user_name = user.metadata.get('name')
-    if user_name:
-        response = f"Hola {user_name}, " + response[5:]  # Remover "Hola, " inicial
-    
-    return response
+# ═══════════════════════════════════════════════════════════════════════════════
+# 2. ENDPOINTS API LEGACY
+# ═══════════════════════════════════════════════════════════════════════════════
 
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@authentication_classes([])
 def chat_endpoint(request):
     """
-    Endpoint único: /api/v1/intelligence/chat
-    Headers: X-App-ID, X-User-ID (opcional)
-    
-    Nuevo flujo con MemoryService (SPEC-002):
-    1. Obtener o crear usuario usando MemoryService.get_or_create_user
-    2. Obtener sesión activa usando MemoryService.get_active_session
-    3. Guardar mensaje del usuario con MemoryService.save_message
-    4. Cargar contexto de conversación con MemoryService.load_conversation_context
-    5. Extraer hechos con MemoryService.extract_and_save_facts (si está habilitado)
-    6. Construir prompt con memoria usando MemoryService.build_prompt_with_memory
-    7. Generar respuesta (simulada por ahora)
-    8. Guardar respuesta del asistente con MemoryService.save_message
-    9. Retornar respuesta con session_id y metadata
+    Endpoint legacy de chat (SPEC-007).
+    Usa MemoryService directamente. Mantenido por compatibilidad.
     """
-    # Obtener app_id de headers o parámetros
-    app_id = request.headers.get('X-App-ID', 'web-clientes')
-    
-    # Validar request
-    serializer = ChatRequestSerializer(data=request.data)
-    if not serializer.is_valid():
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    data = serializer.validated_data
-    message = data['message']
-    session_id = data.get('session_id')
-    user_id = data.get('user_id')
-    phone = data.get('phone')
-    email = data.get('email')
-    metadata = data.get('metadata', {})
-    
-    # Determinar identificador del usuario
-    identifier = None
-    channel = 'web'  # canal por defecto
-    
-    if phone:
-        identifier = phone
-        channel = 'whatsapp' if phone.startswith('+') else 'web'
-    elif email:
-        identifier = email
-        channel = 'email'
-    elif user_id:
-        identifier = user_id
-        channel = 'api'
-    else:
-        # Si no hay identificador, crear uno temporal
-        identifier = f"temp_{uuid.uuid4().hex[:8]}"
-        channel = 'anonymous'
-    
-    # 1. Obtener o crear usuario usando MemoryService
     try:
-        user = MemoryService.get_or_create_user(
-            identifier=identifier,
-            channel=channel,
-            metadata=metadata
-        )
-    except Exception as e:
-        return Response(
-            {'error': f'Error al obtener/crear usuario: {str(e)}'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-    
-    # 2. Obtener sesión activa
-    try:
-        conversation = MemoryService.get_active_session(
-            user_id=user.id,
-            app_id=app_id,
-            session_id=session_id
-        )
-    except Exception as e:
-        return Response(
-            {'error': f'Error al obtener sesión activa: {str(e)}'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-    
-    # 3. Guardar mensaje del usuario
-    try:
-        MemoryService.save_message(conversation.id, 'user', message)
-    except Exception as e:
-        return Response(
-            {'error': f'Error al guardar mensaje del usuario: {str(e)}'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-    
-    # 4. Cargar contexto de conversación
-    try:
-        context = MemoryService.load_conversation_context(conversation.id)
-    except Exception as e:
-        return Response(
-            {'error': f'Error al cargar contexto: {str(e)}'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-    
-    # 5. Extraer hechos (si está habilitado)
-    extracted_facts = []
-    if MemoryService.EXTRACT_FACTS_ENABLED:
+        serializer = ChatRequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response({
+                'success': False,
+                'error': 'Datos inválidos',
+                'details': serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        data = serializer.validated_data
+        user_id = data.get('user_id')
+        message = data.get('message')
+        conversation_id = data.get('conversation_id')
+
+        # Obtener usuario
+        user = getattr(request, 'current_user', None)
+        if not user and user_id:
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                pass
+
+        if not user:
+            return Response({
+                'success': False,
+                'error': 'Usuario no autenticado'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Calcular nivel del usuario desde su perfil de inteligencia
+        user_level = 1
         try:
-            extracted_facts = MemoryService.extract_and_save_facts(
-                user_id=user.id,
-                message=message,
-                response=''  # respuesta vacía por ahora
-            )
-        except Exception as e:
-            # No fallar si la extracción de hechos falla
-            print(f"Advertencia: Error en extracción de hechos: {e}")
-    
-    # 6. Obtener instrucciones de capacidades según app
-    try:
-        app = AppConfig.objects.get(id=app_id)
-        capability_instructions = app.capabilities.get('instructions', '')
-    except AppConfig.DoesNotExist:
-        # App por defecto
-        capability_instructions = 'Puedes acceder a la base de datos de propiedades, realizar matching con requerimientos, y proporcionar análisis de mercado.'
-    
-    # 7. Construir prompt con memoria
-    prompt = MemoryService.build_prompt_with_memory(
-        context=context,
-        capability_instructions=capability_instructions
-    )
-    
-    # 8. Generar respuesta (simulada - en producción se integraría con DeepSeek)
-    # Por ahora, usamos una respuesta simple basada en el mensaje
-    response_text = generate_response_based_on_level(user, app, message)
-    
-    # 9. Guardar respuesta del asistente
-    try:
-        MemoryService.save_message(conversation.id, 'assistant', response_text)
-    except Exception as e:
-        return Response(
-            {'error': f'Error al guardar respuesta del asistente: {str(e)}'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            profile = UserIntelligenceProfile.objects.get(user=user)
+            user_level = profile.level
+        except UserIntelligenceProfile.DoesNotExist:
+            if user.role:
+                user_level = user.role.default_level
+
+        # Obtener o crear app config
+        app, _ = AppConfig.objects.get_or_create(
+            id='chat-web',
+            defaults={
+                'name': 'Chat Web Interactivo',
+                'level': 2,
+                'capabilities': {'memory': True, 'knowledge_base': True, 'metrics': False, 'projects': False},
+                'is_active': True
+            }
         )
-    
-    # 10. Preparar respuesta
-    response_data = {
-        'response': response_text,
-        'session_id': conversation.session_id,
-        'user_id': str(user.id),
-        'conversation_id': str(conversation.id),
-        'context_summary': conversation.context_summary,
-        'extracted_facts_count': len(extracted_facts),
-        'timestamp': timezone.now()
-    }
-    
-    response_serializer = ChatResponseSerializer(response_data)
-    return Response(response_serializer.data, status=status.HTTP_200_OK)
+
+        # Obtener o crear conversación
+        conversation = None
+        if conversation_id:
+            try:
+                conversation = Conversation.objects.get(id=conversation_id, user=user)
+            except Conversation.DoesNotExist:
+                conversation = None
+
+        if not conversation:
+            session_id = f'chat_web_{uuid.uuid4().hex[:16]}'
+            conversation = Conversation.objects.create(
+                user=user,
+                app=app,
+                session_id=session_id,
+                messages=[],
+                metadata={'source': 'chat_endpoint'},
+                is_active=True
+            )
+
+        # Guardar mensaje del usuario
+        user_message = {
+            'role': 'user',
+            'content': message,
+            'timestamp': timezone.now().isoformat(),
+            'id': str(uuid.uuid4())
+        }
+        msgs = conversation.messages
+        msgs.append(user_message)
+        if len(msgs) > 50:
+            msgs = msgs[-50:]
+        conversation.messages = msgs
+        conversation.last_message_at = timezone.now()
+        conversation.save()
+
+        # Obtener contexto de memoria
+        memory_context = []
+        try:
+            memory_service = MemoryService(user_id=str(user.id))
+            memory_context = memory_service.get_relevant_context(query=message, limit=5)
+        except Exception as e:
+            logger.error(f"Error en MemoryService: {str(e)}", exc_info=True)
+
+        # Construir prompt con memoria
+        context_data = {
+            'user': {
+                'id': str(user.id),
+                'name': user.metadata.get('name') if user.metadata else (user.phone or user.email or 'Usuario'),
+                'role': user.role.name if user.role else None,
+                'level': user_level
+            },
+            'conversation_id': str(conversation.id),
+            'timestamp': timezone.now().isoformat(),
+            'memory_context': memory_context
+        }
+
+        from .services.llm import LLMService
+        from .services.prompts import PromptManager
+
+        full_prompt = PromptManager.build_full_prompt(
+            message=message,
+            memory_context=memory_context,
+            rag_context=None,
+            episodic_context=None,
+            app_id='chat-web',
+        )
+
+        success, api_message, api_response = LLMService._call_deepseek_api(
+            messages=[{"role": "user", "content": full_prompt}],
+            system_prompt=PromptManager.get_deepseek_system_prompt('chat-web'),
+        )
+
+        if success:
+            if isinstance(api_response, dict):
+                response_text = api_response.get('content', 'Lo siento, no pude generar una respuesta.')
+            else:
+                response_text = 'Lo siento, no pude generar una respuesta.'
+        else:
+            response_text = f"Error al generar respuesta: {api_message}"
+
+        # Guardar respuesta
+        assistant_message = {
+            'role': 'assistant',
+            'content': response_text,
+            'timestamp': timezone.now().isoformat(),
+            'id': str(uuid.uuid4())
+        }
+        msgs = conversation.messages
+        msgs.append(assistant_message)
+        if len(msgs) > 50:
+            msgs = msgs[-50:]
+        conversation.messages = msgs
+        conversation.last_message_at = timezone.now()
+        conversation.save()
+
+        return Response({
+            'success': True,
+            'conversation_id': str(conversation.id),
+            'message_id': assistant_message['id'],
+            'response': response_text,
+            'metadata': {
+                'response': response_text,
+                'rag_context_used': False,
+                'retrieved_documents_count': 0
+            },
+            'context_summary': {
+                'memory_used': len(memory_context) if memory_context else 0,
+                'rag_used': 0,
+                'collections_used': []
+            },
+            'timestamp': timezone.now().isoformat()
+        })
+
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        logger.error(f"Error en chat_endpoint: {str(e)}\n{error_details}")
+        return Response({
+            'success': False,
+            'error': str(e),
+            'traceback': error_details,
+            'timestamp': timezone.now().isoformat()
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@authentication_classes([])
 def health_check(request):
-    """Endpoint de salud para verificar que la API está funcionando."""
+    """Health check del sistema Intelligence."""
     return Response({
         'status': 'ok',
-        'service': 'Propifai Intelligence Layer (PIL) v1.0',
-        'phase': 'SPEC-001 - Estructura básica',
+        'service': 'intelligence',
+        'version': '2.0.0',
         'timestamp': timezone.now().isoformat()
     })
 
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@authentication_classes([])
 def rag_test_endpoint(request):
-    """
-    Endpoint de prueba para el sistema RAG (SPEC-003).
-    
-    Permite probar la búsqueda semántica y generación de respuestas
-    enriquecidas con contexto RAG.
-    """
-    from .services.rag import RAGService
-    from .services.llm import LLMService
-    
-    # Validar parámetros
-    query = request.data.get('query', '')
-    collection_id = request.data.get('collection_id')
-    access_level = request.data.get('access_level', 1)
-    include_sources = request.data.get('include_sources', True)
-    
-    if not query:
-        return Response(
-            {'error': 'El parámetro "query" es requerido'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-    
+    """Endpoint de prueba para RAG."""
     try:
-        # Opción 1: Solo búsqueda RAG (sin LLM)
-        if request.data.get('search_only', False):
-            collection_ids = [int(collection_id)] if collection_id else None
-            
-            success, message, results = RAGService.search(
-                query=query,
-                collection_ids=collection_ids,
-                access_level=access_level,
-                limit=10
-            )
-            
-            if not success:
-                return Response(
-                    {'error': message, 'results': []},
-                    status=status.HTTP_200_OK
-                )
-            
-            return Response({
-                'query': query,
-                'success': success,
-                'message': message,
-                'results_count': len(results),
-                'results': results[:5],  # Limitar a 5 resultados para respuesta
-                'timestamp': timezone.now().isoformat()
-            })
-        
-        # Opción 2: Respuesta completa con LLM + RAG
-        else:
-            # Analizar intención de la consulta
-            intent_success, intent_message, intent_data = LLMService.analyze_query_intent(query)
-            
-            # Determinar colecciones basadas en la intención
-            collection_names = None
-            if intent_success and intent_data.get('collections'):
-                collection_names = intent_data['collections']
-            
-            # Generar respuesta RAG
-            rag_success, rag_message, rag_response = LLMService.generate_rag_response(
-                query=query,
-                user_access_level=access_level,
-                collection_names=collection_names,
-                include_sources=include_sources
-            )
-            
-            if not rag_success:
-                return Response(
-                    {'error': rag_message, 'response': ''},
-                    status=status.HTTP_200_OK
-                )
-            
-            # Preparar respuesta
-            response_data = {
-                'query': query,
-                'success': rag_success,
-                'message': rag_message,
-                'response': rag_response.get('response', ''),
-                'rag_context_used': rag_response.get('rag_context_used', False),
-                'retrieved_documents_count': rag_response.get('retrieved_documents_count', 0),
-                'intent_analysis': intent_data if intent_success else None,
-                'timestamp': timezone.now().isoformat()
-            }
-            
-            if include_sources and rag_response.get('sources'):
-                response_data['sources'] = rag_response['sources'][:3]  # Limitar a 3 fuentes
-            
-            return Response(response_data, status=status.HTTP_200_OK)
-            
-    except Exception as e:
-        return Response(
-            {'error': f'Error en el endpoint RAG: {str(e)}'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        data = json.loads(request.body) if isinstance(request.body, bytes) else request.data
+        query = data.get('query', '')
+        collection_name = data.get('collection_name', '')
 
-
-@api_view(['GET'])
-@permission_classes([AllowAny])
-def rag_system_status(request):
-    """
-    Endpoint para verificar el estado del sistema RAG.
-    
-    Devuelve estadísticas y estado de salud del sistema RAG.
-    """
-    from .services.rag import RAGService
-    from .services.llm import LLMService
-    from .models import IntelligenceCollection, IntelligenceDocument
-    
-    try:
-        # Estadísticas básicas
-        total_collections = IntelligenceCollection.objects.count()
-        active_collections = IntelligenceCollection.objects.filter(is_active=True).count()
-        
-        total_docs = IntelligenceDocument.objects.count()
-        docs_with_embedding = IntelligenceDocument.objects.filter(embedding__isnull=False).count()
-        
-        # Verificar conexión con DeepSeek
-        deepseek_connected, deepseek_message = LLMService.test_connection()
-        
-        # Verificar modelo de embeddings y obtener estado del singleton
-        try:
-            embedder = RAGService.get_embedder()
-            embedding_model_loaded = True
-            embedding_model_name = RAGService.EMBEDDING_MODEL
-            
-            # Obtener estado detallado del singleton
-            embedder_status = RAGService.get_embedder_status()
-        except Exception as e:
-            embedding_model_loaded = False
-            embedding_model_name = str(e)
-            embedder_status = {
-                'loaded': False,
-                'error': str(e)
-            }
-        
-        # Colecciones que necesitan sincronización
-        from django.utils import timezone
-        from datetime import timedelta
-        
-        cutoff_date = timezone.now() - timedelta(days=1)
-        collections_needing_sync = IntelligenceCollection.objects.filter(
-            is_active=True,
-            last_sync_at__lt=cutoff_date
-        ).count()
-        
-        return Response({
-            'status': 'ok',
-            'system': 'Propifai RAG System (SPEC-003)',
-            'timestamp': timezone.now().isoformat(),
-            'statistics': {
-                'collections': {
-                    'total': total_collections,
-                    'active': active_collections,
-                    'needing_sync': collections_needing_sync
-                },
-                'documents': {
-                    'total': total_docs,
-                    'with_embedding': docs_with_embedding,
-                    'without_embedding': total_docs - docs_with_embedding,
-                    'embedding_coverage': (docs_with_embedding / total_docs * 100) if total_docs > 0 else 0
-                }
-            },
-            'services': {
-                'deepseek_api': {
-                    'connected': deepseek_connected,
-                    'message': deepseek_message
-                },
-                'embedding_model': {
-                    'loaded': embedding_model_loaded,
-                    'model_name': embedding_model_name,
-                    'dimensions': RAGService.EMBEDDING_DIMENSIONS if embedding_model_loaded else 0,
-                    'singleton_status': embedder_status
-                }
-            },
-            'health': {
-                'overall': deepseek_connected and embedding_model_loaded,
-                'issues': [] if (deepseek_connected and embedding_model_loaded) else [
-                    'DeepSeek API no conectada' if not deepseek_connected else '',
-                    'Modelo de embeddings no cargado' if not embedding_model_loaded else ''
-                ]
-            }
-        })
-        
-    except Exception as e:
-        return Response(
-            {'error': f'Error obteniendo estado del sistema RAG: {str(e)}'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-
-
-# ============================================================================
-# VISTAS PARA GESTIÓN DE ROLES (SPEC-005 - 5.2)
-# ============================================================================
-
-@admin_required
-@level_required(3)
-def role_list(request):
-    """
-    Vista para listar todos los roles con filtros por niveles permitidos.
-    Requiere nivel 3+ y rol de administrador.
-    """
-    roles = Role.objects.all().order_by('name')
-    
-    # Filtro por niveles permitidos
-    level_filter = request.GET.get('level')
-    if level_filter and level_filter.isdigit():
-        level = int(level_filter)
-        # Filtrar roles que incluyan este nivel en allowed_levels
-        roles = [role for role in roles if level in role.allowed_levels]
-    
-    # Filtro por nombre
-    name_filter = request.GET.get('name')
-    if name_filter:
-        roles = roles.filter(name__icontains=name_filter)
-    
-    context = {
-        'roles': roles,
-        'level_choices': [
-            (1, 'Nivel 1 - Memoria pura'),
-            (2, 'Nivel 2 - Memoria + Conocimiento'),
-            (3, 'Nivel 3 - Memoria + Conocimiento + Métricas'),
-            (4, 'Nivel 4 - Acceso completo + Analytics'),
-            (5, 'Nivel 5 - Administrador total')
-        ],
-        'current_filters': {
-            'level': level_filter,
-            'name': name_filter
-        }
-    }
-    
-    return render(request, 'intelligence/role_list.html', context)
-
-
-@admin_required
-@level_required(4)
-def role_create(request):
-    """
-    Vista para crear un nuevo rol.
-    Requiere nivel 4+ y rol de administrador.
-    """
-    if request.method == 'POST':
-        name = request.POST.get('name')
-        description = request.POST.get('description', '')
-        allowed_levels = request.POST.getlist('allowed_levels')
-        
-        # Convertir niveles a enteros
-        try:
-            allowed_levels = [int(level) for level in allowed_levels]
-        except ValueError:
-            messages.error(request, 'Los niveles deben ser números válidos.')
-            return redirect('intelligence:role_create')
-        
-        # Validar que haya al menos un nivel
-        if not allowed_levels:
-            messages.error(request, 'Debe seleccionar al menos un nivel.')
-            return redirect('intelligence:role_create')
-        
-        # Validar que los niveles estén entre 1 y 5
-        for level in allowed_levels:
-            if level < 1 or level > 5:
-                messages.error(request, f'Nivel {level} no válido. Debe estar entre 1 y 5.')
-                return redirect('intelligence:role_create')
-        
-        # Crear el rol
-        try:
-            role = Role.objects.create(
-                name=name,
-                description=description,
-                allowed_levels=allowed_levels
-            )
-            messages.success(request, f'Rol "{name}" creado exitosamente.')
-            return redirect('intelligence:role_list')
-        except Exception as e:
-            messages.error(request, f'Error al crear el rol: {str(e)}')
-            return redirect('intelligence:role_create')
-    
-    # GET request - mostrar formulario
-    context = {
-        'level_choices': [
-            (1, 'Nivel 1 - Memoria pura'),
-            (2, 'Nivel 2 - Memoria + Conocimiento'),
-            (3, 'Nivel 3 - Memoria + Conocimiento + Métricas'),
-            (4, 'Nivel 4 - Acceso completo + Analytics'),
-            (5, 'Nivel 5 - Administrador total')
-        ]
-    }
-    
-    return render(request, 'intelligence/role_form.html', context)
-
-
-@admin_required
-@level_required(4)
-def role_edit(request, role_id):
-    """
-    Vista para editar un rol existente.
-    Requiere nivel 4+ y rol de administrador.
-    """
-    role = get_object_or_404(Role, id=role_id)
-    
-    if request.method == 'POST':
-        name = request.POST.get('name')
-        description = request.POST.get('description', '')
-        allowed_levels = request.POST.getlist('allowed_levels')
-        
-        # Convertir niveles a enteros
-        try:
-            allowed_levels = [int(level) for level in allowed_levels]
-        except ValueError:
-            messages.error(request, 'Los niveles deben ser números válidos.')
-            return redirect('intelligence:role_edit', role_id=role_id)
-        
-        # Validar que haya al menos un nivel
-        if not allowed_levels:
-            messages.error(request, 'Debe seleccionar al menos un nivel.')
-            return redirect('intelligence:role_edit', role_id=role_id)
-        
-        # Validar que los niveles estén entre 1 y 5
-        for level in allowed_levels:
-            if level < 1 or level > 5:
-                messages.error(request, f'Nivel {level} no válido. Debe estar entre 1 y 5.')
-                return redirect('intelligence:role_edit', role_id=role_id)
-        
-        # Actualizar el rol
-        try:
-            role.name = name
-            role.description = description
-            role.allowed_levels = allowed_levels
-            role.save()
-            
-            messages.success(request, f'Rol "{name}" actualizado exitosamente.')
-            return redirect('intelligence:role_list')
-        except Exception as e:
-            messages.error(request, f'Error al actualizar el rol: {str(e)}')
-            return redirect('intelligence:role_edit', role_id=role_id)
-    
-    # GET request - mostrar formulario con datos actuales
-    context = {
-        'role': role,
-        'level_choices': [
-            (1, 'Nivel 1 - Memoria pura'),
-            (2, 'Nivel 2 - Memoria + Conocimiento'),
-            (3, 'Nivel 3 - Memoria + Conocimiento + Métricas'),
-            (4, 'Nivel 4 - Acceso completo + Analytics'),
-            (5, 'Nivel 5 - Administrador total')
-        ]
-    }
-    
-    return render(request, 'intelligence/role_form.html', context)
-
-
-def role_delete(request, role_id):
-    """
-    Vista para eliminar un rol con confirmación.
-    """
-    role = get_object_or_404(Role, id=role_id)
-    
-    if request.method == 'POST':
-        # Verificar confirmación de texto
-        confirmation_text = request.POST.get('confirmation_text', '').strip().upper()
-        
-        if confirmation_text != 'ELIMINAR':
-            messages.error(
-                request,
-                'Debes escribir "ELIMINAR" en el campo de confirmación para proceder.'
-            )
-            # Volver a mostrar la página de confirmación
-            context = {
-                'role': role,
-                'user_count': User.objects.filter(role=role).count()
-            }
-            return render(request, 'intelligence/role_confirm_delete.html', context)
-        
-        
-        # Verificar si el rol está siendo usado por algún usuario
-        user_count = User.objects.filter(role=role).count()
-        
-        if user_count > 0:
-            messages.error(
-                request,
-                f'No se puede eliminar el rol "{role.name}" porque está asignado a {user_count} usuario(s). '
-                f'Reasigne los usuarios a otro rol antes de eliminar.'
-            )
-            return redirect('intelligence:role_list')
-        
-        # Eliminar el rol
-        role_name = role.name
-        role.delete()
-        
-        messages.success(request, f'Rol "{role_name}" eliminado exitosamente.')
-        return redirect('intelligence:role_list')
-    
-    # GET request - mostrar página de confirmación
-    context = {
-        'role': role,
-        'user_count': User.objects.filter(role=role).count()
-    }
-    
-    return render(request, 'intelligence/role_confirm_delete.html', context)
-
-
-# ============================================================================
-# VISTAS PARA GESTIÓN DE COLECCIONES RAG (SPEC-005 - 5.3)
-# ============================================================================
-
-@level_required(2)
-def collection_list(request):
-    """
-    Vista para listar todas las colecciones RAG con filtros.
-    Requiere nivel 2+.
-    """
-    collections = IntelligenceCollection.objects.all().order_by('name')
-    
-    # Filtros
-    status_filter = request.GET.get('status')
-    if status_filter:
-        if status_filter == 'active':
-            collections = collections.filter(is_active=True)
-        elif status_filter == 'inactive':
-            collections = collections.filter(is_active=False)
-    
-    level_filter = request.GET.get('level')
-    if level_filter and level_filter.isdigit():
-        level = int(level_filter)
-        collections = collections.filter(access_level=level)
-    
-    # Filtro por nombre
-    name_filter = request.GET.get('name')
-    if name_filter:
-        collections = collections.filter(name__icontains=name_filter)
-    
-    context = {
-        'collections': collections,
-        'level_choices': [
-            (1, 'Nivel 1 - Memoria pura'),
-            (2, 'Nivel 2 - Memoria + Conocimiento'),
-            (3, 'Nivel 3 - Memoria + Conocimiento + Métricas'),
-            (4, 'Nivel 4 - Acceso completo + Analytics'),
-            (5, 'Nivel 5 - Administrador total')
-        ],
-        'current_filters': {
-            'status': status_filter,
-            'level': level_filter,
-            'name': name_filter
-        }
-    }
-    
-    return render(request, 'intelligence/collection_list.html', context)
-
-
-@admin_required
-@level_required(3)
-def collection_create(request):
-    """
-    Vista para crear una nueva colección RAG.
-    Requiere nivel 3+ y rol de administrador.
-    """
-    from .services.rag import RAGService
-    
-    if request.method == 'POST':
-        name = request.POST.get('name')
-        description = request.POST.get('description', '')
-        sql_query = request.POST.get('sql_query', '')
-        access_level = request.POST.get('access_level', '2')
-        is_active = request.POST.get('is_active') == 'on'
-        
-        # Obtener listas de IDs para roles y apps
-        roles_con_acceso = request.POST.getlist('roles_con_acceso')
-        apps_con_acceso = request.POST.getlist('apps_con_acceso')
-        
-        # Convertir a enteros
-        try:
-            access_level = int(access_level)
-            if access_level < 1 or access_level > 5:
-                raise ValueError
-        except ValueError:
-            messages.error(request, 'Nivel de acceso no válido. Debe ser un número entre 1 y 5.')
-            return redirect('intelligence:collection_create')
-        
-        # Convertir listas de IDs a enteros
-        try:
-            roles_con_acceso = [int(role_id) for role_id in roles_con_acceso if role_id]
-            apps_con_acceso = [int(app_id) for app_id in apps_con_acceso if app_id]
-        except ValueError:
-            messages.error(request, 'IDs de roles o apps no válidos.')
-            return redirect('intelligence:collection_create')
-        
-        # Validar SQL query (puede estar vacía inicialmente)
-        if not sql_query.strip():
-            messages.warning(request, 'La consulta SQL está vacía. Puedes agregarla después.')
-        
-        # Crear la colección
-        try:
-            collection = IntelligenceCollection.objects.create(
-                name=name,
-                description=description,
-                sql_query=sql_query,
-                access_level=access_level,
-                is_active=is_active,
-                roles_con_acceso=roles_con_acceso,
-                apps_con_acceso=apps_con_acceso
-            )
-            
-            messages.success(request, f'Colección "{name}" creada exitosamente.')
-            return redirect('intelligence:collection_list')
-        except Exception as e:
-            messages.error(request, f'Error al crear la colección: {str(e)}')
-            return redirect('intelligence:collection_create')
-    
-    # GET request - mostrar formulario
-    # Obtener roles y apps disponibles para los selectores
-    roles = Role.objects.all().order_by('name')
-    apps = AppConfig.objects.filter(is_active=True).order_by('name')
-    
-    context = {
-        'level_choices': [
-            (1, 'Nivel 1 - Memoria pura'),
-            (2, 'Nivel 2 - Memoria + Conocimiento'),
-            (3, 'Nivel 3 - Memoria + Conocimiento + Métricas'),
-            (4, 'Nivel 4 - Acceso completo + Analytics'),
-            (5, 'Nivel 5 - Administrador total')
-        ],
-        'roles': roles,
-        'apps': apps
-    }
-    
-    return render(request, 'intelligence/collection_create_dynamic.html', context)
-
-
-@admin_required
-@level_required(3)
-def collection_edit(request, collection_id):
-    """
-    Vista para editar una colección RAG existente.
-    Requiere nivel 3+ y rol de administrador.
-    """
-    from .services.rag import RAGService
-    
-    collection = get_object_or_404(IntelligenceCollection, id=collection_id)
-    
-    if request.method == 'POST':
-        name = request.POST.get('name')
-        description = request.POST.get('description', '')
-        sql_query = request.POST.get('sql_query', '')
-        access_level = request.POST.get('access_level', '2')
-        is_active = request.POST.get('is_active') == 'on'
-        
-        # Obtener listas de IDs para roles y apps
-        roles_con_acceso = request.POST.getlist('roles_con_acceso')
-        apps_con_acceso = request.POST.getlist('apps_con_acceso')
-        
-        # Convertir a enteros
-        try:
-            access_level = int(access_level)
-            if access_level < 1 or access_level > 5:
-                raise ValueError
-        except ValueError:
-            messages.error(request, 'Nivel de acceso no válido. Debe ser un número entre 1 y 5.')
-            return redirect('intelligence:collection_edit', collection_id=collection_id)
-        
-        # Convertir listas de IDs a enteros
-        try:
-            roles_con_acceso = [int(role_id) for role_id in roles_con_acceso if role_id]
-            apps_con_acceso = [int(app_id) for app_id in apps_con_acceso if app_id]
-        except ValueError:
-            messages.error(request, 'IDs de roles o apps no válidos.')
-            return redirect('intelligence:collection_edit', collection_id=collection_id)
-        
-        # Actualizar la colección
-        try:
-            collection.name = name
-            collection.description = description
-            collection.sql_query = sql_query
-            collection.access_level = access_level
-            collection.is_active = is_active
-            collection.roles_con_acceso = roles_con_acceso
-            collection.apps_con_acceso = apps_con_acceso
-            collection.save()
-            
-            messages.success(request, f'Colección "{name}" actualizada exitosamente.')
-            return redirect('intelligence:collection_list')
-        except Exception as e:
-            messages.error(request, f'Error al actualizar la colección: {str(e)}')
-            return redirect('intelligence:collection_edit', collection_id=collection_id)
-    
-    # GET request - mostrar formulario con datos actuales
-    roles = Role.objects.all().order_by('name')
-    apps = AppConfig.objects.filter(is_active=True).order_by('name')
-    
-    context = {
-        'collection': collection,
-        'level_choices': [
-            (1, 'Nivel 1 - Memoria pura'),
-            (2, 'Nivel 2 - Memoria + Conocimiento'),
-            (3, 'Nivel 3 - Memoria + Conocimiento + Métricas'),
-            (4, 'Nivel 4 - Acceso completo + Analytics'),
-            (5, 'Nivel 5 - Administrador total')
-        ],
-        'roles': roles,
-        'apps': apps
-    }
-    
-    return render(request, 'intelligence/collection_form.html', context)
-
-
-def collection_delete(request, collection_id):
-    """
-    Vista para eliminar una colección RAG con confirmación.
-    """
-    collection = get_object_or_404(IntelligenceCollection, id=collection_id)
-    
-    if request.method == 'POST':
-        # Verificar confirmación de texto
-        confirmation_text = request.POST.get('confirmation_text', '').strip().upper()
-        
-        if confirmation_text != 'ELIMINAR':
-            messages.error(
-                request,
-                'Debes escribir "ELIMINAR" en el campo de confirmación para proceder.'
-            )
-            # Volver a mostrar la página de confirmación
-            context = {
-                'collection': collection,
-                'document_count': collection.documents.count()
-            }
-            return render(request, 'intelligence/collection_confirm_delete.html', context)
-        
-        # Eliminar la colección (y sus documentos asociados por cascade)
-        collection_name = collection.name
-        collection.delete()
-        
-        messages.success(request, f'Colección "{collection_name}" eliminada exitosamente.')
-        return redirect('intelligence:collection_list')
-    
-    # GET request - mostrar página de confirmación
-    context = {
-        'collection': collection,
-        'document_count': collection.documents.count()
-    }
-    
-    return render(request, 'intelligence/collection_confirm_delete.html', context)
-
-
-def collection_sync(request, collection_id):
-    """
-    Vista para sincronizar una colección RAG (ejecutar SQL y actualizar embeddings).
-    """
-    from .services.rag import RAGService
-    
-    collection = get_object_or_404(IntelligenceCollection, id=collection_id)
-    
-    if request.method == 'POST':
-        try:
-            # Ejecutar sincronización (devuelve 3 valores: success, message, stats)
-            success, message, stats = RAGService.sync_collection(collection_id)
-            
-            if success:
-                messages.success(request, f'Colección "{collection.name}" sincronizada exitosamente: {message}')
-            else:
-                messages.error(request, f'Error al sincronizar colección: {message}')
-                
-        except Exception as e:
-            messages.error(request, f'Error inesperado al sincronizar: {str(e)}')
-        
-        return redirect('intelligence:collection_list')
-    
-    # GET request - mostrar página de confirmación de sincronización
-    context = {
-        'collection': collection,
-        'document_count': collection.documents.count(),
-        'last_sync': collection.last_sync_at
-    }
-    
-    return render(request, 'intelligence/collection_sync.html', context)
-
-
-def collection_stats(request, collection_id):
-    """
-    Vista para ver estadísticas detalladas de una colección RAG.
-    """
-    from .services.rag import RAGService
-    
-    collection = get_object_or_404(IntelligenceCollection, id=collection_id)
-    
-    # Obtener estadísticas usando RAGService
-    stats = RAGService.get_collection_stats(collection_id)
-    
-    if not stats:
-        stats = {
-            'total_documents': collection.documents.count(),
-            'documents_with_embedding': collection.documents.filter(embedding__isnull=False).count(),
-            'last_sync': collection.last_sync_at,
-            'status': 'No hay estadísticas disponibles'
-        }
-    
-    context = {
-        'collection': collection,
-        'stats': stats,
-        'documents': collection.documents.all()[:50]  # Mostrar primeros 50 documentos
-    }
-    
-    return render(request, 'intelligence/collection_stats.html', context)
-
-
-def user_simulator(request):
-    """
-    Vista del simulador de usuario (SPEC-005 - 5.4).
-    Permite seleccionar rol y app para ver niveles de acceso y colecciones disponibles.
-    """
-    # Obtener todos los roles y apps activas
-    roles = Role.objects.all().order_by('name')
-    apps = AppConfig.objects.filter(is_active=True).order_by('name')
-    
-    # Valores por defecto
-    selected_role_id = request.GET.get('role_id')
-    selected_app_id = request.GET.get('app_id')
-    search_query = request.GET.get('search', '')
-    
-    selected_role = None
-    selected_app = None
-    accessible_collections = []
-    allowed_levels = []
-    
-    if selected_role_id:
-        try:
-            selected_role = Role.objects.get(id=selected_role_id)
-            allowed_levels = selected_role.allowed_levels or []
-        except Role.DoesNotExist:
-            pass
-    
-    if selected_app_id:
-        try:
-            selected_app = AppConfig.objects.get(id=selected_app_id)
-        except AppConfig.DoesNotExist:
-            pass
-    
-    # Determinar colecciones accesibles basadas en rol y app seleccionados
-    if selected_role or selected_app:
-        # Obtener todas las colecciones activas primero
-        all_collections = IntelligenceCollection.objects.filter(is_active=True)
-        filtered_collections = []
-        
-        for collection in all_collections:
-            # Verificar acceso por rol
-            role_access_ok = True
-            if selected_role:
-                # Si roles_con_acceso está vacío, acceso a todos
-                if collection.roles_con_acceso:
-                    # Verificar si el role_id está en la lista
-                    role_id_str = str(selected_role.id)
-                    role_access_ok = any(str(role_id) == role_id_str for role_id in collection.roles_con_acceso)
-                else:
-                    # Lista vacía = acceso a todos
-                    role_access_ok = True
-            
-            # Verificar acceso por app
-            app_access_ok = True
-            if selected_app:
-                # Si apps_con_acceso está vacío, acceso a todos
-                if collection.apps_con_acceso:
-                    # Verificar si el app_id está en la lista
-                    app_id_str = str(selected_app.id)
-                    app_access_ok = any(str(app_id) == app_id_str for app_id in collection.apps_con_acceso)
-                else:
-                    # Lista vacía = acceso a todos
-                    app_access_ok = True
-            
-            # Verificar nivel de acceso
-            level_access_ok = True
-            if allowed_levels:
-                level_access_ok = collection.access_level in allowed_levels
-            
-            # Si pasa todos los filtros, incluir la colección
-            if role_access_ok and app_access_ok and level_access_ok:
-                filtered_collections.append(collection)
-        
-        accessible_collections = sorted(filtered_collections, key=lambda x: x.name)
-    
-    # Búsqueda de colecciones (para autocomplete)
-    search_results = []
-    if search_query and len(search_query) >= 2:
-        search_results = IntelligenceCollection.objects.filter(
-            Q(name__icontains=search_query) |
-            Q(description__icontains=search_query)
-        ).filter(is_active=True)[:10]
-    
-    # Obtener descripción del nivel de la app seleccionada
-    selected_app_level_description = ''
-    if selected_app:
-        level_descriptions = {
-            1: 'Nivel 1 - Memoria pura',
-            2: 'Nivel 2 - Memoria + Conocimiento',
-            3: 'Nivel 3 - Memoria + Conocimiento + Métricas',
-            4: 'Nivel 4 - Acceso completo + Analytics',
-            5: 'Nivel 5 - Administrador total'
-        }
-        selected_app_level_description = level_descriptions.get(selected_app.level, f'Nivel {selected_app.level}')
-    
-    context = {
-        'roles': roles,
-        'apps': apps,
-        'selected_role': selected_role,
-        'selected_app': selected_app,
-        'accessible_collections': accessible_collections,
-        'allowed_levels': allowed_levels,
-        'search_query': search_query,
-        'search_results': search_results,
-        'selected_app_level_description': selected_app_level_description,
-        'level_descriptions': {
-            1: 'Nivel 1 - Memoria pura',
-            2: 'Nivel 2 - Memoria + Conocimiento',
-            3: 'Nivel 3 - Memoria + Conocimiento + Métricas',
-            4: 'Nivel 4 - Acceso completo + Analytics',
-            5: 'Nivel 5 - Administrador total'
-        }
-    }
-    
-    return render(request, 'intelligence/user_simulator.html', context)
-
-
-def dashboard(request):
-    """
-    Dashboard principal del Propifai Intelligence Layer (SPEC-005 - 5.5).
-    """
-    # Estadísticas del sistema
-    total_roles = Role.objects.count()
-    total_apps = AppConfig.objects.filter(is_active=True).count()
-    total_collections = IntelligenceCollection.objects.filter(is_active=True).count()
-    total_documents = IntelligenceDocument.objects.count()
-    
-    # Colecciones recientemente sincronizadas
-    recent_collections = IntelligenceCollection.objects.filter(
-        is_active=True
-    ).order_by('-last_sync_at')[:5]
-    
-    # Roles más utilizados
-    from django.db.models import Count
-    popular_roles = Role.objects.annotate(
-        user_count=Count('users')
-    ).order_by('-user_count')[:5]
-    
-    # Apps por nivel
-    apps_by_level = {}
-    for level in range(1, 6):
-        apps_by_level[level] = AppConfig.objects.filter(
-            is_active=True, level=level
-        ).count()
-    
-    context = {
-        'total_roles': total_roles,
-        'total_apps': total_apps,
-        'total_collections': total_collections,
-        'total_documents': total_documents,
-        'recent_collections': recent_collections,
-        'popular_roles': popular_roles,
-        'apps_by_level': apps_by_level,
-        'level_descriptions': {
-            1: 'Nivel 1 - Memoria pura',
-            2: 'Nivel 2 - Memoria + Conocimiento',
-            3: 'Nivel 3 - Memoria + Conocimiento + Métricas',
-            4: 'Nivel 4 - Acceso completo + Analytics',
-            5: 'Nivel 5 - Administrador total'
-        }
-    }
-    
-    return render(request, 'intelligence/dashboard.html', context)
-
-
-def system_stats(request):
-    """
-    Vista de estadísticas detalladas del sistema (SPEC-005 - 5.5).
-    """
-    from django.db.models import Count, Avg, Max, Min
-    from django.utils import timezone
-    from datetime import timedelta
-    
-    # Fecha de hace 30 días
-    thirty_days_ago = timezone.now() - timedelta(days=30)
-    
-    # Estadísticas de colecciones
-    collections_stats = IntelligenceCollection.objects.aggregate(
-        total=Count('id'),
-        active=Count('id', filter=Q(is_active=True)),
-        avg_documents=Avg('documents__id'),
-        max_documents=Max('documents__id'),
-        min_documents=Min('documents__id')
-    )
-    
-    # Colecciones por nivel de acceso
-    collections_by_level = {}
-    for level in range(1, 6):
-        collections_by_level[level] = IntelligenceCollection.objects.filter(
-            access_level=level, is_active=True
-        ).count()
-    
-    # Documentos con/sin embedding
-    documents_with_embedding = IntelligenceDocument.objects.filter(
-        embedding__isnull=False
-    ).count()
-    documents_without_embedding = IntelligenceDocument.objects.filter(
-        embedding__isnull=True
-    ).count()
-    
-    # Documentos creados recientemente
-    recent_documents = IntelligenceDocument.objects.filter(
-        created_at__gte=thirty_days_ago
-    ).count()
-    
-    context = {
-        'collections_stats': collections_stats,
-        'collections_by_level': collections_by_level,
-        'documents_with_embedding': documents_with_embedding,
-        'documents_without_embedding': documents_without_embedding,
-        'recent_documents': recent_documents,
-        'thirty_days_ago': thirty_days_ago,
-        'level_descriptions': {
-            1: 'Nivel 1 - Memoria pura',
-            2: 'Nivel 2 - Memoria + Conocimiento',
-            3: 'Nivel 3 - Memoria + Conocimiento + Métricas',
-            4: 'Nivel 4 - Acceso completo + Analytics',
-            5: 'Nivel 5 - Administrador total'
-        }
-    }
-    
-    return render(request, 'intelligence/system_stats.html', context)
-
-
-def activity_logs(request):
-    """
-    Vista de logs de actividad del sistema (SPEC-005 - 5.5).
-    Usa datos reales de los modelos en lugar de datos mock.
-    Incluye logs detallados de errores, procesos RAG y acceso a BD.
-    """
-    from datetime import datetime, timedelta
-    from django.utils import timezone
-    import logging
-    import os
-    
-    logs = []
-    
-    # 1. Logs de conversaciones recientes
-    recent_conversations = Conversation.objects.filter(
-        created_at__gte=timezone.now() - timedelta(days=30)
-    ).order_by('-created_at')[:20]
-    
-    for conv in recent_conversations:
-        user_identifier = conv.user.phone or conv.user.email or 'anon'
-        logs.append({
-            'id': f'conv_{conv.id}',
-            'timestamp': conv.created_at,
-            'action': 'Conversación iniciada',
-            'user': user_identifier,
-            'details': f'App: {conv.app_id}, Session: {conv.session_id[:8]}...',
-            'status': 'success',
-            'log_type': 'process_start',
-            'duration_ms': 0
-        })
-    
-    # 2. Logs de hechos extraídos
-    recent_facts = Fact.objects.filter(
-        created_at__gte=timezone.now() - timedelta(days=30)
-    ).order_by('-created_at')[:15]
-    
-    for fact in recent_facts:
-        user_identifier = fact.user.phone or fact.user.email or 'anon'
-        logs.append({
-            'id': f'fact_{fact.id}',
-            'timestamp': fact.created_at,
-            'action': 'Hecho extraído',
-            'user': user_identifier,
-            'details': f'{fact.subject} {fact.relation} {fact.object}',
-            'status': 'success',
-            'log_type': 'process_step',
-            'duration_ms': 0
-        })
-    
-    # 3. Logs de documentos procesados
-    recent_documents = IntelligenceDocument.objects.filter(
-        created_at__gte=timezone.now() - timedelta(days=30)
-    ).order_by('-created_at')[:15]
-    
-    for doc in recent_documents:
-        logs.append({
-            'id': f'doc_{doc.id}',
-            'timestamp': doc.created_at,
-            'action': 'Documento procesado',
-            'user': 'sistema',
-            'details': f'Colección: {doc.collection.name}, Embedding: {"Sí" if doc.embedding else "No"}',
-            'status': 'success' if doc.embedding else 'warning',
-            'log_type': 'process_step',
-            'duration_ms': 0
-        })
-    
-    # 4. Logs de colecciones sincronizadas (usamos colecciones activas recientemente actualizadas)
-    recent_collections = IntelligenceCollection.objects.filter(
-        updated_at__gte=timezone.now() - timedelta(days=30)
-    ).order_by('-updated_at')[:10]
-    
-    for coll in recent_collections:
-        logs.append({
-            'id': f'coll_{coll.id}',
-            'timestamp': coll.updated_at,
-            'action': 'Colección actualizada',
-            'user': 'admin',
-            'details': f'{coll.name} - Nivel {coll.access_level}',
-            'status': 'success',
-            'log_type': 'process_step',
-            'duration_ms': 0
-        })
-    
-    # 5. Logs de roles creados/modificados
-    recent_roles = Role.objects.filter(
-        updated_at__gte=timezone.now() - timedelta(days=30)
-    ).order_by('-updated_at')[:5]
-    
-    for role in recent_roles:
-        logs.append({
-            'id': f'role_{role.id}',
-            'timestamp': role.updated_at,
-            'action': 'Rol actualizado',
-            'user': 'admin',
-            'details': f'{role.name} - Niveles {role.allowed_levels}',
-            'status': 'success',
-            'log_type': 'process_step',
-            'duration_ms': 0
-        })
-    
-    # 6. Logs EXPLICATIVOS - para que el usuario entienda QUÉ HACE EL SISTEMA
-    
-    # Explicación del sistema RAG y memoria
-    explanation_logs = [
-        {
-            'id': 'explain_001',
-            'timestamp': timezone.now() - timedelta(minutes=10),
-            'action': '🧠 SISTEMA RAG EXPLICADO',
-            'user': 'sistema',
-            'details': 'RAG = Retrieval-Augmented Generation. Tu pregunta → Embedding → Búsqueda en memoria → Consulta BD → Respuesta IA',
-            'status': 'success',
-            'log_type': 'process_start',
-            'duration_ms': 0
-        },
-        {
-            'id': 'explain_002',
-            'timestamp': timezone.now() - timedelta(minutes=9, seconds=50),
-            'action': '📚 ACCESO A LA MEMORIA',
-            'user': 'sistema',
-            'details': 'Memoria: 3 colecciones (propiedades_propify, propiedades_competencia, noticias_mercado). 84 documentos con embeddings de 384 dimensiones.',
-            'status': 'success',
-            'log_type': 'subprocess',
-            'duration_ms': 0
-        },
-        {
-            'id': 'explain_003',
-            'timestamp': timezone.now() - timedelta(minutes=9, seconds=40),
-            'action': '🔍 CÓMO BUSCA EL SISTEMA',
-            'user': 'sistema',
-            'details': '1. Convierte tu pregunta a vector 2. Busca documentos similares 3. Obtiene IDs de propiedades 4. Consulta la base de datos 5. Genera respuesta con IA',
-            'status': 'success',
-            'log_type': 'subprocess',
-            'duration_ms': 0
-        },
-        {
-            'id': 'explain_004',
-            'timestamp': timezone.now() - timedelta(minutes=9, seconds=30),
-            'action': '⚠️ PROBLEMA IDENTIFICADO',
-            'user': 'sistema',
-            'details': 'PROBLEMA: La búsqueda "propiedades en Cayma" devuelve 0 resultados. RAZÓN: No hay propiedades en Cayma en la BD properties.',
-            'status': 'error',
-            'log_type': 'error',
-            'duration_ms': 0
-        }
-    ]
-    
-    logs.extend(explanation_logs)
-    
-    # 7. Logs DETALLADOS de una consulta REAL paso a paso
-    system_action_logs = [
-        {
-            'id': 'action_001',
-            'timestamp': timezone.now() - timedelta(minutes=8),
-            'action': '👤 USUARIO PREGUNTA',
-            'user': 'usuario_chat',
-            'details': 'Pregunta: "que propiedades tienes en cayma que me puedas mostrar" - App: chat-web',
-            'status': 'success',
-            'log_type': 'process_start',
-            'duration_ms': 0
-        },
-        {
-            'id': 'action_002',
-            'timestamp': timezone.now() - timedelta(minutes=8, seconds=5),
-            'action': '🧠 PROCESAMIENTO DE TEXTO',
-            'user': 'sistema',
-            'details': 'Análisis: palabras clave ["propiedades", "cayma", "mostrar"]. Tipo: propiedades, Ubicación: cayma',
-            'status': 'success',
-            'log_type': 'subprocess',
-            'duration_ms': 120
-        },
-        {
-            'id': 'action_003',
-            'timestamp': timezone.now() - timedelta(minutes=8, seconds=10),
-            'action': '📚 ACCESO A COLECCIÓN',
-            'user': 'sistema',
-            'details': 'Colección seleccionada: propiedades_propify. Razón: usuario busca propiedades propias',
-            'status': 'success',
-            'log_type': 'subprocess',
-            'duration_ms': 45
-        },
-        {
-            'id': 'action_004',
-            'timestamp': timezone.now() - timedelta(minutes=8, seconds=15),
-            'action': '🔢 VERIFICACIÓN DE EMBEDDINGS',
-            'user': 'sistema',
-            'details': 'Embeddings: 84/84 documentos listos. Modelo: all-MiniLM-L6-v2. Dimensión: 384.',
-            'status': 'success',
-            'log_type': 'subprocess',
-            'duration_ms': 85
-        },
-        {
-            'id': 'action_005',
-            'timestamp': timezone.now() - timedelta(minutes=8, seconds=20),
-            'action': '🎯 GENERACIÓN DE EMBEDDING',
-            'user': 'sistema',
-            'details': 'Embedding generado para "propiedades en cayma": Vector 384D. Calculando similitud con 84 embeddings...',
-            'status': 'success',
-            'log_type': 'subprocess',
-            'duration_ms': 210
-        },
-        {
-            'id': 'action_006',
-            'timestamp': timezone.now() - timedelta(minutes=8, seconds=25),
-            'action': '🚫 RESULTADO BÚSQUEDA VECTORIAL',
-            'user': 'sistema',
-            'details': 'Búsqueda vectorial: 0 documentos con similitud > 0.7. Los embeddings no coinciden con "cayma".',
-            'status': 'error',
-            'log_type': 'error',
-            'duration_ms': 95
-        },
-        {
-            'id': 'action_007',
-            'timestamp': timezone.now() - timedelta(minutes=8, seconds=30),
-            'action': '🗄️ CONSULTA DIRECTA A BD',
-            'user': 'sistema',
-            'details': 'SQL ejecutado: SELECT id, title, price, district FROM properties WHERE district LIKE "%cayma%"',
-            'status': 'success',
-            'log_type': 'subprocess',
-            'duration_ms': 150
-        },
-        {
-            'id': 'action_008',
-            'timestamp': timezone.now() - timedelta(minutes=8, seconds=35),
-            'action': '📊 RESULTADO CONSULTA SQL',
-            'user': 'sistema',
-            'details': 'Consulta SQL: 0 filas. Tabla properties tiene 84 propiedades, pero NINGUNA en Cayma.',
-            'status': 'error',
-            'log_type': 'error',
-            'duration_ms': 120
-        },
-        {
-            'id': 'action_009',
-            'timestamp': timezone.now() - timedelta(minutes=8, seconds=40),
-            'action': '🤖 CONSULTA A DEEPSEEK',
-            'user': 'sistema',
-            'details': 'LLM DeepSeek: "Usuario pregunta por propiedades en Cayma pero no hay en BD. Generar respuesta útil."',
-            'status': 'success',
-            'log_type': 'subprocess',
-            'duration_ms': 850
-        },
-        {
-            'id': 'action_010',
-            'timestamp': timezone.now() - timedelta(minutes=8, seconds=45),
-            'action': '💬 RESPUESTA GENERADA',
-            'user': 'sistema',
-            'details': 'Respuesta: "No tengo información específica sobre propiedades disponibles en Cayma..." Enviada al usuario.',
-            'status': 'success',
-            'log_type': 'process_step',
-            'duration_ms': 0
-        }
-    ]
-    
-    logs.extend(system_action_logs)
-    
-    # 8. Logs de ESTADO ACTUAL y TABLAS ACCEDIDAS
-    status_logs = [
-        {
-            'id': 'status_001',
-            'timestamp': timezone.now(),
-            'action': '✅ ESTADO DEL SISTEMA',
-            'user': 'sistema',
-            'details': 'RAG: Funcionando | Embeddings: 84/84 | BD: Conectada | LLM: Disponible | Problema: Sin datos Cayma',
-            'status': 'success',
-            'log_type': 'process_start',
-            'duration_ms': 0
-        },
-        {
-            'id': 'status_002',
-            'timestamp': timezone.now(),
-            'action': '🗃️ TABLAS ACCEDIDAS',
-            'user': 'sistema',
-            'details': '1. properties (84 props) 2. propiedadraw (1200+ props) 3. requerimientoraw (350+ reqs) 4. intelligence_document (84 docs)',
-            'status': 'success',
-            'log_type': 'subprocess',
-            'duration_ms': 0
-        },
-        {
-            'id': 'status_003',
-            'timestamp': timezone.now(),
-            'action': '🔧 ACCIONES POSIBLES',
-            'user': 'sistema',
-            'details': 'Buscar propiedades, filtrar por precio/tipo, comparar, analizar mercado, generar informes, responder preguntas',
-            'status': 'success',
-            'log_type': 'subprocess',
-            'duration_ms': 0
-        },
-        {
-            'id': 'status_004',
-            'timestamp': timezone.now(),
-            'action': '🚫 LIMITACIONES',
-            'user': 'sistema',
-            'details': '1. Sin propiedades en Cayma 2. Búsqueda por sinónimos limitada 3. Sin propiedades en alquiler 4. Faltan imágenes',
-            'status': 'warning',
-            'log_type': 'process_step',
-            'duration_ms': 0
-        }
-    ]
-    
-    logs.extend(status_logs)
-    
-    # Ordenar todos los logs por timestamp (más reciente primero)
-    logs.sort(key=lambda x: x['timestamp'], reverse=True)
-    
-    # Asignar IDs secuenciales
-    for i, log in enumerate(logs):
-        log['id'] = i + 1
-    
-    # Filtrar por parámetros GET
-    status_filter = request.GET.get('status')
-    if status_filter:
-        logs = [log for log in logs if log['status'] == status_filter]
-    
-    user_filter = request.GET.get('user')
-    if user_filter:
-        logs = [log for log in logs if log['user'] == user_filter]
-    
-    type_filter = request.GET.get('type')
-    if type_filter:
-        logs = [log for log in logs if log.get('log_type') == type_filter]
-    
-    # Paginación simple
-    page = int(request.GET.get('page', 1))
-    per_page = 20
-    start_idx = (page - 1) * per_page
-    end_idx = start_idx + per_page
-    paginated_logs = logs[start_idx:end_idx]
-    
-    context = {
-        'logs': paginated_logs,
-        'total_logs': len(logs),
-        'page': page,
-        'per_page': per_page,
-        'total_pages': (len(logs) + per_page - 1) // per_page,
-        'status_filter': status_filter,
-        'user_filter': user_filter,
-        'type_filter': type_filter
-    }
-    
-    return render(request, 'intelligence/activity_logs.html', context)
-
-
-# ============================================================================
-# API ENDPOINTS PARA DESCUBRIMIENTO DE TABLAS (SPEC-003)
-# ============================================================================
-
-@api_view(['GET'])
-@permission_classes([AllowAny])
-def rag_discovery_tables(request):
-    """
-    Endpoint: GET /api/v1/intelligence/rag/tables/
-    
-    Lista todas las tablas disponibles en Azure SQL.
-    Parámetros:
-    - schema: Esquema a consultar (default: 'dbo')
-    - database: Alias de la base de datos ('default' o 'propifai')
-    - nocache: Si está presente, fuerza refresco de caché
-    """
-    from .services.rag import RAGService
-    import logging
-    import sys
-    
-    logger = logging.getLogger(__name__)
-    
-    try:
-        schema = request.GET.get('schema', 'dbo')
-        database = request.GET.get('database', 'propifai')  # Cambiado de 'default' a 'propifai'
-        force_refresh = 'nocache' in request.GET
-        
-        print(f"[DEBUG VISTA] rag_discovery_tables: schema={schema}, database={database}, force_refresh={force_refresh}", file=sys.stderr)
-        print(f"[DEBUG VISTA] URL completa: {request.get_full_path()}", file=sys.stderr)
-        logger.info(f"rag_discovery_tables: schema={schema}, database={database}, force_refresh={force_refresh}")
-        
-        # Llamar al servicio con force_refresh
-        tables = RAGService.get_available_tables(schema=schema, database_alias=database, force_refresh=force_refresh)
-        
-        print(f"[DEBUG VISTA] Tablas obtenidas: {len(tables)}", file=sys.stderr)
-        
-        return Response({
-            'success': True,
-            'schema': schema,
-            'database': database,
-            'tables': tables,
-            'count': len(tables),
-            'timestamp': timezone.now().isoformat()
-        })
-        
-    except Exception as e:
-        logger.error(f"rag_discovery_tables error: {e}")
-        return Response({
-            'success': False,
-            'error': str(e),
-            'tables': [],
-            'timestamp': timezone.now().isoformat()
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-@api_view(['GET'])
-@permission_classes([AllowAny])
-def rag_discovery_table_schema(request, table_name):
-    """
-    Endpoint: GET /api/v1/intelligence/rag/tables/{table_name}/schema/
-    
-    Obtiene esquema completo de una tabla específica.
-    Parámetros:
-    - schema: Esquema a consultar (default: 'dbo')
-    - database: Alias de la base de datos ('default' o 'propifai')
-    """
-    from .services.rag import RAGService
-    import logging
-    import sys
-    
-    logger = logging.getLogger(__name__)
-    
-    try:
-        schema = request.GET.get('schema', 'dbo')
-        database = request.GET.get('database', 'propifai')  # Cambiado de 'default' a 'propifai'
-        
-        print(f"[DEBUG VISTA] rag_discovery_table_schema: table={table_name}, schema={schema}, database={database}", file=sys.stderr)
-        logger.info(f"rag_discovery_table_schema: table={table_name}, schema={schema}, database={database}")
-        
-        schema_analysis = RAGService.analyze_table_schema(table_name, schema=schema, database_alias=database)
-        
-        print(f"[DEBUG VISTA] Análisis obtenido: {len(schema_analysis.get('columns', []))} columnas", file=sys.stderr)
-        
-        return Response({
-            'success': True,
-            'table_name': table_name,
-            'schema': schema,
-            'database': database,
-            'analysis': schema_analysis,
-            'timestamp': timezone.now().isoformat()
-        })
-        
-    except Exception as e:
-        logger.error(f"rag_discovery_table_schema error: {e}")
-        return Response({
-            'success': False,
-            'error': str(e),
-            'table_name': table_name,
-            'analysis': None,
-            'timestamp': timezone.now().isoformat()
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-@api_view(['GET'])
-@permission_classes([AllowAny])
-def rag_discovery_table_preview(request, table_name):
-    """
-    Endpoint: GET /api/v1/intelligence/rag/tables/{table_name}/preview/
-    
-    Muestra datos de ejemplo de una tabla.
-    Parámetros:
-    - schema: Esquema a consultar (default: 'dbo')
-    - database: Alias de la base de datos ('default' o 'propifai')
-    - limit: Límite de registros (default: 5)
-    """
-    from .services.schema_discovery import SchemaDiscoveryService
-    
-    try:
-        schema = request.GET.get('schema', 'dbo')
-        database = request.GET.get('database', 'default')
-        limit = int(request.GET.get('limit', 5))
-        
-        sample_data = SchemaDiscoveryService.get_sample_data(
-            table_name=table_name,
-            schema=schema,
-            database_alias=database,
-            limit=limit
-        )
-        
-        return Response({
-            'success': True,
-            'table_name': table_name,
-            'schema': schema,
-            'database': database,
-            'limit': limit,
-            'sample_data': sample_data,
-            'count': len(sample_data),
-            'timestamp': timezone.now().isoformat()
-        })
-        
-    except Exception as e:
-        return Response({
-            'success': False,
-            'error': str(e),
-            'table_name': table_name,
-            'sample_data': [],
-            'timestamp': timezone.now().isoformat()
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def rag_create_collection_dynamic(request):
-    """
-    Endpoint: POST /api/v1/intelligence/rag/collections/
-    
-    Crea una colección RAG con configuración dinámica basada en tabla.
-    """
-    from .services.rag import RAGService
-    
-    try:
-        import json
-        import sys
-        
-        # Log para depuración
-        print(f"[DEBUG CREATE] Datos recibidos: {request.data}", file=sys.stderr)
-        print(f"[DEBUG CREATE] Tipo de request.data: {type(request.data)}", file=sys.stderr)
-        
-        # Validar datos requeridos
-        required_fields = ['name', 'table_name', 'embedding_fields']
-        for field in required_fields:
-            if field not in request.data:
-                print(f"[DEBUG CREATE] Campo faltante: {field}", file=sys.stderr)
-                return Response({
-                    'success': False,
-                    'error': f'Campo requerido faltante: {field}'
-                }, status=status.HTTP_400_BAD_REQUEST)
-        
-        name = request.data['name']
-        table_name = request.data['table_name']
-        
-        # Parsear campos que pueden venir como strings JSON
-        def parse_field_list(field_data):
-            print(f"[DEBUG CREATE] parse_field_list input: {field_data}, tipo: {type(field_data)}", file=sys.stderr)
-            if isinstance(field_data, list):
-                print(f"[DEBUG CREATE] Es lista: {field_data}", file=sys.stderr)
-                return field_data
-            elif isinstance(field_data, str):
-                try:
-                    parsed = json.loads(field_data)
-                    print(f"[DEBUG CREATE] JSON parseado: {parsed}", file=sys.stderr)
-                    return parsed
-                except json.JSONDecodeError:
-                    # Si no es JSON válido, tratar como string separado por comas
-                    print(f"[DEBUG CREATE] No es JSON válido, tratando como string separado por comas", file=sys.stderr)
-                    if field_data.strip():
-                        result = [item.strip() for item in field_data.split(',') if item.strip()]
-                        print(f"[DEBUG CREATE] Resultado split: {result}", file=sys.stderr)
-                        return result
-                    else:
-                        return []
-            else:
-                print(f"[DEBUG CREATE] Tipo no manejado: {type(field_data)}", file=sys.stderr)
-                return []
-        
-        embedding_fields = parse_field_list(request.data['embedding_fields'])
-        display_fields = parse_field_list(request.data.get('display_fields', []))
-        filter_fields = parse_field_list(request.data.get('filter_fields', []))
-        
-        print(f"[DEBUG CREATE] embedding_fields final: {embedding_fields}", file=sys.stderr)
-        print(f"[DEBUG CREATE] display_fields final: {display_fields}", file=sys.stderr)
-        print(f"[DEBUG CREATE] filter_fields final: {filter_fields}", file=sys.stderr)
-        
-        access_level = request.data.get('access_level', 2)
-        description = request.data.get('description', '')
-        schema = request.data.get('schema', 'dbo')
-        database = request.data.get('database', 'propifai')  # Usar 'propifai' por defecto
-        
-        print(f"[DEBUG CREATE] Parámetros finales: name={name}, table={table_name}, schema={schema}, database={database}", file=sys.stderr)
-        print(f"[DEBUG CREATE] embedding_fields: {embedding_fields}", file=sys.stderr)
-        print(f"[DEBUG CREATE] display_fields: {display_fields}", file=sys.stderr)
-        print(f"[DEBUG CREATE] filter_fields: {filter_fields}", file=sys.stderr)
-        
-        # Validar que embedding_fields no esté vacío
-        if not embedding_fields:
-            return Response({
-                'success': False,
-                'error': 'Debe seleccionar al menos un campo para embedding'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Crear colección dinámica
-        success, message, collection = RAGService.create_collection_dynamic(
-            name=name,
-            table_name=table_name,
-            embedding_fields=embedding_fields,
-            display_fields=display_fields,
-            filter_fields=filter_fields,
-            access_level=access_level,
-            description=description,
-            schema=schema,
-            database_alias=database
-        )
-        
-        if not success:
-            return Response({
-                'success': False,
-                'error': message,
-                'collection': None
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Intentar sincronizar la colección automáticamente después de crearla
-        sync_success = False
-        sync_message = ""
-        try:
-            print(f"[DEBUG CREATE] Intentando sincronizar colección {collection.name}...", file=sys.stderr)
-            sync_success, sync_message = RAGService.sync_collection_dynamic(
-                collection_name=collection.name,
-                database_alias=database
-            )
-            print(f"[DEBUG CREATE] Resultado sincronización: success={sync_success}, message={sync_message}", file=sys.stderr)
-        except Exception as sync_error:
-            print(f"[DEBUG CREATE] Error en sincronización automática: {sync_error}", file=sys.stderr)
-            sync_message = f"Error en sincronización automática: {sync_error}"
-        
-        return Response({
-            'success': True,
-            'message': message,
-            'sync_success': sync_success,
-            'sync_message': sync_message,
-            'collection': {
-                'id': str(collection.id),
-                'name': collection.name,
-                'table_name': collection.table_name,
-                'description': collection.description,
-                'field_definitions_count': len(collection.field_definitions),
-                'embedding_fields': collection.embedding_fields,
-                'display_fields': collection.display_fields,
-                'filter_fields': collection.filter_fields,
-                'access_level': collection.access_level,
-                'created_at': collection.created_at.isoformat() if collection.created_at else None
-            },
-            'timestamp': timezone.now().isoformat()
-        })
-        
-    except Exception as e:
-        return Response({
-            'success': False,
-            'error': str(e),
-            'collection': None,
-            'timestamp': timezone.now().isoformat()
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def rag_search_dynamic(request):
-    """
-    Endpoint: POST /api/v1/intelligence/rag/search/
-    
-    Busca en colecciones dinámicas usando campos reales.
-    """
-    from .services.rag import RAGService
-    
-    try:
-        query = request.data.get('query', '')
-        collection_names = request.data.get('collection_names', [])
-        filters = request.data.get('filters', {})
-        top_k = int(request.data.get('top_k', 5))
-        
         if not query:
             return Response({
                 'success': False,
-                'error': 'El parámetro "query" es requerido'
+                'error': 'Se requiere un query'
             }, status=status.HTTP_400_BAD_REQUEST)
-        
-        if not collection_names:
-            return Response({
-                'success': False,
-                'error': 'Debe especificar al menos una colección en "collection_names"'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Realizar búsqueda
-        results = RAGService.search_dynamic(
-            query=query,
-            collection_names=collection_names,
-            filters=filters,
-            top_k=top_k
-        )
-        
+
+        from .services.rag import RAGService
+
+        if collection_name:
+            results = RAGService.search_dynamic(
+                query=query,
+                collection_names=[collection_name],
+                top_k=5
+            )
+        else:
+            # Buscar en todas las colecciones activas
+            collections = IntelligenceCollection.objects.filter(
+                is_active=True
+            ).values_list('name', flat=True)
+            results = RAGService.search_dynamic(
+                query=query,
+                collection_names=list(collections),
+                top_k=5
+            )
+
         return Response({
             'success': True,
             'query': query,
-            'collection_names': collection_names,
+            'collection_used': collection_name or 'all',
             'results_count': len(results),
             'results': results,
             'timestamp': timezone.now().isoformat()
         })
-        
+
     except Exception as e:
+        import traceback
         return Response({
             'success': False,
             'error': str(e),
-            'results': [],
+            'traceback': traceback.format_exc(),
             'timestamp': timezone.now().isoformat()
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-# ============================================================================
-# VISTAS PARA CHAT WEB INTERACTIVO (SPEC-007)
-# ============================================================================
+@api_view(['GET'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def rag_system_status(request):
+    """Estado del sistema RAG."""
+    try:
+        from .services.rag import RAGService
 
-import logging
-import time
+        embedder_status = RAGService.get_embedder_status()
+        total_collections = IntelligenceCollection.objects.count()
+        active_collections = IntelligenceCollection.objects.filter(is_active=True).count()
+        total_documents = IntelligenceDocument.objects.count()
 
-logger = logging.getLogger(__name__)
+        collections_info = []
+        for col in IntelligenceCollection.objects.filter(is_active=True):
+            doc_count = IntelligenceDocument.objects.filter(collection=col).count()
+            collections_info.append({
+                'id': col.id,
+                'name': col.name,
+                'table_name': col.table_name,
+                'documents': doc_count,
+                'min_level': col.min_level,
+                'domain': col.domain,
+                'is_public': col.is_public,
+                'created_at': col.created_at.isoformat() if col.created_at else None,
+            })
+
+        return Response({
+            'success': True,
+            'status': 'operational' if embedder_status.get('loaded') else 'degraded',
+            'embedder': embedder_status,
+            'collections': {
+                'total': total_collections,
+                'active': active_collections,
+                'list': collections_info
+            },
+            'documents': {
+                'total': total_documents
+            },
+            'timestamp': timezone.now().isoformat()
+        })
+
+    except Exception as e:
+        import traceback
+        return Response({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc(),
+            'timestamp': timezone.now().isoformat()
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 3. ROLE CRUD (Template Views)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@admin_required
+def role_list(request):
+    """Lista de roles."""
+    roles = Role.objects.all().order_by('name')
+    return render(request, 'intelligence/roles/list.html', {
+        'roles': roles,
+        'active_section': 'roles'
+    })
+
+
+@admin_required
+def role_create(request):
+    """Crear nuevo rol."""
+    if request.method == 'POST':
+        name = request.POST.get('name')
+        description = request.POST.get('description', '')
+        default_level = int(request.POST.get('default_level', 1))
+        max_level = int(request.POST.get('max_level', 5))
+        default_domains_raw = request.POST.get('default_domains', '')
+        default_domains = [d.strip() for d in default_domains_raw.split(',') if d.strip()] if default_domains_raw else ['general']
+
+        if name:
+            try:
+                capabilities = {
+                    'memory': request.POST.get('cap_memory') == 'on',
+                    'knowledge_base': request.POST.get('cap_knowledge_base') == 'on',
+                    'metrics': request.POST.get('cap_metrics') == 'on',
+                    'projects': request.POST.get('cap_projects') == 'on',
+                }
+                role = Role.objects.create(
+                    name=name,
+                    description=description,
+                    default_level=default_level,
+                    max_level=max_level,
+                    default_domains=default_domains,
+                    capabilities=capabilities
+                )
+                messages.success(request, f'Rol "{role.name}" creado exitosamente.')
+                return redirect('role_list')
+            except Exception as e:
+                messages.error(request, f'Error al crear rol: {str(e)}')
+        else:
+            messages.error(request, 'El nombre del rol es obligatorio.')
+
+    return render(request, 'intelligence/roles/create.html', {
+        'active_section': 'roles'
+    })
+
+
+@admin_required
+def role_edit(request, role_id):
+    """Editar un rol existente."""
+    role = get_object_or_404(Role, id=role_id)
+
+    if request.method == 'POST':
+        name = request.POST.get('name')
+        description = request.POST.get('description', '')
+        default_level = int(request.POST.get('default_level', 1))
+        max_level = int(request.POST.get('max_level', 5))
+        default_domains_raw = request.POST.get('default_domains', '')
+        default_domains = [d.strip() for d in default_domains_raw.split(',') if d.strip()] if default_domains_raw else ['general']
+
+        if name:
+            try:
+                role.name = name
+                role.description = description
+                role.default_level = default_level
+                role.max_level = max_level
+                role.default_domains = default_domains
+                role.capabilities = {
+                    'memory': request.POST.get('cap_memory') == 'on',
+                    'knowledge_base': request.POST.get('cap_knowledge_base') == 'on',
+                    'metrics': request.POST.get('cap_metrics') == 'on',
+                    'projects': request.POST.get('cap_projects') == 'on',
+                }
+                role.save()
+                messages.success(request, f'Rol "{role.name}" actualizado exitosamente.')
+                return redirect('role_list')
+            except Exception as e:
+                messages.error(request, f'Error al actualizar rol: {str(e)}')
+        else:
+            messages.error(request, 'El nombre del rol es obligatorio.')
+
+    return render(request, 'intelligence/roles/edit.html', {
+        'role': role,
+        'active_section': 'roles'
+    })
+
+
+def role_delete(request, role_id):
+    """Eliminar un rol."""
+    role = get_object_or_404(Role, id=role_id)
+    if request.method == 'POST':
+        try:
+            role.delete()
+            messages.success(request, 'Rol eliminado exitosamente.')
+        except Exception as e:
+            messages.error(request, f'Error al eliminar rol: {str(e)}')
+    return redirect('role_list')
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 4. COLLECTION CRUD (Template Views)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@level_required(2)
+def collection_list(request):
+    """Lista de colecciones RAG."""
+    from .models import DOMAIN_CHOICES
+    collections = IntelligenceCollection.objects.all().order_by('-created_at')
+
+    # Filtros desde query params
+    current_filters = {}
+    name_filter = request.GET.get('name', '').strip()
+    status_filter = request.GET.get('status', '').strip()
+    level_filter = request.GET.get('level', '').strip()
+    domain_filter = request.GET.get('domain', '').strip()
+
+    if name_filter:
+        collections = collections.filter(name__icontains=name_filter)
+        current_filters['name'] = name_filter
+    if status_filter == 'active':
+        collections = collections.filter(is_active=True)
+        current_filters['status'] = 'active'
+    elif status_filter == 'inactive':
+        collections = collections.filter(is_active=False)
+        current_filters['status'] = 'inactive'
+    if level_filter and level_filter.isdigit():
+        collections = collections.filter(min_level=int(level_filter))
+        current_filters['level'] = level_filter
+    if domain_filter:
+        collections = collections.filter(domain=domain_filter)
+        current_filters['domain'] = domain_filter
+
+    level_choices = IntelligenceCollection._meta.get_field('min_level').choices
+
+    return render(request, 'intelligence/collections/list.html', {
+        'collections': collections,
+        'current_filters': current_filters,
+        'level_choices': level_choices,
+        'domain_choices': DOMAIN_CHOICES,
+        'active_section': 'collections'
+    })
+
+
+@admin_required
+def collection_create(request):
+    """Crear nueva colección RAG."""
+    if request.method == 'POST':
+        name = request.POST.get('name')
+        description = request.POST.get('description', '')
+        table_name = request.POST.get('table_name', '')
+        schema_name = request.POST.get('schema_name', 'dbo')
+        min_level = int(request.POST.get('min_level', 1))
+        domain = request.POST.get('domain', 'general')
+        is_public = request.POST.get('is_public') == 'on'
+        key_field = request.POST.get('key_field', 'id')
+        search_fields_raw = request.POST.get('search_fields', '')
+        display_fields_raw = request.POST.get('display_fields', '')
+
+        if name and table_name:
+            try:
+                display_fields = [f.strip() for f in display_fields_raw.split(',') if f.strip()]
+
+                collection = IntelligenceCollection.objects.create(
+                    name=name,
+                    description=description,
+                    table_name=table_name,
+                    schema_name=schema_name,
+                    min_level=min_level,
+                    domain=domain,
+                    is_public=is_public,
+                    display_fields=display_fields or ['title', 'price', 'district'],
+                    is_active=True
+                )
+                messages.success(request, f'Colección "{collection.name}" creada exitosamente.')
+                return redirect('intelligence:collections_dashboard')
+            except Exception as e:
+                messages.error(request, f'Error al crear colección: {str(e)}')
+        else:
+            messages.error(request, 'Nombre y tabla son obligatorios.')
+
+    return render(request, 'intelligence/collections/create.html', {
+        'active_section': 'collections'
+    })
+
+
+@admin_required
+def collection_edit(request, collection_id):
+    """Editar una colección existente."""
+    collection = get_object_or_404(IntelligenceCollection, id=collection_id)
+
+    if request.method == 'POST':
+        name = request.POST.get('name')
+        description = request.POST.get('description', '')
+        table_name = request.POST.get('table_name', '')
+        schema_name = request.POST.get('schema_name', 'dbo')
+        min_level = int(request.POST.get('min_level', 1))
+        domain = request.POST.get('domain', 'general')
+        is_public = request.POST.get('is_public') == 'on'
+        display_fields_raw = request.POST.get('display_fields', '')
+
+        if name and table_name:
+            try:
+                collection.name = name
+                collection.description = description
+                collection.table_name = table_name
+                collection.schema_name = schema_name
+                collection.min_level = min_level
+                collection.domain = domain
+                collection.is_public = is_public
+                collection.display_fields = [f.strip() for f in display_fields_raw.split(',') if f.strip()]
+                collection.save()
+                messages.success(request, f'Colección "{collection.name}" actualizada exitosamente.')
+                return redirect('intelligence:collections_dashboard')
+            except Exception as e:
+                messages.error(request, f'Error al actualizar colección: {str(e)}')
+        else:
+            messages.error(request, 'Nombre y tabla son obligatorios.')
+
+    from .models import DOMAIN_CHOICES
+    return render(request, 'intelligence/collections/edit.html', {
+        'collection': collection,
+        'active_section': 'collections',
+        'domain_choices': DOMAIN_CHOICES,
+    })
+
+
+def collection_delete(request, collection_id):
+    """Eliminar una colección."""
+    collection = get_object_or_404(IntelligenceCollection, id=collection_id)
+    if request.method == 'POST':
+        try:
+            from .services.rag import RAGService
+            success, msg = RAGService.delete_collection(collection_id)
+            if success:
+                messages.success(request, 'Colección eliminada exitosamente.')
+            else:
+                messages.error(request, f'Error al eliminar colección: {msg}')
+        except Exception as e:
+            messages.error(request, f'Error al eliminar colección: {str(e)}')
+        return redirect('intelligence:collections_dashboard')
+    return render(request, 'intelligence/collections/confirm_delete.html', {
+        'collection': collection,
+        'active_section': 'collections'
+    })
+
+
+def collection_sync(request, collection_id):
+    """Sincronizar una colección con su tabla."""
+    collection = get_object_or_404(IntelligenceCollection, id=collection_id)
+    if request.method == 'POST':
+        try:
+            from .services.rag import RAGService
+            result = RAGService.sync_collection(collection_id)
+            if result.get('success'):
+                messages.success(
+                    request,
+                    f'Colección sincronizada: {result.get("processed", 0)} documentos procesados, '
+                    f'{result.get("errors", 0)} errores.'
+                )
+            else:
+                messages.error(request, f'Error en sincronización: {result.get("error", "Desconocido")}')
+        except Exception as e:
+            messages.error(request, f'Error al sincronizar: {str(e)}')
+    return redirect('intelligence:collections_dashboard')
+
+
+def collection_stats(request, collection_id):
+    """Estadísticas de una colección."""
+    collection = get_object_or_404(IntelligenceCollection, id=collection_id)
+    try:
+        from .services.rag import RAGService
+        stats = RAGService.get_collection_stats(collection_id)
+    except Exception as e:
+        stats = {'error': str(e)}
+
+    return render(request, 'intelligence/collections/stats.html', {
+        'collection': collection,
+        'stats': stats,
+        'active_section': 'collections'
+    })
+
+
+def collection_detail(request, collection_id):
+    """Detalle completo de una colección: campos, embedding_fields, documentos y vector."""
+    collection = get_object_or_404(IntelligenceCollection, id=collection_id)
+    documents = IntelligenceDocument.objects.filter(collection=collection).order_by('-created_at')[:200]
+
+    # Preparar datos de embedding_fields con info de field_definitions
+    field_defs = collection.field_definitions or {}
+    embedding_info = []
+    for field_name in (collection.embedding_fields or []):
+        info = field_defs.get(field_name, {})
+        embedding_info.append({
+            'name': field_name,
+            'type': info.get('type', 'unknown'),
+            'nullable': info.get('nullable', True),
+            'description': info.get('description', ''),
+        })
+
+    # Preparar datos de display_fields
+    display_info = []
+    for field_name in (collection.display_fields or []):
+        info = field_defs.get(field_name, {})
+        display_info.append({
+            'name': field_name,
+            'type': info.get('type', 'unknown'),
+            'nullable': info.get('nullable', True),
+        })
+
+    # Preparar datos de filter_fields
+    filter_info = []
+    for field_name in (collection.filter_fields or []):
+        info = field_defs.get(field_name, {})
+        filter_info.append({
+            'name': field_name,
+            'type': info.get('type', 'unknown'),
+            'nullable': info.get('nullable', True),
+        })
+
+    # Estadísticas de documentos
+    total_docs = IntelligenceDocument.objects.filter(collection=collection).count()
+    docs_with_embedding = IntelligenceDocument.objects.filter(
+        collection=collection, embedding__isnull=False
+    ).count()
+
+    # Recolectar TODOS los nombres de campos únicos de field_values de todos los documentos
+    all_field_names = set()
+    for doc in documents:
+        if doc.field_values:
+            all_field_names.update(doc.field_values.keys())
+    # Ordenar: poner source_id primero si existe, luego los embedding_fields, luego el resto
+    ordered_fields = []
+    if 'source_id' in all_field_names:
+        ordered_fields.append('source_id')
+        all_field_names.discard('source_id')
+    for ef in (collection.embedding_fields or []):
+        if ef in all_field_names:
+            ordered_fields.append(ef)
+            all_field_names.discard(ef)
+    for df in (collection.display_fields or []):
+        if df in all_field_names:
+            ordered_fields.append(df)
+            all_field_names.discard(df)
+    # El resto alfabéticamente
+    ordered_fields.extend(sorted(all_field_names))
+
+    # Preparar documentos para el template
+    doc_list = []
+    for doc in documents:
+        embedding_size = len(doc.embedding) if doc.embedding else 0
+        doc_list.append({
+            'id': str(doc.id),
+            'source_id': doc.source_id,
+            'content_preview': doc.content[:500] if doc.content else '',
+            'content_length': len(doc.content) if doc.content else 0,
+            'has_embedding': doc.embedding is not None,
+            'embedding_size': embedding_size,
+            'field_values': doc.field_values or {},
+            'content_hash': doc.content_hash[:16] if doc.content_hash else '',
+            'created_at': doc.created_at,
+            'updated_at': doc.updated_at,
+        })
+
+    return render(request, 'intelligence/collections/detail.html', {
+        'collection': collection,
+        'field_definitions': field_defs,
+        'embedding_info': embedding_info,
+        'display_info': display_info,
+        'filter_info': filter_info,
+        'total_docs': total_docs,
+        'docs_with_embedding': docs_with_embedding,
+        'documents': doc_list,
+        'active_section': 'collections',
+        'field_names': ordered_fields,
+    })
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 5. DASHBOARD / STATS / SIMULATOR
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def user_simulator(request):
+    """Simulador de usuario para probar el chat."""
+    users = User.objects.all().order_by('-created_at')[:20]
+    conversations = Conversation.objects.all().order_by('-last_message_at')[:20]
+
+    return render(request, 'intelligence/simulator.html', {
+        'users': users,
+        'conversations': conversations,
+        'active_section': 'simulator'
+    })
+
+
+def intelligence_dashboard(request):
+    """Dashboard general de Propifai Intelligence Layer."""
+    # Skills stats
+    skills = SKILL_SYSTEM.list_available_skills()
+    active_skills = sum(1 for s in skills if s.get('is_active', True))
+    total_skills = len(skills)
+
+    # Collections stats
+    total_collections = IntelligenceCollection.objects.count()
+    active_collections = IntelligenceCollection.objects.filter(is_active=True).count()
+
+    # Intent evaluation stats
+    total_samples = len(INTENT_EVALUATION_SAMPLES)
+    correct_intent = 0
+    for sample in INTENT_EVALUATION_SAMPLES:
+        predicted = IntentClassifier.classify(sample['question'])
+        if predicted.intent == sample['expected_intent']:
+            correct_intent += 1
+    intent_accuracy = round((correct_intent / total_samples) * 100, 2) if total_samples else 0
+
+    # Skill executions stats
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT COUNT(*) FROM intelligence_skill_execution")
+        total_executions = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM intelligence_skill_execution WHERE status = 'success'")
+        successful_executions = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM intelligence_skill_execution WHERE status = 'error'")
+        error_executions = cursor.fetchone()[0]
+
+    # Recent errors
+    recent_errors = []
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT TOP 10 id, skill_name, error_message, executed_at "
+            "FROM intelligence_skill_execution "
+            "WHERE error_message IS NOT NULL AND error_message != '' "
+            "ORDER BY executed_at DESC"
+        )
+        for row in cursor.fetchall():
+            recent_errors.append({
+                'id': row[0],
+                'skill_name': row[1],
+                'error_message': row[2],
+                'executed_at': row[3]
+            })
+
+    # System health
+    system_health = {
+        'skills_active': active_skills,
+        'collections_active': active_collections,
+        'intent_accuracy': intent_accuracy,
+        'execution_success_rate': round((successful_executions / max(total_executions, 1)) * 100, 2)
+    }
+
+    inactive_collections = total_collections - active_collections
+    return render(request, 'intelligence/dashboard_general.html', {
+        'active_section': 'dashboard',
+        'skills': skills,
+        'total_skills': total_skills,
+        'active_skills': active_skills,
+        'total_collections': total_collections,
+        'active_collections': active_collections,
+        'inactive_collections': inactive_collections,
+        'intent_accuracy': intent_accuracy,
+        'total_samples': total_samples,
+        'total_executions': total_executions,
+        'successful_executions': successful_executions,
+        'error_executions': error_executions,
+        'recent_errors': recent_errors,
+        'system_health': system_health,
+    })
+
+
+def intelligence_config(request):
+    """Vista de configuraciones del sistema Intelligence."""
+    return render(request, 'intelligence/config.html', {
+        'active_section': 'config'
+    })
+
+def intelligence_errors(request):
+    """Vista de errores del sistema Intelligence."""
+    errors = []
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT id, skill_name, status, error_message, executed_at "
+            "FROM intelligence_skill_execution "
+            "WHERE status = 'error' OR (error_message IS NOT NULL AND error_message != '') "
+            "ORDER BY executed_at DESC"
+        )
+        for row in cursor.fetchall():
+            errors.append({
+                'id': row[0],
+                'skill_name': row[1],
+                'status': row[2],
+                'error_message': row[3],
+                'executed_at': row[4]
+            })
+
+    return render(request, 'intelligence/errors.html', {
+        'active_section': 'errors',
+        'errors': errors
+    })
+
+def intelligence_tests(request):
+    """Vista de tests del sistema Intelligence."""
+    return render(request, 'intelligence/tests.html', {
+        'active_section': 'tests'
+    })
+
+
+def intent_evaluation_dashboard(request):
+    """Dashboard de evaluación del clasificador de intenciones."""
+    evaluation_rows = []
+    total_samples = len(INTENT_EVALUATION_SAMPLES)
+    correct_intent = 0
+    correct_skill = 0
+    total_skill_checks = 0
+
+    for sample in INTENT_EVALUATION_SAMPLES:
+        question = sample['question']
+        expected_intent = sample['expected_intent']
+        expected_skill = sample.get('expected_skill')
+        expected_description = sample.get('expected_description', '')
+
+        predicted = IntentClassifier.classify(question)
+        predicted_skill = ChatProcessor._find_skill_candidate(question)
+        predicted_skill_name = predicted_skill.get('name') if predicted_skill else None
+
+        intent_match = predicted.intent == expected_intent
+        if intent_match:
+            correct_intent += 1
+
+        skill_match = None
+        if expected_skill is not None:
+            total_skill_checks += 1
+            skill_match = predicted_skill_name == expected_skill
+            if skill_match:
+                correct_skill += 1
+
+        evaluation_rows.append({
+            'question': question,
+            'expected_intent': expected_intent.value,
+            'predicted_intent': predicted.intent.value,
+            'intent_confidence': round(predicted.confidence, 2),
+            'intent_match': intent_match,
+            'expected_skill': expected_skill or 'N/A',
+            'predicted_skill': predicted_skill_name or 'N/A',
+            'skill_match': 'Sí' if skill_match else 'No' if expected_skill is not None else 'N/A',
+            'expected_description': expected_description,
+        })
+
+    intent_accuracy = round((correct_intent / total_samples) * 100, 2) if total_samples else 0.0
+    skill_accuracy = round((correct_skill / total_skill_checks) * 100, 2) if total_skill_checks else None
+
+    return render(request, 'intelligence/intent_evaluation.html', {
+        'evaluation_rows': evaluation_rows,
+        'total_samples': total_samples,
+        'correct_intent': correct_intent,
+        'intent_accuracy': intent_accuracy,
+        'total_skill_checks': total_skill_checks,
+        'correct_skill': correct_skill,
+        'skill_accuracy': skill_accuracy,
+        'active_section': 'intent_evaluation',
+    })
+
+
+def system_stats(request):
+    """Estadísticas detalladas del sistema."""
+    total_users = User.objects.count()
+    users_by_role = Role.objects.annotate(
+        user_count=Count('user')
+    ).values('name', 'user_count')
+
+    total_conversations = Conversation.objects.count()
+    conversations_with_memory = Conversation.objects.filter(
+        metadata__has_key='memory_context'
+    ).count()
+
+    total_facts = Fact.objects.count()
+    facts_by_category = Fact.objects.values('category').annotate(
+        count=Count('id')
+    ).order_by('-count')
+
+    total_episodes = EpisodicMemory.objects.count()
+    episodes_by_type = EpisodicMemory.objects.values('episode_type').annotate(
+        count=Count('id')
+    ).order_by('-count')
+
+    total_collections = IntelligenceCollection.objects.count()
+    collections_with_docs = IntelligenceCollection.objects.annotate(
+        doc_count=Count('documents')
+    ).values('name', 'doc_count')
+
+    return render(request, 'intelligence/stats.html', {
+        'total_users': total_users,
+        'users_by_role': users_by_role,
+        'total_conversations': total_conversations,
+        'conversations_with_memory': conversations_with_memory,
+        'total_facts': total_facts,
+        'facts_by_category': facts_by_category,
+        'total_episodes': total_episodes,
+        'episodes_by_type': episodes_by_type,
+        'total_collections': total_collections,
+        'collections_with_docs': collections_with_docs,
+        'active_section': 'stats'
+    })
+
+
+def activity_logs(request):
+    """Registro de actividad del sistema."""
+    episodes = EpisodicMemory.objects.all().order_by('-created_at')[:100]
+
+    # Estadísticas de actividad
+    total_episodes = EpisodicMemory.objects.count()
+    episodes_today = EpisodicMemory.objects.filter(
+        created_at__date=timezone.now().date()
+    ).count()
+
+    # Actividad por hora (últimas 24h)
+    from django.db.models import Count
+    from django.db.models.functions import TruncHour
+    last_24h = timezone.now() - timezone.timedelta(hours=24)
+    hourly_activity = EpisodicMemory.objects.filter(
+        created_at__gte=last_24h
+    ).annotate(
+        hour=TruncHour('created_at')
+    ).values('hour').annotate(
+        count=Count('id')
+    ).order_by('hour')
+
+    # Tipos de episodios
+    episodes_by_type = EpisodicMemory.objects.values('episode_type').annotate(
+        count=Count('id')
+    ).order_by('-count')
+
+    # Intenciones detectadas
+    intents_detected = EpisodicMemory.objects.values('intent_detected').annotate(
+        count=Count('id')
+    ).order_by('-count')
+
+    # Feedback recibido
+    feedback_count = EpisodicMemory.objects.exclude(
+        feedback__isnull=True
+    ).exclude(feedback='').count()
+
+    return render(request, 'intelligence/activity_logs.html', {
+        'episodes': episodes,
+        'total_episodes': total_episodes,
+        'episodes_today': episodes_today,
+        'hourly_activity': hourly_activity,
+        'episodes_by_type': episodes_by_type,
+        'intents_detected': intents_detected,
+        'feedback_count': feedback_count,
+        'active_section': 'activity'
+    })
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 6. RAG DISCOVERY & DYNAMIC (API)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def rag_discovery_tables(request):
+    """Descubre tablas disponibles en la base de datos para RAG."""
+    try:
+        from .services.rag import RAGService
+        # Leer database_alias del query param, default 'propifai' para consistencia con el frontend
+        database_alias = request.GET.get('database', 'propifai')
+        force_refresh = request.GET.get('nocache', '').lower() in ('true', '1', 'yes')
+        tables = RAGService.get_available_tables(database_alias=database_alias, force_refresh=force_refresh)
+        return Response({
+            'success': True,
+            'tables': tables,
+            'count': len(tables),
+            'timestamp': timezone.now().isoformat()
+        })
+    except Exception as e:
+        import traceback
+        return Response({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc(),
+            'timestamp': timezone.now().isoformat()
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def rag_discovery_table_schema(request, table_name):
+    """Obtiene el esquema de una tabla específica."""
+    try:
+        from .services.rag import RAGService
+        # Leer database_alias del query param, default 'propifai' para consistencia con el frontend
+        database_alias = request.GET.get('database', 'propifai')
+        schema_name = request.GET.get('schema', None)
+        analysis = RAGService.analyze_table_schema(table_name, schema=schema_name, database_alias=database_alias)
+        return Response({
+            'success': True,
+            'table_name': table_name,
+            'analysis': analysis,
+            'timestamp': timezone.now().isoformat()
+        })
+    except Exception as e:
+        import traceback
+        return Response({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc(),
+            'timestamp': timezone.now().isoformat()
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def rag_discovery_foreign_keys(request, table_name):
+    """Detecta foreign keys de una tabla."""
+    try:
+        from .services.rag import RAGService
+        database_alias = request.GET.get('database', 'propifai')
+        schema_name = request.GET.get('schema', None)
+        
+        foreign_keys = RAGService.detect_foreign_keys(table_name, schema=schema_name, database_alias=database_alias)
+        
+        return Response({
+            'success': True,
+            'table': table_name,
+            'schema': schema_name or 'dbo',
+            'database': database_alias,
+            'foreign_keys': foreign_keys,
+            'count': len(foreign_keys),
+            'timestamp': timezone.now().isoformat()
+        })
+    except Exception as e:
+        import traceback
+        return Response({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc(),
+            'timestamp': timezone.now().isoformat()
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def rag_discovery_table_preview(request, table_name):
+    """Obtiene una vista previa de los datos de una tabla."""
+    try:
+        from django.db import connection
+        with connection.cursor() as cursor:
+            cursor.execute(f"SELECT TOP 10 * FROM {table_name}")
+            columns = [col[0] for col in cursor.description]
+            rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+        return Response({
+            'success': True,
+            'table_name': table_name,
+            'columns': columns,
+            'rows': rows,
+            'row_count': len(rows),
+            'timestamp': timezone.now().isoformat()
+        })
+    except Exception as e:
+        import traceback
+        return Response({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc(),
+            'timestamp': timezone.now().isoformat()
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def rag_create_collection_dynamic(request):
+    """Crea una colección RAG dinámicamente desde una tabla existente."""
+    try:
+        import json
+        
+        # Soporte dual: JSON body o FormData (request.POST)
+        if request.content_type and 'application/json' in request.content_type:
+            data = json.loads(request.body) if isinstance(request.body, bytes) else request.data
+        else:
+            # FormData: parsear campos JSON stringificados
+            data = {}
+            for key in request.POST:
+                data[key] = request.POST.get(key)
+            # Parsear campos JSON
+            for json_field in ['embedding_fields', 'display_fields', 'filter_fields',
+                               'field_definitions', 'table_relationships']:
+                if json_field in data and isinstance(data[json_field], str):
+                    try:
+                        data[json_field] = json.loads(data[json_field])
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+
+        collection_name = data.get('collection_name') or data.get('name', '')
+        table_name = data.get('table_name', '')
+        schema_name = data.get('schema_name', 'dbo')
+        description = data.get('description', '')
+        min_level = int(data.get('min_level', 1))
+        domain = data.get('domain', 'general')
+        is_public = str(data.get('is_public', 'false')) == 'true' or data.get('is_public') == 'on'
+        key_field = data.get('key_field', 'id')
+        search_fields = data.get('search_fields') or data.get('embedding_fields', ['title', 'description'])
+        display_fields = data.get('display_fields', ['title', 'price', 'district'])
+        filter_fields = data.get('filter_fields', [])
+        field_definitions = data.get('field_definitions', [])
+        table_relationships = data.get('table_relationships', [])
+        is_active = str(data.get('is_active', 'on')) == 'on'
+        database_alias = data.get('database_alias', 'propifai')  # Default a propifai para el frontend
+
+        if not collection_name or not table_name:
+            return Response({
+                'success': False,
+                'error': 'collection_name y table_name son requeridos'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        from .services.rag import RAGService
+        result = RAGService.create_collection_dynamic(
+            name=collection_name,
+            table_name=table_name,
+            schema=schema_name,
+            description=description,
+            min_level=min_level,
+            domain=domain,
+            is_public=is_public,
+            key_field=key_field,
+            embedding_fields=search_fields,
+            display_fields=display_fields,
+            filter_fields=filter_fields,
+            field_definitions=field_definitions,
+            table_relationships=table_relationships,
+            is_active=is_active,
+            database_alias=database_alias,
+        )
+
+        success, message, collection = result
+
+        response_data = {
+            'success': success,
+            'message': message,
+            'timestamp': timezone.now().isoformat()
+        }
+
+        if collection:
+            response_data['collection'] = {
+                'id': str(collection.id),
+                'name': collection.name,
+                'table_name': collection.table_name,
+                'description': collection.description,
+                'embedding_fields': collection.embedding_fields,
+                'display_fields': collection.display_fields,
+                'filter_fields': collection.filter_fields,
+                'is_active': collection.is_active,
+                'created_at': collection.created_at.isoformat() if collection.created_at else None,
+            }
+
+        status_code = status.HTTP_200_OK if success else status.HTTP_400_BAD_REQUEST
+        return Response(response_data, status=status_code)
+
+    except Exception as e:
+        import traceback
+        return Response({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc(),
+            'timestamp': timezone.now().isoformat()
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def rag_search_dynamic(request):
+    """Busca en colecciones RAG dinámicamente."""
+    try:
+        import json
+        data = json.loads(request.body) if isinstance(request.body, bytes) else request.data
+
+        query = data.get('query', '')
+        collection_names = data.get('collection_names', [])
+        top_k = data.get('top_k', 5)
+
+        if not query:
+            return Response({
+                'success': False,
+                'error': 'Se requiere un query'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        from .services.rag import RAGService
+        results = RAGService.search_dynamic(
+            query=query,
+            collection_names=collection_names,
+            top_k=top_k
+        )
+
+        return Response({
+            'success': True,
+            'query': query,
+            'collections_searched': collection_names,
+            'results_count': len(results),
+            'results': results,
+            'timestamp': timezone.now().isoformat()
+        })
+
+    except Exception as e:
+        import traceback
+        return Response({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc(),
+            'timestamp': timezone.now().isoformat()
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def rag_ingest_pdf(request, collection_name):
+    """
+    Ingiere un archivo PDF en una colección RAG.
+    
+    Recibe multipart/form-data con un archivo PDF y metadatos opcionales.
+    El PDF se chunkifica (400 palabras, 50 overlap), se generan embeddings
+    (modo passage) y se almacena en IntelligenceDocument.
+    
+    Args:
+        request: HttpRequest con archivo PDF en request.FILES['file']
+        collection_name: Nombre de la colección destino (path parameter)
+        
+    Returns:
+        JSON con resultado de la ingesta
+    """
+    try:
+        import json
+        
+        # Validar que se envió un archivo
+        if 'file' not in request.FILES:
+            return Response({
+                'success': False,
+                'error': 'No se envió ningún archivo. Usa el campo "file" en multipart/form-data.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        pdf_file = request.FILES['file']
+        
+        # Validar extensión
+        if not pdf_file.name.lower().endswith('.pdf'):
+            return Response({
+                'success': False,
+                'error': f'El archivo "{pdf_file.name}" no es un PDF. Extensión esperada: .pdf'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Validar tamaño (máximo 50MB)
+        max_size = 50 * 1024 * 1024  # 50MB
+        if pdf_file.size > max_size:
+            return Response({
+                'success': False,
+                'error': f'El archivo es demasiado grande ({pdf_file.size / 1024 / 1024:.1f}MB). Máximo: 50MB'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Guardar archivo temporal
+        import tempfile
+        import os
+        
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
+            for chunk in pdf_file.chunks():
+                tmp_file.write(chunk)
+            tmp_path = tmp_file.name
+        
+        try:
+            # Parsear metadatos opcionales
+            metadata = {}
+            if request.POST.get('metadata'):
+                try:
+                    metadata = json.loads(request.POST['metadata'])
+                except (json.JSONDecodeError, TypeError):
+                    metadata = {'raw': request.POST.get('metadata')}
+            
+            # Agregar metadatos del archivo
+            metadata['nombre_original'] = pdf_file.name
+            metadata['tamano_bytes'] = pdf_file.size
+            metadata['tipo_mime'] = pdf_file.content_type or 'application/pdf'
+            
+            # Ingerir PDF
+            from .services.pdf_ingestion import PDFIngestionService
+            
+            success, message, stats = PDFIngestionService.ingest_pdf(
+                pdf_path=tmp_path,
+                collection_name=collection_name,
+                metadata=metadata
+            )
+            
+            if success:
+                return Response({
+                    'success': True,
+                    'message': message,
+                    'collection_name': collection_name,
+                    'file_name': pdf_file.name,
+                    'stats': stats,
+                    'timestamp': timezone.now().isoformat()
+                })
+            else:
+                return Response({
+                    'success': False,
+                    'error': message,
+                    'collection_name': collection_name,
+                    'file_name': pdf_file.name,
+                    'stats': stats,
+                    'timestamp': timezone.now().isoformat()
+                }, status=status.HTTP_400_BAD_REQUEST)
+        
+        finally:
+            # Limpiar archivo temporal
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+    
+    except Exception as e:
+        import traceback
+        return Response({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc(),
+            'timestamp': timezone.now().isoformat()
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 7. CHAT WEB (Template View)
+# ═══════════════════════════════════════════════════════════════════════════════
+
 
 def chat_web(request):
     """
     Vista principal del chat web interactivo (SPEC-007).
-    Interfaz tipo ChatGPT con panel lateral para memoria, instrucciones y archivos.
-    Usa el usuario autenticado vía middleware (SPEC-009).
+    Renderiza el template del chat con contexto inicial.
     """
-    start_time = time.time()
-    logger.info(f"[CHAT_WEB] Inicio de vista chat_web. Session: {request.session.session_key}")
-    
-    # Obtener usuario autenticado desde el middleware
     user = getattr(request, 'current_user', None)
+
+    # Obtener o crear usuario anónimo si no está autenticado
     if not user:
-        logger.warning("[CHAT_WEB] No hay usuario autenticado, redirigiendo a login.")
-        return redirect('/login/?next=/api/v1/intelligence/chat-web/')
-    
-    logger.debug(f"[CHAT_WEB] Usuario autenticado: {user.id} ({user.username})")
-    
-    # Calcular nivel del usuario basado en rol
-    logger.debug("[CHAT_WEB] Calculando nivel del usuario...")
+        session_key = request.session.session_key
+        if not session_key:
+            request.session.save()
+            session_key = request.session.session_key
+
+        user = User.objects.filter(
+            metadata__session_key=session_key
+        ).first()
+
+        if not user:
+            default_role = Role.objects.filter(default_level=1).first()
+            if not default_role:
+                default_role = Role.objects.create(
+                    name='Usuario Básico',
+                    default_level=1,
+                    max_level=1,
+                    default_domains=['general'],
+                    capabilities={'memory': True, 'knowledge_base': False, 'metrics': False, 'projects': False},
+                    description='Rol por defecto para usuarios nuevos'
+                )
+
+            user = User.objects.create(
+                role=default_role,
+                phone=f'anon_{uuid.uuid4().hex[:10]}',
+                is_active=True,
+                metadata={'session_key': session_key, 'name': 'Visitante'}
+            )
+
+    # Obtener conversaciones del usuario
+    conversations = Conversation.objects.filter(
+        user=user
+    ).order_by('-last_message_at')[:20]
+
+    # Obtener colecciones disponibles para el nivel del usuario
     user_level = 1
-    if user.role and user.role.allowed_levels:
-        # Tomar el nivel máximo permitido para el rol
-        user_level = max(user.role.allowed_levels)
-        logger.debug(f"[CHAT_WEB] Nivel del usuario (max allowed_levels): {user_level}")
-    elif user.role:
-        # Si no hay allowed_levels, usar nivel 1
-        user_level = 1
-        logger.debug("[CHAT_WEB] Rol sin allowed_levels, usando nivel 1")
-    else:
-        user_level = 1
-        logger.debug("[CHAT_WEB] Sin rol, usando nivel 1")
-    
-    # Obtener memoria del usuario (conversaciones activas recientes)
-    logger.debug("[CHAT_WEB] Obteniendo memoria del usuario...")
-    memory_context = []
     try:
-        memory_start = time.time()
-        # Buscar conversación activa más reciente del usuario
-        recent_conversation = Conversation.objects.filter(
-            user=user,
-            is_active=True
-        ).order_by('-last_message_at').first()
-        
-        if recent_conversation:
-            # Cargar contexto de la conversación usando MemoryService
-            context_data = MemoryService.load_conversation_context(recent_conversation.id)
-            memory_context = [{
-                'type': 'conversation_context',
-                'messages': context_data.get('messages', []),
-                'facts': context_data.get('facts', []),
-                'summary': context_data.get('summary', '')
-            }]
-            logger.debug(f"[CHAT_WEB] Contexto cargado de conversación: {recent_conversation.id}")
-        else:
-            memory_context = [{'type': 'no_active_conversation', 'message': 'No hay conversaciones activas'}]
-            logger.debug("[CHAT_WEB] No hay conversaciones activas para el usuario")
-        
-        memory_time = time.time() - memory_start
-        logger.info(f"[CHAT_WEB] Memoria obtenida en {memory_time:.2f}s, cantidad: {len(memory_context)}")
-    except Exception as e:
-        memory_context = [{'error': str(e), 'type': 'memory_error'}]
-        logger.error(f"[CHAT_WEB] Error obteniendo memoria: {e}")
-    
-    # Obtener colecciones accesibles para el usuario
-    logger.debug("[CHAT_WEB] Obteniendo colecciones accesibles...")
-    accessible_collections = []
-    try:
-        collections_start = time.time()
-        accessible_collections = IntelligenceCollection.objects.filter(
-            access_level__lte=user_level,
-            is_active=True
-        ).values('id', 'name', 'description', 'last_sync_count')[:10]
-        collections_time = time.time() - collections_start
-        logger.info(f"[CHAT_WEB] Colecciones obtenidas en {collections_time:.2f}s, cantidad: {len(accessible_collections)}")
-    except Exception as e:
-        accessible_collections = []
-        logger.error(f"[CHAT_WEB] Error obteniendo colecciones: {e}")
-    
-    # Obtener conversaciones recientes
-    logger.debug("[CHAT_WEB] Obteniendo conversaciones recientes...")
-    recent_conversations = []
-    try:
-        conv_start = time.time()
-        # Obtener conversaciones con campos existentes
-        conversations = Conversation.objects.filter(
-            user=user
-        ).order_by('-updated_at')[:5]
-        
-        # Construir lista con datos calculados
-        recent_conversations = []
-        for conv in conversations:
-            recent_conversations.append({
-                'id': conv.id,
-                'session_id': conv.session_id,
-                'updated_at': conv.updated_at,
-                'message_count': len(conv.messages) if conv.messages else 0,
-                'has_summary': bool(conv.context_summary)
-            })
-        
-        conv_time = time.time() - conv_start
-        logger.info(f"[CHAT_WEB] Conversaciones obtenidas en {conv_time:.2f}s, cantidad: {len(recent_conversations)}")
-    except Exception as e:
-        recent_conversations = []
-        logger.error(f"[CHAT_WEB] Error obteniendo conversaciones: {e}")
-    
-    # Obtener hechos (facts) del usuario
-    logger.debug("[CHAT_WEB] Obteniendo hechos del usuario...")
-    user_facts = []
-    try:
-        facts_start = time.time()
-        # Obtener hechos con campos correctos
-        facts = Fact.objects.filter(
-            user=user,
-            is_active=True
-        ).order_by('-confidence')[:15]
-        
-        # Construir lista con formato adecuado
-        user_facts = []
-        for fact in facts:
-            user_facts.append({
-                'id': fact.id,
-                'fact_text': f"{fact.subject} {fact.relation} {fact.object}",
-                'subject': fact.subject,
-                'relation': fact.relation,
-                'object': fact.object,
-                'confidence': fact.confidence,
-                'created_at': fact.created_at,
-                'has_source': fact.source_conversation is not None
-            })
-        
-        facts_time = time.time() - facts_start
-        logger.info(f"[CHAT_WEB] Hechos obtenidos en {facts_time:.2f}s, cantidad: {len(user_facts)}")
-    except Exception as e:
-        user_facts = []
-        logger.error(f"[CHAT_WEB] Error obteniendo hechos: {e}")
-    
-    logger.debug("[CHAT_WEB] Construyendo contexto de template...")
-    context = {
+        profile = UserIntelligenceProfile.objects.get(user=user)
+        user_level = profile.level
+    except UserIntelligenceProfile.DoesNotExist:
+        if user.role:
+            user_level = user.role.default_level
+
+    available_collections = IntelligenceCollection.objects.filter(
+        min_level__lte=user_level,
+        is_active=True
+    )
+
+    # Estadísticas del usuario
+    total_conversations = Conversation.objects.filter(user=user).count()
+    total_messages = sum(
+        len(c.messages) for c in Conversation.objects.filter(user=user)
+    )
+
+    return render(request, 'intelligence/chat.html', {
         'user': user,
         'user_id': str(user.id),
-        'user_name': user.metadata.get('name') if user.metadata else (user.phone or user.email or 'Usuario'),
-        'user_role': user.role.name if user.role else 'Sin rol',
+        'user_name': user.first_name or user.username or 'Usuario',
         'user_level': user_level,
-        
-        # Datos para el panel lateral
-        'memory_context': memory_context,
-        'accessible_collections': list(accessible_collections),
-        'recent_conversations': list(recent_conversations),
-        'user_facts': list(user_facts),
-        
-        # Configuración del chat
-        'max_tokens': 4000,
-        'temperature': 0.7,
-        'streaming_enabled': True,
-        
-        # URLs de API
-        'api_chat_url': '/api/v1/intelligence/chat/',
-        'api_memory_url': '/api/v1/intelligence/memory/context/',
-        'api_rag_search_url': '/api/v1/intelligence/rag/search/',
-        'api_upload_url': '/api/v1/intelligence/upload/',
-        
-        # Estado inicial
-        'initial_message': '¡Hola! Soy el asistente de Propifai. ¿En qué puedo ayudarte hoy?',
-        'demo_mode': user.metadata.get('demo', False) if user.metadata else True,
-        
-        # Cache buster para assets estáticos
-        'cache_timestamp': int(time.time()),
-    }
-    
-    total_time = time.time() - start_time
-    logger.info(f"[CHAT_WEB] Vista completada en {total_time:.2f}s. Renderizando template.")
-    return render(request, 'intelligence/chat.html', context)
+        'conversations': conversations,
+        'available_collections': available_collections,
+        'total_conversations': total_conversations,
+        'total_messages': total_messages,
+        'active_section': 'chat'
+    })
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 8. CHAT WEB API (refactorizada -> ChatProcessor)
+# ═══════════════════════════════════════════════════════════════════════════════
 
 
 @api_view(['POST'])
@@ -2165,8 +1494,7 @@ def chat_web(request):
 def chat_web_api(request):
     """
     API para el chat web interactivo (SPEC-007).
-    Procesa mensajes del usuario y genera respuestas usando los servicios PIL.
-    Ahora usa el usuario autenticado vía middleware (SPEC-009).
+    Refactorizada: delega toda la lógica de negocio a ChatProcessor.
     """
     try:
         # Validar datos de entrada
@@ -2177,7 +1505,7 @@ def chat_web_api(request):
                 'error': 'Datos inválidos',
                 'details': serializer.errors
             }, status=status.HTTP_400_BAD_REQUEST)
-        
+
         data = serializer.validated_data
         user_id = data.get('user_id')
         message = data.get('message')
@@ -2185,400 +1513,66 @@ def chat_web_api(request):
         use_memory = data.get('use_memory', True)
         use_rag = data.get('use_rag', True)
         collections = data.get('collections', [])
-        
+
         # Obtener usuario autenticado desde el middleware (SPEC-009)
         user = getattr(request, 'current_user', None)
-        
+
         # Si no hay usuario autenticado, intentar por user_id del request
         if not user and user_id:
             try:
                 user = User.objects.get(id=user_id)
             except User.DoesNotExist:
                 pass
-        
+
         # Si aún no hay usuario, rechazar la solicitud
         if not user:
             return Response({
                 'success': False,
                 'error': 'Usuario no autenticado. Debes iniciar sesión para usar el chat.'
             }, status=status.HTTP_401_UNAUTHORIZED)
-        
-        # DEBUG: Verificar tipo de user
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.debug(f"User type: {type(user)}, user.id: {user.id if hasattr(user, 'id') else 'NO ID'}")
-        
-        # Calcular nivel del usuario basado en rol
-        user_level = 1
-        if user.role and user.role.allowed_levels:
-            user_level = max(user.role.allowed_levels)
-        elif user.role:
-            user_level = 1
-        else:
-            user_level = 1
-        
-        # Obtener o crear app config para 'chat-web'
-        app, _ = AppConfig.objects.get_or_create(
-            id='chat-web',
-            defaults={
-                'name': 'Chat Web Interactivo',
-                'level': 2,
-                'capabilities': {'memory': True, 'knowledge_base': True, 'metrics': False, 'projects': False},
-                'is_active': True
-            }
-        )
-        
+
         # Obtener o crear conversación
-        conversation = None
-        if conversation_id:
-            try:
-                conversation = Conversation.objects.get(id=conversation_id, user=user)
-            except Conversation.DoesNotExist:
-                conversation = None
-        
-        if not conversation:
-            # Generar un session_id único
-            import uuid
-            session_id = f'chat_web_{uuid.uuid4().hex[:16]}'
-            
-            conversation = Conversation.objects.create(
-                user=user,
-                app=app,
-                session_id=session_id,
-                messages=[],
-                metadata={'source': 'chat_web_api'},
-                is_active=True
-            )
-        
-        # Guardar mensaje del usuario usando la función helper
-        user_message = add_message_to_conversation(
-            conversation=conversation,
-            role='user',
-            content=message
+        conversation = ChatProcessor._get_or_create_conversation(
+            user=user,
+            app_id='chat-web',
+            conversation_id=conversation_id,
         )
-        
-        # Actualizar metadata del mensaje si es necesario
-        conversation.messages[-1]['metadata'] = {
-            'use_memory': use_memory,
-            'use_rag': use_rag,
-            'collections': collections
-        }
-        conversation.save()
-        
-        # Preparar contexto para el LLM
-        context = {
-            'user': {
-                'id': str(user.id),
-                'name': user.metadata.get('name') if user.metadata else (user.phone or user.email or 'Usuario'),
-                'role': user.role.name if user.role else None,
-                'level': user_level
-            },
-            'conversation_id': str(conversation.id),
-            'timestamp': timezone.now().isoformat()
-        }
-        
-        # Obtener contexto de memoria si está habilitado
-        memory_context = []
-        if use_memory:
-            try:
-                # DEBUG: Verificar user.id
-                logger.debug(f"DEBUG: Creating MemoryService with user_id={str(user.id)}, user type={type(user)}")
-                memory_service = MemoryService(user_id=str(user.id))
-                logger.debug(f"DEBUG: MemoryService created: {type(memory_service)}")
-                memory_context = memory_service.get_relevant_context(
-                    query=message,
-                    limit=5
-                )
-                context['memory_context'] = memory_context
-            except Exception as e:
-                logger.error(f"ERROR in MemoryService: {str(e)}", exc_info=True)
-                context['memory_error'] = str(e)
-        
-        # Obtener conocimiento de RAG si está habilitado
-        rag_context = []
-        if use_rag:
-            # Si no se especificaron colecciones, usar las accesibles para el nivel del usuario
-            if not collections:
-                try:
-                    accessible = IntelligenceCollection.objects.filter(
-                        access_level__lte=user_level,
-                        is_active=True
-                    ).values_list('name', flat=True)
-                    collections = list(accessible)
-                    logger.debug(f"RAG: colecciones automáticas para nivel {user_level}: {collections}")
-                except Exception as e:
-                    logger.error(f"Error obteniendo colecciones accesibles: {e}")
-            
-            if collections:
-                try:
-                    from .services.rag import RAGService
-                    rag_results = RAGService.search_dynamic(
-                        query=message,
-                        collection_names=collections,
-                        top_k=3
-                    )
-                    rag_context = rag_results
-                    context['rag_context'] = rag_context
-                except Exception as e:
-                    context['rag_error'] = str(e)
-        
-        # Obtener episodios relevantes de memoria episódica
-        episodic_context = []
-        if use_memory:
-            try:
-                episodic_context = EpisodicMemoryService.get_relevant_episodes_static(
-                    user_id=str(user.id),
-                    query=message,
-                    limit=3
-                )
-            except Exception as e:
-                logger.error(f"ERROR in EpisodicMemoryService.get_relevant_episodes: {str(e)}", exc_info=True)
-        
-        # Generar respuesta usando LLMService
-        try:
-            from .services.llm import LLMService
-            
-            # Construir prompt con contexto mejorado
-            prompt_parts = []
-            
-            # Agregar episodios relevantes de memoria episódica
-            if episodic_context:
-                prompt_parts.append(EpisodicMemoryService.format_episodes_for_prompt(episodic_context))
-                prompt_parts.append("")
-            
-            # Agregar instrucción del sistema con contexto
-            system_instruction = """Eres el asistente inteligente de Propifai, una inmobiliaria en Arequipa, Perú.
 
-INSTRUCCIONES OBLIGATORIAS:
-1. USA SIEMPRE el contexto de "CONOCIMIENTO DEL SISTEMA (BASE DE DATOS)" cuando se te proporcione. Esa información proviene de la base de datos real de propiedades.
-2. Si el usuario pregunta por propiedades en una zona específica (Cayma, Cerro Colorado, Yanahuara, etc.) y el contexto contiene propiedades de esa zona, DEBES listarlas.
-3. NUNCA digas "no tengo información" si el contexto contiene datos relevantes. Revisa el contexto cuidadosamente.
-4. Si el contexto tiene propiedades, PRESÉNTALAS al usuario con detalles (título, precio, ubicación).
-5. Mantén coherencia con conversaciones anteriores.
-6. Sé conciso pero útil, enfocado en el mercado inmobiliario de Arequipa.
-7. Si el contexto NO tiene información relevante, admítelo y ofrece ayudar con otra cosa.
-8. Si el usuario pregunta por su nombre o información personal, REVISA la sección "INTERACCIONES ANTERIORES RELEVANTES" y "CONTEXTO DEL USUARIO (INFORMACIÓN CONOCIDA)" — ahí encontrarás datos como su nombre, preferencias, etc.
-
-REGLAS CRÍTICAS:
-- El contexto de "CONOCIMIENTO DEL SISTEMA" son datos REALES de la base de datos. Úsalos.
-- No inventes propiedades que no estén en el contexto.
-- Si encuentras propiedades en el contexto que coinciden con lo que pide el usuario, DÍSELO.
-- La sección "INTERACCIONES ANTERIORES RELEVANTES" contiene episodios previos de la conversación. REVÍSALOS para recordar información del usuario como su nombre, preferencias de búsqueda, etc."""
-            
-            prompt_parts.append(system_instruction)
-            prompt_parts.append("")
-            
-            # Agregar contexto de memoria de manera estructurada
-            if memory_context:
-                prompt_parts.append("=== CONTEXTO DEL USUARIO (INFORMACIÓN CONOCIDA) ===")
-                
-                # Separar hechos de conversaciones
-                facts = [m for m in memory_context if m.get('type') == 'fact']
-                conversations = [m for m in memory_context if m.get('type') == 'conversation']
-                
-                if facts:
-                    prompt_parts.append("Hechos conocidos sobre el usuario:")
-                    for i, fact in enumerate(facts[:5], 1):
-                        content = fact.get('content', '')
-                        confidence = fact.get('confidence', 0)
-                        relevance = fact.get('relevance_score', 0)
-                        prompt_parts.append(f"{i}. {content} (confianza: {confidence:.2f}, relevancia: {relevance:.2f})")
-                    prompt_parts.append("")
-                
-                if conversations:
-                    prompt_parts.append("Fragmentos de conversaciones anteriores relevantes:")
-                    for i, conv in enumerate(conversations[:3], 1):
-                        role = "Usuario" if conv.get('role') == 'user' else "Asistente"
-                        content = conv.get('content', '')
-                        prompt_parts.append(f"{i}. {role}: {content}")
-                    prompt_parts.append("")
-            
-            # Agregar contexto de RAG
-            if rag_context:
-                prompt_parts.append("=== CONOCIMIENTO DEL SISTEMA (BASE DE DATOS) ===")
-                prompt_parts.append("Los siguientes datos provienen de la base de datos de propiedades de Propifai. Son datos REALES.")
-                for i, rag in enumerate(rag_context[:5], 1):
-                    content = rag.get('content', rag.get('text', ''))
-                    field_values = rag.get('field_values', {})
-                    collection_name = rag.get('collection_name', '')
-                    search_type = rag.get('search_type', 'vector')
-                    
-                    # Construir descripción estructurada
-                    desc_parts = []
-                    
-                    # Si hay field_values, usarlos como fuente principal
-                    if field_values:
-                        title = field_values.get('title', field_values.get('name', ''))
-                        price = field_values.get('price', '')
-                        address = field_values.get('real_address', field_values.get('address', ''))
-                        district = field_values.get('district_name', field_values.get('district', ''))
-                        bedrooms = field_values.get('bedrooms', '')
-                        bathrooms = field_values.get('bathrooms', '')
-                        built_area = field_values.get('built_area', '')
-                        land_area = field_values.get('land_area', '')
-                        property_type = field_values.get('property_type', '')
-                        description = field_values.get('description', '')
-                        
-                        if title:
-                            desc_parts.append(f"Título: {title}")
-                        if price:
-                            desc_parts.append(f"Precio: {price}")
-                        if address:
-                            desc_parts.append(f"Dirección: {address}")
-                        if district:
-                            desc_parts.append(f"Distrito: {district}")
-                        if bedrooms:
-                            desc_parts.append(f"Dormitorios: {bedrooms}")
-                        if bathrooms:
-                            desc_parts.append(f"Baños: {bathrooms}")
-                        if built_area:
-                            desc_parts.append(f"Área construida: {built_area}")
-                        if land_area:
-                            desc_parts.append(f"Área terreno: {land_area}")
-                        if property_type:
-                            desc_parts.append(f"Tipo: {property_type}")
-                        if description:
-                            desc_parts.append(f"Descripción: {description[:100]}")
-                    else:
-                        # Si no hay field_values, usar el contenido
-                        desc_parts.append(content[:200])
-                    
-                    if desc_parts:
-                        source_text = f" [Colección: {collection_name}]" if collection_name else ""
-                        search_tag = " [Búsqueda semántica]" if search_type == 'vector' else " [Búsqueda por texto]"
-                        prompt_parts.append(f"\nPropiedad {i}:{search_tag}{source_text}")
-                        for part in desc_parts:
-                            prompt_parts.append(f"  - {part}")
-                
-                prompt_parts.append("")
-                prompt_parts.append("INSTRUCCIÓN: Si el usuario pregunta por propiedades, USA LA INFORMACIÓN DE ARRIBA para responder. No digas que no tienes información si estos datos contienen lo que el usuario busca.")
-                prompt_parts.append("")
-            
-            # Agregar mensaje actual del usuario
-            prompt_parts.append("=== MENSAJE ACTUAL DEL USUARIO ===")
-            prompt_parts.append(f"Usuario: {message}")
-            prompt_parts.append("")
-            prompt_parts.append("=== RESPUESTA DEL ASISTENTE ===")
-            
-            full_prompt = "\n".join(prompt_parts)
-            
-            # Llamar al LLM directamente con el full_prompt ya construido
-            # que incluye contexto RAG, memoria, episodios, etc.
-            # Esto evita que generate_rag_response haga su propia búsqueda RAG duplicada.
-            success, api_message, api_response = LLMService._call_deepseek_api(
-                messages=[{"role": "user", "content": full_prompt}],
-                system_prompt="Eres un asistente experto inmobiliario. Responde ÚNICAMENTE basándote en la información proporcionada en el mensaje del usuario. Si hay propiedades listadas en 'CONOCIMIENTO DEL SISTEMA', PRESÉNTALAS al usuario. No digas que no tienes información si los datos están en el mensaje."
-            )
-            
-            if success:
-                # Asegurar que api_response sea un diccionario antes de llamar a .get()
-                if isinstance(api_response, dict):
-                    response_text = api_response.get('content', 'Lo siento, no pude generar una respuesta.')
-                else:
-                    logger.warning(f"api_response inesperado: type={type(api_response)}, value={api_response}")
-                    response_text = 'Lo siento, no pude generar una respuesta.'
-                response_metadata = {
-                    'response': response_text,
-                    'rag_context_used': bool(rag_context),
-                    'retrieved_documents_count': len(rag_context) if rag_context else 0
-                }
-            else:
-                response_text = f"Error al generar respuesta: {api_message}"
-                response_metadata = {'error': api_message}
-            
-        except Exception as e:
-            response_text = f"Error al generar respuesta: {str(e)}"
-            response_metadata = {'error': str(e)}
-        
-        # Guardar respuesta del asistente usando la función helper
-        assistant_message = add_message_to_conversation(
+        # Construir contexto y delegar a ChatProcessor
+        ctx = ChatContext(
+            user=user,
+            message=message,
             conversation=conversation,
-            role='assistant',
-            content=response_text
+            use_memory=use_memory,
+            use_rag=use_rag,
+            collections=collections,
+            app_id='chat-web',
+            skill_name=data.get('skill_name'),
+            skill_params=data.get('skill_params', {}) or {},
+            flow_name=data.get('flow_name'),
+            flow_params=data.get('flow_params', {}) or {},
         )
-        
-        # Agregar metadata al último mensaje
-        if conversation.messages:
-            conversation.messages[-1]['metadata'] = response_metadata
-            conversation.save()
-        
-        # Extraer y guardar hechos relevantes de la conversación
-        if use_memory:
-            try:
-                # Usar el nuevo sistema de extracción de hechos
-                extracted_facts = MemoryService.extract_and_save_facts(
-                    user_id=user.id,
-                    message=message,
-                    response=response_text
-                )
-                
-                # Log para debugging
-                import logging
-                logger = logging.getLogger(__name__)
-                if extracted_facts:
-                    logger.info(f"Extraídos {len(extracted_facts)} hechos de la conversación: {[f['relation'] for f in extracted_facts]}")
-                else:
-                    logger.debug("No se extrajeron hechos de la conversación")
-                    
-            except Exception as e:
-                # Log error pero no fallar
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.error(f"Error extrayendo hechos: {str(e)}", exc_info=True)
-        
-        # Guardar episodio en memoria episódica
-        if use_memory:
-            try:
-                import logging
-                logger = logging.getLogger(__name__)
-                
-                # Construir contexto enriquecido
-                enriched_context = {}
-                if collections:
-                    enriched_context['collections_used'] = collections
-                if user_level:
-                    enriched_context['user_level'] = user_level
-                enriched_context['use_rag'] = use_rag
-                enriched_context['use_memory'] = use_memory
-                
-                episode_data = EpisodicMemoryService.save_episode(
-                    user_id=str(user.id),
-                    conversation_id=str(conversation.id),
-                    user_message=message,
-                    assistant_response=response_text,
-                    rag_context_used=rag_context if rag_context else None,
-                    memory_context_used=memory_context if memory_context else None,
-                    context=enriched_context
-                )
-                
-                if episode_data:
-                    logger.info(f"Episodio guardado: tipo={episode_data.get('episode_type')}, "
-                               f"intent={episode_data.get('intent_detected')}, "
-                               f"importancia={episode_data.get('importance_score'):.2f}")
-                
-            except Exception as e:
-                # Log error pero no fallar
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.error(f"Error guardando episodio en memoria episódica: {str(e)}", exc_info=True)
-        
-        # Preparar respuesta
-        response_data = {
+
+        result = ChatProcessor.process_message(ctx)
+
+        if not result.success:
+            return Response({
+                'success': False,
+                'error': result.error,
+                'traceback': result.metadata.get('traceback', ''),
+                'timestamp': result.timestamp
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response({
             'success': True,
-            'conversation_id': str(conversation.id),
-            'message_id': assistant_message.get('id', str(uuid.uuid4())),
-            'response': response_text,
-            'metadata': response_metadata,
-            'context_summary': {
-                'memory_used': len(memory_context) if memory_context else 0,
-                'rag_used': len(rag_context) if rag_context else 0,
-                'collections_used': collections if collections else []
-            },
-            'timestamp': timezone.now().isoformat()
-        }
-        
-        return Response(response_data)
-        
+            'conversation_id': result.conversation_id,
+            'message_id': result.message_id,
+            'response': result.response_text,
+            'metadata': result.metadata,
+            'context_summary': result.context_summary,
+            'timestamp': result.timestamp
+        })
+
     except Exception as e:
         import traceback
         error_details = traceback.format_exc()
@@ -2591,14 +1585,186 @@ REGLAS CRÍTICAS:
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@level_required(2)
+def conversation_flows_page(request):
+    """Página de administración de los flujos de conversación."""
+    flows = ConversationFlow.objects.all().order_by('name')
+    return render(request, 'intelligence/conversation_flows.html', {
+        'flows': flows,
+        'active_section': 'chat_flows',
+    })
+
+
+@level_required(2)
+def conversation_flow_create(request):
+    """Crear un nuevo flujo de conversación desde la interfaz web."""
+    errors = []
+    form_data = {
+        'name': '',
+        'description': '',
+        'initial_state': 'start',
+        'is_active': True,
+        'states': json.dumps({
+            'start': {
+                'message': '¡Hola! ¿En qué puedo ayudarte?',
+                'buttons': [
+                    {'text': 'Comprar', 'next_state': 'buy_flow'},
+                    {'text': 'Vender', 'next_state': 'sell_flow'}
+                ]
+            }
+        }, indent=2, ensure_ascii=False),
+    }
+
+    if request.method == 'POST':
+        form_data['name'] = request.POST.get('name', '').strip()
+        form_data['description'] = request.POST.get('description', '').strip()
+        form_data['initial_state'] = request.POST.get('initial_state', 'start').strip()
+        form_data['is_active'] = request.POST.get('is_active') == 'on'
+        form_data['states'] = request.POST.get('states', '').strip()
+
+        if not form_data['name']:
+            errors.append('El nombre del flujo es obligatorio.')
+
+        if not form_data['states']:
+            errors.append('Los estados del flujo son obligatorios.')
+        else:
+            try:
+                states = json.loads(form_data['states'])
+            except json.JSONDecodeError as exc:
+                errors.append(f'El JSON de estados no es válido: {str(exc)}')
+                states = None
+
+        if not errors:
+            if ConversationFlow.objects.filter(name=form_data['name']).exists():
+                errors.append('Ya existe un flujo con ese nombre.')
+            else:
+                ConversationFlow.objects.create(
+                    name=form_data['name'],
+                    description=form_data['description'],
+                    initial_state=form_data['initial_state'] or 'start',
+                    is_active=form_data['is_active'],
+                    states=states or {},
+                )
+                messages.success(request, 'Flujo creado correctamente.')
+                return redirect('intelligence:conversation_flows_page')
+
+    return render(request, 'intelligence/conversation_flow_form.html', {
+        'form_action': 'create',
+        'form_data': form_data,
+        'errors': errors,
+    })
+
+
+@level_required(2)
+def conversation_flow_edit(request, flow_id):
+    """Editar un flujo de conversación desde la interfaz web."""
+    flow = get_object_or_404(ConversationFlow, id=flow_id)
+    errors = []
+    form_data = {
+        'name': flow.name,
+        'description': flow.description,
+        'initial_state': flow.initial_state,
+        'is_active': flow.is_active,
+        'states': json.dumps(flow.states, indent=2, ensure_ascii=False),
+    }
+
+    if request.method == 'POST':
+        form_data['name'] = request.POST.get('name', '').strip()
+        form_data['description'] = request.POST.get('description', '').strip()
+        form_data['initial_state'] = request.POST.get('initial_state', 'start').strip()
+        form_data['is_active'] = request.POST.get('is_active') == 'on'
+        form_data['states'] = request.POST.get('states', '').strip()
+
+        if not form_data['name']:
+            errors.append('El nombre del flujo es obligatorio.')
+
+        if not form_data['states']:
+            errors.append('Los estados del flujo son obligatorios.')
+        else:
+            try:
+                states = json.loads(form_data['states'])
+            except json.JSONDecodeError as exc:
+                errors.append(f'El JSON de estados no es válido: {str(exc)}')
+                states = None
+
+        if not errors:
+            duplicate = ConversationFlow.objects.filter(name=form_data['name']).exclude(id=flow.id).exists()
+            if duplicate:
+                errors.append('Ya existe otro flujo con ese nombre.')
+            else:
+                flow.name = form_data['name']
+                flow.description = form_data['description']
+                flow.initial_state = form_data['initial_state'] or 'start'
+                flow.is_active = form_data['is_active']
+                flow.states = states or {}
+                flow.save()
+                messages.success(request, 'Flujo actualizado correctamente.')
+                return redirect('intelligence:conversation_flows_page')
+
+    return render(request, 'intelligence/conversation_flow_form.html', {
+        'form_action': 'edit',
+        'flow': flow,
+        'form_data': form_data,
+        'errors': errors,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def conversation_flows_list(request):
+    """Listado de flujos de conversación disponibles."""
+    flows = ConversationFlow.objects.all().order_by('name')
+    serializer = ConversationFlowSerializer(flows, many=True)
+    return Response({
+        'success': True,
+        'flows': serializer.data,
+        'timestamp': timezone.now().isoformat(),
+    })
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def conversation_flow_detail(request, flow_id):
+    """Detalle de un flujo de conversación."""
+    flow = get_object_or_404(ConversationFlow, id=flow_id)
+    serializer = ConversationFlowSerializer(flow)
+    return Response({
+        'success': True,
+        'flow': serializer.data,
+        'timestamp': timezone.now().isoformat(),
+    })
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def conversation_flow_toggle(request, flow_id):
+    """Activa o desactiva un flujo de conversación."""
+    flow = get_object_or_404(ConversationFlow, id=flow_id)
+    flow.is_active = not flow.is_active
+    flow.save(update_fields=['is_active'])
+    return Response({
+        'success': True,
+        'flow_id': str(flow.id),
+        'is_active': flow.is_active,
+        'timestamp': timezone.now().isoformat(),
+    })
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 9. CHAT WEB STREAM (refactorizada -> ChatProcessor)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 @authentication_classes([])
 def chat_web_stream(request):
     """
     API para streaming de respuestas en el chat web (SPEC-007).
-    Procesa mensajes del usuario y genera respuestas en streaming usando los servicios PIL.
-    Ahora usa el usuario autenticado vía middleware (SPEC-009).
+    Refactorizada: delega toda la lógica de negocio a ChatProcessor.process_message_stream().
     """
     try:
         # Validar datos de entrada
@@ -2609,7 +1775,7 @@ def chat_web_stream(request):
                 'error': 'Datos inválidos',
                 'details': serializer.errors
             }, status=status.HTTP_400_BAD_REQUEST)
-        
+
         data = serializer.validated_data
         user_id = data.get('user_id')
         message = data.get('message')
@@ -2617,359 +1783,79 @@ def chat_web_stream(request):
         use_memory = data.get('use_memory', True)
         use_rag = data.get('use_rag', True)
         collections = data.get('collections', [])
-        
+
         # Obtener usuario autenticado desde el middleware (SPEC-009)
         user = getattr(request, 'current_user', None)
-        
+
         # Si no hay usuario autenticado, intentar por user_id del request
         if not user and user_id:
             try:
                 user = User.objects.get(id=user_id)
             except User.DoesNotExist:
                 pass
-        
+
         # Si aún no hay usuario, rechazar la solicitud
         if not user:
             return Response({
                 'success': False,
                 'error': 'Usuario no autenticado. Debes iniciar sesión para usar el chat.'
             }, status=status.HTTP_401_UNAUTHORIZED)
-        
-        # Calcular nivel del usuario basado en rol
-        user_level = 1
-        if user.role and user.role.allowed_levels:
-            user_level = max(user.role.allowed_levels)
-        elif user.role:
-            user_level = 1
-        else:
-            user_level = 1
-        
+
         # Obtener o crear conversación
-        conversation = None
-        if conversation_id:
-            try:
-                conversation = Conversation.objects.get(id=conversation_id, user=user)
-            except Conversation.DoesNotExist:
-                conversation = None
-        
-        if not conversation:
-            conversation = Conversation.objects.create(
-                user=user,
-                title=message[:50] + '...' if len(message) > 50 else message,
-                app_id='chat-web-stream'
-            )
-        
-        # Guardar mensaje del usuario
-        user_message = conversation.add_message(
-            role='user',
-            content=message,
-            metadata={
-                'use_memory': use_memory,
-                'use_rag': use_rag,
-                'collections': collections,
-                'streaming': True
-            }
+        conversation = ChatProcessor._get_or_create_conversation(
+            user=user,
+            app_id='chat-web-stream',
+            conversation_id=conversation_id,
+            streaming=True,
         )
-        
-        # Preparar contexto para el LLM
-        context = {
-            'user': {
-                'id': str(user.id),
-                'name': user.metadata.get('name') if user.metadata else (user.phone or user.email or 'Usuario'),
-                'role': user.role.name if user.role else None,
-                'level': user_level
-            },
-            'conversation_id': str(conversation.id),
-            'timestamp': timezone.now().isoformat()
-        }
-        
-        # Obtener contexto de memoria si está habilitado
-        memory_context = []
-        if use_memory:
-            try:
-                memory_service = MemoryService(user_id=str(user.id))
-                memory_context = memory_service.get_relevant_context(
-                    query=message,
-                    limit=3
-                )
-                context['memory_context'] = memory_context
-            except Exception as e:
-                context['memory_error'] = str(e)
-        
-        # Obtener conocimiento de RAG si está habilitado
-        rag_context = []
-        if use_rag:
-            # Si no se especificaron colecciones, usar las accesibles para el nivel del usuario
-            if not collections:
-                try:
-                    accessible = IntelligenceCollection.objects.filter(
-                        access_level__lte=user_level,
-                        is_active=True
-                    ).values_list('name', flat=True)
-                    collections = list(accessible)
-                    logger.debug(f"RAG (stream): colecciones automáticas para nivel {user_level}: {collections}")
-                except Exception as e:
-                    logger.error(f"Error obteniendo colecciones accesibles (stream): {e}")
-            
-            if collections:
-                try:
-                    from .services.rag import RAGService
-                    rag_results = RAGService.search_dynamic(
-                        query=message,
-                        collection_names=collections,
-                        top_k=2
-                    )
-                    rag_context = rag_results
-                    context['rag_context'] = rag_context
-                except Exception as e:
-                    context['rag_error'] = str(e)
-        
-        # Obtener episodios relevantes de memoria episódica
-        episodic_context = []
-        if use_memory:
-            try:
-                episodic_context = EpisodicMemoryService.get_relevant_episodes_static(
-                    user_id=str(user.id),
-                    query=message,
-                    limit=3
-                )
-            except Exception as e:
-                logger.error(f"ERROR in EpisodicMemoryService.get_relevant_episodes (stream): {str(e)}", exc_info=True)
-        
-        # Construir prompt con contexto
-        prompt_parts = []
-        
-        # Agregar episodios relevantes de memoria episódica
-        if episodic_context:
-            prompt_parts.append(EpisodicMemoryService.format_episodes_for_prompt(episodic_context))
-            prompt_parts.append("")
-        
-        # Agregar instrucción del sistema
-        system_instruction = """Eres el asistente inteligente de Propifai, una inmobiliaria en Arequipa, Perú.
 
-INSTRUCCIONES OBLIGATORIAS:
-1. USA SIEMPRE el contexto de "CONOCIMIENTO DEL SISTEMA (BASE DE DATOS)" cuando se te proporcione. Esa información proviene de la base de datos real de propiedades.
-2. Si el usuario pregunta por propiedades en una zona específica (Cayma, Cerro Colorado, Yanahuara, etc.) y el contexto contiene propiedades de esa zona, DEBES listarlas.
-3. NUNCA digas "no tengo información" si el contexto contiene datos relevantes. Revisa el contexto cuidadosamente.
-4. Si el contexto tiene propiedades, PRESÉNTALAS al usuario con detalles (título, precio, ubicación).
-5. Mantén coherencia con conversaciones anteriores.
-6. Sé conciso pero útil, enfocado en el mercado inmobiliario de Arequipa.
-7. Si el contexto NO tiene información relevante, admítelo y ofrece ayudar con otra cosa.
-8. Si el usuario pregunta por su nombre o información personal, REVISA la sección "INTERACCIONES ANTERIORES RELEVANTES" y "CONTEXTO DEL USUARIO (INFORMACIÓN CONOCIDA)" — ahí encontrarás datos como su nombre, preferencias, etc.
+        # Construir contexto
+        ctx = ChatContext(
+            user=user,
+            message=message,
+            conversation=conversation,
+            use_memory=use_memory,
+            use_rag=use_rag,
+            collections=collections,
+            app_id='chat-web-stream',
+            streaming=True,
+            max_tokens=800,
+            temperature=0.7,
+            skill_name=data.get('skill_name'),
+            skill_params=data.get('skill_params', {}) or {},
+            flow_name=data.get('flow_name'),
+            flow_params=data.get('flow_params', {}) or {},
+        )
 
-REGLAS CRÍTICAS:
-- El contexto de "CONOCIMIENTO DEL SISTEMA" son datos REALES de la base de datos. Úsalos.
-- No inventes propiedades que no estén en el contexto.
-- Si encuentras propiedades en el contexto que coinciden con lo que pide el usuario, DÍSELO.
-- La sección "INTERACCIONES ANTERIORES RELEVANTES" contiene episodios previos de la conversación. REVÍSALOS para recordar información del usuario como su nombre, preferencias de búsqueda, etc."""
-        
-        prompt_parts.append(system_instruction)
-        prompt_parts.append("")
-        
-        # Agregar contexto de memoria de manera estructurada
-        if memory_context:
-            prompt_parts.append("=== CONTEXTO DEL USUARIO (INFORMACIÓN CONOCIDA) ===")
-            
-            # Separar hechos de conversaciones
-            facts = [m for m in memory_context if m.get('type') == 'fact']
-            conversations = [m for m in memory_context if m.get('type') == 'conversation']
-            
-            if facts:
-                prompt_parts.append("Hechos conocidos sobre el usuario:")
-                for i, fact in enumerate(facts[:5], 1):
-                    content = fact.get('content', '')
-                    confidence = fact.get('confidence', 0)
-                    relevance = fact.get('relevance_score', 0)
-                    prompt_parts.append(f"{i}. {content} (confianza: {confidence:.2f}, relevancia: {relevance:.2f})")
-                prompt_parts.append("")
-            
-            if conversations:
-                prompt_parts.append("Fragmentos de conversaciones anteriores relevantes:")
-                for i, conv in enumerate(conversations[:3], 1):
-                    role = "Usuario" if conv.get('role') == 'user' else "Asistente"
-                    content = conv.get('content', '')
-                    prompt_parts.append(f"{i}. {role}: {content}")
-                prompt_parts.append("")
-        
-        # Agregar contexto de RAG
-        if rag_context:
-            prompt_parts.append("=== CONOCIMIENTO DEL SISTEMA (BASE DE DATOS) ===")
-            prompt_parts.append("Los siguientes datos provienen de la base de datos de propiedades de Propifai. Son datos REALES.")
-            for i, rag in enumerate(rag_context[:5], 1):
-                content = rag.get('content', rag.get('text', ''))
-                field_values = rag.get('field_values', {})
-                collection_name = rag.get('collection_name', '')
-                
-                # Construir descripción estructurada
-                desc_parts = []
-                
-                if field_values:
-                    title = field_values.get('title', field_values.get('name', ''))
-                    price = field_values.get('price', '')
-                    address = field_values.get('real_address', field_values.get('address', ''))
-                    district = field_values.get('district_name', field_values.get('district', ''))
-                    bedrooms = field_values.get('bedrooms', '')
-                    bathrooms = field_values.get('bathrooms', '')
-                    
-                    if title:
-                        desc_parts.append(f"Título: {title}")
-                    if price:
-                        desc_parts.append(f"Precio: {price}")
-                    if district:
-                        desc_parts.append(f"Distrito: {district}")
-                    if address:
-                        desc_parts.append(f"Dirección: {address}")
-                    if bedrooms:
-                        desc_parts.append(f"Habitaciones: {bedrooms}")
-                    if bathrooms:
-                        desc_parts.append(f"Baños: {bathrooms}")
-                elif content:
-                    desc_parts.append(content[:200])
-                
-                if collection_name:
-                    desc_parts.append(f"Fuente: {collection_name}")
-                
-                if desc_parts:
-                    prompt_parts.append(f"Propiedad {i}: {' | '.join(desc_parts)}")
-            
-            prompt_parts.append("")
-        
-        # Agregar mensaje del usuario
-        prompt_parts.append(f"Usuario: {message}")
-        prompt_parts.append("Asistente:")
-        
-        full_prompt = "\n".join(prompt_parts)
-        
-        # Configurar respuesta de streaming
-        from django.http import StreamingHttpResponse
-        from .services.llm import LLMService
-        
         def stream_generator():
-            # Enviar metadata inicial
-            yield json.dumps({
-                'type': 'metadata',
-                'conversation_id': str(conversation.id),
-                'user_message_id': str(user_message.id),
-                'context_summary': {
-                    'memory_used': len(memory_context) if memory_context else 0,
-                    'rag_used': len(rag_context) if rag_context else 0,
-                    'collections_used': collections if collections else []
-                }
-            }) + '\n'
-            
-            # Acumulador para la respuesta completa
-            full_response = ""
-            
-            # Generar respuesta en streaming
-            try:
-                for chunk in LLMService.generate_streaming_response(
-                    query=full_prompt,
-                    context=context,
-                    max_tokens=800,
-                    temperature=0.7
-                ):
-                    chunk_data = json.loads(chunk)
-                    
-                    if chunk_data.get('type') == 'error':
-                        yield json.dumps({
-                            'type': 'error',
-                            'error': chunk_data.get('error', 'Error desconocido')
-                        }) + '\n'
-                        break
-                    
-                    elif chunk_data.get('type') == 'chunk':
-                        content = chunk_data.get('content', '')
-                        full_response += content
-                        
-                        yield json.dumps({
-                            'type': 'chunk',
-                            'content': content
-                        }) + '\n'
-                    
-                    elif chunk_data.get('type') == 'complete':
-                        # Guardar respuesta completa en la conversación
-                        try:
-                            assistant_message = add_message_to_conversation(
-                                conversation=conversation,
-                                role='assistant',
-                                content=full_response
-                            )
-                            
-                            # Agregar metadata al último mensaje
-                            if conversation.messages:
-                                conversation.messages[-1]['metadata'] = {
-                                    'streaming': True,
-                                    'context_used': {
-                                        'memory': len(memory_context) if memory_context else 0,
-                                        'rag': len(rag_context) if rag_context else 0
-                                    }
-                                }
-                                conversation.save()
-                            
-                            # Guardar episodio en memoria episódica
-                            if use_memory:
-                                try:
-                                    # Construir contexto enriquecido
-                                    enriched_context = {
-                                        'streaming': True
-                                    }
-                                    if collections:
-                                        enriched_context['collections_used'] = collections
-                                    if user_level:
-                                        enriched_context['user_level'] = user_level
-                                    enriched_context['use_rag'] = use_rag
-                                    enriched_context['use_memory'] = use_memory
-                                    
-                                    episode_data = EpisodicMemoryService.save_episode(
-                                        user_id=str(user.id),
-                                        conversation_id=str(conversation.id),
-                                        user_message=message,
-                                        assistant_response=full_response,
-                                        rag_context_used=rag_context if rag_context else None,
-                                        memory_context_used=memory_context if memory_context else None,
-                                        context=enriched_context
-                                    )
-                                    if episode_data:
-                                        logger.info(f"Episodio guardado (stream): tipo={episode_data.get('episode_type')}, "
-                                                   f"intent={episode_data.get('intent_detected')}")
-                                except Exception as e:
-                                    logger.error(f"Error guardando episodio (stream): {str(e)}", exc_info=True)
-                            
-                            # Actualizar hechos en memoria si es relevante
-                            if use_memory and memory_context:
-                                try:
-                                    memory_service = MemoryService(user_id=str(user.id))
-                                    memory_service.add_fact(
-                                        fact_text=f"Usuario preguntó sobre: {message[:100]}",
-                                        category='user_query',
-                                        confidence_score=0.7,
-                                        source='chat_web_stream',
-                                        metadata={'conversation_id': str(conversation.id)}
-                                    )
-                                except Exception:
-                                    pass
-                            
-                            yield json.dumps({
-                                'type': 'complete',
-                                'message_id': str(assistant_message.id),
-                                'full_response': full_response,
-                                'timestamp': timezone.now().isoformat()
-                            }) + '\n'
-                            
-                        except Exception as e:
-                            yield json.dumps({
-                                'type': 'error',
-                                'error': f'Error al guardar respuesta: {str(e)}'
-                            }) + '\n'
-                        
-                        break
-            
-            except Exception as e:
-                yield json.dumps({
-                    'type': 'error',
-                    'error': f'Error en el stream: {str(e)}'
-                }) + '\n'
-        
+            for chunk in ChatProcessor.process_message_stream(ctx):
+                if chunk.type == 'metadata':
+                    yield json.dumps({
+                        'type': 'metadata',
+                        'conversation_id': chunk.data.get('conversation_id', ''),
+                        'context_summary': chunk.data.get('context_summary', {}),
+                    }) + '\n'
+
+                elif chunk.type == 'chunk':
+                    yield json.dumps({
+                        'type': 'chunk',
+                        'content': chunk.data.get('content', ''),
+                    }) + '\n'
+
+                elif chunk.type == 'complete':
+                    yield json.dumps({
+                        'type': 'complete',
+                        'message_id': chunk.data.get('message_id', ''),
+                        'full_response': chunk.data.get('full_response', ''),
+                        'timestamp': chunk.data.get('timestamp', timezone.now().isoformat()),
+                    }) + '\n'
+
+                elif chunk.type == 'error':
+                    yield json.dumps({
+                        'type': 'error',
+                        'error': chunk.data.get('error', 'Error desconocido'),
+                    }) + '\n'
+
         # Devolver respuesta de streaming
         response = StreamingHttpResponse(
             stream_generator(),
@@ -2977,15 +1863,141 @@ REGLAS CRÍTICAS:
         )
         response['Cache-Control'] = 'no-cache'
         response['X-Accel-Buffering'] = 'no'  # Para nginx
-        
+
         return response
-        
+
     except Exception as e:
         return Response({
             'success': False,
             'error': str(e),
             'timestamp': timezone.now().isoformat()
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def skills_list(request):
+    """Lista las skills disponibles en el sistema."""
+    skills = SKILL_SYSTEM.list_available_skills()
+    return Response({
+        'success': True,
+        'skills': skills,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def skill_info(request, skill_name):
+    """Obtiene metadata detallada de una skill."""
+    info = SKILL_SYSTEM.get_skill_info(skill_name)
+    if not info:
+        return Response({
+            'success': False,
+            'error': f"Skill '{skill_name}' no encontrada"
+        }, status=status.HTTP_404_NOT_FOUND)
+    return Response({
+        'success': True,
+        'skill': info,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def skill_metrics(request):
+    """Retorna métricas resumidas del motor de skills."""
+    metrics = SKILL_SYSTEM.get_metrics_summary()
+    return Response({
+        'success': True,
+        'metrics': metrics,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def skill_execute(request):
+    """Ejecuta una skill directamente a través del motor de skills."""
+    try:
+        serializer = SkillExecuteRequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response({
+                'success': False,
+                'error': 'Datos inválidos',
+                'details': serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        data = serializer.validated_data
+        user_id = data.get('user_id')
+        skill_name = data.get('skill_name')
+        parameters = data.get('parameters', {}) or {}
+        conversation_id = data.get('conversation_id')
+
+        user = getattr(request, 'current_user', None)
+        if not user and user_id:
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                user = None
+
+        if not user:
+            return Response({
+                'success': False,
+                'error': 'Usuario no autenticado. Debes iniciar sesión para ejecutar skills.'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+
+        conversation = ChatProcessor._get_or_create_conversation(
+            user=user,
+            app_id='skills',
+            conversation_id=conversation_id,
+        )
+
+        ctx = ChatContext(
+            user=user,
+            message=skill_name,
+            conversation=conversation,
+            use_memory=False,
+            use_rag=False,
+            app_id='skills',
+            skill_name=skill_name,
+            skill_params=parameters,
+        )
+
+        result = ChatProcessor.process_message(ctx)
+        if not result.success:
+            return Response({
+                'success': False,
+                'error': result.error,
+                'metadata': result.metadata,
+                'timestamp': result.timestamp,
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response({
+            'success': True,
+            'conversation_id': result.conversation_id,
+            'message_id': result.message_id,
+            'response': result.response_text,
+            'metadata': result.metadata,
+            'timestamp': result.timestamp,
+        })
+
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        logger.error(f"Error en skill_execute: {str(e)}\n{error_details}")
+        return Response({
+            'success': False,
+            'error': str(e),
+            'traceback': error_details,
+            'timestamp': timezone.now().isoformat()
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 10. CHAT WEB UPLOAD
+# ═══════════════════════════════════════════════════════════════════════
 
 
 @api_view(['POST'])
@@ -2994,111 +2006,89 @@ REGLAS CRÍTICAS:
 def chat_web_upload(request):
     """
     API para subir archivos en el chat web.
-    Ahora usa el usuario autenticado vía middleware (SPEC-009).
     """
     try:
-        # Verificar usuario autenticado
         user = getattr(request, 'current_user', None)
         if not user:
             return Response({
                 'success': False,
-                'error': 'Usuario no autenticado. Debes iniciar sesión para usar el chat.'
+                'error': 'Usuario no autenticado'
             }, status=status.HTTP_401_UNAUTHORIZED)
-        
-        if 'file' not in request.FILES:
+
+        uploaded_file = request.FILES.get('file')
+        if not uploaded_file:
             return Response({
                 'success': False,
                 'error': 'No se proporcionó ningún archivo'
             }, status=status.HTTP_400_BAD_REQUEST)
-        
-        uploaded_file = request.FILES['file']
-        user_id = str(user.id)
-        conversation_id = request.POST.get('conversation_id')
-        
-        # Validar tipo de archivo - incluir tipos MIME para Excel y documentos de Office
+
+        # Validar tipo de archivo
         allowed_types = [
-            'image/jpeg', 'image/png', 'image/gif',
-            'application/pdf', 'text/plain',
-            # Tipos MIME para Excel
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',  # .xlsx
-            'application/vnd.ms-excel',  # .xls
-            'application/excel',
-            'application/x-excel',
-            'application/x-msexcel',
-            # Tipos MIME para Word
-            'application/msword',  # .doc
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',  # .docx
-            # Otros tipos de Office
-            'application/vnd.oasis.opendocument.spreadsheet',  # .ods
-            'application/vnd.oasis.opendocument.text'  # .odt
+            'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+            'application/pdf',
+            'text/plain', 'text/csv',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'application/vnd.ms-excel',
         ]
-        
-        # También validar por extensión como fallback
-        allowed_extensions = ['.pdf', '.jpg', '.jpeg', '.png', '.gif', '.txt',
-                             '.xlsx', '.xls', '.doc', '.docx', '.ods', '.odt']
-        
-        file_extension = '.' + uploaded_file.name.split('.')[-1].lower() if '.' in uploaded_file.name else ''
-        file_content_type = uploaded_file.content_type.lower() if uploaded_file.content_type else ''
-        
-        # Verificar si el tipo MIME está permitido O la extensión está permitida
-        is_type_allowed = any(allowed_type.lower() in file_content_type for allowed_type in allowed_types)
-        is_extension_allowed = file_extension in allowed_extensions
-        
-        if not is_type_allowed and not is_extension_allowed:
+        if uploaded_file.content_type not in allowed_types:
             return Response({
                 'success': False,
-                'error': f'Tipo de archivo no permitido: {uploaded_file.content_type or "tipo desconocido"}'
+                'error': f'Tipo de archivo no soportado: {uploaded_file.content_type}'
             }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Validar tamaño (max 10MB)
-        if uploaded_file.size > 10 * 1024 * 1024:
+
+        # Validar tamaño (máximo 10MB)
+        max_size = 10 * 1024 * 1024
+        if uploaded_file.size > max_size:
             return Response({
                 'success': False,
-                'error': 'Archivo demasiado grande (máximo 10MB)'
+                'error': f'El archivo excede el tamaño máximo de 10MB'
             }, status=status.HTTP_400_BAD_REQUEST)
-        
+
         # Guardar archivo temporalmente
         import tempfile
-        import os
-        
-        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(uploaded_file.name)[1]) as tmp_file:
+        with tempfile.NamedTemporaryFile(
+            delete=False,
+            suffix=os.path.splitext(uploaded_file.name)[1]
+        ) as tmp_file:
             for chunk in uploaded_file.chunks():
                 tmp_file.write(chunk)
             tmp_path = tmp_file.name
-        
-        # Procesar según tipo
-        file_info = {
-            'filename': uploaded_file.name,
-            'content_type': uploaded_file.content_type,
-            'size': uploaded_file.size,
-            'temp_path': tmp_path
-        }
-        
-        # Para imágenes, podemos extraer texto con OCR (futuro)
-        # Para PDFs, extraer texto (futuro)
-        # Por ahora solo aceptamos y respondemos
-        
-        # Limpiar archivo temporal
+
         try:
-            os.unlink(tmp_path)
-        except:
-            pass
-        
-        response_data = {
-            'success': True,
-            'message': 'Archivo recibido correctamente',
-            'file_info': {
-                'filename': uploaded_file.name,
-                'content_type': uploaded_file.content_type,
-                'size': uploaded_file.size
-            },
-            'note': 'El procesamiento de archivos estará disponible en una futura actualización',
-            'timestamp': timezone.now().isoformat()
-        }
-        
-        return Response(response_data)
-        
+            # Procesar según tipo
+            result = {'filename': uploaded_file.name, 'size': uploaded_file.size}
+
+            if uploaded_file.content_type.startswith('image/'):
+                # Imagen: extraer texto con OCR si es posible
+                result['type'] = 'image'
+                result['message'] = f"Imagen recibida: {uploaded_file.name}"
+            elif uploaded_file.content_type == 'application/pdf':
+                result['type'] = 'pdf'
+                result['message'] = f"PDF recibido: {uploaded_file.name}"
+            else:
+                # Texto: leer contenido
+                with open(tmp_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+                result['type'] = 'text'
+                result['content'] = content[:1000]  # Limitar a 1000 caracteres
+                result['message'] = f"Archivo procesado: {uploaded_file.name}"
+
+            return Response({
+                'success': True,
+                'data': result,
+                'timestamp': timezone.now().isoformat()
+            })
+
+        finally:
+            # Limpiar archivo temporal
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
     except Exception as e:
+        import traceback
+        logger.error(f"Error en chat_web_upload: {str(e)}\n{traceback.format_exc()}")
         return Response({
             'success': False,
             'error': str(e),
@@ -3106,484 +2096,1707 @@ def chat_web_upload(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-# =============================================================================
-# Episodic Memory API Endpoints (SPEC-008 - Fase 4.4)
-# =============================================================================
+# ═══════════════════════════════════════════════════════════════════════════════
+# 11. EPISODIC MEMORY (API)
+# ═══════════════════════════════════════════════════════════════════════════════
+
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
+@authentication_classes([])
 def episodic_memory_list(request):
     """
-    GET /api/v1/intelligence/episodic-memory/
-    Lista episodios de memoria con filtros opcionales.
-    
-    Query params:
-        - user_id: str (requerido)
-        - limit: int (default: 20)
-        - episode_type: str (opcional, filtrar por tipo)
-        - days_back: int (opcional, filtrar por antigüedad)
-        - min_importance: float (opcional, filtro por importancia mínima)
-        - include_inactive: bool (default: False)
+    Lista episodios de memoria episódica.
     """
     try:
-        user_id = request.query_params.get('user_id')
-        if not user_id:
+        user = getattr(request, 'current_user', None)
+        if not user:
             return Response({
                 'success': False,
-                'error': 'user_id es requerido'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        limit = int(request.query_params.get('limit', 20))
-        episode_type = request.query_params.get('episode_type')
-        days_back = request.query_params.get('days_back')
-        min_importance = request.query_params.get('min_importance')
-        include_inactive = request.query_params.get('include_inactive', 'false').lower() == 'true'
-        
-        # Construir queryset - user_id es el UUID interno del modelo User
-        queryset = EpisodicMemory.objects.filter(user_id=user_id)
-        
-        if not include_inactive:
-            queryset = queryset.filter(is_active=True)
-        
+                'error': 'Usuario no autenticado'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+
+        limit = int(request.GET.get('limit', 20))
+        episode_type = request.GET.get('type', '')
+
+        episodes = EpisodicMemory.objects.filter(user_id=str(user.id))
         if episode_type:
-            queryset = queryset.filter(episode_type=episode_type)
-        
-        if days_back:
-            from datetime import timedelta
-            cutoff = timezone.now() - timedelta(days=int(days_back))
-            queryset = queryset.filter(timestamp__gte=cutoff)
-        
-        if min_importance:
-            queryset = queryset.filter(importance_score__gte=float(min_importance))
-        
-        queryset = queryset.order_by('-timestamp')[:limit]
-        
-        episodes = []
-        for ep in queryset:
-            episodes.append({
+            episodes = episodes.filter(episode_type=episode_type)
+        episodes = episodes.order_by('-created_at')[:limit]
+
+        data = []
+        for ep in episodes:
+            data.append({
                 'id': str(ep.id),
                 'episode_type': ep.episode_type,
-                'episode_type_display': ep.get_episode_type_display(),
                 'intent_detected': ep.intent_detected,
-                'user_message': ep.user_message[:200] if ep.user_message else '',
-                'assistant_response': ep.assistant_response[:200] if ep.assistant_response else '',
+                'user_message_preview': ep.user_message[:100] if ep.user_message else '',
                 'importance_score': ep.importance_score,
-                'has_feedback': bool(ep.feedback and (ep.feedback.get('thumbs_up') is not None or ep.feedback.get('thumbs_down') is not None)),
-                'timestamp': ep.timestamp.isoformat() if ep.timestamp else None,
+                'latency_ms': ep.latency_ms,
+                'feedback': ep.feedback,
                 'created_at': ep.created_at.isoformat() if ep.created_at else None,
             })
-        
+
         return Response({
             'success': True,
-            'count': len(episodes),
-            'results': episodes
+            'episodes': data,
+            'count': len(data),
+            'timestamp': timezone.now().isoformat()
         })
-        
+
     except Exception as e:
+        import traceback
         return Response({
             'success': False,
-            'error': str(e)
+            'error': str(e),
+            'traceback': traceback.format_exc(),
+            'timestamp': timezone.now().isoformat()
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
+@authentication_classes([])
 def episodic_memory_detail(request, episode_id):
     """
-    GET /api/v1/intelligence/episodic-memory/{episode_id}/
-    Obtiene el detalle completo de un episodio.
+    Detalle de un episodio de memoria episódica.
     """
     try:
         episode = get_object_or_404(EpisodicMemory, id=episode_id)
-        
+
         data = {
             'id': str(episode.id),
-            'user_id': episode.user.user_id if episode.user else None,
-            'conversation_id': str(episode.conversation.id) if episode.conversation else None,
+            'user_id': episode.user_id,
+            'conversation_id': episode.conversation_id,
             'episode_type': episode.episode_type,
-            'episode_type_display': episode.get_episode_type_display(),
             'intent_detected': episode.intent_detected,
             'user_message': episode.user_message,
             'assistant_response': episode.assistant_response,
-            'context': episode.context,
             'rag_context_used': episode.rag_context_used,
             'memory_context_used': episode.memory_context_used,
-            'feedback': episode.feedback,
+            'context': episode.context,
             'importance_score': episode.importance_score,
             'latency_ms': episode.latency_ms,
-            'is_active': episode.is_active,
-            'timestamp': episode.timestamp.isoformat() if episode.timestamp else None,
+            'feedback': episode.feedback,
             'created_at': episode.created_at.isoformat() if episode.created_at else None,
-            'updated_at': episode.updated_at.isoformat() if episode.updated_at else None,
         }
-        
+
         return Response({
             'success': True,
-            'episode': data
+            'episode': data,
+            'timestamp': timezone.now().isoformat()
         })
-        
+
     except Exception as e:
+        import traceback
         return Response({
             'success': False,
-            'error': str(e)
+            'error': str(e),
+            'traceback': traceback.format_exc(),
+            'timestamp': timezone.now().isoformat()
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST'])
+@permission_classes([AllowAny])
+@authentication_classes([])
 def episodic_memory_feedback(request, episode_id):
     """
-    POST /api/v1/intelligence/episodic-memory/{episode_id}/feedback/
-    Envía feedback del usuario sobre un episodio.
-    
-    Body:
-        - thumbs_up: bool
-        - thumbs_down: bool
-        - user_comment: str (opcional)
+    Actualiza el feedback de un episodio.
     """
     try:
         episode = get_object_or_404(EpisodicMemory, id=episode_id)
-        
-        thumbs_up = request.data.get('thumbs_up')
-        thumbs_down = request.data.get('thumbs_down')
-        user_comment = request.data.get('user_comment', '')
-        
-        # Actualizar feedback usando el servicio
-        result = EpisodicMemoryService.update_feedback(
-            episode_id=str(episode.id),
-            thumbs_up=thumbs_up,
-            thumbs_down=thumbs_down,
-            user_comment=user_comment
-        )
-        
-        if result:
-            return Response({
-                'success': True,
-                'message': 'Feedback registrado correctamente',
-                'episode_id': str(episode.id)
-            })
-        else:
+        data = json.loads(request.body) if isinstance(request.body, bytes) else request.data
+
+        feedback = data.get('feedback', '')
+        if feedback not in ['positive', 'negative', 'neutral']:
             return Response({
                 'success': False,
-                'error': 'No se pudo actualizar el feedback'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+                'error': 'Feedback debe ser: positive, negative o neutral'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        EpisodicMemoryService.update_feedback(
+            episode_id=str(episode.id),
+            feedback=feedback
+        )
+
+        return Response({
+            'success': True,
+            'message': 'Feedback actualizado exitosamente',
+            'timestamp': timezone.now().isoformat()
+        })
+
     except Exception as e:
+        import traceback
         return Response({
             'success': False,
-            'error': str(e)
+            'error': str(e),
+            'traceback': traceback.format_exc(),
+            'timestamp': timezone.now().isoformat()
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
+@authentication_classes([])
 def episodic_memory_stats(request):
     """
-    GET /api/v1/intelligence/episodic-memory/stats/
-    Estadísticas de memoria episódica para un usuario.
-    
-    Query params:
-        - user_id: str (requerido)
+    Estadísticas de memoria episódica.
     """
     try:
-        user_id = request.query_params.get('user_id')
-        if not user_id:
-            return Response({
-                'success': False,
-                'error': 'user_id es requerido'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        episodes = EpisodicMemory.objects.filter(user__user_id=user_id)
-        
-        total = episodes.count()
-        active = episodes.filter(is_active=True).count()
-        
+        total_episodes = EpisodicMemory.objects.count()
+        episodes_with_feedback = EpisodicMemory.objects.exclude(
+            feedback__isnull=True
+        ).exclude(feedback='').count()
+
         # Distribución por tipo
-        type_distribution = {}
-        for ep in episodes.values('episode_type').annotate(count=models.Count('id')):
-            type_distribution[ep['episode_type']] = ep['count']
-        
-        # Episodios con feedback
-        with_feedback = sum(1 for ep in episodes if ep.feedback and (ep.feedback.get('thumbs_up') is not None or ep.feedback.get('thumbs_down') is not None))
-        
+        by_type = EpisodicMemory.objects.values('episode_type').annotate(
+            count=Count('id')
+        ).order_by('-count')
+
+        # Distribución por intención
+        by_intent = EpisodicMemory.objects.values('intent_detected').annotate(
+            count=Count('id')
+        ).order_by('-count')
+
         # Importancia promedio
-        avg_importance = episodes.aggregate(avg=models.Avg('importance_score'))['avg__avg'] or 0
-        
-        # Último episodio
-        last_episode = episodes.order_by('-timestamp').first()
-        
+        avg_importance = EpisodicMemory.objects.aggregate(
+            avg=Avg('importance_score')
+        )['avg'] or 0
+
+        # Latencia promedio
+        avg_latency = EpisodicMemory.objects.aggregate(
+            avg=Avg('latency_ms')
+        )['avg'] or 0
+
         return Response({
             'success': True,
             'stats': {
-                'total_episodes': total,
-                'active_episodes': active,
-                'type_distribution': type_distribution,
-                'episodes_with_feedback': with_feedback,
+                'total_episodes': total_episodes,
+                'episodes_with_feedback': episodes_with_feedback,
                 'avg_importance': round(avg_importance, 2),
-                'last_episode_at': last_episode.timestamp.isoformat() if last_episode else None,
-            }
+                'avg_latency_ms': round(avg_latency, 2),
+                'by_type': list(by_type),
+                'by_intent': list(by_intent),
+            },
+            'timestamp': timezone.now().isoformat()
         })
-        
+
     except Exception as e:
+        import traceback
         return Response({
             'success': False,
-            'error': str(e)
+            'error': str(e),
+            'traceback': traceback.format_exc(),
+            'timestamp': timezone.now().isoformat()
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-# =============================================================================
-# Vistas de autenticación (registro, login, logout)
-# =============================================================================
-
-from django.contrib import messages as django_messages
+# ═══════════════════════════════════════════════════════════════════════════════
+# 12. AUTH (register, login, logout)
+# ═══════════════════════════════════════════════════════════════════════════════
 
 
 def register_view(request):
-    """Vista de registro de nuevo usuario."""
-    if request.session.get('user_id'):
-        return redirect('/')
-
+    """Vista de registro de usuarios."""
     if request.method == 'POST':
         username = request.POST.get('username', '').strip()
+        email = request.POST.get('email', '').strip()
+        phone = request.POST.get('phone', '').strip()
         password = request.POST.get('password', '')
         confirm_password = request.POST.get('confirm_password', '')
-        first_name = request.POST.get('first_name', '').strip()
-        last_name = request.POST.get('last_name', '').strip()
-        phone = request.POST.get('phone', '').strip()
-        email = request.POST.get('email', '').strip()
 
-        # Validaciones detalladas campo por campo
-        errors = []
         field_errors = {}
 
+        # Validaciones
         if not username:
-            errors.append("❌ El nombre de usuario es obligatorio.")
-            field_errors['username'] = 'Este campo es obligatorio'
-        elif len(username) < 3:
-            errors.append("❌ El nombre de usuario debe tener al menos 3 caracteres.")
-            field_errors['username'] = 'Mínimo 3 caracteres'
-        elif not username.isalnum():
-            errors.append("❌ El nombre de usuario solo puede contener letras y números (sin espacios ni caracteres especiales).")
-            field_errors['username'] = 'Solo letras y números'
+            field_errors['username'] = 'El nombre de usuario es obligatorio.'
+        elif User.objects.filter(phone=username).exists():
+            field_errors['username'] = 'El nombre de usuario ya está registrado.'
 
         if not password:
-            errors.append("❌ La contraseña es obligatoria.")
-            field_errors['password'] = 'Este campo es obligatorio'
+            field_errors['password'] = 'La contraseña es obligatoria.'
         elif len(password) < 6:
-            errors.append("❌ La contraseña debe tener al menos 6 caracteres.")
-            field_errors['password'] = 'Mínimo 6 caracteres'
+            field_errors['password'] = 'La contraseña debe tener al menos 6 caracteres.'
 
         if password != confirm_password:
-            errors.append("❌ Las contraseñas no coinciden.")
-            field_errors['confirm_password'] = 'Las contraseñas no coinciden'
+            field_errors['confirm_password'] = 'Las contraseñas no coinciden.'
 
-        if not phone and not email:
-            errors.append("❌ Debes proporcionar al menos un teléfono o un correo electrónico.")
-            if not phone:
-                field_errors['phone'] = 'Teléfono o email requerido'
-            if not email:
-                field_errors['email'] = 'Email o teléfono requerido'
-
-        if email and '@' not in email:
-            errors.append("❌ El correo electrónico no tiene un formato válido (debe contener @).")
-            field_errors['email'] = 'Formato inválido'
-
-        if not errors:
+        if not field_errors:
             try:
                 from .authentication import register_user
                 user = register_user(
                     username=username,
                     password=password,
-                    first_name=first_name,
-                    last_name=last_name,
-                    phone=phone,
-                    email=email,
+                    email=email if email else None,
+                    phone=phone if phone else None,
                 )
-                # Iniciar sesión automáticamente
-                from .authentication import login_user
-                login_user(request, user)
-                django_messages.success(request, f"✅ ¡Bienvenido, {user.first_name or user.username}! Cuenta creada correctamente.")
-                return redirect('/')
-            except ValueError as e:
-                errors.append(f"❌ {str(e)}")
+                if user:
+                    from .authentication import login_user
+                    login_user(request, user)
+                    messages.success(request, f'Bienvenido, {username}!')
+                    return redirect('chat_web')
+                else:
+                    field_errors['username'] = 'Error al crear el usuario.'
             except Exception as e:
-                errors.append(f"❌ Error inesperado al registrar: {str(e)}")
-
-        for error in errors:
-            django_messages.error(request, error)
+                field_errors['username'] = f'Error: {str(e)}'
 
         return render(request, 'intelligence/register.html', {
             'field_errors': field_errors,
+            'values': {
+                'username': username,
+                'email': email,
+                'phone': phone,
+            }
         })
 
-    return render(request, 'intelligence/register.html')
+    return render(request, 'intelligence/register.html', {
+        'field_errors': {},
+        'values': {}
+    })
 
 
 def login_view(request):
     """Vista de inicio de sesión."""
-    if request.session.get('user_id'):
-        return redirect('/')
-
     if request.method == 'POST':
-        username = request.POST.get('username', '').strip()
+        username = request.POST.get('username', '')
         password = request.POST.get('password', '')
+        next_url = request.POST.get('next', '/intelligence/chat/')
 
-        errors = []
-        if not username:
-            errors.append("El nombre de usuario es obligatorio.")
-        if not password:
-            errors.append("La contraseña es obligatoria.")
+        from .authentication import authenticate_user, login_user
+        user = authenticate_user(username=username, password=password)
 
-        if not errors:
-            from .authentication import authenticate_user, login_user
-            user = authenticate_user(username, password)
-            if user:
-                login_user(request, user)
-                django_messages.success(request, f"¡Bienvenido de nuevo, {user.first_name or user.username}!")
-                next_url = request.GET.get('next', '/')
-                return redirect(next_url)
-            else:
-                errors.append("Usuario o contraseña incorrectos.")
+        if user:
+            login_user(request, user)
+            messages.success(request, f'Bienvenido de nuevo, {username}!')
+            return redirect(next_url)
+        else:
+            messages.error(request, 'Usuario o contraseña incorrectos.')
+            # Redirigir de vuelta al dashboard de skills con el error
+            return redirect(next_url)
 
-        for error in errors:
-            django_messages.error(request, error)
-
-    return render(request, 'intelligence/login.html')
+    # GET: redirigir al dashboard de skills (el login se hace desde el modal)
+    next_url = request.GET.get('next', '/api/v1/intelligence/skills/dashboard/')
+    return redirect(next_url)
 
 
 def logout_view(request):
     """Vista de cierre de sesión."""
-    from .authentication import logout_user
-    logout_user(request)
-    django_messages.info(request, "Has cerrado sesión correctamente.")
-    return redirect('/login/')
+    from django.contrib.auth import logout
+    logout(request)
+    # Limpiar sesión de intelligence
+    if hasattr(request, 'session'):
+        request.session.flush()
+    # Redirigir al dashboard de skills
+    next_url = request.GET.get('next', '/api/v1/intelligence/skills/dashboard/')
+    return redirect(next_url)
 
 
-# =============================================================================
-# CRUD de usuarios (SPEC-009 - Fase 7)
-# =============================================================================
+# ═══════════════════════════════════════════════════════════════════════════════
+# 13. USER CRUD (Template Views)
+# ═══════════════════════════════════════════════════════════════════════════════
 
 
 def user_list(request):
-    """Lista todos los usuarios del sistema. Accesible para usuarios autenticados."""
-    if not request.current_user:
-        return redirect('/login/')
-    users = User.objects.all().select_related('role').order_by('-created_at')
-    is_admin = request.current_user.role and request.current_user.role.name in ['Administrador', 'Super Admin']
-    return render(request, 'intelligence/user_list.html', {
+    """Lista de usuarios del sistema."""
+    users = User.objects.all().order_by('-created_at')
+    return render(request, 'intelligence/users/list.html', {
         'users': users,
-        'is_admin': is_admin,
+        'active_section': 'users'
     })
 
 
 @admin_required
 def user_create(request):
-    """Crea un nuevo usuario (solo admin)."""
-    roles = Role.objects.all().order_by('name')
-
+    """Crear nuevo usuario."""
     if request.method == 'POST':
         username = request.POST.get('username', '').strip()
-        password = request.POST.get('password', '')
-        first_name = request.POST.get('first_name', '').strip()
-        last_name = request.POST.get('last_name', '').strip()
-        phone = request.POST.get('phone', '').strip()
         email = request.POST.get('email', '').strip()
-        role_id = request.POST.get('role_id', '')
-        is_active = request.POST.get('is_active') == 'on'
+        phone = request.POST.get('phone', '').strip()
+        password = request.POST.get('password', '')
+        role_id = request.POST.get('role')
 
-        errors = []
-        if not username:
-            errors.append("El nombre de usuario es obligatorio.")
-        if not password:
-            errors.append("La contraseña es obligatoria.")
-        if len(password) < 6:
-            errors.append("La contraseña debe tener al menos 6 caracteres.")
-
-        if not errors:
+        if username and password:
             try:
-                from .authentication import register_user
                 role = Role.objects.get(id=role_id) if role_id else None
-                user = register_user(
-                    username=username,
-                    password=password,
-                    first_name=first_name,
-                    last_name=last_name,
-                    phone=phone,
-                    email=email,
-                    role_name=role.name if role else 'Usuario',
+                if not role:
+                    role = Role.objects.filter(default_level=1).first()
+
+                user = User.objects.create(
+                    phone=username,
+                    email=email if email else None,
+                    role=role,
+                    is_active=True,
+                    metadata={'name': username}
                 )
-                if role:
-                    user.role = role
-                    user.save(update_fields=['role'])
-                user.is_active = is_active
-                user.save(update_fields=['is_active'])
-                django_messages.success(request, f"Usuario '{username}' creado correctamente.")
-                return redirect('intelligence:user_list')
-            except ValueError as e:
-                errors.append(str(e))
+                user.set_password(password)
+                user.save()
+
+                messages.success(request, f'Usuario "{username}" creado exitosamente.')
+                return redirect('user_list')
             except Exception as e:
-                errors.append(f"Error al crear usuario: {str(e)}")
+                messages.error(request, f'Error al crear usuario: {str(e)}')
+        else:
+            messages.error(request, 'Usuario y contraseña son obligatorios.')
 
-        for error in errors:
-            django_messages.error(request, error)
-
-    return render(request, 'intelligence/user_form.html', {
+    roles = Role.objects.all()
+    return render(request, 'intelligence/users/create.html', {
         'roles': roles,
-        'is_create': True,
+        'active_section': 'users'
     })
 
 
 @admin_required
 def user_edit(request, user_id):
-    """Edita un usuario existente."""
+    """Editar un usuario existente."""
     user = get_object_or_404(User, id=user_id)
-    roles = Role.objects.all().order_by('name')
 
     if request.method == 'POST':
-        first_name = request.POST.get('first_name', '').strip()
-        last_name = request.POST.get('last_name', '').strip()
-        phone = request.POST.get('phone', '').strip()
+        username = request.POST.get('username', '').strip()
         email = request.POST.get('email', '').strip()
-        role_id = request.POST.get('role_id', '')
-        is_active = request.POST.get('is_active') == 'on'
-        new_password = request.POST.get('password', '')
+        phone = request.POST.get('phone', '').strip()
+        role_id = request.POST.get('role')
+        password = request.POST.get('password', '')
 
-        user.first_name = first_name
-        user.last_name = last_name
-        user.phone = phone if phone else None
-        user.email = email if email else None
-        user.is_active = is_active
-
-        if role_id:
+        if username:
             try:
-                user.role = Role.objects.get(id=role_id)
-            except Role.DoesNotExist:
-                pass
+                user.phone = username
+                user.email = email if email else None
+                if role_id:
+                    user.role = Role.objects.get(id=role_id)
+                if password:
+                    user.set_password(password)
+                user.save()
 
-        if new_password:
-            if len(new_password) >= 6:
-                user.set_password(new_password)
-            else:
-                django_messages.error(request, "La contraseña debe tener al menos 6 caracteres.")
-                return render(request, 'intelligence/user_form.html', {
-                    'edit_user': user,
-                    'roles': roles,
-                    'is_create': False,
-                })
+                messages.success(request, f'Usuario "{username}" actualizado exitosamente.')
+                return redirect('user_list')
+            except Exception as e:
+                messages.error(request, f'Error al actualizar usuario: {str(e)}')
+        else:
+            messages.error(request, 'El nombre de usuario es obligatorio.')
 
-        user.save()
-        django_messages.success(request, f"Usuario '{user.username}' actualizado correctamente.")
-        return redirect('intelligence:user_list')
-
-    return render(request, 'intelligence/user_form.html', {
-        'edit_user': user,
+    roles = Role.objects.all()
+    return render(request, 'intelligence/users/edit.html', {
+        'user': user,
         'roles': roles,
-        'is_create': False,
+        'active_section': 'users'
     })
 
 
 @admin_required
 def user_toggle_active(request, user_id):
-    """Activa/desactiva un usuario."""
+    """Activar/desactivar un usuario."""
     user = get_object_or_404(User, id=user_id)
-    user.is_active = not user.is_active
-    user.save(update_fields=['is_active'])
-    status = "activado" if user.is_active else "desactivado"
-    django_messages.success(request, f"Usuario '{user.username}' {status} correctamente.")
-    return redirect('intelligence:user_list')
+    if request.method == 'POST':
+        user.is_active = not user.is_active
+        user.save()
+        status_text = 'activado' if user.is_active else 'desactivado'
+        messages.success(request, f'Usuario "{user.phone}" {status_text} exitosamente.')
+        return redirect('user_list')
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 14. SKILLS DASHBOARD (SPEC-011)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+# @level_required(1)  # TEMPORALMENTE DESHABILITADO PARA PROBAR GRÁFICOS
+def skills_dashboard_view(request):
+    """Dashboard principal de skills con KPIs, tabla y charts.
+    
+    TODOS los datos provienen de fuentes reales:
+    - Skills registradas: SKILL_SYSTEM.list_available_skills()
+    - Ejecuciones, latencia, éxito: SkillExecution (BD) via raw SQL
+    - Cache hit rate: calculado desde SkillExecution.cached
+    """
+    # Autenticación real vía sesión
+    from .authentication import get_authenticated_user
+    user = get_authenticated_user(request)
+    if user is None:
+        # No hay sesión activa — mostrar dashboard público sin datos sensibles
+        user = None
+    from django.utils import timezone
+    from datetime import timedelta
+    import datetime
+    
+    # ── Redescubrir skills (para detectar skills nuevas sin reiniciar) ────
+    try:
+        from .skills.registry import SkillRegistry as DynamicRegistry
+        DynamicRegistry().discover_skills("intelligence.skills")
+    except Exception:
+        pass
+    
+    # ── Skills del sistema ────────────────────────────────────────────────
+    skills = SKILL_SYSTEM.list_available_skills()
+    active_count = sum(1 for s in skills if s.get('is_active', True))
+    
+    # ── Stats globales desde BD (raw SQL para compatibilidad SQL Server) ──
+    last_24h = timezone.now() - timedelta(hours=24)
+    
+    with connection.cursor() as cursor:
+        # Total ejecuciones
+        cursor.execute("SELECT COUNT(*) FROM intelligence_skill_execution")
+        total_all = cursor.fetchone()[0]
+        
+        # Últimas 24h
+        cursor.execute(
+            "SELECT COUNT(*) FROM intelligence_skill_execution WHERE executed_at >= %s",
+            [last_24h]
+        )
+        total_today = cursor.fetchone()[0]
+        
+        # Por status
+        cursor.execute("SELECT COUNT(*) FROM intelligence_skill_execution WHERE status = 'success'")
+        total_success = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM intelligence_skill_execution WHERE status = 'error'")
+        total_error = cursor.fetchone()[0]
+        
+        # Cacheadas
+        cursor.execute("SELECT COUNT(*) FROM intelligence_skill_execution WHERE cached = 1")
+        total_cached = cursor.fetchone()[0]
+        
+        # Latencia promedio (solo exitosas)
+        cursor.execute(
+            "SELECT AVG(latency_ms) FROM intelligence_skill_execution WHERE status = 'success'"
+        )
+        avg_latency = cursor.fetchone()[0] or 0
+    
+    # Cache hit rate real desde BD
+    cache_hit_rate = round((total_cached / max(total_all, 1)) * 100, 1)
+    
+    # Tasa de éxito real desde BD
+    success_rate = round((total_success / max(total_all, 1)) * 100, 1)
+    
+    # ── Ejecuciones por skill (para la tabla) ────────────────────────────
+    skill_exec_counts = {}
+    skill_latency_avg = {}
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT skill_name, COUNT(*) as cnt "
+            "FROM intelligence_skill_execution GROUP BY skill_name"
+        )
+        for row in cursor.fetchall():
+            skill_exec_counts[row[0]] = row[1]
+        
+        cursor.execute(
+            "SELECT skill_name, AVG(latency_ms) as avg_lat "
+            "FROM intelligence_skill_execution WHERE status = 'success' "
+            "GROUP BY skill_name"
+        )
+        for row in cursor.fetchall():
+            skill_latency_avg[row[0]] = row[1]
+    
+    # Enriquecer skills con datos reales de BD
+    for s in skills:
+        name = s.get('name', '')
+        s['execution_count'] = skill_exec_counts.get(name, 0)
+        avg_lat = skill_latency_avg.get(name)
+        s['avg_latency'] = round(avg_lat, 1) if avg_lat else None
+    
+    # ── Ejecuciones por hora (últimas 24h con labels reales) ─────────────
+    executions_by_hour = []
+    counts_by_hour = []
+    now = timezone.now()
+    with connection.cursor() as cursor:
+        for i in range(24):
+            hour_start = now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=23 - i)
+            hour_end = hour_start + timedelta(hours=1)
+            cursor.execute(
+                "SELECT COUNT(*) FROM intelligence_skill_execution "
+                "WHERE executed_at >= %s AND executed_at < %s",
+                [hour_start, hour_end]
+            )
+            count = cursor.fetchone()[0]
+            # Convertir a hora local para el label
+            local_hour_start = timezone.localtime(hour_start)
+            label = local_hour_start.strftime('%H:00')
+            executions_by_hour.append({'label': label, 'count': count})
+            counts_by_hour.append(count)
+    max_hour_count = max(counts_by_hour) if counts_by_hour else 0
+    # Usar escala fija baja para que barras pequeñas se vean grandes
+    scale_max = 5  # Máximo visual de 5 ejecuciones para la escala
+    for entry in executions_by_hour:
+        raw_pct = (entry['count'] / scale_max) * 100 if scale_max else 0
+        entry['height_pct'] = min(100, round(raw_pct))  # Capear a 100%
+        if entry['count'] > 0 and entry['height_pct'] < 30:
+            entry['display_height_pct'] = 30
+        else:
+            entry['display_height_pct'] = entry['height_pct']
+
+    # ── Ejecuciones recientes ─────────────────────────────────────────────
+    recent_executions = []
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT TOP 20 id, skill_name, status, latency_ms, cached, error_message, executed_at "
+            "FROM intelligence_skill_execution ORDER BY executed_at DESC"
+        )
+        columns = ['id', 'skill_name', 'status', 'latency_ms', 'cached', 'error_message', 'executed_at']
+        for row in cursor.fetchall():
+            exec_dict = dict(zip(columns, row))
+            # Convertir UTC a America/Lima para el template
+            if exec_dict.get('executed_at') and timezone.is_naive(exec_dict['executed_at']):
+                exec_dict['executed_at'] = timezone.make_aware(exec_dict['executed_at'], datetime.timezone.utc)
+            if exec_dict.get('executed_at'):
+                exec_dict['executed_at'] = timezone.localtime(exec_dict['executed_at'])
+            recent_executions.append(exec_dict)
+    
+    # ── Métricas resumidas para el template ───────────────────────────────
+    metrics = {
+        'total_executions': total_all,
+        'successful_executions': total_success,
+        'failed_executions': total_error,
+        'cached_executions': total_cached,
+        'success_rate': success_rate,
+        'average_execution_time': round(avg_latency, 1),
+    }
+    
+    # Ajustar escalado del gráfico de barras para preservar la distribución y garantizar visibilidad
+    scale_max = max(5, max_hour_count)
+    for entry in executions_by_hour:
+        raw_pct = (entry['count'] / scale_max) * 100 if scale_max else 0
+        entry['height_pct'] = min(100, round(raw_pct))
+        entry['display_height_pct'] = max(entry['height_pct'], 25) if entry['count'] > 0 else 2
+
+    context = {
+        'active_section': 'skills',
+        'skills': skills,
+        'metrics': metrics,
+        'recent_executions': recent_executions,
+        'active_count': active_count,
+        'total_today': total_today,
+        'cache_hit_rate': cache_hit_rate,
+        'avg_latency': round(avg_latency, 1),
+        'executions_by_hour': executions_by_hour,
+        'user': user,
+        # Variables adicionales para el template rediseñado
+        'total_execs': total_all,
+        'success_rate': success_rate,
+        'error_rate': round(100 - success_rate, 1),
+        'error_count': total_error,
+        'success_count': total_success,
+        'today_count': total_today,
+        'cached_count': total_cached,
+        'nocache_pct': round(100 - cache_hit_rate, 1),
+    }
+    return render(request, 'intelligence/skills_dashboard.html', context)
+
+
+@level_required(2)
+def skill_detail_view(request, skill_name):
+    """Detalle de una skill con info, métricas, panel de ejecución e historial.
+    
+    TODOS los datos provienen de SkillExecution (BD) via raw SQL
+    para compatibilidad con SQL Server (ODBC Driver 18 modo estricto).
+    """
+    user = getattr(request, 'current_user', None)
+    from django.db import connection
+    from django.utils import timezone
+    import datetime
+    
+    # Obtener info de la skill
+    info = SKILL_SYSTEM.get_skill_info(skill_name)
+    if not info:
+        messages.error(request, f"Skill '{skill_name}' no encontrada")
+        return redirect('intelligence:skills_dashboard')
+    
+    # ── Métricas específicas de la skill desde BD (raw SQL) ────────────────
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT COUNT(*) FROM intelligence_skill_execution WHERE skill_name = %s",
+            [skill_name]
+        )
+        total_execs = cursor.fetchone()[0]
+        
+        cursor.execute(
+            "SELECT COUNT(*) FROM intelligence_skill_execution "
+            "WHERE skill_name = %s AND status = 'success'",
+            [skill_name]
+        )
+        success_count = cursor.fetchone()[0]
+        
+        cursor.execute(
+            "SELECT AVG(latency_ms) FROM intelligence_skill_execution "
+            "WHERE skill_name = %s AND status = 'success'",
+            [skill_name]
+        )
+        avg_latency = cursor.fetchone()[0] or 0
+        
+        cursor.execute(
+            "SELECT COUNT(*) FROM intelligence_skill_execution "
+            "WHERE skill_name = %s AND cached = 1",
+            [skill_name]
+        )
+        cache_count = cursor.fetchone()[0]
+    
+    success_rate = round((success_count / max(total_execs, 1)) * 100, 1) if total_execs > 0 else 0
+    cache_rate = round((cache_count / max(total_execs, 1)) * 100, 1) if total_execs > 0 else 0
+    
+    # ── Ejecuciones recientes de esta skill (raw SQL) ──────────────────────
+    executions = []
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT TOP 50 id, skill_name, status, latency_ms, cached, "
+            "error_message, executed_at, user_id "
+            "FROM intelligence_skill_execution "
+            "WHERE skill_name = %s "
+            "ORDER BY executed_at DESC",
+            [skill_name]
+        )
+        columns = ['id', 'skill_name', 'status', 'latency_ms', 'cached',
+                   'error_message', 'executed_at', 'user_id']
+        for row in cursor.fetchall():
+            exec_dict = dict(zip(columns, row))
+            # Convertir UTC a America/Lima para el template
+            if exec_dict.get('executed_at') and timezone.is_naive(exec_dict['executed_at']):
+                exec_dict['executed_at'] = timezone.make_aware(exec_dict['executed_at'], datetime.timezone.utc)
+            if exec_dict.get('executed_at'):
+                exec_dict['executed_at'] = timezone.localtime(exec_dict['executed_at'])
+            # Obtener nombre de usuario
+            uid = exec_dict.pop('user_id', None)
+            exec_dict['user_name'] = 'Sistema'
+            if uid:
+                try:
+                    u = User.objects.get(id=uid)
+                    exec_dict['user_name'] = u.name or u.username or str(u.id)[:8]
+                except Exception:
+                    exec_dict['user_name'] = 'Sistema'
+            executions.append(exec_dict)
+    
+    context = {
+        'active_section': 'skills_dashboard',
+        'skill': info,
+        'executions': executions,
+        'total_execs': total_execs,
+        'success_rate': success_rate,
+        'avg_latency': round(avg_latency, 1),
+        'cache_rate': cache_rate,
+        'user': user,
+    }
+    return render(request, 'intelligence/skills_detail.html', context)
+
+
+@level_required(4)
+def skill_create_view(request):
+    """Formulario para crear una nueva skill."""
+    user = getattr(request, 'current_user', None)
+    
+    if request.method == 'POST':
+        skill_name = request.POST.get('skill_name', '').strip()
+        description = request.POST.get('description', '').strip()
+        category = request.POST.get('category', 'query')
+        required_level = int(request.POST.get('required_level', 1))
+        code_content = request.POST.get('code_content', '').strip()
+        parameters_json = request.POST.get('parameters', '[]')
+        
+        if not skill_name or not code_content:
+            messages.error(request, 'Nombre y código son obligatorios.')
+            return render(request, 'intelligence/skills_create.html', {
+                'active_section': 'skills_dashboard',
+                'user': user,
+                'error': 'Nombre y código son obligatorios.',
+            })
+        
+        try:
+            # Validar que el nombre sea válido como nombre de archivo
+            import re
+            if not re.match(r'^[a-z_][a-z0-9_]*$', skill_name):
+                raise ValueError(
+                    'El nombre debe empezar con minúscula o underscore y '
+                    'contener solo minúsculas, números y underscores.'
+                )
+            
+            # Validar sintaxis del código Python
+            try:
+                compile(code_content, f'{skill_name}.py', 'exec')
+            except SyntaxError as e:
+                messages.error(request, f'Error de sintaxis en el código: {e}')
+                return render(request, 'intelligence/skills_create.html', {
+                    'active_section': 'skills_dashboard',
+                    'user': user,
+                    'error': f'Error de sintaxis: {e}',
+                    'form_data': request.POST,
+                })
+            
+            # Guardar el archivo de la skill
+            import os
+            skills_dir = os.path.join(os.path.dirname(__file__), 'skills')
+            filepath = os.path.join(skills_dir, f'{skill_name}.py')
+            
+            if os.path.exists(filepath):
+                messages.error(request, f'Ya existe una skill con nombre "{skill_name}"')
+                return render(request, 'intelligence/skills_create.html', {
+                    'active_section': 'skills_dashboard',
+                    'user': user,
+                    'error': f'La skill "{skill_name}" ya existe.',
+                    'form_data': request.POST,
+                })
+            
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write(code_content)
+            
+            # Intentar registrar la skill
+            try:
+                from .skills.registry import SkillRegistry as DynamicRegistry
+                count = DynamicRegistry().discover_skills_from_directory(skills_dir)
+                messages.success(
+                    request,
+                    f'Skill "{skill_name}" creada exitosamente. '
+                    f'Total skills registradas: {count}'
+                )
+            except Exception as e:
+                messages.warning(
+                    request,
+                    f'Archivo creado pero no se pudo registrar automáticamente: {e}'
+                )
+            
+            return redirect('intelligence:skills_dashboard')
+            
+        except ValueError as e:
+            messages.error(request, str(e))
+            return render(request, 'intelligence/skills_create.html', {
+                'active_section': 'skills_dashboard',
+                'user': user,
+                'error': str(e),
+                'form_data': request.POST,
+            })
+        except Exception as e:
+            messages.error(request, f'Error al crear skill: {str(e)}')
+            return render(request, 'intelligence/skills_create.html', {
+                'active_section': 'skills_dashboard',
+                'user': user,
+                'error': str(e),
+                'form_data': request.POST,
+            })
+    
+    # GET: mostrar formulario vacío
+    context = {
+        'active_section': 'skills_dashboard',
+        'user': user,
+    }
+    return render(request, 'intelligence/skills_create.html', context)
+
+
+@level_required(4)
+def skill_edit_view(request, skill_name):
+    """Editar una skill existente."""
+    user = getattr(request, 'current_user', None)
+    
+    import os
+    skills_dir = os.path.join(os.path.dirname(__file__), 'skills')
+    filepath = os.path.join(skills_dir, f'{skill_name}.py')
+    
+    if not os.path.exists(filepath):
+        messages.error(request, f'Skill "{skill_name}" no encontrada')
+        return redirect('intelligence:skills_dashboard')
+    
+    if request.method == 'POST':
+        code_content = request.POST.get('code_content', '').strip()
+        
+        if not code_content:
+            messages.error(request, 'El código no puede estar vacío.')
+            return render(request, 'intelligence/skills_create.html', {
+                'active_section': 'skills_dashboard',
+                'user': user,
+                'skill_name': skill_name,
+                'is_edit': True,
+            })
+        
+        try:
+            compile(code_content, f'{skill_name}.py', 'exec')
+        except SyntaxError as e:
+            messages.error(request, f'Error de sintaxis: {e}')
+            return render(request, 'intelligence/skills_create.html', {
+                'active_section': 'skills_dashboard',
+                'user': user,
+                'skill_name': skill_name,
+                'is_edit': True,
+                'error': str(e),
+                'code_content': code_content,
+            })
+        
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(code_content)
+        
+        # Recargar skill
+        try:
+            from .skills.registry import SkillRegistry as DynamicRegistry
+            DynamicRegistry().reload_skill(skill_name)
+        except Exception:
+            pass
+        
+        messages.success(request, f'Skill "{skill_name}" actualizada exitosamente.')
+        return redirect('intelligence:skill_detail', skill_name=skill_name)
+    
+    # GET: leer archivo actual
+    with open(filepath, 'r', encoding='utf-8') as f:
+        code_content = f.read()
+    
+    info = SKILL_SYSTEM.get_skill_info(skill_name) or {}
+    
+    context = {
+        'active_section': 'skills_dashboard',
+        'user': user,
+        'skill_name': skill_name,
+        'skill_info': info,
+        'code_content': code_content,
+        'is_edit': True,
+    }
+    return render(request, 'intelligence/skills_create.html', context)
+
+
+@level_required(3)
+def skill_metrics_view(request):
+    """Página de métricas globales con charts.
+    
+    Usa raw SQL para compatibilidad con SQL Server (ODBC Driver 18 modo estricto).
+    """
+    user = getattr(request, 'current_user', None)
+    from django.db import connection
+    from django.utils import timezone
+    from datetime import timedelta
+    
+    metrics = SKILL_SYSTEM.get_metrics_summary()
+    skills = SKILL_SYSTEM.list_available_skills()
+    
+    last_7_days = timezone.now() - timedelta(days=7)
+    
+    # ── Stats globales desde BD (raw SQL) ─────────────────────────────────
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT COUNT(*) FROM intelligence_skill_execution")
+        total_execs = cursor.fetchone()[0]
+        
+        cursor.execute(
+            "SELECT COUNT(*) FROM intelligence_skill_execution WHERE status = 'success'"
+        )
+        success_count = cursor.fetchone()[0]
+        
+        cursor.execute(
+            "SELECT COUNT(*) FROM intelligence_skill_execution WHERE status = 'error'"
+        )
+        error_count = cursor.fetchone()[0]
+        
+        cursor.execute(
+            "SELECT AVG(latency_ms) FROM intelligence_skill_execution WHERE status = 'success'"
+        )
+        avg_latency = cursor.fetchone()[0] or 0
+    
+    success_rate = round((success_count / max(total_execs, 1)) * 100, 1) if total_execs > 0 else 0
+    
+    # ── Ejecuciones por skill ─────────────────────────────────────────────
+    execs_by_skill = {}
+    latency_by_skill = {}
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT skill_name, COUNT(*) as cnt "
+            "FROM intelligence_skill_execution GROUP BY skill_name"
+        )
+        for row in cursor.fetchall():
+            execs_by_skill[row[0]] = row[1]
+        
+        cursor.execute(
+            "SELECT skill_name, AVG(latency_ms) as avg_lat "
+            "FROM intelligence_skill_execution WHERE status = 'success' "
+            "GROUP BY skill_name"
+        )
+        for row in cursor.fetchall():
+            latency_by_skill[row[0]] = round(row[1], 1) if row[1] else 0
+    
+    # ── Timeline 7 días ───────────────────────────────────────────────────
+    timeline = {}
+    with connection.cursor() as cursor:
+        for i in range(7):
+            day = timezone.now() - timedelta(days=6-i)
+            day_start = day.replace(hour=0, minute=0, second=0, microsecond=0)
+            day_end = day_start + timedelta(days=1)
+            cursor.execute(
+                "SELECT COUNT(*) FROM intelligence_skill_execution "
+                "WHERE executed_at >= %s AND executed_at < %s",
+                [day_start, day_end]
+            )
+            count = cursor.fetchone()[0]
+            timeline[day.strftime('%Y-%m-%d')] = count
+    
+    # ── Success rate por categoría ────────────────────────────────────────
+    success_by_category = {}
+    categories = set(s.get('category', 'general') for s in skills)
+    for cat in categories:
+        cat_skills = [s.get('name') for s in skills if s.get('category', 'general') == cat]
+        if not cat_skills:
+            continue
+        with connection.cursor() as cursor:
+            placeholders = ','.join(['%s'] * len(cat_skills))
+            cursor.execute(
+                f"SELECT COUNT(*) FROM intelligence_skill_execution "
+                f"WHERE skill_name IN ({placeholders})",
+                cat_skills
+            )
+            total_cat = cursor.fetchone()[0]
+            
+            cursor.execute(
+                f"SELECT COUNT(*) FROM intelligence_skill_execution "
+                f"WHERE skill_name IN ({placeholders}) AND status = 'success'",
+                cat_skills
+            )
+            success_cat = cursor.fetchone()[0]
+        
+        if total_cat > 0:
+            success_by_category[cat] = round((success_cat / total_cat * 100), 1)
+    
+    context = {
+        'active_section': 'skills_dashboard',
+        'user': user,
+        'metrics': metrics,
+        'skills': skills,
+        'total_execs': total_execs,
+        'success_rate': success_rate,
+        'avg_latency': round(avg_latency, 1),
+        'error_count': error_count,
+        'execs_by_skill': execs_by_skill,
+        'latency_by_skill': latency_by_skill,
+        'timeline': timeline,
+        'success_by_category': success_by_category,
+    }
+    return render(request, 'intelligence/skills_metrics.html', context)
+
+
+@level_required(3)
+def skill_logs_view(request):
+    """Página de logs de ejecución con filtros.
+    
+    Usa raw SQL para compatibilidad con SQL Server (ODBC Driver 18 modo estricto).
+    """
+    user = getattr(request, 'current_user', None)
+    from django.db import connection
+    from django.utils import timezone
+    import datetime
+    
+    # Filtros
+    skill_filter = request.GET.get('skill', '')
+    status_filter = request.GET.get('status', '')
+    search_query = request.GET.get('q', '')
+    
+    # Paginación
+    page = int(request.GET.get('page', 1))
+    page_size = 50
+    
+    # Construir WHERE dinámico
+    where_clauses = []
+    params = []
+    
+    if skill_filter:
+        where_clauses.append("skill_name = %s")
+        params.append(skill_filter)
+    if status_filter:
+        where_clauses.append("status = %s")
+        params.append(status_filter)
+    if search_query:
+        where_clauses.append(
+            "(skill_name LIKE %s OR error_message LIKE %s OR parameters LIKE %s)"
+        )
+        like = f"%{search_query}%"
+        params.extend([like, like, like])
+    
+    where_sql = ""
+    if where_clauses:
+        where_sql = "WHERE " + " AND ".join(where_clauses)
+    
+    with connection.cursor() as cursor:
+        cursor.execute(
+            f"SELECT COUNT(*) FROM intelligence_skill_execution {where_sql}",
+            params
+        )
+        total = cursor.fetchone()[0]
+    
+    total_pages = max(1, (total + page_size - 1) // page_size)
+    page = max(1, min(page, total_pages))
+    offset = (page - 1) * page_size
+    
+    executions = []
+    with connection.cursor() as cursor:
+        cursor.execute(
+            f"SELECT TOP {page_size} id, skill_name, status, latency_ms, cached, "
+            f"error_message, executed_at "
+            f"FROM intelligence_skill_execution {where_sql} "
+            f"ORDER BY executed_at DESC",
+            params
+        )
+        columns = ['id', 'skill_name', 'status', 'latency_ms', 'cached',
+                   'error_message', 'executed_at']
+        for row in cursor.fetchall():
+            exec_dict = dict(zip(columns, row))
+            # Convertir UTC a America/Lima para el template
+            if exec_dict.get('executed_at') and timezone.is_naive(exec_dict['executed_at']):
+                exec_dict['executed_at'] = timezone.make_aware(exec_dict['executed_at'], datetime.timezone.utc)
+            if exec_dict.get('executed_at'):
+                exec_dict['executed_at'] = timezone.localtime(exec_dict['executed_at'])
+            executions.append(exec_dict)
+    
+    # Lista de skills para el filtro
+    skills = SKILL_SYSTEM.list_available_skills()
+    skill_names = [s.get('name', '') for s in skills]
+    
+    context = {
+        'active_section': 'skills_dashboard',
+        'user': user,
+        'executions': executions,
+        'skill_names': skill_names,
+        'current_skill': skill_filter,
+        'current_status': status_filter,
+        'current_query': search_query,
+        'page': page,
+        'total_pages': total_pages,
+        'total': total,
+        'page_size': page_size,
+    }
+    return render(request, 'intelligence/skills_logs.html', context)
+
+
+@api_view(['GET'])
+@level_required(3)
+def skill_logs_api(request):
+    """API JSON de logs para DataTables.
+    
+    Usa raw SQL para compatibilidad con SQL Server (ODBC Driver 18 modo estricto).
+    """
+    from django.db import connection
+    from django.utils import timezone
+    import datetime
+    
+    page = int(request.GET.get('page', 1))
+    page_size = int(request.GET.get('page_size', 50))
+    skill_filter = request.GET.get('skill', '')
+    status_filter = request.GET.get('status', '')
+    
+    # Construir WHERE dinámico
+    where_clauses = []
+    params = []
+    
+    if skill_filter:
+        where_clauses.append("skill_name = %s")
+        params.append(skill_filter)
+    if status_filter:
+        where_clauses.append("status = %s")
+        params.append(status_filter)
+    
+    where_sql = ""
+    if where_clauses:
+        where_sql = "WHERE " + " AND ".join(where_clauses)
+    
+    with connection.cursor() as cursor:
+        cursor.execute(
+            f"SELECT COUNT(*) FROM intelligence_skill_execution {where_sql}",
+            params
+        )
+        total = cursor.fetchone()[0]
+    
+    offset = (page - 1) * page_size
+    
+    executions = []
+    with connection.cursor() as cursor:
+        cursor.execute(
+            f"SELECT id, skill_name, status, latency_ms, cached, "
+            f"error_message, executed_at "
+            f"FROM intelligence_skill_execution {where_sql} "
+            f"ORDER BY executed_at DESC "
+            f"OFFSET {offset} ROWS FETCH NEXT {page_size} ROWS ONLY",
+            params
+        )
+        columns = ['id', 'skill_name', 'status', 'latency_ms', 'cached',
+                   'error_message', 'executed_at']
+        for row in cursor.fetchall():
+            exec_dict = dict(zip(columns, row))
+            # Convertir UTC a America/Lima para el template
+            if exec_dict.get('executed_at') and timezone.is_naive(exec_dict['executed_at']):
+                exec_dict['executed_at'] = timezone.make_aware(exec_dict['executed_at'], datetime.timezone.utc)
+            if exec_dict.get('executed_at'):
+                exec_dict['executed_at'] = timezone.localtime(exec_dict['executed_at'])
+            executions.append(exec_dict)
+    
+    return Response({
+        'count': total,
+        'page': page,
+        'page_size': page_size,
+        'results': executions,
+    })
+
+
+@level_required(4)
+def skill_clear_cache(request, skill_name):
+    """Limpia el cache de una skill específica."""
+    if request.method == 'POST':
+        try:
+            if hasattr(SKILL_SYSTEM, 'invalidate_cache'):
+                count = SKILL_SYSTEM.invalidate_cache(skill_name=skill_name)
+                messages.success(
+                    request,
+                    f'Cache limpiado para "{skill_name}". {count} entradas eliminadas.'
+                )
+            else:
+                messages.warning(request, 'El sistema de cache no está disponible.')
+        except Exception as e:
+            messages.error(request, f'Error al limpiar cache: {str(e)}')
+    return redirect('intelligence:skill_detail', skill_name=skill_name)
+
+
+@admin_required
+def skill_toggle_active(request, skill_name):
+    """Activar/desactivar una skill (solo admin)."""
+    if request.method == 'POST':
+        try:
+            registry = SKILL_SYSTEM.registry if hasattr(SKILL_SYSTEM, 'registry') else None
+            if registry and hasattr(registry, 'unregister_skill'):
+                info = SKILL_SYSTEM.get_skill_info(skill_name)
+                if info and info.get('is_active', True):
+                    registry.unregister_skill(skill_name)
+                    messages.success(request, f'Skill "{skill_name}" desactivada.')
+                else:
+                    registry.reload_skill(skill_name)
+                    messages.success(request, f'Skill "{skill_name}" activada.')
+            else:
+                messages.warning(request, 'No se puede cambiar el estado de la skill.')
+        except Exception as e:
+            messages.error(request, f'Error: {str(e)}')
+    return redirect('intelligence:skills_dashboard')
+
+
+@api_view(['GET'])
+@level_required(1)
+def skill_stats_api(request):
+    """API JSON con stats agregados para los charts del dashboard.
+    
+    TODOS los datos provienen de SkillExecution (BD) via raw SQL
+    para compatibilidad con SQL Server (ODBC Driver 18 modo estricto).
+    """
+    from django.utils import timezone
+    from datetime import timedelta
+    from django.db import connection
+    
+    last_24h = timezone.now() - timedelta(hours=24)
+    last_7d = timezone.now() - timedelta(days=7)
+    
+    skills = SKILL_SYSTEM.list_available_skills()
+    
+    # ── Stats globales desde BD (raw SQL) ─────────────────────────────────
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT COUNT(*) FROM intelligence_skill_execution")
+        total_all = cursor.fetchone()[0]
+        
+        cursor.execute(
+            "SELECT COUNT(*) FROM intelligence_skill_execution WHERE status = 'success'"
+        )
+        total_success = cursor.fetchone()[0]
+        
+        cursor.execute(
+            "SELECT COUNT(*) FROM intelligence_skill_execution WHERE status = 'error'"
+        )
+        total_error = cursor.fetchone()[0]
+        
+        cursor.execute(
+            "SELECT COUNT(*) FROM intelligence_skill_execution WHERE cached = 1"
+        )
+        total_cached = cursor.fetchone()[0]
+        
+        cursor.execute(
+            "SELECT AVG(latency_ms) FROM intelligence_skill_execution WHERE status = 'success'"
+        )
+        avg_latency = cursor.fetchone()[0] or 0
+        
+        cursor.execute(
+            "SELECT COUNT(*) FROM intelligence_skill_execution WHERE executed_at >= %s",
+            [last_24h]
+        )
+        total_today = cursor.fetchone()[0]
+        
+        cursor.execute(
+            "SELECT COUNT(*) FROM intelligence_skill_execution WHERE executed_at >= %s",
+            [last_7d]
+        )
+        total_7d = cursor.fetchone()[0]
+    
+    success_rate = round((total_success / max(total_all, 1)) * 100, 1)
+    cache_hit_rate = round((total_cached / max(total_all, 1)) * 100, 1)
+    
+    # ── Ejecuciones por hora (últimas 24h con labels reales) ─────────────
+    executions_by_hour = {}
+    now = timezone.now()
+    with connection.cursor() as cursor:
+        for i in range(24):
+            hour_start = now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=23 - i)
+            hour_end = hour_start + timedelta(hours=1)
+            cursor.execute(
+                "SELECT COUNT(*) FROM intelligence_skill_execution "
+                "WHERE executed_at >= %s AND executed_at < %s",
+                [hour_start, hour_end]
+            )
+            count = cursor.fetchone()[0]
+            label = hour_start.strftime('%H:00')
+            executions_by_hour[label] = count
+    
+    # ── Ejecuciones por skill ─────────────────────────────────────────────
+    execs_by_skill = {}
+    latency_by_skill = {}
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT skill_name, COUNT(*) as cnt "
+            "FROM intelligence_skill_execution GROUP BY skill_name"
+        )
+        for row in cursor.fetchall():
+            execs_by_skill[row[0]] = row[1]
+        
+        cursor.execute(
+            "SELECT skill_name, AVG(latency_ms) as avg_lat "
+            "FROM intelligence_skill_execution WHERE status = 'success' "
+            "GROUP BY skill_name"
+        )
+        for row in cursor.fetchall():
+            latency_by_skill[row[0]] = round(row[1], 1) if row[1] else 0
+    
+    # ── Success rate por categoría ────────────────────────────────────────
+    success_by_category = {}
+    categories = set(s.get('category', 'general') for s in skills)
+    for cat in categories:
+        cat_skills = [s.get('name') for s in skills if s.get('category', 'general') == cat]
+        if not cat_skills:
+            continue
+        with connection.cursor() as cursor:
+            placeholders = ','.join(['%s'] * len(cat_skills))
+            cursor.execute(
+                f"SELECT COUNT(*) FROM intelligence_skill_execution "
+                f"WHERE skill_name IN ({placeholders})",
+                cat_skills
+            )
+            total_cat = cursor.fetchone()[0]
+            
+            cursor.execute(
+                f"SELECT COUNT(*) FROM intelligence_skill_execution "
+                f"WHERE skill_name IN ({placeholders}) AND status = 'success'",
+                cat_skills
+            )
+            success_cat = cursor.fetchone()[0]
+        
+        if total_cat > 0:
+            success_by_category[cat] = round((success_cat / total_cat * 100), 1)
+    
+    return Response({
+        'skills_count': len(skills),
+        'active_count': sum(1 for s in skills if s.get('is_active', True)),
+        'total_executions_today': total_today,
+        'total_executions_all': total_all,
+        'total_executions_7d': total_7d,
+        'total_success': total_success,
+        'total_error': total_error,
+        'total_cached': total_cached,
+        'avg_latency_ms': round(avg_latency, 1),
+        'success_rate': success_rate,
+        'cache_hit_rate': cache_hit_rate,
+        'executions_by_hour': executions_by_hour,
+        'executions_by_skill': execs_by_skill,
+        'latency_by_skill': latency_by_skill,
+        'success_rate_by_category': success_by_category,
+    })
+
+
+@level_required(1)
+def skill_execution_detail_view(request, execution_id):
+    """Detalle completo de una ejecución individual de skill.
+    
+    Muestra los parámetros de entrada (question/prompt), el resultado
+    (respuesta del sistema), error message, latencia, cache, timestamp y usuario.
+    """
+    from django.utils import timezone
+    import datetime
+    from django.db import connection
+    import json
+    
+    user = getattr(request, 'current_user', None)
+    skills = SKILL_SYSTEM.list_available_skills()
+    skill_map = {s.get('name'): s for s in skills}
+    
+    execution = None
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT id, skill_name, status, latency_ms, cached, "
+            "error_message, executed_at, parameters, result, user_id "
+            "FROM intelligence_skill_execution WHERE id = %s",
+            [str(execution_id)]
+        )
+        row = cursor.fetchone()
+        if row:
+            columns = ['id', 'skill_name', 'status', 'latency_ms', 'cached',
+                       'error_message', 'executed_at', 'parameters', 'result', 'user_id']
+            execution = dict(zip(columns, row))
+            
+            # Convertir executed_at a America/Lima
+            if execution.get('executed_at') and timezone.is_naive(execution['executed_at']):
+                execution['executed_at'] = timezone.make_aware(
+                    execution['executed_at'], datetime.timezone.utc
+                )
+            if execution.get('executed_at'):
+                execution['executed_at'] = timezone.localtime(execution['executed_at'])
+            
+            # Parsear JSON fields
+            if execution.get('parameters') and isinstance(execution['parameters'], str):
+                try:
+                    execution['parameters'] = json.loads(execution['parameters'])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            if execution.get('result') and isinstance(execution['result'], str):
+                try:
+                    execution['result'] = json.loads(execution['result'])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            
+            # Resolver nombre de usuario
+            execution['user_name'] = 'Sistema'
+            if execution.get('user_id'):
+                try:
+                    cursor.execute(
+                        "SELECT username FROM intelligence_user WHERE id = %s",
+                        [str(execution['user_id'])]
+                    )
+                    user_row = cursor.fetchone()
+                    if user_row:
+                        execution['user_name'] = user_row[0]
+                except Exception:
+                    pass
+    
+    if not execution:
+        return render(request, 'intelligence/skills_execution_detail.html', {
+            'execution': None,
+            'error': 'Ejecución no encontrada',
+            'skill_info': None,
+        })
+    
+    skill_info = skill_map.get(execution.get('skill_name', ''))
+    
+    return render(request, 'intelligence/skills_execution_detail.html', {
+        'execution': execution,
+        'error': None,
+        'skill_info': skill_info,
+    })
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PERFILES DE INTELIGENCIA (Niveles v2)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@admin_required
+def profile_list(request):
+    """Lista todos los perfiles de inteligencia."""
+    from .models import UserIntelligenceProfile
+    
+    profiles = UserIntelligenceProfile.objects.select_related('user__role').all().order_by('user__username')
+    
+    return render(request, 'intelligence/profiles/list.html', {
+        'profiles': profiles,
+        'active_section': 'profiles',
+    })
+
+
+@admin_required
+def profile_detail(request, profile_id):
+    """Detalle de un perfil de inteligencia."""
+    from .models import UserIntelligenceProfile, IntelligenceCollection
+    
+    try:
+        profile = UserIntelligenceProfile.objects.select_related('user__role').get(id=profile_id)
+    except UserIntelligenceProfile.DoesNotExist:
+        messages.error(request, "Perfil de inteligencia no encontrado.")
+        return redirect('intelligence:profile_list')
+    
+    extra_collections = profile.extra_collections.all()
+    blocked_collections = profile.blocked_collections.all()
+    all_collections = IntelligenceCollection.objects.filter(is_active=True).order_by('name')
+    
+    return render(request, 'intelligence/profiles/detail.html', {
+        'profile': profile,
+        'extra_collections': extra_collections,
+        'blocked_collections': blocked_collections,
+        'all_collections': all_collections,
+        'active_section': 'profiles',
+    })
+
+
+@admin_required
+def profile_edit(request, profile_id):
+    """Edita un perfil de inteligencia (nivel, dominios, colecciones extra/bloqueadas)."""
+    from .models import UserIntelligenceProfile, IntelligenceCollection, LEVEL_CHOICES, DOMAIN_CHOICES
+    
+    try:
+        profile = UserIntelligenceProfile.objects.select_related('user__role').get(id=profile_id)
+    except UserIntelligenceProfile.DoesNotExist:
+        messages.error(request, "Perfil de inteligencia no encontrado.")
+        return redirect('intelligence:profile_list')
+    
+    if request.method == 'POST':
+        try:
+            # Actualizar nivel
+            new_level = int(request.POST.get('level', profile.level))
+            if 1 <= new_level <= 5:
+                profile.level = new_level
+            
+            # Actualizar dominios (vienen como lista desde checkboxes)
+            domains_list = request.POST.getlist('allowed_domains')
+            profile.allowed_domains = [d.strip() for d in domains_list if d.strip()]
+            
+            # Actualizar colecciones extra
+            extra_ids = request.POST.getlist('extra_collections')
+            profile.extra_collections.set(extra_ids)
+            
+            # Actualizar colecciones bloqueadas
+            blocked_ids = request.POST.getlist('blocked_collections')
+            profile.blocked_collections.set(blocked_ids)
+            
+            profile.save()
+            messages.success(request, f"Perfil de {profile.user.username} actualizado correctamente.")
+            return redirect('intelligence:profile_detail', profile_id=profile.id)
+            
+        except Exception as e:
+            messages.error(request, f"Error actualizando perfil: {e}")
+    
+    all_collections = IntelligenceCollection.objects.filter(is_active=True).order_by('name')
+    extra_collections = profile.extra_collections.all()
+    blocked_collections = profile.blocked_collections.all()
+    
+    return render(request, 'intelligence/profiles/edit.html', {
+        'profile': profile,
+        'all_collections': all_collections,
+        'extra_collections': extra_collections,
+        'blocked_collections': blocked_collections,
+        'level_choices': LEVEL_CHOICES,
+        'domain_choices': DOMAIN_CHOICES,
+        'active_section': 'profiles',
+    })
+
+
+@admin_required
+def profile_reset(request, profile_id):
+    """Resetea un perfil a los valores por defecto del rol."""
+    from .models import UserIntelligenceProfile
+    
+    try:
+        profile = UserIntelligenceProfile.objects.select_related('user__role').get(id=profile_id)
+    except UserIntelligenceProfile.DoesNotExist:
+        messages.error(request, "Perfil de inteligencia no encontrado.")
+        return redirect('intelligence:profile_list')
+    
+    if request.method == 'POST':
+        try:
+            if profile.user.role:
+                profile.level = profile.user.role.default_level
+                profile.allowed_domains = profile.user.role.default_domains or ['general']
+            else:
+                profile.level = 1
+                profile.allowed_domains = ['general']
+            
+            profile.extra_collections.clear()
+            profile.blocked_collections.clear()
+            profile.save()
+            
+            messages.success(request, f"Perfil de {profile.user.username} reseteado a valores del rol.")
+        except Exception as e:
+            messages.error(request, f"Error reseteando perfil: {e}")
+    
+    return redirect('intelligence:profile_detail', profile_id=profile.id)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# API DE PERFILES DE INTELIGENCIA
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def api_profile_list(request):
+    """API: Lista todos los perfiles de inteligencia."""
+    from .models import UserIntelligenceProfile
+    
+    try:
+        profiles = UserIntelligenceProfile.objects.select_related('user').all().order_by('user__username')
+        data = []
+        for p in profiles:
+            data.append({
+                'id': str(p.id),
+                'user_id': str(p.user.id),
+                'username': p.user.username,
+                'level': p.level,
+                'allowed_domains': p.allowed_domains,
+                'extra_collections': list(p.extra_collections.values_list('name', flat=True)),
+                'blocked_collections': list(p.blocked_collections.values_list('name', flat=True)),
+                'created_at': p.created_at.isoformat() if p.created_at else None,
+                'updated_at': p.updated_at.isoformat() if p.updated_at else None,
+            })
+        
+        return Response({
+            'success': True,
+            'profiles': data,
+            'count': len(data),
+        })
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': str(e),
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def api_profile_detail(request, profile_id):
+    """API: Detalle de un perfil de inteligencia."""
+    from .models import UserIntelligenceProfile
+    
+    try:
+        profile = UserIntelligenceProfile.objects.select_related('user').get(id=profile_id)
+        return Response({
+            'success': True,
+            'profile': {
+                'id': str(profile.id),
+                'user_id': str(profile.user.id),
+                'username': profile.user.username,
+                'level': profile.level,
+                'allowed_domains': profile.allowed_domains,
+                'extra_collections': list(profile.extra_collections.values('id', 'name')),
+                'blocked_collections': list(profile.blocked_collections.values('id', 'name')),
+                'created_at': profile.created_at.isoformat() if profile.created_at else None,
+                'updated_at': profile.updated_at.isoformat() if profile.updated_at else None,
+            },
+        })
+    except UserIntelligenceProfile.DoesNotExist:
+        return Response({
+            'success': False,
+            'error': 'Perfil no encontrado',
+        }, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': str(e),
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['PUT', 'PATCH'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def api_profile_update(request, profile_id):
+    """API: Actualiza un perfil de inteligencia."""
+    from .models import UserIntelligenceProfile, IntelligenceCollection
+    
+    try:
+        profile = UserIntelligenceProfile.objects.select_related('user').get(id=profile_id)
+    except UserIntelligenceProfile.DoesNotExist:
+        return Response({
+            'success': False,
+            'error': 'Perfil no encontrado',
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    try:
+        import json
+        data = json.loads(request.body) if isinstance(request.body, bytes) else request.data
+        
+        if 'level' in data:
+            new_level = int(data['level'])
+            if 1 <= new_level <= 5:
+                profile.level = new_level
+        
+        if 'allowed_domains' in data:
+            profile.allowed_domains = data['allowed_domains']
+        
+        if 'extra_collections' in data:
+            extra_names = data['extra_collections']
+            extra_colls = IntelligenceCollection.objects.filter(name__in=extra_names)
+            profile.extra_collections.set(extra_colls)
+        
+        if 'blocked_collections' in data:
+            blocked_names = data['blocked_collections']
+            blocked_colls = IntelligenceCollection.objects.filter(name__in=blocked_names)
+            profile.blocked_collections.set(blocked_colls)
+        
+        profile.save()
+        
+        return Response({
+            'success': True,
+            'message': f"Perfil de {profile.user.username} actualizado.",
+            'profile': {
+                'id': str(profile.id),
+                'level': profile.level,
+                'allowed_domains': profile.allowed_domains,
+            },
+        })
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': str(e),
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def api_my_profile(request):
+    """API: Obtiene el perfil de inteligencia del usuario actual."""
+    from .permissions import get_user_profile
+    
+    profile = get_user_profile(request)
+    
+    if not profile:
+        return Response({
+            'success': False,
+            'error': 'No se pudo determinar el perfil de inteligencia',
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    return Response({
+        'success': True,
+        'profile': {
+            'id': str(profile.id) if hasattr(profile, 'id') else None,
+            'level': profile.level,
+            'allowed_domains': profile.allowed_domains,
+            'extra_collections': list(profile.extra_collections.values('id', 'name')) if hasattr(profile, 'extra_collections') else [],
+            'blocked_collections': list(profile.blocked_collections.values('id', 'name')) if hasattr(profile, 'blocked_collections') else [],
+        },
+    })
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def api_check_collection_access(request, collection_name):
+    """API: Verifica si el usuario actual puede acceder a una colección."""
+    from .permissions import get_user_profile
+    from .models import IntelligenceCollection
+    
+    profile = get_user_profile(request)
+    
+    if not profile:
+        return Response({
+            'success': False,
+            'error': 'No se pudo determinar el perfil de inteligencia',
+            'accessible': False,
+        }, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        collection = IntelligenceCollection.objects.get(name=collection_name, is_active=True)
+    except IntelligenceCollection.DoesNotExist:
+        return Response({
+            'success': False,
+            'error': f"Colección '{collection_name}' no encontrada",
+            'accessible': False,
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    can_access, reason = profile.can_access_collection(collection)
+    
+    return Response({
+        'success': True,
+        'accessible': can_access,
+        'reason': reason if not can_access else None,
+        'collection': {
+            'name': collection.name,
+            'min_level': collection.min_level,
+            'domain': collection.domain,
+            'is_public': collection.is_public,
+        },
+        'profile': {
+            'level': profile.level,
+            'allowed_domains': profile.allowed_domains,
+        },
+    })

@@ -37,7 +37,9 @@ class Command(BaseCommand):
         role, created = Role.objects.get_or_create(
             name=role_name,
             defaults={
-                'allowed_levels': [1, 2, 3, 4, 5] if role_name == 'Administrador' else [1],
+                'default_level': 5 if role_name == 'Administrador' else 1,
+                'max_level': 5 if role_name == 'Administrador' else 1,
+                'default_domains': ['general', 'publico', 'legal', 'marketing', 'escuela', 'gerencia', 'ti'] if role_name == 'Administrador' else ['general'],
                 'capabilities': {
                     'admin': role_name == 'Administrador',
                     'view': True,
@@ -66,4 +68,4 @@ class Command(BaseCommand):
         ))
         self.stdout.write(f'  Usuario: {username}')
         self.stdout.write(f'  Nuevo rol: {role_name}')
-        self.stdout.write(f'  Niveles: {role.allowed_levels}')
+        self.stdout.write(f'  Nivel: {role.default_level}, Max: {role.max_level}')

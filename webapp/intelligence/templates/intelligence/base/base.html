@@ -1,0 +1,137 @@
+{% extends "propifai_base.html" %}
+{% load static %}
+
+{% block title %}Propifai Intelligence Layer{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'intelligence/css/intelligence_base.css' %}">
+<style>
+    /* Ajustes para que el CSS de intelligence funcione dentro del layout de propifai_base */
+    .intelligence-main .card {
+        background-color: var(--bg-card, #161b22);
+        border: 1px solid var(--border-color, #30363d);
+        border-radius: var(--radius, 6px);
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    .intelligence-main .stat-card {
+        background-color: var(--bg-card, #161b22);
+        border: 1px solid var(--border-color, #30363d);
+        border-radius: var(--radius, 6px);
+        padding: 20px;
+        text-align: center;
+    }
+    .intelligence-main .stat-value {
+        font-size: 32px;
+        font-weight: 700;
+        margin-bottom: 8px;
+        color: var(--accent-blue, #58a6ff);
+    }
+    .intelligence-main .stat-label {
+        color: var(--text-secondary, #8b949e);
+        font-size: 14px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .intelligence-main .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+    .intelligence-main .grid {
+        display: grid;
+        gap: 20px;
+    }
+    .intelligence-main .grid-2 { grid-template-columns: repeat(2, 1fr); }
+    .intelligence-main .grid-3 { grid-template-columns: repeat(3, 1fr); }
+    .intelligence-main .grid-4 { grid-template-columns: repeat(4, 1fr); }
+    .intelligence-main .card-header {
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid var(--border-color, #30363d);
+    }
+    .intelligence-main .card-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--text-primary, #c9d1d9);
+    }
+    .intelligence-main .card-body {
+        color: var(--text-secondary, #8b949e);
+    }
+    .intelligence-main .btn {
+        display: inline-flex;
+        align-items: center;
+        padding: 8px 16px;
+        border-radius: var(--radius, 6px);
+        font-size: 14px;
+        font-weight: 500;
+        text-decoration: none;
+        border: 1px solid var(--border-color, #30363d);
+        background-color: var(--bg-card, #161b22);
+        color: var(--text-primary, #c9d1d9);
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    .intelligence-main .btn-primary {
+        background-color: var(--accent-blue, #58a6ff);
+        border-color: var(--accent-blue, #58a6ff);
+        color: white;
+    }
+    .intelligence-main .btn-primary:hover {
+        background-color: #79c0ff;
+    }
+    .intelligence-main .table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 15px;
+    }
+    .intelligence-main .table th,
+    .intelligence-main .table td {
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--border-color, #30363d);
+        text-align: left;
+    }
+    .intelligence-main .table th {
+        color: var(--text-secondary, #8b949e);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-weight: 600;
+    }
+    .intelligence-main .table tr:hover {
+        background-color: var(--bg-hover, #21262d);
+    }
+    .intelligence-main .chart-container {
+        height: 300px;
+        background-color: var(--bg-card, #161b22);
+        border: 1px solid var(--border-color, #30363d);
+        border-radius: var(--radius, 6px);
+        padding: 20px;
+        margin-top: 15px;
+    }
+    .intelligence-main .small-text {
+        font-size: 12px;
+        color: var(--text-secondary, #8b949e);
+    }
+    .intelligence-main a:not(.btn) {
+        color: var(--accent-blue, #58a6ff);
+    }
+</style>
+{% endblock %}
+
+{% block header_title_area %}
+<div class="header-title">Intelligence Layer <span>— {% block page_title %}Dashboard{% endblock %}</span></div>
+{% endblock %}
+
+{% block before_content %}
+<div class="intelligence-main">
+{% endblock %}
+
+{% block after_content %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'intelligence/js/intelligence.js' %}"></script>
+{% endblock %}

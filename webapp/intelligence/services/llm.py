@@ -194,7 +194,7 @@ class LLMService:
             # Si no se especifican colecciones, buscar en todas las activas
             collections = IntelligenceCollection.objects.filter(
                 is_active=True,
-                access_level__lte=user_access_level
+                min_level__lte=user_access_level
             )
             collection_names = list(collections.values_list('name', flat=True))
         
