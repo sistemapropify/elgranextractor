@@ -1247,26 +1247,36 @@ function renderExistingZones(zones) {
                 });
                 var center = bounds.getCenter();
 
-                // Crear marcador personalizado con solo texto (sin globo)
-                var labelMarker = new google.maps.Marker({
-                    position: center,
-                    map: map,
-                    icon: {
-                        path: google.maps.SymbolPath.CIRCLE,
-                        scale: 0.01,  // invisible
-                        fillOpacity: 0,
-                        strokeOpacity: 0
-                    },
-                    label: {
-                        text: zone.nombre_zona || 'Zona',
-                        color: '#dc3545',
-                        fontSize: '13px',
-                        fontWeight: '700',
-                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-                    },
-                    zIndex: 1000,
-                    clickable: false
-                });
+                // Crear overlay de texto personalizado
+                var labelDiv = document.createElement('div');
+                labelDiv.className = 'zone-label-overlay';
+                labelDiv.textContent = zone.nombre_zona || 'Zona';
+                labelDiv.style.cssText = 'color: #dc3545; font-size: 12px; font-weight: 400; ' +
+                    'font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; ' +
+                    'white-space: nowrap; pointer-events: none; user-select: none; ' +
+                    'background: transparent; padding: 0; ' +
+                    'position: absolute; transform: translate(-50%, -50%); ' +
+                    'z-index: 1000;';
+
+                var labelOverlay = new google.maps.OverlayView();
+                labelOverlay.onAdd = function() {
+                    var panes = this.getPanes();
+                    panes.floatPane.appendChild(labelDiv);
+                };
+                labelOverlay.draw = function() {
+                    var projection = this.getProjection();
+                    var point = projection.fromLatLngToDivPixel(center);
+                    if (point) {
+                        labelDiv.style.left = point.x + 'px';
+                        labelDiv.style.top = point.y + 'px';
+                    }
+                };
+                labelOverlay.onRemove = function() {
+                    if (labelDiv.parentNode) {
+                        labelDiv.parentNode.removeChild(labelDiv);
+                    }
+                };
+                labelOverlay.setMap(map);
 
                 // Al hacer click en el polígono, seleccionar
                 google.maps.event.addListener(polygon, 'click', function() {
