@@ -858,7 +858,12 @@
                     {% block header_actions %}
                     <button class="header-btn" title="Actualizar" onclick="location.reload()">&#x21BB;</button>
                     <button class="header-btn" title="Notificaciones">&#x1F514;</button>
-                    <div class="user-avatar">P</div>
+                    {% if user.is_authenticated %}
+                    <div class="user-avatar" title="{{ user.username }}">{{ user.username|first|upper }}</div>
+                    <a href="/intelligence/logout/?next=/intelligence/skills/dashboard/" class="header-btn" title="Cerrar Sesión" style="text-decoration:none;">🚪</a>
+                    {% else %}
+                    <a href="/intelligence/login/?next=/intelligence/skills/dashboard/" class="header-btn" title="Iniciar Sesión" style="text-decoration:none;">🔑</a>
+                    {% endif %}
                     {% endblock %}
                 </div>
             </header>
