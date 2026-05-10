@@ -2375,9 +2375,16 @@ def login_view(request):
             # Redirigir de vuelta al dashboard de skills con el error
             return redirect(next_url)
 
-    # GET: redirigir al dashboard de skills (el login se hace desde el modal)
-    next_url = request.GET.get('next', '/api/v1/intelligence/skills/dashboard/')
-    return redirect(next_url)
+    # GET: si el usuario ya está autenticado, redirigir al next
+    # Si no, renderizar el dashboard de skills (que tiene el modal de login)
+    # para evitar el redirect loop: middleware → /login/?next=... → redirect → middleware → ...
+    next_url = request.GET.get('next', '/intelligence/chat/')
+    user = getattr(request, 'current_user', None)
+    if user:
+        return redirect(next_url)
+    # Renderizar el dashboard de skills directamente (vista pública sin decorador)
+    # para que el usuario vea la página con el modal de login
+    return skills_dashboard_view(request)
 
 
 def logout_view(request):
