@@ -1240,6 +1240,29 @@ function renderExistingZones(zones) {
                     clickable: true
                 });
 
+                // Calcular centro del polígono para la etiqueta
+                var bounds = new google.maps.LatLngBounds();
+                path.forEach(function(p) {
+                    bounds.extend(p);
+                });
+                var center = bounds.getCenter();
+
+                // Crear InfoWindow con el nombre de la zona
+                var infoWindow = new google.maps.InfoWindow({
+                    content: '<div style="color:#0d1117;font-weight:600;font-size:13px;padding:4px 8px;white-space:nowrap;">' +
+                        (zone.nombre_zona || 'Zona') + '</div>',
+                    position: center,
+                    pixelOffset: new google.maps.Size(0, 0),
+                    disableAutoPan: true
+                });
+
+                // Mostrar la etiqueta siempre (sin necesidad de click)
+                // Usamos un timeout para evitar problemas de renderizado
+                setTimeout(function() {
+                    infoWindow.open(map);
+                }, 100);
+
+                // Al hacer click en el polígono, cerrar otras etiquetas y seleccionar
                 google.maps.event.addListener(polygon, 'click', function() {
                     selectShape(this);
                 });
