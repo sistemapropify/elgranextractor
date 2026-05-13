@@ -1,54 +1,74 @@
 """
 Skill avanzado para generar reportes de precios por zona y tipo de propiedad.
+Migrada de Skill (LEGACY) a BaseSkill (NUEVO).
 """
 
-from typing import Dict, Any, List
+from typing import Any, Dict, List, Optional
 
-from ..services.skill_base import Skill, SkillParameter, SkillResult
+from .base import BaseSkill, SkillResult
 
 
-class ReportePreciosZonaSkill(Skill):
+class ReportePreciosZonaSkill(BaseSkill):
     """Skill para crear reportes de precios promedio y tendencias por zona."""
 
     name = "reporte_precios_zona"
     description = "Genera un reporte de precios promedio y tendencias para una zona y tipo de propiedad"
-    parameters = {
-        'zona': SkillParameter(
-            name='zona',
-            type='str',
-            description='Zona o distrito objetivo',
-            required=True
-        ),
-        'tipo_propiedad': SkillParameter(
-            name='tipo_propiedad',
-            type='str',
-            description='Tipo de propiedad a analizar',
-            required=True
-        ),
-        'registros': SkillParameter(
-            name='registros',
-            type='list',
-            description='Lista de registros de ventas con precios y atributos de propiedad',
-            required=True
-        ),
+    category = "reporte"
+    access_level = 1
+    is_active = True
+
+    parameters_schema = {
+        'zona': {
+            'type': 'string',
+            'description': 'Zona o distrito objetivo',
+            'required': True,
+        },
+        'tipo_propiedad': {
+            'type': 'string',
+            'description': 'Tipo de propiedad a analizar',
+            'required': True,
+        },
+        'registros': {
+            'type': 'array',
+            'description': 'Lista de registros de ventas con precios y atributos de propiedad',
+            'required': True,
+        },
     }
 
-    def execute(self, **kwargs) -> SkillResult:
+    def validate_params(self, params: Dict[str, Any]) -> bool:
+        """Valida que los parámetros requeridos estén presentes."""
+        if not params:
+            return False
+        required = ('zona', 'tipo_propiedad', 'registros')
+        return all(params.get(k) is not None for k in required)
+
+    def execute(self, params: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> SkillResult:
         try:
-            params = self.validate_params(**kwargs)
-            zona = params['zona'].lower()
-            tipo_propiedad = params['tipo_propiedad'].lower()
+            if not self.validate_params(params):
+                return SkillResult.error(
+                    message="Faltan parámetros requeridos: zona, tipo_propiedad, registros",
+                    skill_name=self.name
+                )
+
+            zona = str(params['zona']).lower()
+            tipo_propiedad = str(params['tipo_propiedad']).lower()
             registros = params['registros']
 
             if not isinstance(registros, list) or not registros:
-                return SkillResult.from_error("La lista de registros no puede estar vacía")
+                return SkillResult.error(
+                    message="La lista de registros no puede estar vacía",
+                    skill_name=self.name
+                )
 
             filtrados = [r for r in registros if isinstance(r, dict) and
                          zona in str(r.get('zona', '')).lower() and
                          tipo_propiedad in str(r.get('tipo_propiedad', '')).lower()]
 
             if not filtrados:
-                return SkillResult.from_error("No se encontraron registros para la zona y tipo de propiedad solicitados")
+                return SkillResult.error(
+                    message="No se encontraron registros para la zona y tipo de propiedad solicitados",
+                    skill_name=self.name
+                )
 
             precios = [float(r.get('precio', 0)) for r in filtrados if r.get('precio') is not None]
             precios = [p for p in precios if p > 0]
@@ -71,7 +91,10 @@ class ReportePreciosZonaSkill(Skill):
                     continue
 
             if not precios:
-                return SkillResult.from_error("Los registros no contienen precios válidos")
+                return SkillResult.error(
+                    message="Los registros no contienen precios válidos",
+                    skill_name=self.name
+                )
 
             precios.sort()
             total = len(precios)
@@ -126,8 +149,15 @@ class ReportePreciosZonaSkill(Skill):
                     'reporte': reporte,
                     'registros_analizados': filtrados,
                 },
-                operation='reporte_precios_zona',
-                inputs=params
+                message=reporte,
+                metadata={
+                    'operation': 'reporte_precios_zona',
+                    'inputs': {'zona': zona, 'tipo_propiedad': tipo_propiedad},
+                },
+                skill_name=self.name
             )
         except Exception as e:
-            return SkillResult.from_error(str(e))
+            return SkillResult.error(
+                message=str(e),
+                skill_name=self.name
+            )

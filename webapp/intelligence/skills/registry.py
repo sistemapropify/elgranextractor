@@ -1,356 +1,451 @@
 """
-Skill Registry Dinámico.
+SkillRegistry — Registro central de skills.
 
-Sistema de registro y discovery automático de skills.
-Permite cargar skills dinámicamente desde paquetes y directorios.
+Singleton que mantiene el catálogo de skills disponibles.
+Responsabilidades:
+- register(skill): registra una skill al arrancar la aplicación
+- find_best_skill(intent, user_level): dada una intención, retorna la skill más adecuada
+- get_by_name(name): obtiene una skill específica por su identificador
+- list_available(user_level): lista todas las skills activas accesibles para ese nivel
+- deactivate(name) / activate(name): control operacional sin reiniciar
+
+Refactor B — SPEC: plans/spec_tecnica_propifai_intelligence.md
 """
+
 from __future__ import annotations
 
-import importlib
-import inspect
-import pkgutil
+import logging
 import re
-from typing import Dict, Any, List, Optional, Type
-from pathlib import Path
+from typing import Any, Dict, List, Optional, Type
+
+from django.conf import settings
+
+from .base import BaseSkill
+
+logger = logging.getLogger(__name__)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Palabras clave que indican intención de búsqueda de propiedades
+# ═══════════════════════════════════════════════════════════════════════════════
+# Refactor B1: Ampliado con términos faltantes que causaban falsos negativos
+# (ej: 'construir', 'colegio', 'local', 'oficina', 'comercial')
+# Refactor B2: Ahora es sobreescribible desde settings.PROPIEDADES_KEYWORDS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_KEYWORDS_PROPIEDADES_BASE = {
+    # Tipos de propiedad (ampliado)
+    'propiedad', 'propiedades', 'depa', 'depas', 'departamento', 'departamentos',
+    'casa', 'casas', 'terreno', 'terrenos', 'lote', 'lotes',
+    'inmueble', 'inmuebles', 'vivienda', 'viviendas',
+    'local', 'locales', 'oficina', 'oficinas', 'consultorio', 'consultorios',
+    'edificio', 'edificios', 'galpon', 'galpones', 'taller', 'talleres',
+    'cochera', 'cocheras', 'estacionamiento', 'estacionamientos',
+    'deposito', 'depositos', 'ambiente', 'ambientes',
+    'penthouse', 'duplex', 'loft', 'flat',
+
+    # Operaciones
+    'alquiler', 'alquilo', 'alquila', 'alquilan', 'arriendo', 'arriendo',
+    'vendo', 'vende', 'venden', 'venta', 'compro', 'compra', 'comprar',
+    'remate', 'remates', 'subasta', 'subastas', 'permuta', 'permuto',
+
+    # Consultas
+    'disponible', 'disponibles', 'cuanto', 'cuantos', 'cuantas', 'cuanta',
+    'precio', 'precios', 'costar', 'cuesta', 'cuestan', 'valor', 'valores',
+
+    # Características
+    'habitacion', 'habitaciones', 'cuarto', 'cuartos',
+    'dormitorio', 'dormitorios', 'recamara', 'recamaras',
+    'banio', 'banos', 'bano', 'banos', 'bano', 'bathroom',
+    'area', 'metros', 'm2', 'metros2', 'metros_cuadrados',
+    'piso', 'pisos', 'nivel', 'niveles', 'sotano', 'azotea',
+    'amplio', 'amplios', 'amplia', 'amplias',
+    'luminoso', 'luminosa', 'acogedor', 'acogedora',
+    'amoblado', 'amoblada', 'semiamoblado',
+
+    # Distritos de Arequipa (ampliado)
+    'cayma', 'yanahuara', 'cercado', 'miraflores', 'sachaca',
+    'cerro_colorado', 'cerrocolorado', 'mariano_melgar',
+    'jose_luis_bustamante', 'bustamante', 'rivero',
+    'paucarpata', 'socabaya', 'tiabaya', 'jacobo_hunter',
+    'alto_selva_alegre', 'selva_alegre', 'characato',
+    'sabandia', 'mollebaya', 'quebrada_honda',
+    'san_juana_de_siguas', 'santa_rita', 'santa_isabel',
+    'la_campina', 'la_joya', 'vitor', 'yura',
+
+    # Verbos de acción (ampliado)
+    'buscar', 'busca', 'busco', 'buscan', 'buscamos',
+    'quiero', 'quiere', 'queremos', 'necesito', 'necesita',
+    'mostrar', 'muestrame', 'muestrame', 'listar', 'lista',
+    'ver', 'mirar', 'conocer', 'ensena', 'ensename',
+    'recomendar', 'recomienda', 'sugerir', 'sugiere',
+    'filtrar', 'filtra', 'ordenar', 'ordena',
+
+    # Uso / propósito (NUEVOS — críticos para semántica)
+    'construir', 'construccion', 'construiria', 'construyo',
+    'colegio', 'colegios', 'educacion', 'escuela', 'escuelas',
+    'universidad', 'universidades', 'instituto', 'institutos',
+    'comercial', 'comercio', 'negocio', 'negocios',
+    'industria', 'industrial', 'fabrica', 'fabricas',
+    'vivienda', 'viviendas', 'residencial', 'habitacional',
+    'proyecto', 'proyectos', 'inversion', 'invertir',
+}
+
+# Exponer como variable pública (puede sobreescribirse desde settings)
+_KEYWORDS_PROPIEDADES = getattr(
+    settings, 'PROPIEDADES_KEYWORDS', _KEYWORDS_PROPIEDADES_BASE
+)
 
 
 class SkillRegistry:
     """
-    Registry dinámico de skills disponibles.
+    Registry central de skills. Implementación singleton.
 
-    Características:
-    - Discovery automático de skills en paquetes
-    - Metadata completa de skills
-    - Búsqueda semántica
-    - Versionado y hot-reload
-    - Validación de skills al registro
+    La selección de la mejor skill en find_best_skill() analiza la intención
+    del usuario usando:
+    1. Coincidencia de tokens con palabras clave del dominio
+    2. Coincidencia de tokens con la descripción de cada skill
+    3. Bonus por nombre de skill y categoría
+
+    Si la confianza es menor al umbral configurado, retorna None (RAG puro).
     """
 
-    def __init__(self):
-        self._skills: Dict[str, Skill] = {}
-        self._metadata: Dict[str, Dict[str, Any]] = {}
-        self._skill_classes: Dict[str, Type[Skill]] = {}
+    _instance: Optional['SkillRegistry'] = None
+    _skills: Dict[str, BaseSkill] = {}
+    _skill_classes: Dict[str, Type[BaseSkill]] = {}
 
-    def register_skill(self, skill_class: Type[Skill]) -> None:
+    # Umbral mínimo de confianza para selección semántica (0.0 - 1.0)
+    MIN_CONFIDENCE_THRESHOLD = 0.25
+
+    def __new__(cls) -> 'SkillRegistry':
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._skills = {}
+            cls._skill_classes = {}
+        return cls._instance
+
+    # ── Registro ─────────────────────────────────────────────────────────
+
+    def register(self, skill_class: Type[BaseSkill]) -> None:
         """
-        Registra una skill con validación completa.
+        Registra una skill en el catálogo.
 
         Args:
-            skill_class: Clase de la skill a registrar
+            skill_class: Clase que hereda de BaseSkill
 
         Raises:
-            ValueError: Si la skill no es válida
+            ValueError: Si la clase no es válida
         """
-        from ..services.skill_base import Skill
-        from ..services.metrics import log
+        if not issubclass(skill_class, BaseSkill):
+            raise ValueError(
+                f"{skill_class.__name__} no hereda de BaseSkill"
+            )
 
-        # Validar que es una subclase de Skill
-        if not inspect.isclass(skill_class) or not issubclass(skill_class, Skill):
-            raise ValueError(f"{skill_class} no es una subclase de Skill")
+        # Validar que name no esté vacío
+        if not skill_class.name:
+            raise ValueError(
+                f"Skill {skill_class.__name__} debe definir 'name'"
+            )
 
-        # Validar atributos requeridos
-        if not hasattr(skill_class, 'name') or not skill_class.name:
-            raise ValueError(f"Skill {skill_class.__name__} debe definir 'name'")
-
-        if not hasattr(skill_class, 'description') or not skill_class.description:
-            raise ValueError(f"Skill {skill_class.__name__} debe definir 'description'")
-
-        # Verificar que no existe ya
-        if skill_class.name in self._skills:
-            log.warning(f"Skill '{skill_class.name}' ya registrada, reemplazando")
-            # Podríamos permitir override o rechazar
-
-        # Crear instancia para validación
+        # Crear instancia
         try:
             skill_instance = skill_class()
         except Exception as e:
-            raise ValueError(f"No se pudo instanciar skill {skill_class.__name__}: {e}")
+            raise ValueError(
+                f"No se pudo instanciar skill '{skill_class.__name__}': {e}"
+            )
 
-        # Validar parámetros (solo estructura, no valores)
-        try:
-            self._validate_skill_structure(skill_instance)
-        except Exception as e:
-            raise ValueError(f"Estructura inválida en skill {skill_class.__name__}: {e}")
+        # Verificar que no exista ya (log warning pero reemplazar)
+        if skill_class.name in self._skills:
+            logger.warning(
+                f"Skill '{skill_class.name}' ya registrada. Reemplazando..."
+            )
 
-        # Registrar
         self._skills[skill_class.name] = skill_instance
         self._skill_classes[skill_class.name] = skill_class
-        self._metadata[skill_class.name] = self._extract_metadata(skill_class, skill_instance)
+        logger.info(
+            f"Skill registrada: '{skill_class.name}' "
+            f"(categoría: {skill_class.category}, nivel: {skill_class.access_level})"
+        )
 
-        log.info(f"Skill registrada: {skill_class.name}")
+    # ── Búsqueda ──────────────────────────────────────────────────────────
 
-    def discover_skills(self, package_path: str) -> int:
+    def find_best_skill(
+        self,
+        intent: str,
+        user_level: int = 1,
+        active_context: Optional[Dict[str, Any]] = None,
+    ) -> Optional[BaseSkill]:
         """
-        Descubre y registra skills automáticamente desde un paquete.
+        Dada una intención extraída por el LLM, retorna la skill más adecuada
+        que el usuario tiene permiso de usar.
+
+        Estrategia de matching:
+        1. Detectar si la intención contiene palabras clave del dominio (propiedades)
+        2. Si sí, calcular score contra skills de búsqueda
+        3. Si no, buscar en todas las skills por coincidencia de tokens
+        4. Si hay contexto activo, considerar mensajes de seguimiento (B4)
+
+        Refactor B3: Nuevo parámetro active_context para mejorar routing
+        cuando hay contexto conversacional activo.
+        Refactor B4: Detección de mensajes de seguimiento — si hay contexto
+        activo y el mensaje no tiene keywords propias, asumir que es
+        continuación de la búsqueda anterior.
 
         Args:
-            package_path: Path del paquete (ej: "intelligence.skills.examples")
+            intent: Texto de intención del usuario (ej: 'buscar depas en Cayma')
+            user_level: Nivel de acceso del usuario
+            active_context: Dict con contexto activo (opcional)
 
         Returns:
-            Número de skills registradas
+            Instancia de BaseSkill o None si no hay skill adecuada
         """
-        from ..services.metrics import log
-        from ..services.skill_base import Skill
+        if not intent or not intent.strip():
+            return None
 
-        registered_count = 0
+        intent_lower = intent.lower().strip()
 
-        try:
-            # Importar el paquete
-            package = importlib.import_module(package_path)
+        # Extraer tokens relevantes (>= 3 caracteres)
+        intent_tokens = set(
+            t for t in re.findall(r'\b\w{3,}\b', intent_lower)
+        )
 
-            # Iterar sobre módulos en el paquete
-            if hasattr(package, '__path__'):
-                for importer, modname, ispkg in pkgutil.iter_modules(package.__path__):
-                    full_modname = f"{package_path}.{modname}"
+        if not intent_tokens:
+            return None
 
-                    try:
-                        # Importar módulo
-                        module = importlib.import_module(full_modname)
+        # Detectar si la intención es sobre propiedades
+        es_consulta_propiedades = bool(
+            intent_tokens & _KEYWORDS_PROPIEDADES
+        )
 
-                        # Buscar clases de skills en el módulo
-                        for name, obj in inspect.getmembers(module):
-                            if (inspect.isclass(obj) and
-                                issubclass(obj, Skill) and
-                                obj != Skill):  # No registrar la clase base
+        # ── B4: Detección de mensajes de seguimiento ──────────────────────
+        # Si hay contexto activo pero el mensaje NO contiene keywords de
+        # propiedades, puede ser un mensaje de seguimiento (ej: "solo
+        # departamentos", "y en cayma", "muestrame").
+        # En ese caso, forzamos busqueda_propiedades.
+        es_seguimiento = False
+        if (
+            active_context
+            and not es_consulta_propiedades
+        ):
+            # Palabras que indican seguimiento/refinamiento
+            _PALABRAS_SEGUIMIENTO = {
+                'solo', 'solamente', 'unicamente', 'tambien',
+                'y', 'pero', 'entonces', 'ahora',
+                'muestrame', 'listame', 'dime', 'ensename',
+                'cuales', 'cuales', 'cuantas', 'cuantos',
+                'refinar', 'filtra', 'filtrar',
+            }
+            if intent_tokens & _PALABRAS_SEGUIMIENTO:
+                es_seguimiento = True
+                logger.debug(
+                    f"[find_best_skill] Mensaje de seguimiento detectado: "
+                    f"'{intent}' (contexto activo presente)"
+                )
 
-                                try:
-                                    self.register_skill(obj)
-                                    registered_count += 1
-                                except ValueError as e:
-                                    log.warning(f"Error registrando skill {name}: {e}")
+        best_skill = None
+        best_score = 0.0
 
-                    except ImportError as e:
-                        log.warning(f"Error importando módulo {full_modname}: {e}")
-
-        except ImportError as e:
-            log.error(f"Error importando paquete {package_path}: {e}")
-
-        log.info(f"Discovery completado: {registered_count} skills registradas desde {package_path}")
-        return registered_count
-
-    def discover_skills_from_directory(self, directory_path: str) -> int:
-        """
-        Descubre skills desde un directorio de archivos Python.
-
-        Args:
-            directory_path: Path absoluto del directorio
-
-        Returns:
-            Número de skills registradas
-        """
-        from ..services.metrics import log
-        from ..services.skill_base import Skill
-
-        registered_count = 0
-        directory = Path(directory_path)
-
-        if not directory.exists() or not directory.is_dir():
-            log.error(f"Directorio no existe: {directory_path}")
-            return 0
-
-        # Buscar archivos .py
-        for py_file in directory.glob("*.py"):
-            if py_file.name.startswith("__"):
+        for name, skill in self._skills.items():
+            # Verificar acceso del usuario
+            if not skill.can_user_access(user_level):
                 continue
 
-            try:
-                # Importar como módulo
-                spec = importlib.util.spec_from_file_location(py_file.stem, py_file)
-                if spec and spec.loader:
-                    module = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(module)
+            desc_lower = skill.description.lower()
+            desc_tokens = set(
+                t for t in re.findall(r'\b\w{3,}\b', desc_lower)
+            )
 
-                    # Buscar skills en el módulo
-                    for name, obj in inspect.getmembers(module):
-                        if (inspect.isclass(obj) and
-                            issubclass(obj, Skill) and
-                            obj != Skill):
+            if not desc_tokens:
+                continue
 
-                            try:
-                                self.register_skill(obj)
-                                registered_count += 1
-                            except ValueError as e:
-                                log.warning(f"Error registrando skill {name}: {e}")
+            score = 0.0
 
-            except Exception as e:
-                log.warning(f"Error procesando archivo {py_file}: {e}")
+            # ── B4: Si es seguimiento, dar bonus fuerte a busqueda_propiedades ──
+            if es_seguimiento and name == 'busqueda_propiedades':
+                score = 0.6  # Score alto directo para seguimiento
+            # Si es consulta de propiedades y la skill es de búsqueda
+            elif es_consulta_propiedades and skill.category == 'busqueda':
+                # Score base por ser la skill correcta para el dominio
+                score = 0.3
 
-        log.info(f"Discovery desde directorio completado: {registered_count} skills desde {directory_path}")
-        return registered_count
+                # Coincidencia de tokens con la descripción
+                common = intent_tokens & desc_tokens
+                if common:
+                    # Proporción de tokens de la intención que están en la descripción
+                    score += len(common) / len(intent_tokens) * 0.5
 
-    def get_skill(self, name: str) -> Optional[Skill]:
+                # Bonus si el nombre de la skill está en la intención
+                if name in intent_lower:
+                    score += 0.2
+
+            else:
+                # Para otras skills, matching general de tokens
+                common = intent_tokens & desc_tokens
+                if common:
+                    score = len(common) / len(intent_tokens)
+
+                    # Bonus por nombre
+                    if name in intent_lower:
+                        score += 0.2
+
+                    # Bonus por categoría
+                    if skill.category in intent_lower:
+                        score += 0.1
+
+            if score > best_score:
+                best_score = score
+                best_skill = skill
+
+        # Solo retornar si supera el umbral
+        if best_score >= self.MIN_CONFIDENCE_THRESHOLD:
+            logger.debug(
+                f"Skill seleccionada: '{best_skill.name}' "
+                f"(score: {best_score:.2f}, umbral: {self.MIN_CONFIDENCE_THRESHOLD})"
+            )
+            return best_skill
+
+        logger.debug(
+            f"Ninguna skill superó el umbral de confianza "
+            f"(mejor score: {best_score:.2f}, umbral: {self.MIN_CONFIDENCE_THRESHOLD})"
+        )
+        return None
+
+    def get_by_name(self, name: str) -> Optional[BaseSkill]:
         """
-        Obtiene instancia de skill por nombre.
+        Obtiene una skill por su identificador único.
 
         Args:
-            name: Nombre de la skill
+            name: Nombre de la skill (snake_case)
 
         Returns:
-            Instancia de skill o None si no existe
+            Instancia de BaseSkill o None si no existe
         """
         return self._skills.get(name)
 
-    def get_skill_class(self, name: str) -> Optional[Type[Skill]]:
+    # ── Listado ───────────────────────────────────────────────────────────
+
+    def list_available(self, user_level: int = 1) -> List[Dict[str, Any]]:
         """
-        Obtiene clase de skill por nombre.
+        Lista todas las skills activas accesibles para un nivel de usuario.
 
         Args:
-            name: Nombre de la skill
+            user_level: Nivel de acceso del usuario
 
         Returns:
-            Clase de skill o None si no existe
+            Lista de schemas de skills disponibles
         """
-        return self._skill_classes.get(name)
+        return [
+            skill.get_schema()
+            for skill in self._skills.values()
+            if skill.can_user_access(user_level)
+        ]
 
-    def get_skill_info(self, name: str) -> Optional[Dict[str, Any]]:
+    def list_all(self) -> List[Dict[str, Any]]:
+        """Lista todas las skills registradas (activas e inactivas)."""
+        return [
+            skill.get_schema()
+            for skill in self._skills.values()
+        ]
+
+    # ── Compatibilidad hacia atrás ─────────────────────────────────────────
+
+    def list_skills(self) -> Dict[str, Dict[str, Any]]:
         """
-        Obtiene información completa de una skill.
-
-        Args:
-            name: Nombre de la skill
-
-        Returns:
-            Dict con metadata o None si no existe
+        Alias de compatibilidad para el viejo SkillRegistry.
+        Retorna dict {skill_name: schema_dict} para mantener compatibilidad
+        con orchestrator.py y vistas que usan la API antigua.
         """
-        return self._metadata.get(name)
+        return {
+            schema['name']: schema
+            for schema in self.list_all()
+        }
 
-    def list_skills(self) -> List[Dict[str, Any]]:
+    def discover_skills(self, *args, **kwargs) -> None:
         """
-        Lista todas las skills registradas con metadata.
-
-        Returns:
-            Lista de dicts con información de skills
+        No-op de compatibilidad. El nuevo SkillRegistry requiere registro
+        explícito via register() en lugar de auto-descubrimiento.
         """
-        return list(self._metadata.values())
+        logger.debug(
+            "discover_skills() llamado pero es no-op en el nuevo SkillRegistry. "
+            "Usar register() explícitamente."
+        )
 
     def search_skills(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
         """
-        Búsqueda semántica de skills por descripción.
+        Busca skills por coincidencia en nombre/descripción.
+        Compatibilidad con el sistema de skills anterior.
 
         Args:
-            query: Texto a buscar
-            limit: Máximo número de resultados
+            query: Texto de búsqueda
+            limit: Máximo de resultados a retornar
 
         Returns:
-            Lista de skills que coinciden
+            Lista de schemas de skills que coinciden
         """
-        query_lower = query.lower()
-        query_tokens = re.findall(r"\b[\wáéíóúñü]+\b", query_lower)
-        matches = []
+        query_lower = query.lower().strip()
+        results = []
+        for skill in self._skills.values():
+            if query_lower in skill.name.lower() or query_lower in skill.description.lower():
+                results.append(skill.get_schema())
+        return results[:limit]
 
-        for metadata in self._metadata.values():
-            description = metadata.get('description', '').lower()
-            name = metadata.get('name', '').lower()
+    # ── Control operacional ───────────────────────────────────────────────
 
-            if query_lower in description or query_lower in name:
-                matches.append(metadata)
-                continue
-
-            if any(
-                token in description or token in name
-                for token in query_tokens
-                if len(token) >= 3
-            ):
-                matches.append(metadata)
-
-        # Ordenar por relevancia (más coincidencias primero)
-        matches.sort(key=lambda x: (
-            query_lower in x.get('name', '').lower(),
-            len(x.get('description', ''))
-        ), reverse=True)
-
-        return matches[:limit]
-
-    def unregister_skill(self, name: str) -> bool:
+    def deactivate(self, name: str) -> bool:
         """
-        Remueve una skill del registry.
+        Desactiva una skill sin eliminarla del registro.
 
         Args:
             name: Nombre de la skill
 
         Returns:
-            True si se removió, False si no existía
+            True si se desactivó, False si no existe
         """
-        if name in self._skills:
-            del self._skills[name]
-            del self._skill_classes[name]
-            del self._metadata[name]
-            log.info(f"Skill removida: {name}")
+        skill = self._skills.get(name)
+        if skill:
+            skill.is_active = False
+            logger.info(f"Skill desactivada: '{name}'")
             return True
         return False
 
-    def reload_skill(self, name: str) -> bool:
+    def activate(self, name: str) -> bool:
         """
-        Recarga una skill (útil para desarrollo).
+        Reactiva una skill desactivada.
 
         Args:
             name: Nombre de la skill
 
         Returns:
-            True si se recargó exitosamente
+            True si se activó, False si no existe
         """
-        skill_class = self._skill_classes.get(name)
-        if not skill_class:
-            return False
-
-        try:
-            # Re-registrar (esto reemplaza la instancia)
-            self.register_skill(skill_class)
-            log.info(f"Skill recargada: {name}")
+        skill = self._skills.get(name)
+        if skill:
+            skill.is_active = True
+            logger.info(f"Skill activada: '{name}'")
             return True
-        except Exception as e:
-            log.error(f"Error recargando skill {name}: {e}")
-            return False
+        return False
+
+    # ── Estadísticas ──────────────────────────────────────────────────────
 
     def get_stats(self) -> Dict[str, Any]:
-        """
-        Estadísticas del registry.
+        """Retorna estadísticas del registry."""
+        total = len(self._skills)
+        activas = sum(1 for s in self._skills.values() if s.is_active)
+        por_categoria: Dict[str, int] = {}
+        for s in self._skills.values():
+            por_categoria[s.category] = por_categoria.get(s.category, 0) + 1
 
-        Returns:
-            Dict con estadísticas
-        """
         return {
-            'total_skills': len(self._skills),
-            'skill_names': list(self._skills.keys()),
-            'skills_by_category': self._count_by_category(),
+            'total': total,
+            'activas': activas,
+            'inactivas': total - activas,
+            'por_categoria': por_categoria,
+            'skills': list(self._skills.keys()),
         }
 
-    def _extract_metadata(self, skill_class: Type[Skill], skill_instance: Skill) -> Dict[str, Any]:
-        """Extrae metadata completa de una skill."""
-        return {
-            'name': skill_class.name,
-            'description': skill_class.description,
-            'class_name': skill_class.__name__,
-            'module': skill_class.__module__,
-            'parameters': skill_instance.get_parameter_schema(),
-            'required_permissions': getattr(skill_class, 'required_permissions', []),
-            'cacheable': getattr(skill_class, 'cacheable', True),
-            'cache_ttl': getattr(skill_class, 'cache_ttl', 3600),
-            'version': getattr(skill_class, 'version', '1.0'),
-            'author': getattr(skill_class, 'author', 'Unknown'),
-            'tags': getattr(skill_class, 'tags', []),
-            'category': getattr(skill_class, 'category', 'general'),
-        }
-
-    def _validate_skill_structure(self, skill_instance: Skill) -> None:
-        """Valida la estructura básica de una skill sin requerir parámetros."""
-        # Verificar que tiene parámetros definidos
-        if not hasattr(skill_instance, 'parameters'):
-            raise ValueError("Skill debe definir 'parameters'")
-
-        if not isinstance(skill_instance.parameters, dict):
-            raise ValueError("'parameters' debe ser un dict")
-
-        # Verificar que cada parámetro tiene la estructura correcta
-        for param_name, param_def in skill_instance.parameters.items():
-            if not hasattr(param_def, 'name') or param_def.name != param_name:
-                raise ValueError(f"Parámetro {param_name}: 'name' debe coincidir")
-
-            if not hasattr(param_def, 'type') or not param_def.type:
-                raise ValueError(f"Parámetro {param_name}: debe definir 'type'")
-
-            if not hasattr(param_def, 'description') or not param_def.description:
-                raise ValueError(f"Parámetro {param_name}: debe definir 'description'")
-
-            if not hasattr(param_def, 'required'):
-                raise ValueError(f"Parámetro {param_name}: debe definir 'required'")
+    def clear(self) -> None:
+        """Limpia todas las skills registradas (útil para tests)."""
+        self._skills.clear()
+        self._skill_classes.clear()
+        logger.info("SkillRegistry limpiado")

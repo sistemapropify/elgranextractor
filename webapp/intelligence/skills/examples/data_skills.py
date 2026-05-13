@@ -4,46 +4,52 @@ Skills de análisis de datos.
 Incluye procesamiento de datos, filtros y transformaciones.
 """
 import re
-from typing import List, Dict, Any, Union
+from typing import List, Dict, Any, Union, Optional
 from collections import Counter
 
-from ...services.skill_base import Skill, SkillParameter, SkillResult
+from ..base import BaseSkill, SkillResult
 
 
-class ContarPalabrasSkill(Skill):
+class ContarPalabrasSkill(BaseSkill):
     """Skill para contar palabras en un texto."""
 
     name = "contar_palabras"
     description = "Cuenta la frecuencia de palabras en un texto"
-    parameters = {
-        'texto': SkillParameter(
-            name='texto',
-            type='str',
-            description='Texto del que contar palabras',
-            required=True
-        ),
-        'ignorar_case': SkillParameter(
-            name='ignorar_case',
-            type='bool',
-            description='Si ignorar mayúsculas/minúsculas',
-            required=False,
-            default=True
-        ),
-        'top_n': SkillParameter(
-            name='top_n',
-            type='int',
-            description='Número de palabras más frecuentes a retornar (0 = todas)',
-            required=False,
-            default=10
-        ),
+    category = "ejemplos"
+    access_level = 1
+    is_active = True
+
+    parameters_schema = {
+        'texto': {
+            'type': 'string',
+            'description': 'Texto del que contar palabras',
+            'required': True,
+        },
+        'ignorar_case': {
+            'type': 'boolean',
+            'description': 'Si ignorar mayúsculas/minúsculas',
+            'required': False,
+            'default': True,
+        },
+        'top_n': {
+            'type': 'integer',
+            'description': 'Número de palabras más frecuentes a retornar (0 = todas)',
+            'required': False,
+            'default': 10,
+        },
     }
 
-    def execute(self, **kwargs) -> SkillResult:
+    def validate_params(self, params: Dict[str, Any]) -> bool:
+        return 'texto' in params
+
+    def execute(self, params: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> SkillResult:
         try:
-            params = self.validate_params(**kwargs)
+            if not self.validate_params(params):
+                return SkillResult.error("El parámetro 'texto' es requerido")
+
             texto = params['texto']
-            ignorar_case = params['ignorar_case']
-            top_n = params['top_n']
+            ignorar_case = params.get('ignorar_case', True)
+            top_n = params.get('top_n', 10)
 
             # Procesar texto
             if ignorar_case:
@@ -53,7 +59,7 @@ class ContarPalabrasSkill(Skill):
             palabras = re.findall(r'\b\w+\b', texto)
 
             if not palabras:
-                return SkillResult.from_error("No se encontraron palabras en el texto")
+                return SkillResult.error("No se encontraron palabras en el texto")
 
             # Contar frecuencia
             contador = Counter(palabras)
@@ -74,59 +80,71 @@ class ContarPalabrasSkill(Skill):
 
             return SkillResult.ok(
                 data=resultado,
-                operation='contar_palabras',
-                inputs={
-                    'longitud_texto': len(texto),
-                    'ignorar_case': ignorar_case,
-                    'top_n': top_n
-                }
+                message="Conteo de palabras realizado correctamente",
+                metadata={
+                    'operation': 'contar_palabras',
+                    'inputs': {
+                        'longitud_texto': len(texto),
+                        'ignorar_case': ignorar_case,
+                        'top_n': top_n,
+                    },
+                },
+                skill_name=self.name,
             )
 
         except Exception as e:
-            return SkillResult.from_error(str(e))
+            return SkillResult.error(str(e))
 
 
-class FiltrarListaSkill(Skill):
+class FiltrarListaSkill(BaseSkill):
     """Skill para filtrar elementos de una lista."""
 
     name = "filtrar_lista"
     description = "Filtra elementos de una lista según criterios"
-    parameters = {
-        'lista': SkillParameter(
-            name='lista',
-            type='list',
-            description='Lista a filtrar',
-            required=True
-        ),
-        'criterio': SkillParameter(
-            name='criterio',
-            type='str',
-            description='Criterio de filtro: "mayor_que", "menor_que", "igual_a", "contiene", "empieza_con", "termina_con"',
-            required=True,
-            options=['mayor_que', 'menor_que', 'igual_a', 'contiene', 'empieza_con', 'termina_con']
-        ),
-        'valor': SkillParameter(
-            name='valor',
-            type='str',
-            description='Valor para comparar (se convierte al tipo apropiado)',
-            required=True
-        ),
+    category = "ejemplos"
+    access_level = 1
+    is_active = True
+
+    parameters_schema = {
+        'lista': {
+            'type': 'list',
+            'description': 'Lista a filtrar',
+            'required': True,
+        },
+        'criterio': {
+            'type': 'string',
+            'description': 'Criterio de filtro: "mayor_que", "menor_que", "igual_a", "contiene", "empieza_con", "termina_con"',
+            'required': True,
+            'options': ['mayor_que', 'menor_que', 'igual_a', 'contiene', 'empieza_con', 'termina_con'],
+        },
+        'valor': {
+            'type': 'string',
+            'description': 'Valor para comparar (se convierte al tipo apropiado)',
+            'required': True,
+        },
     }
 
-    def execute(self, **kwargs) -> SkillResult:
+    def validate_params(self, params: Dict[str, Any]) -> bool:
+        return 'lista' in params and 'criterio' in params and 'valor' in params
+
+    def execute(self, params: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> SkillResult:
         try:
-            params = self.validate_params(**kwargs)
+            if not self.validate_params(params):
+                return SkillResult.error("Parámetros 'lista', 'criterio' y 'valor' son requeridos")
+
             lista = params['lista']
             criterio = params['criterio']
             valor_str = params['valor']
 
             if not isinstance(lista, list):
-                return SkillResult.from_error("El parámetro 'lista' debe ser una lista")
+                return SkillResult.error("El parámetro 'lista' debe ser una lista")
 
             if not lista:
                 return SkillResult.ok(
                     data={'filtrados': [], 'total_original': 0, 'total_filtrados': 0},
-                    operation='filtrar_lista'
+                    message="Lista vacía, sin elementos para filtrar",
+                    metadata={'operation': 'filtrar_lista'},
+                    skill_name=self.name,
                 )
 
             # Intentar convertir valor al tipo apropiado
@@ -147,16 +165,20 @@ class FiltrarListaSkill(Skill):
 
             return SkillResult.ok(
                 data=resultado,
-                operation='filtrar_lista',
-                inputs={
-                    'criterio': criterio,
-                    'valor': valor_str,
-                    'tipo_valor': type(valor).__name__
-                }
+                message=f"Filtro '{criterio}' aplicado correctamente",
+                metadata={
+                    'operation': 'filtrar_lista',
+                    'inputs': {
+                        'criterio': criterio,
+                        'valor': valor_str,
+                        'tipo_valor': type(valor).__name__,
+                    },
+                },
+                skill_name=self.name,
             )
 
         except Exception as e:
-            return SkillResult.from_error(str(e))
+            return SkillResult.error(str(e))
 
     def _convertir_valor(self, valor_str: str, ejemplo_item: Any) -> Any:
         """Convierte el valor string al tipo apropiado basado en el ejemplo."""
@@ -197,50 +219,58 @@ class FiltrarListaSkill(Skill):
             return False
 
 
-class OrdenarListaSkill(Skill):
+class OrdenarListaSkill(BaseSkill):
     """Skill para ordenar una lista."""
 
     name = "ordenar_lista"
     description = "Ordena una lista en orden ascendente o descendente"
-    parameters = {
-        'lista': SkillParameter(
-            name='lista',
-            type='list',
-            description='Lista a ordenar',
-            required=True
-        ),
-        'orden': SkillParameter(
-            name='orden',
-            type='str',
-            description='Orden: "ascendente" o "descendente"',
-            required=False,
-            default='ascendente',
-            options=['ascendente', 'descendente']
-        ),
-        'tipo_dato': SkillParameter(
-            name='tipo_dato',
-            type='str',
-            description='Tipo de dato para comparación: "auto", "str", "int", "float"',
-            required=False,
-            default='auto',
-            options=['auto', 'str', 'int', 'float']
-        ),
+    category = "ejemplos"
+    access_level = 1
+    is_active = True
+
+    parameters_schema = {
+        'lista': {
+            'type': 'list',
+            'description': 'Lista a ordenar',
+            'required': True,
+        },
+        'orden': {
+            'type': 'string',
+            'description': 'Orden: "ascendente" o "descendente"',
+            'required': False,
+            'default': 'ascendente',
+            'options': ['ascendente', 'descendente'],
+        },
+        'tipo_dato': {
+            'type': 'string',
+            'description': 'Tipo de dato para comparación: "auto", "str", "int", "float"',
+            'required': False,
+            'default': 'auto',
+            'options': ['auto', 'str', 'int', 'float'],
+        },
     }
 
-    def execute(self, **kwargs) -> SkillResult:
+    def validate_params(self, params: Dict[str, Any]) -> bool:
+        return 'lista' in params
+
+    def execute(self, params: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> SkillResult:
         try:
-            params = self.validate_params(**kwargs)
+            if not self.validate_params(params):
+                return SkillResult.error("El parámetro 'lista' es requerido")
+
             lista = params['lista']
-            orden = params['orden']
-            tipo_dato = params['tipo_dato']
+            orden = params.get('orden', 'ascendente')
+            tipo_dato = params.get('tipo_dato', 'auto')
 
             if not isinstance(lista, list):
-                return SkillResult.from_error("El parámetro 'lista' debe ser una lista")
+                return SkillResult.error("El parámetro 'lista' debe ser una lista")
 
             if not lista:
                 return SkillResult.ok(
                     data={'ordenada': [], 'total_elementos': 0},
-                    operation='ordenar_lista'
+                    message="Lista vacía, sin elementos para ordenar",
+                    metadata={'operation': 'ordenar_lista'},
+                    skill_name=self.name,
                 )
 
             # Convertir tipos si es necesario
@@ -263,12 +293,13 @@ class OrdenarListaSkill(Skill):
 
             return SkillResult.ok(
                 data=resultado,
-                operation='ordenar_lista',
-                inputs=params
+                message=f"Lista ordenada en orden {orden}",
+                metadata={'operation': 'ordenar_lista', 'inputs': params},
+                skill_name=self.name,
             )
 
         except Exception as e:
-            return SkillResult.from_error(str(e))
+            return SkillResult.error(str(e))
 
     def _convertir_tipos(self, lista: List[Any], tipo_dato: str) -> List[Any]:
         """Convierte los elementos de la lista al tipo especificado."""
@@ -284,50 +315,56 @@ class OrdenarListaSkill(Skill):
         return [convert_func(item) for item in lista]
 
 
-class ResumirTextoSkill(Skill):
+class ResumirTextoSkill(BaseSkill):
     """Skill para crear un resumen simple de un texto."""
 
     name = "resumir_texto"
     description = "Crea un resumen simple de un texto basado en las oraciones más importantes"
-    parameters = {
-        'texto': SkillParameter(
-            name='texto',
-            type='str',
-            description='Texto a resumir',
-            required=True
-        ),
-        'max_oraciones': SkillParameter(
-            name='max_oraciones',
-            type='int',
-            description='Máximo número de oraciones en el resumen',
-            required=False,
-            default=3
-        ),
-        'longitud_minima': SkillParameter(
-            name='longitud_minima',
-            type='int',
-            description='Longitud mínima de oraciones a incluir',
-            required=False,
-            default=20
-        ),
+    category = "ejemplos"
+    access_level = 1
+    is_active = True
+
+    parameters_schema = {
+        'texto': {
+            'type': 'string',
+            'description': 'Texto a resumir',
+            'required': True,
+        },
+        'max_oraciones': {
+            'type': 'integer',
+            'description': 'Máximo número de oraciones en el resumen',
+            'required': False,
+            'default': 3,
+        },
+        'longitud_minima': {
+            'type': 'integer',
+            'description': 'Longitud mínima de oraciones a incluir',
+            'required': False,
+            'default': 20,
+        },
     }
 
-    def execute(self, **kwargs) -> SkillResult:
+    def validate_params(self, params: Dict[str, Any]) -> bool:
+        return 'texto' in params
+
+    def execute(self, params: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> SkillResult:
         try:
-            params = self.validate_params(**kwargs)
+            if not self.validate_params(params):
+                return SkillResult.error("El parámetro 'texto' es requerido")
+
             texto = params['texto']
-            max_oraciones = params['max_oraciones']
-            longitud_minima = params['longitud_minima']
+            max_oraciones = params.get('max_oraciones', 3)
+            longitud_minima = params.get('longitud_minima', 20)
 
             if not texto.strip():
-                return SkillResult.from_error("El texto no puede estar vacío")
+                return SkillResult.error("El texto no puede estar vacío")
 
             # Dividir en oraciones
             oraciones = re.split(r'[.!?]+', texto)
             oraciones = [s.strip() for s in oraciones if s.strip()]
 
             if not oraciones:
-                return SkillResult.from_error("No se pudieron identificar oraciones en el texto")
+                return SkillResult.error("No se pudieron identificar oraciones en el texto")
 
             # Filtrar oraciones por longitud
             oraciones_filtradas = [s for s in oraciones if len(s) >= longitud_minima]
@@ -353,12 +390,16 @@ class ResumirTextoSkill(Skill):
 
             return SkillResult.ok(
                 data=resultado,
-                operation='resumir_texto',
-                inputs={
-                    'max_oraciones': max_oraciones,
-                    'longitud_minima': longitud_minima
-                }
+                message="Resumen generado correctamente",
+                metadata={
+                    'operation': 'resumir_texto',
+                    'inputs': {
+                        'max_oraciones': max_oraciones,
+                        'longitud_minima': longitud_minima,
+                    },
+                },
+                skill_name=self.name,
             )
 
         except Exception as e:
-            return SkillResult.from_error(str(e))
+            return SkillResult.error(str(e))

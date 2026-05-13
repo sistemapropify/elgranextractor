@@ -381,6 +381,14 @@ class IntelligenceCollection(models.Model):
         verbose_name="Relaciones entre tablas",
         help_text="Lista de relaciones FK para resolver durante sync: [{'foreign_key_field': 'district_fk_id', 'referenced_table': 'districts', 'referenced_display_fields': ['name'], 'label': 'Distrito'}]"
     )
+    semantic_tags = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name="Etiquetas semánticas",
+        help_text="Lista de etiquetas semánticas que describen el contenido de la colección. "
+                  "Se inyectan en el embedding durante sync para mejorar búsquedas conceptuales. "
+                  "Ej: ['terreno', 'construccion', 'educacion', 'comercial', 'vivienda']"
+    )
     database_alias = models.CharField(
         max_length=50,
         default='default',

@@ -797,14 +797,13 @@ class TestSkillBase(TestCase):
     """Verifica que el framework de skills funciona correctamente."""
 
     def setUp(self):
-        from intelligence.services.skill_base import (
-            Skill, SkillResult, SkillParameter, SkillRegistry, ExampleSkill
-        )
+        from intelligence.skills.base import SkillResult
+        from intelligence.skills.base import BaseSkill as Skill
         self.Skill = Skill
         self.SkillResult = SkillResult
-        self.SkillParameter = SkillParameter
-        self.SkillRegistry = SkillRegistry
-        self.ExampleSkill = ExampleSkill
+        self.SkillParameter = None  # Deprecado - usar dict en parameters_schema
+        self.SkillRegistry = None   # Deprecado - usar skills.registry.SkillRegistry
+        self.ExampleSkill = None    # Deprecado - usar skills.examples.math_skills
 
     def test_skill_result_ok(self):
         """SkillResult.ok debe crear resultado exitoso."""

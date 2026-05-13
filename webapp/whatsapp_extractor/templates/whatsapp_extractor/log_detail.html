@@ -14,7 +14,7 @@
         --we-bg-secondary: #161b22;
         --we-bg-tertiary: #21262d;
         --we-border: #30363d;
-        --we-text-primary: #f0f6fc;
+        --we-text-primary: #c9d1d9;
         --we-text-secondary: #8b949e;
         --we-accent: #58a6ff;
         --we-accent-hover: #1f6feb;
@@ -27,9 +27,15 @@
         --we-purple: #8957e5;
         --we-cyan: #39d2c0;
         --we-radius: 8px;
+        --we-radius-sm: 6px;
         --we-transition: all 0.2s ease;
     }
-    .we-container { max-width: 1000px; margin: 0 auto; }
+
+    .we-container {
+        max-width: 1000px;
+        margin: 0 auto;
+    }
+
     .we-header {
         display: flex;
         justify-content: space-between;
@@ -37,26 +43,34 @@
         margin-bottom: 24px;
         flex-wrap: wrap;
         gap: 12px;
+        padding: 16px 20px;
+        border-radius: var(--we-radius);
+        border: 1px solid var(--we-border);
+        background: var(--we-bg-secondary);
     }
     .we-header h2 { margin: 0; font-size: 20px; font-weight: 600; color: var(--we-text-primary); }
     .we-header-actions { display: flex; align-items: center; gap: 12px; }
+
     .we-card {
-        background: var(--we-bg-secondary);
+        background: #161b22;
         border: 1px solid var(--we-border);
         border-radius: var(--we-radius);
         margin-bottom: 16px;
     }
+
     .we-card-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
         padding: 14px 20px;
         border-bottom: 1px solid var(--we-border);
+        background: #21262d;
     }
     .we-card-title { margin: 0; font-size: 15px; font-weight: 600; color: var(--we-text-primary); }
     .we-card-body { padding: 20px; }
     .we-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
     @media (max-width: 768px) { .we-grid-2 { grid-template-columns: 1fr; } }
+
     .we-badge {
         display: inline-flex;
         align-items: center;
@@ -66,10 +80,13 @@
         font-weight: 500;
         gap: 4px;
     }
-    .we-badge-green { background: var(--we-green-bg); color: var(--we-green); border: 1px solid rgba(35, 134, 54, 0.3); }
-    .we-badge-red { background: var(--we-red-bg); color: var(--we-red); border: 1px solid rgba(218, 54, 51, 0.3); }
-    .we-badge-blue { background: rgba(88, 166, 255, 0.15); color: var(--we-accent); border: 1px solid rgba(88, 166, 255, 0.3); }
-    .we-badge-gray { background: rgba(139, 148, 158, 0.15); color: var(--we-text-secondary); border: 1px solid rgba(139, 148, 158, 0.3); }
+    .we-badge-green { background: rgba(35,134,54,0.15); color: var(--we-green); border: 1px solid rgba(35, 134, 54, 0.3); }
+    .we-badge-red { background: rgba(218,54,51,0.15); color: var(--we-red); border: 1px solid rgba(218, 54, 51, 0.3); }
+    .we-badge-blue { background: rgba(88,166,255,0.15); color: var(--we-accent); border: 1px solid rgba(88, 166, 255, 0.3); }
+    .we-badge-gray { background: rgba(139,148,158,0.15); color: var(--we-text-secondary); border: 1px solid rgba(139, 148, 158, 0.3); }
+    .we-badge-info { background: rgba(88,166,255,0.12); color: var(--we-accent); border: 1px solid rgba(88, 166, 255, 0.25); }
+    .we-badge-warning { background: rgba(187,128,9,0.15); color: var(--we-orange); border: 1px solid rgba(187, 128, 9, 0.3); }
+
     .we-btn {
         display: inline-flex;
         align-items: center;
@@ -79,17 +96,24 @@
         font-size: 13px;
         font-weight: 500;
         color: var(--we-text-primary);
-        background: var(--we-bg-tertiary);
+        background: #21262d;
         border: 1px solid var(--we-border);
         cursor: pointer;
         text-decoration: none;
-        transition: var(--we-transition);
     }
-    .we-btn:hover { background: rgba(255,255,255,0.05); border-color: var(--we-text-secondary); color: var(--we-text-primary); }
+    .we-btn:hover {
+        background: #30363d;
+        border-color: var(--we-text-secondary);
+        color: var(--we-text-primary);
+    }
+    .we-btn-sm { padding: 4px 10px; font-size: 12px; }
+
     .we-text-small { font-size: 12px; color: var(--we-text-secondary); }
     .we-text-mono { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; }
+    .we-text-muted { color: var(--we-text-secondary); font-size: 12px; }
     .we-link { color: var(--we-accent); text-decoration: none; font-weight: 500; }
     .we-link:hover { color: var(--we-accent-hover); text-decoration: underline; }
+
     .we-detail-row {
         display: flex;
         justify-content: space-between;
@@ -99,10 +123,11 @@
     .we-detail-row:last-child { border-bottom: none; }
     .we-detail-label { font-size: 13px; color: var(--we-text-secondary); }
     .we-detail-value { font-size: 14px; color: var(--we-text-primary); font-weight: 500; }
+
     .we-error-box {
-        background: var(--we-red-bg);
+        background: rgba(218, 54, 51, 0.1);
         border: 1px solid rgba(218, 54, 51, 0.3);
-        border-radius: 6px;
+        border-radius: var(--we-radius-sm);
         padding: 16px;
         margin-top: 16px;
     }
@@ -113,18 +138,19 @@
         white-space: pre-wrap;
         font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
     }
+
     .we-table {
         width: 100%;
         border-collapse: collapse;
         font-size: 12px;
     }
     .we-table th {
-        background: var(--we-bg-tertiary);
+        background: #21262d;
         color: var(--we-text-secondary);
         font-weight: 600;
         text-align: left;
         padding: 8px 10px;
-        border-bottom: 1px solid var(--we-border);
+        border-bottom: 2px solid var(--we-border);
         white-space: nowrap;
         position: sticky;
         top: 0;
@@ -136,17 +162,20 @@
         color: var(--we-text-primary);
         vertical-align: top;
     }
-    .we-table tr:hover td {
-        background: rgba(255,255,255,0.02);
+    .we-table tbody tr:hover td {
+        background: rgba(88, 166, 255, 0.04);
     }
     .we-table-wrapper {
         overflow-x: auto;
         max-height: 600px;
         overflow-y: auto;
     }
-    .we-table-wrapper table {
-        min-width: 2000px;
-    }
+    .we-table-wrapper::-webkit-scrollbar { width: 6px; height: 6px; }
+    .we-table-wrapper::-webkit-scrollbar-track { background: var(--we-bg); }
+    .we-table-wrapper::-webkit-scrollbar-thumb { background: var(--we-border); border-radius: 3px; }
+    .we-table-wrapper::-webkit-scrollbar-thumb:hover { background: #3d444d; }
+    .we-table-wrapper table { min-width: 2000px; }
+
     .we-pagination {
         display: flex;
         justify-content: center;
@@ -170,7 +199,7 @@
         font-size: 12px;
     }
     .we-pagination a:hover {
-        background: var(--we-bg-tertiary);
+        background: #21262d;
         border-color: var(--we-accent);
     }
     .we-pagination .current {
@@ -178,9 +207,11 @@
         font-size: 12px;
         padding: 0 8px;
     }
-    .we-text-muted { color: var(--we-text-secondary); font-size: 12px; }
-    .we-badge-info { background: rgba(88, 166, 255, 0.12); color: var(--we-accent); border: 1px solid rgba(88, 166, 255, 0.25); }
-    .we-badge-warning { background: var(--we-orange-bg); color: var(--we-orange); border: 1px solid rgba(187, 128, 9, 0.3); }
+
+    @media (max-width: 768px) {
+        .we-header { flex-direction: column; text-align: center; }
+        .we-header-actions { width: 100%; justify-content: center; }
+    }
 </style>
 {% endblock %}
 
@@ -190,7 +221,7 @@
     <div class="we-header">
         <h2>📋 Log de Extracción #{{ log.id }}</h2>
         <div class="we-header-actions">
-            <a href="{% url 'whatsapp_extractor:dashboard' %}" class="we-btn we-btn-sm">← Dashboard</a>
+            <a href="{% url 'whatsapp_extractor:dashboard' %}" class="we-btn we-btn-sm">⬅ Dashboard</a>
         </div>
     </div>
 
@@ -204,7 +235,7 @@
                 <div class="we-detail-row">
                     <span class="we-detail-label">Estado</span>
                     <span class="we-badge {% if log.estado == 'completed' %}we-badge-green{% elif log.estado == 'error' %}we-badge-red{% elif log.estado == 'running' %}we-badge-blue{% else %}we-badge-gray{% endif %}">
-                        {% if log.estado == 'completed' %}✓ Completado{% elif log.estado == 'error' %}✗ Error{% elif log.estado == 'running' %}⏳ Ejecutando{% else %}⏸️ Pendiente{% endif %}
+                        {% if log.estado == 'completed' %}✓ Completado{% elif log.estado == 'error' %}✗ Error{% elif log.estado == 'running' %}🔄 Ejecutando{% else %}⏳ Pendiente{% endif %}
                     </span>
                 </div>
                 <div class="we-detail-row">
@@ -299,26 +330,26 @@
                     <thead>
                         <tr>
                             <th>#</th>
-                            <th>📝 Requerimiento</th>
+                            <th>💬 Requerimiento</th>
                             <th>📋 Fuente</th>
                             <th>👤 Agente</th>
                             <th>📅 Fecha</th>
-                            <th>⏰ Hora</th>
-                            <th>🏷️ Condición</th>
-                            <th>🏠 Tipo</th>
+                            <th>🕐 Hora</th>
+                            <th>🏠 Condición</th>
+                            <th>🔤 Tipo</th>
                             <th>💰 Presupuesto</th>
                             <th>💲 Moneda</th>
                             <th>💳 Pago</th>
-                            <th>🛏️ Dorm.</th>
+                            <th>🛌 Dorm.</th>
                             <th>🚿 Baños</th>
                             <th>📐 Área</th>
                             <th>📍 Distritos</th>
                             <th>🚗 Cochera</th>
                             <th>🛗 Ascensor</th>
                             <th>🪑 Amueblado</th>
-                            <th>📝 Extra</th>
+                            <th>✨ Extra</th>
                             <th>📞 Teléfono</th>
-                            <th>🕐 Creado</th>
+                            <th>🗓 Creado</th>
                         </tr>
                     </thead>
                     <tbody>

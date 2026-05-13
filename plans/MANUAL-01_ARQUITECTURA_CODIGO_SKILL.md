@@ -1,676 +1,746 @@
 # MANUAL 1: Arquitectura de Código para una Skill Python
 
-> **Propósito:** Este manual explica EXACTAMENTE cómo debe estructurarse el código Python que se pega en el formulario de creación de skills (textarea "Código de la Skill" en `/api/v1/intelligence/skills/create/`).
+> **Propósito:** Este manual explica EXACTAMENTE cómo debe estructurarse el código Python de una skill en el sistema Propifai Intelligence.
 >
-> **Público:** Desarrolladores que necesitan crear nuevas skills escribiendo código Python directamente en el dashboard.
+> **Público:** Desarrolladores que necesitan crear nuevas skills.
+>
+> **Actualizado:** Mayo 2026 — Solo documenta el sistema NUEVO (`BaseSkill`). El sistema LEGACY (`Skill` de `services/skill_base.py`) fue eliminado.
 
 ---
 
 ## Índice
 
-1. [Estructura General del Código](#1-estructura-general-del-código)
-2. [Importaciones](#2-importaciones)
-3. [La Clase Skill](#3-la-clase-skill)
-4. [Atributos Obligatorios de Clase](#4-atributos-obligatorios-de-clase)
-5. [Parámetros con `SkillParameter`](#5-parámetros-con-skillparameter)
-6. [El Método `execute()`](#6-el-método-execute)
-7. [Validación de Parámetros con `validate_params()`](#7-validación-de-parámetros-con-validate_params)
-8. [Retorno de Resultados con `SkillResult`](#8-retorno-de-resultados-con-skillresult)
-9. [Manejo de Errores](#9-manejo-de-errores)
-10. [Ejemplo Mínimo (Template)](#10-ejemplo-mínimo-template)
-11. [Ejemplo Simple: SumaSkill](#11-ejemplo-simple-sumaskill)
-12. [Ejemplo Intermedio: DivisionSkill](#12-ejemplo-intermedio-divisionskill)
-13. [Ejemplo Avanzado: ACMAnalisisSkill](#13-ejemplo-avanzado-acmanalisisskill)
-14. [Ejemplo con Listas: EstadisticasBasicasSkill](#14-ejemplo-con-listas-estadisticasbasicas)
-15. [Checklist de Validación](#15-checklist-de-validación)
-16. [Errores Comunes y Soluciones](#16-errores-comunes-y-soluciones)
+1. [Visión General del Sistema](#1-visión-general-del-sistema)
+2. [Clase `BaseSkill` (skills.base)](#2-clase-baseskill-skillsbase)
+3. [SkillResult](#3-skillresult)
+4. [SkillRegistry (Singleton)](#4-skillregistry-singleton)
+5. [SkillOrchestrator](#5-skillorchestrator)
+6. [Importaciones](#6-importaciones)
+7. [Estructura de la Clase](#7-estructura-de-la-clase)
+8. [Parámetros con `parameters_schema`](#8-parámetros-con-parameters_schema)
+9. [El Método `execute()`](#9-el-método-execute)
+10. [Validación de Parámetros](#10-validación-de-parámetros)
+11. [Retorno de Resultados con `SkillResult`](#11-retorno-de-resultados-con-skillresult)
+12. [Manejo de Errores](#12-manejo-de-errores)
+13. [Ejemplo Mínimo (Template)](#13-ejemplo-mínimo-template)
+14. [Ejemplo Simple: SumaSkill](#14-ejemplo-simple-sumaskill)
+15. [Ejemplo Avanzado: ACMAnalisisSkill (Migrado)](#15-ejemplo-avanzado-acmanalisisskill-migrado)
+16. [Ejemplo Producción: BusquedaPropiedadesSkill](#16-ejemplo-producción-busquedapropiedadesskill)
+17. [Ejemplo con Listas: EstadisticasBasicasSkill](#17-ejemplo-con-listas-estadisticasbasicas)
+18. [Checklist de Validación](#18-checklist-de-validación)
+19. [Errores Comunes y Soluciones](#19-errores-comunes-y-soluciones)
 
 ---
 
-## 1. Estructura General del Código
+## 1. Visión General del Sistema
 
-Toda skill es un **archivo Python** que contiene **una clase** que hereda de `Skill`. La estructura mínima es:
+El sistema de skills de Propifai usa una **única clase base**: [`BaseSkill`](webapp/intelligence/skills/base.py:91).
 
-```python
-"""
-[Docstring opcional describiendo la skill]
-"""
-from typing import Dict, Any
-from ...services.skill_base import Skill, SkillParameter, SkillResult
-
-class MiNuevaSkill(Skill):
-    name = "mi_nueva_skill"
-    description = "Descripción clara de lo que hace"
-    parameters = {
-        # Definir parámetros aquí
-    }
-
-    def execute(self, **kwargs) -> SkillResult:
-        try:
-            params = self.validate_params(**kwargs)
-            # LÓGICA DE LA SKILL AQUÍ
-            return SkillResult.ok(
-                data={'resultado': ...},
-                operation='mi_nueva_skill',
-                inputs=params
-            )
-        except Exception as e:
-            return SkillResult.from_error(str(e))
-```
-
-> ⚠️ **REGLAS DE ORO:**
-> 1. La clase **DEBE** heredar de `Skill`
-> 2. La clase **DEBE** definir `name`, `description` y `parameters`
-> 3. La clase **DEBE** implementar `execute(self, **kwargs) -> SkillResult`
-> 4. El método `execute()` **DEBE** usar `self.validate_params(**kwargs)` para validar
-> 5. El método `execute()` **DEBE** retornar `SkillResult.ok()` o `SkillResult.from_error()`
-> 6. Todo el código de `execute()` **DEBE** ir dentro de un `try/except`
-
----
-
-## 2. Importaciones
-
-Las importaciones necesarias son siempre las mismas:
-
-```python
-from typing import Dict, Any          # Tipado (opcional pero recomendado)
-from ...services.skill_base import Skill, SkillParameter, SkillResult
-```
-
-**Explicación:**
-- `Skill` → Clase base abstracta de la que heredar
-- `SkillParameter` → Dataclass para definir cada parámetro de entrada
-- `SkillResult` → Dataclass para el resultado estandarizado
-
-**Importaciones adicionales comunes:**
-```python
-from typing import Dict, Any, List, Optional, Union
-import math
-import json
-from collections import Counter
-```
-
-> ⚠️ **Ruta de importación:** Las skills viven en `intelligence/skills/`, y `skill_base.py` está en `intelligence/services/`. Por eso la ruta relativa es `...services.skill_base` (subir dos niveles: skills → intelligence → services).
-
----
-
-## 3. La Clase Skill
-
-La clase `Skill` es una **clase abstracta** (`ABC`). Cuando heredas de ella, el sistema **valida automáticamente** que hayas definido:
-
-| Atributo | Tipo | Obligatorio | Descripción |
-|---|---|---|---|
-| `name` | `str` | ✅ Sí | Identificador único de la skill |
-| `description` | `str` | ✅ Sí | Descripción semántica para el LLM |
-| `parameters` | `Dict[str, SkillParameter]` | ✅ Sí | Diccionario de parámetros de entrada |
-
-Si falta alguno, el sistema lanza `ValueError` al intentar cargar la skill.
-
-### Convención de nombres para la clase:
-
-```
-[Funcionalidad]Skill
-```
-
-Ejemplos: `SumaSkill`, `DivisionSkill`, `ACMAnalisisSkill`, `ReportePreciosZonaSkill`, `MatchingOfertaDemandaSkill`
-
----
-
-## 4. Atributos Obligatorios de Clase
-
-### `name` — Identificador único
-
-```python
-name = "mi_skill"
-```
-
-**Reglas:**
-- Solo **minúsculas**, **números** y **guiones bajos** (`_`)
-- Debe empezar con letra o underscore
-- Debe ser **único** en todo el sistema
-- Se usa como identificador en URLs y API
-- Ejemplos válidos: `"suma"`, `"acm_analisis"`, `"reporte_precios_zona"`, `"matching_oferta_demanda"`
-
-### `description` — Descripción semántica
-
-```python
-description = "Calcula la raíz cuadrada de un número"
-```
-
-**Reglas:**
-- Texto descriptivo en español
-- Debe explicar QUÉ hace la skill, no cómo
-- Se usa para que el LLM (DeepSeek) pueda encontrar y ejecutar la skill automáticamente
-- Sé específico: incluye el tipo de operación y los datos que maneja
-
-### `parameters` — Diccionario de parámetros
-
-```python
-parameters = {
-    'nombre_parametro': SkillParameter(
-        name='nombre_parametro',
-        type='float',
-        description='Descripción del parámetro',
-        required=True
-    ),
-}
-```
-
-**Reglas:**
-- Las **llaves** del diccionario deben coincidir con el `name` del `SkillParameter`
-- Cada valor es una instancia de `SkillParameter`
-- Puede estar vacío (`{}`) si la skill no requiere parámetros
-
----
-
-## 5. Parámetros con `SkillParameter`
-
-`SkillParameter` es un **dataclass** con estos campos:
-
-| Campo | Tipo | Obligatorio | Default | Descripción |
-|---|---|---|---|---|
-| `name` | `str` | ✅ Sí | — | Nombre del parámetro |
-| `type` | `str` | ✅ Sí | — | Tipo de dato: `'str'`, `'int'`, `'float'`, `'bool'`, `'list'`, `'dict'` |
-| `description` | `str` | ✅ Sí | — | Descripción para el LLM y la UI |
-| `required` | `bool` | ❌ No | `True` | Si es obligatorio o no |
-| `default` | `Any` | ❌ No | `None` | Valor por defecto (solo si `required=False`) |
-| `options` | `Optional[List[str]]` | ❌ No | `None` | Lista de valores permitidos (para opciones fijas) |
-
-### Tipos de datos soportados:
-
-| type | Python | Conversión automática |
+| Componente | Archivo | Función |
 |---|---|---|
-| `'str'` | `str` | `str(value)` |
-| `'int'` | `int` | `int(value)` |
-| `'float'` | `float` | `float(value)` |
-| `'bool'` | `bool` | `str(value).lower() in ('true', '1', 'yes', 'si')` |
-| `'list'` | `list` | `list(value)` o `[value]` |
-| `'dict'` | `dict` | `dict(value)` o `{'value': value}` |
+| **`BaseSkill`** (ABC) | [`skills/base.py`](webapp/intelligence/skills/base.py:91) | Clase base abstracta para todas las skills |
+| **`SkillResult`** | [`skills/base.py`](webapp/intelligence/skills/base.py:22) | Dataclass de resultado estandarizado |
+| **`SkillRegistry`** | [`skills/registry.py`](webapp/intelligence/skills/registry.py:41) | Singleton que registra y descubre skills |
+| **`SkillOrchestrator`** | [`skills/orchestrator.py`](webapp/intelligence/skills/orchestrator.py:62) | Coordina ejecución con cache, métricas y persistencia |
+| **`SkillCache`** | [`skills/cache.py`](webapp/intelligence/skills/cache.py) | Cache en Redis + memoria local |
+| **`SkillExecution`** | [`models.py`](webapp/intelligence/models.py) | Persistencia de ejecuciones en BD |
 
-### Ejemplos de parámetros:
-
-```python
-# Parámetro string requerido
-'ubicacion': SkillParameter(
-    name='ubicacion',
-    type='str',
-    description='Zona o distrito a analizar',
-    required=True
-),
-
-# Parámetro numérico requerido
-'precio': SkillParameter(
-    name='precio',
-    type='float',
-    description='Precio de la propiedad en soles',
-    required=True
-),
-
-# Parámetro entero opcional con valor por defecto
-'plazo_anos': SkillParameter(
-    name='plazo_anos',
-    type='int',
-    description='Plazo del financiamiento en años',
-    required=False,
-    default=20
-),
-
-# Parámetro con opciones fijas
-'tipo_inmueble': SkillParameter(
-    name='tipo_inmueble',
-    type='str',
-    description='Tipo de propiedad',
-    required=True,
-    options=['Departamento', 'Casa', 'Terreno', 'Local Comercial', 'Oficina']
-),
-
-# Parámetro de lista
-'registros': SkillParameter(
-    name='registros',
-    type='list',
-    description='Lista de registros a analizar',
-    required=True
-),
-
-# Parámetro booleano opcional
-'generar_grafico': SkillParameter(
-    name='generar_grafico',
-    type='bool',
-    description='Si debe generar un gráfico',
-    required=False,
-    default=False
-),
-```
+> ⚠️ **El sistema LEGACY (`Skill`, `SkillParameter` de `services/skill_base.py`) fue eliminado en Mayo 2026.** Todas las skills existentes fueron migradas a `BaseSkill`. No uses importaciones de `services.skill_base`.
 
 ---
 
-## 6. El Método `execute()`
+## 2. Clase `BaseSkill` (skills.base)
 
-Es el **corazón de la skill**. Aquí va toda la lógica de negocio.
-
-### Firma:
+**Archivo:** [`webapp/intelligence/skills/base.py`](webapp/intelligence/skills/base.py:91)
 
 ```python
-def execute(self, **kwargs) -> SkillResult:
+class BaseSkill(ABC):
+    # Atributos de clase (sobrescribir en subclases)
+    name: str = ""
+    description: str = ""
+    category: str = "custom"
+    access_level: int = 1
+    is_active: bool = True
+    parameters_schema: Dict[str, Dict[str, Any]] = {}
+
+    @abstractmethod
+    def execute(self, params: Dict[str, Any],
+                context: Optional[Dict[str, Any]] = None) -> SkillResult:
+        ...
+
+    @abstractmethod
+    def validate_params(self, params: Dict[str, Any]) -> bool:
+        ...
+
+    def get_schema(self) -> Dict[str, Any]:
+        """Retorna el schema completo de la skill para el agente."""
+        return {
+            'name': self.name,
+            'description': self.description,
+            'category': self.category,
+            'access_level': self.access_level,
+            'is_active': self.is_active,
+            'parameters_schema': self.parameters_schema,
+        }
+
+    def can_user_access(self, user_level: int) -> bool:
+        """Verifica si un usuario con cierto nivel puede usar esta skill."""
+        return self.is_active and user_level >= self.access_level
 ```
 
-### Estructura obligatoria:
+### Atributos de clase requeridos:
 
-```python
-def execute(self, **kwargs) -> SkillResult:
-    try:
-        # 1. Validar y convertir parámetros
-        params = self.validate_params(**kwargs)
+| Atributo | Tipo | Descripción |
+|---|---|---|
+| `name` | `str` | Identificador único en snake_case. Ej: `'busqueda_propiedades'` |
+| `description` | `str` | Descripción semántica para que el LLM elija la skill |
+| `category` | `str` | `'busqueda'`, `'crm'`, `'reporte'`, `'notificacion'`, `'template'`, `'custom'` |
+| `access_level` | `int` | Nivel mínimo de acceso: 1 (Básico), 2, 3, 4 (Admin), 5 (SuperAdmin) |
+| `is_active` | `bool` | Si la skill está disponible para el agente |
+| `parameters_schema` | `dict` | Schema de parámetros que acepta la skill |
 
-        # 2. Extraer valores (con .get() para opcionales)
-        valor_requerido = params['nombre_parametro']
-        valor_opcional = params.get('nombre_opcional', valor_default)
+### Validación automática en `__init_subclass__`:
 
-        # 3. Validaciones de negocio
-        if valor_requerido <= 0:
-            return SkillResult.from_error("El valor debe ser mayor a cero")
-
-        # 4. Lógica principal
-        resultado = ...  # tu cálculo aquí
-
-        # 5. Retornar resultado exitoso
-        return SkillResult.ok(
-            data={'clave': resultado},
-            operation='nombre_skill',
-            inputs=params
-        )
-
-    except Exception as e:
-        # 6. Capturar cualquier error
-        return SkillResult.from_error(str(e))
-```
-
-### Reglas del método `execute()`:
-
-1. **Siempre** dentro de `try/except`
-2. **Siempre** llamar a `self.validate_params(**kwargs)` primero
-3. **Siempre** retornar `SkillResult.ok()` o `SkillResult.from_error()`
-4. **Nunca** lanzar excepciones — siempre capturarlas y retornar error
-5. **Nunca** retornar un dict, string u otro tipo directamente
+Al definir una subclase, `BaseSkill` valida automáticamente:
+- `name` no puede estar vacío
+- `description` no puede estar vacío
+- `category` debe ser uno de los valores estándar (warning si no)
+- `parameters_schema` debe ser un dict
 
 ---
 
-## 7. Validación de Parámetros con `validate_params()`
+## 3. SkillResult
 
-El método `validate_params(**kwargs)` de la clase base `Skill`:
-
-1. **Verifica** que todos los parámetros requeridos estén presentes
-2. **Convierte** cada valor al tipo especificado (`_convert_type()`)
-3. **Retorna** un diccionario con los valores ya convertidos
-4. **Lanza** `ValueError` si falta algún parámetro requerido
+**Archivo:** [`webapp/intelligence/skills/base.py`](webapp/intelligence/skills/base.py:22)
 
 ```python
-params = self.validate_params(**kwargs)
-# params es un dict: {'a': 5.0, 'b': 3.0}
+@dataclass
+class SkillResult:
+    success: bool
+    data: Optional[Dict[str, Any]] = None
+    message: str = ""
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    skill_name: str = ""
+
+    @classmethod
+    def ok(cls, data, message="", metadata=None, skill_name="") -> 'SkillResult': ...
+
+    @classmethod
+    def error(cls, message, metadata=None, skill_name="") -> 'SkillResult': ...
 ```
 
-**¿Qué pasa si un parámetro opcional no se envía?**
-- Si tiene `default`, se usa ese valor
-- Si no tiene `default` y no se envía, simplemente no aparece en `params`
-
-Por eso los parámetros opcionales se acceden con `.get()`:
+### Métodos factory:
 
 ```python
-gastos = params.get('gastos_mantenimiento_mensuales', 0.0)
-tasa = params.get('tasa_interes_anual', 7.5)
-```
+# Resultado exitoso
+SkillResult.ok(
+    data={'resultado': 'valor'},
+    message="Descripción legible del resultado",
+    metadata={'parametros_usados': list(params.keys())},
+    skill_name=self.name
+)
 
----
-
-## 8. Retorno de Resultados con `SkillResult`
-
-### `SkillResult.ok(data, **metadata)` — Resultado exitoso
-
-```python
-return SkillResult.ok(
-    data={
-        'resultado': 42,
-        'mensaje': 'Operación completada',
-    },
-    operation='mi_skill',
-    inputs={'a': 5, 'b': 3}
+# Resultado con error
+SkillResult.error(
+    message="Descripción del error",
+    metadata={'parametros_recibidos': params},
+    skill_name=self.name
 )
 ```
 
-| Parámetro | Tipo | Obligatorio | Descripción |
-|---|---|---|---|
-| `data` | `Dict[str, Any]` | ✅ Sí | Datos del resultado |
-| `**metadata` | `Any` | ❌ No | Metadatos adicionales (operation, inputs, etc.) |
-
-**Convenciones para `data`:**
-- Usa claves descriptivas en español
-- Incluye solo datos relevantes
-- Si el resultado es complejo, estructura con sub-diccionarios
-
-### `SkillResult.from_error(error, **metadata)` — Resultado con error
+### Alias de compatibilidad (para código migrado desde LEGACY):
 
 ```python
-return SkillResult.from_error("No se puede dividir por cero")
-```
-
-| Parámetro | Tipo | Obligatorio | Descripción |
-|---|---|---|---|
-| `error` | `str` | ✅ Sí | Mensaje de error descriptivo |
-| `**metadata` | `Any` | ❌ No | Metadatos adicionales |
-
-**Buenas prácticas para mensajes de error:**
-- Sé descriptivo: explica qué pasó y por qué
-- En español
-- Incluye valores relevantes si ayuda al debugging
-
----
-
-## 9. Manejo de Errores
-
-### Patrón obligatorio:
-
-```python
-def execute(self, **kwargs) -> SkillResult:
-    try:
-        params = self.validate_params(**kwargs)
-        # ... lógica ...
-        return SkillResult.ok(data={...})
-    except ValueError as e:
-        # Error de validación de parámetros
-        return SkillResult.from_error(f"Error de validación: {str(e)}")
-    except Exception as e:
-        # Cualquier otro error
-        return SkillResult.from_error(f"Error inesperado: {str(e)}")
-```
-
-### Validaciones de negocio (antes de procesar):
-
-```python
-# Validar rangos
-if params['numero'] < 0:
-    return SkillResult.from_error("El número no puede ser negativo")
-
-# Validar división por cero
-if params['b'] == 0:
-    return SkillResult.from_error("No se puede dividir por cero")
-
-# Validar listas vacías
-if not params['numeros']:
-    return SkillResult.from_error("La lista no puede estar vacía")
-
-# Validar tipos específicos
-if not isinstance(params['registros'], list):
-    return SkillResult.from_error("Se requiere una lista de registros")
+result.error_message       # → self.message si no es success, None si es success
+SkillResult.from_error("error", **metadata)  # → equivalente a SkillResult.error(message="error", metadata=metadata)
 ```
 
 ---
 
-## 10. Ejemplo Mínimo (Template)
+## 4. SkillRegistry (Singleton)
 
-Este es el template mínimo que puedes copiar y pegar directamente en el textarea del dashboard:
+**Archivo:** [`webapp/intelligence/skills/registry.py`](webapp/intelligence/skills/registry.py:41)
 
 ```python
-"""
-[Descripción breve de la skill]
-"""
-from typing import Dict, Any
-from ...services.skill_base import Skill, SkillParameter, SkillResult
+class SkillRegistry:
+    _instance: Optional['SkillRegistry'] = None
+    _skills: Dict[str, BaseSkill] = {}
+    _skill_classes: Dict[str, Type[BaseSkill]] = {}
 
+    def __new__(cls) -> 'SkillRegistry':
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
 
-class MiNuevaSkill(Skill):
-    """[Descripción detallada de la clase]"""
+    def register(self, skill_class: Type[BaseSkill]) -> None:
+        """Registra una skill en el catálogo."""
 
-    name = "mi_nueva_skill"
-    description = "[Descripción semántica para el LLM]"
-    parameters = {
-        'param1': SkillParameter(
-            name='param1',
-            type='str',
-            description='[Descripción del parámetro]',
-            required=True
-        ),
-        'param2': SkillParameter(
-            name='param2',
-            type='float',
-            description='[Descripción del parámetro]',
-            required=False,
-            default=0.0
-        ),
+    def find_best_skill(self, intent: str, user_level: int = 1) -> Optional[BaseSkill]:
+        """Dada una intención, retorna la skill más adecuada."""
+
+    def get_skill(self, name: str) -> Optional[BaseSkill]:
+        """Obtiene una skill por su nombre."""
+
+    def list_available(self, user_level: int = 1) -> List[Dict[str, Any]]:
+        """Lista todas las skills activas accesibles para ese nivel."""
+
+    def deactivate(self, name: str) -> None: ...
+    def activate(self, name: str) -> None: ...
+```
+
+### Registro de skills:
+
+Las skills se registran automáticamente al arrancar la aplicación en [`webapp/intelligence/apps.py`](webapp/intelligence/apps.py). El registro manual:
+
+```python
+from intelligence.skills.registry import SkillRegistry
+from intelligence.skills.mi_skill import MiSkill
+
+registry = SkillRegistry()
+registry.register(MiSkill)
+```
+
+### Búsqueda semántica:
+
+`find_best_skill()` analiza la intención del usuario usando:
+1. Coincidencia de tokens con palabras clave del dominio inmobiliario
+2. Coincidencia de tokens con la descripción de cada skill
+3. Bonus por nombre de skill y categoría
+
+Si la confianza es menor al umbral (`MIN_CONFIDENCE_THRESHOLD = 0.25`), retorna `None` (RAG puro).
+
+---
+
+## 5. SkillOrchestrator
+
+**Archivo:** [`webapp/intelligence/skills/orchestrator.py`](webapp/intelligence/skills/orchestrator.py:62)
+
+```python
+class SkillOrchestrator:
+    def __init__(self, registry: SkillRegistry, cache: SkillCache): ...
+
+    def execute_skill(
+        self,
+        skill_name: str,
+        parameters: Dict[str, Any],
+        context: ExecutionContext = None
+    ) -> SkillResult:
+        """Ejecuta una skill con validación completa, cache y persistencia."""
+```
+
+### Flujo de ejecución:
+
+1. Validar existencia de la skill en el registry
+2. Verificar permisos del usuario (`can_user_access`)
+3. Generar cache key
+4. Verificar cache (si hay hit, retorna resultado cacheado)
+5. Ejecutar `skill.execute(parameters, context)`
+6. Cachear resultado si fue exitoso
+7. Registrar métricas y persistir en `SkillExecution`
+
+### ExecutionContext:
+
+```python
+@dataclass
+class ExecutionContext:
+    user_id: Optional[str] = None
+    session_id: Optional[str] = None
+    permissions: List[str] = field(default_factory=list)
+    environment: str = "production"
+    timeout: int = 30
+    metadata: Dict[str, Any] = field(default_factory=dict)
+```
+
+---
+
+## 6. Importaciones
+
+```python
+from typing import Dict, Any, Optional
+from ..base import BaseSkill, SkillResult
+```
+
+> **Ruta de importación:** Las skills viven en `intelligence/skills/`. `base.py` está en el mismo paquete `intelligence/skills/`, por eso la ruta relativa es `..base` (subir un nivel desde una subcarpeta como `skills/propiedades/` → `skills/`).
+
+Para skills en subdirectorios (ej: `skills/propiedades/skill.py`):
+
+```python
+from ..base import BaseSkill, SkillResult
+```
+
+Para skills en el directorio raíz de skills (ej: `skills/acm_analisis.py`):
+
+```python
+from .base import BaseSkill, SkillResult
+```
+
+---
+
+## 7. Estructura de la Clase
+
+```python
+class MiSkill(BaseSkill):
+    """Docstring de la skill."""
+
+    name = "mi_skill"
+    description = "Descripción semántica para el LLM"
+    category = "custom"              # busqueda | crm | reporte | notificacion | template | custom
+    access_level = 1                 # 1=Básico, 2=Intermedio, 3=Avanzado, 4=Admin, 5=SuperAdmin
+    is_active = True
+
+    parameters_schema = {
+        'param1': {
+            'type': 'string',
+            'description': 'Descripción del parámetro',
+            'required': True,
+        },
+        'param2': {
+            'type': 'integer',
+            'description': 'Parámetro opcional',
+            'required': False,
+            'default': 0,
+        },
     }
 
-    def execute(self, **kwargs) -> SkillResult:
+    def validate_params(self, params: Dict[str, Any]) -> bool:
+        if not params:
+            return False
+        for name, schema in self.parameters_schema.items():
+            if schema.get('required', False):
+                if params.get(name) is None or params.get(name) == '':
+                    return False
+        return True
+
+    def execute(self, params: Dict[str, Any],
+                context: Optional[Dict[str, Any]] = None) -> SkillResult:
         try:
-            params = self.validate_params(**kwargs)
-
-            # --- LÓGICA DE LA SKILL ---
-            param1 = params['param1']
-            param2 = params.get('param2', 0.0)
-
-            resultado = f"Procesado: {param1} con valor {param2}"
-
+            if not self.validate_params(params):
+                return SkillResult.error(
+                    message="Parámetros inválidos",
+                    skill_name=self.name
+                )
+            # Lógica aquí
             return SkillResult.ok(
-                data={
-                    'resultado': resultado,
-                    'param1': param1,
-                    'param2': param2,
-                },
-                operation='mi_nueva_skill',
-                inputs=params
+                data={'resultado': ...},
+                message="Ejecutado correctamente",
+                skill_name=self.name
             )
-
         except Exception as e:
-            return SkillResult.from_error(str(e))
+            return SkillResult.error(
+                message=str(e),
+                skill_name=self.name
+            )
 ```
 
 ---
 
-## 11. Ejemplo Simple: SumaSkill
+## 8. Parámetros con `parameters_schema`
 
-Skill más básica posible: suma dos números.
+Los parámetros se definen como un diccionario de diccionarios:
+
+```python
+parameters_schema = {
+    'nombre_parametro': {
+        'type': 'string',          # Tipo: 'string', 'integer', 'number', 'boolean', 'array', 'object'
+        'description': '...',      # Descripción para el LLM
+        'required': True,          # Si es obligatorio
+        'default': None,           # Valor por defecto (solo si required=False)
+        'enum': ['opcion1', 'opcion2'],  # Valores fijos permitidos (opcional)
+        'example': 'ejemplo',      # Ejemplo para el LLM (opcional)
+    },
+    ...
+}
+```
+
+### Tipos soportados:
+
+| Tipo en schema | Python | Uso |
+|---|---|---|
+| `'string'` | `str` | Texto, nombres, descripciones |
+| `'integer'` | `int` | Números enteros (cantidad, años) |
+| `'number'` | `float` | Números decimales (precios, áreas) |
+| `'boolean'` | `bool` | Valores verdadero/falso |
+| `'array'` | `list` | Lista de valores |
+| `'object'` | `dict` | Diccionario con estructura compleja |
+
+### Diferencia clave con el LEGACY eliminado:
+
+En el sistema NUEVO, `validate_params()` **NO** hace validación automática de tipos. Eres responsable de:
+1. Verificar que los parámetros requeridos existen
+2. Convertir tipos si es necesario
+3. Validar valores permitidos
+
+```python
+def validate_params(self, params: Dict[str, Any]) -> bool:
+    if not params:
+        return False
+    for name, schema in self.parameters_schema.items():
+        if schema.get('required', False):
+            if params.get(name) is None or params.get(name) == '':
+                return False
+        # Validar valores permitidos (enum)
+        if 'enum' in schema and params.get(name) is not None:
+            if params[name] not in schema['enum']:
+                return False
+    return True
+```
+
+---
+
+## 9. El Método `execute()`
+
+```python
+def execute(self, params: Dict[str, Any],
+            context: Optional[Dict[str, Any]] = None) -> SkillResult:
+    try:
+        if not self.validate_params(params):
+            return SkillResult.error(
+                message="Parámetros inválidos o insuficientes",
+                skill_name=self.name
+            )
+        valor = params.get('param_requerido')
+        opcional = params.get('param_opcional', default)
+        return SkillResult.ok(
+            data={'resultado': valor},
+            message="Ejecutado correctamente",
+            metadata={'parametros_usados': list(params.keys())},
+            skill_name=self.name
+        )
+    except Exception as e:
+        return SkillResult.error(
+            message=str(e),
+            skill_name=self.name
+        )
+```
+
+> **El parámetro `context`** permite pasar información adicional como:
+> - `user_id`: ID del usuario que ejecuta la skill
+> - `session_id`: ID de sesión
+> - `permissions`: Lista de permisos
+> - `environment`: 'production' o 'development'
+> - `metadata`: Dict con datos adicionales
+
+---
+
+## 10. Validación de Parámetros
+
+El sistema NUEVO **no hace validación automática**. Debes implementarla tú mismo:
+
+```python
+def validate_params(self, params: Dict[str, Any]) -> bool:
+    if not params:
+        return False
+
+    # 1. Verificar requeridos
+    for name, schema in self.parameters_schema.items():
+        if schema.get('required', False):
+            if params.get(name) is None or params.get(name) == '':
+                return False
+
+    # 2. Verificar que haya al menos un filtro con valor
+    has_any_value = any(
+        v is not None and v != '' and v != []
+        for v in params.values()
+    )
+    if not has_any_value:
+        return False
+
+    # 3. Validar valores enum si aplica
+    for name, schema in self.parameters_schema.items():
+        if 'enum' in schema and params.get(name) is not None:
+            if params[name] not in schema['enum']:
+                return False
+
+    return True
+```
+
+---
+
+## 11. Retorno de Resultados con `SkillResult`
+
+```python
+# Éxito
+return SkillResult.ok(
+    data={'resultado': 'valor'},
+    message="Descripción legible del resultado",
+    metadata={'parametros_usados': list(params.keys())},
+    skill_name=self.name
+)
+
+# Error
+return SkillResult.error(
+    message="Descripción del error",
+    metadata={'parametros_recibidos': params},
+    skill_name=self.name
+)
+```
+
+### Campos de SkillResult:
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `success` | `bool` | `True` si la ejecución fue exitosa |
+| `data` | `dict` o `None` | Datos del resultado |
+| `message` | `str` | Texto legible del resultado o error |
+| `metadata` | `dict` | Metadatos adicionales |
+| `skill_name` | `str` | Nombre de la skill que ejecutó |
+
+---
+
+## 12. Manejo de Errores
+
+```python
+def execute(self, params: Dict[str, Any],
+            context: Optional[Dict[str, Any]] = None) -> SkillResult:
+    try:
+        if not self.validate_params(params):
+            return SkillResult.error(
+                message="Parámetros inválidos o insuficientes",
+                metadata={'params_recibidos': params},
+                skill_name=self.name
+            )
+        # ... lógica ...
+        if precio <= 0:
+            return SkillResult.error(
+                message="El precio debe ser mayor a cero",
+                skill_name=self.name
+            )
+        return SkillResult.ok(data={...}, skill_name=self.name)
+    except Exception as e:
+        return SkillResult.error(
+            message=str(e),
+            metadata={'error_type': type(e).__name__},
+            skill_name=self.name
+        )
+```
+
+---
+
+## 13. Ejemplo Mínimo (Template)
+
+```python
+"""
+[Nombre de la skill] — [Descripción breve]
+"""
+from typing import Dict, Any, Optional
+from ..base import BaseSkill, SkillResult
+
+
+class MiSkill(BaseSkill):
+    """[Descripción detallada]"""
+
+    name = "mi_skill"
+    description = "[Descripción semántica para el LLM]"
+    category = "custom"
+    access_level = 1
+    is_active = True
+
+    parameters_schema = {
+        'param1': {
+            'type': 'string',
+            'description': '[Descripción del parámetro]',
+            'required': True,
+        },
+        'param_opcional': {
+            'type': 'integer',
+            'description': '[Descripción]',
+            'required': False,
+            'default': 0,
+        },
+    }
+
+    def validate_params(self, params: Dict[str, Any]) -> bool:
+        if not params:
+            return False
+        for name, schema in self.parameters_schema.items():
+            if schema.get('required', False):
+                if params.get(name) is None or params.get(name) == '':
+                    return False
+        return True
+
+    def execute(self, params: Dict[str, Any],
+                context: Optional[Dict[str, Any]] = None) -> SkillResult:
+        try:
+            if not self.validate_params(params):
+                return SkillResult.error(
+                    message="Parámetros inválidos",
+                    skill_name=self.name
+                )
+            # Lógica aquí
+            return SkillResult.ok(
+                data={'resultado': 'ok'},
+                message="Ejecutado correctamente",
+                skill_name=self.name
+            )
+        except Exception as e:
+            return SkillResult.error(
+                message=str(e),
+                skill_name=self.name
+            )
+```
+
+---
+
+## 14. Ejemplo Simple: SumaSkill
+
+Basado en el ejemplo real [`webapp/intelligence/skills/examples/math_skills.py`](webapp/intelligence/skills/examples/math_skills.py):
 
 ```python
 """
 Skill para sumar dos números.
 """
-from typing import Dict, Any
-from ...services.skill_base import Skill, SkillParameter, SkillResult
+from typing import Dict, Any, Optional
+from ..base import BaseSkill, SkillResult
 
 
-class SumaSkill(Skill):
+class SumaSkill(BaseSkill):
     """Skill para sumar dos números."""
 
     name = "suma"
-    description = "Suma dos números y retorna el resultado"
-    parameters = {
-        'a': SkillParameter(
-            name='a',
-            type='float',
-            description='Primer número a sumar',
-            required=True
-        ),
-        'b': SkillParameter(
-            name='b',
-            type='float',
-            description='Segundo número a sumar',
-            required=True
-        ),
+    description = "Suma dos números y devuelve el resultado"
+    category = "custom"
+    access_level = 1
+    is_active = True
+
+    parameters_schema = {
+        'a': {
+            'type': 'number',
+            'description': 'Primer número a sumar',
+            'required': True,
+        },
+        'b': {
+            'type': 'number',
+            'description': 'Segundo número a sumar',
+            'required': True,
+        },
     }
 
-    def execute(self, **kwargs) -> SkillResult:
+    def validate_params(self, params: Dict[str, Any]) -> bool:
+        if not params:
+            return False
+        return (
+            params.get('a') is not None and
+            params.get('b') is not None
+        )
+
+    def execute(self, params: Dict[str, Any],
+                context: Optional[Dict[str, Any]] = None) -> SkillResult:
         try:
-            params = self.validate_params(**kwargs)
-            result = params['a'] + params['b']
+            if not self.validate_params(params):
+                return SkillResult.error(
+                    message="Se requieren dos números (a y b)",
+                    skill_name=self.name
+                )
+            resultado = float(params['a']) + float(params['b'])
             return SkillResult.ok(
-                data={'resultado': result},
-                operation='suma',
-                inputs=params
+                data={'resultado': resultado, 'operacion': 'suma'},
+                message=f"La suma de {params['a']} + {params['b']} = {resultado}",
+                skill_name=self.name
             )
         except Exception as e:
-            return SkillResult.from_error(str(e))
+            return SkillResult.error(
+                message=str(e),
+                skill_name=self.name
+            )
 ```
-
-**Puntos clave:**
-- 2 parámetros requeridos tipo `float`
-- Lógica de una línea: `params['a'] + params['b']`
-- Retorna `{'resultado': result}` en `data`
-- Metadata: `operation='suma'`, `inputs=params`
 
 ---
 
-## 12. Ejemplo Intermedio: DivisionSkill
+## 15. Ejemplo Avanzado: ACMAnalisisSkill (Migrado)
 
-Muestra validación de negocio (división por cero).
-
-```python
-"""
-Skill para dividir dos números.
-"""
-from typing import Dict, Any
-from ...services.skill_base import Skill, SkillParameter, SkillResult
-
-
-class DivisionSkill(Skill):
-    """Skill para dividir dos números."""
-
-    name = "division"
-    description = "Divide el primer número por el segundo"
-    parameters = {
-        'a': SkillParameter(
-            name='a',
-            type='float',
-            description='Dividendo',
-            required=True
-        ),
-        'b': SkillParameter(
-            name='b',
-            type='float',
-            description='Divisor (no puede ser cero)',
-            required=True
-        ),
-    }
-
-    def execute(self, **kwargs) -> SkillResult:
-        try:
-            params = self.validate_params(**kwargs)
-
-            # Validación de negocio ANTES de operar
-            if params['b'] == 0:
-                return SkillResult.from_error("No se puede dividir por cero")
-
-            result = params['a'] / params['b']
-            return SkillResult.ok(
-                data={'resultado': result},
-                operation='division',
-                inputs=params
-            )
-        except Exception as e:
-            return SkillResult.from_error(str(e))
-```
-
-**Puntos clave:**
-- Validación de negocio: `if params['b'] == 0`
-- Retorno temprano con `SkillResult.from_error()`
-- La descripción del parámetro `b` advierte al usuario: "no puede ser cero"
-
----
-
-## 13. Ejemplo Avanzado: ACMAnalisisSkill
-
-Skill real del sistema que hace análisis financiero de propiedades. Muestra:
-- Parámetros requeridos y opcionales con defaults
-- Cálculos financieros complejos
-- Estructura de datos anidada en el resultado
-- Generación de texto de recomendación
+Basado en el archivo real [`webapp/intelligence/skills/acm_analisis.py`](webapp/intelligence/skills/acm_analisis.py):
 
 ```python
 """
 Skill avanzado para análisis financiero de una propiedad.
+Migrada de Skill (LEGACY) a BaseSkill (NUEVO).
 """
-from typing import Dict, Any
-from ...services.skill_base import Skill, SkillParameter, SkillResult
+from typing import Any, Dict, Optional
+from .base import BaseSkill, SkillResult
 
 
-class ACMAnalisisSkill(Skill):
+class ACMAnalisisSkill(BaseSkill):
     """Skill para generar un análisis financiero ACM de una propiedad."""
 
     name = "acm_analisis"
     description = "Genera un análisis ACM completo y recomendaciones financieras para una propiedad"
-    parameters = {
-        'precio': SkillParameter(
-            name='precio',
-            type='float',
-            description='Precio de la propiedad',
-            required=True
-        ),
-        'area_m2': SkillParameter(
-            name='area_m2',
-            type='float',
-            description='Área de la propiedad en metros cuadrados',
-            required=True
-        ),
-        'ubicacion': SkillParameter(
-            name='ubicacion',
-            type='str',
-            description='Ubicación o zona de la propiedad',
-            required=True
-        ),
-        'gastos_mantenimiento_mensuales': SkillParameter(
-            name='gastos_mantenimiento_mensuales',
-            type='float',
-            description='Gastos mensuales de mantenimiento estimados',
-            required=False,
-            default=0.0
-        ),
-        'tasa_interes_anual': SkillParameter(
-            name='tasa_interes_anual',
-            type='float',
-            description='Tasa de interés anual esperada para financiamiento (%)',
-            required=False,
-            default=7.5
-        ),
-        'plazo_anos': SkillParameter(
-            name='plazo_anos',
-            type='int',
-            description='Plazo del financiamiento en años',
-            required=False,
-            default=20
-        ),
+    category = "reporte"
+    access_level = 1
+    is_active = True
+
+    parameters_schema = {
+        'precio': {
+            'type': 'number',
+            'description': 'Precio de la propiedad',
+            'required': True,
+        },
+        'area_m2': {
+            'type': 'number',
+            'description': 'Área de la propiedad en metros cuadrados',
+            'required': True,
+        },
+        'ubicacion': {
+            'type': 'string',
+            'description': 'Ubicación o zona de la propiedad',
+            'required': True,
+        },
+        'gastos_mantenimiento_mensuales': {
+            'type': 'number',
+            'description': 'Gastos mensuales de mantenimiento estimados',
+            'required': False,
+        },
+        'tasa_interes_anual': {
+            'type': 'number',
+            'description': 'Tasa de interés anual esperada para financiamiento (%)',
+            'required': False,
+        },
+        'plazo_anos': {
+            'type': 'integer',
+            'description': 'Plazo del financiamiento en años',
+            'required': False,
+        },
     }
 
-    def execute(self, **kwargs) -> SkillResult:
+    def validate_params(self, params: Dict[str, Any]) -> bool:
+        """Valida que los parámetros requeridos estén presentes."""
+        if not params:
+            return False
+        required = ('precio', 'area_m2', 'ubicacion')
+        return all(params.get(k) is not None for k in required)
+
+    def execute(self, params: Dict[str, Any],
+                context: Optional[Dict[str, Any]] = None) -> SkillResult:
         try:
-            params = self.validate_params(**kwargs)
-
-            # Extraer valores (requeridos con [], opcionales con .get())
-            precio = params['precio']
-            area = params['area_m2']
-            gastos = params.get('gastos_mantenimiento_mensuales', 0.0)
-            tasa_anual = params.get('tasa_interes_anual', 7.5) / 100.0
-            plazo_anos = params.get('plazo_anos', 20)
-            meses = max(1, plazo_anos * 12)
-
-            # Validaciones de negocio
-            if precio <= 0 or area <= 0:
-                return SkillResult.from_error(
-                    "Precio y área deben ser mayores a cero"
+            if not self.validate_params(params):
+                return SkillResult.error(
+                    message="Faltan parámetros requeridos: precio, area_m2, ubicacion",
+                    skill_name=self.name
                 )
 
-            # Cálculos financieros
+            precio = float(params['precio'])
+            area = float(params['area_m2'])
+            ubicacion = str(params['ubicacion'])
+            gastos = float(params.get('gastos_mantenimiento_mensuales', 0.0))
+            tasa_anual = float(params.get('tasa_interes_anual', 7.5)) / 100.0
+            plazo_anos = int(params.get('plazo_anos', 20))
+            meses = max(1, plazo_anos * 12)
+
+            if precio <= 0 or area <= 0:
+                return SkillResult.error(
+                    message="Precio y área deben ser mayores a cero",
+                    skill_name=self.name
+                )
+
             precio_m2 = round(precio / area, 2)
             cuota_mensual = round(
-                precio * (tasa_anual / 12) /
-                (1 - (1 + tasa_anual / 12) ** -meses),
+                precio * (tasa_anual / 12) / (1 - (1 + tasa_anual / 12) ** -meses),
                 2
             ) if tasa_anual > 0 else round(precio / meses, 2)
-
-            costo_total = round(
-                cuota_mensual * meses + gastos * 12 * plazo_anos, 2
-            )
+            costo_total = round(cuota_mensual * meses + gastos * 12 * plazo_anos, 2)
             ingreso_recomendado = round(cuota_mensual * 3.5, 2)
 
-            # Estructurar resultado
             analisis = {
-                'zona': params['ubicacion'],
+                'zona': ubicacion,
                 'precio_total': precio,
                 'area_m2': area,
                 'precio_m2': precio_m2,
@@ -690,170 +760,301 @@ class ACMAnalisisSkill(Skill):
             )
 
             return SkillResult.ok(
-                data={
-                    'analisis': analisis,
-                    'recomendacion': recomendacion,
-                },
-                operation='acm_analisis',
-                inputs=params
+                data={'analisis': analisis, 'recomendacion': recomendacion},
+                message="Análisis ACM generado correctamente",
+                skill_name=self.name
             )
-
         except Exception as e:
-            return SkillResult.from_error(str(e))
+            return SkillResult.error(
+                message=str(e),
+                skill_name=self.name
+            )
 ```
 
 **Puntos clave:**
-- 3 parámetros requeridos + 3 opcionales con `default`
+- 3 parámetros requeridos + 3 opcionales
 - Parámetros opcionales se acceden con `params.get('nombre', default)`
 - Validación de negocio: `if precio <= 0 or area <= 0`
-- Resultado estructurado con sub-diccionarios (`'analisis'` y `'recomendacion'`)
+- Resultado estructurado con sub-diccionarios
 - Generación de texto legible para humanos
 
 ---
 
-## 14. Ejemplo con Listas: EstadisticasBasicasSkill
+## 16. Ejemplo Producción: BusquedaPropiedadesSkill
 
-Muestra cómo trabajar con parámetros tipo `list`.
+Basado en el archivo real [`webapp/intelligence/skills/propiedades/skill.py`](webapp/intelligence/skills/propiedades/skill.py):
+
+```python
+"""
+BusquedaPropiedadesSkill — Skill de búsqueda híbrida (SQL + semántica) de propiedades.
+"""
+from typing import Any, Dict, Optional
+from ..base import BaseSkill, SkillResult
+
+
+class BusquedaPropiedadesSkill(BaseSkill):
+    """Busca propiedades combinando filtros SQL con búsqueda semántica."""
+
+    name = "busqueda_propiedades"
+    description = (
+        "Busca propiedades en la base de datos usando filtros exactos "
+        "(distrito, tipo, precio, habitaciones, área) y búsqueda semántica "
+        "(descripciones, ambientes, características)."
+    )
+    category = "busqueda"
+    access_level = 1
+    is_active = True
+
+    parameters_schema = {
+        'distrito': {
+            'type': 'string',
+            'description': 'Distrito donde buscar (ej: Cayma, Yanahuara, Cerro Colorado)',
+            'required': False,
+        },
+        'tipo_propiedad': {
+            'type': 'string',
+            'description': 'Tipo de propiedad: Departamento, Casa, Terreno, Local Comercial, Oficina',
+            'required': False,
+        },
+        'operacion': {
+            'type': 'string',
+            'description': 'Tipo de operación: venta, alquiler',
+            'required': False,
+        },
+        'precio_min': {
+            'type': 'number',
+            'description': 'Precio mínimo en la moneda detectada',
+            'required': False,
+        },
+        'precio_max': {
+            'type': 'number',
+            'description': 'Precio máximo en la moneda detectada',
+            'required': False,
+        },
+        'habitaciones': {
+            'type': 'integer',
+            'description': 'Número mínimo de habitaciones',
+            'required': False,
+        },
+        'area_min': {
+            'type': 'number',
+            'description': 'Área mínima en m²',
+            'required': False,
+        },
+        'semantic_query': {
+            'type': 'string',
+            'description': 'Búsqueda por texto libre semántico (ej: ambientes amplios y luminosos)',
+            'required': False,
+        },
+    }
+
+    def validate_params(self, params: Dict[str, Any]) -> bool:
+        if not params:
+            return False
+        has_filter = any(
+            params.get(k) is not None and params.get(k) != ''
+            for k in ('distrito', 'tipo_propiedad', 'operacion',
+                       'precio_min', 'precio_max', 'habitaciones',
+                       'area_min', 'semantic_query')
+        )
+        return has_filter
+
+    def execute(self, params: Dict[str, Any],
+                context: Optional[Dict[str, Any]] = None) -> SkillResult:
+        try:
+            if not self.validate_params(params):
+                return SkillResult.error(
+                    message="Parámetros insuficientes para buscar propiedades",
+                    skill_name=self.name
+                )
+            # Lógica de búsqueda aquí...
+            return SkillResult.ok(
+                data={'propiedades': [], 'total': 0},
+                message="Búsqueda completada",
+                skill_name=self.name
+            )
+        except Exception as e:
+            return SkillResult.error(
+                message=str(e),
+                skill_name=self.name
+            )
+```
+
+---
+
+## 17. Ejemplo con Listas: EstadisticasBasicas
+
+Basado en el ejemplo real [`webapp/intelligence/skills/examples/data_skills.py`](webapp/intelligence/skills/examples/data_skills.py):
 
 ```python
 """
 Skill para calcular estadísticas básicas de una lista de números.
 """
-import math
-from typing import Dict, Any, List
+from typing import List, Dict, Any, Optional
 from collections import Counter
-from ...services.skill_base import Skill, SkillParameter, SkillResult
+from ..base import BaseSkill, SkillResult
 
 
-class EstadisticasBasicasSkill(Skill):
-    """Skill para calcular estadísticas básicas."""
+class EstadisticasBasicasSkill(BaseSkill):
+    """Calcula estadísticas básicas (media, mediana, moda, etc.) de una lista de números."""
 
     name = "estadisticas_basicas"
-    description = "Calcula estadísticas básicas (media, mediana, moda, desviación estándar) de una lista de números"
-    parameters = {
-        'numeros': SkillParameter(
-            name='numeros',
-            type='list',
-            description='Lista de números para analizar',
-            required=True
-        ),
+    description = "Calcula estadísticas básicas de una lista de números: media, mediana, moda, mínimo, máximo"
+    category = "custom"
+    access_level = 1
+    is_active = True
+
+    parameters_schema = {
+        'numeros': {
+            'type': 'array',
+            'description': 'Lista de números para analizar',
+            'required': True,
+        },
     }
 
-    def execute(self, **kwargs) -> SkillResult:
+    def validate_params(self, params: Dict[str, Any]) -> bool:
+        if not params:
+            return False
+        numeros = params.get('numeros')
+        if numeros is None or not isinstance(numeros, list) or len(numeros) == 0:
+            return False
+        return True
+
+    def execute(self, params: Dict[str, Any],
+                context: Optional[Dict[str, Any]] = None) -> SkillResult:
         try:
-            params = self.validate_params(**kwargs)
-            numeros = params['numeros']
-
-            # Validar que sea lista no vacía
-            if not isinstance(numeros, list) or len(numeros) == 0:
-                return SkillResult.from_error(
-                    "Se requiere una lista no vacía de números"
+            if not self.validate_params(params):
+                return SkillResult.error(
+                    message="Se requiere una lista no vacía de números",
+                    skill_name=self.name
                 )
-
-            # Convertir a float
-            try:
-                nums = [float(x) for x in numeros]
-            except (ValueError, TypeError):
-                return SkillResult.from_error(
-                    "Todos los elementos deben ser números"
-                )
-
-            # Cálculos
-            n = len(nums)
-            media = sum(nums) / n
-
-            nums_sorted = sorted(nums)
-            if n % 2 == 0:
-                mediana = (nums_sorted[n//2 - 1] + nums_sorted[n//2]) / 2
-            else:
-                mediana = nums_sorted[n//2]
-
-            counter = Counter(nums)
-            max_count = max(counter.values())
-            modas = [num for num, count in counter.items()
-                     if count == max_count]
-            moda = modas[0] if len(modas) == 1 else modas
-
-            varianza = sum((x - media) ** 2 for x in nums) / n
-            desviacion = math.sqrt(varianza)
+            numeros = [float(x) for x in params['numeros']]
+            n = len(numeros)
+            suma = sum(numeros)
+            media = suma / n
+            ordenados = sorted(numeros)
+            mediana = ordenados[n // 2] if n % 2 else (ordenados[n // 2 - 1] + ordenados[n // 2]) / 2
+            moda = Counter(numeros).most_common(1)[0][0] if n > 0 else None
 
             return SkillResult.ok(
                 data={
-                    'media': round(media, 4),
-                    'mediana': round(mediana, 4),
+                    'media': round(media, 2),
+                    'mediana': round(mediana, 2),
                     'moda': moda,
-                    'desviacion_estandar': round(desviacion, 4),
-                    'minimo': min(nums),
-                    'maximo': max(nums),
-                    'cantidad': n,
+                    'minimo': min(numeros),
+                    'maximo': max(numeros),
+                    'total': n,
                 },
-                operation='estadisticas_basicas',
-                inputs={'cantidad_numeros': n}
+                message=f"Estadísticas calculadas para {n} números",
+                skill_name=self.name
             )
-
+        except (ValueError, TypeError) as e:
+            return SkillResult.error(
+                message=f"Error al procesar números: {e}",
+                skill_name=self.name
+            )
         except Exception as e:
-            return SkillResult.from_error(str(e))
+            return SkillResult.error(
+                message=str(e),
+                skill_name=self.name
+            )
 ```
 
-**Puntos clave:**
-- Parámetro tipo `list` para recibir múltiples valores
-- Validación de tipo: `isinstance(numeros, list)`
-- Validación de contenido: `len(numeros) == 0`
-- Conversión segura de tipos dentro de try/except anidado
-- Múltiples cálculos sobre los mismos datos
+---
+
+## 18. Checklist de Validación
+
+Antes de dar por terminada una skill, verifica:
+
+### ✅ Estructura básica
+- [ ] La clase hereda de `BaseSkill`
+- [ ] `name` está definido y es único (snake_case)
+- [ ] `description` es semántica y descriptiva para el LLM
+- [ ] `category` es uno de los valores estándar
+- [ ] `access_level` está definido (1-5)
+- [ ] `is_active` está definido
+- [ ] `parameters_schema` es un dict no vacío
+
+### ✅ Métodos implementados
+- [ ] `validate_params(params) -> bool` está implementado
+- [ ] `execute(params, context) -> SkillResult` está implementado
+
+### ✅ Calidad de código
+- [ ] Los nombres de parámetros son intuitivos y en español
+- [ ] Las `description` incluyen ejemplos entre paréntesis para el LLM
+- [ ] Se usa `params.get('nombre', default)` para opcionales
+- [ ] Los errores se capturan y retornan como `SkillResult.error()`
+- [ ] No hay SQL raw ni lógica de negocio hardcodeada
+- [ ] La skill se registra en `apps.py` (o se descubre automáticamente)
 
 ---
 
-## 15. Checklist de Validación
+## 19. Errores Comunes y Soluciones
 
-Antes de guardar una skill, verifica que cumples con TODO:
+### Error de importación: `ModuleNotFoundError`
 
-### Estructura básica
-- [ ] El archivo tiene docstring al inicio
-- [ ] Las importaciones son correctas (`from ...services.skill_base import ...`)
-- [ ] La clase hereda de `Skill`
-- [ ] La clase tiene `name` (string)
-- [ ] La clase tiene `description` (string)
-- [ ] La clase tiene `parameters` (dict)
-- [ ] La clase implementa `execute(self, **kwargs) -> SkillResult`
+```python
+# ❌ MAL (ruta del sistema LEGACY eliminado)
+from ...services.skill_base import Skill
 
-### Atributo `name`
-- [ ] Solo minúsculas, números y underscores
-- [ ] No tiene espacios ni caracteres especiales
-- [ ] Es descriptivo y único
+# ✅ BIEN (ruta del sistema NUEVO)
+from ..base import BaseSkill, SkillResult
+```
 
-### Atributo `parameters`
-- [ ] Cada `SkillParameter` tiene `name`, `type`, `description`
-- [ ] Los tipos son válidos: `'str'`, `'int'`, `'float'`, `'bool'`, `'list'`, `'dict'`
-- [ ] Los parámetros opcionales tienen `default`
-- [ ] Los parámetros con opciones fijas tienen `options`
+### La skill no aparece en el dashboard
 
-### Método `execute()`
-- [ ] Todo el código está dentro de `try/except`
-- [ ] Se llama a `self.validate_params(**kwargs)` al inicio
-- [ ] Los parámetros requeridos se acceden con `params['nombre']`
-- [ ] Los parámetros opcionales se acceden con `params.get('nombre', default)`
-- [ ] Hay validaciones de negocio antes de procesar
-- [ ] Se retorna `SkillResult.ok(data={...})` en éxito
-- [ ] Se retorna `SkillResult.from_error(...)` en error
-- [ ] El `except` final captura `Exception as e`
+**Posibles causas:**
+1. Error de sintaxis en el código Python
+2. Error en tiempo de importación (módulo no encontrado)
+3. La clase no hereda correctamente de `BaseSkill`
+4. Falta `name`, `description` o `parameters_schema`
+
+**Solución:**
+```bash
+cd webapp
+python manage.py shell
+```
+
+```python
+from intelligence.skills.registry import SkillRegistry
+registry = SkillRegistry()
+try:
+    count = registry.discover_skills("intelligence.skills")
+    print(f"Skills descubiertas: {count}")
+except Exception as e:
+    print(f"Error: {e}")
+```
+
+### La skill se ejecuta pero retorna error
+
+**Posibles causas:**
+1. Parámetros incorrectos o faltantes
+2. Error en la lógica de negocio
+3. División por cero u operación matemática inválida
+4. Tipo de dato incorrecto
+
+**Solución:** Revisa los logs en `/api/v1/intelligence/skills/logs/` y filtra por tu skill para ver el mensaje de error exacto.
+
+### La skill no es invocada por el chat IA
+
+**Posibles causas:**
+1. La `description` no es lo suficientemente descriptiva
+2. El `IntentClassifier` no detecta la intención correcta
+3. Los parámetros no pueden extraerse del mensaje del usuario
+
+**Solución:** Mejora la `description` para que sea más semántica. Incluye palabras clave que el LLM pueda asociar.
+
+### La skill funciona en shell pero no en el dashboard
+
+**Posible causa:** El archivo se creó manualmente pero no se registró en el `SkillRegistry`.
+
+**Solución:** Reinicia el servidor de Django o ejecuta:
+```python
+from intelligence.skills.registry import SkillRegistry
+registry = SkillRegistry()
+registry.discover_skills("intelligence.skills")
+```
 
 ---
 
-## 16. Errores Comunes y Soluciones
-
-| Error | Causa | Solución |
-|---|---|---|
-| `ValueError: Skill X debe definir 'name'` | Falta el atributo `name` en la clase | Agregar `name = "mi_skill"` |
-| `ValueError: Skill X debe definir 'description'` | Falta el atributo `description` | Agregar `description = "..."` |
-| `ValueError: Parámetro requerido faltante: x` | No se envió un parámetro requerido | Verificar que el parámetro existe en `parameters` y se envía |
-| `ValueError: could not convert string to float: 'abc'` | Tipo de dato incorrecto | El parámetro espera `float` pero se recibió texto |
-| `DivisionByZero` | No se validó división por cero | Agregar `if b == 0: return SkillResult.from_error(...)` |
-| `KeyError: 'x'` | Se accede a `params['x']` pero no existe | Usar `params.get('x', default)` para opcionales |
-| `NameError: name 'Skill' is not defined` | Importación incorrecta | Verificar `from ...services.skill_base import Skill` |
-| La skill no aparece en el dashboard | Error de sintaxis en el código | Revisar el código con atención a indentación y sintaxis |
-| `TypeError: 'NoneType' object is not subscriptable` | `validate_params()` no fue llamado | Llamar `params = self.validate_params(**kwargs)` primero |
-
----
-
-> **Siguiente paso:** Una vez que el código de la skill está listo, ve al [`MANUAL-02_IMPLEMENTACION_SKILL.md`](MANUAL-02_IMPLEMENTACION_SKILL.md) para aprender cómo implementarla de 0 en el sistema, desde la creación en el dashboard hasta la ejecución y monitoreo.
+*Este manual documenta exclusivamente el sistema NUEVO (`BaseSkill`). El sistema LEGACY (`Skill` de `services/skill_base.py`) fue eliminado en Mayo 2026.*

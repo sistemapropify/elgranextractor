@@ -1,48 +1,64 @@
 """
 Skill avanzado para cruzar requerimientos de clientes con propiedades disponibles.
+Migrada de Skill (LEGACY) a BaseSkill (NUEVO).
 """
 
-from typing import Dict, Any, List
+from typing import Any, Dict, List, Optional
 
-from ..services.skill_base import Skill, SkillParameter, SkillResult
+from .base import BaseSkill, SkillResult
 
 
-class MatchingOfertaDemandaSkill(Skill):
+class MatchingOfertaDemandaSkill(BaseSkill):
     """Skill para hacer matching entre requerimientos y propiedades."""
 
     name = "matching_oferta_demanda"
     description = "Cruza requerimientos de cliente con propiedades disponibles y retorna las mejores coincidencias"
-    parameters = {
-        'requerimientos': SkillParameter(
-            name='requerimientos',
-            type='list',
-            description='Lista de requerimientos de clientes',
-            required=True
-        ),
-        'propiedades': SkillParameter(
-            name='propiedades',
-            type='list',
-            description='Lista de propiedades disponibles para matching',
-            required=True
-        ),
-        'top_n': SkillParameter(
-            name='top_n',
-            type='int',
-            description='Número máximo de coincidencias a retornar',
-            required=False,
-            default=5
-        ),
+    category = "crm"
+    access_level = 1
+    is_active = True
+
+    parameters_schema = {
+        'requerimientos': {
+            'type': 'array',
+            'description': 'Lista de requerimientos de clientes',
+            'required': True,
+        },
+        'propiedades': {
+            'type': 'array',
+            'description': 'Lista de propiedades disponibles para matching',
+            'required': True,
+        },
+        'top_n': {
+            'type': 'integer',
+            'description': 'Número máximo de coincidencias a retornar',
+            'required': False,
+        },
     }
 
-    def execute(self, **kwargs) -> SkillResult:
+    def validate_params(self, params: Dict[str, Any]) -> bool:
+        """Valida que los parámetros requeridos estén presentes."""
+        if not params:
+            return False
+        required = ('requerimientos', 'propiedades')
+        return all(params.get(k) is not None for k in required)
+
+    def execute(self, params: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> SkillResult:
         try:
-            params = self.validate_params(**kwargs)
+            if not self.validate_params(params):
+                return SkillResult.error(
+                    message="Faltan parámetros requeridos: requerimientos, propiedades",
+                    skill_name=self.name
+                )
+
             requerimientos = params['requerimientos']
             propiedades = params['propiedades']
-            top_n = params['top_n']
+            top_n = int(params.get('top_n', 5))
 
             if not isinstance(requerimientos, list) or not isinstance(propiedades, list):
-                return SkillResult.from_error("Requerimientos y propiedades deben ser listas")
+                return SkillResult.error(
+                    message="Requerimientos y propiedades deben ser listas",
+                    skill_name=self.name
+                )
 
             def score_property(prop: Dict[str, Any], req: Dict[str, Any]) -> float:
                 score = 0.0
@@ -77,13 +93,29 @@ class MatchingOfertaDemandaSkill(Skill):
             matches.sort(key=lambda item: item['score'], reverse=True)
             mejores = matches[:top_n]
 
+            mensaje = (
+                f"Matching completado: {len(matches)} coincidencias encontradas, "
+                f"mostrando las {len(mejores)} mejores."
+            )
+
             return SkillResult.ok(
                 data={
                     'top_matches': mejores,
                     'total_matches': len(matches),
                 },
-                operation='matching_oferta_demanda',
-                inputs=params
+                message=mensaje,
+                metadata={
+                    'operation': 'matching_oferta_demanda',
+                    'inputs': {
+                        'total_requerimientos': len(requerimientos),
+                        'total_propiedades': len(propiedades),
+                        'top_n': top_n,
+                    },
+                },
+                skill_name=self.name
             )
         except Exception as e:
-            return SkillResult.from_error(str(e))
+            return SkillResult.error(
+                message=str(e),
+                skill_name=self.name
+            )

@@ -9,262 +9,335 @@
 
 {% block extra_css %}
 <style>
+    /* ===== SISTEMA DE DISEÑO - WHATSAPP EXTRACTOR ===== */
+    /* Estilo idéntico a intelligence/collections (tema oscuro GitHub-style) */
     :root {
         --we-bg: #0d1117;
         --we-bg-secondary: #161b22;
         --we-bg-tertiary: #21262d;
         --we-border: #30363d;
-        --we-text-primary: #f0f6fc;
+        --we-text-primary: #c9d1d9;
         --we-text-secondary: #8b949e;
         --we-accent: #58a6ff;
         --we-accent-hover: #1f6feb;
         --we-green: #238636;
-        --we-green-bg: rgba(35, 134, 54, 0.15);
+        --we-green-bg: rgba(35, 134, 54, 0.2);
         --we-red: #da3633;
-        --we-red-bg: rgba(218, 54, 51, 0.15);
-        --we-orange: #bb8009;
-        --we-orange-bg: rgba(187, 128, 9, 0.15);
+        --we-red-bg: rgba(218, 54, 51, 0.2);
+        --we-orange: #d29922;
+        --we-orange-bg: rgba(210, 153, 34, 0.2);
         --we-purple: #8957e5;
+        --we-purple-bg: rgba(137, 87, 229, 0.2);
         --we-cyan: #39d2c0;
+        --we-cyan-bg: rgba(57, 210, 192, 0.2);
         --we-radius: 8px;
+        --we-radius-sm: 6px;
         --we-transition: all 0.2s ease;
     }
+
+    /* ===== CONTENEDOR PRINCIPAL ===== */
     .we-container {
         max-width: 1400px;
         margin: 0 auto;
+        padding: 0 4px;
     }
+
+    /* ===== HEADER ===== */
     .we-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 24px;
+        margin-bottom: 28px;
         flex-wrap: wrap;
         gap: 12px;
+        padding: 0 0 20px;
+        border-bottom: 1px solid #30363d;
     }
     .we-header h2 {
         margin: 0;
-        font-size: 20px;
+        font-size: 28px;
         font-weight: 600;
-        color: var(--we-text-primary);
+        color: #58a6ff;
+        letter-spacing: -0.3px;
     }
     .we-header-actions {
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 8px;
+        flex-wrap: wrap;
     }
-    /* KPI Grid */
+
+    /* ===== TARJETAS KPI ===== */
     .we-kpi-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: 12px;
-        margin-bottom: 24px;
+        grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+        gap: 14px;
+        margin-bottom: 28px;
     }
     .we-kpi {
-        background: var(--we-bg-secondary);
-        border: 1px solid var(--we-border);
-        border-radius: var(--we-radius);
-        padding: 16px 20px;
+        background: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        padding: 18px 20px 16px;
         transition: var(--we-transition);
+        position: relative;
+        overflow: hidden;
+        text-align: center;
     }
     .we-kpi:hover {
-        border-color: var(--we-accent);
+        border-color: #3c444d;
     }
+
     .we-kpi-value {
-        font-size: 28px;
+        font-size: 30px;
         font-weight: 700;
-        color: var(--we-text-primary);
-        line-height: 1.2;
-    }
-    .we-kpi-label {
-        font-size: 13px;
-        color: var(--we-text-secondary);
-        margin-top: 4px;
-    }
-    .we-kpi-sub {
-        font-size: 11px;
-        color: var(--we-text-secondary);
-        margin-top: 2px;
+        line-height: 1.15;
+        letter-spacing: -0.5px;
     }
     .we-kpi-accent-blue .we-kpi-value { color: var(--we-accent); }
-    .we-kpi-accent-green .we-kpi-value { color: var(--we-green); }
+    .we-kpi-accent-green .we-kpi-value { color: #3fb950; }
     .we-kpi-accent-red .we-kpi-value { color: var(--we-red); }
     .we-kpi-accent-purple .we-kpi-value { color: var(--we-purple); }
     .we-kpi-accent-orange .we-kpi-value { color: var(--we-orange); }
     .we-kpi-accent-cyan .we-kpi-value { color: var(--we-cyan); }
-    /* Cards */
+
+    .we-kpi-label {
+        font-size: 12px;
+        color: #8b949e;
+        margin-top: 6px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+    }
+    .we-kpi-sub {
+        font-size: 11px;
+        color: #8b949e;
+        margin-top: 2px;
+        opacity: 0.7;
+    }
+
+    /* ===== TARJETAS PRINCIPALES (CARDS) ===== */
     .we-card {
-        background: var(--we-bg-secondary);
-        border: 1px solid var(--we-border);
-        border-radius: var(--we-radius);
-        margin-bottom: 16px;
+        background: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        transition: var(--we-transition);
+        overflow: hidden;
+        color: #c9d1d9;
+    }
+    .we-card:hover {
+        border-color: #3c444d;
     }
     .we-card-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 14px 20px;
-        border-bottom: 1px solid var(--we-border);
+        padding: 16px 22px;
+        border-bottom: 1px solid #30363d;
+        background: #21262d;
     }
     .we-card-title {
         margin: 0;
-        font-size: 15px;
+        font-size: 16px;
         font-weight: 600;
-        color: var(--we-text-primary);
+        color: #c9d1d9;
+        letter-spacing: -0.2px;
     }
     .we-card-body {
-        padding: 20px;
+        padding: 20px 22px;
+        color: #c9d1d9;
     }
-    /* Grid */
+
+    /* ===== GRID SYSTEM ===== */
     .we-grid-2 {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 16px;
+        gap: 20px;
     }
     .we-grid-3 {
         display: grid;
         grid-template-columns: 1fr 1fr 1fr;
-        gap: 16px;
+        gap: 20px;
     }
     @media (max-width: 1024px) {
         .we-grid-2, .we-grid-3 { grid-template-columns: 1fr; }
     }
-    /* Table */
+
+    /* ===== TABLAS ===== */
     .we-table {
         width: 100%;
         border-collapse: collapse;
     }
     .we-table th {
         text-align: left;
-        padding: 10px 12px;
-        font-size: 12px;
-        font-weight: 600;
-        color: var(--we-text-secondary);
-        border-bottom: 1px solid var(--we-border);
+        padding: 12px 14px;
+        font-size: 11px;
+        font-weight: 700;
+        color: #8b949e;
+        border-bottom: 1px solid #30363d;
         text-transform: uppercase;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.6px;
+        background: #21262d;
+        white-space: nowrap;
     }
     .we-table td {
-        padding: 10px 12px;
-        font-size: 14px;
-        color: var(--we-text-primary);
-        border-bottom: 1px solid var(--we-border);
+        padding: 12px 14px;
+        font-size: 13px;
+        color: #c9d1d9;
+        border-bottom: 1px solid #30363d;
+        transition: background 0.15s ease;
     }
-    .we-table tr:hover td {
-        background: rgba(255,255,255,0.02);
+    .we-table tbody tr {
+        transition: background 0.15s ease;
     }
-    /* Badges */
+    .we-table tbody tr:hover td {
+        background: #1c2128;
+    }
+    .we-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+    /* Scrollbar para tablas */
+    .we-card-body div[style*="overflow-x:auto"]::-webkit-scrollbar {
+        height: 6px;
+    }
+    .we-card-body div[style*="overflow-x:auto"]::-webkit-scrollbar-track {
+        background: #0d1117;
+        border-radius: 3px;
+    }
+    .we-card-body div[style*="overflow-x:auto"]::-webkit-scrollbar-thumb {
+        background: #30363d;
+        border-radius: 3px;
+    }
+    .we-card-body div[style*="overflow-x:auto"]::-webkit-scrollbar-thumb:hover {
+        background: #3c444d;
+    }
+
+    /* ===== BADGES ===== */
     .we-badge {
         display: inline-flex;
         align-items: center;
-        padding: 3px 10px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: 500;
-        gap: 4px;
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+        gap: 5px;
+        letter-spacing: 0.2px;
+        transition: var(--we-transition);
     }
     .we-badge-green {
-        background: var(--we-green-bg);
-        color: var(--we-green);
-        border: 1px solid rgba(35, 134, 54, 0.3);
+        background: rgba(35, 134, 54, 0.2);
+        color: #3fb950;
+        border: 1px solid rgba(63, 185, 80, 0.2);
     }
     .we-badge-red {
-        background: var(--we-red-bg);
-        color: var(--we-red);
-        border: 1px solid rgba(218, 54, 51, 0.3);
+        background: rgba(218, 54, 51, 0.2);
+        color: #f85149;
+        border: 1px solid rgba(248, 81, 73, 0.2);
     }
     .we-badge-orange {
-        background: var(--we-orange-bg);
-        color: var(--we-orange);
-        border: 1px solid rgba(187, 128, 9, 0.3);
+        background: rgba(210, 153, 34, 0.2);
+        color: #d29922;
+        border: 1px solid rgba(210, 153, 34, 0.2);
     }
     .we-badge-blue {
-        background: rgba(88, 166, 255, 0.15);
-        color: var(--we-accent);
-        border: 1px solid rgba(88, 166, 255, 0.3);
+        background: rgba(88, 166, 255, 0.2);
+        color: #58a6ff;
+        border: 1px solid rgba(88, 166, 255, 0.2);
     }
     .we-badge-gray {
-        background: rgba(139, 148, 158, 0.15);
-        color: var(--we-text-secondary);
-        border: 1px solid rgba(139, 148, 158, 0.3);
+        background: rgba(110, 118, 129, 0.2);
+        color: #8b949e;
+        border: 1px solid rgba(110, 118, 129, 0.2);
     }
-    /* Buttons */
+
+    /* ===== BOTONES ===== */
     .we-btn {
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        padding: 6px 14px;
-        border-radius: var(--we-radius);
+        padding: 7px 16px;
+        border-radius: 6px;
         font-size: 13px;
-        font-weight: 500;
-        color: var(--we-text-primary);
-        background: var(--we-bg-tertiary);
-        border: 1px solid var(--we-border);
+        font-weight: 600;
+        color: #c9d1d9;
+        background: #30363d;
+        border: 1px solid #30363d;
         cursor: pointer;
         text-decoration: none;
         transition: var(--we-transition);
+        white-space: nowrap;
     }
     .we-btn:hover {
-        background: rgba(255,255,255,0.05);
-        border-color: var(--we-text-secondary);
-        color: var(--we-text-primary);
+        background: #3c444d;
+        border-color: #3c444d;
+        color: #c9d1d9;
     }
     .we-btn-primary {
-        background: var(--we-accent);
-        border-color: var(--we-accent);
+        background: #238636;
+        border-color: #238636;
         color: #fff;
     }
     .we-btn-primary:hover {
-        background: var(--we-accent-hover);
-        border-color: var(--we-accent-hover);
+        background: #2ea043;
+        border-color: #2ea043;
         color: #fff;
     }
     .we-btn-danger {
-        color: var(--we-red);
+        color: #da3633;
     }
     .we-btn-danger:hover {
-        background: var(--we-red-bg);
-        border-color: var(--we-red);
+        background: rgba(218, 54, 51, 0.2);
+        border-color: #da3633;
+        color: #da3633;
     }
     .we-btn-sm {
-        padding: 4px 10px;
+        padding: 6px 12px;
         font-size: 12px;
     }
-    /* Empty state */
+
+    /* ===== ESTADO VACÍO ===== */
     .we-empty {
         text-align: center;
-        padding: 40px 20px;
-        color: var(--we-text-secondary);
+        padding: 48px 24px;
+        color: #8b949e;
     }
     .we-empty h3 {
-        font-size: 18px;
-        margin-bottom: 8px;
-        color: var(--we-text-primary);
+        font-size: 20px;
+        margin-bottom: 10px;
+        color: #c9d1d9;
+        font-weight: 600;
     }
     .we-empty p {
         font-size: 14px;
-        margin: 0;
+        margin: 0 0 8px;
+        color: #8b949e;
+        line-height: 1.6;
     }
-    /* Text helpers */
+
+    /* ===== HELPERS DE TEXTO ===== */
     .we-text-small {
         font-size: 12px;
-        color: var(--we-text-secondary);
+        color: #8b949e;
     }
     .we-text-mono {
         font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
     }
     .we-link {
-        color: var(--we-accent);
+        color: #58a6ff;
         text-decoration: none;
         font-weight: 500;
+        transition: var(--we-transition);
     }
     .we-link:hover {
-        color: var(--we-accent-hover);
+        color: #79b8ff;
         text-decoration: underline;
     }
     .we-section {
-        margin-bottom: 24px;
+        margin-bottom: 28px;
     }
-    /* Status indicator */
+
+    /* ===== INDICADORES DE ESTADO ===== */
     .we-status-dot {
         display: inline-block;
         width: 8px;
@@ -272,10 +345,73 @@
         border-radius: 50%;
         margin-right: 6px;
     }
-    .we-status-dot-green { background: var(--we-green); }
-    .we-status-dot-red { background: var(--we-red); }
-    .we-status-dot-orange { background: var(--we-orange); }
-    .we-status-dot-gray { background: var(--we-text-secondary); }
+    .we-status-dot-green {
+        background: #3fb950;
+    }
+    .we-status-dot-red {
+        background: #da3633;
+    }
+    .we-status-dot-orange {
+        background: #d29922;
+    }
+    .we-status-dot-gray {
+        background: #8b949e;
+    }
+
+    /* ===== ELEMENTOS DENTRO DE CARDS ===== */
+    .we-card .we-bg-tertiary-item {
+        background: #21262d;
+        border-radius: 6px;
+        padding: 10px 14px;
+        transition: var(--we-transition);
+        border: 1px solid transparent;
+    }
+    .we-card .we-bg-tertiary-item:hover {
+        border-color: #30363d;
+        background: #1c2128;
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 768px) {
+        .we-header {
+            flex-direction: column;
+            align-items: stretch;
+        }
+        .we-header h2 {
+            font-size: 22px;
+        }
+        .we-header-actions {
+            justify-content: stretch;
+        }
+        .we-header-actions .we-btn {
+            flex: 1;
+            justify-content: center;
+        }
+        .we-kpi-grid {
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 10px;
+        }
+        .we-kpi {
+            padding: 14px 16px;
+        }
+        .we-kpi-value {
+            font-size: 24px;
+        }
+        .we-card-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 8px;
+            padding: 14px 16px;
+        }
+        .we-card-body {
+            padding: 14px 16px;
+        }
+        .we-table th,
+        .we-table td {
+            padding: 8px 10px;
+            font-size: 12px;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -322,7 +458,7 @@
             <div class="we-kpi-sub">generados en logs</div>
         </div>
         <div class="we-kpi we-kpi-accent-cyan">
-            <div class="we-kpi-value">{{ grupos_activos }}</div>
+            <div class="we-kpi-value">{{ grupos_activos.count }}</div>
             <div class="we-kpi-label">Grupos Activos</div>
             <div class="we-kpi-sub">monitoreando</div>
         </div>
@@ -338,7 +474,7 @@
         <!-- Última ejecución -->
         <div class="we-card">
             <div class="we-card-header">
-                <h3 class="we-card-title">⏱️ Última Ejecución</h3>
+                <h3 class="we-card-title">🕐 Última Ejecución</h3>
                 {% if ultimo_log %}
                 <a href="{% url 'whatsapp_extractor:log_detail' ultimo_log.id %}" class="we-link we-text-small">Ver detalle →</a>
                 {% endif %}
@@ -349,7 +485,7 @@
                     <div style="display:flex;justify-content:space-between;align-items:center;">
                         <span class="we-text-small">Estado</span>
                         <span class="we-badge {% if ultimo_log.estado == 'completed' %}we-badge-green{% elif ultimo_log.estado == 'error' %}we-badge-red{% elif ultimo_log.estado == 'running' %}we-badge-blue{% else %}we-badge-gray{% endif %}">
-                            {% if ultimo_log.estado == 'completed' %}✓ Completado{% elif ultimo_log.estado == 'error' %}✗ Error{% elif ultimo_log.estado == 'running' %}⏳ Ejecutando{% else %}⏸️ Pendiente{% endif %}
+                            {% if ultimo_log.estado == 'completed' %}✓ Completado{% elif ultimo_log.estado == 'error' %}✗ Error{% elif ultimo_log.estado == 'running' %}🔄 Ejecutando{% else %}⏳ Pendiente{% endif %}
                         </span>
                     </div>
                     <div style="display:flex;justify-content:space-between;">
@@ -390,7 +526,7 @@
                 </div>
                 {% else %}
                 <div class="we-empty">
-                    <h3>⏳ Sin ejecuciones</h3>
+                    <h3>📭 Sin ejecuciones</h3>
                     <p>No hay ejecuciones registradas aún. La primera extracción aparecerá aquí.</p>
                 </div>
                 {% endif %}
@@ -535,7 +671,7 @@
                                 <td style="white-space:nowrap;">{{ log.ejecucion_fecha|date:"d/m/Y H:i:s" }}</td>
                                 <td>
                                     <span class="we-badge {% if log.estado == 'completed' %}we-badge-green{% elif log.estado == 'error' %}we-badge-red{% elif log.estado == 'running' %}we-badge-blue{% else %}we-badge-gray{% endif %}">
-                                        {% if log.estado == 'completed' %}✓{% elif log.estado == 'error' %}✗{% elif log.estado == 'running' %}⏳{% else %}⏸️{% endif %}
+                                        {% if log.estado == 'completed' %}✓{% elif log.estado == 'error' %}✗{% elif log.estado == 'running' %}🔄{% else %}⏳{% endif %}
                                         {{ log.get_estado_display }}
                                     </span>
                                 </td>

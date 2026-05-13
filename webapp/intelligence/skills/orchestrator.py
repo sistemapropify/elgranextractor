@@ -22,6 +22,7 @@ class ExecutionContext:
     """Contexto de ejecución de una skill."""
     user_id: Optional[str] = None
     session_id: Optional[str] = None
+    conversation_id: Optional[str] = None
     permissions: List[str] = field(default_factory=list)
     environment: str = "production"
     timeout: int = 30  # segundos
@@ -104,11 +105,11 @@ class SkillOrchestrator:
         execution_record = None
 
         from ..services.metrics import MetricsService, log
-        from ..services.skill_base import SkillResult
+        from .base import SkillResult
 
         # ── Crear registro de ejecución en BD ──────────────────────────────
         try:
-            from ..models import SkillExecution, User
+            from ..models import SkillExecution, User, Conversation
             from django.core.exceptions import ValidationError
             user_obj = None
             if context.user_id:
@@ -117,9 +118,19 @@ class SkillOrchestrator:
                 except (User.DoesNotExist, ValueError, ValidationError):
                     # user_id no es un UUID válido o no existe; continuar sin usuario
                     pass
+
+            # Buscar la conversación por conversation_id del context
+            conversation_obj = None
+            if hasattr(context, 'conversation_id') and context.conversation_id:
+                try:
+                    conversation_obj = Conversation.objects.get(id=context.conversation_id)
+                except (Conversation.DoesNotExist, ValidationError):
+                    pass
+
             execution_record = SkillExecution.objects.create(
                 skill_name=skill_name,
                 user=user_obj,
+                conversation=conversation_obj,
                 parameters=parameters,
                 status='pending',
                 latency_ms=0,
@@ -137,7 +148,7 @@ class SkillOrchestrator:
         ) as timer:
             try:
                 # 1. Validar existencia de skill
-                skill = self.registry.get_skill(skill_name)
+                skill = self.registry.get_by_name(skill_name)
                 if not skill:
                     log.warning(
                         f"Skill no encontrada: {skill_name}",
@@ -147,7 +158,7 @@ class SkillOrchestrator:
                     self._finalize_execution(execution_record, 'error',
                                              error_message=f"Skill '{skill_name}' no encontrada",
                                              latency_ms=(time.time() - start_time) * 1000)
-                    return SkillResult.from_error(f"Skill '{skill_name}' no encontrada")
+                    return SkillResult.error(f"Skill '{skill_name}' no encontrada")
 
                 # 2. Verificar permisos
                 if not self._check_permissions(skill, context):
@@ -160,7 +171,7 @@ class SkillOrchestrator:
                     self._finalize_execution(execution_record, 'error',
                                              error_message=f"Permisos insuficientes",
                                              latency_ms=(time.time() - start_time) * 1000)
-                    return SkillResult.from_error(f"Permisos insuficientes para skill '{skill_name}'")
+                    return SkillResult.error(f"Permisos insuficientes para skill '{skill_name}'")
 
                 # 3. Generar cache key
                 cache_key = self._generate_cache_key(skill_name, parameters, context)
@@ -190,7 +201,7 @@ class SkillOrchestrator:
                     trace_id=timer.trace_id,
                 )
 
-                result = skill.execute(**parameters)
+                result = skill.execute(parameters, context)
 
                 # 6. Cachear resultado si fue exitoso
                 if result.success and self.cache is not None and self._should_cache(skill, result):
@@ -259,7 +270,7 @@ class SkillOrchestrator:
                                          error_message=f"Error interno: {str(e)}",
                                          latency_ms=execution_time * 1000)
 
-                return SkillResult.from_error(f"Error interno: {str(e)}")
+                return SkillResult.error(f"Error interno: {str(e)}")
 
     def execute_skill_pipeline(
         self,
@@ -316,7 +327,7 @@ class SkillOrchestrator:
         stop_on_error: bool,
     ) -> SkillPipelineResult:
         """Ejecuta los pasos del pipeline uno después del otro."""
-        from ..services.skill_base import SkillResult
+        from .base import SkillResult
 
         pipeline_data: Dict[str, Any] = {}
         step_outputs: List[Dict[str, Any]] = []
@@ -366,7 +377,7 @@ class SkillOrchestrator:
         stop_on_error: bool,
     ) -> SkillPipelineResult:
         """Ejecuta los pasos del pipeline en paralelo."""
-        from ..services.skill_base import SkillResult
+        from .base import SkillResult
 
         step_outputs: List[Dict[str, Any]] = []
         pipeline_data: Dict[str, Any] = {}
@@ -382,7 +393,7 @@ class SkillOrchestrator:
                 try:
                     result = future.result()
                 except Exception as exc:
-                    result = SkillResult.from_error(str(exc))
+                    result = SkillResult.error(str(exc))
 
                 step_output = {
                     'name': step.name,
@@ -450,10 +461,10 @@ class SkillOrchestrator:
             context = ExecutionContext()
 
         skills_info = []
-        for skill in self.registry.list_skills():
+        for skill_schema in self.registry.list_all():
             # Verificar permisos si es necesario
-            if self._check_permissions_for_info(skill, context):
-                skills_info.append(skill)
+            if self._check_permissions_for_info(skill_schema, context):
+                skills_info.append(skill_schema)
 
         return skills_info
 
@@ -496,7 +507,7 @@ class SkillOrchestrator:
         log.info(f"Cache invalidado: {invalidated} keys", pattern=pattern)
         return invalidated
 
-    def _check_permissions(self, skill: Skill, context: ExecutionContext) -> bool:
+    def _check_permissions(self, skill, context: ExecutionContext) -> bool:
         """Verifica si el contexto tiene permisos para ejecutar la skill."""
         # Por ahora, permisos básicos. Se puede extender con lógica compleja
         required_permissions = getattr(skill, 'required_permissions', [])
@@ -528,7 +539,7 @@ class SkillOrchestrator:
         cache_hash = hashlib.md5(cache_string.encode()).hexdigest()
         return f"skill:{skill_name}:{cache_hash}"
 
-    def _should_cache(self, skill: Skill, result: SkillResult) -> bool:
+    def _should_cache(self, skill, result: SkillResult) -> bool:
         """Determina si el resultado debe cachearse."""
         # No cachear errores por defecto
         if not result.success:
@@ -537,7 +548,7 @@ class SkillOrchestrator:
         # Verificar si la skill permite cache
         return getattr(skill, 'cacheable', True)
 
-    def _get_cache_ttl(self, skill: Skill) -> int:
+    def _get_cache_ttl(self, skill) -> int:
         """Obtiene TTL de cache para la skill."""
         return getattr(skill, 'cache_ttl', 3600)  # 1 hora por defecto
 

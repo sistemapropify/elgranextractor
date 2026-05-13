@@ -3,6 +3,12 @@ Servicio LLM integrado con RAG para generación de respuestas enriquecidas con c
 
 Este módulo integra el sistema RAG con DeepSeek API para proporcionar respuestas
 enriquecidas con información contextual de propiedades, noticias y datos del mercado.
+
+Integración con Skills:
+- extract_skill_params(): extrae parámetros estructurados del mensaje del usuario
+  usando el schema de una skill, para alimentar la ejecución de la skill.
+- generate_rag_response(): modificado para consultar primero el SkillRegistry
+  y ejecutar la skill adecuada antes de caer en RAG puro.
 """
 
 import os
@@ -18,6 +24,8 @@ from django.utils import timezone
 
 from .rag import RAGService
 from ..models import IntelligenceCollection
+from ..skills.registry import SkillRegistry
+from ..skills.base import SkillResult
 
 logger = logging.getLogger(__name__)
 
@@ -270,6 +278,129 @@ class LLMService:
         return context_text, results
     
     @classmethod
+    def extract_skill_params(
+        cls,
+        message: str,
+        parameters_schema: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Extrae parámetros estructurados del mensaje del usuario usando el LLM.
+
+        Usa DeepSeek para analizar el mensaje en lenguaje natural y extraer
+        los valores correspondientes al schema de parámetros de una skill.
+
+        Args:
+            message: Mensaje del usuario en lenguaje natural
+            parameters_schema: Schema de parámetros de la skill (ver BaseSkill.parameters_schema)
+
+        Returns:
+            Dict con los parámetros extraídos (solo los que se encontraron en el mensaje)
+        """
+        if not message or not message.strip():
+            return {}
+
+        # Construir descripción de campos para el prompt
+        campos_desc = []
+        for param_name, param_info in parameters_schema.items():
+            req = "REQUERIDO" if param_info.get('required') else "OPCIONAL"
+            tipo = param_info.get('type', 'string')
+            desc = param_info.get('description', '')
+            campos_desc.append(f"- {param_name} ({tipo}, {req}): {desc}")
+
+        campos_str = "\n".join(campos_desc)
+
+        system_prompt = f"""Eres un extractor de parámetros para búsqueda de propiedades inmobiliarias.
+
+Analiza el mensaje del usuario y extrae SOLO los parámetros que están explícitamente mencionados.
+
+CAMPOS A EXTRAER:
+{campos_str}
+
+REGLAS DE EXTRACCIÓN:
+1. Extrae SOLO lo que el usuario menciona explícitamente. No inventes valores.
+2. Normaliza tipos de propiedad: "depa"/"dpto"/"departamento" → "Departamento", "casa"/"vivienda" → "Casa", "terreno"/"lote" → "Terreno"
+3. Normaliza distritos: primera letra mayúscula, tildes correctas. Ej: "cayma" → "Cayma"
+4. Precios: "80 mil" → 80000, "1.2 millones" → 1200000. Detecta si es USD o PEN.
+5. semantic_query: TODO lo que sea subjetivo o descriptivo que NO sea un filtro exacto.
+   Ej: "amplio", "luminoso", "cerca de parques", "buena zona", "acogedor"
+6. Si el usuario menciona "amplios ambientes" o similar, ponerlo en semantic_query.
+7. condicion: Si el usuario menciona "vendidas"/"vendido" → "Vendida". Si menciona "reservadas"/"reservado" → "Reservada". Si menciona "disponibles"/"en venta" → "Disponible". Por defecto NO extraer este campo (la skill asume Disponible automáticamente).
+8. Si el usuario pregunta por propiedades en general sin filtros específicos, NO extraer nada.
+
+Responde SOLO con un objeto JSON válido. Si no hay parámetros extraíbles, responde {{}}."""
+
+        messages = [
+            {"role": "user", "content": f"Mensaje del usuario: {message}"}
+        ]
+
+        try:
+            success, api_message, api_response = cls._call_deepseek_api(
+                messages=messages,
+                system_prompt=system_prompt
+            )
+
+            if not success:
+                logger.warning(f"Error extrayendo parámetros de skill: {api_message}")
+                return {}
+
+            # Extraer JSON de la respuesta
+            extracted = cls._extract_json_from_response(api_response["content"])
+
+            if not extracted:
+                logger.warning("No se pudo extraer JSON de la respuesta de extracción de parámetros")
+                return {}
+
+            # Limpiar: remover claves con None o vacío
+            cleaned = {
+                k: v for k, v in extracted.items()
+                if v is not None and v != '' and v != []
+            }
+
+            # ── Fallback: si no se extrajo nada, reintentar con prompt simplificado ──
+            if not cleaned:
+                logger.info(
+                    "[extract_skill_params] Fallback: sin parámetros en primer intento, "
+                    "reintentando con prompt simplificado"
+                )
+                simplified_prompt = (
+                    "Extrae del siguiente mensaje del usuario SOLO estos campos "
+                    "si aparecen explícitamente:\n"
+                    "- distrito: nombre del distrito (ej: Cayma, Yanahuara, Cercado)\n"
+                    "- tipo_propiedad: tipo (Departamento, Casa, Terreno, "
+                    "Local Comercial, Oficina)\n"
+                    "- operacion: tipo de operación (venta, alquiler)\n\n"
+                    "Si el usuario pregunta por propiedades en general sin filtros "
+                    "específicos, responde SOLO con un JSON vacío: {}\n\n"
+                    "NO agregues explicaciones. SOLO responde con el JSON.\n\n"
+                    f"Mensaje: {message}"
+                )
+                success2, _, content2 = cls._call_deepseek_api(
+                    messages=[{"role": "user", "content": message}],
+                    system_prompt=simplified_prompt,
+                )
+                if success2 and content2:
+                    # content2 es un dict con 'content' si es respuesta normal
+                    response_content = content2.get('content', '') if isinstance(content2, dict) else str(content2)
+                    extracted2 = cls._extract_json_from_response(response_content)
+                    if extracted2:
+                        cleaned = {
+                            k: v for k, v in extracted2.items()
+                            if v is not None and v != '' and v != []
+                        }
+                        logger.info(
+                            f"[extract_skill_params] Fallback exitoso: {cleaned}"
+                        )
+
+            logger.info(
+                f"Parámetros extraídos para skill: {cleaned}"
+            )
+            return cleaned
+
+        except Exception as e:
+            logger.error(f"Error en extract_skill_params: {e}")
+            return {}
+
+    @classmethod
     def generate_rag_response(
         cls,
         query: str,
@@ -279,37 +410,121 @@ class LLMService:
         include_sources: bool = True
     ) -> Tuple[bool, str, Dict[str, Any]]:
         """
-        Genera una respuesta enriquecida con contexto RAG.
-        
+        Genera una respuesta enriquecida con contexto RAG o ejecutando una skill.
+
+        Flujo:
+        1. Consultar SkillRegistry.find_best_skill(intent, user_level)
+        2a. Si hay skill → extract_skill_params() → skill.execute()
+        2b. Si no hay skill → _build_rag_context() como antes
+        3. LLM formatea la respuesta con el SkillResult o el contexto RAG
+
         Args:
             query: Consulta del usuario
             conversation_history: Historial de conversación (opcional)
             user_access_level: Nivel de acceso del usuario
             collection_names: Nombres específicos de colecciones
             include_sources: Si incluir referencias a fuentes
-            
+
         Returns:
             Tuple (success, message, response_data)
         """
         logger.info(f"Generando respuesta RAG para: '{query}' (nivel: {user_access_level})")
-        
-        # 1. Obtener contexto RAG
+
+        # ── 1. Intentar ejecutar skill ──
+        registry = SkillRegistry()
+        best_skill = registry.find_best_skill(query, user_level=user_access_level)
+
+        skill_result: Optional[SkillResult] = None
+        rag_context = ""
+        retrieved_docs = []
+
+        if best_skill:
+            logger.info(f"Skill seleccionada: '{best_skill.name}' para query: '{query}'")
+
+            # Extraer parámetros del mensaje usando el schema de la skill
+            params = cls.extract_skill_params(query, best_skill.parameters_schema)
+
+            if best_skill.validate_params(params):
+                # Ejecutar skill con contexto del usuario
+                skill_result = best_skill.execute(
+                    params=params,
+                    context={'user_level': user_access_level}
+                )
+
+                if skill_result.success:
+                    logger.info(
+                        f"Skill '{best_skill.name}' ejecutada exitosamente: "
+                        f"{skill_result.message}"
+                    )
+                else:
+                    logger.warning(
+                        f"Skill '{best_skill.name}' falló: {skill_result.message}"
+                    )
+            else:
+                logger.info(
+                    f"Parámetros insuficientes para skill '{best_skill.name}'. "
+                    f"Usando RAG puro."
+                )
+
+        # ── 2a. Si hay resultado de skill, construir prompt con ese resultado ──
+        if skill_result and skill_result.success:
+            # Construir contexto a partir del resultado de la skill
+            skill_context = cls._format_skill_context(skill_result)
+
+            messages = []
+            if conversation_history:
+                for msg in conversation_history[-6:]:
+                    messages.append(msg)
+
+            system_prompt = cls._build_skill_system_prompt(skill_result, skill_context)
+
+            user_message = f"Consulta del usuario: {query}"
+            messages.append({"role": "user", "content": user_message})
+
+            success, api_message, api_response = cls._call_deepseek_api(
+                messages=messages,
+                system_prompt=system_prompt
+            )
+
+            if not success:
+                return False, api_message, {}
+
+            response_content = api_response["content"]
+
+            response_data = {
+                "query": query,
+                "response": response_content,
+                "timestamp": timezone.now().isoformat(),
+                "skill_used": skill_result.skill_name,
+                "skill_result": {
+                    "success": skill_result.success,
+                    "message": skill_result.message,
+                    "metadata": skill_result.metadata,
+                    "total_resultados": len(skill_result.data) if isinstance(skill_result.data, list) else 0,
+                },
+                "rag_context_used": False,
+                "retrieved_documents_count": 0
+            }
+
+            logger.info(
+                f"Respuesta generada vía skill '{skill_result.skill_name}' "
+                f"({len(response_content)} caracteres)"
+            )
+            return True, "Respuesta generada exitosamente", response_data
+
+        # ── 2b. RAG puro (sin skill) ──
         rag_context, retrieved_docs = cls._build_rag_context(
             query=query,
             user_access_level=user_access_level,
             collection_names=collection_names
         )
-        
-        # 2. Construir prompt del sistema
-        # 3. Construir mensajes
+
         messages = []
-        
-        # Agregar historial de conversación si existe
+
         if conversation_history:
-            for msg in conversation_history[-6:]:  # Últimos 6 mensajes como contexto
+            for msg in conversation_history[-6:]:
                 messages.append(msg)
-        
-        # Construir system prompt con contexto RAG incluido
+
         system_prompt = """Eres Propifai Assistant, un experto asistente inmobiliario especializado en el mercado de Arequipa, Perú.
 
 Tu conocimiento incluye:
@@ -328,30 +543,25 @@ INSTRUCCIONES CRÍTICAS:
 8. Si se te pide comparar o analizar, usa solo los datos del contexto.
 
 CONTEXTO DISPONIBLE:"""
-        
+
         if rag_context:
             system_prompt += f"\n\n{rag_context}"
         else:
             system_prompt += "\n\nNo hay información específica disponible en este momento."
-        
-        # Agregar consulta del usuario
+
         user_message = f"Consulta del usuario: {query}"
-        
         messages.append({"role": "user", "content": user_message})
-        
-        # 4. Llamar a la API
+
         success, api_message, api_response = cls._call_deepseek_api(
             messages=messages,
             system_prompt=system_prompt
         )
-        
+
         if not success:
             return False, api_message, {}
-        
-        # 5. Procesar respuesta
+
         response_content = api_response["content"]
-        
-        # Construir respuesta estructurada
+
         response_data = {
             "query": query,
             "response": response_content,
@@ -359,8 +569,7 @@ CONTEXTO DISPONIBLE:"""
             "rag_context_used": bool(rag_context),
             "retrieved_documents_count": len(retrieved_docs)
         }
-        
-        # Incluir fuentes si se solicita y hay documentos recuperados
+
         if include_sources and retrieved_docs:
             sources = []
             for doc in retrieved_docs:
@@ -370,9 +579,84 @@ CONTEXTO DISPONIBLE:"""
                     "metadata": doc.get("metadata", {})
                 })
             response_data["sources"] = sources
-        
+
         logger.info(f"Respuesta RAG generada exitosamente ({len(response_content)} caracteres)")
         return True, "Respuesta generada exitosamente", response_data
+
+    @classmethod
+    def _format_skill_context(cls, skill_result: SkillResult) -> str:
+        """
+        Formatea el resultado de una skill como contexto para el LLM.
+
+        Convierte los datos estructurados de la skill en texto legible
+        para que el LLM lo use en su respuesta.
+        """
+        if not skill_result.data:
+            return skill_result.message
+
+        data = skill_result.data
+        if isinstance(data, list):
+            partes = []
+            for i, item in enumerate(data, 1):
+                field_values = item.get('field_values', {})
+                if field_values:
+                    titulo = field_values.get('title') or field_values.get('titulo', 'Sin título')
+                    distrito = field_values.get('district_name') or field_values.get('distrito', 'Sin distrito')
+                    precio = field_values.get('price') or field_values.get('precio', 'N/A')
+                    moneda = field_values.get('currency_id', '')
+                    tipo = field_values.get('property_type_id') or field_values.get('tipo_propiedad', 'Sin tipo')
+                    habitaciones = field_values.get('bedrooms', 'N/A')
+                    banos = field_values.get('bathrooms', 'N/A')
+                    area = field_values.get('built_area') or field_values.get('area_construida', 'N/A')
+                    descripcion = field_values.get('description') or field_values.get('descripcion', '')
+
+                    partes.append(
+                        f"[Propiedad {i}]\n"
+                        f"Título: {titulo}\n"
+                        f"Descripción: {descripcion}\n"
+                        f"Distrito: {distrito}\n"
+                        f"Tipo: {tipo}\n"
+                        f"Precio: {precio} {moneda}\n"
+                        f"Área construida: {area} m²\n"
+                        f"Habitaciones: {habitaciones}\n"
+                        f"Baños: {banos}\n"
+                    )
+            return "\n\n".join(partes)
+
+        return str(data)
+
+    @classmethod
+    def _build_skill_system_prompt(cls, skill_result: SkillResult, skill_context: str) -> str:
+        """
+        Construye el system prompt cuando se usó una skill.
+
+        Incluye el contexto de la skill y metadatos para que el LLM
+        pueda responder con precisión.
+        """
+        modo = skill_result.metadata.get('modo', 'desconocido')
+        total = skill_result.metadata.get('total_encontrados_sql', 0)
+        filtros = skill_result.metadata.get('filtros_aplicados', {})
+
+        prompt = f"""Eres Propifai Assistant, un experto asistente inmobiliario especializado en el mercado de Arequipa, Perú.
+
+Has ejecutado una búsqueda de propiedades con los siguientes detalles:
+- Modo de búsqueda: {modo}
+- Total de propiedades encontradas: {total}
+- Filtros aplicados: {json.dumps(filtros, ensure_ascii=False)}
+
+INSTRUCCIONES CRÍTICAS:
+1. Usa EXCLUSIVAMENTE la información de las propiedades listadas abajo para responder.
+2. Responde en español claro y profesional.
+3. Para cada propiedad, menciona: título, precio, ubicación (distrito), tipo y características principales.
+4. Si no hay propiedades en los resultados, indícalo claramente al usuario.
+5. Si el usuario preguntó por un distrito específico y hay propiedades de ese distrito, resáltalo.
+6. NUNCA inventes propiedades que no estén en la lista.
+7. Sé preciso con precios y características.
+
+RESULTADOS DE LA BÚSQUEDA:
+{skill_context}"""
+
+        return prompt
     
     @classmethod
     def analyze_query_intent(

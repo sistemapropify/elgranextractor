@@ -1,58 +1,75 @@
 """
 Skill avanzado para realizar búsquedas exactas de propiedades por filtros.
+Migrada de Skill (LEGACY) a BaseSkill (NUEVO).
 """
 
-from typing import Dict, Any, List
+from typing import Any, Dict, List, Optional
 
-from ..services.skill_base import Skill, SkillParameter, SkillResult
+from .base import BaseSkill, SkillResult
 
 
-class BusquedaExactaSkill(Skill):
+class BusquedaExactaSkill(BaseSkill):
     """Skill para filtrar propiedades usando criterios exactos."""
 
     name = "busqueda_exacta"
     description = "Realiza una búsqueda exacta de propiedades según filtros estructurados"
-    parameters = {
-        'propiedades': SkillParameter(
-            name='propiedades',
-            type='list',
-            description='Lista de propiedades a filtrar',
-            required=True
-        ),
-        'filtros': SkillParameter(
-            name='filtros',
-            type='dict',
-            description='Diccionario de filtros exactos a aplicar',
-            required=True
-        ),
-        'ordenar_por': SkillParameter(
-            name='ordenar_por',
-            type='str',
-            description='Campo por el cual ordenar resultados',
-            required=False,
-            default='precio'
-        ),
-        'direccion': SkillParameter(
-            name='direccion',
-            type='str',
-            description='Dirección del orden: ascendente o descendente',
-            required=False,
-            default='ascendente'
-        ),
+    category = "busqueda"
+    access_level = 1
+    is_active = True
+
+    parameters_schema = {
+        'propiedades': {
+            'type': 'array',
+            'description': 'Lista de propiedades a filtrar',
+            'required': True,
+        },
+        'filtros': {
+            'type': 'object',
+            'description': 'Diccionario de filtros exactos a aplicar',
+            'required': True,
+        },
+        'ordenar_por': {
+            'type': 'string',
+            'description': 'Campo por el cual ordenar resultados',
+            'required': False,
+        },
+        'direccion': {
+            'type': 'string',
+            'description': 'Dirección del orden: ascendente o descendente',
+            'required': False,
+        },
     }
 
-    def execute(self, **kwargs) -> SkillResult:
+    def validate_params(self, params: Dict[str, Any]) -> bool:
+        """Valida que los parámetros requeridos estén presentes."""
+        if not params:
+            return False
+        required = ('propiedades', 'filtros')
+        return all(params.get(k) is not None for k in required)
+
+    def execute(self, params: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> SkillResult:
         try:
-            params = self.validate_params(**kwargs)
+            if not self.validate_params(params):
+                return SkillResult.error(
+                    message="Faltan parámetros requeridos: propiedades, filtros",
+                    skill_name=self.name
+                )
+
             propiedades = params['propiedades']
             filtros = params['filtros']
-            ordenar_por = params['ordenar_por']
-            direccion = params['direccion']
+            ordenar_por = str(params.get('ordenar_por', 'precio'))
+            direccion = str(params.get('direccion', 'ascendente'))
 
             if not isinstance(propiedades, list):
-                return SkillResult.from_error("El parámetro 'propiedades' debe ser una lista")
+                return SkillResult.error(
+                    message="El parámetro 'propiedades' debe ser una lista",
+                    skill_name=self.name
+                )
             if not isinstance(filtros, dict):
-                return SkillResult.from_error("El parámetro 'filtros' debe ser un diccionario")
+                return SkillResult.error(
+                    message="El parámetro 'filtros' debe ser un diccionario",
+                    skill_name=self.name
+                )
 
             def cumple(prop: Dict[str, Any]) -> bool:
                 for campo, valor in filtros.items():
@@ -83,6 +100,11 @@ class BusquedaExactaSkill(Skill):
             except TypeError:
                 pass
 
+            mensaje = (
+                f"Búsqueda exacta completada: {len(filtradas)} propiedades encontradas "
+                f"de {len(propiedades)} total."
+            )
+
             return SkillResult.ok(
                 data={
                     'resultados': filtradas,
@@ -91,8 +113,18 @@ class BusquedaExactaSkill(Skill):
                     'ordenar_por': ordenar_por,
                     'direccion': direccion,
                 },
-                operation='busqueda_exacta',
-                inputs=params
+                message=mensaje,
+                metadata={
+                    'operation': 'busqueda_exacta',
+                    'inputs': {
+                        'total_propiedades': len(propiedades),
+                        'total_filtros': len(filtros),
+                    },
+                },
+                skill_name=self.name
             )
         except Exception as e:
-            return SkillResult.from_error(str(e))
+            return SkillResult.error(
+                message=str(e),
+                skill_name=self.name
+            )

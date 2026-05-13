@@ -1,71 +1,83 @@
 """
 Skill avanzado para análisis financiero de una propiedad.
+Migrada de Skill (LEGACY) a BaseSkill (NUEVO).
 """
 
-from typing import Dict, Any
+from typing import Any, Dict, Optional
 
-from ..services.skill_base import Skill, SkillParameter, SkillResult
+from .base import BaseSkill, SkillResult
 
 
-class ACMAnalisisSkill(Skill):
+class ACMAnalisisSkill(BaseSkill):
     """Skill para generar un análisis financiero ACM de una propiedad."""
 
     name = "acm_analisis"
     description = "Genera un análisis ACM completo y recomendaciones financieras para una propiedad"
-    parameters = {
-        'precio': SkillParameter(
-            name='precio',
-            type='float',
-            description='Precio de la propiedad',
-            required=True
-        ),
-        'area_m2': SkillParameter(
-            name='area_m2',
-            type='float',
-            description='Área de la propiedad en metros cuadrados',
-            required=True
-        ),
-        'ubicacion': SkillParameter(
-            name='ubicacion',
-            type='str',
-            description='Ubicación o zona de la propiedad',
-            required=True
-        ),
-        'gastos_mantenimiento_mensuales': SkillParameter(
-            name='gastos_mantenimiento_mensuales',
-            type='float',
-            description='Gastos mensuales de mantenimiento estimados',
-            required=False,
-            default=0.0
-        ),
-        'tasa_interes_anual': SkillParameter(
-            name='tasa_interes_anual',
-            type='float',
-            description='Tasa de interés anual esperada para financiamiento (%)',
-            required=False,
-            default=7.5
-        ),
-        'plazo_anos': SkillParameter(
-            name='plazo_anos',
-            type='int',
-            description='Plazo del financiamiento en años',
-            required=False,
-            default=20
-        ),
+    category = "reporte"
+    access_level = 1
+    is_active = True
+
+    parameters_schema = {
+        'precio': {
+            'type': 'float',
+            'description': 'Precio de la propiedad',
+            'required': True,
+        },
+        'area_m2': {
+            'type': 'float',
+            'description': 'Área de la propiedad en metros cuadrados',
+            'required': True,
+        },
+        'ubicacion': {
+            'type': 'string',
+            'description': 'Ubicación o zona de la propiedad',
+            'required': True,
+        },
+        'gastos_mantenimiento_mensuales': {
+            'type': 'float',
+            'description': 'Gastos mensuales de mantenimiento estimados',
+            'required': False,
+        },
+        'tasa_interes_anual': {
+            'type': 'float',
+            'description': 'Tasa de interés anual esperada para financiamiento (%)',
+            'required': False,
+        },
+        'plazo_anos': {
+            'type': 'integer',
+            'description': 'Plazo del financiamiento en años',
+            'required': False,
+        },
     }
 
-    def execute(self, **kwargs) -> SkillResult:
+    def validate_params(self, params: Dict[str, Any]) -> bool:
+        """Valida que los parámetros requeridos estén presentes."""
+        if not params:
+            return False
+        required = ('precio', 'area_m2', 'ubicacion')
+        return all(params.get(k) is not None for k in required)
+
+    def execute(self, params: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> SkillResult:
         try:
-            params = self.validate_params(**kwargs)
-            precio = params['precio']
-            area = params['area_m2']
-            gastos = params.get('gastos_mantenimiento_mensuales', 0.0)
-            tasa_anual = params.get('tasa_interes_anual', 7.5) / 100.0
-            plazo_anos = params.get('plazo_anos', 20)
+            if not self.validate_params(params):
+                return SkillResult.error(
+                    message="Faltan parámetros requeridos: precio, area_m2, ubicacion",
+                    skill_name=self.name
+                )
+
+            precio = float(params['precio'])
+            area = float(params['area_m2'])
+            ubicacion = str(params['ubicacion'])
+            gastos = float(params.get('gastos_mantenimiento_mensuales', 0.0))
+            tasa_anual = float(params.get('tasa_interes_anual', 7.5)) / 100.0
+            plazo_anos = int(params.get('plazo_anos', 20))
             meses = max(1, plazo_anos * 12)
 
             if precio <= 0 or area <= 0:
-                return SkillResult.from_error("Precio y área deben ser mayores a cero")
+                return SkillResult.error(
+                    message="Precio y área deben ser mayores a cero",
+                    skill_name=self.name
+                )
 
             precio_m2 = round(precio / area, 2)
             cuota_mensual = round(
@@ -77,7 +89,7 @@ class ACMAnalisisSkill(Skill):
             indice_costo_por_area = round(precio_m2 / 1000, 4)
 
             analisis = {
-                'zona': params['ubicacion'],
+                'zona': ubicacion,
                 'precio_total': precio,
                 'area_m2': area,
                 'precio_m2': precio_m2,
@@ -102,8 +114,19 @@ class ACMAnalisisSkill(Skill):
                     'analisis': analisis,
                     'recomendacion': recomendacion,
                 },
-                operation='acm_analisis',
-                inputs=params
+                message=recomendacion,
+                metadata={
+                    'operation': 'acm_analisis',
+                    'inputs': {
+                        'precio': precio,
+                        'area_m2': area,
+                        'ubicacion': ubicacion,
+                    },
+                },
+                skill_name=self.name
             )
         except Exception as e:
-            return SkillResult.from_error(str(e))
+            return SkillResult.error(
+                message=str(e),
+                skill_name=self.name
+            )

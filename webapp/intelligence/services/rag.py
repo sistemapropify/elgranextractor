@@ -1285,6 +1285,22 @@ class RAGService:
                         if val is not None and val != '':
                             content_parts.append(str(val))
                     
+                    # ── Refactor D3: Inyectar etiquetas semánticas de la colección ──
+                    # Las semantic_tags se agregan al contenido del embedding para
+                    # mejorar la búsqueda conceptual. Por ejemplo, una colección con
+                    # tags ['terreno', 'construccion', 'educacion'] hará que propiedades
+                    # sean encontradas por consultas como "donde construir un colegio".
+                    semantic_tags = collection.semantic_tags or []
+                    if semantic_tags:
+                        tags_text = " | ".join(
+                            f"categoria: {tag}" for tag in semantic_tags
+                        )
+                        content_parts.append(tags_text)
+                        logger.debug(
+                            f"Etiquetas semánticas inyectadas en embedding "
+                            f"para {source_id}: {semantic_tags}"
+                        )
+                    
                     content = " ".join(content_parts)
                     
                     if not content.strip():
@@ -1719,80 +1735,91 @@ class RAGService:
             if not documents.exists():
                 return []
             
-            # --- BÚSQUEDA CON FAISS HNSW (P2) ---
-            # Intentar usar FAISS primero para búsqueda O(log n)
+            # --- BÚSQUEDA SEMÁNTICA (P2) ---
+            # Si hay filtros aplicados, NO usar FAISS (no soporta filtros).
+            # Usar búsqueda O(n) que respeta el QuerySet filtrado.
             results = []
             threshold = cls.SIMILARITY_THRESHOLD
+            use_faiss = not filters  # FAISS solo cuando no hay filtros
             
-            try:
-                from .faiss_index import FAISSIndexManager
-                
-                # Procesar cada colección por separado (cada una tiene su propio índice FAISS)
-                for collection in collections:
-                    faiss_index = FAISSIndexManager.get_instance(
-                        collection.name,
-                        cls.EMBEDDING_DIMENSIONS
-                    )
+            if use_faiss:
+                try:
+                    from .faiss_index import FAISSIndexManager
                     
-                    if faiss_index.is_loaded:
-                        # Búsqueda FAISS (O(log n))
-                        faiss_results = faiss_index.search(query_vector, top_k=top_k)
+                    # Procesar cada colección por separado (cada una tiene su propio índice FAISS)
+                    for collection in collections:
+                        faiss_index = FAISSIndexManager.get_instance(
+                            collection.name,
+                            cls.EMBEDDING_DIMENSIONS
+                        )
                         
-                        if faiss_results:
-                            # Obtener documentos completos desde BD
-                            doc_ids = [r['document_id'] for r in faiss_results]
-                            docs_map = {
-                                str(d.id): d
-                                for d in IntelligenceDocument.objects.filter(id__in=doc_ids)
-                            }
+                        if faiss_index.is_loaded:
+                            # Búsqueda FAISS (O(log n))
+                            faiss_results = faiss_index.search(query_vector, top_k=top_k)
                             
-                            for fr in faiss_results:
-                                doc = docs_map.get(fr['document_id'])
-                                if doc and fr['similarity'] >= threshold:
-                                    field_values_to_display = cls._build_field_values_to_display(doc)
-                                    
-                                    results.append({
-                                        'document_id': str(doc.id),
-                                        'collection_name': doc.collection.name,
-                                        'source_id': doc.source_id,
-                                        'similarity': fr['similarity'],
-                                        'field_values': field_values_to_display,
-                                        'content': doc.content[:200] + '...' if len(doc.content) > 200 else doc.content,
-                                        'created_at': doc.created_at.isoformat() if doc.created_at else None,
-                                        'search_type': 'vector_faiss'
-                                    })
-                    else:
-                        # Fallback: búsqueda O(n) para esta colección
-                        logger.debug(f"FAISS no disponible para '{collection.name}', usando búsqueda O(n)")
-                        collection_docs = documents.filter(collection=collection)
-                        
-                        for doc in collection_docs:
-                            try:
-                                doc_vector = np.frombuffer(doc.embedding, dtype=np.float32)
-                                similarity = np.dot(query_vector, doc_vector) / (
-                                    np.linalg.norm(query_vector) * np.linalg.norm(doc_vector)
-                                )
+                            if faiss_results:
+                                # Obtener documentos completos desde BD
+                                doc_ids = [r['document_id'] for r in faiss_results]
+                                docs_map = {
+                                    str(d.id): d
+                                    for d in IntelligenceDocument.objects.filter(id__in=doc_ids)
+                                }
                                 
-                                if similarity >= threshold:
-                                    field_values_to_display = cls._build_field_values_to_display(doc)
+                                for fr in faiss_results:
+                                    doc = docs_map.get(fr['document_id'])
+                                    if doc and fr['similarity'] >= threshold:
+                                        field_values_to_display = cls._build_field_values_to_display(doc)
+                                        
+                                        results.append({
+                                            'document_id': str(doc.id),
+                                            'collection_name': doc.collection.name,
+                                            'source_id': doc.source_id,
+                                            'similarity': fr['similarity'],
+                                            'field_values': field_values_to_display,
+                                            'content': doc.content[:200] + '...' if len(doc.content) > 200 else doc.content,
+                                            'created_at': doc.created_at.isoformat() if doc.created_at else None,
+                                            'search_type': 'vector_faiss'
+                                        })
+                        else:
+                            # Fallback: búsqueda O(n) para esta colección
+                            logger.debug(f"FAISS no disponible para '{collection.name}', usando búsqueda O(n)")
+                            collection_docs = documents.filter(collection=collection)
+                            
+                            for doc in collection_docs:
+                                try:
+                                    doc_vector = np.frombuffer(doc.embedding, dtype=np.float32)
+                                    similarity = np.dot(query_vector, doc_vector) / (
+                                        np.linalg.norm(query_vector) * np.linalg.norm(doc_vector)
+                                    )
                                     
-                                    results.append({
-                                        'document_id': str(doc.id),
-                                        'collection_name': doc.collection.name,
-                                        'source_id': doc.source_id,
-                                        'similarity': float(similarity),
-                                        'field_values': field_values_to_display,
-                                        'content': doc.content[:200] + '...' if len(doc.content) > 200 else doc.content,
-                                        'created_at': doc.created_at.isoformat() if doc.created_at else None,
-                                        'search_type': 'vector'
-                                    })
-                            except Exception as e:
-                                logger.warning(f"Error calculando similitud para documento {doc.id}: {e}")
-                                continue
-                
-            except ImportError:
-                # FAISS no instalado, usar búsqueda O(n) tradicional
-                logger.debug("FAISS no disponible, usando búsqueda O(n) tradicional")
+                                    if similarity >= threshold:
+                                        field_values_to_display = cls._build_field_values_to_display(doc)
+                                        
+                                        results.append({
+                                            'document_id': str(doc.id),
+                                            'collection_name': doc.collection.name,
+                                            'source_id': doc.source_id,
+                                            'similarity': float(similarity),
+                                            'field_values': field_values_to_display,
+                                            'content': doc.content[:200] + '...' if len(doc.content) > 200 else doc.content,
+                                            'created_at': doc.created_at.isoformat() if doc.created_at else None,
+                                            'search_type': 'vector'
+                                        })
+                                except Exception as e:
+                                    logger.warning(f"Error calculando similitud para documento {doc.id}: {e}")
+                                    continue
+                    
+                except ImportError:
+                    # FAISS no instalado, usar búsqueda O(n) tradicional
+                    logger.debug("FAISS no disponible, usando búsqueda O(n) tradicional")
+                    use_faiss = False
+            
+            if not use_faiss:
+                # Búsqueda O(n) tradicional - respeta filtros SQL
+                logger.debug(
+                    f"Usando búsqueda O(n) tradicional "
+                    f"(faiss={'no disponible' if use_faiss is False else 'filtros activos'})"
+                )
                 for doc in documents:
                     try:
                         doc_vector = np.frombuffer(doc.embedding, dtype=np.float32)
@@ -1840,13 +1867,15 @@ class RAGService:
             # Limitar resultados
             results = results[:top_k]
             
-            # Log detallado
-            vector_count = sum(1 for r in results if r.get('search_type') == 'vector')
+            # Log detallado - incluyendo vector_faiss
+            vector_count = sum(1 for r in results if r.get('search_type') in ('vector', 'vector_faiss'))
             text_count = sum(1 for r in results if r.get('search_type') == 'text')
+            faiss_count = sum(1 for r in results if r.get('search_type') == 'vector_faiss')
             
             logger.info(
                 f"Búsqueda dinámica completada: {len(results)} resultados "
-                f"(vector: {vector_count}, texto: {text_count}) para query: '{query[:50]}...'"
+                f"(vector: {vector_count}, faiss: {faiss_count}, texto: {text_count}) "
+                f"para query: '{query[:80]}...'"
             )
             return results
             

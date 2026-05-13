@@ -3,6 +3,29 @@
 
 {% block acm_content %}
 <style>
+    /* ============================================
+       ESTILOS BASE — TEXTO BLANCO Y COLORES GLOBALES
+       ============================================ */
+    /* Texto blanco para todo el contenedor ACM */
+    .acm-container,
+    .acm-container .card,
+    .acm-container .card * {
+        color: #f0f6fc !important;
+    }
+
+    /* Placeholder gris tenue (subtle) */
+    .acm-container input::placeholder,
+    .acm-container .form-control::placeholder,
+    .acm-container textarea::placeholder,
+    .acm-container select::placeholder {
+        color: #8b949e !important;
+        opacity: 0.6 !important;
+    }
+
+    /* ============================================
+       LAYOUT COMPACTO MÓVIL/TABLET (por defecto)
+       Cards sin margen para ahorrar espacio
+       ============================================ */
     /* Eliminar padding superior del contenido principal solo para ACM */
     .app-content {
         padding-top: 0 !important;
@@ -32,6 +55,45 @@
     .acm-container .mb-2 {
         margin-bottom: 0.35rem !important;
     }
+
+    /* ============================================
+       LAYOUT ESCRITORIO (≥992px) — Cards con separación
+       ============================================ */
+    @media (min-width: 992px) {
+        /* Espacio entre las cards contenedoras */
+        .acm-container .card {
+            margin-bottom: 1rem !important;
+        }
+
+        /* Espacio entre columnas */
+        .acm-container .container-fluid > .row {
+            gap: 0 !important;
+        }
+
+        /* Padding lateral para la columna derecha */
+        .acm-right-column {
+            padding-left: 0.75rem;
+            padding-right: 0.25rem;
+        }
+        .acm-right-column .card {
+            margin-bottom: 1rem !important;
+        }
+
+        /* Primera fila (parámetros + mapa): espacio entre ellas */
+        .acm-container .container-fluid > .row > [class*="col-"] {
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
+        }
+        .acm-container .container-fluid > .row > [class*="col-"]:first-child {
+            padding-left: 0 !important;
+        }
+
+        /* Separación entre el row de parámetros/mapa y la columna derecha */
+        .acm-right-column {
+            margin-top: 0;
+        }
+    }
+
     /* ============================================
        LAYOUT TABLET - MODO VERTICAL (PORTRAIT)
        (768px-1024px) - SIN margen entre tarjetas
@@ -50,7 +112,7 @@
         .sidebar-toggle {
             display: block !important;
         }
-        
+
         /* ============================================
            PASO 2: Neutralizar COMPLETAMENTE el acm.css
            ============================================ */
@@ -58,7 +120,7 @@
             width: 100% !important;
             margin-bottom: 0 !important;
         }
-        
+
         /* ============================================
            PASO 3: Contenedor principal - altura automática
            ============================================ */
@@ -69,7 +131,7 @@
             margin: 0 !important;
             overflow: visible;
         }
-        
+
         /* ============================================
            PASO 4: Row en columna vertical, SIN gaps
            ============================================ */
@@ -81,14 +143,14 @@
             display: flex;
             flex-direction: column;
         }
-        
+
         /* ============================================
            PASO 5: Columnas sin padding
            ============================================ */
         .acm-container .container-fluid > .row > [class*="col-"] {
             padding: 0 !important;
         }
-        
+
         /* ============================================
            PASO 6: Panel parámetros - altura mínima
            ============================================ */
@@ -142,7 +204,7 @@
             font-size: 0.7rem !important;
             padding: 0.15rem !important;
         }
-        
+
         /* ============================================
            PASO 7: Panel mapa - altura controlada
            ============================================ */
@@ -189,7 +251,7 @@
             min-height: 250px !important;
             max-height: 400px !important;
         }
-        
+
         /* Ocultar Comparables Seleccionados en tablet vertical */
         .acm-right-column > .d-none.d-lg-block.mt-3 {
             display: none !important;
@@ -215,14 +277,14 @@
         .sidebar-toggle {
             display: block !important;
         }
-        
+
         /* ============================================
            PASO 2: Neutralizar acm.css columnas
            ============================================ */
         .acm-container .row > [class*="col-"] {
             margin-bottom: 0 !important;
         }
-        
+
         /* ============================================
            PASO 3: Contenedor principal - altura completa
            Usamos CSS Grid para las 2 columnas
@@ -238,7 +300,7 @@
             grid-template-rows: 1fr !important;
             position: relative !important;
         }
-        
+
         /* ============================================
            PASO 4: Row existente → Columna IZQUIERDA
            ============================================ */
@@ -254,14 +316,14 @@
             grid-row: 1 !important;
             overflow: hidden !important;
         }
-        
+
         /* ============================================
            PASO 5: Columnas sin padding
            ============================================ */
         .acm-container .container-fluid > .row > [class*="col-"] {
             padding: 0 !important;
         }
-        
+
         /* ============================================
            PASO 6: Panel parámetros - compacto, ancho completo
            ============================================ */
@@ -315,7 +377,7 @@
             font-size: 0.65rem !important;
             padding: 0.1rem !important;
         }
-        
+
         /* ============================================
            PASO 7: Mapa - ocupa el resto de columna izquierda
            ============================================ */
@@ -368,7 +430,7 @@
             max-height: none !important;
             flex: 1 !important;
         }
-        
+
         /* ============================================
            PASO 8: Columna DERECHA (grid column 2)
            Contenedor flex vertical: Comparables arriba + ACM abajo
@@ -382,7 +444,7 @@
             height: 100% !important;
             overflow: hidden !important;
         }
-        
+
         /* Mostrar comparables seleccionados - ocupa la mayor parte */
         .acm-right-column > .d-none.d-lg-block.mt-3 {
             display: flex !important;
@@ -435,7 +497,7 @@
         .acm-right-column .comparables-container-tablet .propiedad-card .propiedad-ubicacion {
             font-size: 0.65rem !important;
         }
-        
+
         /* ============================================
            PASO 9: Resultado ACM debajo de comparables
            ============================================ */
@@ -460,7 +522,7 @@
             max-height: 180px !important;
             overflow-y: auto !important;
         }
-        
+
         /* Ocultar botones flotantes en landscape (innecesarios) */
         .d-lg-none.fixed-bottom.p-2 {
             display: none !important;
@@ -468,7 +530,7 @@
         .d-none.d-lg-block.fixed-bottom.p-3 {
             display: none !important;
         }
-        
+
         /* Ocultar el offcanvas drawer en landscape */
         .offcanvas.offcanvas-bottom.d-lg-none {
             display: none !important;

@@ -381,11 +381,11 @@ class SkillCache:
 
     def _deserialize_result(self, data: Dict[str, Any]) -> 'SkillResult':
         """Deserializa SkillResult desde almacenamiento."""
-        from ..services.skill_base import SkillResult
+        from .base import SkillResult
         return SkillResult(
             success=data['success'],
             data=data.get('data'),
-            error_message=data.get('error_message'),
+            message=data.get('error_message'),
             metadata=data.get('metadata', {}),
         )
 

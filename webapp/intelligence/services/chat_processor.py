@@ -36,9 +36,11 @@ from .prompts import (
 )
 from .intent_classifier import IntentClassifier, IntentType
 from .metrics import MetricsService, log
-from ..services.skill_base import SkillResult
+from .context_manager import ContextManager, ActiveContext
+from ..skills.base import SkillResult
 from ..skills import create_skill_system
-from ..skills.orchestrator import ExecutionContext
+from ..skills.orchestrator import ExecutionContext, SkillPipelineStep
+from ..skills.registry import SkillRegistry
 
 # Skill system singleton para el pipeline de chat
 SKILL_SYSTEM = create_skill_system(enable_cache=True, auto_discover_examples=True)
@@ -648,7 +650,7 @@ class ChatProcessor:
                     rag_results = RAGService.search_dynamic(
                         query=ctx.message,
                         collection_names=collections,
-                        top_k=3,
+                        top_k=5,
                     )
                     log.debug(
                         f"RAG obtenido: {len(rag_results)} resultados",
@@ -746,78 +748,104 @@ class ChatProcessor:
 
     @classmethod
     def _infer_skill_request(cls, ctx: ChatContext, intent: Any, trace_id: str) -> Optional[ChatResult]:
-        """Intenta inferir y ejecutar una skill a partir de la intención del mensaje."""
+        """Intenta inferir y ejecutar una skill a partir de la intención del mensaje.
+
+        Refactor B5: Eliminado el fallback al sistema antiguo de skills.
+        Ahora solo usa SkillRegistry.find_best_skill() con contexto activo.
+
+        Flujo:
+        1. Obtener contexto activo vía ContextManager
+        2. Buscar skill en SkillRegistry (con detección de seguimiento B4)
+        3. Si es busqueda_propiedades/resolver_contexto → pipeline
+        4. Si no, retorna None para RAG puro
+        """
         if ctx.skill_name:
             return None
 
-        candidate_skill = cls._find_skill_candidate(ctx.message)
-        if not candidate_skill:
-            return None
+        # ── 1. Obtener contexto activo para mejorar routing ──
+        contexto_activo = ContextManager.get_active_context(ctx.conversation)
+        active_context_dict = contexto_activo.to_dict() if not contexto_activo.is_empty() else None
 
-        if candidate_skill['name'] == 'reporte_precios_zona' or intent.intent == IntentType.PRICE_QUERY:
-            skill_params = cls._build_skill_params_for_price_query(ctx, intent)
-        else:
-            skill_params = cls._build_params_for_inferred_skill(ctx, candidate_skill)
+        # ── 2. Buscar skill en SkillRegistry ──
+        user_level = cls._get_user_level(ctx.user)
+        registry = SkillRegistry()
+        best_skill = registry.find_best_skill(
+            ctx.message,
+            user_level=user_level,
+            active_context=active_context_dict,
+        )
 
-        if not skill_params:
-            log.debug(
-                "No se pudieron inferir parámetros para la skill detectada",
-                intent=intent.intent.value,
-                skill=candidate_skill.get('name'),
+        if best_skill:
+            log.info(
+                "Skill detectada por SkillRegistry",
+                skill_name=best_skill.name,
                 trace_id=trace_id,
             )
-            return None
 
-        ctx.skill_name = candidate_skill['name']
-        ctx.skill_params = skill_params
+            # ── Si es busqueda_propiedades o resolver_contexto, redirigir al pipeline ──
+            if best_skill.name in ('busqueda_propiedades', 'resolver_contexto'):
+                skill_busqueda = registry.get_by_name('busqueda_propiedades')
+                schema_params = (
+                    skill_busqueda.parameters_schema
+                    if skill_busqueda else best_skill.parameters_schema
+                )
+                params = LLMService.extract_skill_params(
+                    ctx.message, schema_params
+                )
+                ctx.skill_name = 'busqueda_propiedades'
+                ctx.skill_params = params or {}
+                log.info(
+                    "[_infer_skill_request] Ejecutando pipeline de skills para "
+                    f"{best_skill.name}. Parámetros extraídos: "
+                    f"{params}. Mensaje: {ctx.message[:100]}",
+                    trace_id=trace_id,
+                )
+                return cls._process_skill_request(ctx, trace_id)
 
-        log.info(
-            "Skill inferida automáticamente",
-            skill_name=ctx.skill_name,
-            skill_params=list(skill_params.keys()),
-            trace_id=trace_id,
-        )
-        return cls._process_skill_request(ctx, trace_id)
+            # ── Otras skills: usar RAG ──
+            collection_names = ctx.collections if ctx.collections else None
+            success, message, response_data = LLMService.generate_rag_response(
+                query=ctx.message,
+                conversation_history=None,
+                user_access_level=user_level,
+                collection_names=collection_names,
+                include_sources=True,
+            )
 
-    @classmethod
-    def _find_skill_candidate(cls, message: str) -> Optional[Dict[str, Any]]:
-        """Busca una skill adecuada para la consulta del usuario."""
-        candidates = SKILL_SYSTEM.registry.search_skills(message, limit=10)
+            if success:
+                response_text = response_data.get('response', message)
+                message_id = cls._save_response(ctx.conversation, response_text)
 
-        if candidates:
-            # Priorizar skills explícitas de precio o matemáticas en la descripción
-            for candidate in candidates:
-                name = candidate.get('name', '').lower()
-                description = candidate.get('description', '').lower()
-                if 'precio' in name or 'precio' in description or 'precios' in description:
-                    return candidate
-                if any(term in description for term in ['multiplica', 'divide', 'suma', 'resta', 'potencia', 'raíz', 'raiz']):
-                    return candidate
+                return ChatResult(
+                    success=True,
+                    response_text=response_text,
+                    conversation_id=str(ctx.conversation.id),
+                    message_id=message_id,
+                    metadata={
+                        'response': response_text,
+                        'skill_used': response_data.get('skill_used'),
+                        'rag_context_used': response_data.get('rag_context_used', False),
+                        'retrieved_documents_count': response_data.get('retrieved_documents_count', 0),
+                    },
+                    context_summary={
+                        'memory_used': 0,
+                        'rag_used': 0,
+                        'collections_used': ctx.collections or [],
+                        'intent': intent.intent.value,
+                        'intent_confidence': intent.confidence,
+                        'skill_name': best_skill.name,
+                    },
+                    timestamp=timezone.now().isoformat(),
+                )
 
-            return candidates[0]
-
-        return cls._find_math_skill_candidate(message)
-
-    @classmethod
-    def _find_math_skill_candidate(cls, message: str) -> Optional[Dict[str, Any]]:
-        """Busca una skill matemática basándose en palabras clave del mensaje."""
-        lower_message = message.lower()
-        math_skill_keywords = {
-            'multiplicacion': ['por', 'multiplica', 'multiplicacion', 'multiplicar'],
-            'division': ['entre', 'divide', 'division', 'dividir'],
-            'suma': ['más', 'mas', 'suma', 'sumar', 'agrega', 'y'],
-            'resta': ['menos', 'resta', 'restar'],
-            'potencia': ['potencia', 'elevado', 'exponente', 'a la'],
-            'raiz_cuadrada': ['raíz', 'raiz', 'raiz cuadrada'],
-        }
-
-        for skill_name, keywords in math_skill_keywords.items():
-            if any(keyword in lower_message for keyword in keywords):
-                candidate = SKILL_SYSTEM.registry.get_skill_info(skill_name)
-                if candidate:
-                    return candidate
-
+        # ── Sin skill detectada → RAG puro ──
         return None
+
+    # ── NOTA: _find_skill_candidate y _find_math_skill_candidate fueron eliminadas ──
+    # Refactor B6/B7: El sistema antiguo de detección de skills ha sido reemplazado
+    # por SkillRegistry.find_best_skill() con detección de seguimiento (B4).
+    # La función _find_skill_candidate aún se usa en views.py:896 (intent_evaluation_dashboard)
+    # como referencia para comparación, pero ya no es parte del flujo principal.
 
     @classmethod
     def _build_params_for_inferred_skill(
@@ -1000,11 +1028,69 @@ class ChatProcessor:
         return None
 
     @classmethod
+    def _get_contexto_activo(cls, conversation: Conversation) -> Dict[str, Any]:
+        """
+        Extrae el contexto activo de búsqueda usando ContextManager.
+
+        Refactor A2: Delega a ContextManager.get_active_context() para unificar
+        la fuente de verdad del contexto conversacional.
+
+        Returns:
+            Dict con los filtros activos (distrito, tipo_propiedad, etc.)
+            o dict vacío si no hay ejecución previa.
+        """
+        contexto = ContextManager.get_active_context(conversation)
+        if contexto and not contexto.is_empty():
+            log.info(f"[_get_contexto_activo] Contexto vía ContextManager: {contexto}")
+            return contexto.to_dict()
+        return {}
+
+    @classmethod
+    def _get_historial_mensajes(cls, conversation: Conversation, max_mensajes: int = 6) -> List[str]:
+        """
+        Extrae los últimos mensajes de la conversación formateados como
+        lista de strings para pasar a resolver_contexto.
+
+        Args:
+            conversation: La conversación actual
+            max_mensajes: Máximo de mensajes a incluir
+
+        Returns:
+            Lista de strings como "usuario: mensaje" o "asistente: mensaje"
+        """
+        mensajes = conversation.messages or []
+        historial = []
+        for msg in mensajes[-max_mensajes:]:
+            role = msg.get('role', 'unknown')
+            content = msg.get('content', '')
+            if content:
+                historial.append(f"{role}: {content}")
+        return historial
+
+    @classmethod
+    def _guardar_contexto_activo(cls, conversation: Conversation, contexto: Dict[str, Any]) -> None:
+        """
+        Guarda el contexto activo de búsqueda usando ContextManager.
+
+        Refactor A3: Delega a ContextManager.save_active_context() para unificar
+        la escritura del contexto conversacional.
+        """
+        if not contexto:
+            return
+        ContextManager.save_raw_context(conversation, contexto)
+
+    @classmethod
     def _process_skill_request(cls, ctx: ChatContext, trace_id: str) -> ChatResult:
-        """Ejecuta una skill y convierte el resultado a ChatResult."""
+        """Ejecuta una skill y convierte el resultado a ChatResult.
+
+        Si la skill es 'busqueda_propiedades', ejecuta automáticamente un pipeline
+        [resolver_contexto → busqueda_propiedades] para resolver referencias
+        ambiguas del contexto conversacional.
+        """
         execution_context = ExecutionContext(
             user_id=str(ctx.user.id),
             session_id=ctx.conversation.session_id,
+            conversation_id=str(ctx.conversation.id),
             permissions=(ctx.user.role.capabilities.keys()
                          if ctx.user.role and ctx.user.role.capabilities else []),
             environment='production',
@@ -1017,6 +1103,322 @@ class ChatProcessor:
         if ctx.skill_pipeline:
             return cls._process_skill_pipeline_request(ctx, trace_id)
 
+        # ── Pipeline automático para busqueda_propiedades ────────────────────
+        # Refactor C: Pipeline condicional según contexto activo.
+        #
+        # Si HAY contexto activo (turnos previos):
+        #   Pipeline: [resolver_contexto → busqueda_propiedades]
+        #   resolver_contexto hereda distrito/tipo del turno anterior.
+        #
+        # Si NO HAY contexto activo (primer mensaje):
+        #   Ejecución directa: busqueda_propiedades sin resolver_contexto.
+        #   Más rápido y evita llamadas innecesarias a DeepSeek.
+        if ctx.skill_name == 'busqueda_propiedades':
+            contexto_activo = ContextManager.get_active_context(ctx.conversation)
+            tiene_contexto = not contexto_activo.is_empty()
+
+            # ── Variables compartidas por ambas rutas ──
+            pipeline_result = None
+            resultado_busqueda_raw = []
+            contexto_resuelto = {}
+
+            if tiene_contexto:
+                # ── Ruta con contexto: pipeline completo ──
+                historial = cls._get_historial_mensajes(ctx.conversation)
+                pipeline_steps = [
+                    SkillPipelineStep(
+                        name='resolver_contexto',
+                        parameters={
+                            'mensaje_actual': ctx.message,
+                            'contexto_activo': contexto_activo.to_dict(),
+                            'historial_mensajes': historial,
+                        },
+                        inject_previous_result=False,
+                        result_key='contexto_resuelto',
+                    ),
+                    SkillPipelineStep(
+                        name='busqueda_propiedades',
+                        parameters=ctx.skill_params or {},
+                        inject_previous_result=True,
+                        result_key='resultado_busqueda',
+                    ),
+                ]
+
+                pipeline_result = SKILL_SYSTEM.execute_skill_pipeline(
+                    pipeline_steps,
+                    execution_context,
+                    mode='sequential',
+                    stop_on_error=True,
+                )
+
+                # Extraer resultado del pipeline
+                if pipeline_result.success:
+                    contexto_resuelto = pipeline_result.data.get('contexto_resuelto', {})
+                    params_resueltos = contexto_resuelto.get('params_resueltos', {})
+
+                    # Fusión de contexto (A5)
+                    nuevos_params = params_resueltos or (ctx.skill_params or {})
+                    if nuevos_params:
+                        nuevo_contexto = ActiveContext.from_dict(nuevos_params)
+                        contexto_fusionado = contexto_activo.merge(nuevo_contexto)
+                        ContextManager.save_active_context(ctx.conversation, contexto_fusionado)
+                        log.info(
+                            f"[_process_skill_request] Contexto fusionado (con pipeline): "
+                            f"activo={contexto_activo.to_dict()} | "
+                            f"nuevo={nuevo_contexto.to_dict()} | "
+                            f"resultado={contexto_fusionado.to_dict()}"
+                        )
+
+                    resultado_busqueda_raw = pipeline_result.data.get('resultado_busqueda', [])
+            else:
+                # ── Ruta directa: sin resolver_contexto ──
+                log.info(
+                    "[_process_skill_request] Ejecución directa de busqueda_propiedades "
+                    "(sin contexto activo)",
+                )
+                skill = SKILL_SYSTEM.registry.get_by_name('busqueda_propiedades')
+                if skill:
+                    skill_result = SKILL_SYSTEM.execute_skill(
+                        skill_name='busqueda_propiedades',
+                        parameters=ctx.skill_params or {},
+                        context=execution_context,
+                    )
+                    pipeline_result = skill_result
+                    resultado_busqueda_raw = skill_result.data if skill_result.success else []
+                else:
+                    pipeline_result = type('obj', (object,), {'success': False})()
+                    resultado_busqueda_raw = []
+
+                # Guardar contexto del primer mensaje
+                if ctx.skill_params:
+                    nuevo_contexto = ActiveContext.from_dict(ctx.skill_params)
+                    ContextManager.save_active_context(ctx.conversation, nuevo_contexto)
+                    log.info(
+                        f"[_process_skill_request] Contexto guardado (primer mensaje): "
+                        f"{nuevo_contexto.to_dict()}"
+                    )
+
+            # ── Formatear respuesta con DeepSeek (compartido por ambas rutas) ──
+            # Refactor C3: Extracción de propiedades unificada para ambos casos.
+            if pipeline_result and pipeline_result.success:
+                try:
+                    propiedades_encontradas = []
+                    datos_busqueda = []
+
+                    if isinstance(resultado_busqueda_raw, list):
+                        datos_busqueda = resultado_busqueda_raw
+                        mensaje_skill = f"Se encontraron {len(resultado_busqueda_raw)} propiedades"
+                    elif isinstance(resultado_busqueda_raw, dict):
+                        datos_busqueda = resultado_busqueda_raw.get('data', [])
+                        mensaje_skill = resultado_busqueda_raw.get('message', '')
+                    else:
+                        datos_busqueda = []
+                        mensaje_skill = ''
+
+                    if isinstance(datos_busqueda, list):
+                        for item in datos_busqueda:
+                            field_values = item.get('field_values', {}) or {}
+                            titulo = (
+                                field_values.get('title')
+                                or field_values.get('titulo')
+                                or field_values.get('name')
+                                or field_values.get('nombre')
+                                or 'Sin título'
+                            )
+                            distrito = (
+                                field_values.get('district_name')
+                                or field_values.get('district')
+                                or field_values.get('distrito')
+                                or ''
+                            )
+                            precio = (
+                                field_values.get('price')
+                                or field_values.get('precio')
+                                or field_values.get('sale_price')
+                                or field_values.get('precio_venta')
+                                or ''
+                            )
+                            tipo = (
+                                field_values.get('property_type_id')
+                                or field_values.get('tipo_propiedad')
+                                or field_values.get('property_type')
+                                or ''
+                            )
+                            descripcion = (
+                                field_values.get('description')
+                                or field_values.get('descripcion')
+                                or field_values.get('content')
+                                or ''
+                            )
+                            area = (
+                                field_values.get('built_area')
+                                or field_values.get('area_construida')
+                                or field_values.get('area')
+                                or field_values.get('total_area')
+                                or field_values.get('land_area')
+                                or ''
+                            )
+                            habitaciones = (
+                                field_values.get('bedrooms')
+                                or field_values.get('habitaciones')
+                                or field_values.get('dormitorios')
+                                or ''
+                            )
+                            operacion = (
+                                field_values.get('operation_type')
+                                or field_values.get('operacion')
+                                or field_values.get('tipo_operacion')
+                                or ''
+                            )
+                            moneda = (
+                                field_values.get('currency')
+                                or field_values.get('moneda')
+                                or ''
+                            )
+                            direccion = (
+                                field_values.get('address')
+                                or field_values.get('direccion')
+                                or ''
+                            )
+
+                            partes = []
+                            if titulo and titulo != 'Sin título':
+                                partes.append(f"• {titulo}")
+                            else:
+                                partes.append(f"• Propiedad")
+                            if tipo:
+                                partes.append(f"Tipo: {tipo}")
+                            if distrito:
+                                partes.append(f"Distrito: {distrito}")
+                            if precio:
+                                moneda_str = f" {moneda}" if moneda else ""
+                                partes.append(f"Precio: {precio}{moneda_str}")
+                            if area:
+                                partes.append(f"Área: {area} m²")
+                            if habitaciones:
+                                partes.append(f"Habitaciones: {habitaciones}")
+                            if operacion:
+                                partes.append(f"Operación: {operacion}")
+                            if direccion:
+                                partes.append(f"Dirección: {direccion}")
+                            if descripcion:
+                                desc_truncada = descripcion if len(descripcion) <= 200 else descripcion[:200] + '...'
+                                partes.append(f"Descripción: {desc_truncada}")
+
+                            propiedades_encontradas.append(" | ".join(partes))
+
+                    if propiedades_encontradas:
+                        lista_propiedades_texto = "\n".join(propiedades_encontradas)
+                        prompt_formateo = (
+                            "El sistema de búsqueda encontró las siguientes propiedades "
+                            "que coinciden con la consulta del usuario.\n\n"
+                            f"Consulta del usuario: \"{ctx.message}\"\n\n"
+                            "=== PROPIEDADES ENCONTRADAS ===\n"
+                            f"{lista_propiedades_texto}\n\n"
+                            "=== INSTRUCCIONES ===\n"
+                            "- Responde al usuario de forma NATURAL y CONVERSACIONAL en español.\n"
+                            "- PRESENTA las propiedades listadas arriba de forma organizada.\n"
+                            "- Para cada propiedad incluye: tipo, distrito, precio, área y otras características relevantes.\n"
+                            "- USA ÚNICAMENTE las propiedades de esta lista. NO inventes propiedades que no estén aquí.\n"
+                            "- Si la lista está vacía, indícalo amablemente y sugiere refinar la búsqueda.\n"
+                            "- NO devuelvas JSON ni datos técnicos. Solo texto legible para el usuario.\n"
+                            "- Usa un tono profesional pero cercano, como un asesor inmobiliario."
+                        )
+                    else:
+                        prompt_formateo = (
+                            "El usuario ha hecho una búsqueda de propiedades inmobiliarias.\n\n"
+                            f"Consulta del usuario: \"{ctx.message}\"\n\n"
+                            "La búsqueda no encontró propiedades que coincidan con los criterios.\n\n"
+                            "INSTRUCCIONES:\n"
+                            "- Responde al usuario de forma NATURAL y CONVERSACIONAL en español.\n"
+                            "- Indica amablemente que no se encontraron propiedades con esos criterios.\n"
+                            "- Sugiere al usuario refinar su búsqueda (cambiar distrito, tipo de propiedad, etc.).\n"
+                            "- NO inventes propiedades que no existen.\n"
+                            "- Usa un tono profesional pero cercano, como un asesor inmobiliario."
+                        )
+                    system_prompt = PromptManager.get_deepseek_system_prompt(ctx.app_id)
+                    success, api_message, api_response = LLMService._call_deepseek_api(
+                        messages=[{"role": "user", "content": prompt_formateo}],
+                        system_prompt=system_prompt,
+                    )
+                    if success and isinstance(api_response, dict):
+                        response_text = api_response.get(
+                            'content',
+                            mensaje_skill or 'Búsqueda completada.'
+                        )
+                    else:
+                        log.warning(
+                            "DeepSeek falló al formatear respuesta de skill, "
+                            "usando mensaje de la skill como fallback",
+                            trace_id=trace_id,
+                        )
+                        response_text = mensaje_skill or 'Búsqueda completada.'
+                except Exception as e:
+                    log.error(
+                        f"Error al formatear respuesta con DeepSeek: {e}",
+                        exc_info=True,
+                        trace_id=trace_id,
+                    )
+                    response_text = mensaje_skill or 'Búsqueda completada.'
+            else:
+                # Si pipeline_result es SkillResult (ejecución directa sin contexto),
+                # usar renderizador de skill; si es SkillPipelineResult, usar pipeline
+                if hasattr(pipeline_result, 'steps'):
+                    response_text = cls._render_pipeline_response(pipeline_result)
+                else:
+                    response_text = cls._render_skill_response(pipeline_result)
+
+            if pipeline_result.success:
+                message_id = cls._save_response(ctx.conversation, response_text)
+                cls._save_post_process(
+                    ctx=ctx,
+                    response_text=response_text,
+                    memory_context=None,
+                    rag_context=None,
+                    intent=None,
+                    trace_id=trace_id,
+                )
+                return ChatResult(
+                    success=True,
+                    response_text=response_text,
+                    conversation_id=str(ctx.conversation.id),
+                    message_id=message_id,
+                    metadata={
+                        'skill_name': ctx.skill_name,
+                        'skill_params': ctx.skill_params,
+                        'pipeline_result': getattr(pipeline_result, 'data', None),
+                        'pipeline_steps': getattr(pipeline_result, 'steps', None),
+                        'contexto_resuelto': contexto_resuelto if pipeline_result.success else {},
+                    },
+                    context_summary={
+                        'skill_name': ctx.skill_name,
+                        'skill_success': True,
+                        'pipeline': 'resolver_contexto → busqueda_propiedades' if hasattr(pipeline_result, 'steps') else ctx.skill_name,
+                    },
+                    timestamp=timezone.now().isoformat(),
+                )
+
+            return ChatResult(
+                success=False,
+                response_text=response_text,
+                conversation_id=str(ctx.conversation.id),
+                message_id='',
+                metadata={
+                    'skill_name': ctx.skill_name,
+                    'skill_params': ctx.skill_params,
+                    'pipeline_error': getattr(pipeline_result, 'error_message', 'Error desconocido'),
+                    'pipeline_steps': getattr(pipeline_result, 'steps', None),
+                },
+                context_summary={
+                    'skill_name': ctx.skill_name,
+                    'skill_success': False,
+                    'pipeline': 'resolver_contexto → busqueda_propiedades' if hasattr(pipeline_result, 'steps') else ctx.skill_name,
+                },
+                error=getattr(pipeline_result, 'error_message', 'Error desconocido'),
+                timestamp=timezone.now().isoformat(),
+            )
+
+        # ── Ejecución directa para cualquier otra skill ──────────────────────
         skill_result = SKILL_SYSTEM.execute_skill(
             ctx.skill_name,
             ctx.skill_params or {},

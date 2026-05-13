@@ -4,238 +4,286 @@ Skills de matemáticas.
 Incluye operaciones básicas y avanzadas.
 """
 import math
-from typing import List, Union
+from typing import List, Union, Dict, Any, Optional
 
-from ...services.skill_base import Skill, SkillParameter, SkillResult
+from ..base import BaseSkill, SkillResult
 
 
-class SumaSkill(Skill):
+class SumaSkill(BaseSkill):
     """Skill para sumar dos números."""
 
     name = "suma"
     description = "Suma dos números y retorna el resultado"
-    parameters = {
-        'a': SkillParameter(
-            name='a',
-            type='float',
-            description='Primer número a sumar',
-            required=True
-        ),
-        'b': SkillParameter(
-            name='b',
-            type='float',
-            description='Segundo número a sumar',
-            required=True
-        ),
+    category = "ejemplos"
+    access_level = 1
+    is_active = True
+
+    parameters_schema = {
+        'a': {
+            'type': 'float',
+            'description': 'Primer número a sumar',
+            'required': True,
+        },
+        'b': {
+            'type': 'float',
+            'description': 'Segundo número a sumar',
+            'required': True,
+        },
     }
 
-    def execute(self, **kwargs) -> SkillResult:
+    def validate_params(self, params: Dict[str, Any]) -> bool:
+        return 'a' in params and 'b' in params
+
+    def execute(self, params: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> SkillResult:
         try:
-            params = self.validate_params(**kwargs)
-            result = params['a'] + params['b']
+            if not self.validate_params(params):
+                return SkillResult.error("Parámetros 'a' y 'b' son requeridos")
+            result = float(params['a']) + float(params['b'])
             return SkillResult.ok(
                 data={'resultado': result},
-                operation='suma',
-                inputs=params
+                message="Suma realizada correctamente",
+                metadata={'operation': 'suma', 'inputs': {'a': params['a'], 'b': params['b']}},
+                skill_name=self.name,
             )
         except Exception as e:
-            return SkillResult.from_error(str(e))
+            return SkillResult.error(str(e))
 
 
-class RestaSkill(Skill):
+class RestaSkill(BaseSkill):
     """Skill para restar dos números."""
 
     name = "resta"
     description = "Resta el segundo número del primero"
-    parameters = {
-        'a': SkillParameter(
-            name='a',
-            type='float',
-            description='Número del que restar',
-            required=True
-        ),
-        'b': SkillParameter(
-            name='b',
-            type='float',
-            description='Número a restar',
-            required=True
-        ),
+    category = "ejemplos"
+    access_level = 1
+    is_active = True
+
+    parameters_schema = {
+        'a': {
+            'type': 'float',
+            'description': 'Número del que restar',
+            'required': True,
+        },
+        'b': {
+            'type': 'float',
+            'description': 'Número a restar',
+            'required': True,
+        },
     }
 
-    def execute(self, **kwargs) -> SkillResult:
+    def validate_params(self, params: Dict[str, Any]) -> bool:
+        return 'a' in params and 'b' in params
+
+    def execute(self, params: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> SkillResult:
         try:
-            params = self.validate_params(**kwargs)
-            result = params['a'] - params['b']
+            if not self.validate_params(params):
+                return SkillResult.error("Parámetros 'a' y 'b' son requeridos")
+            result = float(params['a']) - float(params['b'])
             return SkillResult.ok(
                 data={'resultado': result},
-                operation='resta',
-                inputs=params
+                message="Resta realizada correctamente",
+                metadata={'operation': 'resta', 'inputs': {'a': params['a'], 'b': params['b']}},
+                skill_name=self.name,
             )
         except Exception as e:
-            return SkillResult.from_error(str(e))
+            return SkillResult.error(str(e))
 
 
-class MultiplicacionSkill(Skill):
+class MultiplicacionSkill(BaseSkill):
     """Skill para multiplicar dos números."""
 
     name = "multiplicacion"
     description = "Multiplica dos números"
-    parameters = {
-        'a': SkillParameter(
-            name='a',
-            type='float',
-            description='Primer factor',
-            required=True
-        ),
-        'b': SkillParameter(
-            name='b',
-            type='float',
-            description='Segundo factor',
-            required=True
-        ),
+    category = "ejemplos"
+    access_level = 1
+    is_active = True
+
+    parameters_schema = {
+        'a': {
+            'type': 'float',
+            'description': 'Primer factor',
+            'required': True,
+        },
+        'b': {
+            'type': 'float',
+            'description': 'Segundo factor',
+            'required': True,
+        },
     }
 
-    def execute(self, **kwargs) -> SkillResult:
+    def validate_params(self, params: Dict[str, Any]) -> bool:
+        return 'a' in params and 'b' in params
+
+    def execute(self, params: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> SkillResult:
         try:
-            params = self.validate_params(**kwargs)
-            result = params['a'] * params['b']
+            if not self.validate_params(params):
+                return SkillResult.error("Parámetros 'a' y 'b' son requeridos")
+            result = float(params['a']) * float(params['b'])
             return SkillResult.ok(
                 data={'resultado': result},
-                operation='multiplicacion',
-                inputs=params
+                message="Multiplicación realizada correctamente",
+                metadata={'operation': 'multiplicacion', 'inputs': {'a': params['a'], 'b': params['b']}},
+                skill_name=self.name,
             )
         except Exception as e:
-            return SkillResult.from_error(str(e))
+            return SkillResult.error(str(e))
 
 
-class DivisionSkill(Skill):
+class DivisionSkill(BaseSkill):
     """Skill para dividir dos números."""
 
     name = "division"
     description = "Divide el primer número por el segundo"
-    parameters = {
-        'a': SkillParameter(
-            name='a',
-            type='float',
-            description='Dividendo',
-            required=True
-        ),
-        'b': SkillParameter(
-            name='b',
-            type='float',
-            description='Divisor (no puede ser cero)',
-            required=True
-        ),
+    category = "ejemplos"
+    access_level = 1
+    is_active = True
+
+    parameters_schema = {
+        'a': {
+            'type': 'float',
+            'description': 'Dividendo',
+            'required': True,
+        },
+        'b': {
+            'type': 'float',
+            'description': 'Divisor (no puede ser cero)',
+            'required': True,
+        },
     }
 
-    def execute(self, **kwargs) -> SkillResult:
+    def validate_params(self, params: Dict[str, Any]) -> bool:
+        return 'a' in params and 'b' in params
+
+    def execute(self, params: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> SkillResult:
         try:
-            params = self.validate_params(**kwargs)
-
-            if params['b'] == 0:
-                return SkillResult.from_error("No se puede dividir por cero")
-
-            result = params['a'] / params['b']
+            if not self.validate_params(params):
+                return SkillResult.error("Parámetros 'a' y 'b' son requeridos")
+            if float(params['b']) == 0:
+                return SkillResult.error("No se puede dividir por cero")
+            result = float(params['a']) / float(params['b'])
             return SkillResult.ok(
                 data={'resultado': result},
-                operation='division',
-                inputs=params
+                message="División realizada correctamente",
+                metadata={'operation': 'division', 'inputs': {'a': params['a'], 'b': params['b']}},
+                skill_name=self.name,
             )
         except Exception as e:
-            return SkillResult.from_error(str(e))
+            return SkillResult.error(str(e))
 
 
-class PotenciaSkill(Skill):
+class PotenciaSkill(BaseSkill):
     """Skill para calcular potencia."""
 
     name = "potencia"
     description = "Calcula base elevado a exponente"
-    parameters = {
-        'base': SkillParameter(
-            name='base',
-            type='float',
-            description='Base de la potencia',
-            required=True
-        ),
-        'exponente': SkillParameter(
-            name='exponente',
-            type='float',
-            description='Exponente',
-            required=True
-        ),
+    category = "ejemplos"
+    access_level = 1
+    is_active = True
+
+    parameters_schema = {
+        'base': {
+            'type': 'float',
+            'description': 'Base de la potencia',
+            'required': True,
+        },
+        'exponente': {
+            'type': 'float',
+            'description': 'Exponente',
+            'required': True,
+        },
     }
 
-    def execute(self, **kwargs) -> SkillResult:
+    def validate_params(self, params: Dict[str, Any]) -> bool:
+        return 'base' in params and 'exponente' in params
+
+    def execute(self, params: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> SkillResult:
         try:
-            params = self.validate_params(**kwargs)
-            result = params['base'] ** params['exponente']
+            if not self.validate_params(params):
+                return SkillResult.error("Parámetros 'base' y 'exponente' son requeridos")
+            result = float(params['base']) ** float(params['exponente'])
             return SkillResult.ok(
                 data={'resultado': result},
-                operation='potencia',
-                inputs=params
+                message="Potencia calculada correctamente",
+                metadata={'operation': 'potencia', 'inputs': {'base': params['base'], 'exponente': params['exponente']}},
+                skill_name=self.name,
             )
         except Exception as e:
-            return SkillResult.from_error(str(e))
+            return SkillResult.error(str(e))
 
 
-class RaizCuadradaSkill(Skill):
+class RaizCuadradaSkill(BaseSkill):
     """Skill para calcular raíz cuadrada."""
 
     name = "raiz_cuadrada"
     description = "Calcula la raíz cuadrada de un número"
-    parameters = {
-        'numero': SkillParameter(
-            name='numero',
-            type='float',
-            description='Número del que calcular la raíz (debe ser no negativo)',
-            required=True
-        ),
+    category = "ejemplos"
+    access_level = 1
+    is_active = True
+
+    parameters_schema = {
+        'numero': {
+            'type': 'float',
+            'description': 'Número del que calcular la raíz (debe ser no negativo)',
+            'required': True,
+        },
     }
 
-    def execute(self, **kwargs) -> SkillResult:
+    def validate_params(self, params: Dict[str, Any]) -> bool:
+        return 'numero' in params
+
+    def execute(self, params: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> SkillResult:
         try:
-            params = self.validate_params(**kwargs)
-
-            if params['numero'] < 0:
-                return SkillResult.from_error("No se puede calcular raíz cuadrada de número negativo")
-
-            result = math.sqrt(params['numero'])
+            if not self.validate_params(params):
+                return SkillResult.error("Parámetro 'numero' es requerido")
+            numero = float(params['numero'])
+            if numero < 0:
+                return SkillResult.error("No se puede calcular raíz cuadrada de número negativo")
+            result = math.sqrt(numero)
             return SkillResult.ok(
                 data={'resultado': result},
-                operation='raiz_cuadrada',
-                inputs=params
+                message="Raíz cuadrada calculada correctamente",
+                metadata={'operation': 'raiz_cuadrada', 'inputs': {'numero': params['numero']}},
+                skill_name=self.name,
             )
         except Exception as e:
-            return SkillResult.from_error(str(e))
+            return SkillResult.error(str(e))
 
 
-class EstadisticasBasicasSkill(Skill):
+class EstadisticasBasicasSkill(BaseSkill):
     """Skill para calcular estadísticas básicas de una lista de números."""
 
     name = "estadisticas_basicas"
     description = "Calcula estadísticas básicas (media, mediana, moda, desviación estándar) de una lista de números"
-    parameters = {
-        'numeros': SkillParameter(
-            name='numeros',
-            type='list',
-            description='Lista de números para analizar',
-            required=True
-        ),
+    category = "ejemplos"
+    access_level = 1
+    is_active = True
+
+    parameters_schema = {
+        'numeros': {
+            'type': 'list',
+            'description': 'Lista de números para analizar',
+            'required': True,
+        },
     }
 
-    def execute(self, **kwargs) -> SkillResult:
+    def validate_params(self, params: Dict[str, Any]) -> bool:
+        return 'numeros' in params
+
+    def execute(self, params: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> SkillResult:
         try:
-            params = self.validate_params(**kwargs)
+            if not self.validate_params(params):
+                return SkillResult.error("Parámetro 'numeros' es requerido")
+
             numeros = params['numeros']
 
             if not isinstance(numeros, list) or len(numeros) == 0:
-                return SkillResult.from_error("Se requiere una lista no vacía de números")
+                return SkillResult.error("Se requiere una lista no vacía de números")
 
             # Convertir a float y validar
             try:
                 nums = [float(x) for x in numeros]
             except (ValueError, TypeError):
-                return SkillResult.from_error("Todos los elementos deben ser números")
+                return SkillResult.error("Todos los elementos deben ser números")
 
             # Calcular estadísticas
             n = len(nums)
@@ -271,9 +319,13 @@ class EstadisticasBasicasSkill(Skill):
 
             return SkillResult.ok(
                 data=resultado,
-                operation='estadisticas_basicas',
-                inputs={'cantidad_numeros': n}
+                message="Estadísticas calculadas correctamente",
+                metadata={
+                    'operation': 'estadisticas_basicas',
+                    'inputs': {'cantidad_numeros': n},
+                },
+                skill_name=self.name,
             )
 
         except Exception as e:
-            return SkillResult.from_error(str(e))
+            return SkillResult.error(str(e))

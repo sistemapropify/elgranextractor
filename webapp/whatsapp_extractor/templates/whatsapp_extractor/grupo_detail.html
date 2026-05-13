@@ -14,7 +14,7 @@
         --we-bg-secondary: #161b22;
         --we-bg-tertiary: #21262d;
         --we-border: #30363d;
-        --we-text-primary: #f0f6fc;
+        --we-text-primary: #c9d1d9;
         --we-text-secondary: #8b949e;
         --we-accent: #58a6ff;
         --we-accent-hover: #1f6feb;
@@ -27,8 +27,10 @@
         --we-purple: #8957e5;
         --we-cyan: #39d2c0;
         --we-radius: 8px;
+        --we-radius-sm: 6px;
         --we-transition: all 0.2s ease;
     }
+
     .we-container { max-width: 1000px; margin: 0 auto; }
     .we-header {
         display: flex;
@@ -37,11 +39,14 @@
         margin-bottom: 24px;
         flex-wrap: wrap;
         gap: 12px;
+        padding: 0 0 20px;
+        border-bottom: 1px solid var(--we-border);
     }
-    .we-header h2 { margin: 0; font-size: 20px; font-weight: 600; color: var(--we-text-primary); }
+    .we-header h2 { margin: 0; font-size: 20px; font-weight: 600; color: var(--we-accent); }
     .we-header-actions { display: flex; align-items: center; gap: 12px; }
+
     .we-card {
-        background: var(--we-bg-secondary);
+        background: #161b22;
         border: 1px solid var(--we-border);
         border-radius: var(--we-radius);
         margin-bottom: 16px;
@@ -52,11 +57,14 @@
         align-items: center;
         padding: 14px 20px;
         border-bottom: 1px solid var(--we-border);
+        background: #21262d;
+        border-radius: var(--we-radius) var(--we-radius) 0 0;
     }
     .we-card-title { margin: 0; font-size: 15px; font-weight: 600; color: var(--we-text-primary); }
     .we-card-body { padding: 20px; }
     .we-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
     @media (max-width: 768px) { .we-grid-2 { grid-template-columns: 1fr; } }
+
     .we-badge {
         display: inline-flex;
         align-items: center;
@@ -66,10 +74,11 @@
         font-weight: 500;
         gap: 4px;
     }
-    .we-badge-green { background: var(--we-green-bg); color: var(--we-green); border: 1px solid rgba(35, 134, 54, 0.3); }
-    .we-badge-red { background: var(--we-red-bg); color: var(--we-red); border: 1px solid rgba(218, 54, 51, 0.3); }
+    .we-badge-green { background: rgba(35, 134, 54, 0.15); color: #3fb950; border: 1px solid rgba(63, 185, 80, 0.3); }
+    .we-badge-red { background: rgba(218, 54, 51, 0.15); color: #f85149; border: 1px solid rgba(248, 81, 73, 0.3); }
     .we-badge-blue { background: rgba(88, 166, 255, 0.15); color: var(--we-accent); border: 1px solid rgba(88, 166, 255, 0.3); }
     .we-badge-gray { background: rgba(139, 148, 158, 0.15); color: var(--we-text-secondary); border: 1px solid rgba(139, 148, 158, 0.3); }
+
     .we-btn {
         display: inline-flex;
         align-items: center;
@@ -79,15 +88,15 @@
         font-size: 13px;
         font-weight: 500;
         color: var(--we-text-primary);
-        background: var(--we-bg-tertiary);
+        background: #30363d;
         border: 1px solid var(--we-border);
         cursor: pointer;
         text-decoration: none;
         transition: var(--we-transition);
     }
     .we-btn:hover { background: rgba(255,255,255,0.05); border-color: var(--we-text-secondary); color: var(--we-text-primary); }
-    .we-btn-primary { background: var(--we-accent); border-color: var(--we-accent); color: #fff; }
-    .we-btn-primary:hover { background: var(--we-accent-hover); border-color: var(--we-accent-hover); color: #fff; }
+    .we-btn-primary { background: #238636; border-color: rgba(35, 134, 54, 0.3); color: #fff; }
+    .we-btn-primary:hover { background: #2ea043; border-color: rgba(35, 134, 54, 0.5); color: #fff; }
     .we-btn-danger { color: var(--we-red); }
     .we-btn-danger:hover { background: var(--we-red-bg); border-color: var(--we-red); }
     .we-btn-sm { padding: 4px 10px; font-size: 12px; }
@@ -100,6 +109,7 @@
         padding: 10px 0;
         border-bottom: 1px solid var(--we-border);
     }
+    .we-detail-row:hover { background: rgba(255,255,255,0.02); padding-left: 8px; padding-right: 8px; border-radius: 4px; }
     .we-detail-row:last-child { border-bottom: none; }
     .we-detail-label { font-size: 13px; color: var(--we-text-secondary); }
     .we-detail-value { font-size: 14px; color: var(--we-text-primary); font-weight: 500; }
@@ -107,9 +117,9 @@
     .we-status-dot-green { background: var(--we-green); }
     .we-status-dot-gray { background: var(--we-text-secondary); }
     .we-error-box {
-        background: var(--we-red-bg);
+        background: rgba(218, 54, 51, 0.1);
         border: 1px solid rgba(218, 54, 51, 0.3);
-        border-radius: 6px;
+        border-radius: var(--we-radius-sm);
         padding: 12px;
         margin-top: 8px;
     }
@@ -123,8 +133,8 @@
         <h2>👥 {{ grupo.nombre_grupo }}</h2>
         <div class="we-header-actions">
             <a href="{% url 'whatsapp_extractor:grupo_create' %}" class="we-btn we-btn-sm">➕ Nuevo</a>
-            <a href="{% url 'whatsapp_extractor:grupo_list' %}" class="we-btn we-btn-sm">← Grupos</a>
-            <a href="{% url 'whatsapp_extractor:dashboard' %}" class="we-btn we-btn-sm">← Dashboard</a>
+            <a href="{% url 'whatsapp_extractor:grupo_list' %}" class="we-btn we-btn-sm">📋 Grupos</a>
+            <a href="{% url 'whatsapp_extractor:dashboard' %}" class="we-btn we-btn-sm">📊 Dashboard</a>
         </div>
     </div>
 
@@ -198,7 +208,7 @@
         <div class="we-card-body">
             <div style="display:flex;gap:12px;flex-wrap:wrap;">
                 <a href="{% url 'whatsapp_extractor:grupo_toggle' grupo.id %}" class="we-btn {% if grupo.activo %}we-btn-danger{% else %}we-btn-primary{% endif %}">
-                    {% if grupo.activo %}⏸️ Desactivar{% else %}▶️ Activar{% endif %}
+                    {% if grupo.activo %}⏹ Desactivar{% else %}▶️ Activar{% endif %}
                 </a>
                 <a href="{% url 'whatsapp_extractor:grupo_extraer' grupo.id %}" class="we-btn we-btn-primary" id="btn-extraer">
                     🔄 Extraer ahora
@@ -215,7 +225,7 @@
                 {% if extractor_log_activo %}
                 <span class="we-badge we-badge-blue">🟢 EN VIVO</span>
                 {% else %}
-                <span class="we-badge we-badge-gray">⏸️ INACTIVO</span>
+                <span class="we-badge we-badge-gray">⏹ INACTIVO</span>
                 {% endif %}
             </span>
         </div>
@@ -235,7 +245,7 @@
                 border-radius: 0 0 8px 8px;
             ">
                 {% if extractor_log_activo %}
-                <div style="color:#7ec699;">━━━ Extracción en progreso ━━━</div>
+                <div style="color:#7ec699;">⚙️ Extracción en progreso ⚙️</div>
                 {% for entry in extractor_log_activo.entries.all %}
                 <div style="display:flex;gap:8px;" data-entry-id="{{ entry.id }}">
                     <span style="color:#666;flex-shrink:0;">[{{ entry.timestamp|date:"H:i:s" }}]</span>
@@ -282,7 +292,7 @@
                             <td style="white-space:nowrap;">{{ log.ejecucion_fecha|date:"d/m/Y H:i" }}</td>
                             <td>
                                 <span class="we-badge {% if log.estado == 'completed' %}we-badge-green{% elif log.estado == 'error' %}we-badge-red{% elif log.estado == 'running' %}we-badge-blue{% else %}we-badge-gray{% endif %}">
-                                    {% if log.estado == 'completed' %}✓{% elif log.estado == 'error' %}✗{% elif log.estado == 'running' %}⏳{% else %}⏸️{% endif %}
+                                    {% if log.estado == 'completed' %}✓{% elif log.estado == 'error' %}✗{% elif log.estado == 'running' %}🔄{% else %}⏹{% endif %}
                                     {{ log.get_estado_display }}
                                 </span>
                             </td>
@@ -365,14 +375,14 @@
                     if (data.log_estado === 'completed') {
                         var doneDiv = document.createElement('div');
                         doneDiv.style.cssText = 'color:#7ec699;margin-top:8px;border-top:1px solid #333;padding-top:8px;';
-                        doneDiv.textContent = '━━━ Extracción completada ━━━';
+                        doneDiv.textContent = '✅ Extracción completada ✅';
                         terminal.appendChild(doneDiv);
                         logStatus.innerHTML = '<span class="we-badge we-badge-green">✓ COMPLETADO</span>';
                         if (btnExtraer) btnExtraer.classList.remove('disabled');
                     } else if (data.log_estado === 'error') {
                         var errDiv = document.createElement('div');
                         errDiv.style.cssText = 'color:#f44336;margin-top:8px;border-top:1px solid #333;padding-top:8px;';
-                        errDiv.textContent = '━━━ Extracción falló ━━━';
+                        errDiv.textContent = '❌ Extracción falló ❌';
                         terminal.appendChild(errDiv);
                         logStatus.innerHTML = '<span class="we-badge we-badge-red">✗ ERROR</span>';
                         if (btnExtraer) btnExtraer.classList.remove('disabled');

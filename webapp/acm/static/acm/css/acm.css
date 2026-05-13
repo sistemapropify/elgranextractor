@@ -639,27 +639,38 @@ hr {
     display: none !important;
 }
 
-/* Placeholders de los inputs en gris claro (plomo) */
+/* Placeholders de los inputs en gris tenue (subtle) */
 .acm-field-input::placeholder {
-    color: #6c757d !important;
-    opacity: 1 !important;
+    color: #8b949e !important;
+    opacity: 0.6 !important;
     font-size: 0.8rem;
 }
 
 .acm-field-input::-webkit-input-placeholder {
-    color: #6c757d !important;
-    opacity: 1 !important;
+    color: #8b949e !important;
+    opacity: 0.6 !important;
     font-size: 0.8rem;
 }
 
 .acm-field-input::-moz-placeholder {
-    color: #6c757d !important;
-    opacity: 1 !important;
+    color: #8b949e !important;
+    opacity: 0.6 !important;
     font-size: 0.8rem;
 }
 
 .acm-field-input:-ms-input-placeholder {
-    color: #6c757d !important;
-    opacity: 1 !important;
+    color: #8b949e !important;
+    opacity: 0.6 !important;
     font-size: 0.8rem;
+}
+
+/* Texto blanco global para modo oscuro ACM */
+.acm-container h1, .acm-container h2, .acm-container h3,
+.acm-container h4, .acm-container h5, .acm-container h6,
+.acm-container p, .acm-container label, .acm-container span,
+.acm-container small, .acm-container li, .acm-container td,
+.acm-container th, .acm-container .form-label,
+.acm-container .card-title, .acm-container .card-text,
+.acm-container .offcanvas-title {
+    color: #f0f6fc !important;
 }

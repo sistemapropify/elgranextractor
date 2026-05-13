@@ -15,7 +15,6 @@ from .prompts import (
 )
 from .metrics import MetricsService, StructuredLogger, log
 from .intent_classifier import IntentClassifier, IntentType, IntentResult
-from .skill_base import Skill, SkillResult, SkillParameter, SkillRegistry
 
 from typing import TYPE_CHECKING
 
@@ -50,8 +49,4 @@ __all__ = [
     'ChatResult',
     'ChatContext',
     'StreamChunk',
-    'Skill',
-    'SkillResult',
-    'SkillParameter',
-    'SkillRegistry',
 ]

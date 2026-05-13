@@ -4,16 +4,118 @@
 
 {% block extra_css %}
 <style>
+    /* ===== PREVIEW TABLE ===== */
     .preview-table {
         max-height: 400px;
         overflow-y: auto;
+        border-radius: 8px;
+        border: 1px solid #dee2e6;
     }
+    .preview-table::-webkit-scrollbar {
+        width: 8px;
+    }
+    .preview-table::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+    .preview-table::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 4px;
+    }
+
+    /* ===== CARDS ===== */
     .card {
         margin-bottom: 20px;
+        border-radius: 12px;
+        overflow: hidden;
+        transition: all 0.3s ease;
     }
+    .card:hover {
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+    }
+
+    /* ===== ALERTAS ===== */
     .alert-info {
         background-color: #d1ecf1;
         border-color: #bee5eb;
+        border-radius: 10px;
+        border-left-width: 4px;
+    }
+
+    /* ===== FORMULARIO ===== */
+    .form-control, .form-select {
+        border-radius: 8px;
+        border: 1.5px solid #dee2e6;
+        padding: 0.5rem 0.75rem;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .form-control:focus, .form-select:focus {
+        border-color: var(--color-primary, #047d7d);
+        box-shadow: 0 0 0 3px rgba(4, 125, 125, 0.15);
+    }
+    .form-label {
+        font-weight: 600;
+        font-size: 0.88rem;
+        color: #495057;
+        margin-bottom: 0.35rem;
+    }
+
+    /* ===== BOTONES ===== */
+    .btn {
+        border-radius: 8px;
+        font-weight: 500;
+        padding: 0.5rem 1.25rem;
+        transition: all 0.25s ease;
+    }
+    .btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    .btn-primary {
+        background: linear-gradient(135deg, var(--color-primary, #047d7d), #036666);
+        border: none;
+    }
+    .btn-primary:hover {
+        background: linear-gradient(135deg, #036666, #025555);
+    }
+
+    /* ===== LOG VIEWER ===== */
+    .log-container {
+        scroll-behavior: smooth;
+    }
+    .log-container::-webkit-scrollbar {
+        width: 8px;
+    }
+    .log-container::-webkit-scrollbar-track {
+        background: #1a1a1a;
+    }
+    .log-container::-webkit-scrollbar-thumb {
+        background: #444;
+        border-radius: 4px;
+    }
+
+    /* ===== LISTA DE INSTRUCCIONES ===== */
+    ol li {
+        padding: 0.4rem 0;
+        color: #495057;
+        line-height: 1.6;
+    }
+    ol li::marker {
+        font-weight: 700;
+        color: var(--color-primary, #047d7d);
+    }
+
+    /* ===== ANIMACIONES ===== */
+    .card {
+        animation: fadeInUp 0.5s ease forwards;
+        opacity: 0;
+    }
+    .card:nth-child(2) { animation-delay: 0.1s; }
+    .card:nth-child(3) { animation-delay: 0.2s; }
+
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
     }
 </style>
 {% endblock %}

@@ -12,7 +12,7 @@ from intelligence.skills import (
     DynamicSkillRegistry,
     SkillCache,
 )
-from intelligence.services.skill_base import SkillResult
+from intelligence.skills.base import SkillResult
 
 
 class TestSkillSystemIntegration(unittest.TestCase):

@@ -12,7 +12,7 @@
         --we-bg-secondary: #161b22;
         --we-bg-tertiary: #21262d;
         --we-border: #30363d;
-        --we-text-primary: #f0f6fc;
+        --we-text-primary: #c9d1d9;
         --we-text-secondary: #8b949e;
         --we-accent: #58a6ff;
         --we-accent-hover: #1f6feb;
@@ -21,22 +21,27 @@
         --we-red: #da3633;
         --we-red-bg: rgba(218, 54, 51, 0.15);
         --we-orange: #bb8009;
+        --we-orange-bg: rgba(187, 128, 9, 0.15);
         --we-radius: 8px;
-        --we-transition: all 0.2s ease;
+        --we-radius-sm: 6px;
     }
+
     .we-container {
         max-width: 800px;
         margin: 0 auto;
     }
+
     .we-card {
-        background: var(--we-bg-secondary);
+        background: #161b22;
         border: 1px solid var(--we-border);
         border-radius: var(--we-radius);
         margin-bottom: 16px;
     }
+
     .we-card-header {
         padding: 14px 20px;
         border-bottom: 1px solid var(--we-border);
+        background: #21262d;
     }
     .we-card-title {
         margin: 0;
@@ -47,6 +52,7 @@
     .we-card-body {
         padding: 20px;
     }
+
     .we-btn {
         display: inline-flex;
         align-items: center;
@@ -56,25 +62,27 @@
         font-size: 14px;
         font-weight: 500;
         color: var(--we-text-primary);
-        background: var(--we-bg-tertiary);
+        background: #21262d;
         border: 1px solid var(--we-border);
         cursor: pointer;
         text-decoration: none;
-        transition: var(--we-transition);
     }
     .we-btn:hover {
-        background: rgba(255,255,255,0.05);
+        background: #30363d;
         border-color: var(--we-text-secondary);
+        color: var(--we-text-primary);
     }
     .we-btn-primary {
-        background: var(--we-accent);
-        border-color: var(--we-accent);
+        background: #238636;
+        border-color: rgba(35, 134, 54, 0.3);
         color: #fff;
     }
     .we-btn-primary:hover {
-        background: var(--we-accent-hover);
-        border-color: var(--we-accent-hover);
+        background: #2ea043;
+        border-color: rgba(35, 134, 54, 0.5);
+        color: #fff;
     }
+
     .we-text-small {
         font-size: 12px;
         color: var(--we-text-secondary);
@@ -86,6 +94,27 @@
     .we-link:hover {
         text-decoration: underline;
     }
+
+    /* Header section */
+    .we-header-section {
+        margin-bottom: 24px;
+        padding: 16px 20px;
+        border-radius: var(--we-radius);
+        border: 1px solid var(--we-border);
+        background: #161b22;
+    }
+    .we-header-section h2 {
+        margin: 0 0 8px 0;
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--we-text-primary);
+    }
+    .we-header-section p {
+        margin: 0;
+        font-size: 14px;
+        color: var(--we-text-secondary);
+    }
+
     /* Drop zone */
     .drop-zone {
         border: 2px dashed var(--we-border);
@@ -93,13 +122,12 @@
         padding: 60px 20px;
         text-align: center;
         cursor: pointer;
-        transition: var(--we-transition);
-        background: var(--we-bg);
+        background: #0d1117;
     }
     .drop-zone:hover,
     .drop-zone.dragover {
         border-color: var(--we-accent);
-        background: rgba(88, 166, 255, 0.05);
+        background: rgba(88, 166, 255, 0.08);
     }
     .drop-zone-icon {
         font-size: 48px;
@@ -117,10 +145,11 @@
     .drop-zone input[type="file"] {
         display: none;
     }
+
     /* File info */
     .file-info {
         display: none;
-        background: var(--we-bg-tertiary);
+        background: #21262d;
         border: 1px solid var(--we-border);
         border-radius: var(--we-radius);
         padding: 16px;
@@ -132,7 +161,11 @@
     .file-info-row {
         display: flex;
         justify-content: space-between;
-        padding: 4px 0;
+        padding: 6px 0;
+        border-bottom: 1px solid rgba(48,54,61,0.4);
+    }
+    .file-info-row:last-child {
+        border-bottom: none;
     }
     .file-info-label {
         color: var(--we-text-secondary);
@@ -141,21 +174,26 @@
     .file-info-value {
         color: var(--we-text-primary);
         font-size: 13px;
+        font-weight: 500;
     }
+
     /* Messages */
     .we-message {
         padding: 12px 16px;
         border-radius: var(--we-radius);
         margin-bottom: 16px;
         font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
     }
     .we-message-success {
-        background: var(--we-green-bg);
+        background: rgba(35, 134, 54, 0.15);
         border: 1px solid rgba(35, 134, 54, 0.3);
         color: var(--we-green);
     }
     .we-message-error {
-        background: var(--we-red-bg);
+        background: rgba(218, 54, 51, 0.15);
         border: 1px solid rgba(218, 54, 51, 0.3);
         color: var(--we-red);
     }
@@ -164,6 +202,23 @@
         border: 1px solid rgba(88, 166, 255, 0.3);
         color: var(--we-accent);
     }
+
+    /* Instructions tip box */
+    .we-tip-box {
+        margin-top: 16px;
+        padding: 12px;
+        background: rgba(88,166,255,0.1);
+        border-radius: var(--we-radius-sm);
+        font-size: 13px;
+        color: var(--we-accent);
+        border: 1px solid rgba(88,166,255,0.2);
+    }
+
+    @media (max-width: 768px) {
+        .we-header-section { text-align: center; }
+        .drop-zone { padding: 40px 16px; }
+        .drop-zone-icon { font-size: 36px; }
+    }
 </style>
 {% endblock %}
 
@@ -171,8 +226,8 @@
 <div class="we-container">
 
     <!-- Header -->
-    <div style="margin-bottom:24px;">
-        <h2 style="margin:0 0 8px 0;font-size:20px;font-weight:600;color:var(--we-text-primary);">📤 Subir Archivo de Extracción</h2>
+    <div class="we-header-section">
+        <h2>📤 Subir Archivo de Extracción</h2>
         <p style="margin:0;font-size:14px;color:var(--we-text-secondary);">
             Sube un archivo <code>.txt</code> exportado de WhatsApp para procesarlo y extraer requerimientos inmobiliarios.
         </p>

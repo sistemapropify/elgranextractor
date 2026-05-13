@@ -10,7 +10,7 @@ Diferencia entre:
 
 Integración:
     Usa LLMService.extract_structured_data() para la extracción.
-    Se registra automáticamente via SkillRegistry.discover_skills().
+    Se registra automáticamente via SkillRegistry.register().
 """
 
 import json
@@ -21,7 +21,7 @@ from typing import Dict, Optional, Any
 
 from django.utils import timezone
 
-from intelligence.services.skill_base import Skill, SkillResult, SkillParameter
+from intelligence.skills.base import BaseSkill, SkillResult
 from intelligence.services.llm import LLMService
 from requerimientos.models import (
     CondicionChoices,
@@ -36,7 +36,7 @@ from requerimientos.models import (
 logger = logging.getLogger(__name__)
 
 
-class ClasificarIntencionWhatsAppSkill(Skill):
+class ClasificarIntencionWhatsAppSkill(BaseSkill):
     """
     Skill que clasifica la intención de un mensaje de WhatsApp inmobiliario
     y extrae datos estructurados para crear un Requerimiento.
@@ -52,42 +52,40 @@ class ClasificarIntencionWhatsAppSkill(Skill):
         "(¿es un agente vendiendo o un cliente comprando?) y extrae "
         "datos estructurados como tipo de propiedad, distrito, presupuesto, etc."
     )
+    category = "crm"
+    access_level = 1
+    is_active = True
 
-    parameters = {
-        "texto": SkillParameter(
-            name="texto",
-            type="string",
-            description="Texto del mensaje de WhatsApp a analizar",
-            required=True,
-        ),
-        "fuente": SkillParameter(
-            name="fuente",
-            type="string",
-            description="Nombre del grupo WhatsApp de origen",
-            required=False,
-            default="",
-        ),
-        "autor": SkillParameter(
-            name="autor",
-            type="string",
-            description="Nombre del autor/agente del mensaje",
-            required=False,
-            default="",
-        ),
-        "fecha": SkillParameter(
-            name="fecha",
-            type="string",
-            description="Fecha del mensaje en formato YYYY-MM-DD",
-            required=False,
-            default="",
-        ),
-        "hora": SkillParameter(
-            name="hora",
-            type="string",
-            description="Hora del mensaje en formato HH:MM:SS",
-            required=False,
-            default="",
-        ),
+    parameters_schema = {
+        "texto": {
+            "type": "string",
+            "description": "Texto del mensaje de WhatsApp a analizar",
+            "required": True,
+        },
+        "fuente": {
+            "type": "string",
+            "description": "Nombre del grupo WhatsApp de origen",
+            "required": False,
+            "default": "",
+        },
+        "autor": {
+            "type": "string",
+            "description": "Nombre del autor/agente del mensaje",
+            "required": False,
+            "default": "",
+        },
+        "fecha": {
+            "type": "string",
+            "description": "Fecha del mensaje en formato YYYY-MM-DD",
+            "required": False,
+            "default": "",
+        },
+        "hora": {
+            "type": "string",
+            "description": "Hora del mensaje en formato HH:MM:SS",
+            "required": False,
+            "default": "",
+        },
     }
 
     # ── Schema de extracción MEJORADO ──────────────────────────────
@@ -157,22 +155,37 @@ class ClasificarIntencionWhatsAppSkill(Skill):
         ),
     }
 
-    def execute(self, **kwargs) -> SkillResult:
+    def validate_params(self, params: Dict[str, Any]) -> bool:
+        """Valida que los parámetros sean correctos."""
+        if not params or "texto" not in params:
+            return False
+        texto = params.get("texto", "")
+        if not texto or not texto.strip():
+            return False
+        return True
+
+    def execute(self, params: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> SkillResult:
         """
         Ejecuta la clasificación y extracción de datos del mensaje.
 
         Args:
-            texto: Texto del mensaje WhatsApp.
-            fuente: Grupo WhatsApp de origen (opcional).
-            autor: Autor del mensaje (opcional).
-            fecha: Fecha del mensaje en formato YYYY-MM-DD (opcional).
-            hora: Hora del mensaje en formato HH:MM:SS (opcional).
+            params: Diccionario con:
+                texto: Texto del mensaje WhatsApp.
+                fuente: Grupo WhatsApp de origen (opcional).
+                autor: Autor del mensaje (opcional).
+                fecha: Fecha del mensaje en formato YYYY-MM-DD (opcional).
+                hora: Hora del mensaje en formato HH:MM:SS (opcional).
+            context: Contexto de ejecución (no usado).
 
         Returns:
             SkillResult con los datos estructurados listos para crear un Requerimiento.
         """
         try:
-            params = self.validate_params(**kwargs)
+            if not self.validate_params(params):
+                return SkillResult.error(
+                    "El parámetro 'texto' es requerido y no debe estar vacío"
+                )
+
             texto = params["texto"]
             fuente = params.get("fuente", "")
             autor = params.get("autor", "")
@@ -180,7 +193,7 @@ class ClasificarIntencionWhatsAppSkill(Skill):
             hora = params.get("hora", "")
 
             if not texto or not texto.strip():
-                return SkillResult.from_error("El texto del mensaje está vacío")
+                return SkillResult.error("El texto del mensaje está vacío")
 
             # 1. Llamar a DeepSeek para extracción estructurada
             success, message, extracted = LLMService.extract_structured_data(
@@ -198,7 +211,9 @@ class ClasificarIntencionWhatsAppSkill(Skill):
                         error=f"Extracción fallida: {message}",
                         fecha=fecha, hora=hora,
                     ),
+                    message="Extracción fallida, datos vacíos devueltos",
                     metadata={"es_valido": False, "error": message},
+                    skill_name=self.name,
                 )
 
             # 2. Validar si es un requerimiento válido
@@ -212,7 +227,9 @@ class ClasificarIntencionWhatsAppSkill(Skill):
                         es_valido=False,
                         fecha=fecha, hora=hora,
                     ),
+                    message="Mensaje no es un requerimiento válido",
                     metadata={"es_valido": False},
+                    skill_name=self.name,
                 )
 
             # 3. Mapear campos extraídos al modelo Requerimiento
@@ -227,16 +244,18 @@ class ClasificarIntencionWhatsAppSkill(Skill):
 
             return SkillResult.ok(
                 data=requerimiento_data,
+                message="Mensaje clasificado y datos extraídos correctamente",
                 metadata={
                     "es_valido": True,
                     "intencion": extracted.get("intencion", "no_determinado"),
                     "tipo_original": requerimiento_data.get("tipo_original", "OTRO"),
                 },
+                skill_name=self.name,
             )
 
         except Exception as e:
             logger.error(f"Error ejecutando skill: {e}", exc_info=True)
-            return SkillResult.from_error(f"Error inesperado: {str(e)}")
+            return SkillResult.error(f"Error inesperado: {str(e)}")
 
     # ── Métodos de mapeo (adaptados de DeepSeekTransformer) ────────
 

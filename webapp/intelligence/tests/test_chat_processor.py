@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from intelligence.services.chat_processor import ChatProcessor, ChatContext
-from intelligence.services.skill_base import SkillResult
+from intelligence.skills.base import SkillResult
 from intelligence.skills.orchestrator import SkillPipelineResult
 
 

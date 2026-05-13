@@ -3,6 +3,8 @@
 > **Propósito:** Este manual explica el proceso completo para implementar una nueva skill en el sistema Propifai, desde la planificación hasta la ejecución y monitoreo en producción.
 >
 > **Público:** Desarrolladores que necesitan agregar nuevas capacidades al sistema de skills.
+>
+> **Actualizado:** Mayo 2026 — Solo documenta el sistema NUEVO (`BaseSkill`). El sistema LEGACY (`Skill` de `services/skill_base.py`) fue eliminado.
 
 ---
 
@@ -13,7 +15,7 @@
 3. [Flujo de Trabajo Completo](#3-flujo-de-trabajo-completo)
 4. [Paso 1: Planificar la Skill](#4-paso-1-planificar-la-skill)
 5. [Paso 2: Escribir el Código Python](#5-paso-2-escribir-el-código-python)
-6. [Paso 3: Crear la Skill en el Dashboard](#6-paso-3-crear-la-skill-en-el-dashboard)
+6. [Paso 3: Registrar la Skill](#6-paso-3-registrar-la-skill)
 7. [Paso 4: Probar la Skill](#7-paso-4-probar-la-skill)
 8. [Paso 5: Monitorear la Skill](#8-paso-5-monitorear-la-skill)
 9. [Método Alternativo: Crear Archivo Directamente](#9-método-alternativo-crear-archivo-directamente)
@@ -40,7 +42,7 @@ El sistema de skills de Propifai es un **motor de capacidades autónomas** que p
 ```
 ┌─────────────┐     ┌──────────────────┐     ┌──────────────┐
 │  Dashboard   │────▶│                  │     │              │
-│  (Web UI)    │     │   SkillOrchestrator │────▶│   Skill      │
+│  (Web UI)    │     │   SkillOrchestrator │────▶│   BaseSkill  │
 ├─────────────┤     │                  │     │   (Python)   │
 │  Chat IA     │────▶│  (Motor central) │     │              │
 │  (DeepSeek)  │     │                  │     └──────────────┘
@@ -56,36 +58,45 @@ El sistema de skills de Propifai es un **motor de capacidades autónomas** que p
 
 ## 2. Arquitectura del Sistema de Skills
 
+> El sistema usa una **única clase base**: `BaseSkill`. Revisa el [`MANUAL-01_ARQUITECTURA_CODIGO_SKILL.md`](MANUAL-01_ARQUITECTURA_CODIGO_SKILL.md) para los detalles de implementación.
+
 ### Estructura de directorios:
 
 ```
 webapp/intelligence/
-├── services/
-│   ├── skill_base.py          ← Clases base (Skill, SkillParameter, SkillResult, SkillRegistry)
+├── services/                     ← Servicios (RAG, LLM, memoria, etc.)
 │   ├── __init__.py
+│   ├── rag.py
+│   ├── llm.py
+│   ├── memory.py
 │   └── ...
 ├── skills/
-│   ├── __init__.py            ← Auto-descubrimiento y create_skill_system()
-│   ├── registry.py            ← DynamicSkillRegistry (descubrimiento dinámico)
-│   ├── orchestrator.py        ← SkillOrchestrator (ejecución, cache, métricas)
-│   ├── cache.py               ← SkillCache (Redis + local)
-│   ├── acm_analisis.py        ← Skill: Análisis financiero ACM
-│   ├── reporte_precios.py     ← Skill: Reporte de precios por zona
-│   ├── matching.py            ← Skill: Matching oferta-demanda
-│   ├── busqueda_exacta.py     ← Skill: Búsqueda exacta de propiedades
+│   ├── __init__.py               ← create_skill_system() y lazy imports
+│   ├── base.py                   ← BaseSkill, SkillResult
+│   ├── registry.py               ← SkillRegistry (singleton)
+│   ├── orchestrator.py           ← SkillOrchestrator (ejecución, cache, métricas)
+│   ├── cache.py                  ← SkillCache (Redis + local)
+│   ├── propiedades/
+│   │   └── skill.py              ← BusquedaPropiedadesSkill (ejemplo producción)
+│   ├── acm_analisis.py           ← ACMAnalisisSkill (migrado a BaseSkill)
+│   ├── reporte_precios.py        ← ReportePreciosZonaSkill (migrado a BaseSkill)
+│   ├── matching.py               ← MatchingOfertaDemandaSkill (migrado a BaseSkill)
+│   ├── busqueda_exacta.py        ← BusquedaExactaSkill (migrado a BaseSkill)
+│   ├── clasificar_intencion_whatsapp.py ← ClasificarIntencionWhatsAppSkill
 │   └── examples/
 │       ├── __init__.py
-│       └── math_skills.py     ← Skills de ejemplo (suma, resta, etc.)
-├── models.py                  ← SkillExecution (modelo de persistencia)
-├── views.py                   ← Vistas del dashboard de skills
-├── urls.py                    ← URLs del dashboard
-├── serializers.py             ← SkillExecutionSerializer
+│       ├── math_skills.py        ← Skills de ejemplo (SumaSkill, etc.)
+│       └── data_skills.py        ← Skills de ejemplo (EstadisticasBasicasSkill, etc.)
+├── models.py                     ← SkillExecution (modelo de persistencia)
+├── views.py                      ← Vistas del dashboard de skills
+├── urls.py                       ← URLs del dashboard
+├── serializers.py                ← SkillExecutionSerializer
 ├── templates/intelligence/
-│   ├── skills_dashboard.html  ← Dashboard principal
-│   ├── skills_detail.html     ← Detalle de skill
-│   ├── skills_create.html     ← Crear/editar skill
-│   ├── skills_metrics.html    ← Métricas avanzadas
-│   └── skills_logs.html       ← Logs de ejecución
+│   ├── skills_dashboard.html     ← Dashboard principal
+│   ├── skills_detail.html        ← Detalle de skill
+│   ├── skills_create.html        ← Crear/editar skill
+│   ├── skills_metrics.html       ← Métricas avanzadas
+│   └── skills_logs.html          ← Logs de ejecución
 └── static/intelligence/
     ├── css/skills_dashboard.css
     └── js/skills_dashboard.js, skills_metrics.js
@@ -95,14 +106,13 @@ webapp/intelligence/
 
 | Componente | Archivo | Función |
 |---|---|---|
-| `Skill` (ABC) | `services/skill_base.py` | Clase base que deben heredar todas las skills |
-| `SkillParameter` | `services/skill_base.py` | Definición de parámetros de entrada |
-| `SkillResult` | `services/skill_base.py` | Resultado estandarizado |
-| `DynamicSkillRegistry` | `skills/registry.py` | Descubre y registra skills automáticamente |
-| `SkillOrchestrator` | `skills/orchestrator.py` | Orquesta ejecución con cache y métricas |
-| `SkillCache` | `skills/cache.py` | Cache en Redis + memoria local |
-| `SkillExecution` | `models.py` | Persistencia de ejecuciones en BD |
-| Dashboard views | `views.py` | CRUD + dashboard + métricas |
+| `BaseSkill` (ABC) | [`skills/base.py`](webapp/intelligence/skills/base.py:91) | Clase base para todas las skills |
+| `SkillResult` | [`skills/base.py`](webapp/intelligence/skills/base.py:22) | Resultado estandarizado (ok/error) |
+| `SkillRegistry` | [`skills/registry.py`](webapp/intelligence/skills/registry.py:41) | Singleton que registra BaseSkill |
+| `SkillOrchestrator` | [`skills/orchestrator.py`](webapp/intelligence/skills/orchestrator.py:62) | Orquesta ejecución con cache y métricas |
+| `SkillCache` | [`skills/cache.py`](webapp/intelligence/skills/cache.py) | Cache en Redis + memoria local |
+| `SkillExecution` | [`models.py`](webapp/intelligence/models.py) | Persistencia de ejecuciones en BD |
+| Dashboard views | [`views.py`](webapp/intelligence/views.py) | CRUD + dashboard + métricas |
 
 ---
 
@@ -125,12 +135,11 @@ webapp/intelligence/
    └─ Verificar con el checklist
    │
    ▼
-3. CREAR EN DASHBOARD
+3. REGISTRAR
    │
-   ├─ Ir a /api/v1/intelligence/skills/create/
-   ├─ Llenar: nombre, descripción, categoría, nivel
-   ├─ Pegar código Python en el editor
-   └─ Click "Crear Skill"
+   ├─ Opción A: Crear archivo en skills/ y registrar en apps.py
+   ├─ Opción B: Usar el dashboard (/api/v1/intelligence/skills/create/)
+   └─ Verificar que aparece en el registry
    │
    ▼
 4. VERIFICAR
@@ -160,21 +169,21 @@ Antes de escribir código, define:
 ```yaml
 Nombre: "mi_nueva_skill"
 Descripción: "Calcula el precio promedio por m2 para una zona específica"
-Categoría: "analysis" | "query" | "utility" | "data" | "integration"
+Categoría: "busqueda" | "crm" | "reporte" | "notificacion" | "template" | "custom"
 Nivel requerido: 1 (Básico) | 2 (Intermedio) | 3 (Avanzado) | 4 (Admin) | 5 (Super Admin)
 
 Parámetros de entrada:
   - nombre: "zona"
-    tipo: "str"
+    tipo: "string"
     descripción: "Nombre del distrito o zona"
     requerido: true
   - nombre: "tipo_propiedad"
-    tipo: "str"
+    tipo: "string"
     descripción: "Tipo de propiedad (Departamento, Casa, Terreno)"
     requerido: true
-    opciones: ["Departamento", "Casa", "Terreno"]
+    enum: ["Departamento", "Casa", "Terreno"]
   - nombre: "incluir_grafico"
-    tipo: "bool"
+    tipo: "boolean"
     descripción: "Si debe incluir gráfico en el resultado"
     requerido: false
     default: false
@@ -190,11 +199,12 @@ Datos de retorno:
 
 | Categoría | Descripción | Ejemplos |
 |---|---|---|
-| `query` | Consultas y búsquedas | `busqueda_exacta`, `matching_oferta_demanda` |
-| `analysis` | Análisis y cálculos | `acm_analisis`, `reporte_precios_zona` |
-| `utility` | Utilidades generales | `suma`, `resta`, `estadisticas_basicas` |
-| `data` | Procesamiento de datos | Importación, transformación |
-| `integration` | Integraciones externas | APIs, webhooks |
+| `busqueda` | Búsquedas y consultas de propiedades | `busqueda_propiedades`, `busqueda_exacta` |
+| `crm` | Gestión de clientes y leads | `clasificar_intencion_whatsapp` |
+| `reporte` | Reportes y análisis | `acm_analisis`, `reporte_precios_zona` |
+| `notificacion` | Notificaciones y alertas | — |
+| `template` | Skills plantilla | — |
+| `custom` | Utilidades generales | `suma`, `estadisticas_basicas` |
 
 ### Niveles de acceso:
 
@@ -212,51 +222,80 @@ Datos de retorno:
 
 Sigue las instrucciones detalladas del [`MANUAL-01_ARQUITECTURA_CODIGO_SKILL.md`](MANUAL-01_ARQUITECTURA_CODIGO_SKILL.md).
 
-### Resumen rápido:
+### Resumen rápido — Sistema NUEVO (BaseSkill):
 
 ```python
 """
-[Descripción de la skill]
+[Nombre de la skill] — [Descripción breve]
 """
-from typing import Dict, Any
-from ...services.skill_base import Skill, SkillParameter, SkillResult
+from typing import Dict, Any, Optional
+from ..base import BaseSkill, SkillResult
 
 
-class MiSkill(Skill):
+class MiSkill(BaseSkill):
     name = "mi_skill"
     description = "Descripción para el LLM"
-    parameters = {
-        'param1': SkillParameter(
-            name='param1', type='str',
-            description='...', required=True
-        ),
+    category = "custom"
+    access_level = 1
+    is_active = True
+
+    parameters_schema = {
+        'param1': {
+            'type': 'string',
+            'description': 'Descripción del parámetro',
+            'required': True,
+        },
     }
 
-    def execute(self, **kwargs) -> SkillResult:
+    def validate_params(self, params: Dict[str, Any]) -> bool:
+        if not params:
+            return False
+        for name, schema in self.parameters_schema.items():
+            if schema.get('required', False):
+                if params.get(name) is None or params.get(name) == '':
+                    return False
+        return True
+
+    def execute(self, params: Dict[str, Any],
+                context: Optional[Dict[str, Any]] = None) -> SkillResult:
         try:
-            params = self.validate_params(**kwargs)
+            if not self.validate_params(params):
+                return SkillResult.error(
+                    message="Parámetros inválidos",
+                    skill_name=self.name
+                )
             # Lógica aquí
-            return SkillResult.ok(data={'resultado': ...})
+            return SkillResult.ok(
+                data={'resultado': ...},
+                message="Ejecutado correctamente",
+                skill_name=self.name
+            )
         except Exception as e:
-            return SkillResult.from_error(str(e))
+            return SkillResult.error(
+                message=str(e),
+                skill_name=self.name
+            )
 ```
 
 ### Prueba local del código (opcional pero recomendado):
 
-Puedes probar tu skill localmente antes de subirla al dashboard:
+Puedes probar tu skill localmente antes de registrarla.
 
 ```python
 # test_mi_skill.py
-import sys
+import sys, os
 sys.path.insert(0, 'webapp')
-import django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'settings')
+import django
 django.setup()
 
 from intelligence.skills.mi_skill import MiSkill
 
 skill = MiSkill()
-resultado = skill.execute(param1="valor")
+resultado = skill.execute(
+    params={'param1': 'valor'},
+    context={'user_id': 1, 'environment': 'test'}
+)
 print(f"Éxito: {resultado.success}")
 print(f"Datos: {resultado.data}")
 ```
@@ -271,15 +310,30 @@ python manage.py shell
 ```python
 from intelligence.skills.mi_skill import MiSkill
 skill = MiSkill()
-result = skill.execute(param1="test")
+result = skill.execute(params={'param1': 'test'})
 print(result)
 ```
 
 ---
 
-## 6. Paso 3: Crear la Skill en el Dashboard
+## 6. Paso 3: Registrar la Skill
 
-### Acceder al formulario de creación:
+### Opción A: Registro automático (recomendado)
+
+Las skills se registran automáticamente al arrancar la aplicación. Para que tu skill sea descubierta:
+
+1. Crea el archivo en `webapp/intelligence/skills/mi_skill.py`
+2. Agrega la importación en [`webapp/intelligence/apps.py`](webapp/intelligence/apps.py):
+
+```python
+# En la clase IntelligenceConfig.ready()
+from .skills.mi_skill import MiSkill
+registry.register(MiSkill)
+```
+
+3. Reinicia el servidor de Django
+
+### Opción B: Usar el dashboard
 
 1. Abre el navegador en: [`http://localhost:8000/api/v1/intelligence/skills/create/`](http://localhost:8000/api/v1/intelligence/skills/create/)
 2. Debes estar autenticado con nivel 4 (Admin) o superior
@@ -304,20 +358,20 @@ print(result)
 │                                                  │
 │  Categoría           Nivel Requerido             │
 │  ┌──────────────┐   ┌──────────────────┐        │
-│  │ ▼ Analysis   │   │ ▼ Nivel 3 (Avanz)│        │
+│  │ ▼ custom     │   │ ▼ Nivel 1 (Básic)│        │
 │  └──────────────┘   └──────────────────┘        │
 ├─────────────────────────────────────────────────┤
 │  Código de la Skill                              │
 │  ┌─────────────────────────────────────────────┐ │
 │  │ # Escribe aquí el código de tu skill...     │ │
 │  │                                             │ │
-│  │ from ...services.skill_base import ...      │ │
+│  │ from ..base import BaseSkill, SkillResult   │ │
 │  │                                             │ │
-│  │ class MiSkill(Skill):                       │ │
+│  │ class MiSkill(BaseSkill):                   │ │
 │  │     ...                                     │ │
 │  └─────────────────────────────────────────────┘ │
-│  La clase debe heredar de Skill e implementar    │
-│  execute(self, **kwargs) -> SkillResult          │
+│  La clase debe heredar de BaseSkill e implementar│
+│  execute(params, context) -> SkillResult         │
 ├─────────────────────────────────────────────────┤
 │                    [Cancelar]  [Crear Skill]     │
 └─────────────────────────────────────────────────┘
@@ -485,26 +539,52 @@ Crea un archivo en: `webapp/intelligence/skills/mi_skill.py`
 """
 Mi nueva skill personalizada.
 """
-from typing import Dict, Any
-from ...services.skill_base import Skill, SkillParameter, SkillResult
+from typing import Dict, Any, Optional
+from ..base import BaseSkill, SkillResult
 
 
-class MiSkill(Skill):
+class MiSkill(BaseSkill):
     name = "mi_skill"
     description = "Descripción de mi skill"
-    parameters = {
-        'param1': SkillParameter(
-            name='param1', type='str',
-            description='...', required=True
-        ),
+    category = "custom"
+    access_level = 1
+    is_active = True
+
+    parameters_schema = {
+        'param1': {
+            'type': 'string',
+            'description': 'Descripción del parámetro',
+            'required': True,
+        },
     }
 
-    def execute(self, **kwargs) -> SkillResult:
+    def validate_params(self, params: Dict[str, Any]) -> bool:
+        if not params:
+            return False
+        for name, schema in self.parameters_schema.items():
+            if schema.get('required', False):
+                if params.get(name) is None or params.get(name) == '':
+                    return False
+        return True
+
+    def execute(self, params: Dict[str, Any],
+                context: Optional[Dict[str, Any]] = None) -> SkillResult:
         try:
-            params = self.validate_params(**kwargs)
-            return SkillResult.ok(data={'resultado': 'ok'})
+            if not self.validate_params(params):
+                return SkillResult.error(
+                    message="Parámetros inválidos",
+                    skill_name=self.name
+                )
+            return SkillResult.ok(
+                data={'resultado': 'ok'},
+                message="Ejecutado correctamente",
+                skill_name=self.name
+            )
         except Exception as e:
-            return SkillResult.from_error(str(e))
+            return SkillResult.error(
+                message=str(e),
+                skill_name=self.name
+            )
 ```
 
 ### Paso 2: Registrar la skill
@@ -547,14 +627,43 @@ Las skills pueden ser invocadas automáticamente por el chat IA (DeepSeek) cuand
 1. El usuario escribe un mensaje en el chat
 2. El `IntentClassifier` analiza la intención
 3. Si detecta que debe ejecutar una skill, busca en el `SkillRegistry` por descripción
-4. Ejecuta la skill con los parámetros extraídos del mensaje
-5. El resultado se formatea como respuesta del chat
+4. Extrae parámetros del mensaje usando `LLMService.extract_skill_params()`
+5. Ejecuta la skill con los parámetros extraídos
+6. El resultado se formatea como respuesta del chat
 
 ### Requisitos para que una skill sea invocable desde el chat:
 
 1. **`description` debe ser semántica y descriptiva** — El LLM la usa para saber qué hace
 2. **Los parámetros deben tener `description` clara** — El LLM extrae valores del mensaje
 3. **El nombre debe ser intuitivo** — Preferir nombres en español
+4. **`parameters_schema` debe estar bien definido** — El sistema `extract_skill_params()` usa el schema para saber qué extraer
+
+### Cómo `extract_skill_params()` usa el schema:
+
+El método `LLMService.extract_skill_params()` (en `services/llm.py`) envía el schema completo de la skill a DeepSeek para que extraiga los valores del mensaje del usuario.
+
+```python
+parameters_schema = {
+    'distrito': {
+        'type': 'string',
+        'description': 'Distrito donde buscar (ej: Cayma, Yanahuara, Cerro Colorado)',
+        'required': False,
+    },
+    'condicion': {
+        'type': 'string',
+        'description': 'Condición de la propiedad (available, sold, paused, unavailable, catchment)',
+        'required': False,
+    },
+}
+```
+
+DeepSeek recibe este schema y extrae: `{"distrito": "Cayma", "condicion": "available"}`
+
+**Recomendaciones para que la extracción funcione bien:**
+- Usa `description` detalladas con ejemplos entre paréntesis
+- Incluye sinónimos en la descripción para que el LLM entienda variaciones
+- Para valores fijos, usa `enum` en el schema
+- Los nombres de parámetros deben ser intuitivos y en español
 
 ### Ejemplo de descripción efectiva:
 
@@ -579,7 +688,10 @@ Usuario: "¿Qué me recomiendas para un departamento de 120m2 en Cayma que cuest
          "acm_analisis" ← "análisis ACM... recomendaciones financieras"
                     │
                     ▼
-         Extrae parámetros del mensaje:
+         LLMService.extract_skill_params(mensaje, schema_de_la_skill)
+                    │
+                    ▼
+         Parámetros extraídos:
          - precio: 250000
          - area_m2: 120
          - ubicacion: "Cayma"
@@ -593,6 +705,15 @@ Usuario: "¿Qué me recomiendas para un departamento de 120m2 en Cayma que cuest
                     ▼
          "El inmueble tiene un precio por m2 de 2,083.33..."
 ```
+
+### ⚠️ Limitación actual: Sin contexto de conversación
+
+Actualmente, `extract_skill_params()` solo ve el mensaje actual, NO el historial de la conversación. Esto significa que:
+
+- ❌ Si dices "muéstrame propiedades en Cayma" y luego "cuantas vendidas", NO inferirá "Cayma" del contexto
+- ✅ Si dices "muéstrame propiedades vendidas en Cayma" en un solo mensaje, funcionará correctamente
+
+**Solución temporal:** Incluye toda la información necesaria en cada mensaje. La solución permanente (contexto de conversación) está en desarrollo.
 
 ---
 
@@ -731,8 +852,8 @@ def skill_create_view(request):
 **Posibles causas:**
 1. Error de sintaxis en el código Python
 2. Error en tiempo de importación (módulo no encontrado)
-3. La clase no hereda correctamente de `Skill`
-4. Falta `name`, `description` o `parameters`
+3. La clase no hereda correctamente de `BaseSkill`
+4. Falta `name`, `description` o `parameters_schema`
 
 **Solución:**
 ```bash
@@ -781,18 +902,21 @@ except Exception as e:
 ### Error de importación: `ModuleNotFoundError`
 
 ```python
-# ❌ MALA importación (ruta incorrecta)
-from services.skill_base import Skill
-
-# ✅ BUENA importación (ruta relativa correcta)
+# ❌ MAL (ruta del sistema LEGACY eliminado)
 from ...services.skill_base import Skill
+
+# ✅ BIEN (ruta del sistema NUEVO)
+from ..base import BaseSkill, SkillResult
 ```
 
-**Explicación:** Las skills están en `intelligence/skills/`, y `skill_base.py` está en `intelligence/services/`. La ruta relativa `...services.skill_base` sube dos niveles: `skills/` → `intelligence/` → `services/skill_base`.
+**Explicación:**
+- El sistema LEGACY (`Skill` de `services/skill_base.py`) fue eliminado en Mayo 2026.
+- Todas las skills deben usar `BaseSkill` desde `skills/base.py`.
+- La ruta relativa `..base` sube un nivel desde subcarpetas (`skills/propiedades/` → `skills/`).
 
 ### La skill funciona en shell pero no en el dashboard
 
-**Posible causa:** El archivo se creó manualmente pero no se registró en el `DynamicSkillRegistry`.
+**Posible causa:** El archivo se creó manualmente pero no se registró en el `SkillRegistry`.
 
 **Solución:** Reinicia el servidor de Django o ejecuta:
 ```python
@@ -815,8 +939,8 @@ registry.discover_skills("intelligence.skills")
 | `/api/v1/intelligence/skills/skills/<nombre>/edit/` | Editar skill |
 | `/api/v1/intelligence/skills/metrics/` | Métricas globales |
 | `/api/v1/intelligence/skills/logs/` | Logs de ejecución |
-| `/api/v1/intelligence/skills/api/` | API de ejecución (POST) |
-| `/api/v1/intelligence/skills/stats/api/` | Stats en JSON |
+| `/api/v1/intelligence/skills/api/` | API REST de ejecución |
+| `/api/v1/intelligence/skills/stats/api/` | Estadísticas JSON |
 
 ### Comandos útiles:
 
@@ -824,56 +948,36 @@ registry.discover_skills("intelligence.skills")
 # Probar skill desde shell
 cd webapp
 python manage.py shell
-from intelligence.skills.mi_skill import MiSkill
-skill = MiSkill()
-result = skill.execute(param1="test")
-print(result)
-
-# Listar skills registradas
-from intelligence.skills import create_skill_system
-o = create_skill_system()
-print(o.list_available_skills())
-
-# Descubrir skills manualmente
-from intelligence.skills.registry import SkillRegistry
-r = SkillRegistry()
-r.discover_skills("intelligence.skills")
 ```
 
-### Template mínimo para copiar:
+```python
+from intelligence.skills.mi_skill import MiSkill
+skill = MiSkill()
+result = skill.execute(params={'param1': 'valor'})
+print(result)
+```
 
 ```python
-"""
-[Nombre de la skill] — [Descripción breve]
-"""
-from typing import Dict, Any
-from ...services.skill_base import Skill, SkillParameter, SkillResult
+# Probar con orchestrator
+from intelligence.skills import create_skill_system
+orchestrator = create_skill_system()
+result = orchestrator.execute_skill("mi_skill", parameters={"param1": "valor"})
+print(result)
+```
 
+### Importaciones correctas:
 
-class MiSkill(Skill):
-    """[Descripción detallada]"""
+```python
+# ✅ Skills en subdirectorio (ej: skills/propiedades/skill.py)
+from ..base import BaseSkill, SkillResult
 
-    name = "mi_skill"
-    description = "[Descripción semántica para el LLM]"
-    parameters = {
-        'param1': SkillParameter(
-            name='param1', type='str',
-            description='[Descripción]', required=True
-        ),
-    }
+# ✅ Skills en directorio raíz de skills (ej: skills/acm_analisis.py)
+from .base import BaseSkill, SkillResult
 
-    def execute(self, **kwargs) -> SkillResult:
-        try:
-            params = self.validate_params(**kwargs)
-            # Lógica aquí
-            return SkillResult.ok(data={'resultado': 'ok'})
-        except Exception as e:
-            return SkillResult.from_error(str(e))
+# ❌ NO USAR (sistema LEGACY eliminado)
+# from ...services.skill_base import Skill, SkillParameter, SkillResult
 ```
 
 ---
 
-> **Documentos relacionados:**
-> - [`MANUAL-01_ARQUITECTURA_CODIGO_SKILL.md`](MANUAL-01_ARQUITECTURA_CODIGO_SKILL.md) — Spec detallado de la arquitectura de código Python
-> - [`SPEC-011_SKILLS_DASHBOARD.md`](SPEC-011_SKILLS_DASHBOARD.md) — Especificación completa del dashboard de skills
-> - [`plans/sistema_skills_arquitectura.md`](sistema_skills_arquitectura.md) — Arquitectura general del sistema de skills
+*Este manual documenta exclusivamente el sistema NUEVO (`BaseSkill`). El sistema LEGACY (`Skill` de `services/skill_base.py`) fue eliminado en Mayo 2026.*

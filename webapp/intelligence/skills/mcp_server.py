@@ -18,7 +18,7 @@ from mcp.types import (
     LoggingLevel
 )
 
-from ..services.skill_base import SkillResult
+from .base import SkillResult
 from ..services.metrics import log
 from .orchestrator import SkillOrchestrator, ExecutionContext
 

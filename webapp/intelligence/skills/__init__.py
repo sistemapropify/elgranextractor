@@ -2,9 +2,10 @@
 Sistema de Skills para Intelligence.
 
 Módulos principales:
-- skill_base: Clases base para skills
+- base: Clase base BaseSkill y SkillResult
+- registry: SkillRegistry central
+- propiedades: Skills de búsqueda de propiedades
 - orchestrator: Coordinación de ejecución
-- registry: Registro dinámico de skills
 - cache: Sistema de cache inteligente
 - mcp_server: Exposición MCP para clientes externos
 - examples: Skills de ejemplo
@@ -12,7 +13,7 @@ Módulos principales:
 from __future__ import annotations
 
 __all__ = [
-    'Skill', 'SkillResult', 'SkillParameter', 'SkillRegistry',
+    'SkillResult', 'BaseSkill',
     'SkillOrchestrator', 'ExecutionContext', 'ExecutionMetrics',
     'SkillPipelineStep', 'SkillPipelineResult',
     'DynamicSkillRegistry', 'SkillCache',
@@ -21,11 +22,13 @@ __all__ = [
 
 
 def _lazy_import(name: str):
-    if name in {'Skill', 'SkillResult', 'SkillParameter', 'SkillRegistry'}:
-        from ..services.skill_base import (
-            Skill, SkillResult, SkillParameter, SkillRegistry
-        )
-        return locals()[name]
+    if name == 'SkillResult':
+        from .base import SkillResult
+        return SkillResult
+
+    if name == 'BaseSkill':
+        from .base import BaseSkill
+        return BaseSkill
 
     if name == 'SkillOrchestrator':
         from .orchestrator import SkillOrchestrator
@@ -85,7 +88,7 @@ def create_skill_system(
     enable_cache: bool = True,
     auto_discover_skills: bool = True,
     auto_discover_examples: bool = True,
-) -> SkillOrchestrator:
+) -> 'SkillOrchestrator':
     """
     Crea un sistema completo de skills listo para usar.
 

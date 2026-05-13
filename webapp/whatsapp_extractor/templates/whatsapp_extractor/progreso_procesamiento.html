@@ -10,7 +10,7 @@
         --we-bg-secondary: #161b22;
         --we-bg-tertiary: #21262d;
         --we-border: #30363d;
-        --we-text: #e6edf3;
+        --we-text: #c9d1d9;
         --we-text-muted: #8b949e;
         --we-accent-blue: #58a6ff;
         --we-accent-green: #3fb950;
@@ -33,7 +33,7 @@
     }
 
     .progress-card {
-        background: var(--we-bg-secondary);
+        background: #161b22;
         border: 1px solid var(--we-border);
         border-radius: 12px;
         padding: 32px;
@@ -61,7 +61,7 @@
     .progress-bar-container {
         width: 100%;
         height: 28px;
-        background: var(--we-bg-tertiary);
+        background: #21262d;
         border-radius: 14px;
         overflow: hidden;
         position: relative;
@@ -148,7 +148,7 @@
     }
 
     .terminal-header {
-        background: var(--we-bg-tertiary);
+        background: #21262d;
         padding: 10px 16px;
         display: flex;
         align-items: center;
@@ -189,7 +189,7 @@
     }
 
     .terminal-body::-webkit-scrollbar-thumb {
-        background: var(--we-border);
+        background: #30363d;
         border-radius: 3px;
     }
 
@@ -228,7 +228,7 @@
         word-break: break-word;
     }
 
-    .log-line.info .log-message { color: #e6edf3; }
+    .log-line.info .log-message { color: #c9d1d9; }
     .log-line.warning .log-message { color: var(--we-accent-orange); }
     .log-line.error .log-message { color: var(--we-accent-red); }
 
@@ -237,7 +237,7 @@
         display: inline-block;
         width: 16px;
         height: 16px;
-        border: 2px solid var(--we-border);
+        border: 2px solid #30363d;
         border-top-color: var(--we-accent-blue);
         border-radius: 50%;
         animation: spin 0.8s linear infinite;
@@ -293,12 +293,8 @@
         font-size: 0.85rem;
         font-weight: 600;
         cursor: pointer;
-        border: 1px solid var(--we-border);
-        transition: all 0.2s ease;
+        border: 1px solid #30363d;
         font-family: inherit;
-    }
-    .btn-control:hover {
-        transform: translateY(-1px);
     }
     .btn-pause {
         background: rgba(210, 153, 34, 0.15);
@@ -448,53 +444,6 @@
         </div>
     </div>
 </div>
-
-<!-- Tabla de requerimientos en tiempo real -->
-<div class="we-card">
-    <div class="we-card-header">
-        <h3 class="we-card-title">📋 Requerimientos en Tiempo Real (últimos 10)</h3>
-        <span class="we-text-small">Se actualiza cada 2 segundos</span>
-    </div>
-    <div class="we-card-body" style="padding:0;">
-        <div class="we-table-wrapper">
-            <table class="we-table">
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>📝 Requerimiento</th>
-                        <th>📋 Fuente</th>
-                        <th>👤 Agente</th>
-                        <th>📅 Fecha</th>
-                        <th>⏰ Hora</th>
-                        <th>🏷️ Condición</th>
-                        <th>🏠 Tipo</th>
-                        <th>💰 Presupuesto</th>
-                        <th>💲 Moneda</th>
-                        <th>💳 Pago</th>
-                        <th>🛏️ Dorm.</th>
-                        <th>🚿 Baños</th>
-                        <th>📐 Área</th>
-                        <th>📍 Distritos</th>
-                        <th>🚗 Cochera</th>
-                        <th>🛗 Ascensor</th>
-                        <th>🪑 Amueblado</th>
-                        <th>📝 Extra</th>
-                        <th>📞 Teléfono</th>
-                        <th>🕐 Creado</th>
-                    </tr>
-                </thead>
-                <tbody id="requerimientosTableBody">
-                    <tr>
-                        <td colspan="21" class="we-empty" style="text-align:center;padding:20px;color:var(--we-text-secondary);">
-                            Esperando primeros requerimientos...
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
-</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -504,7 +453,6 @@
 
 const ARCHIVO_ID = {{ archivo.id }};
 const API_LOG_ENTRIES = '{% url "whatsapp_extractor:api_log_entries" %}';
-const API_REQUERIMIENTOS = '{% url "whatsapp_extractor:api_requerimientos_en_tiempo_real" %}';
 const DETAIL_URL = '{% url "whatsapp_extractor:archivo_detail" pk=archivo.pk %}';
 const PAUSAR_URL = '{% url "whatsapp_extractor:archivo_pausar" pk=archivo.pk %}';
 const REANUDAR_URL = '{% url "whatsapp_extractor:archivo_reanudar" pk=archivo.pk %}';
@@ -523,7 +471,6 @@ const statDuplicados = document.getElementById('statDuplicados');
 const statErrores = document.getElementById('statErrores');
 const controlButtons = document.getElementById('controlButtons');
 const totalRequerimientosEl = document.getElementById('totalRequerimientos');
-const requerimientosTableBody = document.getElementById('requerimientosTableBody');
 
 let lastLogId = 0;
     let extractorLogId = null;
@@ -792,7 +739,7 @@ let lastLogId = 0;
         var redirectMsg = document.createElement('div');
         redirectMsg.style.cssText = 'padding:12px 16px;margin-top:12px;background:var(--we-bg-tertiary);border-radius:8px;text-align:center;';
         redirectMsg.innerHTML = isError
-            ? '🔍 <a href="' + DETAIL_URL + '" style="color:var(--we-accent-blue);">Ver detalle del archivo</a>'
+            ? '❌ <a href="' + DETAIL_URL + '" style="color:var(--we-accent-blue);">Ver detalle del archivo</a>'
             : '✅ Redirigiendo al detalle... <a href="' + DETAIL_URL + '" style="color:var(--we-accent-blue);">Ir ahora</a>';
 
         var card = document.querySelector('.progress-card');
@@ -818,145 +765,7 @@ let lastLogId = 0;
         }
     }, 5 * 60 * 1000);
 
-    // Función para actualizar la tabla de requerimientos en tiempo real
-    function updateRequerimientosTable() {
-        const extractorLogId = new URLSearchParams(window.location.search).get('extractor_log_id');
-        if (!extractorLogId) return;
-
-        fetch(`${API_REQUERIMIENTOS}?extractor_log_id=${extractorLogId}&limit=10`)
-            .then(response => response.json())
-            .then(data => {
-                if (!data.requerimientos || data.requerimientos.length === 0) {
-                    requerimientosTableBody.innerHTML = `
-                        <tr>
-                            <td colspan="21" class="we-empty" style="text-align:center;padding:20px;color:var(--we-text-secondary);">
-                                No se han creado requerimientos aún...
-                            </td>
-                        </tr>
-                    `;
-                    return;
-                }
-
-                const rows = data.requerimientos.map((req, index) => `
-                    <tr>
-                        <td class="we-text-muted">${index + 1}</td>
-                        <td style="max-width:250px;white-space:pre-wrap;word-break:break-word;font-size:11px;">${req.requerimiento || '—'}</td>
-                        <td style="font-size:11px;">${req.fuente || '—'}</td>
-                        <td style="font-size:11px;">${req.agente || '—'}</td>
-                        <td style="font-size:11px;">${req.fecha || '—'}</td>
-                        <td style="font-size:11px;">${req.hora || '—'}</td>
-                        <td><span class="we-badge we-badge-info">${req.condicion || '—'}</span></td>
-                        <td><span class="we-badge we-badge-blue">${req.tipo_propiedad || '—'}</span></td>
-                        <td style="font-size:11px;">${req.presupuesto_monto || '—'}</td>
-                        <td style="font-size:11px;">${req.presupuesto_moneda || '—'}</td>
-                        <td style="font-size:11px;">${req.presupuesto_forma_pago || '—'}</td>
-                        <td style="font-size:11px;">${req.habitaciones || '—'}</td>
-                        <td style="font-size:11px;">${req.banos || '—'}</td>
-                        <td style="font-size:11px;">${req.area_m2 || '—'} m²</td>
-                        <td style="max-width:120px;font-size:11px;">${req.distritos || '—'}</td>
-                        <td style="font-size:11px;">${req.cochera || '—'}</td>
-                        <td style="font-size:11px;">${req.ascensor || '—'}</td>
-                        <td style="font-size:11px;">${req.amueblado || '—'}</td>
-                        <td style="max-width:100px;font-size:11px;">${req.caracteristicas_extra || '—'}</td>
-                        <td style="font-size:11px;">${req.agente_telefono || '—'}</td>
-                        <td class="we-text-muted" style="font-size:11px;">${req.creado_en || '—'}</td>
-                    </tr>
-                `).join('');
-
-                requerimientosTableBody.innerHTML = rows;
-            })
-            .catch(error => {
-                console.error('Error al cargar requerimientos en tiempo real:', error);
-                requerimientosTableBody.innerHTML = `
-                    <tr>
-                        <td colspan="21" class="we-empty" style="text-align:center;padding:20px;color:var(--we-text-secondary);">
-                            Error al cargar datos: ${error.message}
-                        </td>
-                    </tr>
-                `;
-            });
-        }
-
-        // Iniciar el polling cada 2 segundos
-        setInterval(updateRequerimientosTable, 2000);
-
-        // Llamar una vez al inicio
-        updateRequerimientosTable();
     })();
-</script>
-</script>
-
-<script>
-(function() {
-    'use strict';
-
-    const API_REQUERIMIENTOS = '{% url "whatsapp_extractor:api_requerimientos_en_tiempo_real" %}';
-    const requerimientosTableBody = document.getElementById('requerimientosTableBody');
-
-    function updateRequerimientosTable() {
-        const extractorLogId = new URLSearchParams(window.location.search).get('extractor_log_id');
-        if (!extractorLogId) return;
-
-        fetch(`${API_REQUERIMIENTOS}?extractor_log_id=${extractorLogId}&limit=10`)
-            .then(response => response.json())
-            .then(data => {
-                if (!data.requerimientos || data.requerimientos.length === 0) {
-                    requerimientosTableBody.innerHTML = `
-                        <tr>
-                            <td colspan="21" class="we-empty" style="text-align:center;padding:20px;color:var(--we-text-secondary);">
-                                No se han creado requerimientos aún...
-                            </td>
-                        </tr>
-                    `;
-                    return;
-                }
-
-                const rows = data.requerimientos.map((req, index) => `
-                    <tr>
-                        <td class="we-text-muted">${index + 1}</td>
-                        <td style="max-width:250px;white-space:pre-wrap;word-break:break-word;font-size:11px;">${req.requerimiento || '—'}</td>
-                        <td style="font-size:11px;">${req.fuente || '—'}</td>
-                        <td style="font-size:11px;">${req.agente || '—'}</td>
-                        <td style="font-size:11px;">${req.fecha || '—'}</td>
-                        <td style="font-size:11px;">${req.hora || '—'}</td>
-                        <td><span class="we-badge we-badge-info">${req.condicion || '—'}</span></td>
-                        <td><span class="we-badge we-badge-blue">${req.tipo_propiedad || '—'}</span></td>
-                        <td style="font-size:11px;">${req.presupuesto_monto || '—'}</td>
-                        <td style="font-size:11px;">${req.presupuesto_moneda || '—'}</td>
-                        <td style="font-size:11px;">${req.presupuesto_forma_pago || '—'}</td>
-                        <td style="font-size:11px;">${req.habitaciones || '—'}</td>
-                        <td style="font-size:11px;">${req.banos || '—'}</td>
-                        <td style="font-size:11px;">${req.area_m2 || '—'} m²</td>
-                        <td style="max-width:120px;font-size:11px;">${req.distritos || '—'}</td>
-                        <td style="font-size:11px;">${req.cochera || '—'}</td>
-                        <td style="font-size:11px;">${req.ascensor || '—'}</td>
-                        <td style="font-size:11px;">${req.amueblado || '—'}</td>
-                        <td style="max-width:100px;font-size:11px;">${req.caracteristicas_extra || '—'}</td>
-                        <td style="font-size:11px;">${req.agente_telefono || '—'}</td>
-                        <td class="we-text-muted" style="font-size:11px;">${req.creado_en || '—'}</td>
-                    </tr>
-                `).join('');
-
-                requerimientosTableBody.innerHTML = rows;
-            })
-            .catch(error => {
-                console.error('Error al cargar requerimientos en tiempo real:', error);
-                requerimientosTableBody.innerHTML = `
-                    <tr>
-                        <td colspan="21" class="we-empty" style="text-align:center;padding:20px;color:var(--we-text-secondary);">
-                            Error al cargar datos: ${error.message}
-                        </td>
-                    </tr>
-                `;
-            });
-    }
-
-    // Iniciar el polling cada 2 segundos
-    setInterval(updateRequerimientosTable, 2000);
-
-    // Llamar una vez al inicio
-    updateRequerimientosTable();
-})();
 </script>
 
 {% endblock %}
