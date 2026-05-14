@@ -421,6 +421,28 @@
                             </div>
                         </div>
 
+                        <div class="form-group-acm {% if form.correo_electronico.errors %}has-error{% endif %}">
+                            <label class="form-label-acm" for="{{ form.correo_electronico.id_for_label }}">
+                                <i class="fas fa-envelope"></i>Correo Electrónico
+                            </label>
+                            <input type="email"
+                                   name="{{ form.correo_electronico.html_name }}"
+                                   id="{{ form.correo_electronico.id_for_label }}"
+                                   class="form-control-acm"
+                                   placeholder="ej: juan.perez@email.com"
+                                   value="{{ form.correo_electronico.value|default:'' }}">
+                            {% if form.correo_electronico.errors %}
+                            <div class="form-error">
+                                <i class="fas fa-times-circle"></i>
+                                {{ form.correo_electronico.errors.0 }}
+                            </div>
+                            {% endif %}
+                            <div class="helper-text">
+                                <i class="fas fa-info-circle"></i>
+                                Correo electrónico del agente (opcional)
+                            </div>
+                        </div>
+
                         <div class="form-group-acm {% if form.telefono.errors %}has-error{% endif %}">
                             <label class="form-label-acm" for="{{ form.telefono.id_for_label }}">
                                 <i class="fas fa-phone"></i>Teléfono

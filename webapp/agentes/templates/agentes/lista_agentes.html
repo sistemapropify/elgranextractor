@@ -712,6 +712,7 @@
                 <tr>
                     <th>Nombre</th>
                     <th>Teléfono</th>
+                    <th>Email</th>
                     <th>Tipo</th>
                     <th>Inmobiliaria</th>
                     <th>Redes</th>
@@ -735,6 +736,16 @@
                             <i class="fas fa-phone me-1" style="font-size:0.7rem;"></i>
                             {{ agente.telefono }}
                         </a>
+                    </td>
+                    <td data-label="Email">
+                        {% if agente.correo_electronico %}
+                        <a href="mailto:{{ agente.correo_electronico }}" class="agent-email">
+                            <i class="fas fa-envelope me-1" style="font-size:0.7rem;"></i>
+                            {{ agente.correo_electronico }}
+                        </a>
+                        {% else %}
+                        <span class="text-muted" style="font-size:0.8rem;">—</span>
+                        {% endif %}
                     </td>
                     <td data-label="Tipo">
                         {% if agente.tipo_agente == 'INMOBILIARIA' %}

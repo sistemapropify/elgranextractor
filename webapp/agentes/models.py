@@ -81,10 +81,16 @@ class Agente(models.Model):
         verbose_name='Código de agente',
         help_text='Código interno o ID del agente (ej: AG-001)',
     )
+    correo_electronico = models.EmailField(
+        max_length=254,
+        blank=True,
+        verbose_name='Correo electrónico',
+        help_text='Dirección de correo electrónico del agente',
+    )
     telefono = models.CharField(
         max_length=20,
         verbose_name='Teléfono',
-        help_text='Número de contacto del agente',
+        help_text='Número de contacto del agente (formato E.164: +51999888777)',
     )
     tipo_agente = models.CharField(
         max_length=15,

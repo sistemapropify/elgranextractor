@@ -57,7 +57,7 @@ class AgenteForm(forms.ModelForm):
     class Meta:
         model = Agente
         fields = [
-            'nombre_completo', 'codigo_agente', 'telefono',
+            'nombre_completo', 'codigo_agente', 'correo_electronico', 'telefono',
             'tipo_agente', 'inmobiliaria',
             'sitio_web', 'facebook_url', 'instagram_url', 'linkedin_url',
         ]
@@ -69,6 +69,10 @@ class AgenteForm(forms.ModelForm):
             'codigo_agente': forms.TextInput(attrs={
                 'class': 'form-control',
                 'placeholder': 'Ej: AG-001',
+            }),
+            'correo_electronico': forms.EmailInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'ej: juan.perez@email.com',
             }),
             'telefono': forms.TextInput(attrs={
                 'class': 'form-control',
