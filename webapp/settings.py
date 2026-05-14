@@ -254,6 +254,8 @@ RAW_HTML_STORAGE = 'blob_storage'  # 'database' or 'blob_storage'
 
 # Azure Blob Storage Configuration (for raw documents)
 AZURE_STORAGE_CONNECTION_STRING = env('AZURE_STORAGE_CONNECTION_STRING', default='')
+# django-storages AzureStorage busca settings.AZURE_CONNECTION_STRING
+AZURE_CONNECTION_STRING = AZURE_STORAGE_CONNECTION_STRING
 AZURE_STORAGE_CONTAINER_NAME = env('AZURE_STORAGE_CONTAINER_NAME', default='documentoscrudos')
 AZURE_STORAGE_ACCOUNT_NAME = env('AZURE_STORAGE_ACCOUNT_NAME', default='granextractormedia')
 AZURE_STORAGE_ACCOUNT_KEY = env('AZURE_STORAGE_ACCOUNT_KEY', default='')
