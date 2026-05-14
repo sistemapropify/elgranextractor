@@ -72,7 +72,7 @@ class AgenteForm(forms.ModelForm):
             }),
             'telefono': forms.TextInput(attrs={
                 'class': 'form-control',
-                'placeholder': 'Ej: +51 987 654 321',
+                'placeholder': 'Ej: +51999888777',
             }),
             'tipo_agente': forms.Select(attrs={
                 'class': 'form-select',
