@@ -1,7 +1,7 @@
 from django.db import models
 from django.core.validators import FileExtensionValidator
 
-from .storage_backends import LogoStorage, IconoMarcadorStorage
+from .storage_backends import LogoStorage, IconoMarcadorStorage, FotoPerfilStorage
 
 
 class Inmobiliaria(models.Model):
@@ -131,6 +131,22 @@ class Agente(models.Model):
         blank=True,
         verbose_name='LinkedIn',
         help_text='URL del perfil de LinkedIn',
+    )
+    tiktok_url = models.URLField(
+        max_length=500,
+        blank=True,
+        verbose_name='TikTok',
+        help_text='URL del perfil de TikTok',
+    )
+
+    # ── Foto de perfil ────────────────────────
+    foto_perfil = models.ImageField(
+        upload_to='fotos_agentes/',
+        storage=FotoPerfilStorage(),
+        blank=True, null=True,
+        verbose_name='Foto de perfil',
+        help_text='Foto del agente (JPG/PNG recomendado, máx. 400×400 px)',
+        validators=[FileExtensionValidator(['png', 'jpg', 'jpeg'])],
     )
 
     # ── Auditoría ─────────────────────────────

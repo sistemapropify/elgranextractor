@@ -59,7 +59,8 @@ class AgenteForm(forms.ModelForm):
         fields = [
             'nombre_completo', 'codigo_agente', 'correo_electronico', 'telefono',
             'tipo_agente', 'inmobiliaria',
-            'sitio_web', 'facebook_url', 'instagram_url', 'linkedin_url',
+            'sitio_web', 'facebook_url', 'instagram_url', 'linkedin_url', 'tiktok_url',
+            'foto_perfil',
         ]
         widgets = {
             'nombre_completo': forms.TextInput(attrs={
@@ -100,6 +101,14 @@ class AgenteForm(forms.ModelForm):
                 'class': 'form-control',
                 'placeholder': 'https://linkedin.com/in/miperfil',
             }),
+            'tiktok_url': forms.URLInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'https://tiktok.com/@miperfil',
+            }),
+            'foto_perfil': forms.FileInput(attrs={
+                'class': 'form-control',
+                'accept': 'image/png,image/jpeg,image/jpg',
+            }),
         }
 
     def __init__(self, *args, **kwargs):
@@ -108,8 +117,10 @@ class AgenteForm(forms.ModelForm):
         self.fields['inmobiliaria'].queryset = Inmobiliaria.objects.all().order_by('nombre')
         self.fields['inmobiliaria'].empty_label = '--- Seleccione una inmobiliaria ---'
         # Marcar campos de redes como no requeridos
-        for field in ['sitio_web', 'facebook_url', 'instagram_url', 'linkedin_url']:
+        for field in ['sitio_web', 'facebook_url', 'instagram_url', 'linkedin_url', 'tiktok_url']:
             self.fields[field].required = False
+        # Foto de perfil no requerida
+        self.fields['foto_perfil'].required = False
 
     def clean(self):
         cleaned_data = super().clean()

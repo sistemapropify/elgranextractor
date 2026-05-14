@@ -539,6 +539,11 @@
         border-color: #0a66c2;
         background: rgba(10,102,194,0.1);
     }
+    .social-icon-link.tiktok:hover {
+        color: #000000;
+        border-color: #000000;
+        background: rgba(0,0,0,0.1);
+    }
 
     /* ===== RESPONSIVE ===== */
     @media (max-width: 768px) {
@@ -724,12 +729,23 @@
                 {% for agente in agentes %}
                 <tr>
                     <td data-label="Nombre">
-                        <span class="agent-name">
-                            {{ agente.nombre_completo }}
-                            {% if agente.codigo_agente %}
-                            <small class="agent-code">[{{ agente.codigo_agente }}]</small>
+                        <div class="d-flex align-items-center gap-2">
+                            {% if agente.foto_perfil %}
+                            <img src="{{ agente.foto_perfil.url }}" alt="{{ agente.nombre_completo }}"
+                                 class="agent-avatar-img" width="36" height="36"
+                                 style="border-radius:50%; object-fit:cover; flex-shrink:0;">
+                            {% else %}
+                            <div class="agent-avatar-placeholder" style="width:36px;height:36px;border-radius:50%;background:var(--accent-gradient, linear-gradient(135deg,#667eea,#764ba2));display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                                <i class="fas fa-user" style="color:#fff;font-size:0.85rem;"></i>
+                            </div>
                             {% endif %}
-                        </span>
+                            <span class="agent-name">
+                                {{ agente.nombre_completo }}
+                                {% if agente.codigo_agente %}
+                                <small class="agent-code">[{{ agente.codigo_agente }}]</small>
+                                {% endif %}
+                            </span>
+                        </div>
                     </td>
                     <td data-label="Teléfono">
                         <a href="tel:{{ agente.telefono }}" class="agent-phone">
@@ -790,7 +806,12 @@
                                 <i class="fab fa-linkedin"></i>
                             </a>
                             {% endif %}
-                            {% if not agente.sitio_web and not agente.facebook_url and not agente.instagram_url and not agente.linkedin_url %}
+                            {% if agente.tiktok_url %}
+                            <a href="{{ agente.tiktok_url }}" target="_blank" rel="noopener" class="social-icon-link tiktok" title="TikTok">
+                                <i class="fab fa-tiktok"></i>
+                            </a>
+                            {% endif %}
+                            {% if not agente.sitio_web and not agente.facebook_url and not agente.instagram_url and not agente.linkedin_url and not agente.tiktok_url %}
                             <span class="text-muted" style="font-size:0.8rem;">—</span>
                             {% endif %}
                         </div>

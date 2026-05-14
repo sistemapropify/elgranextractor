@@ -23,3 +23,11 @@ class IconoMarcadorStorage(AzureStorage):
     def __init__(self, *args, **kwargs):
         self.azure_container = settings.AZURE_ICONOS_CONTAINER
         super().__init__(*args, **kwargs)
+
+
+class FotoPerfilStorage(AzureStorage):
+    """Storage para fotos de perfil de agentes."""
+
+    def __init__(self, *args, **kwargs):
+        self.azure_container = settings.AZURE_FOTOS_AGENTES_CONTAINER
+        super().__init__(*args, **kwargs)

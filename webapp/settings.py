@@ -209,6 +209,7 @@ MEDIA_ROOT = None  # Not needed when using Azure Storage
 # Azure Storage Configuration for Logos and Marker Icons (Agentes app)
 AZURE_LOGOS_CONTAINER = env('AZURE_LOGOS_CONTAINER', default='logos')
 AZURE_ICONOS_CONTAINER = env('AZURE_ICONOS_CONTAINER', default='iconosmarcadores')
+AZURE_FOTOS_AGENTES_CONTAINER = env('AZURE_FOTOS_AGENTES_CONTAINER', default='fotosagentes')
 
 # Security settings for production
 SECURE_BROWSER_XSS_FILTER = True
