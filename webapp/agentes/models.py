@@ -75,6 +75,12 @@ class Agente(models.Model):
         verbose_name='Nombre completo',
         help_text='Nombres y apellidos del agente',
     )
+    codigo_agente = models.CharField(
+        max_length=20,
+        blank=True,
+        verbose_name='Código de agente',
+        help_text='Código interno o ID del agente (ej: AG-001)',
+    )
     telefono = models.CharField(
         max_length=20,
         verbose_name='Teléfono',
@@ -94,6 +100,34 @@ class Agente(models.Model):
         verbose_name='Inmobiliaria',
         help_text='Inmobiliaria a la que pertenece (solo si aplica)',
     )
+
+    # ── Redes sociales y web ──────────────────
+    sitio_web = models.URLField(
+        max_length=500,
+        blank=True,
+        verbose_name='Sitio web',
+        help_text='URL de la página web personal o profesional',
+    )
+    facebook_url = models.URLField(
+        max_length=500,
+        blank=True,
+        verbose_name='Facebook',
+        help_text='URL del perfil o página de Facebook',
+    )
+    instagram_url = models.URLField(
+        max_length=500,
+        blank=True,
+        verbose_name='Instagram',
+        help_text='URL del perfil de Instagram',
+    )
+    linkedin_url = models.URLField(
+        max_length=500,
+        blank=True,
+        verbose_name='LinkedIn',
+        help_text='URL del perfil de LinkedIn',
+    )
+
+    # ── Auditoría ─────────────────────────────
     creado_en = models.DateTimeField(
         auto_now_add=True,
         verbose_name='Creado en',
@@ -110,4 +144,6 @@ class Agente(models.Model):
         verbose_name_plural = 'Agentes'
 
     def __str__(self):
+        if self.codigo_agente:
+            return f'[{self.codigo_agente}] {self.nombre_completo}'
         return self.nombre_completo

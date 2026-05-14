@@ -481,6 +481,65 @@
         display: block;
     }
 
+    /* ── Código de agente ──────────────────────── */
+    .agent-code {
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: var(--accent-blue, #58a6ff);
+        background: rgba(88, 166, 255, 0.1);
+        padding: 0.1rem 0.4rem;
+        border-radius: 4px;
+        margin-left: 0.35rem;
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+
+    /* ── Enlaces a redes sociales ──────────────── */
+    .social-links-group {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+    .social-icon-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        text-decoration: none;
+        transition: all 0.2s ease;
+        color: var(--text-muted, #8b949e);
+        background: var(--bg-tertiary, #161b22);
+        border: 1px solid var(--border-color, #30363d);
+    }
+    .social-icon-link:hover {
+        text-decoration: none;
+        transform: translateY(-1px);
+    }
+    .social-icon-link.web:hover {
+        color: #58a6ff;
+        border-color: #58a6ff;
+        background: rgba(88,166,255,0.1);
+    }
+    .social-icon-link.facebook:hover {
+        color: #1877f2;
+        border-color: #1877f2;
+        background: rgba(24,119,242,0.1);
+    }
+    .social-icon-link.instagram:hover {
+        color: #e4405f;
+        border-color: #e4405f;
+        background: rgba(228,64,95,0.1);
+    }
+    .social-icon-link.linkedin:hover {
+        color: #0a66c2;
+        border-color: #0a66c2;
+        background: rgba(10,102,194,0.1);
+    }
+
     /* ===== RESPONSIVE ===== */
     @media (max-width: 768px) {
         .hero-section {
@@ -655,6 +714,7 @@
                     <th>Teléfono</th>
                     <th>Tipo</th>
                     <th>Inmobiliaria</th>
+                    <th>Redes</th>
                     <th>Registrado</th>
                     <th class="text-end">Acciones</th>
                 </tr>
@@ -663,7 +723,12 @@
                 {% for agente in agentes %}
                 <tr>
                     <td data-label="Nombre">
-                        <span class="agent-name">{{ agente.nombre_completo }}</span>
+                        <span class="agent-name">
+                            {{ agente.nombre_completo }}
+                            {% if agente.codigo_agente %}
+                            <small class="agent-code">[{{ agente.codigo_agente }}]</small>
+                            {% endif %}
+                        </span>
                     </td>
                     <td data-label="Teléfono">
                         <a href="tel:{{ agente.telefono }}" class="agent-phone">
@@ -691,6 +756,33 @@
                         {% else %}
                         <span class="text-muted">—</span>
                         {% endif %}
+                    </td>
+                    <td data-label="Redes">
+                        <div class="social-links-group">
+                            {% if agente.sitio_web %}
+                            <a href="{{ agente.sitio_web }}" target="_blank" rel="noopener" class="social-icon-link web" title="Sitio web">
+                                <i class="fas fa-globe"></i>
+                            </a>
+                            {% endif %}
+                            {% if agente.facebook_url %}
+                            <a href="{{ agente.facebook_url }}" target="_blank" rel="noopener" class="social-icon-link facebook" title="Facebook">
+                                <i class="fab fa-facebook"></i>
+                            </a>
+                            {% endif %}
+                            {% if agente.instagram_url %}
+                            <a href="{{ agente.instagram_url }}" target="_blank" rel="noopener" class="social-icon-link instagram" title="Instagram">
+                                <i class="fab fa-instagram"></i>
+                            </a>
+                            {% endif %}
+                            {% if agente.linkedin_url %}
+                            <a href="{{ agente.linkedin_url }}" target="_blank" rel="noopener" class="social-icon-link linkedin" title="LinkedIn">
+                                <i class="fab fa-linkedin"></i>
+                            </a>
+                            {% endif %}
+                            {% if not agente.sitio_web and not agente.facebook_url and not agente.instagram_url and not agente.linkedin_url %}
+                            <span class="text-muted" style="font-size:0.8rem;">—</span>
+                            {% endif %}
+                        </div>
                     </td>
                     <td data-label="Registrado">
                         <span class="agent-date">

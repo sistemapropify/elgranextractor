@@ -56,11 +56,19 @@ class AgenteForm(forms.ModelForm):
 
     class Meta:
         model = Agente
-        fields = ['nombre_completo', 'telefono', 'tipo_agente', 'inmobiliaria']
+        fields = [
+            'nombre_completo', 'codigo_agente', 'telefono',
+            'tipo_agente', 'inmobiliaria',
+            'sitio_web', 'facebook_url', 'instagram_url', 'linkedin_url',
+        ]
         widgets = {
             'nombre_completo': forms.TextInput(attrs={
                 'class': 'form-control',
                 'placeholder': 'Ej: Juan Pérez García',
+            }),
+            'codigo_agente': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Ej: AG-001',
             }),
             'telefono': forms.TextInput(attrs={
                 'class': 'form-control',
@@ -72,6 +80,22 @@ class AgenteForm(forms.ModelForm):
             'inmobiliaria': forms.Select(attrs={
                 'class': 'form-select',
             }),
+            'sitio_web': forms.URLInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'https://mipagina.com',
+            }),
+            'facebook_url': forms.URLInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'https://facebook.com/miperfil',
+            }),
+            'instagram_url': forms.URLInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'https://instagram.com/miperfil',
+            }),
+            'linkedin_url': forms.URLInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'https://linkedin.com/in/miperfil',
+            }),
         }
 
     def __init__(self, *args, **kwargs):
@@ -79,6 +103,9 @@ class AgenteForm(forms.ModelForm):
         # Ordenar inmobiliarias alfabéticamente
         self.fields['inmobiliaria'].queryset = Inmobiliaria.objects.all().order_by('nombre')
         self.fields['inmobiliaria'].empty_label = '--- Seleccione una inmobiliaria ---'
+        # Marcar campos de redes como no requeridos
+        for field in ['sitio_web', 'facebook_url', 'instagram_url', 'linkedin_url']:
+            self.fields[field].required = False
 
     def clean(self):
         cleaned_data = super().clean()
