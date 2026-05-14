@@ -1,0 +1,322 @@
+{% extends 'propifai_base.html' %}
+{% load static %}
+
+{% block title %}Confirmar Eliminación — Propifai{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --bg-primary: #0d1117;
+        --bg-secondary: #161b22;
+        --bg-tertiary: #21262d;
+        --border-color: #30363d;
+        --border-hover: #484f58;
+        --text-primary: #e6edf3;
+        --text-secondary: #8b949e;
+        --text-muted: #6e7681;
+        --accent-blue: #58a6ff;
+        --accent-green: #3fb950;
+        --accent-orange: #d29922;
+        --accent-purple: #bc8cff;
+        --accent-red: #f85149;
+        --gradient-start: #0d1117;
+        --gradient-mid: #161b22;
+        --gradient-end: #1c2333;
+    }
+
+    /* === HERO === */
+    .hero-section {
+        background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-mid) 50%, var(--gradient-end) 100%);
+        border-bottom: 1px solid var(--border-color);
+        padding: 2.5rem 1.5rem;
+        position: relative;
+        overflow: hidden;
+    }
+    .hero-section::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -20%;
+        width: 500px;
+        height: 500px;
+        background: radial-gradient(circle, rgba(248,81,73,0.06) 0%, transparent 70%);
+        border-radius: 50%;
+        pointer-events: none;
+    }
+    .hero-content {
+        position: relative;
+        z-index: 1;
+        max-width: 700px;
+        margin: 0 auto;
+        text-align: center;
+    }
+    .hero-content .hero-icon {
+        width: 64px;
+        height: 64px;
+        border-radius: 16px;
+        background: rgba(248,81,73,0.12);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1rem;
+        font-size: 1.5rem;
+        color: var(--accent-red);
+    }
+    .hero-content h1 {
+        font-size: 1.6rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 0.5rem;
+    }
+    .hero-content p {
+        color: var(--text-secondary);
+        font-size: 0.95rem;
+        margin-bottom: 0;
+    }
+
+    /* === DELETE CARD === */
+    .delete-card {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        overflow: hidden;
+        max-width: 560px;
+        margin: 0 auto;
+    }
+    .delete-card-body {
+        padding: 2rem 1.5rem;
+        text-align: center;
+    }
+
+    /* === WARNING === */
+    .delete-warning {
+        background: rgba(248,81,73,0.08);
+        border: 1px solid rgba(248,81,73,0.2);
+        border-radius: 10px;
+        padding: 1.25rem;
+        margin-bottom: 1.5rem;
+        text-align: left;
+    }
+    .delete-warning-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        background: rgba(248,81,73,0.15);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--accent-red);
+        font-size: 1.1rem;
+        flex-shrink: 0;
+    }
+    .delete-warning-content {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.85rem;
+    }
+    .delete-warning-text h6 {
+        color: var(--accent-red);
+        font-size: 0.9rem;
+        font-weight: 600;
+        margin-bottom: 0.25rem;
+    }
+    .delete-warning-text p {
+        color: var(--text-secondary);
+        font-size: 0.85rem;
+        margin: 0;
+    }
+
+    /* === ITEM DETAILS === */
+    .item-details {
+        background: var(--bg-primary);
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        padding: 1.25rem;
+        margin-bottom: 1.5rem;
+        text-align: left;
+    }
+    .item-details .item-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .item-details .item-row:last-child {
+        border-bottom: none;
+    }
+    .item-details .item-label {
+        font-size: 0.82rem;
+        color: var(--text-muted);
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+    .item-details .item-value {
+        font-size: 0.9rem;
+        color: var(--text-primary);
+        font-weight: 500;
+        text-align: right;
+        max-width: 60%;
+    }
+    .item-details .item-value .text-muted {
+        color: var(--text-muted) !important;
+        font-weight: 400;
+    }
+
+    /* === FORM ACTIONS === */
+    .form-actions {
+        display: flex;
+        gap: 0.75rem;
+        justify-content: center;
+    }
+    .btn-acm {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.65rem 1.5rem;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        font-weight: 500;
+        text-decoration: none;
+        border: none;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    .btn-acm-danger {
+        background: var(--accent-red);
+        color: #fff;
+    }
+    .btn-acm-danger:hover {
+        background: #e0443e;
+        color: #fff;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(248,81,73,0.35);
+    }
+    .btn-acm-secondary {
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+        border: 1px solid var(--border-color);
+    }
+    .btn-acm-secondary:hover {
+        background: var(--border-color);
+        color: var(--text-primary);
+        border-color: var(--border-hover);
+    }
+
+    /* === RESPONSIVE === */
+    @media (max-width: 768px) {
+        .hero-section { padding: 1.5rem 1rem; }
+        .hero-content h1 { font-size: 1.3rem; }
+        .delete-card-body { padding: 1.5rem 1rem; }
+        .form-actions { flex-direction: column; }
+        .form-actions .btn-acm { width: 100%; justify-content: center; }
+        .item-details .item-row { flex-direction: column; align-items: flex-start; gap: 0.2rem; }
+        .item-details .item-value { text-align: left; max-width: 100%; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="hero-section">
+    <div class="hero-content">
+        <div class="hero-icon">
+            <i class="fas fa-exclamation-triangle"></i>
+        </div>
+        <h1>Confirmar Eliminación</h1>
+        <p>Esta acción no se puede deshacer. Revisa los detalles antes de continuar.</p>
+    </div>
+</div>
+
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-6 col-xl-5">
+            <div class="delete-card">
+                <div class="delete-card-body">
+                    <div class="delete-warning">
+                        <div class="delete-warning-content">
+                            <div class="delete-warning-icon">
+                                <i class="fas fa-shield-alt"></i>
+                            </div>
+                            <div class="delete-warning-text">
+                                <h6>¿Estás seguro de eliminar este elemento?</h6>
+                                <p>
+                                    {% if object|yesno:"Agente,Inmobiliaria" == "Agente" %}
+                                        Se eliminará permanentemente el agente <strong>{{ object.nombre_completo }}</strong> y se perderán todos sus datos asociados.
+                                    {% else %}
+                                        Se eliminará permanentemente la inmobiliaria <strong>{{ object.nombre }}</strong>. Los agentes vinculados quedarán sin inmobiliaria asignada.
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="item-details">
+                        {% if object|yesno:"agente,inmobiliaria" == "agente" %}
+                        <div class="item-row">
+                            <span class="item-label"><i class="fas fa-user text-muted me-1"></i>Nombre</span>
+                            <span class="item-value">{{ object.nombre_completo }}</span>
+                        </div>
+                        <div class="item-row">
+                            <span class="item-label"><i class="fas fa-phone text-muted me-1"></i>Teléfono</span>
+                            <span class="item-value">{{ object.telefono|default:'<span class="text-muted">—</span>' }}</span>
+                        </div>
+                        <div class="item-row">
+                            <span class="item-label"><i class="fas fa-briefcase text-muted me-1"></i>Tipo</span>
+                            <span class="item-value">{{ object.get_tipo_agente_display }}</span>
+                        </div>
+                        {% if object.inmobiliaria %}
+                        <div class="item-row">
+                            <span class="item-label"><i class="fas fa-building text-muted me-1"></i>Inmobiliaria</span>
+                            <span class="item-value">{{ object.inmobiliaria.nombre }}</span>
+                        </div>
+                        {% endif %}
+                        {% else %}
+                        <div class="item-row">
+                            <span class="item-label"><i class="fas fa-tag text-muted me-1"></i>Nombre</span>
+                            <span class="item-value">{{ object.nombre }}</span>
+                        </div>
+                        <div class="item-row">
+                            <span class="item-label"><i class="fas fa-map-pin text-muted me-1"></i>Dirección</span>
+                            <span class="item-value">{{ object.direccion|truncatechars:40|default:'<span class="text-muted">—</span>' }}</span>
+                        </div>
+                        <div class="item-row">
+                            <span class="item-label"><i class="fas fa-crosshairs text-muted me-1"></i>Coordenadas</span>
+                            <span class="item-value">
+                                {% if object.latitud and object.longitud %}
+                                    {{ object.latitud|floatformat:4 }}, {{ object.longitud|floatformat:4 }}
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </span>
+                        </div>
+                        <div class="item-row">
+                            <span class="item-label"><i class="fas fa-user-tie text-muted me-1"></i>Agentes</span>
+                            <span class="item-value">{{ object.agente_set.count }} agente{{ object.agente_set.count|pluralize:'s' }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <form method="POST">
+                        {% csrf_token %}
+                        <div class="form-actions">
+                            <button type="submit" class="btn-acm btn-acm-danger">
+                                <i class="fas fa-trash"></i>
+                                Sí, Eliminar
+                            </button>
+                            {% if object|yesno:"agente,inmobiliaria" == "agente" %}
+                            <a href="{% url 'agentes:lista_agentes' %}" class="btn-acm btn-acm-secondary">
+                            {% else %}
+                            <a href="{% url 'agentes:lista_inmobiliarias' %}" class="btn-acm btn-acm-secondary">
+                            {% endif %}
+                                <i class="fas fa-arrow-left"></i>
+                                Cancelar
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

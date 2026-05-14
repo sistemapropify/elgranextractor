@@ -76,6 +76,7 @@ INSTALLED_APPS = [
     'meta_ads',  # Habilitado para desarrollo - dashboard de Meta Ads
     'prospects',  # Captura de prospectos inmobiliarios desde el celular
     'whatsapp_extractor',  # Extracción automática de requerimientos desde WhatsApp
+    'agentes',  # Gestión de agentes e inmobiliarias
 ]
 
 MIDDLEWARE = [
@@ -204,6 +205,10 @@ AZURE_CONTAINER = env('AZURE_PHOTOS_CONTAINER', default='fotosprospecciones')
 AZURE_CUSTOM_DOMAIN = f'{AZURE_ACCOUNT_NAME}.blob.core.windows.net'
 MEDIA_URL = f'https://{AZURE_CUSTOM_DOMAIN}/{AZURE_CONTAINER}/'
 MEDIA_ROOT = None  # Not needed when using Azure Storage
+
+# Azure Storage Configuration for Logos and Marker Icons (Agentes app)
+AZURE_LOGOS_CONTAINER = env('AZURE_LOGOS_CONTAINER', default='logos')
+AZURE_ICONOS_CONTAINER = env('AZURE_ICONOS_CONTAINER', default='iconosmarcadores')
 
 # Security settings for production
 SECURE_BROWSER_XSS_FILTER = True

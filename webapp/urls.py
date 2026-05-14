@@ -17,6 +17,7 @@ Including another URLconf
 
 from django.contrib import admin
 from django.urls import path, include
+from django.views.generic.base import RedirectView
 from django.conf import settings
 from django.conf.urls.static import static
 import views
@@ -96,9 +97,14 @@ urlpatterns = [
     
     # Prospects - Captura de prospectos inmobiliarios
     path('prospects/', include('prospects.urls')),
+# WhatsApp Extractor - Extracción automática de requerimientos
+path('whatsapp-extractor/', include('whatsapp_extractor.urls')),
 
-    # WhatsApp Extractor - Extracción automática de requerimientos
-    path('whatsapp-extractor/', include('whatsapp_extractor.urls')),
+# Agentes e Inmobiliarias - Gestión de agentes inmobiliarios
+path('agentes/', include('agentes.urls')),
+
+# Redirect: /inmobiliarias/ → /agentes/inmobiliarias/ (acceso directo amigable)
+path('inmobiliarias/', RedirectView.as_view(url='/agentes/inmobiliarias/', permanent=True)),
 ]
 
 # Servir archivos media en desarrollo

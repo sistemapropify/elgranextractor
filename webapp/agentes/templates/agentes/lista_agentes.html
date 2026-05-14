@@ -1,0 +1,755 @@
+{% extends 'propifai_base.html' %}
+{% load static %}
+
+{% block title %}Propifai - {{ titulo }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --bg-primary: #0d1117;
+        --bg-secondary: #161b22;
+        --bg-tertiary: #21262d;
+        --border-color: #30363d;
+        --text-primary: #f0f6fc;
+        --text-secondary: #8b949e;
+        --text-muted: #484f58;
+        --accent-blue: #58a6ff;
+        --accent-green: #238636;
+        --accent-purple: #bc8cff;
+        --accent-orange: #d29922;
+        --accent-red: #da3633;
+        --radius: 8px;
+        --radius-lg: 12px;
+        --shadow: 0 1px 3px rgba(0,0,0,0.3);
+        --shadow-lg: 0 4px 12px rgba(0,0,0,0.4);
+        --transition: all 0.2s ease;
+    }
+
+    /* ===== HERO SECTION ===== */
+    .hero-section {
+        background: linear-gradient(135deg, #0d1117 0%, #161b22 50%, #1c2333 100%);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
+        padding: 2rem;
+        margin-bottom: 1.5rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 2rem;
+    }
+
+    .hero-content h1 {
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 0.75rem;
+    }
+
+    .hero-content h1 i {
+        color: var(--accent-blue);
+        margin-right: 0.5rem;
+    }
+
+    .hero-content p {
+        color: var(--text-secondary);
+        font-size: 0.95rem;
+        line-height: 1.6;
+        max-width: 600px;
+        margin: 0;
+    }
+
+    .hero-actions {
+        flex-shrink: 0;
+    }
+
+    /* ===== BUTTONS ===== */
+    .btn-acm {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        border-radius: var(--radius);
+        font-size: 0.875rem;
+        font-weight: 500;
+        text-decoration: none;
+        transition: var(--transition);
+        border: none;
+        cursor: pointer;
+    }
+
+    .btn-acm-primary {
+        background: var(--accent-blue);
+        color: #fff;
+    }
+
+    .btn-acm-primary:hover {
+        background: #4a8fd4;
+        color: #fff;
+        text-decoration: none;
+    }
+
+    .btn-acm-success {
+        background: var(--accent-green);
+        color: #fff;
+    }
+
+    .btn-acm-success:hover {
+        background: #2d9e40;
+        color: #fff;
+        text-decoration: none;
+    }
+
+    .btn-acm-danger {
+        background: var(--accent-red);
+        color: #fff;
+    }
+
+    .btn-acm-danger:hover {
+        background: #c62828;
+        color: #fff;
+        text-decoration: none;
+    }
+
+    .btn-acm-lg {
+        padding: 0.75rem 1.5rem;
+        font-size: 1rem;
+    }
+
+    .btn-acm-outline {
+        background: transparent;
+        border: 1px solid var(--border-color);
+        color: var(--text-primary);
+    }
+
+    .btn-acm-outline:hover {
+        border-color: var(--accent-blue);
+        color: var(--accent-blue);
+        text-decoration: none;
+    }
+
+    /* ===== STATS ROW ===== */
+    .stats-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .stat-card {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius);
+        padding: 1.25rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        transition: var(--transition);
+    }
+
+    .stat-card:hover {
+        border-color: var(--accent-blue);
+        transform: translateY(-1px);
+        box-shadow: var(--shadow);
+    }
+
+    .stat-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: var(--radius);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+        flex-shrink: 0;
+    }
+
+    .stat-icon.blue { background: rgba(88, 166, 255, 0.15); color: var(--accent-blue); }
+    .stat-icon.green { background: rgba(35, 134, 54, 0.15); color: var(--accent-green); }
+    .stat-icon.purple { background: rgba(188, 140, 255, 0.15); color: var(--accent-purple); }
+    .stat-icon.orange { background: rgba(210, 153, 34, 0.15); color: var(--accent-orange); }
+
+    .stat-info h3 {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin: 0;
+        line-height: 1.2;
+    }
+
+    .stat-info p {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+        margin: 0;
+        margin-top: 2px;
+    }
+
+    /* ===== FILTERS CARD ===== */
+    .filters-card {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
+        margin-bottom: 1.5rem;
+        overflow: hidden;
+    }
+
+    .filters-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.875rem 1.25rem;
+        border-bottom: 1px solid var(--border-color);
+        background: var(--bg-tertiary);
+    }
+
+    .filters-header h5 {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin: 0;
+    }
+
+    .filters-header h5 i {
+        color: var(--accent-blue);
+        margin-right: 0.5rem;
+    }
+
+    .filters-body {
+        padding: 1.25rem;
+    }
+
+    /* ===== TABLE CARD ===== */
+    .table-card {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+    }
+
+    .table-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.875rem 1.25rem;
+        border-bottom: 1px solid var(--border-color);
+        background: var(--bg-tertiary);
+    }
+
+    .table-header h4 {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin: 0;
+    }
+
+    .table-header h4 i {
+        color: var(--accent-blue);
+        margin-right: 0.5rem;
+    }
+
+    .table-header .badge-count {
+        background: rgba(88, 166, 255, 0.15);
+        color: var(--accent-blue);
+        font-size: 0.75rem;
+        padding: 0.25rem 0.6rem;
+        border-radius: 20px;
+        font-weight: 600;
+    }
+
+    /* ===== DARK TABLE ===== */
+    .table-agentes {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .table-agentes thead th {
+        background: var(--bg-tertiary);
+        color: var(--text-secondary);
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid var(--border-color);
+        white-space: nowrap;
+    }
+
+    .table-agentes tbody td {
+        padding: 0.75rem 1rem;
+        color: var(--text-primary);
+        border-bottom: 1px solid var(--border-color);
+        font-size: 0.875rem;
+        vertical-align: middle;
+    }
+
+    .table-agentes tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    .table-agentes tbody tr {
+        transition: var(--transition);
+    }
+
+    .table-agentes tbody tr:hover {
+        background: rgba(88, 166, 255, 0.04);
+    }
+
+    .table-agentes .agent-name {
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .table-agentes .agent-phone {
+        color: var(--accent-blue);
+        text-decoration: none;
+    }
+
+    .table-agentes .agent-phone:hover {
+        text-decoration: underline;
+    }
+
+    .table-agentes .agent-company {
+        color: var(--text-secondary);
+        font-size: 0.8rem;
+    }
+
+    .table-agentes .agent-date {
+        color: var(--text-muted);
+        font-size: 0.8rem;
+    }
+
+    /* ===== BADGES ===== */
+    .badge-agent {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.25rem 0.6rem;
+        border-radius: 20px;
+        font-size: 0.72rem;
+        font-weight: 600;
+    }
+
+    .badge-agent.agency {
+        background: rgba(188, 140, 255, 0.15);
+        color: var(--accent-purple);
+    }
+
+    .badge-agent.independent {
+        background: rgba(210, 153, 34, 0.15);
+        color: var(--accent-orange);
+    }
+
+    /* ===== ACTION BUTTONS ===== */
+    .action-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border-radius: var(--radius);
+        border: 1px solid var(--border-color);
+        background: transparent;
+        color: var(--text-secondary);
+        text-decoration: none;
+        transition: var(--transition);
+        font-size: 0.85rem;
+    }
+
+    .action-btn:hover {
+        text-decoration: none;
+    }
+
+    .action-btn.edit:hover {
+        border-color: var(--accent-blue);
+        color: var(--accent-blue);
+        background: rgba(88, 166, 255, 0.1);
+    }
+
+    .action-btn.delete:hover {
+        border-color: var(--accent-red);
+        color: var(--accent-red);
+        background: rgba(218, 54, 51, 0.1);
+    }
+
+    .action-group {
+        display: flex;
+        gap: 0.4rem;
+        justify-content: flex-end;
+    }
+
+    /* ===== EMPTY STATE ===== */
+    .empty-state {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: var(--text-secondary);
+    }
+
+    .empty-state i {
+        font-size: 3rem;
+        color: var(--text-muted);
+        margin-bottom: 1rem;
+        display: block;
+    }
+
+    .empty-state h5 {
+        color: var(--text-primary);
+        margin-bottom: 0.5rem;
+    }
+
+    .empty-state p {
+        font-size: 0.9rem;
+        margin-bottom: 1.5rem;
+    }
+
+    /* ===== PAGINATION ===== */
+    .pagination-acm {
+        display: flex;
+        justify-content: center;
+        gap: 0.35rem;
+        padding: 1.25rem;
+        border-top: 1px solid var(--border-color);
+    }
+
+    .page-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 36px;
+        height: 36px;
+        padding: 0 0.6rem;
+        border-radius: var(--radius);
+        border: 1px solid var(--border-color);
+        background: transparent;
+        color: var(--text-secondary);
+        font-size: 0.85rem;
+        text-decoration: none;
+        transition: var(--transition);
+    }
+
+    .page-btn:hover {
+        border-color: var(--accent-blue);
+        color: var(--accent-blue);
+        text-decoration: none;
+    }
+
+    .page-btn.active {
+        background: var(--accent-blue);
+        border-color: var(--accent-blue);
+        color: #fff;
+    }
+
+    .page-btn.disabled {
+        opacity: 0.4;
+        cursor: default;
+    }
+
+    /* ===== FORM CONTROLS ===== */
+    .form-control-acm {
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius);
+        color: var(--text-primary);
+        padding: 0.45rem 0.75rem;
+        font-size: 0.85rem;
+        width: 100%;
+        transition: var(--transition);
+    }
+
+    .form-control-acm:focus {
+        border-color: var(--accent-blue);
+        outline: none;
+        box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.15);
+    }
+
+    .form-control-acm::placeholder {
+        color: var(--text-muted);
+    }
+
+    select.form-control-acm {
+        appearance: none;
+        -webkit-appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238b949e' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 0.75rem center;
+        padding-right: 2rem;
+    }
+
+    .form-label-acm {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        margin-bottom: 0.3rem;
+        display: block;
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 768px) {
+        .hero-section {
+            flex-direction: column;
+            text-align: center;
+            padding: 1.5rem;
+        }
+        .hero-content p {
+            max-width: 100%;
+        }
+        .stats-row {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    @media (max-width: 480px) {
+        .stats-row {
+            grid-template-columns: 1fr;
+        }
+        .table-agentes thead {
+            display: none;
+        }
+        .table-agentes tbody td {
+            display: block;
+            padding: 0.5rem 1rem;
+            border-bottom: none;
+        }
+        .table-agentes tbody tr {
+            display: block;
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .table-agentes tbody td:before {
+            content: attr(data-label);
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            display: block;
+            margin-bottom: 0.2rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<div class="hero-section">
+    <div class="hero-content">
+        <h1>
+            <i class="fas fa-users"></i>
+            {{ titulo }}
+        </h1>
+        <p>
+            Gestiona los agentes inmobiliarios, clasifícalos como independientes o vinculados a una inmobiliaria,
+            y manten un registro actualizado de sus datos de contacto.
+        </p>
+    </div>
+    <div class="hero-actions">
+        <a href="{% url 'agentes:crear_agente' %}" class="btn-acm btn-acm-primary btn-acm-lg">
+            <i class="fas fa-plus-circle"></i>
+            Nuevo Agente
+        </a>
+    </div>
+</div>
+
+<!-- Stats Row -->
+<div class="stats-row">
+    <div class="stat-card">
+        <div class="stat-icon blue">
+            <i class="fas fa-user-tie"></i>
+        </div>
+        <div class="stat-info">
+            <h3>{{ total_agentes }}</h3>
+            <p>Total Agentes</p>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon orange">
+            <i class="fas fa-user"></i>
+        </div>
+        <div class="stat-info">
+            <h3>{{ independientes_count }}</h3>
+            <p>Independientes</p>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon purple">
+            <i class="fas fa-building"></i>
+        </div>
+        <div class="stat-info">
+            <h3>{{ inmobiliarias_count }}</h3>
+            <p>De Inmobiliaria</p>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon green">
+            <i class="fas fa-warehouse"></i>
+        </div>
+        <div class="stat-info">
+            <h3>{{ total_inmobiliarias_reg }}</h3>
+            <p>Inmobiliarias</p>
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="filters-card">
+    <div class="filters-header">
+        <h5>
+            <i class="fas fa-filter"></i>
+            Filtros de búsqueda
+        </h5>
+        {% if busqueda or tipo_seleccionado or inmobiliaria_seleccionada %}
+        <a href="{% url 'agentes:lista_agentes' %}" class="btn-acm btn-acm-outline" style="font-size:0.8rem; padding:0.3rem 0.6rem;">
+            <i class="fas fa-times"></i> Limpiar
+        </a>
+        {% endif %}
+    </div>
+    <div class="filters-body">
+        <form method="GET" class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label-acm">Buscar</label>
+                <input type="text" name="q" class="form-control-acm" placeholder="Nombre del agente..." value="{{ busqueda }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label-acm">Tipo de agente</label>
+                <select name="tipo" class="form-control-acm">
+                    <option value="">Todos</option>
+                    {% for key, label in tipos_agente %}
+                    <option value="{{ key }}" {% if tipo_seleccionado == key %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label-acm">Inmobiliaria</label>
+                <select name="inmobiliaria" class="form-control-acm">
+                    <option value="">Todas</option>
+                    {% for inm in inmobiliarias %}
+                    <option value="{{ inm.id }}" {% if inmobiliaria_seleccionada == inm.id|stringformat:'s' %}selected{% endif %}>{{ inm.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2 d-flex gap-2">
+                <button type="submit" class="btn-acm btn-acm-primary flex-grow-1">
+                    <i class="fas fa-search"></i> Filtrar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Table -->
+<div class="table-card">
+    <div class="table-header">
+        <h4>
+            <i class="fas fa-list"></i>
+            Listado de Agentes
+        </h4>
+        <span class="badge-count">{{ total_agentes }} registros</span>
+    </div>
+
+    {% if agentes %}
+    <div class="table-responsive">
+        <table class="table-agentes">
+            <thead>
+                <tr>
+                    <th>Nombre</th>
+                    <th>Teléfono</th>
+                    <th>Tipo</th>
+                    <th>Inmobiliaria</th>
+                    <th>Registrado</th>
+                    <th class="text-end">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for agente in agentes %}
+                <tr>
+                    <td data-label="Nombre">
+                        <span class="agent-name">{{ agente.nombre_completo }}</span>
+                    </td>
+                    <td data-label="Teléfono">
+                        <a href="tel:{{ agente.telefono }}" class="agent-phone">
+                            <i class="fas fa-phone me-1" style="font-size:0.7rem;"></i>
+                            {{ agente.telefono }}
+                        </a>
+                    </td>
+                    <td data-label="Tipo">
+                        {% if agente.tipo_agente == 'INMOBILIARIA' %}
+                        <span class="badge-agent agency">
+                            <i class="fas fa-building"></i> Inmobiliaria
+                        </span>
+                        {% else %}
+                        <span class="badge-agent independent">
+                            <i class="fas fa-user"></i> Independiente
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td data-label="Inmobiliaria">
+                        {% if agente.inmobiliaria %}
+                        <span class="agent-company">
+                            <i class="fas fa-warehouse me-1" style="font-size:0.7rem;"></i>
+                            {{ agente.inmobiliaria.nombre }}
+                        </span>
+                        {% else %}
+                        <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td data-label="Registrado">
+                        <span class="agent-date">
+                            <i class="far fa-calendar-alt me-1" style="font-size:0.7rem;"></i>
+                            {{ agente.creado_en|date:'d/m/Y' }}
+                        </span>
+                    </td>
+                    <td data-label="Acciones">
+                        <div class="action-group">
+                            <a href="{% url 'agentes:editar_agente' agente.id %}" class="action-btn edit" title="Editar">
+                                <i class="fas fa-edit"></i>
+                            </a>
+                            <a href="{% url 'agentes:eliminar_agente' agente.id %}" class="action-btn delete" title="Eliminar">
+                                <i class="fas fa-trash-alt"></i>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if is_paginated %}
+    <div class="pagination-acm">
+        {% if page_obj.has_previous %}
+        <a href="?page=1{% if busqueda %}&q={{ busqueda }}{% endif %}{% if tipo_seleccionado %}&tipo={{ tipo_seleccionado }}{% endif %}{% if inmobiliaria_seleccionada %}&inmobiliaria={{ inmobiliaria_seleccionada }}{% endif %}" class="page-btn" title="Primera">
+            <i class="fas fa-angle-double-left"></i>
+        </a>
+        <a href="?page={{ page_obj.previous_page_number }}{% if busqueda %}&q={{ busqueda }}{% endif %}{% if tipo_seleccionado %}&tipo={{ tipo_seleccionado }}{% endif %}{% if inmobiliaria_seleccionada %}&inmobiliaria={{ inmobiliaria_seleccionada }}{% endif %}" class="page-btn">
+            <i class="fas fa-angle-left"></i>
+        </a>
+        {% endif %}
+
+        <span class="page-btn disabled">
+            Pág. {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+        </span>
+
+        {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}{% if busqueda %}&q={{ busqueda }}{% endif %}{% if tipo_seleccionado %}&tipo={{ tipo_seleccionado }}{% endif %}{% if inmobiliaria_seleccionada %}&inmobiliaria={{ inmobiliaria_seleccionada }}{% endif %}" class="page-btn">
+            <i class="fas fa-angle-right"></i>
+        </a>
+        <a href="?page={{ page_obj.paginator.num_pages }}{% if busqueda %}&q={{ busqueda }}{% endif %}{% if tipo_seleccionado %}&tipo={{ tipo_seleccionado }}{% endif %}{% if inmobiliaria_seleccionada %}&inmobiliaria={{ inmobiliaria_seleccionada }}{% endif %}" class="page-btn" title="Última">
+            <i class="fas fa-angle-double-right"></i>
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="empty-state">
+        <i class="fas fa-users"></i>
+        <h5>No hay agentes registrados</h5>
+        <p>Crea tu primer agente para comenzar a gestionar tu red de contactos inmobiliarios.</p>
+        <a href="{% url 'agentes:crear_agente' %}" class="btn-acm btn-acm-primary btn-acm-lg">
+            <i class="fas fa-plus-circle"></i>
+            Nuevo Agente
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

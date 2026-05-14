@@ -561,6 +561,25 @@
                     <span>Matching</span>
                 </a>
 
+                <!-- Agentes con submenú -->
+                <div class="nav-item has-submenu {% if '/agentes/' in request.path %}active{% endif %}">
+                    <a href="#" class="nav-link submenu-toggle">
+                        <span class="nav-icon">&#x1F465;</span>
+                        <span>Agentes</span>
+                        <span class="submenu-arrow">&#x25BC;</span>
+                    </a>
+                    <div class="submenu-items">
+                        <a href="/agentes/" class="submenu-item {% if request.path == '/agentes/' %}active{% endif %}">
+                            <span class="submenu-icon">&#x1F464;</span>
+                            <span>Lista de Agentes</span>
+                        </a>
+                        <a href="/agentes/inmobiliarias/" class="submenu-item {% if '/inmobiliarias/' in request.path %}active{% endif %}">
+                            <span class="submenu-icon">&#x1F3E2;</span>
+                            <span>Inmobiliarias</span>
+                        </a>
+                    </div>
+                </div>
+
                 <!-- ===== ANÁLISIS E INTELIGENCIA ===== -->
                 <div class="nav-section-title" style="margin-top: 12px;">An&aacute;lisis & Mercado</div>
 
