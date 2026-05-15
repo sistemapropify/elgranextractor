@@ -1,0 +1,1330 @@
+{% extends 'propifai_base.html' %}
+{% load static %}
+
+{% block title %}Requerimientos - Propifai{% endblock %}
+
+{% block extra_head %}
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    
+    body {
+        background-color: #0d1117;
+        color: #c9d1d9;
+        line-height: 1.6;
+        padding: 20px;
+    }
+    
+    .req-container {
+        max-width: 1600px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+    
+    .req-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 30px;
+        padding-bottom: 20px;
+        border-bottom: 1px solid #30363d;
+    }
+    
+    .req-header h1 {
+        color: #58a6ff;
+        font-size: 28px;
+    }
+    
+    .req-header .header-subtitle {
+        color: #8b949e;
+        font-size: 14px;
+        margin-top: 4px;
+    }
+    
+    .req-header-actions {
+        display: flex;
+        gap: 15px;
+    }
+    
+    .btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        transition: all 0.2s;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .btn-primary {
+        background-color: #238636;
+        color: white;
+    }
+    
+    .btn-primary:hover {
+        background-color: #2ea043;
+    }
+    
+    .btn-secondary {
+        background-color: #30363d;
+        color: #c9d1d9;
+    }
+    
+    .btn-secondary:hover {
+        background-color: #3c444d;
+    }
+    
+    .btn-danger {
+        background-color: #da3633;
+        color: white;
+    }
+    
+    .btn-danger:hover {
+        background-color: #f85149;
+    }
+    
+    .btn-sm {
+        padding: 6px 12px;
+        font-size: 12px;
+    }
+    
+    .messages {
+        margin-bottom: 20px;
+    }
+    
+    .alert {
+        padding: 12px 16px;
+        border-radius: 6px;
+        margin-bottom: 10px;
+        border: 1px solid transparent;
+    }
+    
+    .alert-success {
+        background-color: rgba(35, 134, 54, 0.1);
+        border-color: rgba(35, 134, 54, 0.3);
+        color: #3fb950;
+    }
+    
+    .alert-error {
+        background-color: rgba(218, 54, 51, 0.1);
+        border-color: rgba(218, 54, 51, 0.3);
+        color: #f85149;
+    }
+    
+    .alert-info {
+        background-color: rgba(88, 166, 255, 0.1);
+        border-color: rgba(88, 166, 255, 0.3);
+        color: #58a6ff;
+    }
+    
+    /* ── Filtros ─────────────────────────── */
+    .filters-section {
+        background-color: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 30px;
+    }
+    
+    .filters-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid #30363d;
+        cursor: pointer;
+    }
+    
+    .filters-header h3 {
+        color: #c9d1d9;
+        font-size: 16px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .filters-header .toggle-icon {
+        color: #8b949e;
+        font-size: 12px;
+        transition: transform 0.2s;
+    }
+    
+    .filters-header .toggle-icon.collapsed {
+        transform: rotate(-90deg);
+    }
+    
+    .filter-form {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 14px;
+    }
+    
+    .filter-full-width {
+        grid-column: 1 / -1;
+    }
+    
+    .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    
+    .form-group label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #8b949e;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .form-control {
+        padding: 8px 10px;
+        background-color: #0d1117;
+        border: 1px solid #30363d;
+        border-radius: 6px;
+        color: #c9d1d9;
+        font-size: 13px;
+    }
+    
+    .form-control:focus {
+        outline: none;
+        border-color: #58a6ff;
+    }
+    
+    select.form-control option {
+        background-color: #161b22;
+        color: #c9d1d9;
+    }
+    
+    .filter-actions {
+        display: flex;
+        gap: 10px;
+        align-items: flex-end;
+    }
+    
+    .filter-actions .btn {
+        flex: 1;
+    }
+    
+    /* ── Stats Bar ────────────────────────── */
+    .stats-bar {
+        display: flex;
+        gap: 16px;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+    }
+    
+    .stat-pill {
+        background-color: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 20px;
+        padding: 8px 18px;
+        font-size: 13px;
+        color: #8b949e;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .stat-pill strong {
+        color: #c9d1d9;
+        font-size: 15px;
+    }
+    
+    .stat-pill .stat-green { color: #3fb950; }
+    .stat-pill .stat-blue { color: #58a6ff; }
+    .stat-pill .stat-orange { color: #d29922; }
+    .stat-pill .stat-purple { color: #8957e5; }
+    
+    /* ── Tabla ────────────────────────────── */
+    .req-table-wrapper {
+        background-color: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        overflow-x: auto;
+    }
+    
+    .req-table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 1400px;
+    }
+    
+    .req-table thead th {
+        padding: 12px 14px;
+        background-color: #21262d;
+        border-bottom: 1px solid #30363d;
+        font-weight: 600;
+        color: #8b949e;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        white-space: nowrap;
+        text-align: left;
+        position: sticky;
+        top: 0;
+    }
+    
+    .req-table tbody td {
+        padding: 10px 14px;
+        border-bottom: 1px solid #21262d;
+        font-size: 13px;
+        vertical-align: top;
+    }
+    
+    .req-table tbody tr:hover {
+        background-color: #1c2128;
+    }
+    
+    .req-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+    
+    /* Badges */
+    .badge {
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 10px;
+        font-size: 11px;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    
+    /* ── Verificado — Neón fosforescente ──── */
+    .badge-verificado {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 12px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        cursor: pointer;
+        transition: all 0.2s;
+        border: 1px solid transparent;
+    }
+    .badge-verificado.verificado-si {
+        color: #00ff41;
+        background-color: rgba(0, 255, 65, 0.1);
+        border-color: rgba(0, 255, 65, 0.3);
+        box-shadow: 0 0 8px rgba(0, 255, 65, 0.15), inset 0 0 8px rgba(0, 255, 65, 0.05);
+        text-shadow: 0 0 6px rgba(0, 255, 65, 0.5);
+    }
+    .badge-verificado.verificado-si:hover {
+        box-shadow: 0 0 14px rgba(0, 255, 65, 0.3), inset 0 0 10px rgba(0, 255, 65, 0.08);
+        border-color: rgba(0, 255, 65, 0.6);
+    }
+    .badge-verificado.verificado-no {
+        color: #ff1744;
+        background-color: rgba(255, 23, 68, 0.1);
+        border-color: rgba(255, 23, 68, 0.3);
+        box-shadow: 0 0 8px rgba(255, 23, 68, 0.15), inset 0 0 8px rgba(255, 23, 68, 0.05);
+        text-shadow: 0 0 6px rgba(255, 23, 68, 0.5);
+        animation: neon-pulse 1.5s ease-in-out infinite;
+    }
+    .badge-verificado.verificado-no:hover {
+        box-shadow: 0 0 14px rgba(255, 23, 68, 0.3), inset 0 0 10px rgba(255, 23, 68, 0.08);
+        border-color: rgba(255, 23, 68, 0.6);
+        animation: none;
+    }
+    @keyframes neon-pulse {
+        0%, 100% { opacity: 1; box-shadow: 0 0 8px rgba(255, 23, 68, 0.15); }
+        50% { opacity: 0.85; box-shadow: 0 0 16px rgba(255, 23, 68, 0.35); }
+    }
+    
+    .badge-green {
+        background-color: rgba(35, 134, 54, 0.2);
+        color: #3fb950;
+    }
+    
+    .badge-red {
+        background-color: rgba(218, 54, 51, 0.2);
+        color: #f85149;
+    }
+    
+    .badge-blue {
+        background-color: rgba(88, 166, 255, 0.15);
+        color: #58a6ff;
+    }
+    
+    .badge-orange {
+        background-color: rgba(210, 153, 34, 0.2);
+        color: #d29922;
+    }
+    
+    .badge-purple {
+        background-color: rgba(137, 87, 229, 0.2);
+        color: #8957e5;
+    }
+    
+    .badge-gray {
+        background-color: rgba(110, 118, 129, 0.2);
+        color: #8b949e;
+    }
+    
+    .badge-cyan {
+        background-color: rgba(56, 178, 172, 0.2);
+        color: #39b2ac;
+    }
+    
+    /* Agente name */
+    .agent-name {
+        font-weight: 600;
+        color: #58a6ff;
+    }
+    
+    .agent-phone {
+        color: #8b949e;
+        font-size: 12px;
+    }
+    
+    /* Fuente */
+    .fuente-label {
+        font-size: 12px;
+        color: #8b949e;
+    }
+    
+    /* Mensaje original (truncado) */
+    .msg-preview {
+        max-width: 160px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        font-size: 12px;
+        color: #8b949e;
+        line-height: 1.4;
+    }
+    
+    .msg-preview:hover {
+        -webkit-line-clamp: unset;
+        overflow: visible;
+        background-color: #1c2128;
+        padding: 4px;
+        border-radius: 4px;
+        position: relative;
+        z-index: 10;
+        max-width: 400px;
+    }
+    
+    /* Acciones — sticky a la derecha */
+    .actions-cell {
+        display: flex;
+        gap: 6px;
+        white-space: nowrap;
+    }
+    .req-table th:last-child,
+    .req-table td:last-child {
+        position: sticky;
+        right: 0;
+        background-color: #161b22;
+        z-index: 2;
+        min-width: 80px;
+    }
+    .req-table thead th:last-child {
+        background-color: #21262d;
+    }
+    .req-table tbody tr:hover td:last-child {
+        background-color: #1c2128;
+    }
+    
+    /* Presupuesto */
+    .presupuesto-val {
+        font-weight: 600;
+        color: #d29922;
+        white-space: nowrap;
+    }
+    
+    /* Fecha */
+    .fecha-cell {
+        white-space: nowrap;
+        font-size: 12px;
+        color: #8b949e;
+    }
+    
+    /* Características */
+    .caracts {
+        display: flex;
+        gap: 4px;
+        flex-wrap: wrap;
+    }
+    
+    .caracts .badge {
+        font-size: 10px;
+    }
+    
+    /* Acciones col */
+    .actions-cell {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+    
+    /* ── Paginación ────────────────────────── */
+    .pagination-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 20px;
+        padding: 16px 0;
+        border-top: 1px solid #30363d;
+        color: #8b949e;
+        font-size: 13px;
+    }
+    
+    .pagination-links {
+        display: flex;
+        gap: 6px;
+    }
+    
+    .pagination-links a,
+    .pagination-links span {
+        padding: 6px 12px;
+        border: 1px solid #30363d;
+        border-radius: 4px;
+        text-decoration: none;
+        color: #c9d1d9;
+        font-size: 13px;
+        transition: all 0.2s;
+    }
+    
+    .pagination-links a:hover {
+        background-color: #30363d;
+        border-color: #58a6ff;
+    }
+    
+    .pagination-links .current {
+        background-color: #238636;
+        border-color: #238636;
+        color: white;
+    }
+    
+    .pagination-links .disabled {
+        color: #484f58;
+        cursor: default;
+    }
+    
+    /* ── Empty State ────────────────────────── */
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #8b949e;
+    }
+    
+    .empty-state h3 {
+        font-size: 20px;
+        margin-bottom: 10px;
+        color: #c9d1d9;
+    }
+    
+    .empty-state p {
+        margin-bottom: 20px;
+    }
+    
+    /* ── Footer ─────────────────────────────── */
+    .req-footer {
+        text-align: center;
+        color: #8b949e;
+        font-size: 14px;
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 1px solid #30363d;
+    }
+    
+    /* ── Tooltip para expandir texto ────────── */
+    .expandable-text {
+        cursor: pointer;
+    }
+    
+    /* ── Responive para los filtros ─────────── */
+    @media (max-width: 768px) {
+        .req-header {
+            flex-direction: column;
+            gap: 16px;
+            align-items: flex-start;
+        }
+        .filter-form {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="req-container">
+    <!-- Header -->
+    <div class="req-header">
+        <div>
+            <h1>📋 Requerimientos</h1>
+            <div class="header-subtitle">CRM de demanda — Requerimientos de clientes buscando propiedades</div>
+        </div>
+        <div class="req-header-actions">
+            <a href="/" class="btn btn-secondary">← Dashboard</a>
+            <a href="{% url 'requerimientos:subir' %}" class="btn btn-primary">📤 Importar Excel</a>
+        </div>
+    </div>
+    
+    <!-- Mensajes -->
+    <div class="messages">
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    </div>
+    
+    <!-- Stats Bar -->
+    <div class="stats-bar">
+        <div class="stat-pill">
+            📊 Total: <strong>{{ total_count }}</strong>
+        </div>
+        <div class="stat-pill">
+            📄 Página: <strong>{{ page_obj.number }}</strong> de <strong>{{ page_obj.paginator.num_pages }}</strong>
+        </div>
+        <div class="stat-pill">
+            ✅ Verificados: <strong class="stat-green">{{ verificados_count }}</strong>
+        </div>
+        <div class="stat-pill">
+            ❌ No verificados: <strong style="color:#ff1744;">{{ no_verificados_count }}</strong>
+        </div>
+        {% if current_filters %}
+        <div class="stat-pill">
+            🔍 <span class="stat-orange">{{ page_obj.paginator.count }} filtrado(s)</span>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- Filtros -->
+    <div class="filters-section">
+        <div class="filters-header" onclick="toggleFilters()">
+            <h3>🔍 Filtros y Búsqueda <span class="toggle-icon" id="filter-toggle">▼</span></h3>
+        </div>
+        <div id="filter-body">
+            <form method="get" class="filter-form">
+                <!-- Búsqueda general -->
+                <div class="form-group filter-full-width">
+                    <label for="q">Búsqueda General</label>
+                    <input type="text" id="q" name="q" class="form-control" 
+                           placeholder="Buscar en mensaje, agente, distrito, fuente..." 
+                           value="{{ q|default:'' }}">
+                </div>
+                
+                <!-- Fila 1: Filtros principales -->
+                <div class="form-group">
+                    <label for="fuente">Fuente</label>
+                    <select id="fuente" name="fuente" class="form-control">
+                        <option value="">Todas</option>
+                        {% for value, label in fuentes %}
+                            <option value="{{ value }}" {% if current_filters.fuente == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="condicion">Condición</label>
+                    <select id="condicion" name="condicion" class="form-control">
+                        <option value="">Todas</option>
+                        {% for value, label in condiciones %}
+                            <option value="{{ value }}" {% if current_filters.condicion == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="tipo_propiedad">Tipo Propiedad</label>
+                    <select id="tipo_propiedad" name="tipo_propiedad" class="form-control">
+                        <option value="">Todos</option>
+                        {% for value, label in tipos_propiedad %}
+                            <option value="{{ value }}" {% if current_filters.tipo_propiedad == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="distrito">Distrito</label>
+                    <input type="text" id="distrito" name="distrito" class="form-control" 
+                           placeholder="Ej: Cayma, Yanahuara..." 
+                           value="{{ current_filters.distrito|default:'' }}">
+                </div>
+                
+                <div class="form-group">
+                    <label for="agente">Agente</label>
+                    <input type="text" id="agente" name="agente" class="form-control" 
+                           placeholder="Nombre del agente..." 
+                           value="{{ current_filters.agente|default:'' }}">
+                </div>
+                
+                <div class="form-group">
+                    <label for="moneda">Moneda</label>
+                    <select id="moneda" name="moneda" class="form-control">
+                        <option value="">Todas</option>
+                        {% for value, label in monedas %}
+                            <option value="{{ value }}" {% if current_filters.moneda == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <!-- Fila 2: Filtros secundarios -->
+                <div class="form-group">
+                    <label for="forma_pago">Forma de Pago</label>
+                    <select id="forma_pago" name="forma_pago" class="form-control">
+                        <option value="">Todas</option>
+                        {% for value, label in formas_pago %}
+                            <option value="{{ value }}" {% if current_filters.forma_pago == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="tipo_original">Tipo Original</label>
+                    <select id="tipo_original" name="tipo_original" class="form-control">
+                        <option value="">Todos</option>
+                        {% for value, label in tipos_originales %}
+                            <option value="{{ value }}" {% if current_filters.tipo_original == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="cochera">Cochera</label>
+                    <select id="cochera" name="cochera" class="form-control">
+                        <option value="">Indiferente</option>
+                        {% for value, label in ternario_opts %}
+                            <option value="{{ value }}" {% if current_filters.cochera == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="ascensor">Ascensor</label>
+                    <select id="ascensor" name="ascensor" class="form-control">
+                        <option value="">Indiferente</option>
+                        {% for value, label in ternario_opts %}
+                            <option value="{{ value }}" {% if current_filters.ascensor == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="amueblado">Amueblado</label>
+                    <select id="amueblado" name="amueblado" class="form-control">
+                        <option value="">Indiferente</option>
+                        {% for value, label in ternario_opts %}
+                            <option value="{{ value }}" {% if current_filters.amueblado == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <!-- Fila 3: Rangos y fechas -->
+                <div class="form-group">
+                    <label for="presupuesto_min">Presupuesto Mín.</label>
+                    <input type="number" id="presupuesto_min" name="presupuesto_min" class="form-control" 
+                           placeholder="0" step="0.01" 
+                           value="{{ current_filters.presupuesto_min|default:'' }}">
+                </div>
+                
+                <div class="form-group">
+                    <label for="presupuesto_max">Presupuesto Máx.</label>
+                    <input type="number" id="presupuesto_max" name="presupuesto_max" class="form-control" 
+                           placeholder="999999" step="0.01" 
+                           value="{{ current_filters.presupuesto_max|default:'' }}">
+                </div>
+                
+                <div class="form-group">
+                    <label for="hab_min">Habitaciones (mín)</label>
+                    <input type="number" id="hab_min" name="hab_min" class="form-control" 
+                           placeholder="0" min="0" 
+                           value="{{ current_filters.hab_min|default:'' }}">
+                </div>
+                
+                <div class="form-group">
+                    <label for="area_min">Área m² (mín)</label>
+                    <input type="number" id="area_min" name="area_min" class="form-control" 
+                           placeholder="0" min="0" 
+                           value="{{ current_filters.area_min|default:'' }}">
+                </div>
+                
+                <div class="form-group">
+                    <label for="fecha_desde">Fecha Desde</label>
+                    <input type="date" id="fecha_desde" name="fecha_desde" class="form-control" 
+                           value="{{ current_filters.fecha_desde|default:'' }}">
+                </div>
+                
+                <div class="form-group">
+                    <label for="fecha_hasta">Fecha Hasta</label>
+                    <input type="date" id="fecha_hasta" name="fecha_hasta" class="form-control" 
+                           value="{{ current_filters.fecha_hasta|default:'' }}">
+                </div>
+                
+                <!-- Verificado Filter -->
+                <div class="form-group">
+                    <label for="verificado">Verificado</label>
+                    <select id="verificado" name="verificado" class="form-control">
+                        <option value="">Todos</option>
+                        <option value="si" {% if current_filters.verificado == 'si' %}selected{% endif %}>✅ Verificados</option>
+                        <option value="no" {% if current_filters.verificado == 'no' %}selected{% endif %}>❌ No verificados</option>
+                    </select>
+                </div>
+                
+                <!-- Botones de acción -->
+                <div class="form-group filter-full-width filter-actions" style="margin-top:8px;">
+                    <button type="submit" class="btn btn-primary">🔍 Aplicar Filtros</button>
+                    <a href="{% url 'requerimientos:lista' %}" class="btn btn-secondary">🗑️ Limpiar Filtros</a>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Tabla de Requerimientos -->
+    <div class="req-table-wrapper">
+        <table class="req-table">
+            <thead>
+                <tr>
+                    <th style="width:110px;">Verificado</th>
+                    <th>Agente / Fuente</th>
+                    <th>Fecha / Hora</th>
+                    <th>Condición</th>
+                    <th>Tipo</th>
+                    <th>Distritos</th>
+                    <th>Presupuesto</th>
+                    <th>Pago</th>
+                    <th>Habs</th>
+                    <th>Baños</th>
+                    <th>Área</th>
+                    <th>Caracts</th>
+                    <th>Tipo Orig.</th>
+                    <th>Mensaje Original</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if requerimientos %}
+                    {% for r in requerimientos %}
+                    <tr>
+                        <!-- Verificado -->
+                        <td style="text-align:center;vertical-align:middle;">
+                            <span class="badge-verificado {% if r.verificado %}verificado-si{% else %}verificado-no{% endif %}"
+                                  onclick="toggleVerificado({{ r.pk }}, this)"
+                                  title="{% if r.verificado %}✓ Verificado — Haz clic para desmarcar{% else %}✗ No revisado — Haz clic para marcar como verificado{% endif %}">
+                                {% if r.verificado %}✓ VERIFICADO{% else %}✗ NO VERIF.{% endif %}
+                            </span>
+                        </td>
+                        
+                        <!-- Agente / Fuente -->
+                        <td>
+                            <div class="agent-name">{{ r.agente|truncatechars:25 }}</div>
+                            {% if r.agente_telefono %}
+                                <div class="agent-phone">📞 {{ r.agente_telefono }}</div>
+                            {% endif %}
+                            <div class="fuente-label">{{ r.fuente|truncatechars:20 }}</div>
+                        </td>
+                        
+                        <!-- Fecha / Hora -->
+                        <td>
+                            <div class="fecha-cell">
+                                {% if r.fecha %}{{ r.fecha|date:"d/m/Y" }}{% else %}—{% endif %}
+                            </div>
+                            {% if r.hora %}
+                                <div class="fecha-cell">{{ r.hora|time:"H:i" }}</div>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- Condición -->
+                        <td>
+                            {% if r.condicion == 'compra' %}
+                                <span class="badge badge-blue">Compra</span>
+                            {% elif r.condicion == 'alquiler' %}
+                                <span class="badge badge-orange">Alquiler</span>
+                            {% elif r.condicion == 'ambos' %}
+                                <span class="badge badge-purple">Ambos</span>
+                            {% else %}
+                                <span class="badge badge-gray">{{ r.get_condicion_display }}</span>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- Tipo Propiedad -->
+                        <td>
+                            {% if r.tipo_propiedad == 'departamento' %}
+                                <span class="badge badge-blue">Dpto</span>
+                            {% elif r.tipo_propiedad == 'casa' %}
+                                <span class="badge badge-green">Casa</span>
+                            {% elif r.tipo_propiedad == 'terreno' %}
+                                <span class="badge badge-orange">Terreno</span>
+                            {% elif r.tipo_propiedad == 'local_comercial' %}
+                                <span class="badge badge-purple">Local</span>
+                            {% elif r.tipo_propiedad == 'oficina' %}
+                                <span class="badge badge-cyan">Oficina</span>
+                            {% else %}
+                                <span class="badge badge-gray">{{ r.get_tipo_propiedad_display|truncatechars:10 }}</span>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- Distritos -->
+                        <td>
+                            <span style="font-size:12px;color:#c9d1d9;">{{ r.distritos|default:'—'|truncatechars:30 }}</span>
+                        </td>
+                        
+                        <!-- Presupuesto -->
+                        <td>
+                            {% if r.presupuesto_monto %}
+                                <span class="presupuesto-val">
+                                    {% if r.presupuesto_moneda == 'USD' %}${% else %}S/{% endif %}
+                                    {{ r.presupuesto_monto|floatformat:0 }}
+                                </span>
+                            {% else %}
+                                <span class="badge badge-gray">—</span>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- Forma de Pago -->
+                        <td>
+                            {% if r.presupuesto_forma_pago and r.presupuesto_forma_pago != 'no_especificado' %}
+                                <span class="badge badge-gray">{{ r.get_presupuesto_forma_pago_display|truncatechars:12 }}</span>
+                            {% else %}
+                                <span style="color:#484f58;">—</span>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- Habitaciones -->
+                        <td style="text-align:center;">
+                            {% if r.habitaciones %}
+                                <span class="badge badge-blue">{{ r.habitaciones }}</span>
+                            {% else %}
+                                <span style="color:#484f58;">—</span>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- Baños -->
+                        <td style="text-align:center;">
+                            {% if r.banos %}
+                                <span class="badge badge-blue">{{ r.banos }}</span>
+                            {% else %}
+                                <span style="color:#484f58;">—</span>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- Área -->
+                        <td style="text-align:center;">
+                            {% if r.area_m2 %}
+                                <span class="badge badge-cyan">{{ r.area_m2 }}m²</span>
+                            {% else %}
+                                <span style="color:#484f58;">—</span>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- Características extra -->
+                        <td>
+                            {% if r.caracteristicas_extra %}
+                                <div class="caracts">
+                                    {% if 'URGENTE' in r.caracteristicas_extra.upper %}
+                                        <span class="badge badge-red">URGENTE</span>
+                                    {% endif %}
+                                    {% if r.cochera == 'si' %}
+                                        <span class="badge badge-gray">🚗</span>
+                                    {% endif %}
+                                    {% if r.ascensor == 'si' %}
+                                        <span class="badge badge-gray">🛗</span>
+                                    {% endif %}
+                                    {% if r.amueblado == 'si' %}
+                                        <span class="badge badge-gray">🛋️</span>
+                                    {% endif %}
+                                </div>
+                            {% else %}
+                                <span style="color:#484f58;">—</span>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- Tipo Original -->
+                        <td>
+                            {% if r.tipo_original %}
+                                {% if 'BASURA' in r.tipo_original %}
+                                    <span class="badge badge-red">Basura</span>
+                                {% elif 'REQUERIMIENTO' in r.tipo_original %}
+                                    <span class="badge badge-green">Req.</span>
+                                {% elif 'PROPIEDAD' in r.tipo_original %}
+                                    <span class="badge badge-blue">Prop.</span>
+                                {% else %}
+                                    <span class="badge badge-gray">{{ r.tipo_original|truncatechars:10 }}</span>
+                                {% endif %}
+                            {% else %}
+                                <span style="color:#484f58;">—</span>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- Mensaje Original -->
+                        <td>
+                            {% if r.requerimiento %}
+                                <div class="msg-preview">{{ r.requerimiento|truncatechars:50 }}</div>
+                            {% else %}
+                                <span style="color:#484f58;">—</span>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- Acciones -->
+                        <td>
+                            <div class="actions-cell">
+                                <button type="button" class="btn btn-primary btn-sm ver-detalle-btn"
+                                        data-pk="{{ r.pk }}"
+                                        data-verificado="{% if r.verificado %}si{% else %}no{% endif %}"
+                                        data-agente="{{ r.agente|escape }}"
+                                        data-agente-telefono="{{ r.agente_telefono|escape }}"
+                                        data-fuente="{{ r.fuente|escape }}"
+                                        data-fecha="{% if r.fecha %}{{ r.fecha|date:'d/m/Y' }}{% endif %}"
+                                        data-hora="{% if r.hora %}{{ r.hora|time:'H:i' }}{% endif %}"
+                                        data-condicion="{{ r.condicion|escape }}"
+                                        data-tipo-propiedad="{{ r.tipo_propiedad|escape }}"
+                                        data-distritos="{{ r.distritos|escape }}"
+                                        data-presupuesto-monto="{% if r.presupuesto_monto %}{{ r.presupuesto_monto }}{% endif %}"
+                                        data-presupuesto-moneda="{{ r.presupuesto_moneda|escape }}"
+                                        data-forma-pago="{{ r.presupuesto_forma_pago|escape }}"
+                                        data-habitaciones="{% if r.habitaciones %}{{ r.habitaciones }}{% endif %}"
+                                        data-banos="{% if r.banos %}{{ r.banos }}{% endif %}"
+                                        data-cochera="{{ r.cochera|escape }}"
+                                        data-ascensor="{{ r.ascensor|escape }}"
+                                        data-amueblado="{{ r.amueblado|escape }}"
+                                        data-area-m2="{% if r.area_m2 %}{{ r.area_m2 }}{% endif %}"
+                                        data-piso-preferencia="{{ r.piso_preferencia|escape }}"
+                                        data-caracteristicas="{{ r.caracteristicas_extra|escape }}"
+                                        data-tipo-original="{{ r.tipo_original|escape }}"
+                                        data-mensaje="{{ r.requerimiento|escape }}"
+                                        data-creado="{{ r.creado_en|date:'d/m/Y H:i' }}"
+                                        data-actualizado="{{ r.actualizado_en|date:'d/m/Y H:i' }}">
+                                    <i class="bi bi-eye me-1"></i>Ver
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="15">
+                            <div class="empty-state">
+                                <h3>{% if current_filters %}No se encontraron requerimientos con esos filtros{% else %}No hay requerimientos registrados{% endif %}</h3>
+                                <p>{% if current_filters %}Intenta con otros filtros o <a href="{% url 'requerimientos:lista' %}" style="color:#58a6ff;">limpia los filtros</a>{% else %}Importa datos desde Excel para comenzar{% endif %}</p>
+                            </div>
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+    
+    <!-- Paginación -->
+    {% if page_obj.paginator.num_pages > 1 %}
+    <div class="pagination-bar">
+        <div>
+            Mostrando {{ page_obj.start_index }} - {{ page_obj.end_index }} de {{ page_obj.paginator.count }} requerimientos
+        </div>
+        <div class="pagination-links">
+            {% if page_obj.has_previous %}
+                <a href="?page=1{% for k,v in current_filters.items %}&{{ k }}={{ v }}{% endfor %}">««</a>
+                <a href="?page={{ page_obj.previous_page_number }}{% for k,v in current_filters.items %}&{{ k }}={{ v }}{% endfor %}">«</a>
+            {% else %}
+                <span class="disabled">««</span>
+                <span class="disabled">«</span>
+            {% endif %}
+            
+            {% for num in page_obj.paginator.page_range %}
+                {% if num == page_obj.number %}
+                    <span class="current">{{ num }}</span>
+                {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                    <a href="?page={{ num }}{% for k,v in current_filters.items %}&{{ k }}={{ v }}{% endfor %}">{{ num }}</a>
+                {% endif %}
+            {% endfor %}
+            
+            {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}{% for k,v in current_filters.items %}&{{ k }}={{ v }}{% endfor %}">»</a>
+                <a href="?page={{ page_obj.paginator.num_pages }}{% for k,v in current_filters.items %}&{{ k }}={{ v }}{% endfor %}">»»</a>
+            {% else %}
+                <span class="disabled">»</span>
+                <span class="disabled">»»</span>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+    
+    <div class="req-footer">
+        <p>Propifai • CRM de Demanda • Total: {{ total_count }} requerimiento(s)</p>
+    </div>
+</div>
+
+<!-- Modal de Detalle del Requerimiento -->
+<div class="modal fade" id="modalDetalleRequerimiento" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content" style="background-color: #161b22; border: 1px solid #30363d; color: #c9d1d9;">
+            <div class="modal-header" style="border-bottom: 1px solid #30363d; padding: 16px 20px;">
+                <h5 class="modal-title" style="color: #58a6ff; font-size: 18px; font-weight: 600;">
+                    <i class="bi bi-file-text me-2"></i>Detalle del Requerimiento
+                    <span id="modalReqId" class="badge" style="background-color: #30363d; color: #8b949e; font-size: 11px; margin-left: 8px; vertical-align: middle;">#<span id="modalReqPk">—</span></span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body" style="padding: 0;">
+                <div style="padding: 20px;">
+                    <div id="modalVerificado" style="margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+                        <span id="modalVerificadoBadge" class="badge" style="font-size: 12px; padding: 4px 12px; border-radius: 6px;">—</span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div>
+                            <div class="modal-field-group">
+                                <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Agente</label>
+                                <div id="modalAgente" style="color: #58a6ff; font-weight: 600; font-size: 14px;">—</div>
+                                <div id="modalAgenteTelefono" style="color: #8b949e; font-size: 12px;"></div>
+                            </div>
+                            <div class="modal-field-group" style="margin-top: 12px;">
+                                <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Fuente</label>
+                                <div id="modalFuente" style="color: #c9d1d9; font-size: 13px;">—</div>
+                            </div>
+                            <div class="modal-field-group" style="margin-top: 12px;">
+                                <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Fecha / Hora</label>
+                                <div id="modalFecha" style="color: #c9d1d9; font-size: 13px;">—</div>
+                            </div>
+                            <div class="modal-field-group" style="margin-top: 12px;">
+                                <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Condición</label>
+                                <div id="modalCondicion" style="font-size: 13px;">—</div>
+                            </div>
+                            <div class="modal-field-group" style="margin-top: 12px;">
+                                <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Tipo de Propiedad</label>
+                                <div id="modalTipoPropiedad" style="font-size: 13px;">—</div>
+                            </div>
+                            <div class="modal-field-group" style="margin-top: 12px;">
+                                <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Distritos</label>
+                                <div id="modalDistritos" style="color: #c9d1d9; font-size: 13px;">—</div>
+                            </div>
+                            <div class="modal-field-group" style="margin-top: 12px;">
+                                <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Tipo Original</label>
+                                <div id="modalTipoOriginal" style="font-size: 13px;">—</div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="modal-field-group">
+                                <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Presupuesto</label>
+                                <div id="modalPresupuesto" style="color: #d29922; font-weight: 600; font-size: 16px;">—</div>
+                                <div id="modalFormaPago" style="color: #8b949e; font-size: 12px;"></div>
+                            </div>
+                            <div class="modal-field-group" style="margin-top: 12px;">
+                                <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Habitaciones / Baños</label>
+                                <div id="modalHabBanos" style="color: #c9d1d9; font-size: 13px;">—</div>
+                            </div>
+                            <div class="modal-field-group" style="margin-top: 12px;">
+                                <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Área (m²)</label>
+                                <div id="modalArea" style="color: #39b2ac; font-size: 13px;">—</div>
+                            </div>
+                            <div class="modal-field-group" style="margin-top: 12px;">
+                                <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Piso Preferencia</label>
+                                <div id="modalPiso" style="color: #c9d1d9; font-size: 13px;">—</div>
+                            </div>
+                            <div class="modal-field-group" style="margin-top: 12px;">
+                                <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Extras</label>
+                                <div id="modalExtras" style="font-size: 13px;">
+                                    <span id="modalCochera" class="badge" style="margin-right: 4px;"></span>
+                                    <span id="modalAscensor" class="badge" style="margin-right: 4px;"></span>
+                                    <span id="modalAmueblado" class="badge"></span>
+                                </div>
+                            </div>
+                            <div class="modal-field-group" style="margin-top: 12px;">
+                                <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Características</label>
+                                <div id="modalCaracteristicas" style="color: #c9d1d9; font-size: 13px;">—</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid #30363d;">
+                        <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; display: block; margin-bottom: 8px;">
+                            <i class="bi bi-chat-dots me-1"></i>Mensaje Original
+                        </label>
+                        <div id="modalMensaje" style="background-color: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 12px 16px; color: #c9d1d9; font-size: 13px; line-height: 1.6; white-space: pre-wrap; max-height: 200px; overflow-y: auto;">—</div>
+                    </div>
+                    <div style="margin-top: 12px; display: flex; gap: 16px; font-size: 11px; color: #484f58;">
+                        <span>Creado: <span id="modalCreado">—</span></span>
+                        <span>Actualizado: <span id="modalActualizado">—</span></span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" style="border-top: 1px solid #30363d; padding: 12px 20px;">
+                <button type="button" class="btn" style="background-color: #30363d; color: #c9d1d9; border: none; padding: 8px 20px; border-radius: 6px; font-size: 13px;" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.modal-field-group label { display: block; margin-bottom: 4px; }
+.modal-field-group .badge { font-size: 11px; padding: 3px 8px; border-radius: 4px; }
+#modalMensaje::-webkit-scrollbar { width: 6px; }
+#modalMensaje::-webkit-scrollbar-track { background: #0d1117; }
+#modalMensaje::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+</style>
+
+<script>
+// ── Modal de detalle del requerimiento ────────
+document.addEventListener('DOMContentLoaded', function() {
+    const modal = document.getElementById('modalDetalleRequerimiento');
+    document.querySelectorAll('.ver-detalle-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const d = this.dataset;
+            document.getElementById('modalReqPk').textContent = d.pk;
+            const verifBadge = document.getElementById('modalVerificadoBadge');
+            if (d.verificado === 'si') {
+                verifBadge.textContent = '✓ VERIFICADO';
+                verifBadge.style.backgroundColor = 'rgba(0, 255, 65, 0.1)';
+                verifBadge.style.color = '#00ff41';
+                verifBadge.style.border = '1px solid rgba(0, 255, 65, 0.3)';
+            } else {
+                verifBadge.textContent = '✗ NO VERIFICADO';
+                verifBadge.style.backgroundColor = 'rgba(255, 23, 68, 0.1)';
+                verifBadge.style.color = '#ff1744';
+                verifBadge.style.border = '1px solid rgba(255, 23, 68, 0.3)';
+            }
+            document.getElementById('modalAgente').textContent = d.agente || '—';
+            document.getElementById('modalAgenteTelefono').textContent = d.agenteTelefono ? '📞 ' + d.agenteTelefono : '';
+            document.getElementById('modalFuente').textContent = d.fuente || '—';
+            let fechaStr = d.fecha || '—';
+            if (d.hora) fechaStr += ' ' + d.hora;
+            document.getElementById('modalFecha').textContent = fechaStr;
+            const condEl = document.getElementById('modalCondicion');
+            const condText = d.condicion || '—';
+            let condBadge = condText, condColor = '#8b949e';
+            if (condText === 'compra') { condBadge = 'Compra'; condColor = '#58a6ff'; }
+            else if (condText === 'alquiler') { condBadge = 'Alquiler'; condColor = '#d29922'; }
+            else if (condText === 'ambos') { condBadge = 'Compra y Alquiler'; condColor = '#8957e5'; }
+            condEl.innerHTML = '<span class="badge" style="background-color: ' + condColor + '22; color: ' + condColor + '; border: 1px solid ' + condColor + '44; padding: 3px 10px; border-radius: 4px; font-size: 12px;">' + condBadge + '</span>';
+            const tipoEl = document.getElementById('modalTipoPropiedad');
+            const tipoText = d.tipoPropiedad || '—';
+            let tipoBadge = tipoText, tipoColor = '#8b949e';
+            if (tipoText === 'departamento') { tipoBadge = 'Departamento'; tipoColor = '#58a6ff'; }
+            else if (tipoText === 'casa') { tipoBadge = 'Casa'; tipoColor = '#3fb950'; }
+            else if (tipoText === 'terreno') { tipoBadge = 'Terreno'; tipoColor = '#d29922'; }
+            else if (tipoText === 'local_comercial') { tipoBadge = 'Local Comercial'; tipoColor = '#8957e5'; }
+            else if (tipoText === 'oficina') { tipoBadge = 'Oficina'; tipoColor = '#39b2ac'; }
+            tipoEl.innerHTML = '<span class="badge" style="background-color: ' + tipoColor + '22; color: ' + tipoColor + '; border: 1px solid ' + tipoColor + '44; padding: 3px 10px; border-radius: 4px; font-size: 12px;">' + tipoBadge + '</span>';
+            document.getElementById('modalDistritos').textContent = d.distritos || '—';
+            const toEl = document.getElementById('modalTipoOriginal');
+            const toText = d.tipoOriginal || '—';
+            let toBadge = toText, toColor = '#8b949e';
+            if (toText.includes('BASURA')) { toBadge = 'Basura'; toColor = '#f85149'; }
+            else if (toText.includes('REQUERIMIENTO')) { toBadge = 'Requerimiento'; toColor = '#3fb950'; }
+            else if (toText.includes('PROPIEDAD')) { toBadge = 'Propiedad'; toColor = '#58a6ff'; }
+            toEl.innerHTML = '<span class="badge" style="background-color: ' + toColor + '22; color: ' + toColor + '; border: 1px solid ' + toColor + '44; padding: 3px 10px; border-radius: 4px; font-size: 12px;">' + toBadge + '</span>';
+            const monto = d.presupuestoMonto;
+            const moneda = d.presupuestoMoneda;
+            if (monto) {
+                const simbolo = moneda === 'USD' ? '$' : 'S/';
+                const formatted = parseFloat(monto).toLocaleString('es-PE', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+                document.getElementById('modalPresupuesto').textContent = simbolo + ' ' + formatted;
+            } else {
+                document.getElementById('modalPresupuesto').textContent = '—';
+            }
+            const fpEl = document.getElementById('modalFormaPago');
+            const fpText = d.formaPago || '';
+            if (fpText && fpText !== 'no_especificado') {
+                fpEl.textContent = 'Forma de pago: ' + fpText.charAt(0).toUpperCase() + fpText.slice(1);
+            } else {
+                fpEl.textContent = '';
+            }
+            const habs = d.habitaciones || '—';
+            const banos = d.banos || '—';
+            document.getElementById('modalHabBanos').textContent = habs + ' hab. / ' + banos + ' baños';
+            document.getElementById('modalArea').textContent = d.areaM2 ? d.areaM2 + ' m²' : '—';
+            document.getElementById('modalPiso').textContent = d.pisoPreferencia || '—';
+            function renderExtraBadge(elId, value, label) {
+                const el = document.getElementById(elId);
+                if (value === 'si') {
+                    el.textContent = label;
+                    el.style.display = 'inline-block';
+                    el.style.backgroundColor = 'rgba(35, 134, 54, 0.2)';
+                    el.style.color = '#3fb950';
+                    el.style.border = '1px solid rgba(35, 134, 54, 0.3)';
+                } else {
+                    el.style.display = 'none';
+                }
+            }
+            renderExtraBadge('modalCochera', d.cochera, '🚗 Cochera');
+            renderExtraBadge('modalAscensor', d.ascensor, '🛗 Ascensor');
+            renderExtraBadge('modalAmueblado', d.amueblado, '🛋️ Amueblado');
+            document.getElementById('modalCaracteristicas').textContent = d.caracteristicas || '—';
+            document.getElementById('modalMensaje').textContent = d.mensaje || '—';
+            document.getElementById('modalCreado').textContent = d.creado || '—';
+            document.getElementById('modalActualizado').textContent = d.actualizado || '—';
+            const bsModal = new bootstrap.Modal(modal);
+            bsModal.show();
+        });
+    });
+});
+
+// ── Toggle verificado (AJAX) ─────────────────
+function toggleVerificado(pk, el) {
+    const nuevoEstado = el.classList.contains('verificado-no');
+    const formData = new FormData();
+    formData.append('pk', pk);
+    formData.append('verificado', nuevoEstado);
+    
+    fetch('{% url "requerimientos:toggle_verificado" %}', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ pk: pk, verificado: nuevoEstado })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            if (data.verificado) {
+                el.className = 'badge-verificado verificado-si';
+                el.textContent = '✓ VERIFICADO';
+                el.title = '✓ Verificado — Haz clic para desmarcar';
+            } else {
+                el.className = 'badge-verificado verificado-no';
+                el.textContent = '✗ NO VERIF.';
+                el.title = '✗ No revisado — Haz clic para marcar como verificado';
+            }
+        } else {
+            alert('Error: ' + (data.error || 'No se pudo actualizar'));
+        }
+    })
+    .catch(err => {
+        console.error('Error:', err);
+        alert('Error de conexión al toggle verificado');
+    });
+}
+
+// Toggle filters visibility
+function toggleFilters() {
+    const body = document.getElementById('filter-body');
+    const icon = document.getElementById('filter-toggle');
+    if (body.style.display === 'none') {
+        body.style.display = 'block';
+        icon.classList.remove('collapsed');
+    } else {
+        body.style.display = 'none';
+        icon.classList.add('collapsed');
+    }
+}
+
+// Auto-submit on select change for quick filtering (opt-in)
+document.querySelectorAll('.filter-form select').forEach(select => {
+    select.addEventListener('change', function() {
+        // Don't auto-submit, user must click "Aplicar Filtros"
+    });
+});
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+{% endblock %}
