@@ -41,6 +41,13 @@ CSRF_TRUSTED_ORIGINS = os.environ.get('CSRF_TRUSTED_ORIGINS', 'https://acm.propi
 # In production, set this to: https://acm.propifai.com
 BASE_URL = os.environ.get('BASE_URL', 'http://127.0.0.1:8000')
 
+# CORS configuration
+CORS_ALLOWED_ORIGINS = os.environ.get(
+    'CORS_ALLOWED_ORIGINS',
+    'http://localhost:5173,http://127.0.0.1:5173'
+).split(',')
+CORS_ALLOW_CREDENTIALS = True
+
 
 # Application definition
 
@@ -54,6 +61,7 @@ INSTALLED_APPS = [
     'django.contrib.humanize',
     
     # Third-party apps
+    'corsheaders',
     'rest_framework',
     'django_celery_beat',
     'django_celery_results',
@@ -82,6 +90,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     # Nuestro middleware ANTES que el de Django auth para limpiar
