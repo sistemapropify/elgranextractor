@@ -72,6 +72,9 @@ urlpatterns = [
     
     # ACM - Análisis Comparativo de Mercado
     path('acm/', include('acm.urls')),
+
+    # ACM - API REST (consumible desde servicios externos)
+    path('api/acm/', include('acm.api_urls')),
     
     # Market Analysis - Análisis de Mercado (Heatmap + Dashboard)
     path('market-analysis/', include('market_analysis.urls')),

@@ -109,7 +109,7 @@ class User(models.Model):
             models.UniqueConstraint(fields=['email'], name='unique_email_when_not_null',
                                     condition=models.Q(email__isnull=False)),
             models.CheckConstraint(
-                check=models.Q(phone__isnull=False) | models.Q(email__isnull=False),
+                condition=models.Q(phone__isnull=False) | models.Q(email__isnull=False),
                 name='phone_or_email_required'
             )
         ]
