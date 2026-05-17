@@ -108,10 +108,6 @@ class User(models.Model):
                                     condition=models.Q(phone__isnull=False)),
             models.UniqueConstraint(fields=['email'], name='unique_email_when_not_null',
                                     condition=models.Q(email__isnull=False)),
-            models.CheckConstraint(
-                condition=models.Q(phone__isnull=False) | models.Q(email__isnull=False),
-                name='phone_or_email_required'
-            )
         ]
         indexes = [
             models.Index(fields=['username']),
