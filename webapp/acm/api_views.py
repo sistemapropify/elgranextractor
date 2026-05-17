@@ -1,3 +1,5 @@
+import math
+
 from django.db.models import Q
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -85,8 +87,18 @@ class ComparablesAPIView(APIView):
 
         comparables = []
 
-        # Propiedades locales 
-        qs = PropiedadRaw.objects.exclude(coordenadas__isnull=True).exclude(coordenadas='')
+        # Bounding box: 1 grado lat ≈ 111km, 1 grado lng ≈ 111km * cos(lat)
+        delta_lat = radio / 111000
+        delta_lng = radio / (111000 * math.cos(math.radians(lat)))
+
+        # Propiedades locales
+        qs = (
+            PropiedadRaw.objects
+            .exclude(coordenadas__isnull=True)
+            .exclude(coordenadas='')
+            .filter(lat__gte=lat - delta_lat, lat__lte=lat + delta_lat)
+            .filter(lng__gte=lng - delta_lng, lng__lte=lng + delta_lng)
+        )
         if tipo_propiedad:
             qs = qs.filter(Q(tipo_propiedad__iexact=tipo_propiedad))
 
@@ -125,7 +137,12 @@ class ComparablesAPIView(APIView):
             from propifai.models import PropifaiProperty
             from propifai.mapeo_ubicaciones import DEPARTAMENTOS, PROVINCIAS, DISTRITOS
 
-            for prop in PropifaiProperty.objects.using('propifai').all():
+            qs_propifai = (
+                PropifaiProperty.objects.using('propifai')
+                .filter(latitude__gte=lat - delta_lat, latitude__lte=lat + delta_lat)
+                .filter(longitude__gte=lng - delta_lng, longitude__lte=lng + delta_lng)
+            )
+            for prop in qs_propifai:
                 if prop.latitude is None or prop.longitude is None:
                     continue
                 distancia = haversine(lat, lng, float(prop.latitude), float(prop.longitude))
