@@ -13,6 +13,7 @@ from datetime import datetime
 class RequerimientoAdmin(admin.ModelAdmin):
     list_display = (
         'id',
+        'verificado',
         'fuente',
         'fecha',
         'hora',
@@ -24,6 +25,7 @@ class RequerimientoAdmin(admin.ModelAdmin):
         'es_urgente',
     )
     list_filter = (
+        'verificado',
         'fuente',
         'condicion',
         'tipo_propiedad',
@@ -37,6 +39,7 @@ class RequerimientoAdmin(admin.ModelAdmin):
         'requerimiento',
     )
     readonly_fields = ('creado_en', 'actualizado_en')
+    list_editable = ('verificado',)
     fieldsets = (
         ('Origen', {
             'fields': ('fuente', 'fecha', 'hora', 'agente', 'agente_telefono', 'tipo_original')
@@ -52,6 +55,9 @@ class RequerimientoAdmin(admin.ModelAdmin):
         }),
         ('Extras', {
             'fields': ('caracteristicas_extra',)
+        }),
+        ('Verificación', {
+            'fields': ('verificado',)
         }),
         ('Auditoría', {
             'fields': ('creado_en', 'actualizado_en')

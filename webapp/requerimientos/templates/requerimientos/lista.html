@@ -1079,69 +1079,193 @@
             <div class="modal-body" style="padding: 0;">
                 <div style="padding: 20px;">
                     <div id="modalVerificado" style="margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
-                        <span id="modalVerificadoBadge" class="badge" style="font-size: 12px; padding: 4px 12px; border-radius: 6px;">—</span>
+                        <span id="modalVerificadoBadge" class="badge field-view" style="font-size: 12px; padding: 4px 12px; border-radius: 6px;">—</span>
+                        <div class="field-edit" style="display: none;">
+                            <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-right: 8px;">Verificado</label>
+                            <select id="editVerificado" class="form-select form-select-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: auto; display: inline-block;">
+                                <option value="true">Sí</option>
+                                <option value="false">No</option>
+                            </select>
+                        </div>
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <!-- ── COLUMNA IZQUIERDA ── -->
                         <div>
+                            <!-- Agente -->
                             <div class="modal-field-group">
                                 <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Agente</label>
-                                <div id="modalAgente" style="color: #58a6ff; font-weight: 600; font-size: 14px;">—</div>
-                                <div id="modalAgenteTelefono" style="color: #8b949e; font-size: 12px;"></div>
+                                <div class="field-view" id="modalAgente" style="color: #58a6ff; font-weight: 600; font-size: 14px;">—</div>
+                                <div class="field-view" id="modalAgenteTelefono" style="color: #8b949e; font-size: 12px;"></div>
+                                <div class="field-edit" style="display: none;">
+                                    <input type="text" id="editAgente" class="form-control form-control-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 100%;">
+                                    <input type="text" id="editAgenteTelefono" class="form-control form-control-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 100%; margin-top: 4px;" placeholder="Teléfono">
+                                </div>
                             </div>
+                            <!-- Fuente -->
                             <div class="modal-field-group" style="margin-top: 12px;">
                                 <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Fuente</label>
-                                <div id="modalFuente" style="color: #c9d1d9; font-size: 13px;">—</div>
+                                <div class="field-view" id="modalFuente" style="color: #c9d1d9; font-size: 13px;">—</div>
+                                <div class="field-edit" style="display: none;">
+                                    <select id="editFuente" class="form-select form-select-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 100%;">
+                                        <option value="exito_inmobiliario">Whatsapp Éxito Inmobiliario</option>
+                                        <option value="inmobiliarias_unidas">Whatsapp Inmobiliarias Unidas</option>
+                                        <option value="red_inmobiliaria">WhatsApp Red Inmobiliaria Arequipa</option>
+                                        <option value="grupo_whatsapp_1">Grupo WhatsApp Inmobiliario 1</option>
+                                        <option value="grupo_whatsapp_2">Grupo WhatsApp Inmobiliario 2</option>
+                                        <option value="grupo_whatsapp_3">Grupo WhatsApp Inmobiliario 3</option>
+                                        <option value="otro">Otro</option>
+                                    </select>
+                                </div>
                             </div>
+                            <!-- Fecha / Hora (NO editable) -->
                             <div class="modal-field-group" style="margin-top: 12px;">
                                 <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Fecha / Hora</label>
-                                <div id="modalFecha" style="color: #c9d1d9; font-size: 13px;">—</div>
+                                <div class="field-view" id="modalFecha" style="color: #c9d1d9; font-size: 13px;">—</div>
+                                <div class="field-edit" style="display: none; color: #484f58; font-size: 12px; font-style: italic;">
+                                    <i class="bi bi-lock me-1"></i>No editable
+                                </div>
                             </div>
+                            <!-- Condición -->
                             <div class="modal-field-group" style="margin-top: 12px;">
                                 <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Condición</label>
-                                <div id="modalCondicion" style="font-size: 13px;">—</div>
+                                <div class="field-view" id="modalCondicion" style="font-size: 13px;">—</div>
+                                <div class="field-edit" style="display: none;">
+                                    <select id="editCondicion" class="form-select form-select-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 100%;">
+                                        <option value="compra">Compra</option>
+                                        <option value="alquiler">Alquiler</option>
+                                        <option value="ambos">Compra y Alquiler</option>
+                                        <option value="no_especificado">No Especificado</option>
+                                    </select>
+                                </div>
                             </div>
+                            <!-- Tipo de Propiedad -->
                             <div class="modal-field-group" style="margin-top: 12px;">
                                 <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Tipo de Propiedad</label>
-                                <div id="modalTipoPropiedad" style="font-size: 13px;">—</div>
+                                <div class="field-view" id="modalTipoPropiedad" style="font-size: 13px;">—</div>
+                                <div class="field-edit" style="display: none;">
+                                    <select id="editTipoPropiedad" class="form-select form-select-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 100%;">
+                                        <option value="departamento">Departamento</option>
+                                        <option value="casa">Casa</option>
+                                        <option value="terreno">Terreno</option>
+                                        <option value="oficina">Oficina</option>
+                                        <option value="local_comercial">Local Comercial</option>
+                                        <option value="almacen">Almacén</option>
+                                        <option value="no_especificado">No Especificado</option>
+                                    </select>
+                                </div>
                             </div>
+                            <!-- Distritos -->
                             <div class="modal-field-group" style="margin-top: 12px;">
                                 <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Distritos</label>
-                                <div id="modalDistritos" style="color: #c9d1d9; font-size: 13px;">—</div>
+                                <div class="field-view" id="modalDistritos" style="color: #c9d1d9; font-size: 13px;">—</div>
+                                <div class="field-edit" style="display: none;">
+                                    <input type="text" id="editDistritos" class="form-control form-control-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 100%;" placeholder="Ej: Cayma, Yanahuara">
+                                </div>
                             </div>
+                            <!-- Tipo Original -->
                             <div class="modal-field-group" style="margin-top: 12px;">
                                 <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Tipo Original</label>
-                                <div id="modalTipoOriginal" style="font-size: 13px;">—</div>
+                                <div class="field-view" id="modalTipoOriginal" style="font-size: 13px;">—</div>
+                                <div class="field-edit" style="display: none;">
+                                    <select id="editTipoOriginal" class="form-select form-select-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 100%;">
+                                        <option value="REQUERIMIENTO">Requerimiento</option>
+                                        <option value="REQUERIMIENTO COMPRA">Requerimiento Compra</option>
+                                        <option value="REQUERIMIENTO ALQUILER">Requerimiento Alquiler</option>
+                                        <option value="REQUERIMIENTO COMPRA, REQUERIMIENTO ALQUILER">Req. Compra + Alquiler</option>
+                                        <option value="REQUERIMIENTO ALQUILER, REQUERIMIENTO COMPRA">Req. Alquiler + Compra</option>
+                                        <option value="PROPIEDAD VENTA">Propiedad en Venta</option>
+                                        <option value="MIXTO">Mixto</option>
+                                        <option value="BASURA">Basura / Irrelevante</option>
+                                        <option value="OTRO">Otro</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
+                        <!-- ── COLUMNA DERECHA ── -->
                         <div>
+                            <!-- Presupuesto -->
                             <div class="modal-field-group">
                                 <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Presupuesto</label>
-                                <div id="modalPresupuesto" style="color: #d29922; font-weight: 600; font-size: 16px;">—</div>
-                                <div id="modalFormaPago" style="color: #8b949e; font-size: 12px;"></div>
+                                <div class="field-view" id="modalPresupuesto" style="color: #d29922; font-weight: 600; font-size: 16px;">—</div>
+                                <div class="field-view" id="modalFormaPago" style="color: #8b949e; font-size: 12px;"></div>
+                                <div class="field-edit" style="display: none;">
+                                    <div style="display: flex; gap: 4px;">
+                                        <input type="number" id="editPresupuestoMonto" class="form-control form-control-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; flex: 1;" placeholder="Monto">
+                                        <select id="editPresupuestoMoneda" class="form-select form-select-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 90px;">
+                                            <option value="USD">USD $</option>
+                                            <option value="PEN">Soles S/</option>
+                                            <option value="no_especificado">—</option>
+                                        </select>
+                                    </div>
+                                    <select id="editFormaPago" class="form-select form-select-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 100%; margin-top: 4px;">
+                                        <option value="contado">Al Contado</option>
+                                        <option value="financiado">Financiado / Crédito</option>
+                                        <option value="no_especificado">No Especificado</option>
+                                    </select>
+                                </div>
                             </div>
+                            <!-- Habitaciones / Baños -->
                             <div class="modal-field-group" style="margin-top: 12px;">
                                 <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Habitaciones / Baños</label>
-                                <div id="modalHabBanos" style="color: #c9d1d9; font-size: 13px;">—</div>
+                                <div class="field-view" id="modalHabBanos" style="color: #c9d1d9; font-size: 13px;">—</div>
+                                <div class="field-edit" style="display: none;">
+                                    <div style="display: flex; gap: 4px;">
+                                        <input type="number" id="editHabitaciones" class="form-control form-control-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 50%;" placeholder="Habs" min="0">
+                                        <input type="number" id="editBanos" class="form-control form-control-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 50%;" placeholder="Baños" min="0">
+                                    </div>
+                                </div>
                             </div>
+                            <!-- Área -->
                             <div class="modal-field-group" style="margin-top: 12px;">
                                 <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Área (m²)</label>
-                                <div id="modalArea" style="color: #39b2ac; font-size: 13px;">—</div>
+                                <div class="field-view" id="modalArea" style="color: #39b2ac; font-size: 13px;">—</div>
+                                <div class="field-edit" style="display: none;">
+                                    <input type="number" id="editArea" class="form-control form-control-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 100%;" placeholder="m²" min="0">
+                                </div>
                             </div>
+                            <!-- Piso Preferencia -->
                             <div class="modal-field-group" style="margin-top: 12px;">
                                 <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Piso Preferencia</label>
-                                <div id="modalPiso" style="color: #c9d1d9; font-size: 13px;">—</div>
+                                <div class="field-view" id="modalPiso" style="color: #c9d1d9; font-size: 13px;">—</div>
+                                <div class="field-edit" style="display: none;">
+                                    <input type="text" id="editPiso" class="form-control form-control-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 100%;" placeholder="Ej: primer piso, piso 5+">
+                                </div>
                             </div>
+                            <!-- Extras -->
                             <div class="modal-field-group" style="margin-top: 12px;">
                                 <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Extras</label>
-                                <div id="modalExtras" style="font-size: 13px;">
+                                <div class="field-view" id="modalExtras" style="font-size: 13px;">
                                     <span id="modalCochera" class="badge" style="margin-right: 4px;"></span>
                                     <span id="modalAscensor" class="badge" style="margin-right: 4px;"></span>
                                     <span id="modalAmueblado" class="badge"></span>
                                 </div>
+                                <div class="field-edit" style="display: none;">
+                                    <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                                        <select id="editCochera" class="form-select form-select-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 2px 6px; font-size: 12px; flex: 1;">
+                                            <option value="si">🚗 Cochera: Sí</option>
+                                            <option value="no">🚗 Cochera: No</option>
+                                            <option value="indiferente">🚗 Cochera: Indiferente</option>
+                                        </select>
+                                        <select id="editAscensor" class="form-select form-select-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 2px 6px; font-size: 12px; flex: 1;">
+                                            <option value="si">🛗 Ascensor: Sí</option>
+                                            <option value="no">🛗 Ascensor: No</option>
+                                            <option value="indiferente">🛗 Ascensor: Indiferente</option>
+                                        </select>
+                                        <select id="editAmueblado" class="form-select form-select-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 2px 6px; font-size: 12px; flex: 1;">
+                                            <option value="si">🛋️ Amueblado: Sí</option>
+                                            <option value="no">🛋️ Amueblado: No</option>
+                                            <option value="indiferente">🛋️ Amueblado: Indiferente</option>
+                                        </select>
+                                    </div>
+                                </div>
                             </div>
+                            <!-- Características -->
                             <div class="modal-field-group" style="margin-top: 12px;">
                                 <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Características</label>
-                                <div id="modalCaracteristicas" style="color: #c9d1d9; font-size: 13px;">—</div>
+                                <div class="field-view" id="modalCaracteristicas" style="color: #c9d1d9; font-size: 13px;">—</div>
+                                <div class="field-edit" style="display: none;">
+                                    <input type="text" id="editCaracteristicas" class="form-control form-control-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 100%;" placeholder="Ej: balcón, jardín, URGENTE">
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1149,7 +1273,10 @@
                         <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; display: block; margin-bottom: 8px;">
                             <i class="bi bi-chat-dots me-1"></i>Mensaje Original
                         </label>
-                        <div id="modalMensaje" style="background-color: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 12px 16px; color: #c9d1d9; font-size: 13px; line-height: 1.6; white-space: pre-wrap; max-height: 200px; overflow-y: auto;">—</div>
+                        <div class="field-view" id="modalMensaje" style="background-color: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 12px 16px; color: #c9d1d9; font-size: 13px; line-height: 1.6; white-space: pre-wrap; max-height: 200px; overflow-y: auto;">—</div>
+                        <div class="field-edit" style="display: none;">
+                            <textarea id="editMensaje" class="form-control edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 6px; padding: 12px 16px; font-size: 13px; line-height: 1.6; width: 100%; min-height: 120px; resize: vertical;" placeholder="Mensaje original completo..."></textarea>
+                        </div>
                     </div>
                     <div style="margin-top: 12px; display: flex; gap: 16px; font-size: 11px; color: #484f58;">
                         <span>Creado: <span id="modalCreado">—</span></span>
@@ -1157,8 +1284,21 @@
                     </div>
                 </div>
             </div>
-            <div class="modal-footer" style="border-top: 1px solid #30363d; padding: 12px 20px;">
-                <button type="button" class="btn" style="background-color: #30363d; color: #c9d1d9; border: none; padding: 8px 20px; border-radius: 6px; font-size: 13px;" data-bs-dismiss="modal">Cerrar</button>
+            <div class="modal-footer" style="border-top: 1px solid #30363d; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <button type="button" class="btn" style="background-color: #30363d; color: #c9d1d9; border: none; padding: 8px 20px; border-radius: 6px; font-size: 13px;" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+                <div id="modalEditActions" style="display: none;">
+                    <button type="button" id="btnCancelarEdicion" class="btn" style="background-color: #30363d; color: #c9d1d9; border: none; padding: 8px 20px; border-radius: 6px; font-size: 13px; margin-right: 8px;">Cancelar</button>
+                    <button type="button" id="btnGuardarEdicion" class="btn" style="background-color: #238636; color: #ffffff; border: none; padding: 8px 20px; border-radius: 6px; font-size: 13px; font-weight: 600;">
+                        <i class="bi bi-check2 me-1"></i>Guardar
+                    </button>
+                </div>
+                <div id="modalViewActions">
+                    <button type="button" id="btnEditarRequerimiento" class="btn" style="background-color: #1f6feb; color: #ffffff; border: none; padding: 8px 20px; border-radius: 6px; font-size: 13px; font-weight: 600;">
+                        <i class="bi bi-pencil me-1"></i>Editar
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -1173,100 +1313,427 @@
 </style>
 
 <script>
-// ── Modal de detalle del requerimiento ────────
+// ── Variables globales del modal ──────────────
+let modalRequerimientoActual = null;  // guarda el botón data actual
+let modalEditando = false;
+
+// ── Poblar campos de edición desde data ──────
+function poblarCamposEdicion(d) {
+    document.getElementById('editAgente').value = d.agente || '';
+    document.getElementById('editAgenteTelefono').value = d.agenteTelefono || '';
+    document.getElementById('editFuente').value = d.fuente || 'otro';
+    document.getElementById('editCondicion').value = d.condicion || 'no_especificado';
+    document.getElementById('editTipoPropiedad').value = d.tipoPropiedad || 'no_especificado';
+    document.getElementById('editDistritos').value = d.distritos || '';
+    document.getElementById('editTipoOriginal').value = d.tipoOriginal || 'OTRO';
+    document.getElementById('editPresupuestoMonto').value = d.presupuestoMonto || '';
+    document.getElementById('editPresupuestoMoneda').value = d.presupuestoMoneda || 'no_especificado';
+    document.getElementById('editFormaPago').value = d.formaPago || 'no_especificado';
+    document.getElementById('editHabitaciones').value = d.habitaciones || '';
+    document.getElementById('editBanos').value = d.banos || '';
+    document.getElementById('editArea').value = d.areaM2 || '';
+    document.getElementById('editPiso').value = d.pisoPreferencia || '';
+    document.getElementById('editCochera').value = d.cochera || 'indiferente';
+    document.getElementById('editAscensor').value = d.ascensor || 'indiferente';
+    document.getElementById('editAmueblado').value = d.amueblado || 'indiferente';
+    document.getElementById('editCaracteristicas').value = d.caracteristicas || '';
+    document.getElementById('editMensaje').value = d.mensaje || '';
+    document.getElementById('editVerificado').value = d.verificado === 'si' ? 'true' : 'false';
+}
+
+// ── Sincronizar inputs de edición desde elementos .field-view ──
+// Garantiza que los inputs tengan los mismos valores que se muestran en vista
+function sincronizarEditDesdeVista() {
+    // Helper: obtener texto limpio de un field-view
+    function viewText(id) {
+        var el = document.getElementById(id);
+        return el ? (el.textContent || '').trim() : '';
+    }
+
+    // Agente
+    var agenteTxt = viewText('modalAgente');
+    if (agenteTxt && agenteTxt !== '—') document.getElementById('editAgente').value = agenteTxt;
+
+    // Teléfono: "📞 999888777" → "999888777"
+    var telTxt = viewText('modalAgenteTelefono');
+    if (telTxt) document.getElementById('editAgenteTelefono').value = telTxt.replace('📞 ', '');
+
+    // Fuente
+    var fuenteTxt = viewText('modalFuente');
+    if (fuenteTxt && fuenteTxt !== '—') document.getElementById('editFuente').value = fuenteTxt;
+
+    // Distritos
+    var distTxt = viewText('modalDistritos');
+    if (distTxt && distTxt !== '—') document.getElementById('editDistritos').value = distTxt;
+
+    // Presupuesto: "S/ 250,000" o "$ 500,000" → "250000" o "500000"
+    var presTxt = viewText('modalPresupuesto');
+    if (presTxt && presTxt !== '—') {
+        var match = presTxt.match(/[\d,.]+/);
+        if (match) document.getElementById('editPresupuestoMonto').value = match[0].replace(/,/g, '');
+    }
+
+    // Área: "150 m²" → "150"
+    var areaTxt = viewText('modalArea');
+    if (areaTxt && areaTxt !== '—') {
+        var aMatch = areaTxt.match(/^[\d,.]+/);
+        if (aMatch) document.getElementById('editArea').value = aMatch[0].replace(/,/g, '');
+    }
+
+    // Pisos / Hab / Baños: texto plano
+    var pisoTxt = viewText('modalPiso');
+    if (pisoTxt && pisoTxt !== '—') document.getElementById('editPiso').value = pisoTxt;
+
+    // Habitaciones y Baños: "3 hab. / 2 baños" → extraer
+    var habBanosTxt = viewText('modalHabBanos');
+    if (habBanosTxt && habBanosTxt !== '—') {
+        var habMatch = habBanosTxt.match(/(\d+)\s*hab/);
+        if (habMatch) document.getElementById('editHabitaciones').value = habMatch[1];
+        var banMatch = habBanosTxt.match(/(\d+)\s*baños/);
+        if (banMatch) document.getElementById('editBanos').value = banMatch[1];
+    }
+
+    // Características
+    var caracTxt = viewText('modalCaracteristicas');
+    if (caracTxt && caracTxt !== '—') document.getElementById('editCaracteristicas').value = caracTxt;
+
+    // Mensaje
+    var msgTxt = viewText('modalMensaje');
+    if (msgTxt && msgTxt !== '—') document.getElementById('editMensaje').value = msgTxt;
+
+    // Verificado
+    var verifTxt = viewText('modalVerificadoBadge');
+    document.getElementById('editVerificado').value = (verifTxt && verifTxt.includes('VERIFICADO')) ? 'true' : 'false';
+}
+
+// ── Alternar modo vista ↔ edición ────────────
+function toggleModoEdicion(activar) {
+    const views = document.querySelectorAll('#modalDetalleRequerimiento .field-view');
+    const edits = document.querySelectorAll('#modalDetalleRequerimiento .field-edit');
+    const viewActions = document.getElementById('modalViewActions');
+    const editActions = document.getElementById('modalEditActions');
+    
+    views.forEach(el => { el.style.display = activar ? 'none' : ''; });
+    edits.forEach(el => { el.style.display = activar ? '' : 'none'; });
+    viewActions.style.display = activar ? 'none' : '';
+    editActions.style.display = activar ? '' : 'none';
+    
+    modalEditando = activar;
+}
+
+// ── Actualizar campos de vista desde data ────
+function actualizarVista(d) {
+    const verifBadge = document.getElementById('modalVerificadoBadge');
+    if (d.verificado === 'si') {
+        verifBadge.textContent = '✓ VERIFICADO';
+        verifBadge.style.backgroundColor = 'rgba(0, 255, 65, 0.1)';
+        verifBadge.style.color = '#00ff41';
+        verifBadge.style.border = '1px solid rgba(0, 255, 65, 0.3)';
+    } else {
+        verifBadge.textContent = '✗ NO VERIFICADO';
+        verifBadge.style.backgroundColor = 'rgba(255, 23, 68, 0.1)';
+        verifBadge.style.color = '#ff1744';
+        verifBadge.style.border = '1px solid rgba(255, 23, 68, 0.3)';
+    }
+    document.getElementById('modalAgente').textContent = d.agente || '—';
+    document.getElementById('modalAgenteTelefono').textContent = d.agenteTelefono ? '📞 ' + d.agenteTelefono : '';
+    document.getElementById('modalFuente').textContent = d.fuente || '—';
+    let fechaStr = d.fecha || '—';
+    if (d.hora) fechaStr += ' ' + d.hora;
+    document.getElementById('modalFecha').textContent = fechaStr;
+    
+    const condEl = document.getElementById('modalCondicion');
+    const condText = d.condicion || '—';
+    let condBadge = condText, condColor = '#8b949e';
+    if (condText === 'compra') { condBadge = 'Compra'; condColor = '#58a6ff'; }
+    else if (condText === 'alquiler') { condBadge = 'Alquiler'; condColor = '#d29922'; }
+    else if (condText === 'ambos') { condBadge = 'Compra y Alquiler'; condColor = '#8957e5'; }
+    condEl.innerHTML = '<span class="badge" style="background-color: ' + condColor + '22; color: ' + condColor + '; border: 1px solid ' + condColor + '44; padding: 3px 10px; border-radius: 4px; font-size: 12px;">' + condBadge + '</span>';
+    
+    const tipoEl = document.getElementById('modalTipoPropiedad');
+    const tipoText = d.tipoPropiedad || '—';
+    let tipoBadge = tipoText, tipoColor = '#8b949e';
+    if (tipoText === 'departamento') { tipoBadge = 'Departamento'; tipoColor = '#58a6ff'; }
+    else if (tipoText === 'casa') { tipoBadge = 'Casa'; tipoColor = '#3fb950'; }
+    else if (tipoText === 'terreno') { tipoBadge = 'Terreno'; tipoColor = '#d29922'; }
+    else if (tipoText === 'local_comercial') { tipoBadge = 'Local Comercial'; tipoColor = '#8957e5'; }
+    else if (tipoText === 'oficina') { tipoBadge = 'Oficina'; tipoColor = '#39b2ac'; }
+    tipoEl.innerHTML = '<span class="badge" style="background-color: ' + tipoColor + '22; color: ' + tipoColor + '; border: 1px solid ' + tipoColor + '44; padding: 3px 10px; border-radius: 4px; font-size: 12px;">' + tipoBadge + '</span>';
+    
+    document.getElementById('modalDistritos').textContent = d.distritos || '—';
+    
+    const toEl = document.getElementById('modalTipoOriginal');
+    const toText = d.tipoOriginal || '—';
+    let toBadge = toText, toColor = '#8b949e';
+    if (toText.includes('BASURA')) { toBadge = 'Basura'; toColor = '#f85149'; }
+    else if (toText.includes('REQUERIMIENTO')) { toBadge = 'Requerimiento'; toColor = '#3fb950'; }
+    else if (toText.includes('PROPIEDAD')) { toBadge = 'Propiedad'; toColor = '#58a6ff'; }
+    toEl.innerHTML = '<span class="badge" style="background-color: ' + toColor + '22; color: ' + toColor + '; border: 1px solid ' + toColor + '44; padding: 3px 10px; border-radius: 4px; font-size: 12px;">' + toBadge + '</span>';
+    
+    const monto = d.presupuestoMonto;
+    const moneda = d.presupuestoMoneda;
+    if (monto) {
+        const simbolo = moneda === 'USD' ? '$' : 'S/';
+        const formatted = parseFloat(monto).toLocaleString('es-PE', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+        document.getElementById('modalPresupuesto').textContent = simbolo + ' ' + formatted;
+    } else {
+        document.getElementById('modalPresupuesto').textContent = '—';
+    }
+    const fpEl = document.getElementById('modalFormaPago');
+    const fpText = d.formaPago || '';
+    if (fpText && fpText !== 'no_especificado') {
+        fpEl.textContent = 'Forma de pago: ' + fpText.charAt(0).toUpperCase() + fpText.slice(1);
+    } else {
+        fpEl.textContent = '';
+    }
+    
+    const habs = d.habitaciones || '—';
+    const banos = d.banos || '—';
+    document.getElementById('modalHabBanos').textContent = habs + ' hab. / ' + banos + ' baños';
+    document.getElementById('modalArea').textContent = d.areaM2 ? d.areaM2 + ' m²' : '—';
+    document.getElementById('modalPiso').textContent = d.pisoPreferencia || '—';
+    
+    function renderExtraBadge(elId, value, label) {
+        const el = document.getElementById(elId);
+        if (value === 'si') {
+            el.textContent = label;
+            el.style.display = 'inline-block';
+            el.style.backgroundColor = 'rgba(35, 134, 54, 0.2)';
+            el.style.color = '#3fb950';
+            el.style.border = '1px solid rgba(35, 134, 54, 0.3)';
+        } else {
+            el.style.display = 'none';
+        }
+    }
+    renderExtraBadge('modalCochera', d.cochera, '🚗 Cochera');
+    renderExtraBadge('modalAscensor', d.ascensor, '🛗 Ascensor');
+    renderExtraBadge('modalAmueblado', d.amueblado, '🛋️ Amueblado');
+    
+    document.getElementById('modalCaracteristicas').textContent = d.caracteristicas || '—';
+    document.getElementById('modalMensaje').textContent = d.mensaje || '—';
+    document.getElementById('modalCreado').textContent = d.creado || '—';
+    document.getElementById('modalActualizado').textContent = d.actualizado || '—';
+}
+
+// ── Inicializar modal ─────────────────────────
 document.addEventListener('DOMContentLoaded', function() {
     const modal = document.getElementById('modalDetalleRequerimiento');
+    
+    // Al hacer clic en "Ver"
     document.querySelectorAll('.ver-detalle-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             const d = this.dataset;
+            modalRequerimientoActual = d;
+            
+            // Reset a modo vista
+            toggleModoEdicion(false);
+            
+            // Poblar campos de edición
+            poblarCamposEdicion(d);
+            
+            // Actualizar vista
+            actualizarVista(d);
+            
             document.getElementById('modalReqPk').textContent = d.pk;
-            const verifBadge = document.getElementById('modalVerificadoBadge');
-            if (d.verificado === 'si') {
-                verifBadge.textContent = '✓ VERIFICADO';
-                verifBadge.style.backgroundColor = 'rgba(0, 255, 65, 0.1)';
-                verifBadge.style.color = '#00ff41';
-                verifBadge.style.border = '1px solid rgba(0, 255, 65, 0.3)';
-            } else {
-                verifBadge.textContent = '✗ NO VERIFICADO';
-                verifBadge.style.backgroundColor = 'rgba(255, 23, 68, 0.1)';
-                verifBadge.style.color = '#ff1744';
-                verifBadge.style.border = '1px solid rgba(255, 23, 68, 0.3)';
-            }
-            document.getElementById('modalAgente').textContent = d.agente || '—';
-            document.getElementById('modalAgenteTelefono').textContent = d.agenteTelefono ? '📞 ' + d.agenteTelefono : '';
-            document.getElementById('modalFuente').textContent = d.fuente || '—';
-            let fechaStr = d.fecha || '—';
-            if (d.hora) fechaStr += ' ' + d.hora;
-            document.getElementById('modalFecha').textContent = fechaStr;
-            const condEl = document.getElementById('modalCondicion');
-            const condText = d.condicion || '—';
-            let condBadge = condText, condColor = '#8b949e';
-            if (condText === 'compra') { condBadge = 'Compra'; condColor = '#58a6ff'; }
-            else if (condText === 'alquiler') { condBadge = 'Alquiler'; condColor = '#d29922'; }
-            else if (condText === 'ambos') { condBadge = 'Compra y Alquiler'; condColor = '#8957e5'; }
-            condEl.innerHTML = '<span class="badge" style="background-color: ' + condColor + '22; color: ' + condColor + '; border: 1px solid ' + condColor + '44; padding: 3px 10px; border-radius: 4px; font-size: 12px;">' + condBadge + '</span>';
-            const tipoEl = document.getElementById('modalTipoPropiedad');
-            const tipoText = d.tipoPropiedad || '—';
-            let tipoBadge = tipoText, tipoColor = '#8b949e';
-            if (tipoText === 'departamento') { tipoBadge = 'Departamento'; tipoColor = '#58a6ff'; }
-            else if (tipoText === 'casa') { tipoBadge = 'Casa'; tipoColor = '#3fb950'; }
-            else if (tipoText === 'terreno') { tipoBadge = 'Terreno'; tipoColor = '#d29922'; }
-            else if (tipoText === 'local_comercial') { tipoBadge = 'Local Comercial'; tipoColor = '#8957e5'; }
-            else if (tipoText === 'oficina') { tipoBadge = 'Oficina'; tipoColor = '#39b2ac'; }
-            tipoEl.innerHTML = '<span class="badge" style="background-color: ' + tipoColor + '22; color: ' + tipoColor + '; border: 1px solid ' + tipoColor + '44; padding: 3px 10px; border-radius: 4px; font-size: 12px;">' + tipoBadge + '</span>';
-            document.getElementById('modalDistritos').textContent = d.distritos || '—';
-            const toEl = document.getElementById('modalTipoOriginal');
-            const toText = d.tipoOriginal || '—';
-            let toBadge = toText, toColor = '#8b949e';
-            if (toText.includes('BASURA')) { toBadge = 'Basura'; toColor = '#f85149'; }
-            else if (toText.includes('REQUERIMIENTO')) { toBadge = 'Requerimiento'; toColor = '#3fb950'; }
-            else if (toText.includes('PROPIEDAD')) { toBadge = 'Propiedad'; toColor = '#58a6ff'; }
-            toEl.innerHTML = '<span class="badge" style="background-color: ' + toColor + '22; color: ' + toColor + '; border: 1px solid ' + toColor + '44; padding: 3px 10px; border-radius: 4px; font-size: 12px;">' + toBadge + '</span>';
-            const monto = d.presupuestoMonto;
-            const moneda = d.presupuestoMoneda;
-            if (monto) {
-                const simbolo = moneda === 'USD' ? '$' : 'S/';
-                const formatted = parseFloat(monto).toLocaleString('es-PE', {minimumFractionDigits: 0, maximumFractionDigits: 0});
-                document.getElementById('modalPresupuesto').textContent = simbolo + ' ' + formatted;
-            } else {
-                document.getElementById('modalPresupuesto').textContent = '—';
-            }
-            const fpEl = document.getElementById('modalFormaPago');
-            const fpText = d.formaPago || '';
-            if (fpText && fpText !== 'no_especificado') {
-                fpEl.textContent = 'Forma de pago: ' + fpText.charAt(0).toUpperCase() + fpText.slice(1);
-            } else {
-                fpEl.textContent = '';
-            }
-            const habs = d.habitaciones || '—';
-            const banos = d.banos || '—';
-            document.getElementById('modalHabBanos').textContent = habs + ' hab. / ' + banos + ' baños';
-            document.getElementById('modalArea').textContent = d.areaM2 ? d.areaM2 + ' m²' : '—';
-            document.getElementById('modalPiso').textContent = d.pisoPreferencia || '—';
-            function renderExtraBadge(elId, value, label) {
-                const el = document.getElementById(elId);
-                if (value === 'si') {
-                    el.textContent = label;
-                    el.style.display = 'inline-block';
-                    el.style.backgroundColor = 'rgba(35, 134, 54, 0.2)';
-                    el.style.color = '#3fb950';
-                    el.style.border = '1px solid rgba(35, 134, 54, 0.3)';
-                } else {
-                    el.style.display = 'none';
-                }
-            }
-            renderExtraBadge('modalCochera', d.cochera, '🚗 Cochera');
-            renderExtraBadge('modalAscensor', d.ascensor, '🛗 Ascensor');
-            renderExtraBadge('modalAmueblado', d.amueblado, '🛋️ Amueblado');
-            document.getElementById('modalCaracteristicas').textContent = d.caracteristicas || '—';
-            document.getElementById('modalMensaje').textContent = d.mensaje || '—';
-            document.getElementById('modalCreado').textContent = d.creado || '—';
-            document.getElementById('modalActualizado').textContent = d.actualizado || '—';
+            
             const bsModal = new bootstrap.Modal(modal);
             bsModal.show();
         });
     });
+    
+    // ── Botón Editar ──────────────────────────
+    document.getElementById('btnEditarRequerimiento').addEventListener('click', function() {
+        if (!modalRequerimientoActual) return;
+        // Sincronizar inputs desde los elementos .field-view (que siempre muestran
+        // los datos correctos) antes de mostrar los inputs de edición.
+        // Esto garantiza que ningún campo aparezca vacío aunque el dataset
+        // esté desincronizado.
+        sincronizarEditDesdeVista();
+        toggleModoEdicion(true);
+    });
+    
+    // ── Botón Cancelar ────────────────────────
+    document.getElementById('btnCancelarEdicion').addEventListener('click', function() {
+        toggleModoEdicion(false);
+    });
+    
+    // ── Botón Guardar ─────────────────────────
+    document.getElementById('btnGuardarEdicion').addEventListener('click', function() {
+        if (!modalRequerimientoActual) return;
+        
+        const pk = modalRequerimientoActual.pk;
+        const d = modalRequerimientoActual; // dataset original del botón
+        const data = { pk: parseInt(pk) };
+        
+        // Helper: usar valor del input, o del dataset, o del elemento .field-view
+        // como último recurso antes del fallback. Así NUNCA se pierde un valor
+        // que esté visible en la vista aunque el input o dataset estén vacíos.
+        function val(inputId, datasetKey, fallback, viewId, viewTransform) {
+            var el = document.getElementById(inputId);
+            var inputVal = el ? el.value : '';
+            if (inputVal && inputVal.trim() !== '') return inputVal.trim();
+            
+            var dsVal = d[datasetKey];
+            if (dsVal && dsVal !== '') return dsVal;
+            
+            // Último recurso: extraer del elemento .field-view mostrado
+            if (viewId) {
+                var viewEl = document.getElementById(viewId);
+                if (viewEl) {
+                    var txt = (viewEl.textContent || '').trim();
+                    if (txt && txt !== '—') {
+                        if (viewTransform) return viewTransform(txt);
+                        return txt;
+                    }
+                }
+            }
+            
+            return fallback;
+        }
+        
+        // Transformaciones para extraer valores de texto formateado
+        function extraerNumero(txt) {
+            var m = txt.match(/[\d,.]+/);
+            return m ? m[0].replace(/,/g, '') : '';
+        }
+        function limpiarTelefono(txt) {
+            return txt.replace('📞 ', '');
+        }
+        function extraerArea(txt) {
+            var m = txt.match(/^[\d,.]+/);
+            return m ? m[0].replace(/,/g, '') : '';
+        }
+        function extraerHabs(txt) {
+            var m = txt.match(/(\d+)\s*hab/);
+            return m ? m[1] : '';
+        }
+        function extraerBanos(txt) {
+            var m = txt.match(/(\d+)\s*baños/);
+            return m ? m[1] : '';
+        }
+        
+        // Recolectar todos los campos editables con triple fallback:
+        // input → dataset → .field-view
+        data.agente = val('editAgente', 'agente', '', 'modalAgente');
+        data.agente_telefono = val('editAgenteTelefono', 'agenteTelefono', '', 'modalAgenteTelefono', limpiarTelefono);
+        data.fuente = val('editFuente', 'fuente', 'otro', 'modalFuente');
+        data.condicion = val('editCondicion', 'condicion', 'no_especificado');
+        data.tipo_propiedad = val('editTipoPropiedad', 'tipoPropiedad', 'no_especificado');
+        data.distritos = val('editDistritos', 'distritos', '', 'modalDistritos');
+        data.tipo_original = val('editTipoOriginal', 'tipoOriginal', 'OTRO');
+        data.presupuesto_monto = val('editPresupuestoMonto', 'presupuestoMonto', '', 'modalPresupuesto', extraerNumero);
+        data.presupuesto_moneda = val('editPresupuestoMoneda', 'presupuestoMoneda', 'no_especificado');
+        data.presupuesto_forma_pago = val('editFormaPago', 'formaPago', 'no_especificado');
+        data.habitaciones = val('editHabitaciones', 'habitaciones', '', 'modalHabBanos', extraerHabs);
+        data.banos = val('editBanos', 'banos', '', 'modalHabBanos', extraerBanos);
+        data.area_m2 = val('editArea', 'areaM2', '', 'modalArea', extraerArea);
+        data.piso_preferencia = val('editPiso', 'pisoPreferencia', '', 'modalPiso');
+        data.cochera = val('editCochera', 'cochera', 'indiferente');
+        data.ascensor = val('editAscensor', 'ascensor', 'indiferente');
+        data.amueblado = val('editAmueblado', 'amueblado', 'indiferente');
+        data.caracteristicas_extra = val('editCaracteristicas', 'caracteristicas', '', 'modalCaracteristicas');
+        data.requerimiento = val('editMensaje', 'mensaje', '', 'modalMensaje');
+        data.verificado = document.getElementById('editVerificado').value === 'true';
+        
+        // Deshabilitar botón mientras guarda
+        const btnGuardar = document.getElementById('btnGuardarEdicion');
+        btnGuardar.disabled = true;
+        btnGuardar.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>Guardando...';
+        
+        fetch('{% url "requerimientos:editar" %}', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data)
+        })
+        .then(r => r.json())
+        .then(resp => {
+            if (resp.ok) {
+                // Actualizar modalRequerimientoActual con nuevos valores
+                modalRequerimientoActual.agente = data.agente;
+                modalRequerimientoActual.agenteTelefono = data.agente_telefono;
+                modalRequerimientoActual.fuente = data.fuente;
+                modalRequerimientoActual.condicion = data.condicion;
+                modalRequerimientoActual.tipoPropiedad = data.tipo_propiedad;
+                modalRequerimientoActual.distritos = data.distritos;
+                modalRequerimientoActual.tipoOriginal = data.tipo_original;
+                modalRequerimientoActual.presupuestoMonto = data.presupuesto_monto;
+                modalRequerimientoActual.presupuestoMoneda = data.presupuesto_moneda;
+                modalRequerimientoActual.formaPago = data.presupuesto_forma_pago;
+                modalRequerimientoActual.habitaciones = data.habitaciones;
+                modalRequerimientoActual.banos = data.banos;
+                modalRequerimientoActual.areaM2 = data.area_m2;
+                modalRequerimientoActual.pisoPreferencia = data.piso_preferencia;
+                modalRequerimientoActual.cochera = data.cochera;
+                modalRequerimientoActual.ascensor = data.ascensor;
+                modalRequerimientoActual.amueblado = data.amueblado;
+                modalRequerimientoActual.caracteristicas = data.caracteristicas_extra;
+                modalRequerimientoActual.mensaje = data.requerimiento;
+                modalRequerimientoActual.verificado = data.verificado ? 'si' : 'no';
+                
+                // Actualizar la fila de la tabla (data-attributes del botón)
+                const btnOriginal = document.querySelector(`.ver-detalle-btn[data-pk="${pk}"]`);
+                if (btnOriginal) {
+                    Object.keys(modalRequerimientoActual).forEach(key => {
+                        btnOriginal.dataset[key] = modalRequerimientoActual[key];
+                    });
+                }
+                
+                // Actualizar badge de verificado en la tabla
+                const verifSpan = document.querySelector(`.badge-verificado[data-pk="${pk}"]`);
+                if (verifSpan) {
+                    if (data.verificado) {
+                        verifSpan.className = 'badge-verificado verificado-si';
+                        verifSpan.textContent = '✓ VERIFICADO';
+                        verifSpan.title = '✓ Verificado — Haz clic para desmarcar';
+                    } else {
+                        verifSpan.className = 'badge-verificado verificado-no';
+                        verifSpan.textContent = '✗ NO VERIF.';
+                        verifSpan.title = '✗ No revisado — Haz clic para marcar como verificado';
+                    }
+                }
+                
+                // Actualizar vista del modal
+                actualizarVista(modalRequerimientoActual);
+                
+                // Volver a modo vista
+                toggleModoEdicion(false);
+                
+                // Mostrar toast de éxito
+                mostrarToastEdicion('success', 'Requerimiento actualizado correctamente');
+            } else {
+                mostrarToastEdicion('error', 'Error: ' + (resp.error || 'No se pudo guardar'));
+            }
+        })
+        .catch(err => {
+            console.error('Error al guardar:', err);
+            mostrarToastEdicion('error', 'Error de conexión al guardar');
+        })
+        .finally(() => {
+            btnGuardar.disabled = false;
+            btnGuardar.innerHTML = '<i class="bi bi-check2 me-1"></i>Guardar';
+        });
+    });
 });
+
+// ── Toast para feedback de edición ───────────
+function mostrarToastEdicion(tipo, mensaje) {
+    const toastContainer = document.getElementById('toastContainer');
+    if (!toastContainer) {
+        const container = document.createElement('div');
+        container.id = 'toastContainer';
+        container.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px;';
+        document.body.appendChild(container);
+    }
+    const bgColor = tipo === 'success' ? '#238636' : '#da3633';
+    const toast = document.createElement('div');
+    toast.style.cssText = 'background-color: ' + bgColor + '; color: #fff; padding: 12px 20px; border-radius: 6px; font-size: 13px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); animation: fadeIn 0.2s ease;';
+    toast.textContent = mensaje;
+    document.getElementById('toastContainer').appendChild(toast);
+    setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; setTimeout(() => toast.remove(), 300); }, 3000);
+}
 
 // ── Toggle verificado (AJAX) ─────────────────
 function toggleVerificado(pk, el) {
@@ -1304,6 +1771,7 @@ function toggleVerificado(pk, el) {
         alert('Error de conexión al toggle verificado');
     });
 }
+
 
 // Toggle filters visibility
 function toggleFilters() {

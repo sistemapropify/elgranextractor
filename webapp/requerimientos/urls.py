@@ -6,6 +6,10 @@ app_name = 'requerimientos'
 urlpatterns = [
     # Lista de requerimientos
     path('lista/', views.ListaRequerimientosView.as_view(), name='lista'),
+    path('toggle-verificado/', views.ToggleVerificadoView.as_view(), name='toggle_verificado'),
+    
+    # Editar requerimiento (AJAX)
+    path('editar/', views.EditarRequerimientoView.as_view(), name='editar'),
     
     # Detalle de requerimiento
     path('detalle/<int:pk>/', views.DetalleRequerimientoView.as_view(), name='detalle'),

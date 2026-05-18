@@ -211,6 +211,13 @@ class Requerimiento(models.Model):
         help_text='Mensaje completo tal como fue publicado en el grupo de WhatsApp',
     )
 
+    # ── Verificación / Revisión ────────────────
+    verificado = models.BooleanField(
+        default=False,
+        verbose_name='Verificado',
+        help_text='Marcar como TRUE cuando el requerimiento haya sido revisado manualmente',
+    )
+
     # ── Auditoría ─────────────────────────────
     creado_en = models.DateTimeField(
         auto_now_add=True,

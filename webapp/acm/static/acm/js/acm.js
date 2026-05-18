@@ -402,7 +402,13 @@ function crearMarcadorComparable(propiedad) {
 // Toggle selección de propiedad
 function toggleSeleccionarPropiedad(id) {
     const marcadorInfo = marcadoresComparables.get(id);
-    if (!marcadorInfo) return;
+    if (!marcadorInfo) {
+        console.warn(`⚠️ DEBUG ACM: toggleSeleccionarPropiedad(${id}) — NO ENCONTRADO en marcadoresComparables`);
+        console.warn(`   Claves en marcadoresComparables:`, Array.from(marcadoresComparables.keys()));
+        return;
+    }
+    console.log(`🔍 DEBUG ACM: toggleSeleccionarPropiedad(id=${id}, fuente=${marcadorInfo.data.fuente}, seleccionado_actual=${marcadorInfo.seleccionado})`);
+    console.log(`   propiedadesSeleccionadas tiene ${propiedadesSeleccionadas.size} elementos:`, Array.from(propiedadesSeleccionadas.keys()));
 
     // Determinar tamaño del icono según si es Propifai
     const tamanoIcono = marcadorInfo.tamanoIcono || 32;

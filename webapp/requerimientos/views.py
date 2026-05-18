@@ -1,10 +1,22 @@
-from django.views.generic import ListView, DetailView, RedirectView, TemplateView
+from django.views.generic import ListView, DetailView, RedirectView, TemplateView, View
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.utils import timezone
-from datetime import timedelta
+from django.db import models
+from datetime import timedelta, datetime
 import json
-from .models import Requerimiento, FuenteChoices, CondicionChoices, TipoPropiedadChoices
+from .models import (
+    Requerimiento,
+    FuenteChoices,
+    CondicionChoices,
+    TipoPropiedadChoices,
+    MonedaChoices,
+    FormaPagoChoices,
+    TernarioChoices,
+    TipoOriginalChoices,
+)
 from .analytics import (
     obtener_requerimientos_por_mes,
     calcular_crecimiento_porcentual,
@@ -21,21 +33,44 @@ from .tasks import generar_analisis_temporal, obtener_progreso_tarea
 class ListaRequerimientosView(ListView):
     model = Requerimiento
     template_name = 'requerimientos/lista.html'
-    paginate_by = 20
+    paginate_by = 25
     context_object_name = 'requerimientos'
     ordering = ['-fecha', '-hora']
 
     def get_queryset(self):
         queryset = super().get_queryset()
         
-        # Filtros básicos
-        fuente = self.request.GET.get('fuente')
-        condicion = self.request.GET.get('condicion')
-        tipo_propiedad = self.request.GET.get('tipo_propiedad')
-        distrito = self.request.GET.get('distrito')
-        presupuesto_min = self.request.GET.get('presupuesto_min')
-        presupuesto_max = self.request.GET.get('presupuesto_max')
+        # ── Filtros ─────────────────────────────
+        q = self.request.GET.get('q', '').strip()
+        fuente = self.request.GET.get('fuente', '').strip()
+        condicion = self.request.GET.get('condicion', '').strip()
+        tipo_propiedad = self.request.GET.get('tipo_propiedad', '').strip()
+        distrito = self.request.GET.get('distrito', '').strip()
+        agente = self.request.GET.get('agente', '').strip()
+        moneda = self.request.GET.get('moneda', '').strip()
+        forma_pago = self.request.GET.get('forma_pago', '').strip()
+        cochera = self.request.GET.get('cochera', '').strip()
+        ascensor = self.request.GET.get('ascensor', '').strip()
+        amueblado = self.request.GET.get('amueblado', '').strip()
+        tipo_original = self.request.GET.get('tipo_original', '').strip()
+        verificado = self.request.GET.get('verificado', '').strip()
+        presupuesto_min = self.request.GET.get('presupuesto_min', '').strip()
+        presupuesto_max = self.request.GET.get('presupuesto_max', '').strip()
+        hab_min = self.request.GET.get('hab_min', '').strip()
+        area_min = self.request.GET.get('area_min', '').strip()
+        fecha_desde = self.request.GET.get('fecha_desde', '').strip()
+        fecha_hasta = self.request.GET.get('fecha_hasta', '').strip()
         
+        # Búsqueda general (texto completo)
+        if q:
+            queryset = queryset.filter(
+                models.Q(requerimiento__icontains=q) |
+                models.Q(agente__icontains=q) |
+                models.Q(distritos__icontains=q) |
+                models.Q(fuente__icontains=q)
+            )
+        
+        # Filtros exactos
         if fuente:
             queryset = queryset.filter(fuente=fuente)
         if condicion:
@@ -44,20 +79,56 @@ class ListaRequerimientosView(ListView):
             queryset = queryset.filter(tipo_propiedad=tipo_propiedad)
         if distrito:
             queryset = queryset.filter(distritos__icontains=distrito)
+        if agente:
+            queryset = queryset.filter(agente__icontains=agente)
+        if moneda:
+            queryset = queryset.filter(presupuesto_moneda=moneda)
+        if forma_pago:
+            queryset = queryset.filter(presupuesto_forma_pago=forma_pago)
+        if cochera:
+            queryset = queryset.filter(cochera=cochera)
+        if ascensor:
+            queryset = queryset.filter(ascensor=ascensor)
+        if amueblado:
+            queryset = queryset.filter(amueblado=amueblado)
+        if tipo_original:
+            queryset = queryset.filter(tipo_original=tipo_original)
+        if verificado == 'si':
+            queryset = queryset.filter(verificado=True)
+        elif verificado == 'no':
+            queryset = queryset.filter(verificado=False)
         
-        # Filtro por presupuesto mínimo
+        # Rangos numéricos
         if presupuesto_min:
             try:
-                min_val = float(presupuesto_min)
-                queryset = queryset.filter(presupuesto_monto__gte=min_val)
+                queryset = queryset.filter(presupuesto_monto__gte=float(presupuesto_min))
+            except (ValueError, TypeError):
+                pass
+        if presupuesto_max:
+            try:
+                queryset = queryset.filter(presupuesto_monto__lte=float(presupuesto_max))
+            except (ValueError, TypeError):
+                pass
+        if hab_min:
+            try:
+                queryset = queryset.filter(habitaciones__gte=int(hab_min))
+            except (ValueError, TypeError):
+                pass
+        if area_min:
+            try:
+                queryset = queryset.filter(area_m2__gte=int(area_min))
             except (ValueError, TypeError):
                 pass
         
-        # Filtro por presupuesto máximo
-        if presupuesto_max:
+        # Rango de fechas
+        if fecha_desde:
             try:
-                max_val = float(presupuesto_max)
-                queryset = queryset.filter(presupuesto_monto__lte=max_val)
+                queryset = queryset.filter(fecha__gte=datetime.strptime(fecha_desde, '%Y-%m-%d').date())
+            except (ValueError, TypeError):
+                pass
+        if fecha_hasta:
+            try:
+                queryset = queryset.filter(fecha__lte=datetime.strptime(fecha_hasta, '%Y-%m-%d').date())
             except (ValueError, TypeError):
                 pass
         
@@ -65,6 +136,7 @@ class ListaRequerimientosView(ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        
         # Obtener fuentes reales desde la BD (valores distintos del campo 'fuente')
         fuentes_reales = (
             Requerimiento.objects.values_list('fuente', flat=True)
@@ -73,10 +145,21 @@ class ListaRequerimientosView(ListView):
             .distinct()
             .order_by('fuente')
         )
-        # Convertir a lista de tuplas (value, label) para el template
+        
+        # Pasar filtros actuales al template
+        context['current_filters'] = {k: v for k, v in self.request.GET.items() if v}
+        context['q'] = self.request.GET.get('q', '')
         context['fuentes'] = [(f, f) for f in fuentes_reales]
         context['condiciones'] = CondicionChoices.choices
         context['tipos_propiedad'] = TipoPropiedadChoices.choices
+        context['monedas'] = MonedaChoices.choices
+        context['formas_pago'] = FormaPagoChoices.choices
+        context['ternario_opts'] = TernarioChoices.choices
+        context['tipos_originales'] = TipoOriginalChoices.choices
+        context['verificados_count'] = Requerimiento.objects.filter(verificado=True).count()
+        context['no_verificados_count'] = Requerimiento.objects.filter(verificado=False).count()
+        context['total_count'] = Requerimiento.objects.count()
+        
         return context
 
 
@@ -99,6 +182,107 @@ class DashboardAnalisisTemporalView(TemplateView):
     """Vista principal del dashboard de análisis temporal."""
     template_name = 'requerimientos/dashboard_analisis.html'
     
+    def post(self, request, *args, **kwargs):
+        """Toggle verificado vía POST (AJAX)."""
+        import json
+        try:
+            data = json.loads(request.body)
+            pk = data.get('pk')
+            verificado = data.get('verificado')
+        except (json.JSONDecodeError, TypeError):
+            return JsonResponse({'error': 'JSON inválido'}, status=400)
+
+        if pk is None or verificado is None:
+            return JsonResponse({'error': 'Faltan pk o verificado'}, status=400)
+
+        req = get_object_or_404(Requerimiento, pk=pk)
+        req.verificado = bool(verificado)
+        req.save(update_fields=['verificado'])
+        return JsonResponse({'ok': True, 'verificado': req.verificado})
+
+
+class ToggleVerificadoView(View):
+    """Vista para toggle rápido de verificado vía POST."""
+    def post(self, request, *args, **kwargs):
+        import json
+        try:
+            data = json.loads(request.body)
+            pk = data.get('pk')
+            verificado = data.get('verificado')
+        except (json.JSONDecodeError, TypeError):
+            return JsonResponse({'error': 'JSON inválido'}, status=400)
+
+        if pk is None:
+            return JsonResponse({'error': 'Falta pk'}, status=400)
+
+        req = get_object_or_404(Requerimiento, pk=pk)
+        if verificado is not None:
+            req.verificado = bool(verificado)
+        else:
+            req.verificado = not req.verificado  # toggle
+        req.save(update_fields=['verificado'])
+        return JsonResponse({'ok': True, 'verificado': req.verificado})
+
+
+class EditarRequerimientoView(View):
+    """Vista para editar un requerimiento vía POST (AJAX)."""
+    CAMPOS_EDITABLES = [
+        'verificado', 'fuente', 'agente', 'agente_telefono',
+        'condicion', 'tipo_propiedad', 'distritos',
+        'presupuesto_monto', 'presupuesto_moneda', 'presupuesto_forma_pago',
+        'habitaciones', 'banos', 'cochera', 'ascensor', 'amueblado',
+        'area_m2', 'piso_preferencia', 'caracteristicas_extra',
+        'tipo_original', 'requerimiento',
+    ]
+
+    def post(self, request, *args, **kwargs):
+        import json
+        try:
+            data = json.loads(request.body)
+        except (json.JSONDecodeError, TypeError):
+            return JsonResponse({'error': 'JSON inválido'}, status=400)
+
+        pk = data.get('pk')
+        if not pk:
+            return JsonResponse({'error': 'Falta pk'}, status=400)
+
+        req = get_object_or_404(Requerimiento, pk=pk)
+        campos_actualizados = []
+
+        for campo in self.CAMPOS_EDITABLES:
+            if campo in data:
+                valor = data[campo]
+                # Guardia de seguridad para campos numéricos:
+                # NO sobrescribir un valor existente con None/vacío
+                if campo in ('presupuesto_monto', 'area_m2', 'habitaciones', 'banos'):
+                    valor_actual = getattr(req, campo)
+                    if valor == '' or valor is None:
+                        # Si ya hay un valor en DB, preservarlo
+                        if valor_actual is not None:
+                            continue
+                        # Si no hay valor en DB, mantenerlo como None
+                        continue
+                    else:
+                        try:
+                            valor_convertido = float(valor) if campo == 'presupuesto_monto' else int(valor)
+                            setattr(req, campo, valor_convertido)
+                        except (ValueError, TypeError):
+                            return JsonResponse({'error': f'Valor inválido para {campo}: {valor}'}, status=400)
+                else:
+                    setattr(req, campo, valor)
+                campos_actualizados.append(campo)
+
+        if campos_actualizados:
+            req.save(update_fields=campos_actualizados)
+
+        return JsonResponse({
+            'ok': True,
+            'pk': req.pk,
+            'verificado': req.verificado,
+            'actualizado_en': req.actualizado_en.strftime('%d/%m/%Y %H:%M') if req.actualizado_en else '',
+        })
+
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         

@@ -1,347 +1,241 @@
 {% extends 'propifai_base.html' %}
 {% load static %}
 
-{% block title %}ACM - Análisis Comparativo de Mercado{% endblock %}
-
 {% block extra_head %}
-<!-- Bootstrap 5 CSS (para templates hijos que lo usan) -->
+<!-- Bootstrap 5 CSS (necesario para modales, cards, forms) -->
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-<!-- Font Awesome Icons -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-{% endblock %}
-
-{% block sidebar_brand %}
-<div class="sidebar-brand">
-    {% load static %}
-    <img src="{% static 'img/logo.png' %}" alt="Propifai" height="32" class="me-2"
-         onerror="this.onerror=null;this.style.display='none';var d=document.createElement('div');d.style.cssText='width:32px;height:32px;font-size:16px;display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#58a6ff,#8957e5);border-radius:8px;color:white;font-weight:bold;flex-shrink:0;';d.textContent='P';this.parentElement.appendChild(d)">
-    <div>
-        <div class="brand-text">Propifai ACM</div>
-        <div class="brand-subtext">Análisis Comparativo de Mercado</div>
-    </div>
-</div>
-{% endblock %}
-
-{% block sidebar_menu %}
-<div class="nav-section-title">Navegación</div>
-<a href="/acm/" class="nav-item {% if request.path == '/acm/' %}active{% endif %}">
-    <span class="nav-icon"><i class="fas fa-home"></i></span>
-    <span>Dashboard</span>
-</a>
-<a href="/acm/analisis/" class="nav-item {% if '/acm/analisis/' in request.path %}active{% endif %}">
-    <span class="nav-icon"><i class="fas fa-search"></i></span>
-    <span>Nuevo Análisis</span>
-</a>
-<a href="/acm/historial/" class="nav-item {% if '/acm/historial/' in request.path %}active{% endif %}">
-    <span class="nav-icon"><i class="fas fa-history"></i></span>
-    <span>Historial</span>
-    <span class="nav-badge">{{ historial_count|default:"0" }}</span>
-</a>
-
-<div class="nav-section-title" style="margin-top: 12px;">Herramientas</div>
-<a href="/market-analysis/heatmap/" class="nav-item {% if '/market-analysis/heatmap/' in request.path %}active{% endif %}">
-    <span class="nav-icon"><i class="fas fa-fire"></i></span>
-    <span>Heatmap de Precios</span>
-</a>
-<a href="/market-analysis/dashboard/" class="nav-item {% if '/market-analysis/dashboard/' in request.path %}active{% endif %}">
-    <span class="nav-icon"><i class="fas fa-chart-bar"></i></span>
-    <span>Dashboard Mercado</span>
-</a>
-<a href="/cuadrantizacion/mapa/" class="nav-item {% if '/cuadrantizacion/' in request.path %}active{% endif %}">
-    <span class="nav-icon"><i class="fas fa-map-marked-alt"></i></span>
-    <span>Cuadrantización</span>
-</a>
-
-<div class="nav-section-title" style="margin-top: 12px;">Prospección</div>
-<a href="/prospects/capture/" class="nav-item {% if '/prospects/capture/' in request.path %}active{% endif %}">
-    <span class="nav-icon"><i class="fas fa-camera"></i></span>
-    <span>Captura</span>
-</a>
-<a href="/prospects/" class="nav-item {% if '/prospects/' in request.path and '/capture/' not in request.path %}active{% endif %}">
-    <span class="nav-icon"><i class="fas fa-list"></i></span>
-    <span>Lista de Prospectos</span>
-</a>
-
-<div class="nav-section-title" style="margin-top: 12px;">Sistema</div>
-<a href="/" class="nav-item">
-    <span class="nav-icon"><i class="fas fa-arrow-left"></i></span>
-    <span>Volver al Inicio</span>
-</a>
-{% endblock %}
-
-{% block extra_css %}
-<link rel="stylesheet" href="{% static 'acm/css/acm.css' %}?v=14">
+<!-- Bootstrap Icons -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 <style>
-    /* ============================================
-       ESTILOS ESPECÍFICOS ACM
-       ============================================ */
     :root {
-        --acm-bg-primary: #0d1117;
-        --acm-bg-secondary: #161b22;
-        --acm-bg-tertiary: #21262d;
-        --acm-border-color: #30363d;
-        --acm-text-primary: #f0f6fc;
-        --acm-text-secondary: #8b949e;
-        --acm-accent: #58a6ff;
+        --acm-bg: #0d1117;
         --acm-card-bg: #161b22;
-        --acm-card-header-bg: #1c2333;
+        --acm-border: #30363d;
+        --acm-text-primary: #f0f6fc;
+        --acm-text-secondary: #c9d1d9;
+        --acm-text-muted: #8b949e;
+        --acm-accent: #58a6ff;
+        --acm-success: #238636;
+        --acm-success-hover: #2ea043;
+        --acm-danger: #da3633;
+        --acm-danger-hover: #f85149;
         --acm-input-bg: #0d1117;
         --acm-input-border: #30363d;
-        --acm-input-text: #f0f6fc;
+        --acm-header-bg: #21262d;
     }
 
-    /* Override Bootstrap dark theme for ACM */
-    .card {
+    /* ============================================
+       ESTILOS GLOBALES ACM
+       ============================================ */
+    .acm-container {
+        background-color: var(--acm-bg);
+        min-height: 100vh;
+        padding: 0;
+    }
+
+    /* Sidebar ACM */
+    .acm-sidebar {
         background-color: var(--acm-card-bg) !important;
-        border-color: var(--acm-border-color) !important;
+        border-right: 1px solid var(--acm-border) !important;
     }
-    .card-header {
-        background-color: var(--acm-card-header-bg) !important;
-        border-bottom-color: var(--acm-border-color) !important;
-    }
-    .card-header.bg-white {
-        background-color: var(--acm-card-header-bg) !important;
-    }
-    .table {
-        color: var(--acm-text-primary) !important;
-    }
-    .table-hover tbody tr:hover {
-        color: var(--acm-text-primary) !important;
-        background-color: var(--acm-bg-tertiary) !important;
-    }
-    .modal-content {
-        background-color: var(--acm-bg-secondary) !important;
-        border-color: var(--acm-border-color) !important;
-    }
-    .modal-header {
-        border-bottom-color: var(--acm-border-color) !important;
-    }
-    .modal-footer {
-        border-top-color: var(--acm-border-color) !important;
-    }
-    .btn-close {
-        filter: invert(1);
-    }
-    .form-control, .form-select {
-        background-color: var(--acm-input-bg) !important;
-        border-color: var(--acm-input-border) !important;
-        color: var(--acm-input-text) !important;
-    }
-    .form-control:focus, .form-select:focus {
-        background-color: var(--acm-input-bg) !important;
-        border-color: var(--acm-accent) !important;
-        color: var(--acm-input-text) !important;
-        box-shadow: 0 0 0 0.2rem rgba(88, 166, 255, 0.25) !important;
-    }
-    .text-muted {
-        color: var(--acm-text-secondary) !important;
-    }
-    .table-light {
-        background-color: var(--acm-bg-tertiary) !important;
-        color: var(--acm-text-primary) !important;
-    }
-    .table-light th {
-        background-color: var(--acm-bg-tertiary) !important;
-        color: var(--acm-text-primary) !important;
-        border-bottom-color: var(--acm-border-color) !important;
-    }
-    .table td, .table th {
-        border-top-color: var(--acm-border-color) !important;
-    }
-    .border-bottom {
-        border-bottom-color: var(--acm-border-color) !important;
-    }
-    .border-top {
-        border-top-color: var(--acm-border-color) !important;
-    }
-    hr {
-        border-top-color: var(--acm-border-color) !important;
-    }
-    .alert-info {
-        background-color: rgba(88, 166, 255, 0.1) !important;
-        border-color: var(--acm-accent) !important;
-        color: var(--acm-text-primary) !important;
-    }
-    .alert-warning {
-        background-color: rgba(247, 129, 102, 0.1) !important;
-        border-color: var(--acm-orange, #f78166) !important;
-        color: var(--acm-text-primary) !important;
-    }
-    .page-link {
-        background-color: var(--acm-bg-tertiary) !important;
-        border-color: var(--acm-border-color) !important;
-        color: var(--acm-text-primary) !important;
-    }
-    .page-item.active .page-link {
-        background-color: var(--acm-accent) !important;
-        border-color: var(--acm-accent) !important;
-    }
-    .page-item.disabled .page-link {
-        background-color: var(--acm-bg-secondary) !important;
-        border-color: var(--acm-border-color) !important;
-        color: var(--acm-text-secondary) !important;
-    }
-    .dropdown-menu {
-        background-color: var(--acm-bg-secondary) !important;
-        border-color: var(--acm-border-color) !important;
-    }
-    .dropdown-item {
-        color: var(--acm-text-primary) !important;
-    }
-    .dropdown-item:hover {
-        background-color: var(--acm-bg-tertiary) !important;
-    }
-    .progress {
-        background-color: var(--acm-bg-tertiary) !important;
-    }
-    .list-group-item {
-        background-color: var(--acm-bg-secondary) !important;
-        border-color: var(--acm-border-color) !important;
-        color: var(--acm-text-primary) !important;
-    }
-    .table-striped tbody tr:nth-of-type(odd) {
-        background-color: rgba(255, 255, 255, 0.02) !important;
-    }
-    .offcanvas {
-        background-color: var(--acm-bg-secondary) !important;
-        color: var(--acm-text-primary) !important;
-    }
-    .offcanvas-header {
-        border-bottom-color: var(--acm-border-color) !important;
-    }
-    .accordion-button {
-        background-color: var(--acm-bg-secondary) !important;
-        color: var(--acm-text-primary) !important;
-    }
-    .accordion-button:not(.collapsed) {
-        background-color: var(--acm-bg-tertiary) !important;
-        color: var(--acm-text-primary) !important;
-    }
-    .accordion-item {
-        background-color: var(--acm-bg-secondary) !important;
-        border-color: var(--acm-border-color) !important;
-    }
-    .nav-tabs .nav-link {
-        color: var(--acm-text-secondary) !important;
-    }
-    .nav-tabs .nav-link.active {
-        background-color: var(--acm-bg-secondary) !important;
-        border-color: var(--acm-border-color) !important;
-        color: var(--acm-text-primary) !important;
-    }
-    .nav-tabs {
-        border-bottom-color: var(--acm-border-color) !important;
-    }
-    .table-bordered td, .table-bordered th {
-        border-color: var(--acm-border-color) !important;
-    }
-    .btn-outline-secondary {
-        color: var(--acm-text-secondary) !important;
-        border-color: var(--acm-border-color) !important;
-    }
-    .btn-outline-secondary:hover {
-        background-color: var(--acm-bg-tertiary) !important;
-        color: var(--acm-text-primary) !important;
-    }
-    .btn-outline-success {
-        color: #3fb950 !important;
-        border-color: #3fb950 !important;
-    }
-    .btn-outline-success:hover {
-        background-color: rgba(63, 185, 80, 0.1) !important;
-        color: #3fb950 !important;
-    }
-    .btn-primary {
-        background-color: var(--acm-accent) !important;
-        border-color: var(--acm-accent) !important;
-    }
-    .btn-primary:hover {
-        background-color: #4a90e0 !important;
-        border-color: #4a90e0 !important;
-    }
-    .btn-success {
-        background-color: #238636 !important;
-        border-color: #238636 !important;
-    }
-    .btn-success:hover {
-        background-color: #2ea043 !important;
-        border-color: #2ea043 !important;
-    }
-    .text-success {
-        color: #3fb950 !important;
-    }
-    .text-warning {
-        color: #d29922 !important;
-    }
-    .text-danger {
-        color: #f85149 !important;
-    }
-    .text-info {
+    .acm-sidebar .sidebar-brand {
         color: var(--acm-accent) !important;
+        border-bottom: 1px solid var(--acm-border) !important;
     }
-    .bg-white {
-        background-color: var(--acm-card-header-bg) !important;
+    .acm-sidebar .nav-item {
+        color: var(--acm-text-secondary) !important;
     }
-    .shadow-sm {
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
+    .acm-sidebar .nav-item:hover {
+        background-color: var(--acm-header-bg) !important;
+        color: var(--acm-text-primary) !important;
     }
-    .border {
-        border-color: var(--acm-border-color) !important;
+    .acm-sidebar .nav-item.active {
+        background-color: rgba(88, 166, 255, 0.1) !important;
+        color: var(--acm-accent) !important;
+        border-left: 3px solid var(--acm-accent) !important;
     }
-    select option {
-        background-color: var(--acm-bg-secondary);
+
+    /* Cards */
+    .acm-container .card {
+        background-color: var(--acm-card-bg);
+        border: 1px solid var(--acm-border);
+        border-radius: 6px;
+        margin-bottom: 0;
+    }
+    .acm-container .card-header {
+        background-color: var(--acm-header-bg);
+        border-bottom: 1px solid var(--acm-border);
+        padding-top: 0.25rem;
+        padding-bottom: 0.25rem;
+    }
+    .acm-container .card-header h6 {
+        color: var(--acm-text-secondary);
+        font-size: 14px;
+        font-weight: 600;
+    }
+    .acm-container .card-body {
+        padding-top: 0.25rem;
+        padding-bottom: 0.25rem;
+        color: var(--acm-text-secondary);
+    }
+
+    /* Form controls */
+    .acm-container .form-label {
+        color: var(--acm-text-muted);
+        font-size: 14px;
+        font-weight: 500;
+        margin-bottom: 0.1rem;
+    }
+    .acm-container .form-control,
+    .acm-container .form-select {
+        background-color: var(--acm-input-bg);
+        border: 1px solid var(--acm-input-border);
+        border-radius: 6px;
+        color: var(--acm-text-secondary);
+        font-size: 14px;
+    }
+    .acm-container .form-control:focus,
+    .acm-container .form-select:focus {
+        outline: none;
+        border-color: var(--acm-accent);
+        box-shadow: none;
+    }
+    .acm-container .form-control::placeholder,
+    .acm-container .form-select::placeholder {
+        color: var(--acm-text-muted);
+        opacity: 0.6;
+    }
+
+    /* Buttons */
+    .acm-container .btn-primary {
+        background-color: var(--acm-success);
+        border: none;
+        border-radius: 6px;
+        color: white;
+    }
+    .acm-container .btn-primary:hover {
+        background-color: var(--acm-success-hover);
+    }
+    .acm-container .btn-outline-secondary {
+        background-color: var(--acm-border);
+        border: none;
+        border-radius: 6px;
+        color: var(--acm-text-secondary);
+    }
+    .acm-container .btn-outline-secondary:hover {
+        background-color: #3c444d;
+    }
+    .acm-container .btn-outline-danger {
+        background-color: var(--acm-danger);
+        border: none;
+        border-radius: 6px;
+        color: white;
+    }
+    .acm-container .btn-outline-danger:hover {
+        background-color: var(--acm-danger-hover);
+    }
+    .acm-container .btn-outline-success {
+        background-color: var(--acm-success);
+        border: none;
+        border-radius: 6px;
+        color: white;
+    }
+    .acm-container .btn-outline-success:hover {
+        background-color: var(--acm-success-hover);
+    }
+    .acm-container .btn-outline-primary {
+        background-color: var(--acm-border);
+        border: none;
+        border-radius: 6px;
+        color: var(--acm-text-secondary);
+    }
+    .acm-container .btn-outline-primary:hover {
+        background-color: #3c444d;
+    }
+
+    /* Badges */
+    .acm-container .badge.bg-primary {
+        background-color: rgba(35, 134, 54, 0.2);
+        color: #3fb950;
+    }
+    .acm-container .badge.bg-info {
+        background-color: var(--acm-header-bg);
+        color: var(--acm-text-secondary);
+        border-radius: 6px;
+    }
+
+    /* Text */
+    .acm-container,
+    .acm-container .card,
+    .acm-container .card * {
         color: var(--acm-text-primary);
     }
-    .table-responsive {
-        scrollbar-width: thin;
-        scrollbar-color: var(--acm-bg-tertiary) var(--acm-bg-primary);
+    .acm-container .text-muted {
+        color: var(--acm-text-muted);
     }
-    .table-responsive::-webkit-scrollbar {
-        height: 8px;
+
+    /* Spacing */
+    .acm-container .mb-1 {
+        margin-bottom: 0.25rem;
     }
-    .table-responsive::-webkit-scrollbar-track {
-        background: var(--acm-bg-primary);
+    .acm-container .mb-2 {
+        margin-bottom: 0.35rem;
     }
-    .table-responsive::-webkit-scrollbar-thumb {
-        background: var(--acm-bg-tertiary);
+
+    /* App content */
+    .app-content {
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+
+    /* Scrollbar */
+    .acm-container ::-webkit-scrollbar {
+        width: 8px;
+    }
+    .acm-container ::-webkit-scrollbar-track {
+        background: var(--acm-bg);
+    }
+    .acm-container ::-webkit-scrollbar-thumb {
+        background: var(--acm-border);
         border-radius: 4px;
     }
-    .table-responsive::-webkit-scrollbar-thumb:hover {
-        background: var(--acm-border-color);
+    .acm-container ::-webkit-scrollbar-thumb:hover {
+        background: #3c444d;
     }
-    .btn-group .btn-outline-secondary.active {
-        background-color: var(--acm-accent) !important;
-        border-color: var(--acm-accent) !important;
-        color: #fff !important;
-    }
+
+    /* Checkbox */
     .form-check-input {
-        background-color: var(--acm-input-bg) !important;
-        border-color: var(--acm-input-border) !important;
+        background-color: var(--acm-input-bg);
+        border-color: var(--acm-input-border);
     }
     .form-check-input:checked {
-        background-color: var(--acm-accent) !important;
-        border-color: var(--acm-accent) !important;
+        background-color: var(--acm-accent);
+        border-color: var(--acm-accent);
     }
+
+    /* Links */
     a:not(.nav-item):not(.btn):not(.page-link):not(.dropdown-item) {
-        color: var(--acm-accent) !important;
+        color: var(--acm-accent);
     }
     a:not(.nav-item):not(.btn):not(.page-link):not(.dropdown-item):hover {
-        color: #79c0ff !important;
+        color: #79c0ff;
     }
     .btn-link {
-        color: var(--acm-accent) !important;
+        color: var(--acm-accent);
     }
     .btn-link:hover {
-        color: #79c0ff !important;
+        color: #79c0ff;
     }
+
+    /* Close button */
     .close {
-        color: var(--acm-text-primary) !important;
+        color: var(--acm-text-primary);
     }
     .modal-header .close {
-        color: var(--acm-text-primary) !important;
+        color: var(--acm-text-primary);
     }
     button.close:hover {
-        color: var(--acm-text-primary) !important;
+        color: var(--acm-text-primary);
     }
 </style>
 {% endblock %}
@@ -354,7 +248,9 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<!-- Bootstrap JS (necesario para modales y toasts en ACM) -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbz8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script>
     // ============================================================
     // VARIABLES GLOBALES PARA COMPARTIR ACM

@@ -129,13 +129,18 @@ def buscar_comparables(request):
     
     try:
         data = json.loads(request.body)
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"ACM buscar_comparables - datos recibidos: {data}")
         lat = float(data.get('lat'))
         lng = float(data.get('lng'))
         radio = float(data.get('radio', 500))  # metros
         tipo_propiedad = data.get('tipo_propiedad', '').strip()
+        logger.warning(f"ACM buscar_comparables - parsed: lat={lat}, lng={lng}, radio={radio}, tipo={tipo_propiedad}")
         
         # Validar coordenadas
         if not (-90 <= lat <= 90) or not (-180 <= lng <= 180):
+            logger.warning(f"ACM buscar_comparables - coordenadas inválidas: lat={lat}, lng={lng}")
             return JsonResponse({'status': 'error', 'message': 'Coordenadas inválidas'}, status=400)
         
         # Obtener propiedades locales (PropiedadRaw)
@@ -257,6 +262,18 @@ def buscar_comparables(request):
         # Combinar ambas listas
         todas_propiedades = propiedades_list + propiedades_propifai_list
         
+        # ── DEBUG: Verificar colisión de IDs ──
+        ids_locales = {p.id for p in propiedades_list}
+        ids_propifai = {p.id for p in propiedades_propifai_list}
+        ids_colision = ids_locales & ids_propifai
+        if ids_colision:
+            print(f"DEBUG ACM: COLISION DE IDs entre fuentes: {sorted(ids_colision)}")
+            print(f"   IDs locales ({len(propiedades_list)}): {sorted(list(ids_locales)[:10])}...")
+            print(f"   IDs propifai ({len(propiedades_propifai_list)}): {sorted(list(ids_propifai)[:10])}...")
+        else:
+            print(f"DEBUG ACM: Sin colision de IDs. Locales={len(propiedades_list)}, Propifai={len(propiedades_propifai_list)}")
+        # ── Fin DEBUG ──
+        
         # Filtrar por distancia usando Haversine
         propiedades_cercanas = []
         for prop in todas_propiedades:
@@ -281,9 +298,9 @@ def buscar_comparables(request):
                 provincia = prop.provincia or ''
                 departamento = prop.departamento or ''
                 
-                # Crear diccionario para propiedad local
+                # Crear diccionario para propiedad local con ID único compuesto
                 propiedad_dict = {
-                    'id': prop.id,
+                    'id': f"local-{prop.id}",
                     'lat': prop_lat,
                     'lng': prop_lng,
                     'tipo': prop.tipo_propiedad or 'No especificado',
@@ -366,7 +383,7 @@ def buscar_comparables(request):
                     continue
                 
                 propiedad_dict = {
-                    'id': prop.id,
+                    'id': f"propifai-{prop.id}",
                     'lat': prop_lat,
                     'lng': prop_lng,
                     'tipo': tipo_propiedad_valor,
