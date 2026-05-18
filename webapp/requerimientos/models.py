@@ -19,6 +19,7 @@ class FuenteChoices(models.TextChoices):
 class CondicionChoices(models.TextChoices):
     COMPRA          = 'compra',          'Compra'
     ALQUILER        = 'alquiler',        'Alquiler'
+    ANTICRESIS      = 'anticresis',      'Anticresis'
     AMBOS           = 'ambos',           'Compra y Alquiler'
     NO_ESPECIFICADO = 'no_especificado', 'No Especificado'
 
@@ -188,6 +189,20 @@ class Requerimiento(models.Model):
         blank=True,
         verbose_name='Preferencia de piso',
         help_text='Ej: "primer piso", "a partir de piso 3", "piso 5"',
+    )
+
+    # ── Ubicación específica ──────────────────
+    urbanizacion = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name='Urbanización',
+        help_text='Nombre de la urbanización o residencial',
+    )
+    zona = models.CharField(
+        max_length=500,
+        blank=True,
+        verbose_name='Zona / Calles / Edificio',
+        help_text='Calles específicas, nombres de edificios o referencias, separados por coma',
     )
 
     # ── Características extra (tags libres) ──

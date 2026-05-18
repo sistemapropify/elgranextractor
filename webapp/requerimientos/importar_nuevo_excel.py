@@ -36,7 +36,7 @@ def mapear_condicion(valor):
     if 'alquiler' in valor:
         return CondicionChoices.ALQUILER
     if 'anticresis' in valor:
-        return CondicionChoices.COMPRA  # Asumimos compra para anticresis
+        return CondicionChoices.ANTICRESIS
     return CondicionChoices.NO_ESPECIFICADO
 
 def mapear_tipo_propiedad(valor):

@@ -229,6 +229,7 @@ class EditarRequerimientoView(View):
     CAMPOS_EDITABLES = [
         'verificado', 'fuente', 'agente', 'agente_telefono',
         'condicion', 'tipo_propiedad', 'distritos',
+        'urbanizacion', 'zona',
         'presupuesto_monto', 'presupuesto_moneda', 'presupuesto_forma_pago',
         'habitaciones', 'banos', 'cochera', 'ascensor', 'amueblado',
         'area_m2', 'piso_preferencia', 'caracteristicas_extra',

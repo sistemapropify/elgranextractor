@@ -1,5 +1,6 @@
 {% extends 'propifai_base.html' %}
 {% load static %}
+{% load requerimientos_extras %}
 
 {% block title %}Requerimientos - Propifai{% endblock %}
 
@@ -564,6 +565,29 @@
             grid-template-columns: 1fr;
         }
     }
+
+    /* ── Tags para Zona / Calles ────────────── */
+    .tags-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+    .tag-item {
+        display: inline-block;
+        background-color: rgba(88, 166, 255, 0.12);
+        color: #58a6ff;
+        border: 1px solid rgba(88, 166, 255, 0.25);
+        border-radius: 4px;
+        padding: 2px 8px;
+        font-size: 11px;
+        font-weight: 500;
+        line-height: 1.5;
+        white-space: nowrap;
+    }
+    .tag-item:hover {
+        background-color: rgba(88, 166, 255, 0.2);
+        border-color: rgba(88, 166, 255, 0.4);
+    }
 </style>
 {% endblock %}
 
@@ -803,6 +827,8 @@
                     <th>Condición</th>
                     <th>Tipo</th>
                     <th>Distritos</th>
+                    <th>Urbanización</th>
+                    <th>Zona / Calles</th>
                     <th>Presupuesto</th>
                     <th>Pago</th>
                     <th>Habs</th>
@@ -852,6 +878,8 @@
                                 <span class="badge badge-blue">Compra</span>
                             {% elif r.condicion == 'alquiler' %}
                                 <span class="badge badge-orange">Alquiler</span>
+                            {% elif r.condicion == 'anticresis' %}
+                                <span class="badge badge-orange">Anticresis</span>
                             {% elif r.condicion == 'ambos' %}
                                 <span class="badge badge-purple">Ambos</span>
                             {% else %}
@@ -879,6 +907,16 @@
                         <!-- Distritos -->
                         <td>
                             <span style="font-size:12px;color:#c9d1d9;">{{ r.distritos|default:'—'|truncatechars:30 }}</span>
+                        </td>
+                        
+                        <!-- Urbanización -->
+                        <td>
+                            <span style="font-size:12px;color:#c9d1d9;">{{ r.urbanizacion|default:'—'|truncatechars:25 }}</span>
+                        </td>
+                        
+                        <!-- Zona / Calles / Edificio (tags) -->
+                        <td>
+                            {{ r.zona|render_tags }}
                         </td>
                         
                         <!-- Presupuesto -->
@@ -991,6 +1029,8 @@
                                         data-condicion="{{ r.condicion|escape }}"
                                         data-tipo-propiedad="{{ r.tipo_propiedad|escape }}"
                                         data-distritos="{{ r.distritos|escape }}"
+                                        data-urbanizacion="{{ r.urbanizacion|escape }}"
+                                        data-zona="{{ r.zona|escape }}"
                                         data-presupuesto-monto="{% if r.presupuesto_monto %}{{ r.presupuesto_monto }}{% endif %}"
                                         data-presupuesto-moneda="{{ r.presupuesto_moneda|escape }}"
                                         data-forma-pago="{{ r.presupuesto_forma_pago|escape }}"
@@ -1014,7 +1054,7 @@
                     {% endfor %}
                 {% else %}
                     <tr>
-                        <td colspan="15">
+                        <td colspan="17">
                             <div class="empty-state">
                                 <h3>{% if current_filters %}No se encontraron requerimientos con esos filtros{% else %}No hay requerimientos registrados{% endif %}</h3>
                                 <p>{% if current_filters %}Intenta con otros filtros o <a href="{% url 'requerimientos:lista' %}" style="color:#58a6ff;">limpia los filtros</a>{% else %}Importa datos desde Excel para comenzar{% endif %}</p>
@@ -1133,6 +1173,7 @@
                                     <select id="editCondicion" class="form-select form-select-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 100%;">
                                         <option value="compra">Compra</option>
                                         <option value="alquiler">Alquiler</option>
+                                        <option value="anticresis">Anticresis</option>
                                         <option value="ambos">Compra y Alquiler</option>
                                         <option value="no_especificado">No Especificado</option>
                                     </select>
@@ -1160,6 +1201,22 @@
                                 <div class="field-view" id="modalDistritos" style="color: #c9d1d9; font-size: 13px;">—</div>
                                 <div class="field-edit" style="display: none;">
                                     <input type="text" id="editDistritos" class="form-control form-control-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 100%;" placeholder="Ej: Cayma, Yanahuara">
+                                </div>
+                            </div>
+                            <!-- Urbanización -->
+                            <div class="modal-field-group" style="margin-top: 12px;">
+                                <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Urbanización</label>
+                                <div class="field-view" id="modalUrbanizacion" style="color: #c9d1d9; font-size: 13px;">—</div>
+                                <div class="field-edit" style="display: none;">
+                                    <input type="text" id="editUrbanizacion" class="form-control form-control-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 100%;" placeholder="Nombre de la urbanización">
+                                </div>
+                            </div>
+                            <!-- Zona / Calles / Edificio -->
+                            <div class="modal-field-group" style="margin-top: 12px;">
+                                <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Zona / Calles / Edificio</label>
+                                <div class="field-view" id="modalZona" style="color: #c9d1d9; font-size: 13px;">—</div>
+                                <div class="field-edit" style="display: none;">
+                                    <input type="text" id="editZona" class="form-control form-control-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 100%;" placeholder="Ej: Av. Ejército, Calle Los Olivos, Edif. San Pablo (usa comas para separar)">
                                 </div>
                             </div>
                             <!-- Tipo Original -->
@@ -1325,6 +1382,8 @@ function poblarCamposEdicion(d) {
     document.getElementById('editCondicion').value = d.condicion || 'no_especificado';
     document.getElementById('editTipoPropiedad').value = d.tipoPropiedad || 'no_especificado';
     document.getElementById('editDistritos').value = d.distritos || '';
+    document.getElementById('editUrbanizacion').value = d.urbanizacion || '';
+    document.getElementById('editZona').value = d.zona || '';
     document.getElementById('editTipoOriginal').value = d.tipoOriginal || 'OTRO';
     document.getElementById('editPresupuestoMonto').value = d.presupuestoMonto || '';
     document.getElementById('editPresupuestoMoneda').value = d.presupuestoMoneda || 'no_especificado';
@@ -1447,6 +1506,7 @@ function actualizarVista(d) {
     let condBadge = condText, condColor = '#8b949e';
     if (condText === 'compra') { condBadge = 'Compra'; condColor = '#58a6ff'; }
     else if (condText === 'alquiler') { condBadge = 'Alquiler'; condColor = '#d29922'; }
+    else if (condText === 'anticresis') { condBadge = 'Anticresis'; condColor = '#f0883e'; }
     else if (condText === 'ambos') { condBadge = 'Compra y Alquiler'; condColor = '#8957e5'; }
     condEl.innerHTML = '<span class="badge" style="background-color: ' + condColor + '22; color: ' + condColor + '; border: 1px solid ' + condColor + '44; padding: 3px 10px; border-radius: 4px; font-size: 12px;">' + condBadge + '</span>';
     
@@ -1461,6 +1521,16 @@ function actualizarVista(d) {
     tipoEl.innerHTML = '<span class="badge" style="background-color: ' + tipoColor + '22; color: ' + tipoColor + '; border: 1px solid ' + tipoColor + '44; padding: 3px 10px; border-radius: 4px; font-size: 12px;">' + tipoBadge + '</span>';
     
     document.getElementById('modalDistritos').textContent = d.distritos || '—';
+    document.getElementById('modalUrbanizacion').textContent = d.urbanizacion || '—';
+    // Zona como tags
+    const zonaEl = document.getElementById('modalZona');
+    const zonaVal = d.zona || '';
+    if (zonaVal) {
+        const tags = zonaVal.split(',').map(t => t.trim()).filter(t => t);
+        zonaEl.innerHTML = '<div class="tags-container">' + tags.map(t => '<span class="tag-item">' + t + '</span>').join(' ') + '</div>';
+    } else {
+        zonaEl.innerHTML = '<span style="color:#484f58;">—</span>';
+    }
     
     const toEl = document.getElementById('modalTipoOriginal');
     const toText = d.tipoOriginal || '—';
@@ -1620,6 +1690,8 @@ document.addEventListener('DOMContentLoaded', function() {
         data.condicion = val('editCondicion', 'condicion', 'no_especificado');
         data.tipo_propiedad = val('editTipoPropiedad', 'tipoPropiedad', 'no_especificado');
         data.distritos = val('editDistritos', 'distritos', '', 'modalDistritos');
+        data.urbanizacion = val('editUrbanizacion', 'urbanizacion', '', 'modalUrbanizacion');
+        data.zona = val('editZona', 'zona', '', 'modalZona');
         data.tipo_original = val('editTipoOriginal', 'tipoOriginal', 'OTRO');
         data.presupuesto_monto = val('editPresupuestoMonto', 'presupuestoMonto', '', 'modalPresupuesto', extraerNumero);
         data.presupuesto_moneda = val('editPresupuestoMoneda', 'presupuestoMoneda', 'no_especificado');
@@ -1658,6 +1730,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 modalRequerimientoActual.condicion = data.condicion;
                 modalRequerimientoActual.tipoPropiedad = data.tipo_propiedad;
                 modalRequerimientoActual.distritos = data.distritos;
+                modalRequerimientoActual.urbanizacion = data.urbanizacion;
+                modalRequerimientoActual.zona = data.zona;
                 modalRequerimientoActual.tipoOriginal = data.tipo_original;
                 modalRequerimientoActual.presupuestoMonto = data.presupuesto_monto;
                 modalRequerimientoActual.presupuestoMoneda = data.presupuesto_moneda;

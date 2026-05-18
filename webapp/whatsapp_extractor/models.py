@@ -186,11 +186,13 @@ class ExtractorLog(models.Model):
     # ── Error handling ────────────────────────
     mensaje_error = models.TextField(
         blank=True,
+        default='',
         verbose_name='Mensaje de error',
         help_text='Error principal si el estado es "error"',
     )
     stack_trace = models.TextField(
         blank=True,
+        default='',
         verbose_name='Stack trace',
         help_text='Rastreo completo del error',
     )
