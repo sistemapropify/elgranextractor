@@ -975,3 +975,288 @@ class ExportarAnalisisPDFView(TemplateView):
         except Exception as e:
             from django.http import HttpResponse
             return HttpResponse(f"Error al generar PDF: {str(e)}", status=500)
+
+
+# ── Helper: normalizar teléfono ─────────────────────────────────
+def _normalizar_telefono(valor):
+    """Extrae solo dígitos de un teléfono para comparación flexible.
+    
+    '999888777' → '999888777'
+    '+51999888777' → '51999888777'
+    '999 888 777' → '999888777'
+    """
+    import re
+    return re.sub(r'\D', '', valor)
+
+
+def _buscar_agente_por_telefono(telefono_raw):
+    """Busca un Agente cuyo teléfono coincida con los dígitos del número dado.
+    
+    Primero intenta coincidencia exacta, luego busca por dígitos normalizados
+    usando LIKE con % para ignorar prefijos como +51.
+    """
+    from agentes.models import Agente
+    
+    digitos = _normalizar_telefono(telefono_raw)
+    if not digitos or len(digitos) < 6:
+        return None
+    
+    # 1. Coincidencia exacta
+    agente = Agente.objects.filter(telefono=telefono_raw.strip()).first()
+    if agente:
+        return agente
+    
+    # 2. Coincidencia por dígitos (el teléfono en BD contiene los mismos dígitos)
+    #    Ej: BD tiene "+51999888777", buscamos "999888777" → LIKE '%999888777%'
+    from django.db.models import Q
+    agente = Agente.objects.filter(
+        Q(telefono__endswith=digitos) |
+        Q(telefono__contains=digitos)
+    ).first()
+    if agente:
+        return agente
+    
+    # 3. Último intento: extraer solo dígitos del campo telefono en BD y comparar
+    #    Esto captura casos donde el formato es muy diferente
+    todos = Agente.objects.all()
+    for a in todos:
+        if _normalizar_telefono(a.telefono) == digitos:
+            return a
+    
+    return None
+
+
+def _buscar_agente_por_nombre(nombre_raw):
+    """Busca un Agente cuyo nombre coincida parcialmente (insensible a mayúsculas).
+    
+    Útil cuando el teléfono no coincide pero el nombre es muy similar.
+    Ej: 'Monica Valdivia Ponce' ≈ 'Monica Valdivia'
+    
+    Estrategia de búsqueda (en orden):
+    1. Coincidencia exacta insensible (iexact)
+    2. El nombre buscado está CONTENIDO en algún nombre de BD (icontains)
+    3. Algún nombre de BD está CONTENIDO en el nombre buscado (icontains inverso)
+    4. Todas las palabras del nombre buscado (≥3 letras) aparecen en un nombre de BD
+    5. Primer nombre + primer apellido coinciden
+    """
+    from agentes.models import Agente
+    from django.db.models import Q
+    
+    nombre = nombre_raw.strip().lower()
+    if not nombre or len(nombre) < 3:
+        return None
+    
+    # 1. Coincidencia exacta (insensible)
+    agente = Agente.objects.filter(nombre_completo__iexact=nombre_raw.strip()).first()
+    if agente:
+        return agente
+    
+    # 2. El nombre buscado está contenido en algún nombre de BD
+    #    Ej: buscamos "Keren" y en BD hay "Keren Aragon"
+    agente = Agente.objects.filter(nombre_completo__icontains=nombre_raw.strip()).first()
+    if agente:
+        return agente
+    
+    # 3. Algún nombre de BD está contenido en el nombre buscado
+    #    Ej: buscamos "Keren Aragon Paredes" y en BD hay "Keren Aragon"
+    todos = Agente.objects.all()
+    for a in todos:
+        if a.nombre_completo and a.nombre_completo.strip().lower() in nombre:
+            return a
+    
+    # 4. Todas las palabras del nombre buscado (≥3 letras) aparecen en un nombre de BD
+    palabras = [p for p in nombre.split() if len(p) >= 3]
+    if len(palabras) >= 2:
+        q = Q(nombre_completo__icontains=palabras[0])
+        for palabra in palabras[1:]:
+            q &= Q(nombre_completo__icontains=palabra)
+        agente = Agente.objects.filter(q).first()
+        if agente:
+            return agente
+    
+    # 5. Búsqueda por palabra más significativa (primer nombre + apellido)
+    if len(palabras) >= 2:
+        primer_nombre = palabras[0]
+        primer_apellido = palabras[1]
+        if len(primer_nombre) >= 3 and len(primer_apellido) >= 3:
+            agente = Agente.objects.filter(
+                Q(nombre_completo__icontains=primer_nombre) &
+                Q(nombre_completo__icontains=primer_apellido)
+            ).first()
+            if agente:
+                return agente
+    
+    return None
+
+
+# ── API: Buscar agente por teléfono ─────────────────────────────
+class BuscarAgentePorTelefonoView(View):
+    """Busca un agente en la tabla Agente por número de teléfono.
+
+    GET /requerimientos/api/buscar-agente/?telefono=999888777
+    Retorna JSON con datos del agente si existe, o encontrado=false.
+    La búsqueda normaliza dígitos para ignorar diferencias de formato.
+    """
+    def get(self, request, *args, **kwargs):
+        telefono = request.GET.get('telefono', '').strip()
+        if not telefono or len(telefono) < 6:
+            return JsonResponse({'encontrado': False})
+        try:
+            agente = _buscar_agente_por_telefono(telefono)
+            if agente:
+                return JsonResponse({
+                    'encontrado': True,
+                    'id': agente.id,
+                    'nombre_completo': agente.nombre_completo,
+                    'tipo_agente': agente.tipo_agente,
+                    'telefono': agente.telefono or '',
+                })
+            return JsonResponse({'encontrado': False})
+        except Exception as e:
+            return JsonResponse({'encontrado': False, 'error': str(e)})
+
+
+# ── API: Buscar agente por nombre ───────────────────────────────
+class BuscarAgentePorNombreView(View):
+    """Busca un agente en la tabla Agente por nombre.
+
+    GET /requerimientos/api/buscar-agente-por-nombre/?nombre=Juan%20Perez
+    Retorna JSON con datos del agente si existe, o encontrado=false.
+    Útil cuando el requerimiento tiene nombre de agente pero no teléfono.
+    """
+    def get(self, request, *args, **kwargs):
+        nombre = request.GET.get('nombre', '').strip()
+        if not nombre or len(nombre) < 3:
+            return JsonResponse({'encontrado': False})
+        try:
+            agente = _buscar_agente_por_nombre(nombre)
+            if agente:
+                return JsonResponse({
+                    'encontrado': True,
+                    'id': agente.id,
+                    'nombre_completo': agente.nombre_completo,
+                    'tipo_agente': agente.tipo_agente,
+                    'telefono': agente.telefono or '',
+                })
+            return JsonResponse({'encontrado': False})
+        except Exception as e:
+            return JsonResponse({'encontrado': False, 'error': str(e)})
+
+
+class CrearAgenteRapidoView(View):
+    """Crea un agente rápido desde el modal de requerimientos.
+
+    POST /requerimientos/api/crear-agente-rapido/
+    Body JSON: { telefono: "...", nombre_completo: "..." }
+    Idempotente: busca primero por teléfono (dígitos normalizados) y
+    también por nombre similar para evitar duplicados aunque el número
+    tenga dígitos diferentes (error de captura).
+
+    El teléfono se normaliza (sin espacios, guiones) antes de guardar
+    para mantener consistencia en la base de datos.
+
+    Si el requerimiento no tiene teléfono (solo nombre), se permite
+    crear el agente igualmente con el nombre proporcionado.
+    """
+    def post(self, request, *args, **kwargs):
+        try:
+            import json
+            import re
+            body = json.loads(request.body)
+            telefono_raw = body.get('telefono', '').strip()
+            nombre_completo = body.get('nombre_completo', '').strip()
+
+            from agentes.models import Agente
+
+            # ── Validación: se requiere al menos nombre o teléfono ──
+            if not nombre_completo and (not telefono_raw or len(telefono_raw) < 6):
+                return JsonResponse({'ok': False, 'error': 'Se requiere nombre o teléfono del agente'})
+
+            # ── Normalizar teléfono si existe ──
+            telefono_normalizado = ''
+            if telefono_raw and len(telefono_raw) >= 6:
+                # '+51 958 190 107' → '+51958190107'
+                telefono_normalizado = re.sub(r'[\s\-\(\)]+', '', telefono_raw)
+
+            # ── Buscar existente por teléfono ──
+            if telefono_normalizado:
+                agente = _buscar_agente_por_telefono(telefono_normalizado)
+                if agente:
+                    # Actualizar teléfono si cambió el formato
+                    if agente.telefono != telefono_normalizado:
+                        agente.telefono = telefono_normalizado
+                        agente.save()
+                    # Actualizar nombre si se proporcionó uno mejor
+                    if nombre_completo and agente.nombre_completo != nombre_completo:
+                        agente.nombre_completo = nombre_completo
+                        agente.save()
+                    return JsonResponse({
+                        'ok': True,
+                        'id': agente.id,
+                        'nombre_completo': agente.nombre_completo,
+                        'telefono': agente.telefono or '',
+                    })
+
+            # ── Buscar existente por nombre ──
+            if nombre_completo:
+                agente = _buscar_agente_por_nombre(nombre_completo)
+                if agente:
+                    # Actualizar teléfono si se proporcionó uno y el agente no tenía
+                    if telefono_normalizado and not agente.telefono:
+                        agente.telefono = telefono_normalizado
+                        agente.save()
+                    elif telefono_normalizado and agente.telefono != telefono_normalizado:
+                        agente.telefono = telefono_normalizado
+                        agente.save()
+                    return JsonResponse({
+                        'ok': True,
+                        'id': agente.id,
+                        'nombre_completo': agente.nombre_completo,
+                        'telefono': agente.telefono or '',
+                    })
+
+            # ── Anti-duplicado: búsqueda final ultra-agresiva antes de crear ──
+            # Si hay nombre, buscar en TODOS los agentes por coincidencia parcial
+            # para evitar crear duplicados aunque _buscar_agente_por_nombre no haya
+            # encontrado (por diferencias mínimas como tildes, espacios, etc.)
+            if nombre_completo:
+                from django.db.models import Q as Q2
+                nombre_busqueda = nombre_completo.strip().lower()
+                palabras_busqueda = [p for p in nombre_busqueda.split() if len(p) >= 3]
+                if len(palabras_busqueda) >= 2:
+                    # Buscar cualquier agente que contenga al menos 2 palabras del nombre
+                    q_dup = Q2(nombre_completo__icontains=palabras_busqueda[0])
+                    for p in palabras_busqueda[1:]:
+                        q_dup |= Q2(nombre_completo__icontains=p)
+                    dup = Agente.objects.filter(q_dup).first()
+                    if dup:
+                        # Actualizar teléfono si se proporcionó
+                        if telefono_normalizado and not dup.telefono:
+                            dup.telefono = telefono_normalizado
+                            dup.save()
+                        elif telefono_normalizado and dup.telefono != telefono_normalizado:
+                            dup.telefono = telefono_normalizado
+                            dup.save()
+                        return JsonResponse({
+                            'ok': True,
+                            'id': dup.id,
+                            'nombre_completo': dup.nombre_completo,
+                            'telefono': dup.telefono or '',
+                            'actualizado': True,
+                        })
+
+            # ── No existe: crear nuevo ──
+            agente = Agente.objects.create(
+                telefono=telefono_normalizado,
+                nombre_completo=nombre_completo or telefono_normalizado,
+                tipo_agente=Agente.TipoAgente.INDEPENDIENTE,
+            )
+
+            return JsonResponse({
+                'ok': True,
+                'id': agente.id,
+                'nombre_completo': agente.nombre_completo,
+                'telefono': agente.telefono or '',
+            })
+        except Exception as e:
+            return JsonResponse({'ok': False, 'error': str(e)})

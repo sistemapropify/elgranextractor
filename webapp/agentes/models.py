@@ -89,6 +89,7 @@ class Agente(models.Model):
     )
     telefono = models.CharField(
         max_length=20,
+        blank=True,
         verbose_name='Teléfono',
         help_text='Número de contacto del agente (formato E.164: +51999888777)',
     )

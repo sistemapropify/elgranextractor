@@ -1136,9 +1136,17 @@
                                 <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Agente</label>
                                 <div class="field-view" id="modalAgente" style="color: #58a6ff; font-weight: 600; font-size: 14px;">—</div>
                                 <div class="field-view" id="modalAgenteTelefono" style="color: #8b949e; font-size: 12px;"></div>
-                                <div class="field-edit" style="display: none;">
-                                    <input type="text" id="editAgente" class="form-control form-control-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 100%;">
-                                    <input type="text" id="editAgenteTelefono" class="form-control form-control-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 100%; margin-top: 4px;" placeholder="Teléfono">
+                                <!-- Estado de vinculación con tabla Agentes (visible siempre) -->
+                                <div id="agenteVinculadoStatus" style="margin-top: 6px; display: none;">
+                                    <span id="agenteStatusBadge" class="badge" style="font-size: 11px; padding: 3px 10px; border-radius: 4px;"></span>
+                                    <button type="button" id="btnRegistrarAgente" class="btn btn-sm" style="display: none; background-color: #238636; color: #fff; border: none; padding: 3px 10px; border-radius: 4px; font-size: 11px; margin-left: 4px;">
+                                        <i class="bi bi-plus-circle me-1"></i>Registrar agente
+                                    </button>
+                                </div>
+                                <!-- Inputs de agente SIEMPRE visibles (no dependen de modo edición) -->
+                                <div style="margin-top: 6px;">
+                                    <input type="text" id="editAgente" class="form-control form-control-sm" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 100%;" placeholder="Nombre del agente">
+                                    <input type="text" id="editAgenteTelefono" class="form-control form-control-sm" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 100%; margin-top: 4px;" placeholder="Teléfono (ej: 999888777)">
                                 </div>
                             </div>
                             <!-- Fuente -->
@@ -1157,12 +1165,13 @@
                                     </select>
                                 </div>
                             </div>
-                            <!-- Fecha / Hora (NO editable) -->
+                            <!-- Fecha / Hora (solo lectura) -->
                             <div class="modal-field-group" style="margin-top: 12px;">
                                 <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Fecha / Hora</label>
                                 <div class="field-view" id="modalFecha" style="color: #c9d1d9; font-size: 13px;">—</div>
-                                <div class="field-edit" style="display: none; color: #484f58; font-size: 12px; font-style: italic;">
-                                    <i class="bi bi-lock me-1"></i>No editable
+                                <div class="field-edit" style="display: none; color: #c9d1d9; font-size: 13px;">
+                                    <span id="editFechaTexto" style="color: #c9d1d9;"></span>
+                                    <span style="color: #484f58; font-size: 11px; margin-left: 8px;"><i class="bi bi-lock me-1"></i>No editable</span>
                                 </div>
                             </div>
                             <!-- Condición -->
@@ -1367,6 +1376,17 @@
 #modalMensaje::-webkit-scrollbar { width: 6px; }
 #modalMensaje::-webkit-scrollbar-track { background: #0d1117; }
 #modalMensaje::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+
+/* ── Badge de vinculación agente ──────────── */
+#agenteVinculadoStatus {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+#btnRegistrarAgente:hover {
+    background-color: #2ea043 !important;
+}
 </style>
 
 <script>
@@ -1378,6 +1398,17 @@ let modalEditando = false;
 function poblarCamposEdicion(d) {
     document.getElementById('editAgente').value = d.agente || '';
     document.getElementById('editAgenteTelefono').value = d.agenteTelefono || '';
+    // Vincular evento input para búsqueda de agente (solo una vez)
+    var telInput = document.getElementById('editAgenteTelefono');
+    if (!telInput._listenerVinculado) {
+        telInput.addEventListener('input', iniciarBusquedaAgente);
+        telInput._listenerVinculado = true;
+    }
+    var nomInput = document.getElementById('editAgente');
+    if (!nomInput._listenerNombreVinculado) {
+        nomInput.addEventListener('input', iniciarBusquedaAgente);
+        nomInput._listenerNombreVinculado = true;
+    }
     document.getElementById('editFuente').value = d.fuente || 'otro';
     document.getElementById('editCondicion').value = d.condicion || 'no_especificado';
     document.getElementById('editTipoPropiedad').value = d.tipoPropiedad || 'no_especificado';
@@ -1398,6 +1429,101 @@ function poblarCamposEdicion(d) {
     document.getElementById('editCaracteristicas').value = d.caracteristicas || '';
     document.getElementById('editMensaje').value = d.mensaje || '';
     document.getElementById('editVerificado').value = d.verificado === 'si' ? 'true' : 'false';
+
+    // Sincronizar fecha/hora en modo edición (solo lectura)
+    var fechaStr = d.fecha || '—';
+    if (d.hora) fechaStr += ' ' + d.hora;
+    document.getElementById('editFechaTexto').textContent = fechaStr;
+
+    // Iniciar búsqueda de agente al abrir modal
+    iniciarBusquedaAgente();
+}
+
+// ── Búsqueda de agente por teléfono ──────────
+let timeoutBuscarAgente = null;
+
+function iniciarBusquedaAgente() {
+    clearTimeout(timeoutBuscarAgente);
+    timeoutBuscarAgente = setTimeout(function() {
+        var telefono = document.getElementById('editAgenteTelefono').value.trim();
+        // Limpiar espacios del teléfono antes de buscar
+        // '+51 958 190 107' → '+51958190107'
+        var telefonoLimpio = telefono.replace(/[\s\-\(\)]+/g, '');
+        var nombre = document.getElementById('editAgente').value.trim();
+        buscarAgente(telefonoLimpio, nombre);
+    }, 500);
+}
+
+function buscarAgente(telefono, nombre) {
+    var statusDiv = document.getElementById('agenteVinculadoStatus');
+    var badge = document.getElementById('agenteStatusBadge');
+    var btnRegistrar = document.getElementById('btnRegistrarAgente');
+
+    // Si hay teléfono válido, buscar por teléfono
+    if (telefono && telefono.length >= 6) {
+        fetch('/requerimientos/api/buscar-agente/?telefono=' + encodeURIComponent(telefono))
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                statusDiv.style.display = 'block';
+                if (data.encontrado) {
+                    document.getElementById('editAgente').value = data.nombre_completo;
+                    if (data.telefono) {
+                        document.getElementById('editAgenteTelefono').value = data.telefono;
+                    }
+                    badge.textContent = '✓ Vinculado a ' + data.nombre_completo;
+                    badge.style.backgroundColor = 'rgba(35, 134, 54, 0.2)';
+                    badge.style.color = '#3fb950';
+                    badge.style.border = '1px solid rgba(35, 134, 54, 0.3)';
+                    btnRegistrar.style.display = 'none';
+                } else {
+                    badge.textContent = '⚠ No registrado en agentes';
+                    badge.style.backgroundColor = 'rgba(210, 153, 34, 0.15)';
+                    badge.style.color = '#d29922';
+                    badge.style.border = '1px solid rgba(210, 153, 34, 0.3)';
+                    btnRegistrar.style.display = 'inline-block';
+                }
+            })
+            .catch(function(err) {
+                console.error('Error al buscar agente:', err);
+                statusDiv.style.display = 'none';
+            });
+    }
+    // Si no hay teléfono pero sí hay nombre, buscar por nombre
+    else if (nombre && nombre.length >= 3) {
+        fetch('/requerimientos/api/buscar-agente-por-nombre/?nombre=' + encodeURIComponent(nombre))
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                statusDiv.style.display = 'block';
+                if (data.encontrado) {
+                    // Ya existe en agentes — autocompletar y mostrar vinculado
+                    document.getElementById('editAgente').value = data.nombre_completo;
+                    if (data.telefono) {
+                        document.getElementById('editAgenteTelefono').value = data.telefono;
+                        badge.textContent = '✓ Vinculado a ' + data.nombre_completo + ' (con teléfono)';
+                    } else {
+                        badge.textContent = '✓ Vinculado a ' + data.nombre_completo;
+                    }
+                    badge.style.backgroundColor = 'rgba(35, 134, 54, 0.2)';
+                    badge.style.color = '#3fb950';
+                    badge.style.border = '1px solid rgba(35, 134, 54, 0.3)';
+                    btnRegistrar.style.display = 'none';
+                } else {
+                    // No existe — ofrecer registrar
+                    badge.textContent = '⚠ Sin teléfono — registrar solo con nombre';
+                    badge.style.backgroundColor = 'rgba(210, 153, 34, 0.15)';
+                    badge.style.color = '#d29922';
+                    badge.style.border = '1px solid rgba(210, 153, 34, 0.3)';
+                    btnRegistrar.style.display = 'inline-block';
+                }
+            })
+            .catch(function(err) {
+                console.error('Error al buscar agente por nombre:', err);
+                statusDiv.style.display = 'none';
+            });
+    }
+    else {
+        statusDiv.style.display = 'none';
+    }
 }
 
 // ── Sincronizar inputs de edición desde elementos .field-view ──
@@ -1409,13 +1535,19 @@ function sincronizarEditDesdeVista() {
         return el ? (el.textContent || '').trim() : '';
     }
 
-    // Agente
-    var agenteTxt = viewText('modalAgente');
-    if (agenteTxt && agenteTxt !== '—') document.getElementById('editAgente').value = agenteTxt;
+    // Agente — solo si el input está vacío (no sobreescribir lo que el usuario escribió)
+    var agenteInput = document.getElementById('editAgente');
+    if (agenteInput && !agenteInput.value.trim()) {
+        var agenteTxt = viewText('modalAgente');
+        if (agenteTxt && agenteTxt !== '—') agenteInput.value = agenteTxt;
+    }
 
-    // Teléfono: "📞 999888777" → "999888777"
-    var telTxt = viewText('modalAgenteTelefono');
-    if (telTxt) document.getElementById('editAgenteTelefono').value = telTxt.replace('📞 ', '');
+    // Teléfono — solo si el input está vacío
+    var telInput = document.getElementById('editAgenteTelefono');
+    if (telInput && !telInput.value.trim()) {
+        var telTxt = viewText('modalAgenteTelefono');
+        if (telTxt) telInput.value = telTxt.replace('📞 ', '');
+    }
 
     // Fuente
     var fuenteTxt = viewText('modalFuente');
@@ -1788,6 +1920,65 @@ document.addEventListener('DOMContentLoaded', function() {
         .finally(() => {
             btnGuardar.disabled = false;
             btnGuardar.innerHTML = '<i class="bi bi-check2 me-1"></i>Guardar';
+        });
+    });
+
+    // ── Botón Registrar agente ─────────────────
+    document.getElementById('btnRegistrarAgente').addEventListener('click', function() {
+        var telefonoRaw = document.getElementById('editAgenteTelefono').value.trim();
+        // Limpiar espacios del teléfono antes de enviar
+        var telefono = telefonoRaw.replace(/[\s\-\(\)]+/g, '');
+        var nombreInput = document.getElementById('editAgente').value.trim();
+
+        // Si no hay ni nombre ni teléfono, no se puede registrar
+        if ((!telefono || telefono.length < 6) && (!nombreInput || nombreInput.length < 3)) {
+            alert('Escribe al menos el nombre del agente para registrarlo.');
+            document.getElementById('editAgente').focus();
+            return;
+        }
+
+        // Si hay teléfono pero no hay nombre, pedir nombre con prompt
+        if (telefono && telefono.length >= 6 && (!nombreInput || nombreInput === telefono)) {
+            nombreInput = prompt('Ingrese el nombre completo del agente para registrar en la base de datos:');
+            if (!nombreInput || nombreInput.trim() === '') {
+                return; // Usuario canceló o no escribió nada
+            }
+            nombreInput = nombreInput.trim();
+            document.getElementById('editAgente').value = nombreInput;
+        }
+        // Si no hay teléfono pero sí hay nombre, confirmar registro solo con nombre
+        else if ((!telefono || telefono.length < 6) && nombreInput && nombreInput.length >= 3) {
+            var confirmar = confirm('¿Registrar al agente "' + nombreInput + '" sin número de teléfono?');
+            if (!confirmar) {
+                return;
+            }
+        }
+
+        fetch('/requerimientos/api/crear-agente-rapido/', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ telefono: telefono, nombre_completo: nombreInput })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.ok) {
+                document.getElementById('editAgente').value = data.nombre_completo;
+                // Si el backend devolvió teléfono, autocompletar el input
+                if (data.telefono) {
+                    document.getElementById('editAgenteTelefono').value = data.telefono;
+                }
+                var telBuscar = data.telefono || telefono || '';
+                buscarAgente(telBuscar, data.nombre_completo);
+            } else {
+                console.error('Error al crear agente:', data.error);
+                alert('Error al registrar agente: ' + (data.error || 'Error desconocido'));
+            }
+        })
+        .catch(function(err) {
+            console.error('Error al crear agente:', err);
         });
     });
 });

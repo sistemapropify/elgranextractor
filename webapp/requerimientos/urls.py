@@ -26,4 +26,9 @@ urlpatterns = [
     # Exportaciones
     path('exportar-excel/', views.ExportarAnalisisExcelView.as_view(), name='exportar_excel'),
     path('exportar-pdf/', views.ExportarAnalisisPDFView.as_view(), name='exportar_pdf'),
+
+    # API: Búsqueda y creación rápida de agentes
+    path('api/buscar-agente/', views.BuscarAgentePorTelefonoView.as_view(), name='buscar_agente'),
+    path('api/buscar-agente-por-nombre/', views.BuscarAgentePorNombreView.as_view(), name='buscar_agente_por_nombre'),
+    path('api/crear-agente-rapido/', views.CrearAgenteRapidoView.as_view(), name='crear_agente_rapido'),
 ]
