@@ -1604,6 +1604,7 @@
 // ── Variables globales del modal ──────────────
 let modalRequerimientoActual = null;  // guarda el botón data actual
 let modalEditando = false;
+let modoClonacion = false;  // true si estamos clonando (creando nuevo)
 
 // ── Poblar campos de edición desde data ──────
 function poblarCamposEdicion(d) {
@@ -2353,130 +2354,30 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // ── Botón Clonar ──────────────────────────
+    // Abre el modal en modo edición con los datos del requerimiento actual
+    // para que el usuario pueda modificarlos antes de guardar como nuevo.
     document.getElementById('btnClonarRequerimiento').addEventListener('click', function() {
         if (!modalRequerimientoActual) return;
         
-        // Sincronizar inputs desde los elementos .field-view antes de clonar
+        // Marcar modo clonación
+        modoClonacion = true;
+        
+        // Cambiar texto del botón Guardar para indicar que es clonación
+        document.getElementById('btnGuardarEdicion').innerHTML = '<i class="bi bi-copy me-1"></i>Guardar como nuevo';
+        
+        // Sincronizar inputs desde los elementos .field-view
         sincronizarEditDesdeVista();
         
-        const d = modalRequerimientoActual;
-        const data = { pk: parseInt(d.pk) };
-        
-        // Helper: usar valor del input, o del dataset, o del elemento .field-view
-        function val(inputId, datasetKey, fallback, viewId, viewTransform) {
-            var el = document.getElementById(inputId);
-            var inputVal = el ? el.value : '';
-            if (inputVal && inputVal.trim() !== '') return inputVal.trim();
-            
-            var dsVal = d[datasetKey];
-            if (dsVal && dsVal !== '') return dsVal;
-            
-            if (viewId) {
-                var viewEl = document.getElementById(viewId);
-                if (viewEl) {
-                    var tagItems = viewEl.querySelectorAll('.tag-item');
-                    if (tagItems.length > 0) {
-                        var tags = [];
-                        tagItems.forEach(function(t) { tags.push(t.textContent.trim()); });
-                        return tags.join(', ');
-                    }
-                    var txt = (viewEl.textContent || '').trim();
-                    if (txt && txt !== '—') {
-                        if (viewTransform) return viewTransform(txt);
-                        return txt;
-                    }
-                }
-            }
-            return fallback;
-        }
-        
-        function extraerNumero(txt) {
-            var m = txt.match(/[\d,.]+/);
-            return m ? m[0].replace(/,/g, '') : '';
-        }
-        function limpiarTelefono(txt) {
-            return txt.replace('📞 ', '');
-        }
-        function extraerArea(txt) {
-            var m = txt.match(/^[\d,.]+/);
-            return m ? m[0].replace(/,/g, '') : '';
-        }
-        function extraerHabs(txt) {
-            var m = txt.match(/(\d+)\s*hab/);
-            return m ? m[1] : '';
-        }
-        function extraerBanos(txt) {
-            var m = txt.match(/(\d+)\s*baños/);
-            return m ? m[1] : '';
-        }
-        
-        // Recolectar todos los campos editables con triple fallback
-        data.agente = val('editAgente', 'agente', '', 'modalAgente');
-        data.agente_telefono = val('editAgenteTelefono', 'agenteTelefono', '', 'modalAgenteTelefono', limpiarTelefono);
-        data.fuente = val('editFuente', 'fuente', 'otro', 'modalFuente');
-        data.condicion = val('editCondicion', 'condicion', 'no_especificado');
-        data.tipo_propiedad = val('editTipoPropiedad', 'tipoPropiedad', 'no_especificado');
-        data.distritos = val('editDistritos', 'distritos', '', 'modalDistritos');
-        data.urbanizacion = val('editUrbanizacion', 'urbanizacion', '', 'modalUrbanizacion');
-        data.zona = val('editZona', 'zona', '', 'modalZona');
-        data.tipo_original = val('editTipoOriginal', 'tipoOriginal', 'OTRO');
-        data.presupuesto_monto = val('editPresupuestoMonto', 'presupuestoMonto', '', 'modalPresupuesto', extraerNumero);
-        data.presupuesto_moneda = val('editPresupuestoMoneda', 'presupuestoMoneda', 'no_especificado');
-        data.presupuesto_forma_pago = val('editFormaPago', 'formaPago', 'no_especificado');
-        data.habitaciones = val('editHabitaciones', 'habitaciones', '', 'modalHabBanos', extraerHabs);
-        data.banos = val('editBanos', 'banos', '', 'modalHabBanos', extraerBanos);
-        data.area_m2 = val('editArea', 'areaM2', '', 'modalArea', extraerArea);
-        data.piso_preferencia = val('editPiso', 'pisoPreferencia', '', 'modalPiso');
-        data.cochera = val('editCochera', 'cochera', 'indiferente');
-        data.ascensor = val('editAscensor', 'ascensor', 'indiferente');
-        data.amueblado = val('editAmueblado', 'amueblado', 'indiferente');
-        data.caracteristicas_extra = val('editCaracteristicas', 'caracteristicas', '', 'modalCaracteristicas');
-        data.requerimiento = val('editMensaje', 'mensaje', '', 'modalMensaje');
-        data.verificado = document.getElementById('editVerificado').value === 'true';
-        
-        // Deshabilitar botón mientras guarda
-        const btnClonar = document.getElementById('btnClonarRequerimiento');
-        btnClonar.disabled = true;
-        btnClonar.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>Clonando...';
-        
-        fetch('{% url "requerimientos:api_clonar" %}', {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': '{{ csrf_token }}',
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(data)
-        })
-        .then(r => r.json())
-        .then(resp => {
-            if (resp.ok) {
-                // Cerrar el modal
-                var bsModal = bootstrap.Modal.getInstance(document.getElementById('modalDetalleRequerimiento'));
-                if (bsModal) bsModal.hide();
-                
-                // Mostrar toast de éxito
-                mostrarToastEdicion('success', '✅ Requerimiento clonado correctamente (ID: ' + resp.pk + ')');
-                
-                // Recargar la página para ver el nuevo requerimiento en la lista
-                setTimeout(function() {
-                    location.reload();
-                }, 1500);
-            } else {
-                mostrarToastEdicion('error', 'Error: ' + (resp.error || 'No se pudo clonar'));
-            }
-        })
-        .catch(err => {
-            console.error('Error al clonar:', err);
-            mostrarToastEdicion('error', 'Error de conexión al clonar');
-        })
-        .finally(() => {
-            btnClonar.disabled = false;
-            btnClonar.innerHTML = '<i class="bi bi-copy me-1"></i>Clonar';
-        });
+        // Activar modo edición
+        toggleModoEdicion(true);
     });
     
     // ── Botón Cancelar ────────────────────────
     document.getElementById('btnCancelarEdicion').addEventListener('click', function() {
+        if (modoClonacion) {
+            modoClonacion = false;
+            document.getElementById('btnGuardarEdicion').innerHTML = '<i class="bi bi-check2 me-1"></i>Guardar';
+        }
         toggleModoEdicion(false);
     });
     
@@ -2567,6 +2468,54 @@ document.addEventListener('DOMContentLoaded', function() {
         data.requerimiento = val('editMensaje', 'mensaje', '', 'modalMensaje');
         data.verificado = document.getElementById('editVerificado').value === 'true';
         
+        // ── Si es modo clonación, enviar a api/clonar/ ──
+        if (modoClonacion) {
+            // Incluir fecha y hora del dataset original
+            data.fecha = d.fecha || '';
+            data.hora = d.hora || '';
+            
+            // Deshabilitar botón mientras guarda
+            const btnGuardar = document.getElementById('btnGuardarEdicion');
+            btnGuardar.disabled = true;
+            btnGuardar.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>Guardando como nuevo...';
+            
+            fetch('{% url "requerimientos:api_clonar" %}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            })
+            .then(r => r.json())
+            .then(resp => {
+                if (resp.ok) {
+                    // Cerrar modal
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('modalDetalleRequerimiento'));
+                    if (modal) modal.hide();
+                    
+                    // Mostrar toast de éxito
+                    mostrarToastEdicion('success', 'Requerimiento clonado correctamente');
+                    
+                    // Recargar la página para mostrar el nuevo registro
+                    setTimeout(function() { location.reload(); }, 800);
+                } else {
+                    mostrarToastEdicion('error', 'Error: ' + (resp.error || 'No se pudo clonar'));
+                }
+            })
+            .catch(err => {
+                console.error('Error al clonar:', err);
+                mostrarToastEdicion('error', 'Error de conexión al clonar');
+            })
+            .finally(() => {
+                btnGuardar.disabled = false;
+                btnGuardar.innerHTML = '<i class="bi bi-copy me-1"></i>Guardar como nuevo';
+                modoClonacion = false;
+            });
+            return;
+        }
+        
+        // ── Modo edición normal ──
         // Deshabilitar botón mientras guarda
         const btnGuardar = document.getElementById('btnGuardarEdicion');
         btnGuardar.disabled = true;

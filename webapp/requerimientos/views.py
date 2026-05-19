@@ -1452,6 +1452,7 @@ class ClonarRequerimientoView(View):
         'habitaciones', 'banos', 'cochera', 'ascensor', 'amueblado',
         'area_m2', 'piso_preferencia', 'caracteristicas_extra',
         'tipo_original', 'requerimiento',
+        'fecha', 'hora',
     ]
 
     def post(self, request, *args, **kwargs):
@@ -1476,6 +1477,21 @@ class ClonarRequerimientoView(View):
                             setattr(nuevo_req, campo, valor_convertido)
                         except (ValueError, TypeError):
                             setattr(nuevo_req, campo, None)
+                elif campo == 'fecha':
+                    # fecha viene como string "dd/mm/YYYY"
+                    if valor:
+                        from datetime import datetime as dt
+                        try:
+                            nuevo_req.fecha = dt.strptime(valor, '%d/%m/%Y').date()
+                        except (ValueError, TypeError):
+                            pass
+                elif campo == 'hora':
+                    if valor:
+                        from datetime import datetime as dt
+                        try:
+                            nuevo_req.hora = dt.strptime(valor, '%H:%M').time()
+                        except (ValueError, TypeError):
+                            pass
                 else:
                     setattr(nuevo_req, campo, valor)
 
