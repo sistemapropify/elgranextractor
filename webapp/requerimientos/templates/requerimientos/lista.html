@@ -1604,7 +1604,8 @@
 // ── Variables globales del modal ──────────────
 let modalRequerimientoActual = null;  // guarda el botón data actual
 let modalEditando = false;
-let modoClonacion = false;  // true si estamos clonando (creando nuevo)
+let modoClonacion = false;
+let datosClonacion = null;  // copia independiente de datos para clonación
 
 // ── Poblar campos de edición desde data ──────
 function poblarCamposEdicion(d) {
@@ -2326,6 +2327,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const d = this.dataset;
             modalRequerimientoActual = d;
             
+            // Limpiar estado de clonación al abrir un nuevo detalle
+            modoClonacion = false;
+            datosClonacion = null;
+            document.getElementById('btnGuardarEdicion').innerHTML = '<i class="bi bi-check2 me-1"></i>Guardar';
+            
             // Reset a modo vista
             toggleModoEdicion(false);
             
@@ -2362,6 +2368,38 @@ document.addEventListener('DOMContentLoaded', function() {
         // Marcar modo clonación
         modoClonacion = true;
         
+        // Crear una copia INDEPENDIENTE de los datos del dataset actual
+        // para evitar cualquier referencia compartida con el botón original.
+        // Esto garantiza que modificar el clon NO afecte al original ni viceversa.
+        var src = modalRequerimientoActual;
+        datosClonacion = {
+            pk: src.pk,
+            agente: src.agente || '',
+            agenteTelefono: src.agenteTelefono || '',
+            fuente: src.fuente || '',
+            fecha: src.fecha || '',
+            hora: src.hora || '',
+            condicion: src.condicion || '',
+            tipoPropiedad: src.tipoPropiedad || '',
+            distritos: src.distritos || '',
+            urbanizacion: src.urbanizacion || '',
+            zona: src.zona || '',
+            tipoOriginal: src.tipoOriginal || '',
+            presupuestoMonto: src.presupuestoMonto || '',
+            presupuestoMoneda: src.presupuestoMoneda || '',
+            formaPago: src.formaPago || '',
+            habitaciones: src.habitaciones || '',
+            banos: src.banos || '',
+            cochera: src.cochera || '',
+            ascensor: src.ascensor || '',
+            amueblado: src.amueblado || '',
+            areaM2: src.areaM2 || '',
+            pisoPreferencia: src.pisoPreferencia || '',
+            caracteristicas: src.caracteristicas || '',
+            mensaje: src.mensaje || '',
+            verificado: src.verificado || 'no',
+        };
+        
         // Cambiar texto del botón Guardar para indicar que es clonación
         document.getElementById('btnGuardarEdicion').innerHTML = '<i class="bi bi-copy me-1"></i>Guardar como nuevo';
         
@@ -2376,6 +2414,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('btnCancelarEdicion').addEventListener('click', function() {
         if (modoClonacion) {
             modoClonacion = false;
+            datosClonacion = null;
             document.getElementById('btnGuardarEdicion').innerHTML = '<i class="bi bi-check2 me-1"></i>Guardar';
         }
         toggleModoEdicion(false);
@@ -2470,9 +2509,63 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // ── Si es modo clonación, enviar a api/clonar/ ──
         if (modoClonacion) {
-            // Incluir fecha y hora del dataset original
-            data.fecha = d.fecha || '';
-            data.hora = d.hora || '';
+            // Usar la copia independiente (datosClonacion) como fuente de datos
+            // en lugar del dataset en vivo (d) para evitar contaminación cruzada.
+            var dClone = datosClonacion || d;
+            
+            // Recolectar campos usando dClone como fallback en lugar del dataset en vivo
+            function valClone(inputId, datasetKey, fallback, viewId, viewTransform) {
+                var el = document.getElementById(inputId);
+                var inputVal = el ? el.value : '';
+                if (inputVal && inputVal.trim() !== '') return inputVal.trim();
+                
+                var dsVal = dClone[datasetKey];
+                if (dsVal && dsVal !== '') return dsVal;
+                
+                if (viewId) {
+                    var viewEl = document.getElementById(viewId);
+                    if (viewEl) {
+                        var tagItems = viewEl.querySelectorAll('.tag-item');
+                        if (tagItems.length > 0) {
+                            var tags = [];
+                            tagItems.forEach(function(t) { tags.push(t.textContent.trim()); });
+                            return tags.join(', ');
+                        }
+                        var txt = (viewEl.textContent || '').trim();
+                        if (txt && txt !== '—') {
+                            if (viewTransform) return viewTransform(txt);
+                            return txt;
+                        }
+                    }
+                }
+                return fallback;
+            }
+            
+            var dataClone = {};
+            dataClone.agente = valClone('editAgente', 'agente', '', 'modalAgente');
+            dataClone.agente_telefono = valClone('editAgenteTelefono', 'agenteTelefono', '', 'modalAgenteTelefono', limpiarTelefono);
+            dataClone.fuente = valClone('editFuente', 'fuente', 'otro', 'modalFuente');
+            dataClone.condicion = valClone('editCondicion', 'condicion', 'no_especificado');
+            dataClone.tipo_propiedad = valClone('editTipoPropiedad', 'tipoPropiedad', 'no_especificado');
+            dataClone.distritos = valClone('editDistritos', 'distritos', '', 'modalDistritos');
+            dataClone.urbanizacion = valClone('editUrbanizacion', 'urbanizacion', '', 'modalUrbanizacion');
+            dataClone.zona = valClone('editZona', 'zona', '', 'modalZona');
+            dataClone.tipo_original = valClone('editTipoOriginal', 'tipoOriginal', 'OTRO');
+            dataClone.presupuesto_monto = valClone('editPresupuestoMonto', 'presupuestoMonto', '', 'modalPresupuesto', extraerNumero);
+            dataClone.presupuesto_moneda = valClone('editPresupuestoMoneda', 'presupuestoMoneda', 'no_especificado');
+            dataClone.presupuesto_forma_pago = valClone('editFormaPago', 'formaPago', 'no_especificado');
+            dataClone.habitaciones = valClone('editHabitaciones', 'habitaciones', '', 'modalHabBanos', extraerHabs);
+            dataClone.banos = valClone('editBanos', 'banos', '', 'modalHabBanos', extraerBanos);
+            dataClone.area_m2 = valClone('editArea', 'areaM2', '', 'modalArea', extraerArea);
+            dataClone.piso_preferencia = valClone('editPiso', 'pisoPreferencia', '', 'modalPiso');
+            dataClone.cochera = valClone('editCochera', 'cochera', 'indiferente');
+            dataClone.ascensor = valClone('editAscensor', 'ascensor', 'indiferente');
+            dataClone.amueblado = valClone('editAmueblado', 'amueblado', 'indiferente');
+            dataClone.caracteristicas_extra = valClone('editCaracteristicas', 'caracteristicas', '', 'modalCaracteristicas');
+            dataClone.requerimiento = valClone('editMensaje', 'mensaje', '', 'modalMensaje');
+            dataClone.verificado = document.getElementById('editVerificado').value === 'true';
+            dataClone.fecha = dClone.fecha || '';
+            dataClone.hora = dClone.hora || '';
             
             // Deshabilitar botón mientras guarda
             const btnGuardar = document.getElementById('btnGuardarEdicion');
@@ -2485,7 +2578,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     'X-CSRFToken': '{{ csrf_token }}',
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(data)
+                body: JSON.stringify(dataClone)
             })
             .then(r => r.json())
             .then(resp => {
@@ -2511,6 +2604,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 btnGuardar.disabled = false;
                 btnGuardar.innerHTML = '<i class="bi bi-copy me-1"></i>Guardar como nuevo';
                 modoClonacion = false;
+                datosClonacion = null;
             });
             return;
         }
