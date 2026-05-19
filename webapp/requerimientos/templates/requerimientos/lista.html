@@ -2428,14 +2428,18 @@ document.addEventListener('DOMContentLoaded', function() {
         const d = modalRequerimientoActual; // dataset original del botón
         const data = { pk: parseInt(pk) };
         
-        // Helper: usar valor del input, o del dataset, o del elemento .field-view
-        // como último recurso antes del fallback. Así NUNCA se pierde un valor
-        // que esté visible en la vista aunque el input o dataset estén vacíos.
+        // Helper: recoger valor del input editado.
+        // Si el input existe, usamos su valor aunque esté vacío (el usuario lo borró).
+        // Si el input NO existe (null), caemos al dataset como fallback.
+        // El .field-view es el último recurso si dataset tampoco tiene valor.
         function val(inputId, datasetKey, fallback, viewId, viewTransform) {
             var el = document.getElementById(inputId);
-            var inputVal = el ? el.value : '';
-            if (inputVal && inputVal.trim() !== '') return inputVal.trim();
+            if (el) {
+                // Input existe → respetar su valor (incluso vacío)
+                return el.value.trim();
+            }
             
+            // Input no existe → usar dataset
             var dsVal = d[datasetKey];
             if (dsVal && dsVal !== '') return dsVal;
             
@@ -2516,9 +2520,12 @@ document.addEventListener('DOMContentLoaded', function() {
             // Recolectar campos usando dClone como fallback en lugar del dataset en vivo
             function valClone(inputId, datasetKey, fallback, viewId, viewTransform) {
                 var el = document.getElementById(inputId);
-                var inputVal = el ? el.value : '';
-                if (inputVal && inputVal.trim() !== '') return inputVal.trim();
+                if (el) {
+                    // Input existe → respetar su valor (incluso vacío)
+                    return el.value.trim();
+                }
                 
+                // Input no existe → usar dClone
                 var dsVal = dClone[datasetKey];
                 if (dsVal && dsVal !== '') return dsVal;
                 

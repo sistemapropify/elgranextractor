@@ -260,16 +260,12 @@ class EditarRequerimientoView(View):
         for campo in self.CAMPOS_EDITABLES:
             if campo in data:
                 valor = data[campo]
-                # Guardia de seguridad para campos numéricos:
-                # NO sobrescribir un valor existente con None/vacío
+                # Campos numéricos: convertir o limpiar
                 if campo in ('presupuesto_monto', 'area_m2', 'habitaciones', 'banos'):
-                    valor_actual = getattr(req, campo)
                     if valor == '' or valor is None:
-                        # Si ya hay un valor en DB, preservarlo
-                        if valor_actual is not None:
-                            continue
-                        # Si no hay valor en DB, mantenerlo como None
-                        continue
+                        # Usuario quiere limpiar el campo → guardar como None
+                        setattr(req, campo, None)
+                        campos_actualizados.append(campo)
                     else:
                         try:
                             valor_convertido = float(valor) if campo == 'presupuesto_monto' else int(valor)
