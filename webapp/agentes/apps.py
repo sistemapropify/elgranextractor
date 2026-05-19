@@ -5,3 +5,7 @@ class AgentesConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'agentes'
     verbose_name = 'Agentes e Inmobiliarias'
+
+    def ready(self):
+        """Conecta signals al iniciar la app."""
+        import agentes.signals  # noqa: F401 — necesario para registrar los signals

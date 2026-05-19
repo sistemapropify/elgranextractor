@@ -1152,3 +1152,176 @@ def property_list_dashboard(request):
     }
     
     return render(request, 'market_analysis/property_list_dashboard.html', context)
+
+
+# =============================================================================
+# CRUD Ubicaciones Geográficas (Departamento → Provincia → Distrito)
+# =============================================================================
+
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+from .models import UbicacionGeografica
+
+
+def ubicaciones_view(request):
+    """Vista principal del gestor de ubicaciones geográficas."""
+    return render(request, 'market_analysis/ubicaciones.html', {
+        'title': 'Gestor de Ubicaciones Geográficas',
+    })
+
+
+def api_ubicaciones_departamentos(request):
+    """Retorna JSON con todos los departamentos activos."""
+    deps = UbicacionGeografica.objects.filter(
+        nivel='departamento', activo=True
+    ).order_by('nombre')
+    data = [{'id': d.id, 'nombre': d.nombre, 'codigo': d.codigo or ''} for d in deps]
+    return JsonResponse({'data': data})
+
+
+def api_ubicaciones_hijos(request, parent_id):
+    """Retorna JSON con los hijos (provincias o distritos) de una ubicación."""
+    try:
+        parent = UbicacionGeografica.objects.get(id=parent_id, activo=True)
+        hijos = parent.children.filter(activo=True).order_by('nombre')
+        data = [{
+            'id': h.id,
+            'nombre': h.nombre,
+            'nivel': h.nivel,
+            'codigo': h.codigo or '',
+            'parent_id': h.parent_id,
+        } for h in hijos]
+        return JsonResponse({'data': data, 'nivel': parent.nivel})
+    except UbicacionGeografica.DoesNotExist:
+        return JsonResponse({'error': 'Ubicación no encontrada'}, status=404)
+
+
+@csrf_exempt
+@require_http_methods(['POST'])
+def api_ubicaciones_crear(request):
+    """Crea una nueva ubicación (departamento, provincia o distrito)."""
+    import json
+    try:
+        body = json.loads(request.body)
+        nombre = body.get('nombre', '').strip()
+        nivel = body.get('nivel', '').strip()
+        parent_id = body.get('parent_id')
+        codigo = body.get('codigo', '').strip() or None
+
+        if not nombre or not nivel:
+            return JsonResponse({'error': 'Nombre y nivel son requeridos'}, status=400)
+        if nivel not in ['departamento', 'provincia', 'distrito']:
+            return JsonResponse({'error': 'Nivel inválido'}, status=400)
+
+        # Validar parent según nivel
+        parent = None
+        if nivel == 'provincia':
+            if not parent_id:
+                return JsonResponse({'error': 'Provincia requiere un departamento padre'}, status=400)
+            try:
+                parent = UbicacionGeografica.objects.get(id=parent_id, nivel='departamento', activo=True)
+            except UbicacionGeografica.DoesNotExist:
+                return JsonResponse({'error': 'Departamento padre no encontrado'}, status=400)
+        elif nivel == 'distrito':
+            if not parent_id:
+                return JsonResponse({'error': 'Distrito requiere una provincia padre'}, status=400)
+            try:
+                parent = UbicacionGeografica.objects.get(id=parent_id, nivel='provincia', activo=True)
+            except UbicacionGeografica.DoesNotExist:
+                return JsonResponse({'error': 'Provincia padre no encontrada'}, status=400)
+
+        # Verificar duplicado
+        filtro = {'nombre': nombre, 'nivel': nivel, 'parent': parent}
+        if UbicacionGeografica.objects.filter(**filtro).exists():
+            return JsonResponse({'error': f'Ya existe {nivel} "{nombre}" en esta ubicación padre'}, status=400)
+
+        obj = UbicacionGeografica.objects.create(
+            nombre=nombre,
+            nivel=nivel,
+            parent=parent,
+            codigo=codigo,
+        )
+        return JsonResponse({
+            'ok': True,
+            'id': obj.id,
+            'nombre': obj.nombre,
+            'nivel': obj.nivel,
+            'codigo': obj.codigo or '',
+            'parent_id': obj.parent_id,
+        })
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'JSON inválido'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(['POST'])
+def api_ubicaciones_editar(request):
+    """Edita una ubicación existente."""
+    import json
+    try:
+        body = json.loads(request.body)
+        obj_id = body.get('id')
+        nombre = body.get('nombre', '').strip()
+        codigo = body.get('codigo', '').strip() or None
+
+        if not obj_id or not nombre:
+            return JsonResponse({'error': 'ID y nombre son requeridos'}, status=400)
+
+        try:
+            obj = UbicacionGeografica.objects.get(id=obj_id)
+        except UbicacionGeografica.DoesNotExist:
+            return JsonResponse({'error': 'Ubicación no encontrada'}, status=404)
+
+        # Verificar duplicado (excluyéndose a sí mismo)
+        dup = UbicacionGeografica.objects.filter(
+            nombre=nombre, nivel=obj.nivel, parent=obj.parent
+        ).exclude(id=obj.id).exists()
+        if dup:
+            return JsonResponse({'error': f'Ya existe {obj.nivel} "{nombre}" en esta ubicación padre'}, status=400)
+
+        obj.nombre = nombre
+        obj.codigo = codigo
+        obj.save()
+        return JsonResponse({
+            'ok': True,
+            'id': obj.id,
+            'nombre': obj.nombre,
+            'nivel': obj.nivel,
+            'codigo': obj.codigo or '',
+            'parent_id': obj.parent_id,
+        })
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'JSON inválido'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(['POST'])
+def api_ubicaciones_eliminar(request):
+    """Elimina una ubicación (borra en cascada hijos)."""
+    import json
+    try:
+        body = json.loads(request.body)
+        obj_id = body.get('id')
+        if not obj_id:
+            return JsonResponse({'error': 'ID requerido'}, status=400)
+
+        try:
+            obj = UbicacionGeografica.objects.get(id=obj_id)
+        except UbicacionGeografica.DoesNotExist:
+            return JsonResponse({'error': 'Ubicación no encontrada'}, status=404)
+
+        nombre_eliminado = obj.nombre
+        nivel_eliminado = obj.nivel
+        obj.delete()  # CASCADE elimina hijos automáticamente
+        return JsonResponse({
+            'ok': True,
+            'mensaje': f'{nivel_eliminado.capitalize()} "{nombre_eliminado}" eliminado correctamente',
+        })
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'JSON inválido'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)

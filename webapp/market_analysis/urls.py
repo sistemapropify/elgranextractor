@@ -22,4 +22,11 @@ urlpatterns = [
     path('api/update-property-field/', views.api_update_property_field, name='api_update_property_field'),
     # Vista alternativa de detalle de propiedad (para evitar error ModuleNotFoundError)
     path('property-quick-detail/<int:property_id>/', views.property_quick_detail, name='property_quick_detail'),
+    # Gestor de ubicaciones geográficas (Departamento → Provincia → Distrito)
+    path('ubicaciones/', views.ubicaciones_view, name='ubicaciones'),
+    path('api/ubicaciones/departamentos/', views.api_ubicaciones_departamentos, name='api_ubicaciones_departamentos'),
+    path('api/ubicaciones/hijos/<int:parent_id>/', views.api_ubicaciones_hijos, name='api_ubicaciones_hijos'),
+    path('api/ubicaciones/crear/', views.api_ubicaciones_crear, name='api_ubicaciones_crear'),
+    path('api/ubicaciones/editar/', views.api_ubicaciones_editar, name='api_ubicaciones_editar'),
+    path('api/ubicaciones/eliminar/', views.api_ubicaciones_eliminar, name='api_ubicaciones_eliminar'),
 ]
