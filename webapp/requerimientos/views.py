@@ -44,6 +44,11 @@ class ListaRequerimientosView(ListView):
     def get_queryset(self):
         queryset = super().get_queryset()
         
+        # ── Excluir "No Especificado" por defecto ──
+        # Los requerimientos sin condición definida no se muestran en la lista
+        # ni se cuentan en los totales/verificados.
+        queryset = queryset.exclude(condicion='no_especificado')
+        
         # ── Filtros ─────────────────────────────
         q = self.request.GET.get('q', '').strip()
         fuente = self.request.GET.get('fuente', '').strip()
@@ -163,9 +168,11 @@ class ListaRequerimientosView(ListView):
         context['formas_pago'] = FormaPagoChoices.choices
         context['ternario_opts'] = TernarioChoices.choices
         context['tipos_originales'] = TipoOriginalChoices.choices
-        context['verificados_count'] = Requerimiento.objects.filter(verificado=True).count()
-        context['no_verificados_count'] = Requerimiento.objects.filter(verificado=False).count()
-        context['total_count'] = Requerimiento.objects.count()
+        # Excluir "No Especificado" de todos los conteos
+        base_qs = Requerimiento.objects.exclude(condicion='no_especificado')
+        context['verificados_count'] = base_qs.filter(verificado=True).count()
+        context['no_verificados_count'] = base_qs.filter(verificado=False).count()
+        context['total_count'] = base_qs.count()
         
         return context
 
