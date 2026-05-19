@@ -1941,6 +1941,23 @@ function sincronizarEditDesdeVista() {
         return el ? (el.textContent || '').trim() : '';
     }
 
+    // Helper: obtener tags desde un field-view que contiene .tag-item
+    // IMPORTANTE: textContent concatena el texto de todos los hijos sin separador,
+    // por lo que "Cayma" + "Yanahuara" se convertiría en "CaymaYanahuara".
+    // Este helper extrae cada .tag-item individualmente y los une con coma.
+    function viewTags(id) {
+        var el = document.getElementById(id);
+        if (!el) return '';
+        var tagItems = el.querySelectorAll('.tag-item');
+        if (tagItems.length > 0) {
+            var tags = [];
+            tagItems.forEach(function(t) { tags.push(t.textContent.trim()); });
+            return tags.join(', ');
+        }
+        var txt = (el.textContent || '').trim();
+        return (txt && txt !== '—') ? txt : '';
+    }
+
     // Agente — solo si el input está vacío (no sobreescribir lo que el usuario escribió)
     var agenteInput = document.getElementById('editAgente');
     if (agenteInput && !agenteInput.value.trim()) {
@@ -1959,16 +1976,16 @@ function sincronizarEditDesdeVista() {
     var fuenteTxt = viewText('modalFuente');
     if (fuenteTxt && fuenteTxt !== '—') document.getElementById('editFuente').value = fuenteTxt;
 
-    // Distritos — restaurar como tags
-    var distTxt = viewText('modalDistritos');
+    // Distritos — restaurar como tags (usar viewTags para separar correctamente)
+    var distTxt = viewTags('modalDistritos');
     inicializarTags('distritos', (distTxt && distTxt !== '—') ? distTxt : '');
 
-    // Urbanización — restaurar como tags
-    var urbTxt = viewText('modalUrbanizacion');
+    // Urbanización — restaurar como tags (usar viewTags para separar correctamente)
+    var urbTxt = viewTags('modalUrbanizacion');
     inicializarTags('urbanizacion', (urbTxt && urbTxt !== '—') ? urbTxt : '');
 
-    // Zona — restaurar como tags
-    var zonaTxt = viewText('modalZona');
+    // Zona — restaurar como tags (usar viewTags para separar correctamente)
+    var zonaTxt = viewTags('modalZona');
     inicializarTags('zona', (zonaTxt && zonaTxt !== '—') ? zonaTxt : '');
 
     // Presupuesto: "S/ 250,000" o "$ 500,000" → "250000" o "500000"
