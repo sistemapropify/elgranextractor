@@ -566,6 +566,40 @@
         }
     }
 
+    /* ── Quality Score Badges ───────────────── */
+    .quality-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 36px;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: help;
+        gap: 3px;
+    }
+    .quality-excelente {
+        background-color: rgba(35, 134, 54, 0.2);
+        color: #3fb950;
+        border: 1px solid rgba(35, 134, 54, 0.4);
+    }
+    .quality-bueno {
+        background-color: rgba(88, 166, 255, 0.2);
+        color: #58a6ff;
+        border: 1px solid rgba(88, 166, 255, 0.4);
+    }
+    .quality-regular {
+        background-color: rgba(210, 153, 34, 0.2);
+        color: #d29922;
+        border: 1px solid rgba(210, 153, 34, 0.4);
+    }
+    .quality-malo {
+        background-color: rgba(248, 81, 73, 0.2);
+        color: #f85149;
+        border: 1px solid rgba(248, 81, 73, 0.4);
+    }
+
     /* ── Tags para Zona / Calles ────────────── */
     .tags-container {
         display: flex;
@@ -807,6 +841,18 @@
                     </select>
                 </div>
                 
+                <!-- Quality Score Filter -->
+                <div class="form-group">
+                    <label for="quality_nivel">Calidad</label>
+                    <select id="quality_nivel" name="quality_nivel" class="form-control">
+                        <option value="">Todos</option>
+                        <option value="Excelente" {% if current_filters.quality_nivel == 'Excelente' %}selected{% endif %}>🟢 Excelente</option>
+                        <option value="Bueno" {% if current_filters.quality_nivel == 'Bueno' %}selected{% endif %}>🔵 Bueno</option>
+                        <option value="Regular" {% if current_filters.quality_nivel == 'Regular' %}selected{% endif %}>🟡 Regular</option>
+                        <option value="Malo" {% if current_filters.quality_nivel == 'Malo' %}selected{% endif %}>🔴 Malo</option>
+                    </select>
+                </div>
+                
                 <!-- Botones de acción -->
                 <div class="form-group filter-full-width filter-actions" style="margin-top:8px;">
                     <button type="submit" class="btn btn-primary">🔍 Aplicar Filtros</button>
@@ -836,6 +882,7 @@
                     <th>Área</th>
                     <th>Caracts</th>
                     <th>Tipo Orig.</th>
+                    <th style="width:80px;">Calidad</th>
                     <th>Mensaje Original</th>
                     <th>Acciones</th>
                 </tr>
@@ -1022,6 +1069,29 @@
                             {% endif %}
                         </td>
                         
+                        <!-- Calidad -->
+                        <td style="text-align:center;vertical-align:middle;">
+                            {% with qs=r.quality_score_cached %}
+                            {% if qs and qs.score is not None %}
+                                {% with nivel=qs.nivel score=qs.score %}
+                                {% if nivel == 'Excelente' %}
+                                    <span class="quality-badge quality-excelente" title="Score: {{ score }}/100&#10;Completitud: {{ qs.dimensiones.completitud|floatformat:0 }}%&#10;Especificidad: {{ qs.dimensiones.especificidad|floatformat:0 }}%&#10;Presupuesto: {{ qs.dimensiones.presupuesto|floatformat:0 }}%&#10;Antigüedad: {{ qs.dimensiones.antiguedad|floatformat:0 }}%">🟢 {{ score|floatformat:0 }}</span>
+                                {% elif nivel == 'Bueno' %}
+                                    <span class="quality-badge quality-bueno" title="Score: {{ score }}/100&#10;Completitud: {{ qs.dimensiones.completitud|floatformat:0 }}%&#10;Especificidad: {{ qs.dimensiones.especificidad|floatformat:0 }}%&#10;Presupuesto: {{ qs.dimensiones.presupuesto|floatformat:0 }}%&#10;Antigüedad: {{ qs.dimensiones.antiguedad|floatformat:0 }}%">🔵 {{ score|floatformat:0 }}</span>
+                                {% elif nivel == 'Regular' %}
+                                    <span class="quality-badge quality-regular" title="Score: {{ score }}/100&#10;Completitud: {{ qs.dimensiones.completitud|floatformat:0 }}%&#10;Especificidad: {{ qs.dimensiones.especificidad|floatformat:0 }}%&#10;Presupuesto: {{ qs.dimensiones.presupuesto|floatformat:0 }}%&#10;Antigüedad: {{ qs.dimensiones.antiguedad|floatformat:0 }}%">🟡 {{ score|floatformat:0 }}</span>
+                                {% elif nivel == 'Malo' %}
+                                    <span class="quality-badge quality-malo" title="Score: {{ score }}/100&#10;Completitud: {{ qs.dimensiones.completitud|floatformat:0 }}%&#10;Especificidad: {{ qs.dimensiones.especificidad|floatformat:0 }}%&#10;Presupuesto: {{ qs.dimensiones.presupuesto|floatformat:0 }}%&#10;Antigüedad: {{ qs.dimensiones.antiguedad|floatformat:0 }}%">🔴 {{ score|floatformat:0 }}</span>
+                                {% else %}
+                                    <span style="color:#484f58;font-size:12px;">—</span>
+                                {% endif %}
+                                {% endwith %}
+                            {% else %}
+                                <span style="color:#484f58;font-size:12px;">—</span>
+                            {% endif %}
+                            {% endwith %}
+                        </td>
+                        
                         <!-- Mensaje Original -->
                         <td>
                             {% if r.requerimiento %}
@@ -1070,7 +1140,7 @@
                     {% endfor %}
                 {% else %}
                     <tr>
-                        <td colspan="17">
+                        <td colspan="18">
                             <div class="empty-state">
                                 <h3>{% if current_filters %}No se encontraron requerimientos con esos filtros{% else %}No hay requerimientos registrados{% endif %}</h3>
                                 <p>{% if current_filters %}Intenta con otros filtros o <a href="{% url 'requerimientos:lista' %}" style="color:#58a6ff;">limpia los filtros</a>{% else %}Importa datos desde Excel para comenzar{% endif %}</p>
@@ -1144,8 +1214,24 @@
                             </select>
                         </div>
                     </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                        <!-- ── COLUMNA IZQUIERDA ── -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+                        <!-- COLUMNA IZQUIERDA: Mensaje Original + timestamps -->
+                        <div>
+                            <div class="modal-field-group">
+                                <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; display: block; margin-bottom: 8px;">
+                                    <i class="bi bi-chat-dots me-1"></i>Mensaje Original
+                                </label>
+                                <div class="field-view" id="modalMensaje" style="background-color: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 12px 16px; color: #c9d1d9; font-size: 13px; line-height: 1.6; white-space: pre-wrap; max-height: 300px; overflow-y: auto;">—</div>
+                                <div class="field-edit" style="display: none;">
+                                    <textarea id="editMensaje" class="form-control edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 6px; padding: 12px 16px; font-size: 13px; line-height: 1.6; width: 100%; min-height: 200px; resize: vertical;" placeholder="Mensaje original completo..."></textarea>
+                                </div>
+                            </div>
+                            <div style="margin-top: 12px; display: flex; flex-direction: column; gap: 6px; font-size: 11px; color: #484f58; padding: 8px 12px; background-color: #0d1117; border: 1px solid #30363d; border-radius: 6px;">
+                                <span><span style="color:#8b949e;">Creado:</span> <span id="modalCreado">—</span></span>
+                                <span><span style="color:#8b949e;">Actualizado:</span> <span id="modalActualizado">—</span></span>
+                            </div>
+                        </div>
+                        <!-- COLUMNA CENTRAL: Datos de contacto y clasificación -->
                         <div>
                             <!-- Agente -->
                             <div class="modal-field-group">
@@ -1284,7 +1370,7 @@
                                 </div>
                             </div>
                         </div>
-                        <!-- ── COLUMNA DERECHA ── -->
+                        <!-- COLUMNA DERECHA: Presupuesto y especificaciones -->
                         <div>
                             <!-- Presupuesto -->
                             <div class="modal-field-group">
@@ -1371,19 +1457,6 @@
                                 </div>
                             </div>
                         </div>
-                    </div>
-                    <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid #30363d;">
-                        <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; display: block; margin-bottom: 8px;">
-                            <i class="bi bi-chat-dots me-1"></i>Mensaje Original
-                        </label>
-                        <div class="field-view" id="modalMensaje" style="background-color: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 12px 16px; color: #c9d1d9; font-size: 13px; line-height: 1.6; white-space: pre-wrap; max-height: 200px; overflow-y: auto;">—</div>
-                        <div class="field-edit" style="display: none;">
-                            <textarea id="editMensaje" class="form-control edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 6px; padding: 12px 16px; font-size: 13px; line-height: 1.6; width: 100%; min-height: 120px; resize: vertical;" placeholder="Mensaje original completo..."></textarea>
-                        </div>
-                    </div>
-                    <div style="margin-top: 12px; display: flex; gap: 16px; font-size: 11px; color: #484f58;">
-                        <span>Creado: <span id="modalCreado">—</span></span>
-                        <span>Actualizado: <span id="modalActualizado">—</span></span>
                     </div>
                 </div>
             </div>

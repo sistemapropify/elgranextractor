@@ -1030,18 +1030,18 @@
         
         <div class="ms-auto d-flex align-items-center">
             {% block header_actions %}
-            {% if user.is_authenticated %}
+            {% if request.current_user %}
                 <span class="text-success me-2 small d-none d-md-inline">
                     <i class="bi bi-person-circle"></i>
-                    {{ user.username }}
+                    {{ request.current_user.username }}
                 </span>
-                <a href="{% url 'admin:logout' %}?next={% firstof request.path '/' %}" class="btn btn-outline-danger btn-sm me-2">
+                <a href="{% url 'intelligence:logout' %}?next={{ request.path }}" class="btn btn-outline-danger btn-sm me-2">
                     <i class="bi bi-box-arrow-right"></i> Cerrar sesión
                 </a>
             {% else %}
-                <a href="{% url 'admin:login' %}?next={% firstof request.path '/' %}" class="btn btn-outline-success btn-sm me-2">
+                <button onclick="document.getElementById('login-modal').style.display='flex'" class="btn btn-outline-success btn-sm me-2" style="border:none;background:none;cursor:pointer;">
                     <i class="bi bi-box-arrow-in-right"></i> Iniciar sesión
-                </a>
+                </button>
             {% endif %}
             {% if user.is_staff %}
             <a href="/admin/" class="btn btn-outline-secondary btn-sm me-2" target="_blank">
@@ -1354,5 +1354,73 @@
         
         {% block extra_js %}{% endblock %}
     </script>
+
+    {% if not request.current_user %}
+    <!-- LOGIN MODAL -->
+    <div id="login-modal" class="auth-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;justify-content:center;align-items:center;">
+        <div style="position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);" onclick="document.getElementById('login-modal').style.display='none'"></div>
+        <div style="position:relative;background:var(--bg-primary,#1e1e2e);border-radius:12px;padding:28px;width:90%;max-width:400px;box-shadow:0 8px 32px rgba(0,0,0,0.4);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+                <h3 style="margin:0;color:var(--text-primary,#e6edf3);">🔑 Iniciar Sesión</h3>
+                <button onclick="document.getElementById('login-modal').style.display='none'" style="background:none;border:none;color:var(--text-secondary,#8b949e);font-size:24px;cursor:pointer;">&times;</button>
+            </div>
+            <form method="POST" action="{% url 'intelligence:login' %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.path }}">
+                <div style="margin-bottom:14px;">
+                    <label style="display:block;margin-bottom:4px;font-size:13px;color:var(--text-secondary,#8b949e);">Usuario</label>
+                    <input type="text" name="username" placeholder="Nombre de usuario" required style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border-color,#30363d);background:var(--bg-secondary,#161b22);color:var(--text-primary,#e6edf3);font-size:14px;box-sizing:border-box;">
+                </div>
+                <div style="margin-bottom:20px;">
+                    <label style="display:block;margin-bottom:4px;font-size:13px;color:var(--text-secondary,#8b949e);">Contraseña</label>
+                    <input type="password" name="password" placeholder="Contraseña" required style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border-color,#30363d);background:var(--bg-secondary,#161b22);color:var(--text-primary,#e6edf3);font-size:14px;box-sizing:border-box;">
+                </div>
+                <div style="display:flex;justify-content:flex-end;gap:8px;">
+                    <button type="button" onclick="document.getElementById('login-modal').style.display='none'" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border-color,#30363d);background:transparent;color:var(--text-primary,#e6edf3);cursor:pointer;font-size:13px;">Cancelar</button>
+                    <button type="submit" style="padding:8px 16px;border-radius:8px;border:none;background:#238636;color:#fff;cursor:pointer;font-size:13px;font-weight:500;">Ingresar</button>
+                </div>
+            </form>
+            <div style="margin-top:14px;text-align:center;font-size:13px;color:var(--text-secondary,#8b949e);">
+                ¿No tienes cuenta?
+                <a href="#" onclick="document.getElementById('login-modal').style.display='none';document.getElementById('register-modal').style.display='flex';return false;" style="color:#58a6ff;">Regístrate aquí</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- REGISTER MODAL -->
+    <div id="register-modal" class="auth-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;justify-content:center;align-items:center;">
+        <div style="position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);" onclick="document.getElementById('register-modal').style.display='none'"></div>
+        <div style="position:relative;background:var(--bg-primary,#1e1e2e);border-radius:12px;padding:28px;width:90%;max-width:400px;box-shadow:0 8px 32px rgba(0,0,0,0.4);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+                <h3 style="margin:0;color:var(--text-primary,#e6edf3);">📝 Crear Cuenta</h3>
+                <button onclick="document.getElementById('register-modal').style.display='none'" style="background:none;border:none;color:var(--text-secondary,#8b949e);font-size:24px;cursor:pointer;">&times;</button>
+            </div>
+            <form method="POST" action="{% url 'intelligence:register' %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.path }}">
+                <div style="margin-bottom:14px;">
+                    <label style="display:block;margin-bottom:4px;font-size:13px;color:var(--text-secondary,#8b949e);">Nombre de usuario</label>
+                    <input type="text" name="username" placeholder="Ej: juanperez" required style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border-color,#30363d);background:var(--bg-secondary,#161b22);color:var(--text-primary,#e6edf3);font-size:14px;box-sizing:border-box;">
+                </div>
+                <div style="margin-bottom:14px;">
+                    <label style="display:block;margin-bottom:4px;font-size:13px;color:var(--text-secondary,#8b949e);">Contraseña</label>
+                    <input type="password" name="password" placeholder="Mínimo 6 caracteres" required minlength="6" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border-color,#30363d);background:var(--bg-secondary,#161b22);color:var(--text-primary,#e6edf3);font-size:14px;box-sizing:border-box;">
+                </div>
+                <div style="margin-bottom:20px;">
+                    <label style="display:block;margin-bottom:4px;font-size:13px;color:var(--text-secondary,#8b949e);">Teléfono (opcional)</label>
+                    <input type="text" name="phone" placeholder="Ej: +51999888777" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border-color,#30363d);background:var(--bg-secondary,#161b22);color:var(--text-primary,#e6edf3);font-size:14px;box-sizing:border-box;">
+                </div>
+                <div style="display:flex;justify-content:flex-end;gap:8px;">
+                    <button type="button" onclick="document.getElementById('register-modal').style.display='none'" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border-color,#30363d);background:transparent;color:var(--text-primary,#e6edf3);cursor:pointer;font-size:13px;">Cancelar</button>
+                    <button type="submit" style="padding:8px 16px;border-radius:8px;border:none;background:#238636;color:#fff;cursor:pointer;font-size:13px;font-weight:500;">Crear Cuenta</button>
+                </div>
+            </form>
+            <div style="margin-top:14px;text-align:center;font-size:13px;color:var(--text-secondary,#8b949e);">
+                ¿Ya tienes cuenta?
+                <a href="#" onclick="document.getElementById('register-modal').style.display='none';document.getElementById('login-modal').style.display='flex';return false;" style="color:#58a6ff;">Inicia sesión</a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 </body>
 </html>

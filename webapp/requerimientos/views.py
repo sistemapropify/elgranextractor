@@ -58,6 +58,7 @@ class ListaRequerimientosView(ListView):
         amueblado = self.request.GET.get('amueblado', '').strip()
         tipo_original = self.request.GET.get('tipo_original', '').strip()
         verificado = self.request.GET.get('verificado', '').strip()
+        quality_nivel = self.request.GET.get('quality_nivel', '').strip()
         presupuesto_min = self.request.GET.get('presupuesto_min', '').strip()
         presupuesto_max = self.request.GET.get('presupuesto_max', '').strip()
         hab_min = self.request.GET.get('hab_min', '').strip()
@@ -101,6 +102,8 @@ class ListaRequerimientosView(ListView):
             queryset = queryset.filter(verificado=True)
         elif verificado == 'no':
             queryset = queryset.filter(verificado=False)
+        if quality_nivel:
+            queryset = queryset.filter(quality_nivel=quality_nivel)
         
         # Rangos numéricos
         if presupuesto_min:
@@ -1410,4 +1413,30 @@ class ApiEstadisticasCalidadView(View):
                 {'rango': k, 'count': v}
                 for k, v in sorted(distribucion.items(), key=lambda x: int(x[0].split('-')[0]))
             ],
+        })
+
+class ApiRecalcularQualityView(View):
+    """API para recalcular y persistir quality scores de todos los requerimientos."""
+
+    def post(self, request, *args, **kwargs):
+        from .analytics import _get_calidad_config
+        config = _get_calidad_config()
+        requerimientos = Requerimiento.objects.all()
+        total = requerimientos.count()
+        actualizados = 0
+        errores = 0
+
+        for req in requerimientos.iterator(chunk_size=500):
+            try:
+                req.recalcular_quality_score(config=config, guardar=True)
+                actualizados += 1
+            except Exception:
+                errores += 1
+
+        return JsonResponse({
+            'success': True,
+            'total': total,
+            'actualizados': actualizados,
+            'errores': errores,
+            'mensaje': f'Se recalcularon {actualizados} de {total} requerimientos.'
         })

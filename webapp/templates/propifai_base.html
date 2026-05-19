@@ -881,12 +881,12 @@
                     {% block header_actions %}
                     <button class="header-btn" title="Actualizar" onclick="location.reload()">&#x21BB;</button>
                     <button class="header-btn" title="Notificaciones">&#x1F514;</button>
-                    {% if user.is_authenticated %}
+                    {% if request.current_user %}
                     <div class="user-info" style="display:flex;align-items:center;gap:8px;padding:4px 12px;border-right:1px solid var(--border-color);">
-                        <div class="user-avatar" title="{{ user.username }}">{{ user.username|first|upper }}</div>
-                        <span style="font-size:13px;color:var(--text-primary);font-weight:500;">{{ user.username }}</span>
+                        <div class="user-avatar" title="{{ request.current_user.username }}">{{ request.current_user.username|first|upper }}</div>
+                        <span style="font-size:13px;color:var(--text-primary);font-weight:500;">{{ request.current_user.username }}</span>
                     </div>
-                    <a href="{% url 'admin:logout' %}?next={% firstof request.path '/' %}"
+                    <a href="{% url 'intelligence:logout' %}?next={{ request.path }}"
                        class="auth-btn auth-btn-logout"
                        title="Cerrar Sesión"
                        style="text-decoration:none;display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:8px;border:1px solid var(--border-color);background-color:var(--bg-tertiary);color:#f85149;font-size:13px;font-weight:500;transition:all 0.2s ease;cursor:pointer;">
@@ -894,13 +894,13 @@
                         <span>Cerrar Sesión</span>
                     </a>
                     {% else %}
-                    <a href="{% url 'admin:login' %}?next={% firstof request.path '/' %}"
-                       class="auth-btn auth-btn-login"
-                       title="Iniciar Sesión"
-                       style="text-decoration:none;display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:8px;border:1px solid #238636;background-color:#1f6f3a;color:#fff;font-size:13px;font-weight:500;transition:all 0.2s ease;cursor:pointer;">
+                    <button class="auth-btn auth-btn-login"
+                            onclick="document.getElementById('login-modal').style.display='flex'"
+                            title="Iniciar Sesión"
+                            style="text-decoration:none;display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:8px;border:1px solid #238636;background-color:#1f6f3a;color:#fff;font-size:13px;font-weight:500;transition:all 0.2s ease;cursor:pointer;">
                         <span style="font-size:16px;">🔑</span>
                         <span>Iniciar Sesión</span>
-                    </a>
+                    </button>
                     {% endif %}
                     {% endblock %}
                 </div>
@@ -914,6 +914,85 @@
             </div>
         </div>
     </div>
+
+    {% if not request.current_user %}
+    <!-- ═══════════════════════════════════════════════════════════════
+         LOGIN MODAL — Sistema de autenticación Intelligence
+         ═══════════════════════════════════════════════════════════════ -->
+    <div id="login-modal" class="auth-modal" style="display:none;">
+        <div class="auth-modal-backdrop" onclick="document.getElementById('login-modal').style.display='none'"></div>
+        <div class="auth-modal-content">
+            <div class="auth-modal-header">
+                <h3>🔑 Iniciar Sesión</h3>
+                <button class="auth-modal-close" onclick="document.getElementById('login-modal').style.display='none'">&times;</button>
+            </div>
+            <form method="POST" action="{% url 'intelligence:login' %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.path }}">
+                <div class="auth-form-group">
+                    <label class="auth-form-label">Usuario</label>
+                    <input type="text" name="username" class="auth-form-input" placeholder="Nombre de usuario" required>
+                </div>
+                <div class="auth-form-group">
+                    <label class="auth-form-label">Contraseña</label>
+                    <input type="password" name="password" class="auth-form-input" placeholder="Contraseña" required>
+                </div>
+                <div class="auth-modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('login-modal').style.display='none'">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Ingresar</button>
+                </div>
+            </form>
+            <div style="margin-top:12px;text-align:center;font-size:13px;color:var(--text-secondary);">
+                ¿No tienes cuenta?
+                <a href="#" onclick="document.getElementById('login-modal').style.display='none';document.getElementById('register-modal').style.display='flex';return false;" style="color:var(--accent-blue);">Regístrate aquí</a>
+            </div>
+            {% if messages %}
+            <div style="margin-top:12px;">
+                {% for message in messages %}
+                <div class="alert alert-{% if message.tags == 'error' %}error{% else %}info{% endif %}" style="padding:8px 12px;border-radius:6px;font-size:13px;{% if message.tags == 'error' %}background-color:rgba(248,81,73,0.1);color:#f85149;border:1px solid rgba(248,81,73,0.3);{% else %}background-color:rgba(88,166,255,0.1);color:#58a6ff;border:1px solid rgba(88,166,255,0.3);{% endif %}">{{ message }}</div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         REGISTER MODAL
+         ═══════════════════════════════════════════════════════════════ -->
+    <div id="register-modal" class="auth-modal" style="display:none;">
+        <div class="auth-modal-backdrop" onclick="document.getElementById('register-modal').style.display='none'"></div>
+        <div class="auth-modal-content">
+            <div class="auth-modal-header">
+                <h3>📝 Crear Cuenta</h3>
+                <button class="auth-modal-close" onclick="document.getElementById('register-modal').style.display='none'">&times;</button>
+            </div>
+            <form method="POST" action="{% url 'intelligence:register' %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.path }}">
+                <div class="auth-form-group">
+                    <label class="auth-form-label">Nombre de usuario</label>
+                    <input type="text" name="username" class="auth-form-input" placeholder="Ej: juanperez" required>
+                </div>
+                <div class="auth-form-group">
+                    <label class="auth-form-label">Contraseña</label>
+                    <input type="password" name="password" class="auth-form-input" placeholder="Mínimo 6 caracteres" required minlength="6">
+                </div>
+                <div class="auth-form-group">
+                    <label class="auth-form-label">Teléfono (opcional)</label>
+                    <input type="text" name="phone" class="auth-form-input" placeholder="Ej: +51999888777">
+                </div>
+                <div class="auth-modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('register-modal').style.display='none'">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Crear Cuenta</button>
+                </div>
+            </form>
+            <div style="margin-top:12px;text-align:center;font-size:13px;color:var(--text-secondary);">
+                ¿Ya tienes cuenta?
+                <a href="#" onclick="document.getElementById('register-modal').style.display='none';document.getElementById('login-modal').style.display='flex';return false;" style="color:var(--accent-blue);">Inicia sesión</a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
     {% block extra_scripts %}{% endblock %}
 

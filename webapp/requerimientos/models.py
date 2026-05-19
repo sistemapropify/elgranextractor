@@ -233,6 +233,29 @@ class Requerimiento(models.Model):
         help_text='Marcar como TRUE cuando el requerimiento haya sido revisado manualmente',
     )
 
+    # ── Quality Score (persistente) ────────────
+    quality_score = models.DecimalField(
+        max_digits=5, decimal_places=1,
+        null=True, blank=True,
+        verbose_name='Score de calidad',
+        help_text='Score total de calidad (0-100). Se recalcula automáticamente.',
+    )
+    quality_nivel = models.CharField(
+        max_length=20,
+        null=True, blank=True,
+        verbose_name='Nivel de calidad',
+        help_text='Excelente/Bueno/Regular/Malo',
+    )
+    quality_detalle = models.JSONField(
+        null=True, blank=True,
+        verbose_name='Detalle de calidad',
+        help_text='Desglose de dimensiones: completitud, especificidad, presupuesto, antigüedad',
+    )
+    quality_actualizado_en = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='Quality Score actualizado en',
+    )
+
     # ── Auditoría ─────────────────────────────
     creado_en = models.DateTimeField(
         auto_now_add=True,
@@ -282,15 +305,45 @@ class Requerimiento(models.Model):
         simbolo = '$' if self.presupuesto_moneda == 'USD' else 'S/'
         return f"{simbolo}{self.presupuesto_monto:,.0f}"
 
-    @property
-    def quality_score(self) -> dict:
+    def recalcular_quality_score(self, config=None, guardar=True):
         """
-        Calcula el Quality Score del requerimiento.
-        Retorna dict con score, nivel y desglose de dimensiones.
-        Se calcula en tiempo real desde analytics.py.
+        Recalcula y persiste el Quality Score en los campos del modelo.
+        
+        Args:
+            config: Dict de configuración (opcional, usa la activa o defaults)
+            guardar: Si True, hace save() después de actualizar los campos
+        
+        Returns:
+            dict: Resultado del cálculo completo
         """
         from .analytics import calcular_quality_score
-        return calcular_quality_score(self)
+        from django.utils import timezone
+        
+        resultado = calcular_quality_score(self, config)
+        
+        self.quality_score = resultado['score']
+        self.quality_nivel = resultado['nivel']
+        self.quality_detalle = resultado['dimensiones']
+        self.quality_actualizado_en = timezone.now()
+        
+        if guardar:
+            self.save(update_fields=['quality_score', 'quality_nivel', 'quality_detalle', 'quality_actualizado_en'])
+        
+        return resultado
+
+    @property
+    def quality_score_cached(self) -> dict:
+        """
+        Retorna el Quality Score desde los campos persistidos.
+        Si no está calculado, lo calcula y guarda.
+        """
+        if self.quality_score is not None and self.quality_detalle is not None:
+            return {
+                'score': float(self.quality_score),
+                'nivel': self.quality_nivel,
+                'dimensiones': self.quality_detalle,
+            }
+        return self.recalcular_quality_score()
 
 
 class ZonaCalle(models.Model):

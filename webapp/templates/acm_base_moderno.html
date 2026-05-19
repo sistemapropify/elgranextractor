@@ -376,9 +376,9 @@
 <button class="header-btn" title="Notificaciones">
     <i class="fas fa-bell"></i>
 </button>
-{% if user.is_authenticated %}
-<div class="user-avatar" title="{{ user.username }}">{{ user.username|first|upper }}</div>
-<a href="{% url 'admin:logout' %}?next={% firstof request.path '/' %}"
+{% if request.current_user %}
+<div class="user-avatar" title="{{ request.current_user.username }}">{{ request.current_user.username|first|upper }}</div>
+<a href="{% url 'intelligence:logout' %}?next={{ request.path }}"
    class="header-btn"
    title="Cerrar Sesión"
    style="text-decoration:none;color:#f85149;font-size:13px;font-weight:500;display:flex;align-items:center;gap:4px;">
@@ -386,13 +386,13 @@
     <span>Cerrar Sesión</span>
 </a>
 {% else %}
-<a href="{% url 'admin:login' %}?next={% firstof request.path '/' %}"
-   class="header-btn"
-   title="Iniciar Sesión"
-   style="text-decoration:none;color:#238636;font-size:13px;font-weight:500;display:flex;align-items:center;gap:4px;">
+<button class="header-btn"
+        onclick="document.getElementById('login-modal').style.display='flex'"
+        title="Iniciar Sesión"
+        style="text-decoration:none;color:#238636;font-size:13px;font-weight:500;display:flex;align-items:center;gap:4px;border:none;background:none;cursor:pointer;">
     <i class="fas fa-sign-in-alt"></i>
     <span>Iniciar Sesión</span>
-</a>
+</button>
 {% endif %}
 {% endblock %}
 

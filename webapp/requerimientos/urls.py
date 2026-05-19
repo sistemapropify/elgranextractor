@@ -39,4 +39,5 @@ urlpatterns = [
     path('config-calidad/', views.ConfiguracionCalidadView.as_view(), name='config_calidad'),
     path('api/config-calidad/', views.ApiConfiguracionCalidadView.as_view(), name='api_config_calidad'),
     path('api/estadisticas-calidad/', views.ApiEstadisticasCalidadView.as_view(), name='api_estadisticas_calidad'),
+    path('api/recalcular-quality/', views.ApiRecalcularQualityView.as_view(), name='api_recalcular_quality'),
 ]

@@ -48,13 +48,21 @@ class AuthenticationMiddleware:
         #    resolver request.user con IDs enteros de sesiones pre-UUID.
         self._cleanup_invalid_session(request)
 
-        # 1. Establecer current_user desde la sesión
+        # 1. Establecer current_user desde la sesión de intelligence
         request.current_user = get_authenticated_user(request)
 
         # 2. Verificar autenticación para rutas protegidas
         path = request.path_info
 
-        if not request.current_user and not self._is_public_path(path):
+        # Si no hay current_user de intelligence pero sí está autenticado
+        # vía Django Admin (request.user), considerarlo como autenticado
+        # para evitar redirecciones innecesarias al login de intelligence.
+        is_authenticated = (
+            request.current_user is not None or
+            (hasattr(request, 'user') and request.user.is_authenticated)
+        )
+
+        if not is_authenticated and not self._is_public_path(path):
             login_url = reverse('login')
             if path != login_url:
                 return redirect(f'{login_url}?next={path}')

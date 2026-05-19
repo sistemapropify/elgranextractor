@@ -1,0 +1,775 @@
+{% extends 'propifai_base.html' %}
+{% load static %}
+
+{% block title %}Configuración de Calidad - Requerimientos{% endblock %}
+
+{% block header_title_area %}
+<div class="header-title">⚙️ Configuración de Calidad <span>— Quality Score</span></div>
+{% endblock %}
+
+{% block content %}
+<style>
+:root {
+    --bg-primary: #0d1117;
+    --bg-secondary: #161b22;
+    --bg-tertiary: #21262d;
+    --border-color: #30363d;
+    --text-primary: #e6edf3;
+    --text-secondary: #8b949e;
+    --accent-blue: #58a6ff;
+    --accent-green: #238636;
+    --accent-orange: #d29922;
+    --accent-red: #f85149;
+}
+
+.qc-container {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 24px;
+}
+
+.qc-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 20px;
+}
+
+.qc-card h3 {
+    margin: 0 0 16px 0;
+    font-size: 16px;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.qc-card h3 small {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-weight: 400;
+}
+
+.qc-slider-group {
+    margin-bottom: 14px;
+}
+
+.qc-slider-group label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.qc-slider-group label span.val {
+    color: var(--accent-blue);
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.qc-slider {
+    width: 100%;
+    height: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--bg-tertiary);
+    border-radius: 3px;
+    outline: none;
+    cursor: pointer;
+}
+
+.qc-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--accent-blue);
+    cursor: pointer;
+    border: 2px solid var(--bg-secondary);
+}
+
+.qc-slider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--accent-blue);
+    cursor: pointer;
+    border: 2px solid var(--bg-secondary);
+}
+
+.qc-total-bar {
+    display: flex;
+    height: 8px;
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 12px 0 8px 0;
+}
+
+.qc-total-bar .seg {
+    transition: width 0.3s ease;
+}
+
+.qc-total-label {
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.qc-total-label.ok { color: var(--accent-green); }
+.qc-total-label.warn { color: var(--accent-orange); }
+.qc-total-label.err { color: var(--accent-red); }
+
+.qc-input-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+    padding: 8px 12px;
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+}
+
+.qc-input-group label {
+    font-size: 13px;
+    color: var(--text-primary);
+    flex: 1;
+}
+
+.qc-input-group input[type="number"] {
+    width: 60px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 13px;
+    text-align: center;
+}
+
+.qc-input-group .desc {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.qc-input-group .campos-list {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-left: auto;
+    max-width: 200px;
+    text-align: right;
+}
+
+.qc-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    margin-top: 24px;
+}
+
+.qc-btn {
+    padding: 10px 24px;
+    border-radius: 8px;
+    border: none;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.qc-btn-primary {
+    background: var(--accent-green);
+    color: #fff;
+}
+
+.qc-btn-primary:hover {
+    background: #2ea043;
+}
+
+.qc-btn-secondary {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+}
+
+.qc-btn-secondary:hover {
+    background: var(--border-color);
+}
+
+.qc-btn-danger {
+    background: transparent;
+    color: var(--accent-red);
+    border: 1px solid var(--accent-red);
+}
+
+.qc-btn-danger:hover {
+    background: rgba(248,81,73,0.1);
+}
+
+.qc-toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    z-index: 9999;
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: all 0.3s ease;
+}
+
+.qc-toast.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.qc-toast.success {
+    background: rgba(35,134,54,0.9);
+    color: #fff;
+    border: 1px solid var(--accent-green);
+}
+
+.qc-toast.error {
+    background: rgba(248,81,73,0.9);
+    color: #fff;
+    border: 1px solid var(--accent-red);
+}
+
+.qc-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.qc-stat-card {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 16px;
+    text-align: center;
+}
+
+.qc-stat-card .num {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.qc-stat-card .label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.qc-stat-card .sub {
+    font-size: 12px;
+    color: var(--accent-blue);
+    margin-top: 2px;
+}
+
+.qc-dimension-bars {
+    margin-top: 16px;
+}
+
+.qc-dim-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-size: 12px;
+}
+
+.qc-dim-bar .dim-label {
+    width: 100px;
+    color: var(--text-secondary);
+    text-align: right;
+}
+
+.qc-dim-bar .dim-track {
+    flex: 1;
+    height: 6px;
+    background: var(--bg-tertiary);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.qc-dim-bar .dim-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s ease;
+}
+
+.qc-dim-bar .dim-val {
+    width: 40px;
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.qc-distribucion-bars {
+    margin-top: 12px;
+}
+
+.qc-dist-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+    font-size: 12px;
+}
+
+.qc-dist-bar .rango {
+    width: 60px;
+    color: var(--text-secondary);
+    text-align: right;
+}
+
+.qc-dist-bar .dist-track {
+    flex: 1;
+    height: 16px;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+}
+
+.qc-dist-bar .dist-fill {
+    height: 100%;
+    border-radius: 4px;
+    background: var(--accent-blue);
+    opacity: 0.7;
+    transition: width 0.5s ease;
+}
+
+.qc-dist-bar .dist-count {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 10px;
+    color: var(--text-primary);
+    font-weight: 600;
+}
+</style>
+
+<div class="qc-container">
+    <!-- Toast -->
+    <div id="qcToast" class="qc-toast"></div>
+
+    <!-- Stats -->
+    <div class="qc-stats-grid" id="statsGrid">
+        <div class="qc-stat-card">
+            <div class="num" id="statTotal">—</div>
+            <div class="label">Requerimientos</div>
+        </div>
+        <div class="qc-stat-card">
+            <div class="num" id="statPromedio">—</div>
+            <div class="label">Score Promedio</div>
+        </div>
+        <div class="qc-stat-card">
+            <div class="num" id="statExcelente">—</div>
+            <div class="label">Excelente (80+)</div>
+            <div class="sub" id="statExcelentePct"></div>
+        </div>
+        <div class="qc-stat-card">
+            <div class="num" id="statBueno">—</div>
+            <div class="label">Bueno (60-79)</div>
+        </div>
+        <div class="qc-stat-card">
+            <div class="num" id="statRegular">—</div>
+            <div class="label">Regular (40-59)</div>
+        </div>
+        <div class="qc-stat-card">
+            <div class="num" id="statMalo">—</div>
+            <div class="label">Malo (<40)</div>
+        </div>
+    </div>
+
+    <!-- Dimensiones promedio -->
+    <div class="qc-card">
+        <h3>📊 Dimensiones promedio</h3>
+        <div class="qc-dimension-bars" id="dimensionBars"></div>
+    </div>
+
+    <!-- Distribución de scores -->
+    <div class="qc-card">
+        <h3>📈 Distribución de scores</h3>
+        <div class="qc-distribucion-bars" id="distribucionBars"></div>
+    </div>
+
+    <!-- ═══════════ PESOS DE DIMENSIONES ═══════════ -->
+    <div class="qc-card">
+        <h3>⚖️ Pesos de cada dimensión <small>Debe sumar 100%</small></h3>
+        <div id="pesosContainer"></div>
+        <div class="qc-total-bar" id="totalBar"></div>
+        <div class="qc-total-label" id="totalLabel">Total: 0%</div>
+    </div>
+
+    <!-- ═══════════ TIERS DE COMPLETITUD ═══════════ -->
+    <div class="qc-card">
+        <h3>📋 Tiers de completitud <small>Puntos por campo en cada nivel</small></h3>
+        <div id="tiersContainer"></div>
+    </div>
+
+    <!-- ═══════════ NIVELES DE ESPECIFICIDAD ═══════════ -->
+    <div class="qc-card">
+        <h3>📍 Niveles de especificidad <small>Puntaje por nivel geográfico</small></h3>
+        <div id="especificidadContainer"></div>
+    </div>
+
+    <!-- ═══════════ RANGOS DE ANTIGÜEDAD ═══════════ -->
+    <div class="qc-card">
+        <h3>📅 Rangos de antigüedad <small>Días vs puntaje</small></h3>
+        <div id="antiguedadContainer"></div>
+    </div>
+
+    <!-- ═══════════ PERCENTILES DE PRESUPUESTO ═══════════ -->
+    <div class="qc-card">
+        <h3>💰 Percentiles de presupuesto <small>Puntaje por ubicación en percentil</small></h3>
+        <div id="presupuestoContainer"></div>
+    </div>
+
+    <!-- Acciones -->
+    <div class="qc-actions">
+        <button class="qc-btn qc-btn-secondary" onclick="cargarConfig()">↻ Revertir cambios</button>
+        <button class="qc-btn qc-btn-danger" onclick="recalcularTodos()">🔄 Recalcular todos</button>
+        <button class="qc-btn qc-btn-primary" onclick="guardarConfig()">💾 Guardar configuración</button>
+    </div>
+</div>
+
+<script>
+// ─── Estado ─────────────────────────────────
+let configOriginal = null;
+let configActual = null;
+
+// ─── Cargar configuración ───────────────────
+async function cargarConfig() {
+    try {
+        const resp = await fetch('/requerimientos/api/config-calidad/');
+        const data = await resp.json();
+        if (data.success) {
+            configOriginal = JSON.parse(JSON.stringify(data.config));
+            configActual = JSON.parse(JSON.stringify(data.config));
+            renderizarTodo();
+            cargarEstadisticas();
+        }
+    } catch(e) {
+        mostrarToast('Error al cargar configuración', 'error');
+    }
+}
+
+// ─── Cargar estadísticas ────────────────────
+async function cargarEstadisticas() {
+    try {
+        const resp = await fetch('/requerimientos/api/estadisticas-calidad/');
+        const data = await resp.json();
+        if (data.success) {
+            document.getElementById('statTotal').textContent = data.total;
+            document.getElementById('statPromedio').textContent = data.promedio;
+            document.getElementById('statExcelente').textContent = data.niveles.Excelente || 0;
+            document.getElementById('statBueno').textContent = data.niveles.Bueno || 0;
+            document.getElementById('statRegular').textContent = data.niveles.Regular || 0;
+            document.getElementById('statMalo').textContent = data.niveles.Malo || 0;
+            
+            const pct = data.total > 0 ? ((data.niveles.Excelente || 0) / data.total * 100).toFixed(1) : 0;
+            document.getElementById('statExcelentePct').textContent = `${pct}% del total`;
+
+            // Dimensiones promedio
+            const dims = data.dimensiones_promedio;
+            const dimColors = {completitud: '#238636', especificidad: '#58a6ff', presupuesto: '#d29922', antiguedad: '#f85149'};
+            const dimLabels = {completitud: 'Completitud', especificidad: 'Especificidad', presupuesto: 'Presupuesto', antiguedad: 'Antigüedad'};
+            let dimHtml = '';
+            for (const [k, v] of Object.entries(dims)) {
+                dimHtml += `
+                    <div class="qc-dim-bar">
+                        <span class="dim-label">${dimLabels[k] || k}</span>
+                        <div class="dim-track">
+                            <div class="dim-fill" style="width:${v}%;background:${dimColors[k] || '#58a6ff'}"></div>
+                        </div>
+                        <span class="dim-val">${v}</span>
+                    </div>
+                `;
+            }
+            document.getElementById('dimensionBars').innerHTML = dimHtml;
+
+            // Distribución de scores
+            const dist = data.distribucion_scores || [];
+            const maxCount = Math.max(...dist.map(d => d.count), 1);
+            let distHtml = '';
+            for (const d of dist) {
+                const pct = (d.count / maxCount * 100).toFixed(0);
+                distHtml += `
+                    <div class="qc-dist-bar">
+                        <span class="rango">${d.rango}</span>
+                        <div class="dist-track">
+                            <div class="dist-fill" style="width:${pct}%"></div>
+                            <span class="dist-count">${d.count}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            document.getElementById('distribucionBars').innerHTML = distHtml || '<div style="color:var(--text-secondary);font-size:13px;">Sin datos</div>';
+        }
+    } catch(e) {
+        console.error('Error cargando estadísticas:', e);
+    }
+}
+
+// ─── Renderizar todo ────────────────────────
+function renderizarTodo() {
+    if (!configActual) return;
+    renderizarPesos();
+    renderizarTiers();
+    renderizarEspecificidad();
+    renderizarAntiguedad();
+    renderizarPresupuesto();
+}
+
+// ─── Pesos ──────────────────────────────────
+function renderizarPesos() {
+    const pesos = configActual.pesos_dimensiones || {};
+    const labels = {completitud: 'Completitud', especificidad: 'Especificidad', presupuesto: 'Presupuesto', antiguedad: 'Antigüedad'};
+    const colors = {completitud: '#238636', especificidad: '#58a6ff', presupuesto: '#d29922', antiguedad: '#f85149'};
+    
+    let html = '';
+    for (const [k, v] of Object.entries(pesos)) {
+        html += `
+            <div class="qc-slider-group">
+                <label>
+                    <span>${labels[k] || k}</span>
+                    <span class="val" id="pesoVal_${k}">${v}%</span>
+                </label>
+                <input type="range" class="qc-slider" 
+                       min="0" max="100" value="${v}"
+                       data-key="${k}"
+                       oninput="actualizarPeso('${k}', this.value)"
+                       style="accent-color:${colors[k] || '#58a6ff'}">
+            </div>
+        `;
+    }
+    document.getElementById('pesosContainer').innerHTML = html;
+    actualizarTotalPesos();
+}
+
+function actualizarPeso(key, val) {
+    configActual.pesos_dimensiones[key] = parseInt(val);
+    document.getElementById(`pesoVal_${key}`).textContent = val + '%';
+    actualizarTotalPesos();
+}
+
+function actualizarTotalPesos() {
+    const pesos = configActual.pesos_dimensiones || {};
+    const total = Object.values(pesos).reduce((a, b) => a + b, 0);
+    const colors = {completitud: '#238636', especificidad: '#58a6ff', presupuesto: '#d29922', antiguedad: '#f85149'};
+    
+    let barHtml = '';
+    for (const [k, v] of Object.entries(pesos)) {
+        const pct = total > 0 ? (v / total * 100) : 0;
+        barHtml += `<div class="seg" style="width:${pct}%;background:${colors[k] || '#58a6ff'}"></div>`;
+    }
+    document.getElementById('totalBar').innerHTML = barHtml;
+    
+    const label = document.getElementById('totalLabel');
+    label.textContent = `Total: ${total}%`;
+    label.className = 'qc-total-label ' + (total === 100 ? 'ok' : total > 100 ? 'err' : 'warn');
+}
+
+// ─── Tiers de completitud ───────────────────
+function renderizarTiers() {
+    const tiers = configActual.completitud_tiers || {};
+    const tierLabels = {criticos: 'Críticos', importantes: 'Importantes', complementarios: 'Complementarios'};
+    const tierColors = {criticos: '#f85149', importantes: '#d29922', complementarios: '#8b949e'};
+    
+    let html = '';
+    for (const [key, data] of Object.entries(tiers)) {
+        html += `
+            <div class="qc-input-group" style="border-left:3px solid ${tierColors[key] || '#8b949e'}">
+                <label>${tierLabels[key] || key}</label>
+                <input type="number" min="0" max="10" value="${data.puntos_por_campo}"
+                       data-tier="${key}" onchange="actualizarTier('${key}', this.value)">
+                <span class="desc">pts c/u</span>
+                <span class="campos-list">${(data.campos || []).join(', ')}</span>
+            </div>
+        `;
+    }
+    document.getElementById('tiersContainer').innerHTML = html;
+}
+
+function actualizarTier(key, val) {
+    if (configActual.completitud_tiers && configActual.completitud_tiers[key]) {
+        configActual.completitud_tiers[key].puntos_por_campo = parseInt(val) || 0;
+    }
+}
+
+// ─── Especificidad ──────────────────────────
+function renderizarEspecificidad() {
+    const niveles = configActual.especificidad_niveles || [];
+    const reqLabels = {
+        'zona+urbanizacion+1distrito': 'zona + urbanización + 1 distrito',
+        'urbanizacion_o_zona': 'urbanización o zona',
+        '1_distrito': '1 distrito',
+        'multi_distrito': '2+ distritos',
+        'sin_distrito': 'sin distritos'
+    };
+    
+    let html = '';
+    for (const nivel of niveles) {
+        html += `
+            <div class="qc-input-group">
+                <label>${nivel.nombre || '—'}</label>
+                <input type="number" min="0" max="100" value="${nivel.score || 0}"
+                       data-nombre="${nivel.nombre}" onchange="actualizarEspecificidad('${nivel.nombre}', this.value)">
+                <span class="desc">pts</span>
+                <span class="campos-list">${reqLabels[nivel.requisito] || nivel.requisito || ''}</span>
+            </div>
+        `;
+    }
+    document.getElementById('especificidadContainer').innerHTML = html;
+}
+
+function actualizarEspecificidad(nombre, val) {
+    const niveles = configActual.especificidad_niveles || [];
+    const idx = niveles.findIndex(n => n.nombre === nombre);
+    if (idx >= 0) {
+        niveles[idx].score = parseInt(val) || 0;
+    }
+}
+
+// ─── Antigüedad ─────────────────────────────
+function renderizarAntiguedad() {
+    const rangos = configActual.antiguedad_rangos || [];
+    
+    let html = '';
+    for (let i = 0; i < rangos.length; i++) {
+        const r = rangos[i];
+        const label = r.dias_max >= 999999 ? '>' : '≤';
+        const diasLabel = r.dias_max >= 999999 ? (rangos[i-1]?.dias_max || 180) : r.dias_max;
+        
+        html += `
+            <div class="qc-input-group">
+                <label>${label} <input type="number" min="1" value="${diasLabel}" 
+                         style="width:60px;padding:4px 8px;border-radius:6px;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-primary);font-size:13px;text-align:center;"
+                         onchange="actualizarAntiguedadDias(${i}, this.value)"> días</label>
+                <input type="number" min="0" max="100" value="${r.score || 0}"
+                       onchange="actualizarAntiguedadScore(${i}, this.value)">
+                <span class="desc">pts</span>
+            </div>
+        `;
+    }
+    document.getElementById('antiguedadContainer').innerHTML = html;
+}
+
+function actualizarAntiguedadDias(idx, val) {
+    const rangos = configActual.antiguedad_rangos || [];
+    if (rangos[idx]) {
+        rangos[idx].dias_max = parseInt(val) || 0;
+    }
+}
+
+function actualizarAntiguedadScore(idx, val) {
+    const rangos = configActual.antiguedad_rangos || [];
+    if (rangos[idx]) {
+        rangos[idx].score = parseInt(val) || 0;
+    }
+}
+
+// ─── Presupuesto ────────────────────────────
+function renderizarPresupuesto() {
+    const p = configActual.presupuesto_percentiles || {};
+    const items = [
+        {key: 'p25_score', label: '≤ P25 (muy accesible)'},
+        {key: 'p25_a_p50_score', label: 'P25 - P50 (normal-bajo)'},
+        {key: 'p50_a_p75_score', label: 'P50 - P75 (normal-alto)'},
+        {key: 'mayor_p75_score', label: '> P75 (presupuesto alto)'},
+        {key: 'sin_presupuesto_score', label: 'Sin presupuesto'},
+    ];
+    
+    let html = '';
+    for (const item of items) {
+        html += `
+            <div class="qc-input-group">
+                <label>${item.label}</label>
+                <input type="number" min="0" max="100" value="${p[item.key] || 0}"
+                       onchange="actualizarPresupuesto('${item.key}', this.value)">
+                <span class="desc">pts</span>
+            </div>
+        `;
+    }
+    html += `
+        <div class="qc-input-group">
+            <label>Muestras mínimas</label>
+            <input type="number" min="1" value="${p.min_muestras || 10}"
+                   onchange="actualizarPresupuesto('min_muestras', this.value)">
+            <span class="desc">reqs</span>
+        </div>
+    `;
+    document.getElementById('presupuestoContainer').innerHTML = html;
+}
+
+function actualizarPresupuesto(key, val) {
+    if (configActual.presupuesto_percentiles) {
+        configActual.presupuesto_percentiles[key] = parseInt(val) || 0;
+    }
+}
+
+// ─── Guardar ────────────────────────────────
+async function guardarConfig() {
+    try {
+        const resp = await fetch('/requerimientos/api/config-calidad/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                config: configActual,
+                nombre: 'Config ' + new Date().toLocaleString('es-PE')
+            })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            mostrarToast('✅ Configuración guardada exitosamente', 'success');
+            configOriginal = JSON.parse(JSON.stringify(configActual));
+            cargarEstadisticas();
+        } else {
+            mostrarToast('❌ Error: ' + (data.error || 'desconocido'), 'error');
+        }
+    } catch(e) {
+        mostrarToast('❌ Error al guardar: ' + e.message, 'error');
+    }
+}
+
+// ─── Recalcular todos ───────────────────────
+async function recalcularTodos() {
+    if (!confirm('¿Estás seguro de recalcular el Quality Score de TODOS los requerimientos?\nEsto puede tomar unos segundos.')) return;
+    
+    try {
+        const resp = await fetch('/requerimientos/api/recalcular-quality/', {method: 'POST'});
+        const data = await resp.json();
+        if (data.success) {
+            mostrarToast(`✅ ${data.recalculados} requerimientos recalculados`, 'success');
+            cargarEstadisticas();
+        } else {
+            mostrarToast('❌ Error: ' + (data.error || 'desconocido'), 'error');
+        }
+    } catch(e) {
+        mostrarToast('❌ Error: ' + e.message, 'error');
+    }
+}
+
+// ─── Toast ──────────────────────────────────
+function mostrarToast(msg, tipo) {
+    const toast = document.getElementById('qcToast');
+    toast.textContent = msg;
+    toast.className = 'qc-toast ' + tipo + ' show';
+    setTimeout(() => { toast.classList.remove('show'); }, 3000);
+}
+
+// ─── Init ───────────────────────────────────
+document.addEventListener('DOMContentLoaded', cargarConfig);
+</script>
+{% endblock %}
