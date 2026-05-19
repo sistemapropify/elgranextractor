@@ -1286,6 +1286,7 @@
                                         <option value="alquiler">Alquiler</option>
                                         <option value="anticresis">Anticresis</option>
                                         <option value="ambos">Compra y Alquiler</option>
+                                        <option value="compartido">Compartido</option>
                                         <option value="no_especificado">No Especificado</option>
                                     </select>
                                 </div>
@@ -2071,6 +2072,7 @@ function actualizarVista(d) {
     else if (condText === 'alquiler') { condBadge = 'Alquiler'; condColor = '#d29922'; }
     else if (condText === 'anticresis') { condBadge = 'Anticresis'; condColor = '#f0883e'; }
     else if (condText === 'ambos') { condBadge = 'Compra y Alquiler'; condColor = '#8957e5'; }
+    else if (condText === 'compartido') { condBadge = 'Compartido'; condColor = '#3fb950'; }
     condEl.innerHTML = '<span class="badge" style="background-color: ' + condColor + '22; color: ' + condColor + '; border: 1px solid ' + condColor + '44; padding: 3px 10px; border-radius: 4px; font-size: 12px;">' + condBadge + '</span>';
     
     const tipoEl = document.getElementById('modalTipoPropiedad');
@@ -2189,6 +2191,7 @@ function actualizarFilaTabla(pk, d) {
     function badgeCondicion(val) {
         if (val === 'compra') return '<span class="badge badge-blue">Compra</span>';
         if (val === 'alquiler') return '<span class="badge badge-orange">Alquiler</span>';
+        if (val === 'compartido') return '<span class="badge" style="background-color:#3fb95022;color:#3fb950;border:1px solid #3fb95044;padding:3px 10px;border-radius:4px;font-size:12px;">Compartido</span>';
         if (val === 'anticresis') return '<span class="badge badge-orange">Anticresis</span>';
         if (val === 'ambos') return '<span class="badge badge-purple">Ambos</span>';
         return '<span class="badge badge-gray">' + (val || '—') + '</span>';
