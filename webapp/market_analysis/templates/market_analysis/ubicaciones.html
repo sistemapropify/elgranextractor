@@ -743,6 +743,15 @@ function abrirModal(modo, nivel, id) {
         subtitle.textContent = 'Completa los datos para crear un nuevo ' + nivel + '.';
         saveBtn.textContent = 'Crear';
 
+        // Actualizar placeholder según el nivel
+        var placeholders = {
+            'departamento': 'Ej: Arequipa, Lima, Cusco...',
+            'provincia': 'Ej: Arequipa, Caylloma, Islay...',
+            'distrito': 'Ej: Cayma, Yanahuara, Cercado...',
+            'zona_urbanizacion': 'Ej: Umacollo, San Lázaro, La Pampilla...'
+        };
+        nombreInput.placeholder = placeholders[nivel] || 'Ej: Arequipa, Cayma, ...';
+
         if (nivel === 'departamento') {
             parentGroup.style.display = 'none';
         } else if (nivel === 'provincia') {

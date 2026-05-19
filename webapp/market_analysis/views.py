@@ -1210,7 +1210,7 @@ def api_ubicaciones_crear(request):
 
         if not nombre or not nivel:
             return JsonResponse({'error': 'Nombre y nivel son requeridos'}, status=400)
-        if nivel not in ['departamento', 'provincia', 'distrito']:
+        if nivel not in ['departamento', 'provincia', 'distrito', 'zona_urbanizacion']:
             return JsonResponse({'error': 'Nivel inválido'}, status=400)
 
         # Validar parent según nivel
@@ -1229,6 +1229,13 @@ def api_ubicaciones_crear(request):
                 parent = UbicacionGeografica.objects.get(id=parent_id, nivel='provincia', activo=True)
             except UbicacionGeografica.DoesNotExist:
                 return JsonResponse({'error': 'Provincia padre no encontrada'}, status=400)
+        elif nivel == 'zona_urbanizacion':
+            if not parent_id:
+                return JsonResponse({'error': 'Zona/Urbanización requiere un distrito padre'}, status=400)
+            try:
+                parent = UbicacionGeografica.objects.get(id=parent_id, nivel='distrito', activo=True)
+            except UbicacionGeografica.DoesNotExist:
+                return JsonResponse({'error': 'Distrito padre no encontrado'}, status=400)
 
         # Verificar duplicado
         filtro = {'nombre': nombre, 'nivel': nivel, 'parent': parent}
