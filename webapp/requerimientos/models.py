@@ -21,6 +21,7 @@ class CondicionChoices(models.TextChoices):
     ALQUILER        = 'alquiler',        'Alquiler'
     ANTICRESIS      = 'anticresis',      'Anticresis'
     AMBOS           = 'ambos',           'Compra y Alquiler'
+    COMPARTIDO      = 'compartido',      'Compartido'
     NO_ESPECIFICADO = 'no_especificado', 'No Especificado'
 
 
