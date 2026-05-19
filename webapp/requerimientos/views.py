@@ -1440,3 +1440,62 @@ class ApiRecalcularQualityView(View):
             'errores': errores,
             'mensaje': f'Se recalcularon {actualizados} de {total} requerimientos.'
         })
+
+
+class ClonarRequerimientoView(View):
+    """Vista para clonar un requerimiento (crear uno nuevo a partir de otro) vía POST (AJAX)."""
+    CAMPOS_CLONABLES = [
+        'verificado', 'fuente', 'agente', 'agente_telefono',
+        'condicion', 'tipo_propiedad', 'distritos',
+        'urbanizacion', 'zona',
+        'presupuesto_monto', 'presupuesto_moneda', 'presupuesto_forma_pago',
+        'habitaciones', 'banos', 'cochera', 'ascensor', 'amueblado',
+        'area_m2', 'piso_preferencia', 'caracteristicas_extra',
+        'tipo_original', 'requerimiento',
+    ]
+
+    def post(self, request, *args, **kwargs):
+        import json
+        try:
+            data = json.loads(request.body)
+        except (json.JSONDecodeError, TypeError):
+            return JsonResponse({'error': 'JSON inválido'}, status=400)
+
+        # Crear nuevo requerimiento con los datos recibidos
+        nuevo_req = Requerimiento()
+
+        for campo in self.CAMPOS_CLONABLES:
+            if campo in data:
+                valor = data[campo]
+                if campo in ('presupuesto_monto', 'area_m2', 'habitaciones', 'banos'):
+                    if valor == '' or valor is None:
+                        setattr(nuevo_req, campo, None)
+                    else:
+                        try:
+                            valor_convertido = float(valor) if campo == 'presupuesto_monto' else int(valor)
+                            setattr(nuevo_req, campo, valor_convertido)
+                        except (ValueError, TypeError):
+                            setattr(nuevo_req, campo, None)
+                else:
+                    setattr(nuevo_req, campo, valor)
+
+        # ── Sincronizar ZonaCalle con los tags del campo 'zona' ──
+        if 'zona' in data and data['zona']:
+            tags = [t.strip() for t in data['zona'].split(',') if t.strip()]
+            for tag in tags:
+                obj, created = ZonaCalle.objects.get_or_create(
+                    nombre__iexact=tag,
+                    defaults={'nombre': tag, 'veces_usado': 1}
+                )
+                if not created:
+                    if obj.nombre != tag:
+                        obj.nombre = tag
+                    ZonaCalle.objects.filter(pk=obj.pk).update(veces_usado=models.F('veces_usado') + 1)
+
+        nuevo_req.save()
+
+        return JsonResponse({
+            'ok': True,
+            'pk': nuevo_req.pk,
+            'mensaje': f'Requerimiento clonado correctamente (ID: {nuevo_req.pk})',
+        })
