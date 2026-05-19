@@ -25,3 +25,11 @@ def render_tags(value, separator=','):
         for p in partes
     )
     return mark_safe('<div class="tags-container">{}</div>'.format(tags_html))
+
+
+@register.filter
+def strip(value):
+    """Elimina espacios al inicio y final de un string."""
+    if not value:
+        return ''
+    return value.strip()

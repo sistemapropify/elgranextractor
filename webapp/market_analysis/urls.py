@@ -29,4 +29,6 @@ urlpatterns = [
     path('api/ubicaciones/crear/', views.api_ubicaciones_crear, name='api_ubicaciones_crear'),
     path('api/ubicaciones/editar/', views.api_ubicaciones_editar, name='api_ubicaciones_editar'),
     path('api/ubicaciones/eliminar/', views.api_ubicaciones_eliminar, name='api_ubicaciones_eliminar'),
+    # API de autocomplete para distritos y urbanizaciones (usado desde requerimientos)
+    path('api/ubicaciones/autocomplete/', views.api_ubicaciones_autocomplete, name='api_ubicaciones_autocomplete'),
 ]

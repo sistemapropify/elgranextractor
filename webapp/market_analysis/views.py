@@ -1255,6 +1255,96 @@ def api_ubicaciones_crear(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
+# =========================================================================
+# API de autocomplete para distritos y urbanizaciones (usado desde requerimientos)
+# =========================================================================
+def api_ubicaciones_autocomplete(request):
+    """
+    API de autocomplete para buscar distritos y zonas/urbanizaciones.
+    Retorna resultados en formato JSON para usar con input tipo tag+autocomplete.
+    
+    Query params:
+      - q: texto de búsqueda (obligatorio)
+      - nivel: 'distrito' o 'zona_urbanizacion' (opcional, busca en ambos si no se especifica)
+      - limit: máximo de resultados (default: 20)
+    """
+    query = request.GET.get('q', '').strip()
+    nivel = request.GET.get('nivel', '')
+    limit_str = request.GET.get('limit', '20')
+    
+    try:
+        limit = int(limit_str)
+    except (ValueError, TypeError):
+        limit = 20
+    
+    if not query or len(query) < 1:
+        return JsonResponse({'data': []})
+    
+    try:
+        resultados = []
+        
+        if nivel and nivel in ('distrito', 'zona_urbanizacion'):
+            # Buscar solo en el nivel especificado
+            qs = UbicacionGeografica.objects.filter(
+                nivel=nivel,
+                nombre__icontains=query,
+                activo=True
+            ).select_related('parent').order_by('nombre')[:limit]
+            
+            for item in qs:
+                entry = {
+                    'id': item.id,
+                    'nombre': item.nombre,
+                    'nivel': item.nivel,
+                    'codigo': item.codigo or '',
+                }
+                # Incluir nombre del padre (distrito) para zona_urbanizacion
+                if item.parent:
+                    entry['parent_nombre'] = item.parent.nombre
+                    entry['parent_id'] = item.parent.id
+                resultados.append(entry)
+        else:
+            # Buscar en distritos primero
+            distritos = UbicacionGeografica.objects.filter(
+                nivel='distrito',
+                nombre__icontains=query,
+                activo=True
+            ).order_by('nombre')[:limit]
+            
+            for d in distritos:
+                resultados.append({
+                    'id': d.id,
+                    'nombre': d.nombre,
+                    'nivel': 'distrito',
+                    'codigo': d.codigo or '',
+                })
+            
+            # Buscar en zonas/urbanizaciones
+            if len(resultados) < limit:
+                zonas = UbicacionGeografica.objects.filter(
+                    nivel='zona_urbanizacion',
+                    nombre__icontains=query,
+                    activo=True
+                ).select_related('parent').order_by('nombre')[:limit - len(resultados)]
+                
+                for z in zonas:
+                    entry = {
+                        'id': z.id,
+                        'nombre': z.nombre,
+                        'nivel': 'zona_urbanizacion',
+                        'codigo': z.codigo or '',
+                    }
+                    if z.parent:
+                        entry['parent_nombre'] = z.parent.nombre
+                        entry['parent_id'] = z.parent.id
+                    resultados.append(entry)
+        
+        return JsonResponse({'data': resultados})
+    
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
 @csrf_exempt
 @require_http_methods(['POST'])
 def api_ubicaciones_editar(request):

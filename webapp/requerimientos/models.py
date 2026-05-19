@@ -281,3 +281,40 @@ class Requerimiento(models.Model):
             return '—'
         simbolo = '$' if self.presupuesto_moneda == 'USD' else 'S/'
         return f"{simbolo}{self.presupuesto_monto:,.0f}"
+
+
+class ZonaCalle(models.Model):
+    """
+    Tabla de Zonas y Calles extraídas de los requerimientos.
+    Cada tag del campo 'zona' de Requerimiento se guarda aquí como registro único.
+    Sirve como fuente de autocomplete al escribir nuevas zonas/calles.
+    """
+    nombre = models.CharField(
+        max_length=200,
+        unique=True,
+        verbose_name='Nombre de zona/calle',
+        help_text='Nombre de la zona, calle, edificio o referencia',
+        db_index=True,
+    )
+    veces_usado = models.PositiveIntegerField(
+        default=1,
+        verbose_name='Veces usado',
+        help_text='Contador de cuántas veces aparece este tag en requerimientos',
+    )
+    creado_en = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='Creado en',
+    )
+    actualizado_en = models.DateTimeField(
+        auto_now=True,
+        verbose_name='Actualizado en',
+    )
+
+    class Meta:
+        db_table = 'zona_calle'
+        verbose_name = 'Zona / Calle'
+        verbose_name_plural = 'Zonas y Calles'
+        ordering = ['-veces_usado', 'nombre']
+
+    def __str__(self):
+        return self.nombre

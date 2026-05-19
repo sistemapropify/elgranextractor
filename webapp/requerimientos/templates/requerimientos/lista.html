@@ -904,14 +904,30 @@
                             {% endif %}
                         </td>
                         
-                        <!-- Distritos -->
+                        <!-- Distritos (tags) -->
                         <td>
-                            <span style="font-size:12px;color:#c9d1d9;">{{ r.distritos|default:'—'|truncatechars:30 }}</span>
+                            {% if r.distritos %}
+                                <div class="tags-container" style="gap:3px;">
+                                {% for d in r.distritos|split:',' %}
+                                    <span class="tag-item" style="font-size:11px;">{{ d|strip }}</span>
+                                {% endfor %}
+                                </div>
+                            {% else %}
+                                <span style="color:#484f58;font-size:12px;">—</span>
+                            {% endif %}
                         </td>
                         
-                        <!-- Urbanización -->
+                        <!-- Urbanización (tags) -->
                         <td>
-                            <span style="font-size:12px;color:#c9d1d9;">{{ r.urbanizacion|default:'—'|truncatechars:25 }}</span>
+                            {% if r.urbanizacion %}
+                                <div class="tags-container" style="gap:3px;">
+                                {% for u in r.urbanizacion|split:',' %}
+                                    <span class="tag-item" style="font-size:11px;">{{ u|strip }}</span>
+                                {% endfor %}
+                                </div>
+                            {% else %}
+                                <span style="color:#484f58;font-size:12px;">—</span>
+                            {% endif %}
                         </td>
                         
                         <!-- Zona / Calles / Edificio (tags) -->
@@ -1204,20 +1220,34 @@
                                     </select>
                                 </div>
                             </div>
-                            <!-- Distritos -->
+                            <!-- Distritos (tags con autocomplete) -->
                             <div class="modal-field-group" style="margin-top: 12px;">
                                 <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Distritos</label>
                                 <div class="field-view" id="modalDistritos" style="color: #c9d1d9; font-size: 13px;">—</div>
                                 <div class="field-edit" style="display: none;">
-                                    <input type="text" id="editDistritos" class="form-control form-control-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 100%;" placeholder="Ej: Cayma, Yanahuara">
+                                    <div class="tag-input-container">
+                                        <div class="tag-input-wrapper" id="distritosTagWrapper" onclick="document.getElementById('distritosTagInput').focus()">
+                                            <div id="distritosTagsContainer" class="tags-container-inline"></div>
+                                            <input type="text" id="distritosTagInput" class="tag-input-field" placeholder="Escribe para buscar distritos..." data-nivel="distrito" data-target="distritosTagsContainer" data-hidden="editDistritos">
+                                        </div>
+                                        <div class="autocomplete-dropdown" id="distritosAutocomplete"></div>
+                                        <input type="hidden" id="editDistritos" value="">
+                                    </div>
                                 </div>
                             </div>
-                            <!-- Urbanización -->
+                            <!-- Urbanización / Zona (tags con autocomplete) -->
                             <div class="modal-field-group" style="margin-top: 12px;">
-                                <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Urbanización</label>
+                                <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Urbanización / Zona</label>
                                 <div class="field-view" id="modalUrbanizacion" style="color: #c9d1d9; font-size: 13px;">—</div>
                                 <div class="field-edit" style="display: none;">
-                                    <input type="text" id="editUrbanizacion" class="form-control form-control-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 100%;" placeholder="Nombre de la urbanización">
+                                    <div class="tag-input-container">
+                                        <div class="tag-input-wrapper" id="urbanizacionTagWrapper" onclick="document.getElementById('urbanizacionTagInput').focus()">
+                                            <div id="urbanizacionTagsContainer" class="tags-container-inline"></div>
+                                            <input type="text" id="urbanizacionTagInput" class="tag-input-field" placeholder="Escribe para buscar urbanizaciones..." data-nivel="zona_urbanizacion" data-target="urbanizacionTagsContainer" data-hidden="editUrbanizacion">
+                                        </div>
+                                        <div class="autocomplete-dropdown" id="urbanizacionAutocomplete"></div>
+                                        <input type="hidden" id="editUrbanizacion" value="">
+                                    </div>
                                 </div>
                             </div>
                             <!-- Zona / Calles / Edificio -->
@@ -1225,7 +1255,14 @@
                                 <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Zona / Calles / Edificio</label>
                                 <div class="field-view" id="modalZona" style="color: #c9d1d9; font-size: 13px;">—</div>
                                 <div class="field-edit" style="display: none;">
-                                    <input type="text" id="editZona" class="form-control form-control-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 100%;" placeholder="Ej: Av. Ejército, Calle Los Olivos, Edif. San Pablo (usa comas para separar)">
+                                    <div class="tag-input-container">
+                                        <div class="tag-input-wrapper" id="zonaTagWrapper" onclick="document.getElementById('zonaTagInput').focus()">
+                                            <div id="zonaTagsContainer" class="tags-container" style="display:inline;"></div>
+                                            <input type="text" id="zonaTagInput" class="tag-input-field" data-nivel="zona_calle" placeholder="Escribe una zona o calle..." autocomplete="off">
+                                            <div id="zonaAutocomplete" class="autocomplete-dropdown"></div>
+                                        </div>
+                                        <input type="hidden" id="editZona" value="">
+                                    </div>
                                 </div>
                             </div>
                             <!-- Tipo Original -->
@@ -1387,6 +1424,104 @@
 #btnRegistrarAgente:hover {
     background-color: #2ea043 !important;
 }
+
+/* ── Tags input con autocomplete ──────────── */
+.tag-input-wrapper {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 4px;
+    background-color: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    min-height: 32px;
+    cursor: text;
+    align-items: center;
+}
+.tag-input-wrapper:focus-within {
+    border-color: #58a6ff;
+}
+.tag-item-edit {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background-color: #1f6feb33;
+    border: 1px solid #1f6feb66;
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 12px;
+    color: #58a6ff;
+    white-space: nowrap;
+}
+.tag-item-edit .tag-remove {
+    cursor: pointer;
+    color: #f85149;
+    font-size: 14px;
+    line-height: 1;
+    margin-left: 2px;
+    font-weight: bold;
+}
+.tag-item-edit .tag-remove:hover {
+    color: #ff6b6b;
+}
+.tag-input-field {
+    border: none !important;
+    background: transparent !important;
+    color: #c9d1d9 !important;
+    font-size: 13px !important;
+    outline: none !important;
+    flex: 1;
+    min-width: 80px;
+    padding: 2px 4px !important;
+    box-shadow: none !important;
+}
+.tag-input-field::placeholder {
+    color: #484f58;
+}
+.autocomplete-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+    display: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+.autocomplete-dropdown.active {
+    display: block;
+}
+.autocomplete-item {
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #c9d1d9;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.autocomplete-item:hover,
+.autocomplete-item.highlighted {
+    background-color: #1f6feb33;
+}
+.autocomplete-item .item-type {
+    font-size: 10px;
+    color: #8b949e;
+    background: #21262d;
+    padding: 1px 6px;
+    border-radius: 3px;
+}
+.autocomplete-item .item-parent {
+    font-size: 11px;
+    color: #484f58;
+}
+.tag-input-container {
+    position: relative;
+}
 </style>
 
 <script>
@@ -1412,9 +1547,10 @@ function poblarCamposEdicion(d) {
     document.getElementById('editFuente').value = d.fuente || 'otro';
     document.getElementById('editCondicion').value = d.condicion || 'no_especificado';
     document.getElementById('editTipoPropiedad').value = d.tipoPropiedad || 'no_especificado';
-    document.getElementById('editDistritos').value = d.distritos || '';
-    document.getElementById('editUrbanizacion').value = d.urbanizacion || '';
-    document.getElementById('editZona').value = d.zona || '';
+    // Inicializar tags de distritos, urbanización y zona
+    inicializarTags('distritos', d.distritos || '');
+    inicializarTags('urbanizacion', d.urbanizacion || '');
+    inicializarTags('zona', d.zona || '');
     document.getElementById('editTipoOriginal').value = d.tipoOriginal || 'OTRO';
     document.getElementById('editPresupuestoMonto').value = d.presupuestoMonto || '';
     document.getElementById('editPresupuestoMoneda').value = d.presupuestoMoneda || 'no_especificado';
@@ -1438,6 +1574,198 @@ function poblarCamposEdicion(d) {
     // Iniciar búsqueda de agente al abrir modal
     iniciarBusquedaAgente();
 }
+
+// =========================================================================
+// Tags input con autocomplete para distritos y urbanizaciones
+// =========================================================================
+
+// ── Inicializar tags desde un string separado por comas ──
+function inicializarTags(prefix, valor) {
+    var container = document.getElementById(prefix + 'TagsContainer');
+    var hiddenInput = document.getElementById('edit' + prefix.charAt(0).toUpperCase() + prefix.slice(1));
+    container.innerHTML = '';
+    if (valor) {
+        var tags = valor.split(',').map(function(t) { return t.trim(); }).filter(function(t) { return t; });
+        tags.forEach(function(t) { agregarTag(prefix, t); });
+    }
+    actualizarHiddenTag(prefix);
+}
+
+// ── Agregar un tag visual ──
+function agregarTag(prefix, texto) {
+    var container = document.getElementById(prefix + 'TagsContainer');
+    var tag = document.createElement('span');
+    tag.className = 'tag-item-edit';
+    tag.innerHTML = texto + '<span class="tag-remove" onclick="eliminarTag(\'' + prefix + '\', this)">&times;</span>';
+    container.appendChild(tag);
+    actualizarHiddenTag(prefix);
+}
+
+// ── Eliminar un tag ──
+function eliminarTag(prefix, el) {
+    el.parentElement.remove();
+    actualizarHiddenTag(prefix);
+    document.getElementById(prefix + 'TagInput').focus();
+}
+
+// ── Actualizar el hidden input con los tags actuales ──
+function actualizarHiddenTag(prefix) {
+    var container = document.getElementById(prefix + 'TagsContainer');
+    var hiddenInput = document.getElementById('edit' + prefix.charAt(0).toUpperCase() + prefix.slice(1));
+    var tags = [];
+    container.querySelectorAll('.tag-item-edit').forEach(function(tag) {
+        // El texto es todo excepto el último hijo (el botón ×)
+        var texto = tag.childNodes[0].textContent.trim();
+        if (texto) tags.push(texto);
+    });
+    hiddenInput.value = tags.join(', ');
+}
+
+// ── Buscar sugerencias vía API ──
+var autocompleteTimeout = {};
+
+function buscarSugerencias(prefix) {
+    var input = document.getElementById(prefix + 'TagInput');
+    var dropdown = document.getElementById(prefix + 'Autocomplete');
+    var query = input.value.trim();
+    var nivel = input.dataset.nivel;
+
+    if (query.length < 1) {
+        dropdown.classList.remove('active');
+        dropdown.innerHTML = '';
+        return;
+    }
+
+    var url;
+    if (nivel === 'zona_calle') {
+        // Para zona/calle, usar la API de ZonaCalle
+        url = '/requerimientos/api/zonas-calles/autocomplete/?q=' + encodeURIComponent(query);
+    } else {
+        url = '/market-analysis/api/ubicaciones/autocomplete/?q=' + encodeURIComponent(query) + '&nivel=' + nivel + '&limit=10';
+    }
+
+    fetch(url)
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            dropdown.innerHTML = '';
+            var items = data.data || [];
+            if (items.length === 0) {
+                dropdown.innerHTML = '<div class="autocomplete-item" style="color:#484f58;cursor:default;">Sin resultados</div>';
+                dropdown.classList.add('active');
+                return;
+            }
+            items.forEach(function(item) {
+                var div = document.createElement('div');
+                div.className = 'autocomplete-item';
+                var nombreHtml = item.nombre;
+                if (item.parent_nombre) {
+                    nombreHtml += ' <span class="item-parent">(' + item.parent_nombre + ')</span>';
+                }
+                var tipoLabel;
+                if (nivel === 'zona_calle') {
+                    tipoLabel = 'Usado ' + (item.veces_usado || 1) + ' vez';
+                } else {
+                    tipoLabel = item.nivel === 'distrito' ? 'Distrito' : 'Urb/Zona';
+                }
+                div.innerHTML = nombreHtml + ' <span class="item-type">' + tipoLabel + '</span>';
+                div.addEventListener('click', function() {
+                    // Verificar si ya existe ese tag
+                    var existente = false;
+                    document.getElementById(prefix + 'TagsContainer').querySelectorAll('.tag-item-edit').forEach(function(t) {
+                        if (t.childNodes[0].textContent.trim().toLowerCase() === item.nombre.toLowerCase()) {
+                            existente = true;
+                        }
+                    });
+                    if (!existente) {
+                        agregarTag(prefix, item.nombre);
+                    }
+                    input.value = '';
+                    dropdown.classList.remove('active');
+                    dropdown.innerHTML = '';
+                    input.focus();
+                });
+                dropdown.appendChild(div);
+            });
+            dropdown.classList.add('active');
+        })
+        .catch(function(err) {
+            console.error('Error en autocomplete:', err);
+        });
+}
+
+// ── Configurar eventos de autocomplete para cada campo ──
+function configurarAutocomplete(prefix) {
+    var input = document.getElementById(prefix + 'TagInput');
+    var dropdown = document.getElementById(prefix + 'Autocomplete');
+    var selectedIndex = -1;
+
+    input.addEventListener('input', function() {
+        clearTimeout(autocompleteTimeout[prefix]);
+        selectedIndex = -1;
+        autocompleteTimeout[prefix] = setTimeout(function() {
+            buscarSugerencias(prefix);
+        }, 250);
+    });
+
+    input.addEventListener('keydown', function(e) {
+        var items = dropdown.querySelectorAll('.autocomplete-item');
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            if (selectedIndex >= 0 && items[selectedIndex]) {
+                items[selectedIndex].click();
+            } else {
+                // Si hay texto pero no hay selección, agregar como tag libre
+                var texto = input.value.trim();
+                if (texto) {
+                    // Verificar duplicado
+                    var existente = false;
+                    document.getElementById(prefix + 'TagsContainer').querySelectorAll('.tag-item-edit').forEach(function(t) {
+                        if (t.childNodes[0].textContent.trim().toLowerCase() === texto.toLowerCase()) {
+                            existente = true;
+                        }
+                    });
+                    if (!existente) {
+                        agregarTag(prefix, texto);
+                    }
+                    input.value = '';
+                    dropdown.classList.remove('active');
+                }
+            }
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
+            items.forEach(function(el, i) {
+                el.classList.toggle('highlighted', i === selectedIndex);
+            });
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            selectedIndex = Math.max(selectedIndex - 1, -1);
+            items.forEach(function(el, i) {
+                el.classList.toggle('highlighted', i === selectedIndex);
+            });
+        } else if (e.key === 'Escape') {
+            dropdown.classList.remove('active');
+            selectedIndex = -1;
+        } else if (e.key === 'Backspace' && input.value === '') {
+            // Eliminar último tag
+            var container = document.getElementById(prefix + 'TagsContainer');
+            var lastTag = container.querySelector('.tag-item-edit:last-child');
+            if (lastTag) lastTag.querySelector('.tag-remove').click();
+        }
+    });
+
+    input.addEventListener('blur', function() {
+        // Cerrar dropdown al perder foco (con delay para permitir clicks)
+        setTimeout(function() {
+            dropdown.classList.remove('active');
+        }, 200);
+    });
+}
+
+// ── Configurar autocomplete al cargar ──
+configurarAutocomplete('distritos');
+configurarAutocomplete('urbanizacion');
+configurarAutocomplete('zona');
 
 // ── Búsqueda de agente por teléfono ──────────
 let timeoutBuscarAgente = null;
@@ -1553,9 +1881,17 @@ function sincronizarEditDesdeVista() {
     var fuenteTxt = viewText('modalFuente');
     if (fuenteTxt && fuenteTxt !== '—') document.getElementById('editFuente').value = fuenteTxt;
 
-    // Distritos
+    // Distritos — restaurar como tags
     var distTxt = viewText('modalDistritos');
-    if (distTxt && distTxt !== '—') document.getElementById('editDistritos').value = distTxt;
+    inicializarTags('distritos', (distTxt && distTxt !== '—') ? distTxt : '');
+
+    // Urbanización — restaurar como tags
+    var urbTxt = viewText('modalUrbanizacion');
+    inicializarTags('urbanizacion', (urbTxt && urbTxt !== '—') ? urbTxt : '');
+
+    // Zona — restaurar como tags
+    var zonaTxt = viewText('modalZona');
+    inicializarTags('zona', (zonaTxt && zonaTxt !== '—') ? zonaTxt : '');
 
     // Presupuesto: "S/ 250,000" o "$ 500,000" → "250000" o "500000"
     var presTxt = viewText('modalPresupuesto');
@@ -1652,8 +1988,24 @@ function actualizarVista(d) {
     else if (tipoText === 'oficina') { tipoBadge = 'Oficina'; tipoColor = '#39b2ac'; }
     tipoEl.innerHTML = '<span class="badge" style="background-color: ' + tipoColor + '22; color: ' + tipoColor + '; border: 1px solid ' + tipoColor + '44; padding: 3px 10px; border-radius: 4px; font-size: 12px;">' + tipoBadge + '</span>';
     
-    document.getElementById('modalDistritos').textContent = d.distritos || '—';
-    document.getElementById('modalUrbanizacion').textContent = d.urbanizacion || '—';
+    // Distritos como tags
+    const distritosEl = document.getElementById('modalDistritos');
+    const distritosVal = d.distritos || '';
+    if (distritosVal) {
+        const tags = distritosVal.split(',').map(t => t.trim()).filter(t => t);
+        distritosEl.innerHTML = '<div class="tags-container">' + tags.map(t => '<span class="tag-item">' + t + '</span>').join(' ') + '</div>';
+    } else {
+        distritosEl.innerHTML = '<span style="color:#484f58;">—</span>';
+    }
+    // Urbanización como tags
+    const urbanizacionEl = document.getElementById('modalUrbanizacion');
+    const urbanizacionVal = d.urbanizacion || '';
+    if (urbanizacionVal) {
+        const tags = urbanizacionVal.split(',').map(t => t.trim()).filter(t => t);
+        urbanizacionEl.innerHTML = '<div class="tags-container">' + tags.map(t => '<span class="tag-item">' + t + '</span>').join(' ') + '</div>';
+    } else {
+        urbanizacionEl.innerHTML = '<span style="color:#484f58;">—</span>';
+    }
     // Zona como tags
     const zonaEl = document.getElementById('modalZona');
     const zonaVal = d.zona || '';
@@ -1715,6 +2067,176 @@ function actualizarVista(d) {
     document.getElementById('modalMensaje').textContent = d.mensaje || '—';
     document.getElementById('modalCreado').textContent = d.creado || '—';
     document.getElementById('modalActualizado').textContent = d.actualizado || '—';
+}
+
+// ── Actualizar fila de la tabla después de guardar ──
+function actualizarFilaTabla(pk, d) {
+    // Encontrar la fila que contiene el botón con este pk
+    const btn = document.querySelector(`.ver-detalle-btn[data-pk="${pk}"]`);
+    if (!btn) return;
+    const tr = btn.closest('tr');
+    if (!tr) return;
+    const celdas = tr.querySelectorAll('td');
+    if (celdas.length < 17) return;
+
+    // Helper para crear tags HTML
+    function renderTags(valor) {
+        if (!valor) return '<span style="color:#484f58;font-size:12px;">—</span>';
+        var tags = valor.split(',').map(function(t) { return t.trim(); }).filter(function(t) { return t; });
+        if (tags.length === 0) return '<span style="color:#484f58;font-size:12px;">—</span>';
+        var html = '<div class="tags-container" style="gap:3px;">';
+        tags.forEach(function(t) { html += '<span class="tag-item" style="font-size:11px;">' + t + '</span>'; });
+        html += '</div>';
+        return html;
+    }
+
+    // Helper para badge de condición
+    function badgeCondicion(val) {
+        if (val === 'compra') return '<span class="badge badge-blue">Compra</span>';
+        if (val === 'alquiler') return '<span class="badge badge-orange">Alquiler</span>';
+        if (val === 'anticresis') return '<span class="badge badge-orange">Anticresis</span>';
+        if (val === 'ambos') return '<span class="badge badge-purple">Ambos</span>';
+        return '<span class="badge badge-gray">' + (val || '—') + '</span>';
+    }
+
+    // Helper para badge de tipo propiedad
+    function badgeTipo(val) {
+        if (val === 'departamento') return '<span class="badge badge-blue">Dpto</span>';
+        if (val === 'casa') return '<span class="badge badge-green">Casa</span>';
+        if (val === 'terreno') return '<span class="badge badge-orange">Terreno</span>';
+        if (val === 'local_comercial') return '<span class="badge badge-purple">Local</span>';
+        if (val === 'oficina') return '<span class="badge badge-cyan">Oficina</span>';
+        return '<span class="badge badge-gray">' + (val || '—') + '</span>';
+    }
+
+    // Helper para badge de tipo original
+    function badgeTipoOriginal(val) {
+        if (!val) return '<span style="color:#484f58;">—</span>';
+        if (val.includes('BASURA')) return '<span class="badge badge-red">Basura</span>';
+        if (val.includes('REQUERIMIENTO')) return '<span class="badge badge-green">Req.</span>';
+        if (val.includes('PROPIEDAD')) return '<span class="badge badge-blue">Prop.</span>';
+        return '<span class="badge badge-gray">' + val.substring(0, 10) + '</span>';
+    }
+
+    // Helper para presupuesto
+    function renderPresupuesto(monto, moneda) {
+        if (!monto) return '<span class="badge badge-gray">—</span>';
+        var simb = moneda === 'USD' ? '$' : 'S/';
+        var num = parseFloat(monto).toLocaleString('es-PE', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+        return '<span class="presupuesto-val">' + simb + ' ' + num + '</span>';
+    }
+
+    // Helper para forma de pago
+    function renderFormaPago(val) {
+        if (!val || val === 'no_especificado') return '<span style="color:#484f58;">—</span>';
+        var labels = { 'contado': 'Contado', 'credito': 'Crédito', 'contado_credito': 'Contado/Crédito', 'true': 'Sí', 'false': 'No' };
+        return '<span class="badge badge-gray">' + (labels[val] || val.substring(0, 12)) + '</span>';
+    }
+
+    // Helper para badge numérico
+    function badgeNum(val, color, sufijo) {
+        if (!val) return '<span style="color:#484f58;">—</span>';
+        return '<span class="badge badge-' + color + '">' + val + (sufijo || '') + '</span>';
+    }
+
+    // Helper para características
+    function renderCaracts(val, cochera, ascensor, amueblado) {
+        if (!val && cochera !== 'si' && ascensor !== 'si' && amueblado !== 'si') {
+            return '<span style="color:#484f58;">—</span>';
+        }
+        var html = '<div class="caracts">';
+        if (val && val.toUpperCase().includes('URGENTE')) html += '<span class="badge badge-red">URGENTE</span>';
+        if (cochera === 'si') html += '<span class="badge badge-gray">🚗</span>';
+        if (ascensor === 'si') html += '<span class="badge badge-gray">🛗</span>';
+        if (amueblado === 'si') html += '<span class="badge badge-gray">🛋️</span>';
+        html += '</div>';
+        return html;
+    }
+
+    // Helper para mensaje (truncado)
+    function renderMensaje(val) {
+        if (!val) return '<span style="color:#484f58;">—</span>';
+        var txt = val.length > 50 ? val.substring(0, 50) + '...' : val;
+        return '<div class="msg-preview">' + txt + '</div>';
+    }
+
+    // Helper para agente/fuente
+    function renderAgenteFuente(agente, telefono, fuente) {
+        var html = '<div class="agent-name">' + (agente ? agente.substring(0, 25) : '') + '</div>';
+        if (telefono) html += '<div class="agent-phone">📞 ' + telefono + '</div>';
+        html += '<div class="fuente-label">' + (fuente ? fuente.substring(0, 20) : '') + '</div>';
+        return html;
+    }
+
+    // Helper para fecha
+    function renderFecha(fecha, hora) {
+        if (!fecha) return '<span style="color:#484f58;">—</span>';
+        var html = '<div class="fecha-cell">' + fecha + '</div>';
+        if (hora) html += '<div class="fecha-cell">' + hora + '</div>';
+        return html;
+    }
+
+    // Actualizar celdas por índice
+    // Índice 0: Verificado (se maneja aparte con el badge-verificado)
+    const verifSpan = tr.querySelector('.badge-verificado');
+    if (verifSpan) {
+        if (d.verificado === 'si') {
+            verifSpan.className = 'badge-verificado verificado-si';
+            verifSpan.textContent = '✓ VERIFICADO';
+            verifSpan.title = '✓ Verificado — Haz clic para desmarcar';
+        } else {
+            verifSpan.className = 'badge-verificado verificado-no';
+            verifSpan.textContent = '✗ NO VERIF.';
+            verifSpan.title = '✗ No revisado — Haz clic para marcar como verificado';
+        }
+    }
+
+    // Índice 1: Agente / Fuente
+    celdas[1].innerHTML = renderAgenteFuente(d.agente, d.agenteTelefono, d.fuente);
+
+    // Índice 3: Condición
+    celdas[3].innerHTML = badgeCondicion(d.condicion);
+
+    // Índice 4: Tipo Propiedad
+    celdas[4].innerHTML = badgeTipo(d.tipoPropiedad);
+
+    // Índice 5: Distritos (tags)
+    celdas[5].innerHTML = renderTags(d.distritos);
+
+    // Índice 6: Urbanización (tags)
+    celdas[6].innerHTML = renderTags(d.urbanizacion);
+
+    // Índice 7: Zona (tags)
+    celdas[7].innerHTML = renderTags(d.zona);
+
+    // Índice 8: Presupuesto
+    celdas[8].innerHTML = renderPresupuesto(d.presupuestoMonto, d.presupuestoMoneda);
+
+    // Índice 9: Forma de Pago
+    celdas[9].innerHTML = renderFormaPago(d.formaPago);
+
+    // Índice 10: Habitaciones
+    celdas[10].innerHTML = badgeNum(d.habitaciones, 'blue');
+
+    // Índice 11: Baños
+    celdas[11].innerHTML = badgeNum(d.banos, 'blue');
+
+    // Índice 12: Área
+    celdas[12].innerHTML = badgeNum(d.areaM2, 'cyan', 'm²');
+
+    // Índice 13: Características
+    celdas[13].innerHTML = renderCaracts(d.caracteristicas, d.cochera, d.ascensor, d.amueblado);
+
+    // Índice 14: Tipo Original
+    celdas[14].innerHTML = badgeTipoOriginal(d.tipoOriginal);
+
+    // Índice 15: Mensaje
+    celdas[15].innerHTML = renderMensaje(d.mensaje);
+
+    // Actualizar data-attributes del botón
+    Object.keys(d).forEach(function(key) {
+        btn.dataset[key] = d[key];
+    });
 }
 
 // ── Inicializar modal ─────────────────────────
@@ -1782,6 +2304,13 @@ document.addEventListener('DOMContentLoaded', function() {
             if (viewId) {
                 var viewEl = document.getElementById(viewId);
                 if (viewEl) {
+                    // Si el view tiene tags, extraerlos correctamente
+                    var tagItems = viewEl.querySelectorAll('.tag-item');
+                    if (tagItems.length > 0) {
+                        var tags = [];
+                        tagItems.forEach(function(t) { tags.push(t.textContent.trim()); });
+                        return tags.join(', ');
+                    }
                     var txt = (viewEl.textContent || '').trim();
                     if (txt && txt !== '—') {
                         if (viewTransform) return viewTransform(txt);
@@ -1887,19 +2416,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     });
                 }
                 
-                // Actualizar badge de verificado en la tabla
-                const verifSpan = document.querySelector(`.badge-verificado[data-pk="${pk}"]`);
-                if (verifSpan) {
-                    if (data.verificado) {
-                        verifSpan.className = 'badge-verificado verificado-si';
-                        verifSpan.textContent = '✓ VERIFICADO';
-                        verifSpan.title = '✓ Verificado — Haz clic para desmarcar';
-                    } else {
-                        verifSpan.className = 'badge-verificado verificado-no';
-                        verifSpan.textContent = '✗ NO VERIF.';
-                        verifSpan.title = '✗ No revisado — Haz clic para marcar como verificado';
-                    }
-                }
+                // Actualizar la fila completa de la tabla
+                actualizarFilaTabla(pk, modalRequerimientoActual);
                 
                 // Actualizar vista del modal
                 actualizarVista(modalRequerimientoActual);

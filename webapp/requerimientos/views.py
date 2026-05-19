@@ -1,4 +1,5 @@
 from django.views.generic import ListView, DetailView, RedirectView, TemplateView, View
+from .models import ZonaCalle
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.shortcuts import render
@@ -272,6 +273,20 @@ class EditarRequerimientoView(View):
                 else:
                     setattr(req, campo, valor)
                 campos_actualizados.append(campo)
+
+        # ── Sincronizar ZonaCalle con los tags del campo 'zona' ──
+        if 'zona' in data and data['zona']:
+            tags = [t.strip() for t in data['zona'].split(',') if t.strip()]
+            for tag in tags:
+                obj, created = ZonaCalle.objects.get_or_create(
+                    nombre__iexact=tag,
+                    defaults={'nombre': tag, 'veces_usado': 1}
+                )
+                if not created:
+                    # Si existe pero con diferente capitalización, actualizar
+                    if obj.nombre != tag:
+                        obj.nombre = tag
+                    ZonaCalle.objects.filter(pk=obj.pk).update(veces_usado=models.F('veces_usado') + 1)
 
         if campos_actualizados:
             req.save(update_fields=campos_actualizados)
@@ -1260,3 +1275,20 @@ class CrearAgenteRapidoView(View):
             })
         except Exception as e:
             return JsonResponse({'ok': False, 'error': str(e)})
+
+
+class ApiZonaCalleAutocompleteView(View):
+    """API de autocomplete para ZonaCalle (zonas y calles)."""
+    def get(self, request, *args, **kwargs):
+        q = request.GET.get('q', '').strip()
+        if len(q) < 1:
+            return JsonResponse({'data': []})
+        resultados = ZonaCalle.objects.filter(
+            nombre__icontains=q
+        ).order_by('-veces_usado', 'nombre')[:20]
+        data = [{
+            'id': zc.id,
+            'nombre': zc.nombre,
+            'veces_usado': zc.veces_usado,
+        } for zc in resultados]
+        return JsonResponse({'data': data})
