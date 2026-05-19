@@ -882,10 +882,25 @@
                     <button class="header-btn" title="Actualizar" onclick="location.reload()">&#x21BB;</button>
                     <button class="header-btn" title="Notificaciones">&#x1F514;</button>
                     {% if user.is_authenticated %}
-                    <div class="user-avatar" title="{{ user.username }}">{{ user.username|first|upper }}</div>
-                    <a href="/intelligence/logout/?next=/intelligence/skills/dashboard/" class="header-btn" title="Cerrar Sesión" style="text-decoration:none;">🚪</a>
+                    <div class="user-info" style="display:flex;align-items:center;gap:8px;padding:4px 12px;border-right:1px solid var(--border-color);">
+                        <div class="user-avatar" title="{{ user.username }}">{{ user.username|first|upper }}</div>
+                        <span style="font-size:13px;color:var(--text-primary);font-weight:500;">{{ user.username }}</span>
+                    </div>
+                    <a href="{% url 'admin:logout' %}?next={% firstof request.path '/' %}"
+                       class="auth-btn auth-btn-logout"
+                       title="Cerrar Sesión"
+                       style="text-decoration:none;display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:8px;border:1px solid var(--border-color);background-color:var(--bg-tertiary);color:#f85149;font-size:13px;font-weight:500;transition:all 0.2s ease;cursor:pointer;">
+                        <span style="font-size:16px;">🚪</span>
+                        <span>Cerrar Sesión</span>
+                    </a>
                     {% else %}
-                    <a href="/intelligence/login/?next=/intelligence/skills/dashboard/" class="header-btn" title="Iniciar Sesión" style="text-decoration:none;">🔑</a>
+                    <a href="{% url 'admin:login' %}?next={% firstof request.path '/' %}"
+                       class="auth-btn auth-btn-login"
+                       title="Iniciar Sesión"
+                       style="text-decoration:none;display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:8px;border:1px solid #238636;background-color:#1f6f3a;color:#fff;font-size:13px;font-weight:500;transition:all 0.2s ease;cursor:pointer;">
+                        <span style="font-size:16px;">🔑</span>
+                        <span>Iniciar Sesión</span>
+                    </a>
                     {% endif %}
                     {% endblock %}
                 </div>

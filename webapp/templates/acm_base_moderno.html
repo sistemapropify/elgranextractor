@@ -376,7 +376,24 @@
 <button class="header-btn" title="Notificaciones">
     <i class="fas fa-bell"></i>
 </button>
-<div class="user-avatar">P</div>
+{% if user.is_authenticated %}
+<div class="user-avatar" title="{{ user.username }}">{{ user.username|first|upper }}</div>
+<a href="{% url 'admin:logout' %}?next={% firstof request.path '/' %}"
+   class="header-btn"
+   title="Cerrar Sesión"
+   style="text-decoration:none;color:#f85149;font-size:13px;font-weight:500;display:flex;align-items:center;gap:4px;">
+    <i class="fas fa-sign-out-alt"></i>
+    <span>Cerrar Sesión</span>
+</a>
+{% else %}
+<a href="{% url 'admin:login' %}?next={% firstof request.path '/' %}"
+   class="header-btn"
+   title="Iniciar Sesión"
+   style="text-decoration:none;color:#238636;font-size:13px;font-weight:500;display:flex;align-items:center;gap:4px;">
+    <i class="fas fa-sign-in-alt"></i>
+    <span>Iniciar Sesión</span>
+</a>
+{% endif %}
 {% endblock %}
 
 {% block extra_scripts %}
