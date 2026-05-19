@@ -429,3 +429,324 @@ def calcular_tendencia(valores: List[float]) -> str:
         return '📉 bajando'
     else:
         return '➡️ estable'
+
+
+# ═════════════════════════════════════════════
+#  FUNCIONES DE QUALITY SCORE
+# ═════════════════════════════════════════════
+
+def _get_calidad_config():
+    """Retorna la configuración activa de calidad o los defaults."""
+    from .models import ConfiguracionCalidad
+    return ConfiguracionCalidad.get_config()
+
+
+def calcular_completitud(req, config=None) -> float:
+    """
+    Calcula el score de completitud (0-100) basado en campos llenos.
+    
+    Los campos se dividen en 3 tiers con diferentes pesos:
+    - Críticos (3 pts c/u): distritos, tipo_propiedad, condicion
+    - Importantes (2 pts c/u): presupuesto_monto, habitaciones, urbanizacion, agente
+    - Complementarios (1 pt c/u): presupuesto_moneda, presupuesto_forma_pago, banos,
+      area_m2, zona, cochera, ascensor, amueblado
+    
+    Returns:
+        float: Score de 0 a 100
+    """
+    if config is None:
+        config = _get_calidad_config()
+    
+    tiers = config.get('completitud_tiers', {})
+    max_puntos = 0
+    puntos_obtenidos = 0
+    
+    for tier_key, tier_data in tiers.items():
+        puntos_por_campo = tier_data.get('puntos_por_campo', 1)
+        campos = tier_data.get('campos', [])
+        for campo in campos:
+            max_puntos += puntos_por_campo
+            valor = getattr(req, campo, None)
+            if valor is not None and valor != '' and valor != []:
+                # Para campos ternarios (None/'' no cuenta, 'no' sí cuenta)
+                if campo in ('cochera', 'ascensor', 'amueblado'):
+                    if valor and str(valor) != '':
+                        puntos_obtenidos += puntos_por_campo
+                elif campo == 'distritos':
+                    # distritos es un campo separado por comas
+                    if isinstance(valor, str) and valor.strip():
+                        puntos_obtenidos += puntos_por_campo
+                else:
+                    puntos_obtenidos += puntos_por_campo
+    
+    if max_puntos == 0:
+        return 0.0
+    
+    return round((puntos_obtenidos / max_puntos) * 100, 1)
+
+
+def calcular_especificidad(req, config=None) -> float:
+    """
+    Calcula el score de especificidad geográfica (0-100).
+    
+    Niveles:
+    - Muy específico (100): zona + urbanización + al menos 1 distrito
+    - Específico (75): urbanización o zona
+    - Preciso (50): exactamente 1 distrito
+    - Amplio (30): múltiples distritos
+    - Sin ubicación (0): sin distritos
+    
+    Returns:
+        float: Score de 0 a 100
+    """
+    if config is None:
+        config = _get_calidad_config()
+    
+    niveles = config.get('especificidad_niveles', [])
+    
+    # Obtener datos del requerimiento
+    distritos_raw = getattr(req, 'distritos', '') or ''
+    distritos = [d.strip() for d in distritos_raw.split(',') if d.strip()]
+    num_distritos = len(distritos)
+    
+    urbanizacion = getattr(req, 'urbanizacion', '') or ''
+    zona = getattr(req, 'zona', '') or ''
+    tiene_urbanizacion = bool(urbanizacion.strip())
+    tiene_zona = bool(zona.strip())
+    
+    # Determinar nivel
+    if tiene_zona and tiene_urbanizacion and num_distritos >= 1:
+        # Muy específico
+        for nivel in niveles:
+            if nivel.get('requisito') == 'zona+urbanizacion+1distrito':
+                return float(nivel.get('score', 100))
+    
+    if tiene_urbanizacion or tiene_zona:
+        # Específico
+        for nivel in niveles:
+            if nivel.get('requisito') == 'urbanizacion_o_zona':
+                return float(nivel.get('score', 75))
+    
+    if num_distritos == 1:
+        # Preciso
+        for nivel in niveles:
+            if nivel.get('requisito') == '1_distrito':
+                return float(nivel.get('score', 50))
+    
+    if num_distritos > 1:
+        # Amplio
+        for nivel in niveles:
+            if nivel.get('requisito') == 'multi_distrito':
+                return float(nivel.get('score', 30))
+    
+    # Sin ubicación
+    for nivel in niveles:
+        if nivel.get('requisito') == 'sin_distrito':
+            return float(nivel.get('score', 0))
+    
+    return 0.0
+
+
+def calcular_presupuesto_score(req, config=None) -> float:
+    """
+    Calcula el score de presupuesto (0-100) basado en percentiles.
+    
+    Compara el presupuesto del requerimiento contra todos los requerimientos
+    con presupuesto para determinar si está en percentil alto (menos calidad
+    porque es menos realista) o bajo (más calidad).
+    
+    Usa P25, P50, P75 para categorizar.
+    
+    Returns:
+        float: Score de 0 a 100
+    """
+    if config is None:
+        config = _get_calidad_config()
+    
+    monto = getattr(req, 'presupuesto_monto', None)
+    if monto is None or monto == '' or monto == 0:
+        return float(config.get('presupuesto_percentiles', {}).get('sin_presupuesto_score', 0))
+    
+    try:
+        monto = float(monto)
+    except (TypeError, ValueError):
+        return float(config.get('presupuesto_percentiles', {}).get('sin_presupuesto_score', 0))
+    
+    if monto <= 0:
+        return float(config.get('presupuesto_percentiles', {}).get('sin_presupuesto_score', 0))
+    
+    percentiles_config = config.get('presupuesto_percentiles', {})
+    min_muestras = percentiles_config.get('min_muestras', 10)
+    
+    # Obtener todos los montos de presupuesto (misma moneda)
+    moneda = getattr(req, 'presupuesto_moneda', None)
+    montos_qs = Requerimiento.objects.filter(
+        presupuesto_monto__isnull=False,
+        presupuesto_monto__gt=0
+    )
+    if moneda:
+        montos_qs = montos_qs.filter(presupuesto_moneda=moneda)
+    
+    montos = list(montos_qs.values_list('presupuesto_monto', flat=True))
+    montos = [float(m) for m in montos if m is not None]
+    
+    if len(montos) < min_muestras:
+        # Pocas muestras, score neutral
+        return 50.0
+    
+    montos.sort()
+    n = len(montos)
+    
+    # Calcular percentiles
+    def percentile(data, p):
+        k = (len(data) - 1) * p / 100
+        f = int(k)
+        c = k - f
+        if f + 1 < len(data):
+            return data[f] * (1 - c) + data[f + 1] * c
+        return data[-1]
+    
+    p25 = percentile(montos, 25)
+    p50 = percentile(montos, 50)
+    p75 = percentile(montos, 75)
+    
+    # Asignar score según percentil del monto
+    if monto <= p25:
+        return float(percentiles_config.get('p25_score', 100))
+    elif monto <= p50:
+        return float(percentiles_config.get('p25_a_p50_score', 80))
+    elif monto <= p75:
+        return float(percentiles_config.get('p50_a_p75_score', 50))
+    else:
+        return float(percentiles_config.get('mayor_p75_score', 20))
+
+
+def calcular_antiguedad_score(req, config=None) -> float:
+    """
+    Calcula el score de antigüedad (0-100) basado en días desde creación.
+    
+    Mientras más reciente, mejor score.
+    
+    Rangos por defecto:
+    - ≤7 días: 100
+    - ≤30 días: 75
+    - ≤90 días: 40
+    - ≤180 días: 15
+    - >180 días: 5
+    
+    Returns:
+        float: Score de 0 a 100
+    """
+    if config is None:
+        config = _get_calidad_config()
+    
+    fecha = getattr(req, 'fecha', None) or getattr(req, 'creado_en', None)
+    if fecha is None:
+        return 0.0
+    
+    if isinstance(fecha, str):
+        from datetime import datetime
+        try:
+            fecha = datetime.strptime(fecha, '%Y-%m-%d')
+        except ValueError:
+            return 0.0
+    
+    dias = (timezone.now().date() - fecha).days if hasattr(fecha, 'date') else 0
+    if dias < 0:
+        dias = 0
+    
+    rangos = config.get('antiguedad_rangos', [])
+    for rango in sorted(rangos, key=lambda r: r.get('dias_max', 999999)):
+        if dias <= rango.get('dias_max', 0):
+            return float(rango.get('score', 0))
+    
+    return 0.0
+
+
+def calcular_quality_score(req, config=None) -> Dict[str, Any]:
+    """
+    Calcula el Quality Score completo de un requerimiento.
+    
+    Evalúa 4 dimensiones:
+    1. Completitud (35%) - qué tan llenos están los campos
+    2. Especificidad (25%) - qué tan específico es geográficamente
+    3. Presupuesto (25%) - qué tan realista es el presupuesto
+    4. Antigüedad (15%) - qué tan reciente es
+    
+    Args:
+        req: Instancia de Requerimiento
+        config: Dict de configuración (opcional, usa defaults si no se provee)
+    
+    Returns:
+        dict: {
+            'score': float (0-100),
+            'nivel': str (Excelente/Bueno/Regular/Malo),
+            'dimensiones': {
+                'completitud': float,
+                'especificidad': float,
+                'presupuesto': float,
+                'antiguedad': float
+            },
+            'pesos': {
+                'completitud': int,
+                'especificidad': int,
+                'presupuesto': int,
+                'antiguedad': int
+            }
+        }
+    """
+    if config is None:
+        config = _get_calidad_config()
+    
+    pesos = config.get('pesos_dimensiones', {})
+    peso_completitud = pesos.get('completitud', 35)
+    peso_especificidad = pesos.get('especificidad', 25)
+    peso_presupuesto = pesos.get('presupuesto', 25)
+    peso_antiguedad = pesos.get('antiguedad', 15)
+    
+    # Calcular cada dimensión
+    score_completitud = calcular_completitud(req, config)
+    score_especificidad = calcular_especificidad(req, config)
+    score_presupuesto = calcular_presupuesto_score(req, config)
+    score_antiguedad = calcular_antiguedad_score(req, config)
+    
+    # Ponderar
+    peso_total = peso_completitud + peso_especificidad + peso_presupuesto + peso_antiguedad
+    if peso_total == 0:
+        peso_total = 100  # fallback
+    
+    score_final = (
+        (score_completitud * peso_completitud) +
+        (score_especificidad * peso_especificidad) +
+        (score_presupuesto * peso_presupuesto) +
+        (score_antiguedad * peso_antiguedad)
+    ) / peso_total
+    
+    score_final = round(score_final, 1)
+    
+    # Determinar nivel textual
+    if score_final >= 80:
+        nivel = 'Excelente'
+    elif score_final >= 60:
+        nivel = 'Bueno'
+    elif score_final >= 40:
+        nivel = 'Regular'
+    else:
+        nivel = 'Malo'
+    
+    return {
+        'score': score_final,
+        'nivel': nivel,
+        'dimensiones': {
+            'completitud': score_completitud,
+            'especificidad': score_especificidad,
+            'presupuesto': score_presupuesto,
+            'antiguedad': score_antiguedad,
+        },
+        'pesos': {
+            'completitud': peso_completitud,
+            'especificidad': peso_especificidad,
+            'presupuesto': peso_presupuesto,
+            'antiguedad': peso_antiguedad,
+        },
+    }

@@ -1,0 +1,1518 @@
+{% extends 'propifai_base.html' %}
+{% load static %}
+
+{% block title %}Dashboard de Análisis - Requerimientos - Propifai{% endblock %}
+
+{% block extra_head %}
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+        background-color: #0d1117;
+        color: #c9d1d9;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        font-size: 14px;
+        line-height: 1.5;
+    }
+
+    .dashboard-container {
+        max-width: 1600px;
+        margin: 0 auto;
+        padding: 24px;
+    }
+
+    /* Header */
+    .dashboard-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    .dashboard-header h1 {
+        color: #58a6ff;
+        font-size: 24px;
+        font-weight: 600;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .dashboard-header h1 i {
+        font-size: 28px;
+    }
+
+    .header-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .header-actions .btn {
+        font-size: 13px;
+        padding: 6px 14px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .btn-export-excel {
+        background-color: #1f6f3a;
+        border: 1px solid #238636;
+        color: #fff;
+    }
+    .btn-export-excel:hover {
+        background-color: #238636;
+        color: #fff;
+    }
+
+    .btn-export-pdf {
+        background-color: #8b3a3a;
+        border: 1px solid #a33;
+        color: #fff;
+    }
+    .btn-export-pdf:hover {
+        background-color: #a33;
+        color: #fff;
+    }
+
+    .btn-refresh {
+        background-color: #21262d;
+        border: 1px solid #30363d;
+        color: #c9d1d9;
+    }
+    .btn-refresh:hover {
+        background-color: #30363d;
+        color: #fff;
+    }
+
+    /* Filtros */
+    .filters-bar {
+        background-color: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        padding: 16px 20px;
+        margin-bottom: 20px;
+    }
+
+    .filters-bar .row {
+        align-items: end;
+    }
+
+    .filters-bar label {
+        font-size: 12px;
+        color: #8b949e;
+        margin-bottom: 4px;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .filters-bar .form-control,
+    .filters-bar .form-select {
+        background-color: #0d1117;
+        border: 1px solid #30363d;
+        color: #c9d1d9;
+        font-size: 13px;
+        border-radius: 6px;
+        padding: 6px 10px;
+    }
+
+    .filters-bar .form-control:focus,
+    .filters-bar .form-select:focus {
+        border-color: #58a6ff;
+        box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.15);
+    }
+
+    .filters-bar .btn-apply {
+        background-color: #238636;
+        border: 1px solid #2ea043;
+        color: #fff;
+        font-size: 13px;
+        padding: 6px 16px;
+        border-radius: 6px;
+    }
+    .filters-bar .btn-apply:hover {
+        background-color: #2ea043;
+    }
+
+    .filters-bar .btn-clear {
+        background-color: #21262d;
+        border: 1px solid #30363d;
+        color: #c9d1d9;
+        font-size: 13px;
+        padding: 6px 16px;
+        border-radius: 6px;
+    }
+    .filters-bar .btn-clear:hover {
+        background-color: #30363d;
+    }
+
+    /* KPIs */
+    .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+        margin-bottom: 20px;
+    }
+
+    .kpi-card {
+        background-color: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        padding: 18px 20px;
+        transition: border-color 0.2s;
+    }
+
+    .kpi-card:hover {
+        border-color: #58a6ff;
+    }
+
+    .kpi-card .kpi-label {
+        font-size: 12px;
+        color: #8b949e;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 6px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .kpi-card .kpi-value {
+        font-size: 28px;
+        font-weight: 700;
+        color: #f0f6fc;
+        line-height: 1.2;
+    }
+
+    .kpi-card .kpi-sub {
+        font-size: 12px;
+        color: #8b949e;
+        margin-top: 4px;
+    }
+
+    .kpi-card .kpi-trend-up { color: #3fb950; }
+    .kpi-card .kpi-trend-down { color: #f85149; }
+    .kpi-card .kpi-trend-stable { color: #d29922; }
+
+    .kpi-card.kpi-primary { border-left: 3px solid #58a6ff; }
+    .kpi-card.kpi-success { border-left: 3px solid #3fb950; }
+    .kpi-card.kpi-warning { border-left: 3px solid #d29922; }
+    .kpi-card.kpi-info { border-left: 3px solid #79c0ff; }
+    .kpi-card.kpi-danger { border-left: 3px solid #f85149; }
+
+    /* Charts Grid */
+    .charts-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-bottom: 20px;
+    }
+
+    .chart-card {
+        background-color: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+
+    .chart-card.full-width {
+        grid-column: 1 / -1;
+    }
+
+    .chart-card .chart-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 14px 20px;
+        border-bottom: 1px solid #30363d;
+    }
+
+    .chart-card .chart-header h3 {
+        font-size: 14px;
+        font-weight: 600;
+        color: #c9d1d9;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .chart-card .chart-header h3 i {
+        color: #58a6ff;
+        font-size: 16px;
+    }
+
+    .chart-card .chart-body {
+        padding: 16px 20px;
+        position: relative;
+    }
+
+    .chart-card .chart-body canvas {
+        max-height: 320px;
+        max-width: 100%;
+    }
+
+    /* Insights */
+    .insights-section {
+        background-color: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        overflow: hidden;
+    }
+
+    .insights-section .insights-header {
+        padding: 14px 20px;
+        border-bottom: 1px solid #30363d;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .insights-section .insights-header h3 {
+        font-size: 14px;
+        font-weight: 600;
+        color: #c9d1d9;
+        margin: 0;
+    }
+
+    .insights-section .insights-header i {
+        color: #d29922;
+        font-size: 16px;
+    }
+
+    .insights-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 12px;
+        padding: 16px 20px;
+    }
+
+    .insight-card {
+        background-color: #0d1117;
+        border: 1px solid #21262d;
+        border-radius: 8px;
+        padding: 14px 16px;
+        transition: border-color 0.2s;
+    }
+
+    .insight-card:hover {
+        border-color: #30363d;
+    }
+
+    .insight-card .insight-icon {
+        font-size: 24px;
+        margin-bottom: 8px;
+    }
+
+    .insight-card .insight-titulo {
+        font-size: 14px;
+        font-weight: 600;
+        color: #f0f6fc;
+        margin-bottom: 4px;
+    }
+
+    .insight-card .insight-descripcion {
+        font-size: 13px;
+        color: #8b949e;
+    }
+
+    /* Loading & States */
+    .loading-overlay {
+        display: none;
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(13, 17, 23, 0.8);
+        border-radius: 8px;
+        justify-content: center;
+        align-items: center;
+        z-index: 10;
+    }
+
+    .loading-overlay.active {
+        display: flex;
+    }
+
+    .loading-spinner {
+        width: 40px;
+        height: 40px;
+        border: 3px solid #30363d;
+        border-top-color: #58a6ff;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 40px 20px;
+        color: #8b949e;
+    }
+
+    .empty-state i {
+        font-size: 48px;
+        margin-bottom: 16px;
+        color: #30363d;
+    }
+
+    .empty-state h4 {
+        color: #c9d1d9;
+        margin-bottom: 8px;
+    }
+
+    .error-state {
+        text-align: center;
+        padding: 40px 20px;
+        color: #f85149;
+    }
+
+    .error-state i {
+        font-size: 48px;
+        margin-bottom: 16px;
+    }
+
+    /* Sample data badge */
+    .sample-data-badge {
+        display: none;
+        background-color: #d29922;
+        color: #0d1117;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 3px 10px;
+        border-radius: 12px;
+        margin-left: 12px;
+    }
+
+    /* Tooltip personalizado */
+    .chart-tooltip {
+        background-color: #161b22 !important;
+        border: 1px solid #30363d !important;
+        border-radius: 6px !important;
+        color: #c9d1d9 !important;
+        padding: 8px 12px !important;
+        font-size: 13px !important;
+    }
+
+    /* Responsive */
+    @media (max-width: 992px) {
+        .charts-grid {
+            grid-template-columns: 1fr;
+        }
+        .kpi-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    @media (max-width: 576px) {
+        .dashboard-container {
+            padding: 12px;
+        }
+        .kpi-grid {
+            grid-template-columns: 1fr;
+        }
+        .dashboard-header {
+            flex-direction: column;
+            align-items: start;
+        }
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #0d1117; }
+    ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #484f58; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <!-- Header -->
+    <div class="dashboard-header">
+        <h1>
+            <i class="bi bi-graph-up-arrow"></i>
+            Dashboard de Análisis Temporal
+            <span class="sample-data-badge" id="sampleDataBadge">
+                <i class="bi bi-info-circle"></i> Datos de ejemplo
+            </span>
+        </h1>
+        <div class="header-actions">
+            <a href="{% url 'requerimientos:lista' %}" class="btn btn-sm" style="background-color:#21262d;border:1px solid #30363d;color:#c9d1d9;">
+                <i class="bi bi-list-ul"></i> Lista
+            </a>
+            <button class="btn btn-sm btn-refresh" onclick="cargarDatos()">
+                <i class="bi bi-arrow-clockwise"></i> Actualizar
+            </button>
+            <a href="{% url 'requerimientos:exportar_excel' %}?{{ request.GET.urlencode }}" class="btn btn-sm btn-export-excel" id="btnExportExcel">
+                <i class="bi bi-file-earmark-excel"></i> Excel
+            </a>
+            <a href="{% url 'requerimientos:exportar_pdf' %}?{{ request.GET.urlencode }}" class="btn btn-sm btn-export-pdf" id="btnExportPDF">
+                <i class="bi bi-file-earmark-pdf"></i> PDF
+            </a>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="filters-bar">
+        <form id="filterForm" onsubmit="event.preventDefault(); aplicarFiltros();">
+            <div class="row g-3">
+                <div class="col-md-2 col-sm-6">
+                    <label for="fecha_inicio">Fecha inicio</label>
+                    <input type="date" id="fecha_inicio" name="fecha_inicio" class="form-control form-control-sm"
+                           value="{{ fecha_inicio|date:'Y-m-d'|default:'' }}">
+                </div>
+                <div class="col-md-2 col-sm-6">
+                    <label for="fecha_fin">Fecha fin</label>
+                    <input type="date" id="fecha_fin" name="fecha_fin" class="form-control form-control-sm"
+                           value="{{ fecha_fin|date:'Y-m-d'|default:'' }}">
+                </div>
+                <div class="col-md-2 col-sm-6">
+                    <label for="condicion">Condición</label>
+                    <select id="condicion" name="condicion" class="form-select form-select-sm">
+                        <option value="">Todas</option>
+                        {% for value, label in condiciones %}
+                        <option value="{{ value }}" {% if filtros.condicion == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 col-sm-6">
+                    <label for="tipo_propiedad">Tipo propiedad</label>
+                    <select id="tipo_propiedad" name="tipo_propiedad" class="form-select form-select-sm">
+                        <option value="">Todos</option>
+                        {% for value, label in tipos_propiedad %}
+                        <option value="{{ value }}" {% if filtros.tipo_propiedad == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 col-sm-6">
+                    <label for="distrito">Distrito</label>
+                    <input type="text" id="distrito" name="distrito" class="form-control form-control-sm"
+                           placeholder="Ej: Cayma" value="{{ filtros.distrito|default:'' }}">
+                </div>
+                <div class="col-md-2 col-sm-6">
+                    <label for="fuente">Fuente</label>
+                    <select id="fuente" name="fuente" class="form-select form-select-sm">
+                        <option value="">Todas</option>
+                        {% for value, label in fuentes %}
+                        <option value="{{ value }}" {% if filtros.fuente == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-12 d-flex gap-2 justify-content-end">
+                    <button type="submit" class="btn btn-sm btn-apply">
+                        <i class="bi bi-funnel"></i> Aplicar filtros
+                    </button>
+                    <button type="button" class="btn btn-sm btn-clear" onclick="limpiarFiltros()">
+                        <i class="bi bi-x-circle"></i> Limpiar
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- KPIs -->
+    <div class="kpi-grid" id="kpiContainer">
+        <div class="kpi-card kpi-primary">
+            <div class="kpi-label"><i class="bi bi-file-text"></i> Total requerimientos</div>
+            <div class="kpi-value" id="kpiTotal">--</div>
+            <div class="kpi-sub" id="kpiPeriodo">Cargando...</div>
+        </div>
+        <div class="kpi-card kpi-success">
+            <div class="kpi-label"><i class="bi bi-arrow-up-right"></i> Crecimiento</div>
+            <div class="kpi-value" id="kpiCrecimiento">--</div>
+            <div class="kpi-sub" id="kpiCrecimientoSub">Cargando...</div>
+        </div>
+        <div class="kpi-card kpi-info">
+            <div class="kpi-label"><i class="bi bi-trending-up"></i> Tendencia</div>
+            <div class="kpi-value" id="kpiTendencia">--</div>
+            <div class="kpi-sub" id="kpiTendenciaSub">Cargando...</div>
+        </div>
+        <div class="kpi-card kpi-warning">
+            <div class="kpi-label"><i class="bi bi-star"></i> Calidad promedio</div>
+            <div class="kpi-value" id="kpiCalidad">--</div>
+            <div class="kpi-sub" id="kpiCalidadSub">Cargando...</div>
+        </div>
+        <div class="kpi-card kpi-danger">
+            <div class="kpi-label"><i class="bi bi-building"></i> Distrito líder</div>
+            <div class="kpi-value" id="kpiDistrito">--</div>
+            <div class="kpi-sub" id="kpiDistritoSub">Cargando...</div>
+        </div>
+    </div>
+
+    <!-- Charts Grid -->
+    <div class="charts-grid">
+        <!-- Tendencia mensual -->
+        <div class="chart-card full-width">
+            <div class="chart-header">
+                <h3><i class="bi bi-bar-chart-line"></i> Tendencia mensual de requerimientos</h3>
+                <span style="font-size:12px;color:#8b949e;" id="chartTendenciaLabel">Evolución en el tiempo</span>
+            </div>
+            <div class="chart-body" style="position:relative;">
+                <div class="loading-overlay" id="loadingTendencia">
+                    <div class="loading-spinner"></div>
+                </div>
+                <canvas id="chartTendencia"></canvas>
+            </div>
+        </div>
+
+        <!-- Distribución por distrito -->
+        <div class="chart-card">
+            <div class="chart-header">
+                <h3><i class="bi bi-geo-alt"></i> Requerimientos por distrito</h3>
+            </div>
+            <div class="chart-body" style="position:relative;">
+                <div class="loading-overlay" id="loadingDistritos">
+                    <div class="loading-spinner"></div>
+                </div>
+                <canvas id="chartDistritos"></canvas>
+            </div>
+        </div>
+
+        <!-- Tipo de propiedad -->
+        <div class="chart-card">
+            <div class="chart-header">
+                <h3><i class="bi bi-house-door"></i> Tipo de propiedad</h3>
+            </div>
+            <div class="chart-body" style="position:relative;">
+                <div class="loading-overlay" id="loadingTipos">
+                    <div class="loading-spinner"></div>
+                </div>
+                <canvas id="chartTipos"></canvas>
+            </div>
+        </div>
+
+        <!-- Presupuesto promedio -->
+        <div class="chart-card">
+            <div class="chart-header">
+                <h3><i class="bi bi-cash-coin"></i> Presupuesto promedio</h3>
+            </div>
+            <div class="chart-body" style="position:relative;">
+                <div class="loading-overlay" id="loadingPresupuesto">
+                    <div class="loading-spinner"></div>
+                </div>
+                <canvas id="chartPresupuesto"></canvas>
+            </div>
+        </div>
+
+        <!-- Compra vs Alquiler -->
+        <div class="chart-card">
+            <div class="chart-header">
+                <h3><i class="bi bi-arrow-left-right"></i> Compra vs Alquiler</h3>
+            </div>
+            <div class="chart-body" style="position:relative;">
+                <div class="loading-overlay" id="loadingOperacion">
+                    <div class="loading-spinner"></div>
+                </div>
+                <canvas id="chartOperacion"></canvas>
+            </div>
+        </div>
+
+        <!-- Características demandadas -->
+        <div class="chart-card">
+            <div class="chart-header">
+                <h3><i class="bi bi-check2-square"></i> Características demandadas</h3>
+            </div>
+            <div class="chart-body" style="position:relative;">
+                <div class="loading-overlay" id="loadingCaracts">
+                    <div class="loading-spinner"></div>
+                </div>
+                <canvas id="chartCaracteristicas"></canvas>
+            </div>
+        </div>
+
+        <!-- Distribución por tipo (doughnut) -->
+        <div class="chart-card">
+            <div class="chart-header">
+                <h3><i class="bi bi-pie-chart"></i> Distribución por tipo</h3>
+            </div>
+            <div class="chart-body" style="position:relative;">
+                <div class="loading-overlay" id="loadingDistribucion">
+                    <div class="loading-spinner"></div>
+                </div>
+                <canvas id="chartDistribucion"></canvas>
+            </div>
+        </div>
+
+        <!-- Crecimiento porcentual -->
+        <div class="chart-card">
+            <div class="chart-header">
+                <h3><i class="bi bi-percent"></i> Crecimiento intermensual</h3>
+            </div>
+            <div class="chart-body" style="position:relative;">
+                <div class="loading-overlay" id="loadingCrecimiento">
+                    <div class="loading-spinner"></div>
+                </div>
+                <canvas id="chartCrecimiento"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Insights -->
+    <div class="insights-section">
+        <div class="insights-header">
+            <i class="bi bi-lightbulb"></i>
+            <h3>Insights automáticos</h3>
+        </div>
+        <div class="insights-grid" id="insightsContainer">
+            <div class="empty-state" style="grid-column:1/-1;padding:20px;">
+                <i class="bi bi-hourglass-split"></i>
+                <p>Cargando insights...</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ============================================================
+// DASHBOARD DE ANÁLISIS TEMPORAL - REQUERIMIENTOS
+// ============================================================
+
+// Referencias a instancias de Chart.js para destruir antes de recrear
+let charts = {};
+
+// Colores del tema oscuro
+const COLORS = {
+    blue:       '#58a6ff',
+    green:      '#3fb950',
+    orange:     '#d29922',
+    red:        '#f85149',
+    purple:     '#bc8cff',
+    cyan:       '#79c0ff',
+    pink:       '#f778ba',
+    yellow:     '#e3b341',
+    gray:       '#8b949e',
+    dark:       '#161b22',
+    darker:     '#0d1117',
+    border:     '#30363d',
+    text:       '#c9d1d9',
+    textMuted:  '#8b949e',
+};
+
+const CHART_COLORS = [
+    '#58a6ff', '#3fb950', '#d29922', '#f85149', '#bc8cff',
+    '#79c0ff', '#f778ba', '#e3b341', '#56d4dd', '#ff7b72',
+    '#7ee787', '#c5def5', '#d2a8ff', '#ffa657', '#a5d6ff',
+];
+
+const CHART_DEFAULTS = {
+    responsive: true,
+    maintainAspectRatio: true,
+    plugins: {
+        legend: {
+            labels: {
+                color: COLORS.text,
+                font: { size: 11 },
+                boxWidth: 12,
+                padding: 12,
+            }
+        },
+        tooltip: {
+            backgroundColor: COLORS.dark,
+            titleColor: COLORS.text,
+            bodyColor: COLORS.text,
+            borderColor: COLORS.border,
+            borderWidth: 1,
+            padding: 10,
+            cornerRadius: 6,
+            boxPadding: 4,
+        }
+    },
+    scales: {
+        x: {
+            grid: { color: 'rgba(48,54,61,0.4)', drawBorder: false },
+            ticks: { color: COLORS.textMuted, font: { size: 11 } }
+        },
+        y: {
+            grid: { color: 'rgba(48,54,61,0.4)', drawBorder: false },
+            ticks: { color: COLORS.textMuted, font: { size: 11 } }
+        }
+    }
+};
+
+// ============================================================
+// CARGA DE DATOS
+// ============================================================
+
+function obtenerFiltros() {
+    const params = new URLSearchParams();
+    const fechaInicio = document.getElementById('fecha_inicio').value;
+    const fechaFin = document.getElementById('fecha_fin').value;
+    const condicion = document.getElementById('condicion').value;
+    const tipoPropiedad = document.getElementById('tipo_propiedad').value;
+    const distrito = document.getElementById('distrito').value;
+    const fuente = document.getElementById('fuente').value;
+
+    if (fechaInicio) params.set('fecha_inicio', fechaInicio);
+    if (fechaFin) params.set('fecha_fin', fechaFin);
+    if (condicion) params.set('condicion', condicion);
+    if (tipoPropiedad) params.set('tipo_propiedad', tipoPropiedad);
+    if (distrito) params.set('distrito', distrito);
+    if (fuente) params.set('fuente', fuente);
+
+    return params;
+}
+
+function actualizarURL(filtros) {
+    const qs = filtros.toString();
+    const newURL = window.location.pathname + (qs ? '?' + qs : '');
+    window.history.replaceState({}, '', newURL);
+}
+
+function aplicarFiltros() {
+    const filtros = obtenerFiltros();
+    actualizarURL(filtros);
+    cargarDatos();
+}
+
+function limpiarFiltros() {
+    document.getElementById('filterForm').reset();
+    window.history.replaceState({}, '', window.location.pathname);
+    cargarDatos();
+}
+
+function mostrarLoading(id) {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('active');
+}
+
+function ocultarLoading(id) {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('active');
+}
+
+function destruirChart(id) {
+    if (charts[id]) {
+        charts[id].destroy();
+        delete charts[id];
+    }
+}
+
+function formatearMoneda(valor, moneda = 'S/') {
+    if (valor == null || isNaN(valor)) return '--';
+    return moneda + ' ' + Number(valor).toLocaleString('es-PE', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+    });
+}
+
+function formatearMes(fechaStr) {
+    // fechaStr puede ser "2024-01-01" o un objeto Date
+    const d = new Date(fechaStr);
+    const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    return meses[d.getMonth()] + ' ' + d.getFullYear();
+}
+
+function formatearMesCompleto(fechaStr) {
+    const d = new Date(fechaStr);
+    const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    return meses[d.getMonth()] + ' ' + d.getFullYear();
+}
+
+// ============================================================
+// CARGA PRINCIPAL
+// ============================================================
+
+async function cargarDatos() {
+    const filtros = obtenerFiltros();
+
+    // Mostrar loadings en todos los charts
+    const loadingIds = ['loadingTendencia','loadingDistritos','loadingTipos',
+                        'loadingPresupuesto','loadingOperacion','loadingCaracts',
+                        'loadingDistribucion','loadingCrecimiento'];
+    loadingIds.forEach(id => mostrarLoading(id));
+
+    // Reset KPIs
+    document.getElementById('kpiTotal').textContent = '...';
+    document.getElementById('kpiCrecimiento').textContent = '...';
+    document.getElementById('kpiTendencia').textContent = '...';
+    document.getElementById('kpiCalidad').textContent = '...';
+    document.getElementById('kpiDistrito').textContent = '...';
+    document.getElementById('sampleDataBadge').style.display = 'none';
+
+    try {
+        const url = '{% url "requerimientos:api_analisis_temporal" %}' + '?' + filtros.toString();
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (!data.success) {
+            mostrarError(data.message || 'Error al cargar datos');
+            loadingIds.forEach(id => ocultarLoading(id));
+            return;
+        }
+
+        // Mostrar badge si son datos de ejemplo
+        if (data.is_sample_data) {
+            document.getElementById('sampleDataBadge').style.display = 'inline-block';
+        }
+
+        // Actualizar KPIs
+        actualizarKPIs(data);
+
+        // Actualizar charts
+        actualizarCharts(data);
+
+        // Actualizar insights
+        actualizarInsights(data);
+
+        // Ocultar loadings
+        loadingIds.forEach(id => ocultarLoading(id));
+
+    } catch (error) {
+        console.error('Error cargando datos:', error);
+        loadingIds.forEach(id => ocultarLoading(id));
+        mostrarError('Error de conexión al cargar los datos');
+    }
+}
+
+function mostrarError(mensaje) {
+    const container = document.getElementById('insightsContainer');
+    container.innerHTML = `
+        <div class="error-state" style="grid-column:1/-1;">
+            <i class="bi bi-exclamation-triangle"></i>
+            <h4>Error</h4>
+            <p>${mensaje}</p>
+            <button class="btn btn-sm" style="background-color:#21262d;border:1px solid #30363d;color:#c9d1d9;margin-top:8px;" onclick="cargarDatos()">
+                <i class="bi bi-arrow-clockwise"></i> Reintentar
+            </button>
+        </div>
+    `;
+}
+
+// ============================================================
+// KPIs
+// ============================================================
+
+function actualizarKPIs(data) {
+    const metricas = data.metricas || {};
+    const totales = metricas.totales || [];
+    const crecimiento = metricas.crecimiento || [];
+    const tendencia = metricas.tendencia || 'estable';
+    const datosMes = data.datos_mes || [];
+
+    // Total
+    const totalReqs = totales.length > 0 ? totales.reduce((a, b) => a + b, 0) : 0;
+    document.getElementById('kpiTotal').textContent = totalReqs.toLocaleString('es-PE');
+
+    // Período
+    if (datosMes.length > 0) {
+        const primero = formatearMes(datosMes[0].mes);
+        const ultimo = formatearMes(datosMes[datosMes.length - 1].mes);
+        document.getElementById('kpiPeriodo').textContent = `${primero} - ${ultimo}`;
+    } else {
+        document.getElementById('kpiPeriodo').textContent = 'Sin datos';
+    }
+
+    // Crecimiento
+    const ultimoCrecimiento = crecimiento.length > 0 ? crecimiento[crecimiento.length - 1] : null;
+    if (ultimoCrecimiento != null) {
+        const signo = ultimoCrecimiento >= 0 ? '+' : '';
+        const clase = ultimoCrecimiento > 0 ? 'kpi-trend-up' : (ultimoCrecimiento < 0 ? 'kpi-trend-down' : 'kpi-trend-stable');
+        document.getElementById('kpiCrecimiento').textContent = `${signo}${ultimoCrecimiento.toFixed(1)}%`;
+        document.getElementById('kpiCrecimiento').className = `kpi-value ${clase}`;
+        document.getElementById('kpiCrecimientoSub').textContent = 'Último mes';
+    } else {
+        document.getElementById('kpiCrecimiento').textContent = '--';
+        document.getElementById('kpiCrecimientoSub').textContent = 'Sin datos suficientes';
+    }
+
+    // Tendencia
+    const tendenciaLabels = {
+        'creciente': { icono: '📈', texto: 'Creciente', clase: 'kpi-trend-up' },
+        'decreciente': { icono: '📉', texto: 'Decreciente', clase: 'kpi-trend-down' },
+        'estable': { icono: '➡️', texto: 'Estable', clase: 'kpi-trend-stable' },
+    };
+    const tendInfo = tendenciaLabels[tendencia] || { icono: '➡️', texto: 'Estable', clase: 'kpi-trend-stable' };
+    document.getElementById('kpiTendencia').textContent = `${tendInfo.icono} ${tendInfo.texto}`;
+    document.getElementById('kpiTendencia').className = `kpi-value ${tendInfo.clase}`;
+    document.getElementById('kpiTendenciaSub').textContent =
+        totales.length >= 2
+            ? `${totales[0]} → ${totales[totales.length-1]} requerimientos`
+            : 'Período muy corto';
+
+    // Calidad promedio (desde API de estadísticas de calidad)
+    cargarCalidadPromedio();
+
+    // Distrito líder
+    const distritosMes = data.distritos_mes || {};
+    if (distritosMes.distritos && distritosMes.distritos.length > 0) {
+        let maxDistrito = '', maxTotal = 0;
+        distritosMes.distritos.forEach(d => {
+            const vals = Object.values(distritosMes.data[d] || {});
+            const total = vals.reduce((a, b) => a + b, 0);
+            if (total > maxTotal) { maxTotal = total; maxDistrito = d; }
+        });
+        document.getElementById('kpiDistrito').textContent = maxDistrito;
+        document.getElementById('kpiDistritoSub').textContent = `${maxTotal} requerimientos`;
+    } else {
+        document.getElementById('kpiDistrito').textContent = '--';
+        document.getElementById('kpiDistritoSub').textContent = 'Sin datos';
+    }
+}
+
+// ============================================================
+// CALIDAD PROMEDIO
+// ============================================================
+
+async function cargarCalidadPromedio() {
+    try {
+        const response = await fetch('{% url "requerimientos:api_estadisticas_calidad" %}');
+        const data = await response.json();
+        if (data.success && data.promedio_general != null) {
+            const pct = (data.promedio_general * 100).toFixed(1);
+            document.getElementById('kpiCalidad').textContent = `${pct}%`;
+            document.getElementById('kpiCalidadSub').textContent =
+                `${data.total_procesados || 0} requerimientos evaluados`;
+        } else {
+            document.getElementById('kpiCalidad').textContent = '--';
+            document.getElementById('kpiCalidadSub').textContent = 'Sin datos';
+        }
+    } catch (e) {
+        document.getElementById('kpiCalidad').textContent = '--';
+        document.getElementById('kpiCalidadSub').textContent = 'Error al cargar';
+    }
+}
+
+// ============================================================
+// CHARTS
+// ============================================================
+
+function actualizarCharts(data) {
+    const datosMes = data.datos_mes || [];
+    const distritosMes = data.distritos_mes || {};
+    const tiposMes = data.tipos_mes || {};
+    const presupuestoMes = data.presupuesto_mes || [];
+    const caracteristicasMes = data.caracteristicas_mes || {};
+    const metricas = data.metricas || {};
+    const crecimiento = metricas.crecimiento || [];
+
+    // 1. Tendencia mensual (líneas)
+    crearChartTendencia(datosMes);
+
+    // 2. Distritos (barras horizontales)
+    crearChartDistritos(distritosMes);
+
+    // 3. Tipos de propiedad (barras agrupadas)
+    crearChartTipos(tiposMes);
+
+    // 4. Presupuesto (línea)
+    crearChartPresupuesto(presupuestoMes);
+
+    // 5. Compra vs Alquiler (barras apiladas)
+    crearChartOperacion(datosMes);
+
+    // 6. Características demandadas (radar o barras)
+    crearChartCaracteristicas(caracteristicasMes);
+
+    // 7. Distribución por tipo (doughnut)
+    crearChartDistribucion(tiposMes);
+
+    // 8. Crecimiento intermensual (barras)
+    crearChartCrecimiento(datosMes, crecimiento);
+}
+
+// --- 1. Tendencia mensual ---
+function crearChartTendencia(datosMes) {
+    destruirChart('tendencia');
+    const ctx = document.getElementById('chartTendencia');
+    if (!ctx || datosMes.length === 0) return;
+
+    const labels = datosMes.map(d => formatearMes(d.mes));
+    const totales = datosMes.map(d => d.total);
+    const compra = datosMes.map(d => d.compra || 0);
+    const alquiler = datosMes.map(d => d.alquiler || 0);
+
+    charts.tendencia = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Total',
+                    data: totales,
+                    borderColor: COLORS.blue,
+                    backgroundColor: COLORS.blue + '20',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    pointBackgroundColor: COLORS.blue,
+                    borderWidth: 2,
+                },
+                {
+                    label: 'Compra',
+                    data: compra,
+                    borderColor: COLORS.green,
+                    backgroundColor: 'transparent',
+                    borderDash: [5, 5],
+                    tension: 0.3,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                    pointBackgroundColor: COLORS.green,
+                    borderWidth: 1.5,
+                },
+                {
+                    label: 'Alquiler',
+                    data: alquiler,
+                    borderColor: COLORS.orange,
+                    backgroundColor: 'transparent',
+                    borderDash: [5, 5],
+                    tension: 0.3,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                    pointBackgroundColor: COLORS.orange,
+                    borderWidth: 1.5,
+                },
+            ]
+        },
+        options: {
+            ...CHART_DEFAULTS,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                ...CHART_DEFAULTS.plugins,
+                legend: { ...CHART_DEFAULTS.plugins.legend, position: 'top' },
+            },
+        }
+    });
+}
+
+// --- 2. Distritos ---
+function crearChartDistritos(distritosMes) {
+    destruirChart('distritos');
+    const ctx = document.getElementById('chartDistritos');
+    if (!ctx || !distritosMes.distritos || distritosMes.distritos.length === 0) return;
+
+    const distritos = distritosMes.distritos;
+    const meses = distritosMes.meses || [];
+    const totalPorDistrito = distritos.map(d => {
+        const vals = Object.values(distritosMes.data[d] || {});
+        return vals.reduce((a, b) => a + b, 0);
+    });
+
+    // Ordenar descendente
+    const indices = distritos.map((_, i) => i).sort((a, b) => totalPorDistrito[b] - totalPorDistrito[a]);
+    const sortedDistritos = indices.map(i => distritos[i]);
+    const sortedTotales = indices.map(i => totalPorDistrito[i]);
+
+    charts.distritos = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: sortedDistritos,
+            datasets: [{
+                label: 'Requerimientos',
+                data: sortedTotales,
+                backgroundColor: sortedTotales.map((_, i) => CHART_COLORS[i % CHART_COLORS.length]),
+                borderRadius: 4,
+                borderSkipped: false,
+            }]
+        },
+        options: {
+            ...CHART_DEFAULTS,
+            indexAxis: 'y',
+            plugins: {
+                ...CHART_DEFAULTS.plugins,
+                legend: { display: false },
+            },
+            scales: {
+                ...CHART_DEFAULTS.scales,
+                x: {
+                    ...CHART_DEFAULTS.scales.x,
+                    beginAtZero: true,
+                    ticks: { ...CHART_DEFAULTS.scales.x.ticks, stepSize: 1 }
+                }
+            }
+        }
+    });
+}
+
+// --- 3. Tipos de propiedad ---
+function crearChartTipos(tiposMes) {
+    destruirChart('tipos');
+    const ctx = document.getElementById('chartTipos');
+    if (!ctx || !tiposMes.tipos || tiposMes.tipos.length === 0) return;
+
+    const tipos = tiposMes.tipos;
+    const meses = tiposMes.meses || [];
+    const datasets = tipos.map((tipo, i) => ({
+        label: tipo.charAt(0).toUpperCase() + tipo.slice(1).replace('_', ' '),
+        data: tiposMes.data[tipo] || [],
+        backgroundColor: CHART_COLORS[i % CHART_COLORS.length],
+        borderRadius: 3,
+        borderSkipped: false,
+    }));
+
+    charts.tipos = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: meses,
+            datasets: datasets,
+        },
+        options: {
+            ...CHART_DEFAULTS,
+            plugins: {
+                ...CHART_DEFAULTS.plugins,
+                legend: { ...CHART_DEFAULTS.plugins.legend, position: 'top' },
+            },
+            scales: {
+                ...CHART_DEFAULTS.scales,
+                x: {
+                    ...CHART_DEFAULTS.scales.x,
+                    stacked: false,
+                },
+                y: {
+                    ...CHART_DEFAULTS.scales.y,
+                    beginAtZero: true,
+                    stacked: false,
+                }
+            }
+        }
+    });
+}
+
+// --- 4. Presupuesto ---
+function crearChartPresupuesto(presupuestoMes) {
+    destruirChart('presupuesto');
+    const ctx = document.getElementById('chartPresupuesto');
+    if (!ctx || presupuestoMes.length === 0) return;
+
+    const labels = presupuestoMes.map(d => formatearMes(d.mes));
+    const promedios = presupuestoMes.map(d => d.presupuesto_promedio || 0);
+    const medianos = presupuestoMes.map(d => d.presupuesto_mediano || null);
+    const cantidades = presupuestoMes.map(d => d.cantidad || 0);
+
+    charts.presupuesto = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Presupuesto promedio',
+                    data: promedios,
+                    backgroundColor: COLORS.blue + '40',
+                    borderColor: COLORS.blue,
+                    borderWidth: 1.5,
+                    borderRadius: 3,
+                    order: 2,
+                    yAxisID: 'y',
+                },
+                {
+                    label: 'Cantidad',
+                    data: cantidades,
+                    backgroundColor: COLORS.green + '30',
+                    borderColor: COLORS.green,
+                    borderWidth: 1,
+                    borderRadius: 3,
+                    order: 3,
+                    yAxisID: 'y1',
+                }
+            ]
+        },
+        options: {
+            ...CHART_DEFAULTS,
+            plugins: {
+                ...CHART_DEFAULTS.plugins,
+                legend: { ...CHART_DEFAULTS.plugins.legend, position: 'top' },
+                tooltip: {
+                    ...CHART_DEFAULTS.plugins.tooltip,
+                    callbacks: {
+                        label: function(context) {
+                            if (context.dataset.label === 'Presupuesto promedio') {
+                                return formatearMoneda(context.parsed.y);
+                            }
+                            return context.dataset.label + ': ' + context.parsed.y;
+                        }
+                    }
+                }
+            },
+            scales: {
+                ...CHART_DEFAULTS.scales,
+                y: {
+                    ...CHART_DEFAULTS.scales.y,
+                    position: 'left',
+                    beginAtZero: true,
+                    ticks: {
+                        ...CHART_DEFAULTS.scales.y.ticks,
+                        callback: function(value) { return 'S/ ' + value.toLocaleString('es-PE'); }
+                    }
+                },
+                y1: {
+                    position: 'right',
+                    beginAtZero: true,
+                    grid: { display: false },
+                    ticks: {
+                        color: COLORS.textMuted,
+                        font: { size: 11 },
+                        stepSize: 1,
+                    }
+                }
+            }
+        }
+    });
+}
+
+// --- 5. Compra vs Alquiler ---
+function crearChartOperacion(datosMes) {
+    destruirChart('operacion');
+    const ctx = document.getElementById('chartOperacion');
+    if (!ctx || datosMes.length === 0) return;
+
+    const labels = datosMes.map(d => formatearMes(d.mes));
+    const compra = datosMes.map(d => d.compra || 0);
+    const alquiler = datosMes.map(d => d.alquiler || 0);
+
+    charts.operacion = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Compra',
+                    data: compra,
+                    backgroundColor: COLORS.green + '80',
+                    borderRadius: 3,
+                },
+                {
+                    label: 'Alquiler',
+                    data: alquiler,
+                    backgroundColor: COLORS.orange + '80',
+                    borderRadius: 3,
+                },
+            ]
+        },
+        options: {
+            ...CHART_DEFAULTS,
+            plugins: {
+                ...CHART_DEFAULTS.plugins,
+                legend: { ...CHART_DEFAULTS.plugins.legend, position: 'top' },
+            },
+            scales: {
+                ...CHART_DEFAULTS.scales,
+                x: { ...CHART_DEFAULTS.scales.x, stacked: true },
+                y: { ...CHART_DEFAULTS.scales.y, beginAtZero: true, stacked: true, ticks: { ...CHART_DEFAULTS.scales.y.ticks, stepSize: 1 } }
+            }
+        }
+    });
+}
+
+// --- 6. Características demandadas ---
+function crearChartCaracteristicas(caracts) {
+    destruirChart('caracteristicas');
+    const ctx = document.getElementById('chartCaracteristicas');
+    if (!ctx || Object.keys(caracts).length === 0) return;
+
+    const labels = Object.keys(caracts).map(k => {
+        const map = {
+            'cochera': 'Cochera',
+            'ascensor': 'Ascensor',
+            'amueblado': 'Amueblado',
+            'habitaciones_3': '3+ Habitaciones',
+            'banos_2': '2+ Baños',
+        };
+        return map[k] || k;
+    });
+    const valores = Object.values(caracts);
+
+    charts.caracteristicas = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Requerimientos',
+                data: valores,
+                backgroundColor: valores.map((_, i) => CHART_COLORS[i % CHART_COLORS.length]),
+                borderRadius: 4,
+                borderSkipped: false,
+            }]
+        },
+        options: {
+            ...CHART_DEFAULTS,
+            indexAxis: 'y',
+            plugins: {
+                ...CHART_DEFAULTS.plugins,
+                legend: { display: false },
+            },
+            scales: {
+                ...CHART_DEFAULTS.scales,
+                x: { ...CHART_DEFAULTS.scales.x, beginAtZero: true, ticks: { ...CHART_DEFAULTS.scales.x.ticks, stepSize: 1 } }
+            }
+        }
+    });
+}
+
+// --- 7. Distribución por tipo (doughnut) ---
+function crearChartDistribucion(tiposMes) {
+    destruirChart('distribucion');
+    const ctx = document.getElementById('chartDistribucion');
+    if (!ctx || !tiposMes.tipos || tiposMes.tipos.length === 0) return;
+
+    const tipos = tiposMes.tipos;
+    const totales = tipos.map(t => {
+        const data = tiposMes.data[t] || [];
+        return data.reduce((a, b) => a + b, 0);
+    });
+
+    charts.distribucion = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: tipos.map(t => t.charAt(0).toUpperCase() + t.slice(1).replace('_', ' ')),
+            datasets: [{
+                data: totales,
+                backgroundColor: CHART_COLORS.slice(0, tipos.length),
+                borderColor: COLORS.darker,
+                borderWidth: 2,
+                hoverOffset: 8,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        color: COLORS.text,
+                        font: { size: 11 },
+                        boxWidth: 12,
+                        padding: 10,
+                    }
+                },
+                tooltip: {
+                    backgroundColor: COLORS.dark,
+                    titleColor: COLORS.text,
+                    bodyColor: COLORS.text,
+                    borderColor: COLORS.border,
+                    borderWidth: 1,
+                    padding: 10,
+                    cornerRadius: 6,
+                    callbacks: {
+                        label: function(context) {
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const pct = total > 0 ? ((context.parsed / total) * 100).toFixed(1) : 0;
+                            return context.label + ': ' + context.parsed + ' (' + pct + '%)';
+                        }
+                    }
+                }
+            },
+            cutout: '60%',
+        }
+    });
+}
+
+// --- 8. Crecimiento intermensual ---
+function crearChartCrecimiento(datosMes, crecimiento) {
+    destruirChart('crecimiento');
+    const ctx = document.getElementById('chartCrecimiento');
+    if (!ctx || datosMes.length < 2) return;
+
+    // El crecimiento tiene un elemento menos que datosMes (el primero es null)
+    const labels = datosMes.slice(1).map(d => formatearMes(d.mes));
+    const valores = crecimiento.slice(1).filter(v => v != null);
+
+    if (valores.length === 0) return;
+
+    const colores = valores.map(v => v >= 0 ? COLORS.green + '80' : COLORS.red + '80');
+
+    charts.crecimiento = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Crecimiento %',
+                data: valores,
+                backgroundColor: colores,
+                borderColor: valores.map(v => v >= 0 ? COLORS.green : COLORS.red),
+                borderWidth: 1,
+                borderRadius: 3,
+            }]
+        },
+        options: {
+            ...CHART_DEFAULTS,
+            plugins: {
+                ...CHART_DEFAULTS.plugins,
+                legend: { display: false },
+                tooltip: {
+                    ...CHART_DEFAULTS.plugins.tooltip,
+                    callbacks: {
+                        label: function(context) {
+                            const signo = context.parsed.y >= 0 ? '+' : '';
+                            return signo + context.parsed.y.toFixed(1) + '%';
+                        }
+                    }
+                }
+            },
+            scales: {
+                ...CHART_DEFAULTS.scales,
+                y: {
+                    ...CHART_DEFAULTS.scales.y,
+                    beginAtZero: true,
+                    ticks: {
+                        ...CHART_DEFAULTS.scales.y.ticks,
+                        callback: function(value) { return value + '%'; }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// ============================================================
+// INSIGHTS
+// ============================================================
+
+function actualizarInsights(data) {
+    const container = document.getElementById('insightsContainer');
+    const insights = data.insights || [];
+
+    if (insights.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state" style="grid-column:1/-1;padding:20px;">
+                <i class="bi bi-info-circle"></i>
+                <h4>Sin insights disponibles</h4>
+                <p>No hay suficientes datos para generar insights automáticos.</p>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = insights.map(insight => `
+        <div class="insight-card">
+            <div class="insight-icon">${insight.icono || '💡'}</div>
+            <div class="insight-titulo">${insight.titulo || ''}</div>
+            <div class="insight-descripcion">${insight.descripcion || ''}</div>
+        </div>
+    `).join('');
+}
+
+// ============================================================
+// INICIALIZACIÓN
+// ============================================================
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Cargar datos al iniciar
+    cargarDatos();
+
+    // Auto-refresh cada 5 minutos
+    setInterval(cargarDatos, 5 * 60 * 1000);
+});
+</script>
+{% endblock %}

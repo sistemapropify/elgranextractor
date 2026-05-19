@@ -1,11 +1,13 @@
 from django.views.generic import ListView, DetailView, RedirectView, TemplateView, View
-from .models import ZonaCalle
+from .models import ZonaCalle, ConfiguracionCalidad
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.utils import timezone
 from django.db import models
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 from datetime import timedelta, datetime
 import json
 from .models import (
@@ -17,6 +19,7 @@ from .models import (
     FormaPagoChoices,
     TernarioChoices,
     TipoOriginalChoices,
+    ConfiguracionCalidad,
 )
 from .analytics import (
     obtener_requerimientos_por_mes,
@@ -1292,3 +1295,119 @@ class ApiZonaCalleAutocompleteView(View):
             'veces_usado': zc.veces_usado,
         } for zc in resultados]
         return JsonResponse({'data': data})
+
+
+class ConfiguracionCalidadView(TemplateView):
+    """Vista del dashboard de configuración de Quality Score."""
+    template_name = 'requerimientos/config_calidad.html'
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        config_obj = ConfiguracionCalidad.objects.filter(activo=True).first()
+        if config_obj:
+            ctx['config_obj'] = config_obj
+            ctx['config'] = config_obj.config
+        else:
+            ctx['config_obj'] = None
+            from .models import CONFIG_CALIDAD_DEFAULT
+            ctx['config'] = CONFIG_CALIDAD_DEFAULT
+        return ctx
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class ApiConfiguracionCalidadView(View):
+    """API para guardar la configuración de Quality Score."""
+
+    def get(self, request, *args, **kwargs):
+        """Retorna la configuración activa."""
+        config_obj = ConfiguracionCalidad.objects.filter(activo=True).first()
+        if config_obj:
+            return JsonResponse({'success': True, 'config': config_obj.config, 'id': config_obj.id})
+        from .models import CONFIG_CALIDAD_DEFAULT
+        return JsonResponse({'success': True, 'config': CONFIG_CALIDAD_DEFAULT, 'id': None})
+
+    def post(self, request, *args, **kwargs):
+        """Guarda la configuración."""
+        try:
+            body = json.loads(request.body)
+            config_data = body.get('config', {})
+
+            # Desactivar configuraciones anteriores
+            ConfiguracionCalidad.objects.filter(activo=True).update(activo=False)
+
+            # Crear nueva configuración
+            nombre = body.get('nombre', f'Config {timezone.now().strftime("%Y-%m-%d %H:%M")}')
+            config_obj = ConfiguracionCalidad.objects.create(
+                activo=True,
+                config=config_data,
+                nombre=nombre,
+            )
+            return JsonResponse({'success': True, 'id': config_obj.id})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+
+
+class ApiEstadisticasCalidadView(View):
+    """API para obtener estadísticas de calidad de todos los requerimientos."""
+
+    def get(self, request, *args, **kwargs):
+        from .analytics import calcular_quality_score
+        from .models import CONFIG_CALIDAD_DEFAULT
+
+        config_obj = ConfiguracionCalidad.objects.filter(activo=True).first()
+        config = config_obj.config if config_obj else CONFIG_CALIDAD_DEFAULT
+
+        requerimientos = Requerimiento.objects.all()
+        total = requerimientos.count()
+
+        if total == 0:
+            return JsonResponse({
+                'success': True,
+                'total': 0,
+                'promedio': 0,
+                'niveles': {'Excelente': 0, 'Bueno': 0, 'Regular': 0, 'Malo': 0},
+                'dimensiones_promedio': {
+                    'completitud': 0, 'especificidad': 0,
+                    'presupuesto': 0, 'antiguedad': 0,
+                },
+                'distribucion_scores': [],
+            })
+
+        scores = []
+        niveles_count = {'Excelente': 0, 'Bueno': 0, 'Regular': 0, 'Malo': 0}
+        dim_sum = {'completitud': 0.0, 'especificidad': 0.0, 'presupuesto': 0.0, 'antiguedad': 0.0}
+
+        for req in requerimientos.iterator(chunk_size=500):
+            qs = calcular_quality_score(req, config)
+            scores.append({
+                'id': req.id,
+                'score': qs['score'],
+                'nivel': qs['nivel'],
+                'dimensiones': qs['dimensiones'],
+            })
+            niveles_count[qs['nivel']] = niveles_count.get(qs['nivel'], 0) + 1
+            for k in dim_sum:
+                dim_sum[k] += qs['dimensiones'].get(k, 0)
+
+        promedio = sum(s['score'] for s in scores) / total if total else 0
+
+        # Distribución de scores (agrupada en rangos de 10)
+        distribucion = {}
+        for s in scores:
+            rango = int(s['score'] // 10) * 10
+            key = f'{rango}-{rango+9}'
+            distribucion[key] = distribucion.get(key, 0) + 1
+
+        return JsonResponse({
+            'success': True,
+            'total': total,
+            'promedio': round(promedio, 1),
+            'niveles': niveles_count,
+            'dimensiones_promedio': {
+                k: round(v / total, 1) for k, v in dim_sum.items()
+            },
+            'distribucion_scores': [
+                {'rango': k, 'count': v}
+                for k, v in sorted(distribucion.items(), key=lambda x: int(x[0].split('-')[0]))
+            ],
+        })

@@ -282,6 +282,16 @@ class Requerimiento(models.Model):
         simbolo = '$' if self.presupuesto_moneda == 'USD' else 'S/'
         return f"{simbolo}{self.presupuesto_monto:,.0f}"
 
+    @property
+    def quality_score(self) -> dict:
+        """
+        Calcula el Quality Score del requerimiento.
+        Retorna dict con score, nivel y desglose de dimensiones.
+        Se calcula en tiempo real desde analytics.py.
+        """
+        from .analytics import calcular_quality_score
+        return calcular_quality_score(self)
+
 
 class ZonaCalle(models.Model):
     """
@@ -318,3 +328,86 @@ class ZonaCalle(models.Model):
 
     def __str__(self):
         return self.nombre
+
+
+# ─────────────────────────────────────────────
+#  CONFIGURACIÓN DE CALIDAD
+# ─────────────────────────────────────────────
+
+CONFIG_CALIDAD_DEFAULT = {
+    'pesos_dimensiones': {
+        'completitud': 35,
+        'especificidad': 25,
+        'presupuesto': 25,
+        'antiguedad': 15,
+    },
+    'completitud_tiers': {
+        'criticos': {
+            'campos': ['distritos', 'tipo_propiedad', 'condicion'],
+            'puntos_por_campo': 3,
+        },
+        'importantes': {
+            'campos': ['presupuesto_monto', 'habitaciones', 'urbanizacion', 'agente'],
+            'puntos_por_campo': 2,
+        },
+        'complementarios': {
+            'campos': [
+                'presupuesto_moneda', 'presupuesto_forma_pago', 'banos',
+                'area_m2', 'zona', 'cochera', 'ascensor', 'amueblado',
+            ],
+            'puntos_por_campo': 1,
+        },
+    },
+    'especificidad_niveles': [
+        {'nombre': 'Muy específico', 'score': 100, 'requisito': 'zona+urbanizacion+1distrito'},
+        {'nombre': 'Específico', 'score': 75, 'requisito': 'urbanizacion_o_zona'},
+        {'nombre': 'Preciso', 'score': 50, 'requisito': '1_distrito'},
+        {'nombre': 'Amplio', 'score': 30, 'requisito': 'multi_distrito'},
+        {'nombre': 'Sin ubicación', 'score': 0, 'requisito': 'sin_distrito'},
+    ],
+    'antiguedad_rangos': [
+        {'dias_max': 7, 'score': 100},
+        {'dias_max': 30, 'score': 75},
+        {'dias_max': 90, 'score': 40},
+        {'dias_max': 180, 'score': 15},
+        {'dias_max': 999999, 'score': 5},
+    ],
+    'presupuesto_percentiles': {
+        'p25_score': 100,
+        'p25_a_p50_score': 80,
+        'p50_a_p75_score': 50,
+        'mayor_p75_score': 20,
+        'sin_presupuesto_score': 0,
+        'min_muestras': 10,
+    },
+}
+
+
+class ConfiguracionCalidad(models.Model):
+    """
+    Almacena la configuración del Quality Score.
+    Solo un registro activo a la vez.
+    """
+    activo = models.BooleanField(default=True, verbose_name='Configuración activa')
+    config = models.JSONField(default=dict, verbose_name='Configuración JSON')
+    nombre = models.CharField(max_length=100, blank=True, default='Default',
+                              verbose_name='Nombre de configuración')
+    creado_en = models.DateTimeField(auto_now_add=True, verbose_name='Creado en')
+    actualizado_en = models.DateTimeField(auto_now=True, verbose_name='Actualizado en')
+
+    class Meta:
+        db_table = 'config_calidad'
+        verbose_name = 'Configuración de Calidad'
+        verbose_name_plural = 'Configuraciones de Calidad'
+
+    def __str__(self):
+        return f'{self.nombre} (activo={self.activo})'
+
+    @classmethod
+    def get_config(cls):
+        """Retorna la configuración activa o los defaults si no existe."""
+        try:
+            cfg = cls.objects.get(activo=True)
+            return cfg.config
+        except cls.DoesNotExist:
+            return CONFIG_CALIDAD_DEFAULT

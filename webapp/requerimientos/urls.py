@@ -34,4 +34,9 @@ urlpatterns = [
 
     # API: Autocomplete de ZonaCalle (zonas y calles)
     path('api/zonas-calles/autocomplete/', views.ApiZonaCalleAutocompleteView.as_view(), name='api_zonas_calles_autocomplete'),
+
+    # Quality Score - Configuración
+    path('config-calidad/', views.ConfiguracionCalidadView.as_view(), name='config_calidad'),
+    path('api/config-calidad/', views.ApiConfiguracionCalidadView.as_view(), name='api_config_calidad'),
+    path('api/estadisticas-calidad/', views.ApiEstadisticasCalidadView.as_view(), name='api_estadisticas_calidad'),
 ]
