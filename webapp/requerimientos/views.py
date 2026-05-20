@@ -1,3 +1,4 @@
+import logging
 from django.views.generic import ListView, DetailView, RedirectView, TemplateView, View
 from .models import ZonaCalle, ConfiguracionCalidad
 from django.http import JsonResponse
@@ -10,6 +11,8 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from datetime import timedelta, datetime
 import json
+
+logger = logging.getLogger(__name__)
 from .models import (
     Requerimiento,
     FuenteChoices,
@@ -42,35 +45,44 @@ class ListaRequerimientosView(ListView):
     context_object_name = 'requerimientos'
     ordering = ['-fecha', '-hora']
 
+    def _get_filtros(self):
+        """Obtiene filtros desde GET params o desde la sesión si ?f=1."""
+        if self.request.GET.get('f') == '1':
+            # Modo compacto: filtros vienen de la sesión
+            return self.request.session.get('req_filtros', {})
+        else:
+            # Modo normal: filtros vienen de query params
+            return {k: v for k, v in self.request.GET.items() if v and k != 'page'}
+
     def get_queryset(self):
         queryset = super().get_queryset()
         
         # ── Excluir "No Especificado" por defecto ──
-        # Los requerimientos sin condición definida no se muestran en la lista
-        # ni se cuentan en los totales/verificados.
         queryset = queryset.exclude(condicion='no_especificado')
         
-        # ── Filtros ─────────────────────────────
-        q = self.request.GET.get('q', '').strip()
-        fuente = self.request.GET.get('fuente', '').strip()
-        condicion = self.request.GET.get('condicion', '').strip()
-        tipo_propiedad = self.request.GET.get('tipo_propiedad', '').strip()
-        distrito = self.request.GET.get('distrito', '').strip()
-        agente = self.request.GET.get('agente', '').strip()
-        moneda = self.request.GET.get('moneda', '').strip()
-        forma_pago = self.request.GET.get('forma_pago', '').strip()
-        cochera = self.request.GET.get('cochera', '').strip()
-        ascensor = self.request.GET.get('ascensor', '').strip()
-        amueblado = self.request.GET.get('amueblado', '').strip()
-        tipo_original = self.request.GET.get('tipo_original', '').strip()
-        verificado = self.request.GET.get('verificado', '').strip()
-        quality_nivel = self.request.GET.get('quality_nivel', '').strip()
-        presupuesto_min = self.request.GET.get('presupuesto_min', '').strip()
-        presupuesto_max = self.request.GET.get('presupuesto_max', '').strip()
-        hab_min = self.request.GET.get('hab_min', '').strip()
-        area_min = self.request.GET.get('area_min', '').strip()
-        fecha_desde = self.request.GET.get('fecha_desde', '').strip()
-        fecha_hasta = self.request.GET.get('fecha_hasta', '').strip()
+        # ── Obtener filtros (GET params o sesión) ──
+        filtros = self._get_filtros()
+        
+        q = filtros.get('q', '')
+        fuente = filtros.get('fuente', '')
+        condicion = filtros.get('condicion', '')
+        tipo_propiedad = filtros.get('tipo_propiedad', '')
+        distrito = filtros.get('distrito', '')
+        agente = filtros.get('agente', '')
+        moneda = filtros.get('moneda', '')
+        forma_pago = filtros.get('forma_pago', '')
+        cochera = filtros.get('cochera', '')
+        ascensor = filtros.get('ascensor', '')
+        amueblado = filtros.get('amueblado', '')
+        tipo_original = filtros.get('tipo_original', '')
+        verificado = filtros.get('verificado', '')
+        quality_nivel = filtros.get('quality_nivel', '')
+        presupuesto_min = filtros.get('presupuesto_min', '')
+        presupuesto_max = filtros.get('presupuesto_max', '')
+        hab_min = filtros.get('hab_min', '')
+        area_min = filtros.get('area_min', '')
+        fecha_desde = filtros.get('fecha_desde', '')
+        fecha_hasta = filtros.get('fecha_hasta', '')
         
         # Búsqueda general (texto completo)
         if q:
@@ -115,35 +127,35 @@ class ListaRequerimientosView(ListView):
         if presupuesto_min:
             try:
                 queryset = queryset.filter(presupuesto_monto__gte=float(presupuesto_min))
-            except (ValueError, TypeError):
-                pass
+            except (ValueError, TypeError) as e:
+                logger.warning('Filtro presupuesto_min inválido: %s — valor: %s', e, presupuesto_min)
         if presupuesto_max:
             try:
                 queryset = queryset.filter(presupuesto_monto__lte=float(presupuesto_max))
-            except (ValueError, TypeError):
-                pass
+            except (ValueError, TypeError) as e:
+                logger.warning('Filtro presupuesto_max inválido: %s — valor: %s', e, presupuesto_max)
         if hab_min:
             try:
                 queryset = queryset.filter(habitaciones__gte=int(hab_min))
-            except (ValueError, TypeError):
-                pass
+            except (ValueError, TypeError) as e:
+                logger.warning('Filtro hab_min inválido: %s — valor: %s', e, hab_min)
         if area_min:
             try:
                 queryset = queryset.filter(area_m2__gte=int(area_min))
-            except (ValueError, TypeError):
-                pass
+            except (ValueError, TypeError) as e:
+                logger.warning('Filtro area_min inválido: %s — valor: %s', e, area_min)
         
         # Rango de fechas
         if fecha_desde:
             try:
                 queryset = queryset.filter(fecha__gte=datetime.strptime(fecha_desde, '%Y-%m-%d').date())
-            except (ValueError, TypeError):
-                pass
+            except (ValueError, TypeError) as e:
+                logger.warning('Filtro fecha_desde inválido: %s — valor: %s', e, fecha_desde)
         if fecha_hasta:
             try:
                 queryset = queryset.filter(fecha__lte=datetime.strptime(fecha_hasta, '%Y-%m-%d').date())
-            except (ValueError, TypeError):
-                pass
+            except (ValueError, TypeError) as e:
+                logger.warning('Filtro fecha_hasta inválido: %s — valor: %s', e, fecha_hasta)
         
         return queryset
 
@@ -1379,11 +1391,24 @@ class ApiConfiguracionCalidadView(View):
 
 
 class ApiEstadisticasCalidadView(View):
-    """API para obtener estadísticas de calidad de todos los requerimientos."""
+    """API para obtener estadísticas de calidad de todos los requerimientos.
+    
+    Cachea el resultado en memoria durante 60 segundos para evitar
+    recalcular sobre todos los requerimientos en cada request.
+    """
+    _cache = None  # (timestamp, data)
 
     def get(self, request, *args, **kwargs):
+        import time
         from .analytics import calcular_quality_score
         from .models import CONFIG_CALIDAD_DEFAULT
+
+        # Verificar cache (válido por 60 segundos)
+        now = time.time()
+        if ApiEstadisticasCalidadView._cache is not None:
+            ts, data = ApiEstadisticasCalidadView._cache
+            if now - ts < 60:
+                return JsonResponse(data)
 
         config_obj = ConfiguracionCalidad.objects.filter(activo=True).first()
         config = config_obj.config if config_obj else CONFIG_CALIDAD_DEFAULT
@@ -1392,7 +1417,7 @@ class ApiEstadisticasCalidadView(View):
         total = requerimientos.count()
 
         if total == 0:
-            return JsonResponse({
+            data = {
                 'success': True,
                 'total': 0,
                 'promedio': 0,
@@ -1402,7 +1427,9 @@ class ApiEstadisticasCalidadView(View):
                     'presupuesto': 0, 'antiguedad': 0,
                 },
                 'distribucion_scores': [],
-            })
+            }
+            ApiEstadisticasCalidadView._cache = (now, data)
+            return JsonResponse(data)
 
         scores = []
         niveles_count = {'Excelente': 0, 'Bueno': 0, 'Regular': 0, 'Malo': 0}
@@ -1429,7 +1456,7 @@ class ApiEstadisticasCalidadView(View):
             key = f'{rango}-{rango+9}'
             distribucion[key] = distribucion.get(key, 0) + 1
 
-        return JsonResponse({
+        data = {
             'success': True,
             'total': total,
             'promedio': round(promedio, 1),
@@ -1441,7 +1468,9 @@ class ApiEstadisticasCalidadView(View):
                 {'rango': k, 'count': v}
                 for k, v in sorted(distribucion.items(), key=lambda x: int(x[0].split('-')[0]))
             ],
-        })
+        }
+        ApiEstadisticasCalidadView._cache = (now, data)
+        return JsonResponse(data)
 
 class ApiRecalcularQualityView(View):
     """API para recalcular y persistir quality scores de todos los requerimientos."""
@@ -1543,3 +1572,21 @@ class ClonarRequerimientoView(View):
             'pk': nuevo_req.pk,
             'mensaje': f'Requerimiento clonado correctamente (ID: {nuevo_req.pk})',
         })
+
+
+class ApiGuardarFiltrosSesionView(View):
+    """API para guardar filtros de la lista en la sesión del usuario.
+    
+    Permite que el frontend guarde los filtros en el servidor (sesión)
+    y luego redirija con ?f=1 en lugar de pasar todos los filtros en la URL.
+    """
+
+    def post(self, request, *args, **kwargs):
+        import json
+        try:
+            data = json.loads(request.body)
+            filtros = {k: v for k, v in data.items() if v}
+            request.session['req_filtros'] = filtros
+            return JsonResponse({'ok': True})
+        except Exception as e:
+            return JsonResponse({'ok': False, 'error': str(e)})

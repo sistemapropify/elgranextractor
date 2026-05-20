@@ -41,4 +41,7 @@ urlpatterns = [
     path('api/estadisticas-calidad/', views.ApiEstadisticasCalidadView.as_view(), name='api_estadisticas_calidad'),
     path('api/recalcular-quality/', views.ApiRecalcularQualityView.as_view(), name='api_recalcular_quality'),
     path('api/clonar/', views.ClonarRequerimientoView.as_view(), name='api_clonar'),
+
+    # API: Guardar filtros en sesión (para evitar URL explosion)
+    path('api/guardar-filtros-sesion/', views.ApiGuardarFiltrosSesionView.as_view(), name='api_guardar_filtros_sesion'),
 ]

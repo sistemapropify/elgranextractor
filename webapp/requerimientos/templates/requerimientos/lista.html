@@ -641,6 +641,88 @@
         <div class="req-header-actions">
             <a href="/" class="btn btn-secondary">← Dashboard</a>
             <a href="/whatsapp-extractor/upload/" class="btn btn-primary">📤 Subir Archivo</a>
+            <div class="column-toggle-wrapper" style="position:relative;display:inline-block;">
+                <button type="button" class="btn btn-secondary" id="btnToggleColumnas" title="Mostrar/ocultar columnas">
+                    ⚙️ Columnas
+                </button>
+                <div id="columnToggleMenu" class="column-toggle-menu" style="display:none;position:absolute;right:0;top:100%;z-index:1000;background:#161b22;border:1px solid #30363d;border-radius:6px;padding:8px;min-width:200px;max-height:400px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.4);margin-top:4px;">
+                    <div style="font-size:12px;color:#8b949e;padding:4px 8px 8px;border-bottom:1px solid #30363d;margin-bottom:4px;">
+                        Columnas visibles
+                    </div>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;hover:background:#21262d;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="0" checked> Verificado
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="1" checked> Agente / Fuente
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="2" checked> Fecha / Hora
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="3" checked> Condición
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="4" checked> Tipo
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="5" checked> Distritos
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="6" checked> Urbanización
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="7" checked> Zona / Calles
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="8" checked> Presupuesto
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="9" checked> Pago
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="10" checked> Habs
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="11" checked> Baños
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="12" checked> Área
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="13" checked> Caracts
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="14" checked> Tipo Orig.
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="15" checked> Calidad
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="16" checked> Mensaje Original
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="17" checked> Acciones
+                    </label>
+                </div>
+            </div>
         </div>
     </div>
     
@@ -860,8 +942,8 @@
                 
                 <!-- Botones de acción -->
                 <div class="form-group filter-full-width filter-actions" style="margin-top:8px;">
-                    <button type="submit" class="btn btn-primary">🔍 Aplicar Filtros</button>
-                    <a href="{% url 'requerimientos:lista' %}" class="btn btn-secondary">🗑️ Limpiar Filtros</a>
+                    <button type="submit" class="btn btn-primary" id="btnAplicarFiltros">🔍 Aplicar Filtros</button>
+                    <a href="{% url 'requerimientos:lista' %}" class="btn btn-secondary" id="btnLimpiarFiltros">🗑️ Limpiar Filtros</a>
                 </div>
             </form>
         </div>
@@ -1607,11 +1689,291 @@
 </style>
 
 <script>
+// ── AbortControllers para cancelar fetch en curso ──
+const abortControllers = {};
+
+function getAbortSignal(key) {
+    if (abortControllers[key]) {
+        abortControllers[key].abort();
+    }
+    abortControllers[key] = new AbortController();
+    return abortControllers[key].signal;
+}
+
 // ── Variables globales del modal ──────────────
 let modalRequerimientoActual = null;  // guarda el botón data actual
 let modalEditando = false;
 let modoClonacion = false;
 let datosClonacion = null;  // copia independiente de datos para clonación
+let modalDirty = false;     // indica si hay cambios sin guardar
+let modalSnapshot = '';     // snapshot de campos al abrir edición
+
+// ── Filtros en sessionStorage para evitar URLs enormes ──
+(function() {
+    const STORAGE_KEY = 'req_lista_filtros';
+
+    // Al cargar la página, restaurar filtros desde sessionStorage
+    // solo si la URL no tiene parámetros de filtro (carga limpia)
+    const urlParams = new URLSearchParams(window.location.search);
+    const hasFilterParams = Array.from(urlParams.entries()).some(function(e) {
+        return e[0] !== 'page' && e[0] !== 'f' && e[1];
+    });
+
+    if (!hasFilterParams) {
+        var saved = sessionStorage.getItem(STORAGE_KEY);
+        if (saved) {
+            try {
+                var filtros = JSON.parse(saved);
+                Object.keys(filtros).forEach(function(key) {
+                    var el = document.querySelector('[name="' + key + '"]');
+                    if (el) el.value = filtros[key];
+                });
+            } catch(e) {
+                // Si el JSON está corrupto, ignorar
+                sessionStorage.removeItem(STORAGE_KEY);
+            }
+        }
+    }
+
+    // Interceptar submit del form para guardar filtros en sessionStorage
+    // y redirigir con ?f=1 en lugar de todos los parámetros en la URL
+    var filterForm = document.querySelector('.filter-form');
+    if (filterForm) {
+        filterForm.addEventListener('submit', function(e) {
+            var filtros = {};
+            var formData = new FormData(filterForm);
+            formData.forEach(function(value, key) {
+                if (value) filtros[key] = value;
+            });
+            sessionStorage.setItem(STORAGE_KEY, JSON.stringify(filtros));
+            // Si hay más de 3 filtros activos, redirigir con ?f=1
+            // para evitar URL enorme. Si hay pocos, dejar URL normal.
+            var activeCount = Object.keys(filtros).length;
+            if (activeCount > 3) {
+                e.preventDefault();
+                // Guardar filtros en la sesión del servidor vía API
+                fetch('/requerimientos/api/guardar-filtros-sesion/', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(filtros)
+                }).then(function() {
+                    window.location.href = window.location.pathname + '?f=1';
+                }).catch(function() {
+                    // Si falla la API, igual redirigir (sessionStorage tiene copia)
+                    window.location.href = window.location.pathname + '?f=1';
+                });
+            }
+            // Si hay 3 o menos, el form se envía normalmente (URL corta)
+        });
+    }
+
+    // Al hacer clic en "Limpiar Filtros", borrar sessionStorage
+    var btnLimpiar = document.getElementById('btnLimpiarFiltros');
+    if (btnLimpiar) {
+        btnLimpiar.addEventListener('click', function() {
+            sessionStorage.removeItem(STORAGE_KEY);
+        });
+    }
+})();
+
+// ── AJAX filtering con debounce ──
+var debounceTimer = null;
+var abortControllerFiltros = null;
+
+function cargarTablaAJAX() {
+    // Cancelar petición anterior si existe
+    if (abortControllerFiltros) {
+        abortControllerFiltros.abort();
+    }
+    abortControllerFiltros = new AbortController();
+
+    // Mostrar indicador de carga
+    var wrapper = document.querySelector('.req-table-wrapper');
+    if (wrapper) {
+        wrapper.style.opacity = '0.5';
+        wrapper.style.transition = 'opacity 0.2s';
+    }
+
+    var filterForm = document.querySelector('.filter-form');
+    if (!filterForm) return;
+
+    var formData = new FormData(filterForm);
+    var params = new URLSearchParams(formData);
+    // Preservar página actual si existe
+    var urlParams = new URLSearchParams(window.location.search);
+    var page = urlParams.get('page');
+    if (page) params.set('page', page);
+
+    var url = window.location.pathname + '?' + params.toString();
+
+    // Actualizar URL sin recargar
+    history.replaceState(null, '', url);
+
+    fetch(url, {
+        signal: abortControllerFiltros.signal,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(function(resp) {
+        if (!resp.ok) throw new Error('Error ' + resp.status);
+        return resp.text();
+    })
+    .then(function(html) {
+        // Extraer solo el contenido de la tabla y paginación del HTML recibido
+        var parser = new DOMParser();
+        var doc = parser.parseFromString(html, 'text/html');
+        var newWrapper = doc.querySelector('.req-table-wrapper');
+        var newPagination = doc.querySelector('.pagination-bar');
+        var newStats = doc.querySelector('.stats-bar');
+
+        if (newWrapper && wrapper) {
+            wrapper.innerHTML = newWrapper.innerHTML;
+        }
+        if (newPagination) {
+            var oldPagination = document.querySelector('.pagination-bar');
+            if (oldPagination) {
+                oldPagination.outerHTML = newPagination.outerHTML;
+            }
+        }
+        if (newStats) {
+            var oldStats = document.querySelector('.stats-bar');
+            if (oldStats) {
+                oldStats.outerHTML = newStats.outerHTML;
+            }
+        }
+        if (wrapper) wrapper.style.opacity = '1';
+    })
+    .catch(function(err) {
+        if (err.name === 'AbortError') return;
+        if (wrapper) wrapper.style.opacity = '1';
+        console.error('Error al cargar tabla:', err);
+    });
+}
+
+function aplicarFiltrosConDebounce() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(cargarTablaAJAX, 300);
+}
+
+// Reemplazar submit tradicional con AJAX
+document.addEventListener('DOMContentLoaded', function() {
+    var filterForm = document.querySelector('.filter-form');
+    if (filterForm) {
+        filterForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            cargarTablaAJAX();
+        });
+    }
+
+    // Agregar event listeners con debounce a inputs de texto y selects
+    var inputs = filterForm ? filterForm.querySelectorAll('input, select') : [];
+    inputs.forEach(function(inp) {
+        // Para inputs de texto, escuchar input event con debounce
+        if (inp.tagName === 'INPUT' && inp.type !== 'hidden') {
+            inp.addEventListener('input', aplicarFiltrosConDebounce);
+        }
+        // Para selects, escuchar change event
+        if (inp.tagName === 'SELECT') {
+            inp.addEventListener('change', aplicarFiltrosConDebounce);
+        }
+    });
+});
+
+// ── Validación client-side del formulario de edición ──
+function validarFormularioEdicion() {
+    const errores = [];
+    
+    // Validar presupuesto monto (si tiene valor, debe ser numérico)
+    const presMonto = document.getElementById('editPresupuestoMonto');
+    if (presMonto && presMonto.value.trim()) {
+        const val = parseFloat(presMonto.value.trim());
+        if (isNaN(val) || val < 0) {
+            errores.push('El monto del presupuesto debe ser un número válido mayor o igual a 0.');
+            presMonto.style.borderColor = '#f85149';
+        } else {
+            presMonto.style.borderColor = '';
+        }
+    }
+    
+    // Validar área (si tiene valor, debe ser numérico)
+    const area = document.getElementById('editArea');
+    if (area && area.value.trim()) {
+        const val = parseFloat(area.value.trim());
+        if (isNaN(val) || val < 0) {
+            errores.push('El área debe ser un número válido mayor o igual a 0.');
+            area.style.borderColor = '#f85149';
+        } else {
+            area.style.borderColor = '';
+        }
+    }
+    
+    // Validar habitaciones (si tiene valor, debe ser entero)
+    const habs = document.getElementById('editHabitaciones');
+    if (habs && habs.value.trim()) {
+        const val = parseInt(habs.value.trim(), 10);
+        if (isNaN(val) || val < 0 || val > 50) {
+            errores.push('Las habitaciones deben ser un número entero entre 0 y 50.');
+            habs.style.borderColor = '#f85149';
+        } else {
+            habs.style.borderColor = '';
+        }
+    }
+    
+    // Validar baños (si tiene valor, debe ser entero)
+    const banos = document.getElementById('editBanos');
+    if (banos && banos.value.trim()) {
+        const val = parseInt(banos.value.trim(), 10);
+        if (isNaN(val) || val < 0 || val > 50) {
+            errores.push('Los baños deben ser un número entero entre 0 y 50.');
+            banos.style.borderColor = '#f85149';
+        } else {
+            banos.style.borderColor = '';
+        }
+    }
+    
+    // Validar teléfono (si tiene valor, formato mínimo)
+    const tel = document.getElementById('editAgenteTelefono');
+    if (tel && tel.value.trim()) {
+        const limpio = tel.value.trim().replace(/[\s\-\(\)]+/g, '');
+        if (limpio.length < 6) {
+            errores.push('El teléfono del agente debe tener al menos 6 dígitos.');
+            tel.style.borderColor = '#f85149';
+        } else {
+            tel.style.borderColor = '';
+        }
+    }
+    
+    return errores;
+}
+
+// ── Snapshot de campos de edición para detectar cambios ──
+function tomarSnapshotEdicion() {
+    const inputs = document.querySelectorAll('#modalDetalleRequerimiento .field-edit input, ' +
+        '#modalDetalleRequerimiento .field-edit select, ' +
+        '#modalDetalleRequerimiento .field-edit textarea');
+    let snapshot = '';
+    inputs.forEach(function(inp) {
+        snapshot += inp.id + '=' + inp.value + '|';
+    });
+    // Incluir tags containers
+    ['distritos', 'urbanizacion', 'zona'].forEach(function(prefix) {
+        const container = document.getElementById(prefix + 'TagsContainer');
+        if (container) {
+            snapshot += prefix + 'Tags=';
+            container.querySelectorAll('.tag-item-edit').forEach(function(t) {
+                snapshot += t.childNodes[0].textContent.trim() + ',';
+            });
+            snapshot += '|';
+        }
+    });
+    return snapshot;
+}
+
+// ── Verificar si hay cambios sin guardar ──
+function hayCambiosSinGuardar() {
+    if (!modalEditando) return false;
+    const nuevoSnapshot = tomarSnapshotEdicion();
+    return nuevoSnapshot !== modalSnapshot;
+}
 
 // ── Poblar campos de edición desde data ──────
 function poblarCamposEdicion(d) {
@@ -1709,10 +2071,10 @@ function actualizarHiddenTag(prefix) {
 var autocompleteTimeout = {};
 
 function buscarSugerencias(prefix) {
-    var input = document.getElementById(prefix + 'TagInput');
-    var dropdown = document.getElementById(prefix + 'Autocomplete');
-    var query = input.value.trim();
-    var nivel = input.dataset.nivel;
+    const input = document.getElementById(prefix + 'TagInput');
+    const dropdown = document.getElementById(prefix + 'Autocomplete');
+    const query = input.value.trim();
+    const nivel = input.dataset.nivel;
 
     if (query.length < 1) {
         dropdown.classList.remove('active');
@@ -1720,32 +2082,32 @@ function buscarSugerencias(prefix) {
         return;
     }
 
-    var url;
+    const signal = getAbortSignal('autocomplete_' + prefix);
+    let url;
     if (nivel === 'zona_calle') {
-        // Para zona/calle, usar la API de ZonaCalle
         url = '/requerimientos/api/zonas-calles/autocomplete/?q=' + encodeURIComponent(query);
     } else {
         url = '/market-analysis/api/ubicaciones/autocomplete/?q=' + encodeURIComponent(query) + '&nivel=' + nivel + '&limit=10';
     }
 
-    fetch(url)
+    fetch(url, { signal })
         .then(function(r) { return r.json(); })
         .then(function(data) {
             dropdown.innerHTML = '';
-            var items = data.data || [];
+            const items = data.data || [];
             if (items.length === 0) {
                 dropdown.innerHTML = '<div class="autocomplete-item" style="color:#484f58;cursor:default;">Sin resultados</div>';
                 dropdown.classList.add('active');
                 return;
             }
             items.forEach(function(item) {
-                var div = document.createElement('div');
+                const div = document.createElement('div');
                 div.className = 'autocomplete-item';
-                var nombreHtml = item.nombre;
+                let nombreHtml = item.nombre;
                 if (item.parent_nombre) {
                     nombreHtml += ' <span class="item-parent">(' + item.parent_nombre + ')</span>';
                 }
-                var tipoLabel;
+                let tipoLabel;
                 if (nivel === 'zona_calle') {
                     tipoLabel = 'Usado ' + (item.veces_usado || 1) + ' vez';
                 } else {
@@ -1753,8 +2115,7 @@ function buscarSugerencias(prefix) {
                 }
                 div.innerHTML = nombreHtml + ' <span class="item-type">' + tipoLabel + '</span>';
                 div.addEventListener('click', function() {
-                    // Verificar si ya existe ese tag
-                    var existente = false;
+                    let existente = false;
                     document.getElementById(prefix + 'TagsContainer').querySelectorAll('.tag-item-edit').forEach(function(t) {
                         if (t.childNodes[0].textContent.trim().toLowerCase() === item.nombre.toLowerCase()) {
                             existente = true;
@@ -1773,6 +2134,7 @@ function buscarSugerencias(prefix) {
             dropdown.classList.add('active');
         })
         .catch(function(err) {
+            if (err.name === 'AbortError') return;
             console.error('Error en autocomplete:', err);
         });
 }
@@ -1867,13 +2229,14 @@ function iniciarBusquedaAgente() {
 }
 
 function buscarAgente(telefono, nombre) {
-    var statusDiv = document.getElementById('agenteVinculadoStatus');
-    var badge = document.getElementById('agenteStatusBadge');
-    var btnRegistrar = document.getElementById('btnRegistrarAgente');
+    const statusDiv = document.getElementById('agenteVinculadoStatus');
+    const badge = document.getElementById('agenteStatusBadge');
+    const btnRegistrar = document.getElementById('btnRegistrarAgente');
 
     // Si hay teléfono válido, buscar por teléfono
     if (telefono && telefono.length >= 6) {
-        fetch('/requerimientos/api/buscar-agente/?telefono=' + encodeURIComponent(telefono))
+        const signal = getAbortSignal('buscarAgente');
+        fetch('/requerimientos/api/buscar-agente/?telefono=' + encodeURIComponent(telefono), { signal })
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 statusDiv.style.display = 'block';
@@ -1896,18 +2259,19 @@ function buscarAgente(telefono, nombre) {
                 }
             })
             .catch(function(err) {
+                if (err.name === 'AbortError') return;
                 console.error('Error al buscar agente:', err);
                 statusDiv.style.display = 'none';
             });
     }
     // Si no hay teléfono pero sí hay nombre, buscar por nombre
     else if (nombre && nombre.length >= 3) {
-        fetch('/requerimientos/api/buscar-agente-por-nombre/?nombre=' + encodeURIComponent(nombre))
+        const signal = getAbortSignal('buscarAgenteNombre');
+        fetch('/requerimientos/api/buscar-agente-por-nombre/?nombre=' + encodeURIComponent(nombre), { signal })
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 statusDiv.style.display = 'block';
                 if (data.encontrado) {
-                    // Ya existe en agentes — autocompletar y mostrar vinculado
                     document.getElementById('editAgente').value = data.nombre_completo;
                     if (data.telefono) {
                         document.getElementById('editAgenteTelefono').value = data.telefono;
@@ -1920,7 +2284,6 @@ function buscarAgente(telefono, nombre) {
                     badge.style.border = '1px solid rgba(35, 134, 54, 0.3)';
                     btnRegistrar.style.display = 'none';
                 } else {
-                    // No existe — ofrecer registrar
                     badge.textContent = '⚠ Sin teléfono — registrar solo con nombre';
                     badge.style.backgroundColor = 'rgba(210, 153, 34, 0.15)';
                     badge.style.color = '#d29922';
@@ -1929,6 +2292,7 @@ function buscarAgente(telefono, nombre) {
                 }
             })
             .catch(function(err) {
+                if (err.name === 'AbortError') return;
                 console.error('Error al buscar agente por nombre:', err);
                 statusDiv.style.display = 'none';
             });
@@ -2047,6 +2411,12 @@ function toggleModoEdicion(activar) {
     editActions.style.display = activar ? '' : 'none';
     
     modalEditando = activar;
+    
+    // Tomar snapshot al activar edición para dirty tracking
+    if (activar) {
+        modalSnapshot = tomarSnapshotEdicion();
+        modalDirty = false;
+    }
 }
 
 // ── Actualizar campos de vista desde data ────
@@ -2449,6 +2819,13 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('btnGuardarEdicion').addEventListener('click', function() {
         if (!modalRequerimientoActual) return;
         
+        // Validar formulario antes de guardar
+        const errores = validarFormularioEdicion();
+        if (errores.length > 0) {
+            mostrarToastEdicion('error', 'Corrige los siguientes errores:\n• ' + errores.join('\n• '));
+            return;
+        }
+        
         const pk = modalRequerimientoActual.pk;
         const d = modalRequerimientoActual; // dataset original del botón
         const data = { pk: parseInt(pk) };
@@ -2773,6 +3150,25 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Error al crear agente:', err);
         });
     });
+
+    // ── Confirmar al cerrar modal si hay cambios sin guardar ──
+    modal.addEventListener('hidden.bs.modal', function() {
+        if (hayCambiosSinGuardar()) {
+            // Si el usuario guardó justo antes de cerrar, el snapshot se actualiza
+            // y hayCambiosSinGuardar() retorna false. Si hay cambios reales sin guardar,
+            // mostramos advertencia en consola (el modal ya se cerró).
+            console.warn('Modal cerrado con cambios sin guardar. Reapertura mostrará datos desactualizados.');
+        }
+        // Resetear estado de edición
+        if (modalEditando) {
+            toggleModoEdicion(false);
+        }
+        modoClonacion = false;
+        datosClonacion = null;
+        modalDirty = false;
+        modalSnapshot = '';
+        document.getElementById('btnGuardarEdicion').innerHTML = '<i class="bi bi-check2 me-1"></i>Guardar';
+    });
 });
 
 // ── Toast para feedback de edición ───────────
@@ -2849,6 +3245,107 @@ document.querySelectorAll('.filter-form select').forEach(select => {
         // Don't auto-submit, user must click "Aplicar Filtros"
     });
 });
+
+// ── Toggle de columnas visibles ──────────────
+(function() {
+    const STORAGE_KEY = 'req_lista_columnas';
+    var menu = document.getElementById('columnToggleMenu');
+    var btn = document.getElementById('btnToggleColumnas');
+
+    // Cargar estado guardado
+    function cargarEstado() {
+        try {
+            var saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                var state = JSON.parse(saved);
+                document.querySelectorAll('.col-toggle').forEach(function(cb) {
+                    var col = cb.getAttribute('data-col');
+                    if (state[col] !== undefined) {
+                        cb.checked = state[col];
+                    }
+                });
+            }
+        } catch(e) {
+            // ignorar
+        }
+    }
+
+    // Guardar estado
+    function guardarEstado() {
+        var state = {};
+        document.querySelectorAll('.col-toggle').forEach(function(cb) {
+            state[cb.getAttribute('data-col')] = cb.checked;
+        });
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        } catch(e) {
+            // ignorar
+        }
+    }
+
+    // Aplicar visibilidad de columnas
+    function aplicarColumnas() {
+        var table = document.querySelector('.req-table');
+        if (!table) return;
+        var headerCells = table.querySelectorAll('thead th');
+        var rows = table.querySelectorAll('tbody tr');
+
+        document.querySelectorAll('.col-toggle').forEach(function(cb) {
+            var colIndex = parseInt(cb.getAttribute('data-col'), 10);
+            var visible = cb.checked;
+
+            // Ocultar/mostrar header
+            if (headerCells[colIndex]) {
+                headerCells[colIndex].style.display = visible ? '' : 'none';
+            }
+
+            // Ocultar/mostrar celdas en cada fila
+            rows.forEach(function(row) {
+                var cells = row.querySelectorAll('td');
+                if (cells[colIndex]) {
+                    cells[colIndex].style.display = visible ? '' : 'none';
+                }
+            });
+        });
+    }
+
+    // Toggle menú
+    if (btn && menu) {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+        });
+
+        // Cerrar menú al hacer clic fuera
+        document.addEventListener('click', function() {
+            menu.style.display = 'none';
+        });
+        menu.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+    }
+
+    // Event listeners en checkboxes
+    document.querySelectorAll('.col-toggle').forEach(function(cb) {
+        cb.addEventListener('change', function() {
+            guardarEstado();
+            aplicarColumnas();
+        });
+    });
+
+    // Inicializar
+    cargarEstado();
+    aplicarColumnas();
+
+    // Re-aplicar después de carga AJAX (usar MutationObserver)
+    var wrapper = document.querySelector('.req-table-wrapper');
+    if (wrapper) {
+        var observer = new MutationObserver(function() {
+            aplicarColumnas();
+        });
+        observer.observe(wrapper, { childList: true, subtree: true });
+    }
+})();
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
