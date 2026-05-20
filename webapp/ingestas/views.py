@@ -924,6 +924,7 @@ class ListaPropiedadesView(ListView):
         """
         Calcula los valores de los checkboxes basados en los parámetros GET.
         Devuelve una tupla (fuente_local, fuente_externa, fuente_propify)
+        Por defecto (sin parámetros) muestra TODAS las fuentes.
         """
         # Obtener parámetros de filtro de checkboxes
         has_any_checkbox_param = any(
@@ -932,10 +933,10 @@ class ListaPropiedadesView(ListView):
         )
         
         if not has_any_checkbox_param:
-            # No hay parámetros de checkbox - mostrar solo locales por defecto
+            # No hay parámetros de checkbox - mostrar TODAS las fuentes por defecto
             fuente_local = True
-            fuente_externa = False
-            fuente_propify = False
+            fuente_externa = True
+            fuente_propify = True
         else:
             # Hay al menos un parámetro de checkbox - respetar solo los presentes
             fuente_local = 'fuente_local' in self.request.GET

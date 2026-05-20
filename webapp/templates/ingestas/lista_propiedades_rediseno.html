@@ -815,7 +815,7 @@
                 </div>
             </div>
 
-            <!-- FILA 2: Tipo + acciones -->
+            <!-- FILA 2: Tipo + Fuentes + acciones -->
             <div class="filter-row-acciones">
                 <div class="filter-group">
                     <label for="filter-type">Tipo</label>
@@ -825,6 +825,22 @@
                             <option value="{{ tipo }}">{{ tipo }}</option>
                         {% endfor %}
                     </select>
+                </div>
+
+                <div class="filter-group" style="flex-direction: row; align-items: center; gap: 12px;">
+                    <label style="margin-bottom: 0; white-space: nowrap;">Fuentes:</label>
+                    <label class="distrito-checkbox-label" style="font-size: 0.75rem;">
+                        <input type="checkbox" name="fuente_local" value="1" {% if fuente_local_checked %}checked{% endif %}>
+                        <span class="badge bg-info" style="font-size: 0.65rem;">Local</span>
+                    </label>
+                    <label class="distrito-checkbox-label" style="font-size: 0.75rem;">
+                        <input type="checkbox" name="fuente_externa" value="1" {% if fuente_externa_checked %}checked{% endif %}>
+                        <span class="badge bg-warning text-dark" style="font-size: 0.65rem;">Externa</span>
+                    </label>
+                    <label class="distrito-checkbox-label" style="font-size: 0.75rem;">
+                        <input type="checkbox" name="fuente_propify" value="1" {% if fuente_propify_checked %}checked{% endif %}>
+                        <span class="badge bg-success" style="font-size: 0.65rem;">Propify</span>
+                    </label>
                 </div>
 
                 <div class="filter-actions">
