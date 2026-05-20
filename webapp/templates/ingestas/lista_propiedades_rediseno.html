@@ -1100,10 +1100,11 @@
             if (entry && entry.marker) {
                 entry.marker._selectedNumero = null;
                 const p = entry.marker._propertyData;
+                const portal = (p.portal || '').toLowerCase();
                 let iconUrl;
                 if (p.es_propify) iconUrl = ICONO_PROPIFFY;
-                else if (p.portal === 'Remax') iconUrl = ICONO_REMAX;
-                else if (p.portal === 'Adondevivir') iconUrl = ICONO_ADONDEVIVIR;
+                else if (portal === 'remax') iconUrl = ICONO_REMAX;
+                else if (portal === 'adondevivir') iconUrl = ICONO_ADONDEVIVIR;
                 else if (p.es_externo) iconUrl = ICONO_REMAX;
                 else iconUrl = ICONO_LOCAL;
                 entry.marker.setIcon({ url: iconUrl, scaledSize: new google.maps.Size(32, 32) });
@@ -1127,13 +1128,22 @@
             console.log(`Agregando ${propiedades.length} marcadores para distrito: ${distrito}`);
             
             propiedades.forEach(p => {
+                // Determinar icono según portal
+                const portal = (p.portal || '').toLowerCase();
+                let iconUrl;
+                if (p.es_propify) iconUrl = ICONO_PROPIFFY;
+                else if (portal === 'remax') iconUrl = ICONO_REMAX;
+                else if (portal === 'adondevivir') iconUrl = ICONO_ADONDEVIVIR;
+                else if (p.es_externo) iconUrl = ICONO_REMAX;
+                else iconUrl = ICONO_LOCAL;
+                
                 // Crear marcador sin número inicialmente
                 const marker = new google.maps.Marker({
                     position: { lat: p.lat, lng: p.lng },
                     map: map,
                     title: p.titulo || p.descripcion || '',
                     icon: {
-                        url: ICONO_LOCAL,
+                        url: iconUrl,
                         scaledSize: new google.maps.Size(32, 32)
                     },
                     _distrito: distrito,
