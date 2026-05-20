@@ -1,623 +1,1019 @@
 {% extends "propifai_base.html" %}
 {% load static %}
 
-{% block title %}Matching Masivo - Sistema de Compatibilidad{% endblock %}
+{% block page_title %}Matching Masivo - Propifai{% endblock %}
 
 {% block extra_css %}
-<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-<link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
 <style>
-    /* Estilos específicos para matching masivo */
-    .matching-masivo-header {
-        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-        color: white;
-        padding: 1.5rem;
-        border-radius: 10px;
-        margin-bottom: 1.5rem;
+    /* ============================================
+       ESTILO OSCURO TIPO GITHUB (Propifai Dark)
+       Inspirado en intelligence/collections/list.html
+       ============================================ */
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
-    
-    .stat-card-masivo {
-        transition: transform 0.3s ease;
+
+    body {
+        background-color: #0d1117;
+        color: #c9d1d9;
+        line-height: 1.6;
+    }
+
+    .container-matching {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    /* HEADER */
+    .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 30px;
+        padding-bottom: 20px;
+        border-bottom: 1px solid #30363d;
+    }
+
+    .header h1 {
+        color: #58a6ff;
+        font-size: 28px;
+        margin: 0;
+    }
+
+    .header-subtitle {
+        color: #8b949e;
+        font-size: 14px;
+        margin-top: 4px;
+    }
+
+    .header-actions {
+        display: flex;
+        gap: 12px;
+    }
+
+    /* BOTONES */
+    .btn {
+        padding: 10px 20px;
         border: none;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        transition: all 0.2s;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
     }
-    
-    .stat-card-masivo:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 8px 12px rgba(0, 0, 0, 0.15);
-    }
-    
-    .progress-match {
-        height: 20px;
-        border-radius: 10px;
-        overflow: hidden;
-        background-color: #e9ecef;
-    }
-    
-    .progress-match .progress-bar {
-        transition: width 1s ease-in-out;
-    }
-    
-    .match-high {
-        background-color: #dc3545 !important; /* Rojo para >80% */
-        font-weight: bold;
-    }
-    
-    .match-medium {
-        background-color: #ffc107 !important; /* Amarillo para 50-80% */
-    }
-    
-    .match-low {
-        background-color: #28a745 !important; /* Verde para <50% */
-    }
-    
-    .requerimiento-row {
-        transition: all 0.2s ease;
-        border-left: 4px solid transparent;
-    }
-    
-    .requerimiento-row:hover {
-        background-color: #f8f9fa;
-        transform: translateX(3px);
-    }
-    
-    .requerimiento-row.match-high-row {
-        border-left-color: #dc3545;
-        background-color: rgba(220, 53, 69, 0.05);
-    }
-    
-    .requerimiento-row.match-medium-row {
-        border-left-color: #ffc107;
-        background-color: rgba(255, 193, 7, 0.05);
-    }
-    
-    .requerimiento-row.match-low-row {
-        border-left-color: #28a745;
-        background-color: rgba(40, 167, 69, 0.05);
-    }
-    
-    .badge-match {
-        font-size: 0.85rem;
-        padding: 0.3rem 0.6rem;
-        border-radius: 20px;
-        font-weight: 600;
-    }
-    
-    .badge-match-high {
-        background-color: #dc3545;
+
+    .btn-primary {
+        background-color: #238636;
         color: white;
     }
-    
-    .badge-match-medium {
-        background-color: #ffc107;
-        color: #212529;
+    .btn-primary:hover {
+        background-color: #2ea043;
     }
-    
-    .badge-match-low {
-        background-color: #28a745;
+
+    .btn-secondary {
+        background-color: #30363d;
+        color: #c9d1d9;
+    }
+    .btn-secondary:hover {
+        background-color: #3c444d;
+    }
+
+    .btn-danger {
+        background-color: #da3633;
         color: white;
     }
-    
-    .action-buttons {
-        position: sticky;
-        top: 20px;
-        z-index: 100;
+    .btn-danger:hover {
+        background-color: #f85149;
     }
-    
-    .table-responsive {
-        max-height: 600px;
-        overflow-y: auto;
+
+    .btn-sm {
+        padding: 6px 12px;
+        font-size: 12px;
     }
-    
-    .filter-controls {
-        background-color: #f8f9fa;
-        padding: 1rem;
+
+    .btn-outline {
+        background: transparent;
+        border: 1px solid #30363d;
+        color: #c9d1d9;
+    }
+    .btn-outline:hover {
+        border-color: #58a6ff;
+        color: #58a6ff;
+    }
+
+    .btn-success {
+        background-color: #238636;
+        color: white;
+    }
+    .btn-success:hover {
+        background-color: #2ea043;
+    }
+
+    /* STAT CARDS */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+        margin-bottom: 30px;
+    }
+
+    .stat-card {
+        background-color: #161b22;
+        border: 1px solid #30363d;
         border-radius: 8px;
-        margin-bottom: 1.5rem;
-        border: 1px solid #dee2e6;
+        padding: 20px;
+        transition: border-color 0.2s;
+    }
+
+    .stat-card:hover {
+        border-color: #58a6ff;
+    }
+
+    .stat-card .stat-label {
+        font-size: 13px;
+        color: #8b949e;
+        margin-bottom: 8px;
+        font-weight: 500;
+    }
+
+    .stat-card .stat-value {
+        font-size: 28px;
+        font-weight: 700;
+        color: #c9d1d9;
+    }
+
+    .stat-card .stat-value.high {
+        color: #3fb950;
+    }
+    .stat-card .stat-value.medium {
+        color: #d29922;
+    }
+    .stat-card .stat-value.low {
+        color: #f85149;
+    }
+
+    .stat-card .stat-sub {
+        font-size: 12px;
+        color: #8b949e;
+        margin-top: 4px;
+    }
+
+    /* FILTROS */
+    .filters {
+        background-color: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 30px;
+    }
+
+    .filter-form {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+        align-items: end;
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .form-group label {
+        font-size: 13px;
+        font-weight: 500;
+        color: #8b949e;
+    }
+
+    .form-control {
+        padding: 10px 12px;
+        background-color: #0d1117;
+        border: 1px solid #30363d;
+        border-radius: 6px;
+        color: #c9d1d9;
+        font-size: 14px;
+        width: 100%;
+    }
+
+    .form-control:focus {
+        outline: none;
+        border-color: #58a6ff;
+    }
+
+    select.form-control {
+        cursor: pointer;
+    }
+
+    /* TABLA PRINCIPAL */
+    .matching-table {
+        background-color: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        overflow: hidden;
+        margin-bottom: 30px;
+    }
+
+    .table-header {
+        display: grid;
+        grid-template-columns: 2fr 1.5fr 1fr 1.2fr 1.2fr 1.2fr 1.2fr 1fr;
+        padding: 14px 20px;
+        background-color: #21262d;
+        border-bottom: 1px solid #30363d;
+        font-weight: 600;
+        color: #8b949e;
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .table-row {
+        display: grid;
+        grid-template-columns: 2fr 1.5fr 1fr 1.2fr 1.2fr 1.2fr 1.2fr 1fr;
+        padding: 14px 20px;
+        border-bottom: 1px solid #30363d;
+        align-items: center;
+        transition: background-color 0.15s;
+    }
+
+    .table-row:last-child {
+        border-bottom: none;
+    }
+
+    .table-row:hover {
+        background-color: #1c2128;
+    }
+
+    /* Estados de match */
+    .table-row.match-high-row {
+        border-left: 3px solid #3fb950;
+    }
+    .table-row.match-medium-row {
+        border-left: 3px solid #d29922;
+    }
+    .table-row.match-low-row {
+        border-left: 3px solid #f85149;
+    }
+
+    /* Nombre requerimiento */
+    .req-name {
+        font-weight: 500;
+        color: #58a6ff;
+        font-size: 14px;
+    }
+
+    .req-detail {
+        font-size: 12px;
+        color: #8b949e;
+        margin-top: 2px;
+    }
+
+    /* Progress bar */
+    .progress-match {
+        width: 100%;
+        height: 8px;
+        background-color: #21262d;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+
+    .progress-bar {
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.5s ease;
+    }
+
+    .progress-bar.match-high {
+        background-color: #3fb950;
+    }
+    .progress-bar.match-medium {
+        background-color: #d29922;
+    }
+    .progress-bar.match-low {
+        background-color: #f85149;
+    }
+
+    /* Badges */
+    .badge-match {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 500;
+    }
+
+    .badge-match-high {
+        background-color: rgba(63, 185, 80, 0.15);
+        color: #3fb950;
+    }
+    .badge-match-medium {
+        background-color: rgba(210, 153, 34, 0.15);
+        color: #d29922;
+    }
+    .badge-match-low {
+        background-color: rgba(248, 81, 73, 0.15);
+        color: #f85149;
+    }
+
+    /* Propiedad match info */
+    .prop-match-info {
+        font-size: 13px;
+    }
+
+    .prop-match-code {
+        color: #58a6ff;
+        font-weight: 500;
+    }
+
+    .prop-match-detail {
+        font-size: 12px;
+        color: #8b949e;
+    }
+
+    .prop-match-price {
+        color: #d29922;
+        font-weight: 500;
+    }
+
+    /* Acciones */
+    .actions {
+        display: flex;
+        gap: 6px;
+    }
+
+    /* Empty state */
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #8b949e;
+    }
+
+    .empty-state h3 {
+        font-size: 20px;
+        margin-bottom: 10px;
+        color: #c9d1d9;
+    }
+
+    .empty-state p {
+        margin-bottom: 20px;
+    }
+
+    /* PAGINACIÓN */
+    .pagination-container {
+        display: flex;
+        justify-content: center;
+        padding: 16px 20px;
+        border-top: 1px solid #30363d;
+    }
+
+    .pagination {
+        display: flex;
+        gap: 4px;
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+
+    .page-item {
+        display: inline-block;
+    }
+
+    .page-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 32px;
+        height: 32px;
+        padding: 0 8px;
+        background-color: #21262d;
+        border: 1px solid #30363d;
+        border-radius: 6px;
+        color: #c9d1d9;
+        font-size: 13px;
+        text-decoration: none;
+        transition: all 0.15s;
+    }
+
+    .page-link:hover {
+        background-color: #30363d;
+        border-color: #58a6ff;
+        color: #58a6ff;
+    }
+
+    .page-item.active .page-link {
+        background-color: #238636;
+        border-color: #238636;
+        color: white;
+    }
+
+    .page-item.disabled .page-link {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    /* PANEL DE CONTROLES */
+    .control-panel {
+        background-color: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        padding: 24px;
+        margin-bottom: 30px;
+    }
+
+    .control-panel h3 {
+        color: #58a6ff;
+        font-size: 18px;
+        margin-bottom: 16px;
+    }
+
+    .control-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+    }
+
+    .control-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .control-group label {
+        font-size: 13px;
+        font-weight: 500;
+        color: #8b949e;
+    }
+
+    .checkbox-group {
+        display: flex;
+        gap: 20px;
+        padding: 8px 0;
+    }
+
+    .checkbox-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        color: #c9d1d9;
+    }
+
+    .checkbox-item input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        accent-color: #238636;
+    }
+
+    /* INFO PANEL */
+    .info-panel {
+        background-color: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        padding: 20px;
+    }
+
+    .info-panel h4 {
+        color: #c9d1d9;
+        font-size: 15px;
+        margin-bottom: 12px;
+    }
+
+    .alert {
+        padding: 12px 16px;
+        border-radius: 6px;
+        margin-bottom: 12px;
+        border: 1px solid transparent;
+        font-size: 13px;
+    }
+
+    .alert-info {
+        background-color: rgba(88, 166, 255, 0.1);
+        border-color: rgba(88, 166, 255, 0.3);
+        color: #58a6ff;
+    }
+
+    .alert-warning {
+        background-color: rgba(210, 153, 34, 0.1);
+        border-color: rgba(210, 153, 34, 0.3);
+        color: #d29922;
+    }
+
+    .alert-success {
+        background-color: rgba(35, 134, 54, 0.1);
+        border-color: rgba(35, 134, 54, 0.3);
+        color: #3fb950;
+    }
+
+    .alert ul {
+        margin: 8px 0 0 16px;
+        padding: 0;
+    }
+
+    .alert li {
+        margin-bottom: 4px;
+    }
+
+    /* MODAL */
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.7);
+        z-index: 1000;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .modal-overlay.active {
+        display: flex;
+    }
+
+    .modal-content {
+        background-color: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 12px;
+        padding: 30px;
+        max-width: 480px;
+        width: 90%;
+        text-align: center;
+    }
+
+    .modal-content h3 {
+        color: #c9d1d9;
+        font-size: 20px;
+        margin-bottom: 16px;
+    }
+
+    .modal-content p {
+        color: #8b949e;
+        margin-bottom: 20px;
+    }
+
+    .spinner {
+        width: 48px;
+        height: 48px;
+        border: 4px solid #30363d;
+        border-top-color: #58a6ff;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin: 0 auto 16px;
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    /* FOOTER */
+    .footer {
+        text-align: center;
+        color: #8b949e;
+        font-size: 14px;
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 1px solid #30363d;
+    }
+
+    /* RESPONSIVE */
+    @media (max-width: 1200px) {
+        .table-header,
+        .table-row {
+            grid-template-columns: 2fr 1.5fr 1fr 1.2fr 1.2fr 1.2fr;
+        }
+        .table-header div:nth-child(7),
+        .table-header div:nth-child(8),
+        .table-row div:nth-child(7),
+        .table-row div:nth-child(8) {
+            display: none;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 12px;
+        }
+        .table-header,
+        .table-row {
+            grid-template-columns: 2fr 1fr 1fr;
+            font-size: 12px;
+        }
+        .table-header div:nth-child(4),
+        .table-header div:nth-child(5),
+        .table-header div:nth-child(6),
+        .table-header div:nth-child(7),
+        .table-header div:nth-child(8),
+        .table-row div:nth-child(4),
+        .table-row div:nth-child(5),
+        .table-row div:nth-child(6),
+        .table-row div:nth-child(7),
+        .table-row div:nth-child(8) {
+            display: none;
+        }
+        .control-grid {
+            grid-template-columns: 1fr;
+        }
+        .stats-grid {
+            grid-template-columns: 1fr 1fr;
+        }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <!-- Header del matching masivo -->
-    <div class="matching-masivo-header">
-        <div class="row align-items-center">
-            <div class="col-md-8">
-                <h1 class="h3 mb-2">
-                    <i class="bi bi-lightning-charge-fill me-2"></i>
-                    Matching Masivo de Requerimientos
-                </h1>
-                <p class="mb-0 opacity-75">
-                    Sistema automático que cruza todas las propiedades con todos los requerimientos. 
-                    Visualiza el porcentaje de match al costado de cada requerimiento.
-                </p>
+<div class="container-matching">
+    <!-- HEADER -->
+    <div class="header">
+        <div>
+            <h1>🎯 Matching Masivo</h1>
+            <div class="header-subtitle">
+                Cruce inteligente de requerimientos vs propiedades disponibles
             </div>
-            <div class="col-md-4 text-end">
-                <a href="{% url 'matching:dashboard' %}" class="btn btn-outline-light me-2">
-                    <i class="bi bi-arrow-left me-1"></i> Volver al Dashboard
-                </a>
-                <button id="btnEjecutarMatching" class="btn btn-light">
-                    <i class="bi bi-play-circle me-1"></i> Ejecutar Matching Masivo
-                </button>
-            </div>
+        </div>
+        <div class="header-actions">
+            <a href="{% url 'matching:dashboard' %}" class="btn btn-secondary">← Dashboard Individual</a>
+            <a href="{% url 'matching:calendar' %}" class="btn btn-secondary">📅 Calendario</a>
+            <button class="btn btn-primary" id="btnEjecutarMasivo">🚀 Ejecutar Matching</button>
         </div>
     </div>
 
-    <!-- Panel de estadísticas -->
-    <div class="row mb-4">
-        <div class="col-md-3">
-            <div class="card stat-card-masivo">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h6 class="card-subtitle mb-2 text-muted">Total Requerimientos</h6>
-                            <h3 class="card-title mb-0">{{ total_requerimientos }}</h3>
-                        </div>
-                        <div class="text-primary">
-                            <i class="bi bi-people-fill fs-1"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
+    <!-- STATS CARDS -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-label">📋 Total Requerimientos</div>
+            <div class="stat-value">{{ total_requerimientos }}</div>
+            <div class="stat-sub">En el sistema</div>
         </div>
-        <div class="col-md-3">
-            <div class="card stat-card-masivo">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h6 class="card-subtitle mb-2 text-muted">Total Propiedades</h6>
-                            <h3 class="card-title mb-0">{{ total_propiedades }}</h3>
-                        </div>
-                        <div class="text-success">
-                            <i class="bi bi-house-fill fs-1"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        <div class="stat-card">
+            <div class="stat-label">🏠 Total Propiedades</div>
+            <div class="stat-value">{{ total_propiedades }}</div>
+            <div class="stat-sub">En cartera activa</div>
         </div>
-        <div class="col-md-3">
-            <div class="card stat-card-masivo">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h6 class="card-subtitle mb-2 text-muted">Matches Altos (>80%)</h6>
-                            <h3 class="card-title mb-0">{{ match_alto_count }}</h3>
-                        </div>
-                        <div class="text-danger">
-                            <i class="bi bi-fire fs-1"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        <div class="stat-card">
+            <div class="stat-label">✅ Match Alto (>80%)</div>
+            <div class="stat-value high">{{ match_alto_count }}</div>
+            <div class="stat-sub">Requerimientos con alta compatibilidad</div>
         </div>
-        <div class="col-md-3">
-            <div class="card stat-card-masivo">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h6 class="card-subtitle mb-2 text-muted">Última Ejecución</h6>
-                            <h5 class="card-title mb-0">
-                                {% if resumen.0.fecha_ultimo_matching %}
-                                    {{ resumen.0.fecha_ultimo_matching|date:"d/m/Y H:i" }}
-                                {% else %}
-                                    No ejecutado
-                                {% endif %}
-                            </h5>
-                        </div>
-                        <div class="text-warning">
-                            <i class="bi bi-clock-history fs-1"></i>
-                        </div>
-                    </div>
-                </div>
+        <div class="stat-card">
+            <div class="stat-label">📅 Último Matching</div>
+            <div class="stat-value" style="font-size: 16px;">
+                {% if resumen.0.fecha_ultimo_matching %}
+                    {{ resumen.0.fecha_ultimo_matching|date:"d/m/Y H:i" }}
+                {% else %}
+                    —
+                {% endif %}
             </div>
+            <div class="stat-sub">Ejecutar para actualizar</div>
         </div>
     </div>
 
-    <!-- Controles de filtro -->
-    <div class="filter-controls">
-        <div class="row">
-            <div class="col-md-8">
-                <div class="input-group">
-                    <span class="input-group-text"><i class="bi bi-search"></i></span>
-                    <input type="text" id="searchRequerimientos" class="form-control" placeholder="Buscar requerimientos...">
-                    <button class="btn btn-outline-secondary" type="button" id="btnFiltrarMatchAlto">
-                        <i class="bi bi-filter-circle"></i> Solo Match Alto
-                    </button>
-                </div>
+    <!-- FILTROS -->
+    <div class="filters">
+        <form method="get" class="filter-form">
+            <div class="form-group">
+                <label for="search">🔍 Buscar requerimiento</label>
+                <input type="text" id="search" name="search" class="form-control"
+                       placeholder="Nombre, código, distrito..."
+                       value="{{ request.GET.search|default:'' }}">
+                <input type="hidden" id="filterScoreMin" value="90">
             </div>
-            <div class="col-md-4 text-end">
-                <div class="btn-group" role="group">
-                    <button type="button" class="btn btn-outline-primary active" data-filter="all">Todos</button>
-                    <button type="button" class="btn btn-outline-primary" data-filter="high">Alto (>80%)</button>
-                    <button type="button" class="btn btn-outline-primary" data-filter="medium">Medio (50-80%)</button>
-                    <button type="button" class="btn btn-outline-primary" data-filter="low">Bajo (<50%)</button>
-                </div>
+            <div class="form-group">
+                <label for="match_filter">Filtrar por match</label>
+                <select id="match_filter" name="match_filter" class="form-control">
+                    <option value="">Todos</option>
+                    <option value="high" {% if request.GET.match_filter == 'high' %}selected{% endif %}>Alto (>80%)</option>
+                    <option value="medium" {% if request.GET.match_filter == 'medium' %}selected{% endif %}>Medio (50-80%)</option>
+                    <option value="low" {% if request.GET.match_filter == 'low' %}selected{% endif %}>Bajo (<50%)</option>
+                    <option value="none" {% if request.GET.match_filter == 'none' %}selected{% endif %}>Sin match</option>
+                </select>
             </div>
-        </div>
+            <div class="form-group">
+                <label for="sort">Ordenar por</label>
+                <select id="sort" name="sort" class="form-control">
+                    <option value="-fecha" {% if request.GET.sort == '-fecha' %}selected{% endif %}>Más recientes</option>
+                    <option value="fecha" {% if request.GET.sort == 'fecha' %}selected{% endif %}>Más antiguos</option>
+                    <option value="-match" {% if request.GET.sort == '-match' %}selected{% endif %}>Mejor match</option>
+                    <option value="match" {% if request.GET.sort == 'match' %}selected{% endif %}>Peor match</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label style="visibility: hidden;">Acción</label>
+                <button type="submit" class="btn btn-primary" style="width: 100%;">🔍 Aplicar Filtros</button>
+            </div>
+        </form>
     </div>
 
-    <!-- Tabla de requerimientos con porcentajes -->
-    <div class="card">
-        <div class="card-header bg-white d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">
-                <i class="bi bi-table me-2"></i>
-                Grilla de Requerimientos con Porcentaje de Match
-            </h5>
-            <div>
-                <span class="badge bg-primary me-2">Total: {{ page_obj.paginator.count }}</span>
-                <span class="badge bg-danger">Match Alto: {{ match_alto_count }}</span>
-            </div>
+    <!-- TABLA DE RESULTADOS -->
+    <div class="matching-table">
+        <div class="table-header">
+            <div>Requerimiento</div>
+            <div>Distritos / Tipo</div>
+            <div>Presupuesto</div>
+            <div>% Match</div>
+            <div>Mejor Propiedad</div>
+            <div>Precio</div>
+            <div>Compatibles</div>
+            <div>Acciones</div>
         </div>
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-hover mb-0" id="tablaRequerimientos">
-                    <thead class="table-light">
-                        <tr>
-                            <th width="50">ID</th>
-                            <th>Cliente / Contacto</th>
-                            <th>Tipo Propiedad</th>
-                            <th>Presupuesto</th>
-                            <th>Distritos</th>
-                            <th width="150">Porcentaje Match</th>
-                            <th width="180">Propiedad Match</th>
-                            <th width="120">Estado</th>
-                            <th width="100">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for item in requerimientos_con_porcentajes %}
-                            {% with req=item.requerimiento porcentaje=item.porcentaje row_class=item.row_class badge_class=item.badge_class progress_class=item.progress_class estado_text=item.estado_text %}
-                                <tr class="requerimiento-row {{ row_class }}" data-porcentaje="{{ porcentaje }}">
-                                    <td class="fw-bold">#{{ req.id }}</td>
-                                    <td>
-                                        <div class="fw-semibold">{{ req.nombre_cliente|default:"Sin nombre" }}</div>
-                                        <small class="text-muted">{{ req.telefono|default:"Sin teléfono" }}</small>
-                                    </td>
-                                    <td>
-                                        <span class="badge bg-info">{{ req.get_tipo_propiedad_display|default:"No especificado" }}</span>
-                                    </td>
-                                    <td>
-                                        <span class="fw-semibold">{{ req.presupuesto_display }}</span>
-                                    </td>
-                                    <td>
-                                        {% if req.distritos_lista %}
-                                            <small>{{ req.distritos_lista|join:", "|truncatechars:30 }}</small>
-                                        {% else %}
-                                            <span class="text-muted">No especificado</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <div class="d-flex align-items-center">
-                                            <div class="progress-match flex-grow-1 me-2">
-                                                <div class="progress-bar {{ progress_class }}"
-                                                     role="progressbar"
-                                                     style="width: {{ porcentaje }}%;"
-                                                     aria-valuenow="{{ porcentaje }}"
-                                                     aria-valuemin="0"
-                                                     aria-valuemax="100">
-                                                </div>
-                                            </div>
-                                            <span class="fw-bold">{{ porcentaje }}%</span>
-                                        </div>
-                                        {% if item.total_compatibles > 0 %}
-                                        <small class="text-muted d-block mt-1">{{ item.total_compatibles }} propiedad(es) compatible(s)</small>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if item.tiene_propiedad_match %}
-                                            <div class="propiedad-match-info">
-                                                <div class="fw-semibold small">
-                                                    <i class="bi bi-house-check text-success"></i>
-                                                    {{ item.mejor_propiedad_codigo|default:"Propiedad" }}
-                                                </div>
-                                                <div class="text-muted small">
-                                                    Distrito: {{ item.mejor_propiedad_distrito|default:"N/A" }}
-                                                </div>
-                                                <div class="text-muted small">
-                                                    Precio: ${{ item.mejor_propiedad_precio|floatformat:0|default:"N/A" }}
-                                                </div>
-                                                <small class="text-muted d-block">ID: {{ item.mejor_propiedad_id }}</small>
-                                            </div>
-                                        {% else %}
-                                            <span class="text-muted small">Sin match</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <span class="badge-match {{ badge_class }}">{{ estado_text }}</span>
-                                    </td>
-                                    <td>
-                                        <div class="btn-group btn-group-sm" role="group">
-                                            <a href="{% url 'matching:dashboard' %}?requerimiento_id={{ req.id }}"
-                                               class="btn btn-outline-primary"
-                                               title="Ver detalles">
-                                                <i class="bi bi-eye"></i>
-                                            </a>
-                                            <button class="btn btn-outline-success btn-ejecutar-individual"
-                                                    data-id="{{ req.id }}"
-                                                    title="Ejecutar matching individual">
-                                                <i class="bi bi-play"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            {% endwith %}
-                        {% empty %}
-                            <tr>
-                                <td colspan="8" class="text-center py-4">
-                                    <div class="text-muted">
-                                        <i class="bi bi-inbox fs-1"></i>
-                                        <p class="mt-2">No hay requerimientos para mostrar.</p>
-                                    </div>
-                                </td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+
+        {% if requerimientos_con_porcentajes %}
+            {% for item in requerimientos_con_porcentajes %}
+                {% with req=item.requerimiento %}
+                <div class="table-row {{ item.row_class }}">
+                    <div>
+                        <div class="req-name">
+                            {{ req.nombre|default:req.id }}
+                        </div>
+                        <div class="req-detail">
+                            {{ req.tipo_propiedad|default:"Sin tipo"|capfirst }}
+                            · {{ req.habitaciones|default:"?" }} hab · {{ req.banos|default:"?" }} baños
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="req-detail">
+                            {{ req.distritos|default:"Sin distritos"|truncatechars:40 }}
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="prop-match-price">
+                            {% if req.presupuesto_monto %}
+                                {{ req.presupuesto_monto|floatformat:0 }}
+                                {% if req.presupuesto_moneda %}{{ req.presupuesto_moneda }}{% endif %}
+                            {% else %}
+                                <span class="req-detail">—</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div class="progress-match" style="flex: 1; max-width: 100px;">
+                                <div class="progress-bar {{ item.progress_class }}"
+                                     style="width: {{ item.porcentaje|floatformat:0 }}%;"></div>
+                            </div>
+                            <span class="badge-match {{ item.badge_class }}">
+                                {{ item.porcentaje|floatformat:0 }}%
+                            </span>
+                        </div>
+                    </td>
+
+                    <td>
+                        {% if item.tiene_propiedad_match %}
+                            <div class="prop-match-info">
+                                <div class="prop-match-code">{{ item.mejor_propiedad_codigo|default:"—" }}</div>
+                                <div class="prop-match-detail">{{ item.mejor_propiedad_distrito|default:"—" }}</div>
+                            </div>
+                        {% else %}
+                            <span class="req-detail">Sin match</span>
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        {% if item.mejor_propiedad_precio %}
+                            <span class="prop-match-price">
+                                S/ {{ item.mejor_propiedad_precio|floatformat:0 }}
+                            </span>
+                        {% else %}
+                            <span class="req-detail">—</span>
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        <span class="badge-match {{ item.badge_class }}">
+                            {{ item.total_compatibles }}
+                        </span>
+                    </td>
+
+                    <td>
+                        <div class="actions">
+                            <a href="{% url 'matching:dashboard' %}?requerimiento_id={{ req.id }}"
+                               class="btn btn-primary btn-sm"
+                               title="Ver detalle de matching">
+                                📊 Ver
+                            </a>
+                            <button class="btn btn-outline btn-sm btn-ejecutar-individual"
+                                    data-requerimiento-id="{{ req.id }}"
+                                    title="Ejecutar matching individual">
+                                ▶️
+                            </button>
+                        </div>
+                    </td>
+                </div>
+                {% endwith %}
+            {% endfor %}
+        {% else %}
+            <div class="empty-state">
+                <h3>📭 No se encontraron requerimientos</h3>
+                <p>{% if request.GET.search or request.GET.match_filter %}Intenta con otros filtros{% else %}No hay requerimientos registrados en el sistema{% endif %}</p>
             </div>
-        </div>
-        <div class="card-footer bg-white">
-            <!-- Paginación -->
-            {% if page_obj.has_other_pages %}
-            <nav aria-label="Paginación de requerimientos">
-                <ul class="pagination justify-content-center mb-0">
+        {% endif %}
+
+        <!-- PAGINACIÓN -->
+        {% if page_obj.paginator.num_pages > 1 %}
+        <div class="pagination-container">
+            <nav>
+                <ul class="pagination">
                     {% if page_obj.has_previous %}
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Anterior</a>
+                            <a class="page-link" href="?page=1{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.match_filter %}&match_filter={{ request.GET.match_filter }}{% endif %}{% if request.GET.sort %}&sort={{ request.GET.sort }}{% endif %}">««</a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.match_filter %}&match_filter={{ request.GET.match_filter }}{% endif %}{% if request.GET.sort %}&sort={{ request.GET.sort }}{% endif %}">«</a>
                         </li>
                     {% else %}
-                        <li class="page-item disabled">
-                            <span class="page-link">Anterior</span>
-                        </li>
+                        <li class="page-item disabled"><span class="page-link">«</span></li>
                     {% endif %}
-                    
+
                     {% for num in page_obj.paginator.page_range %}
-                        {% if page_obj.number == num %}
-                            <li class="page-item active">
-                                <span class="page-link">{{ num }}</span>
-                            </li>
+                        {% if num == page_obj.number %}
+                            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
                         {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
                             <li class="page-item">
-                                <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                                <a class="page-link" href="?page={{ num }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.match_filter %}&match_filter={{ request.GET.match_filter }}{% endif %}{% if request.GET.sort %}&sort={{ request.GET.sort }}{% endif %}">{{ num }}</a>
                             </li>
                         {% endif %}
                     {% endfor %}
-                    
+
                     {% if page_obj.has_next %}
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.next_page_number }}">Siguiente</a>
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.match_filter %}&match_filter={{ request.GET.match_filter }}{% endif %}{% if request.GET.sort %}&sort={{ request.GET.sort }}{% endif %}">»</a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.match_filter %}&match_filter={{ request.GET.match_filter }}{% endif %}{% if request.GET.sort %}&sort={{ request.GET.sort }}{% endif %}">»»</a>
                         </li>
                     {% else %}
-                        <li class="page-item disabled">
-                            <span class="page-link">Siguiente</span>
-                        </li>
+                        <li class="page-item disabled"><span class="page-link">»</span></li>
                     {% endif %}
                 </ul>
             </nav>
-            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- PANEL DE CONTROL -->
+    <div class="control-panel">
+        <h3>⚙️ Controles de Matching Masivo</h3>
+        <div class="control-grid">
+            <div class="control-group">
+                <label for="limitePorRequerimiento">Límite de propiedades por requerimiento</label>
+                <input type="number" id="limitePorRequerimiento" class="form-control"
+                       value="10" min="1" max="100">
+            </div>
+            <div class="control-group">
+                <label>Opciones</label>
+                <div class="checkbox-group">
+                    <label class="checkbox-item">
+                        <input type="checkbox" id="chkSoloConMatch" checked>
+                        Solo mostrar con match
+                    </label>
+                    <label class="checkbox-item">
+                        <input type="checkbox" id="chkAutoEjecutar">
+                        Auto-ejecutar al cargar
+                    </label>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- Panel de acciones masivas -->
-    <div class="row mt-4">
-        <div class="col-md-8">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0"><i class="bi bi-gear-wide-connected me-2"></i> Configuración del Matching Masivo</h5>
-                </div>
-                <div class="card-body">
-                    <form id="formMatchingMasivo">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label for="limitePorRequerimiento" class="form-label">Límite de propiedades por requerimiento</label>
-                                    <input type="number" class="form-control" id="limitePorRequerimiento" value="10" min="1" max="100">
-                                    <div class="form-text">Número máximo de propiedades a evaluar por cada requerimiento.</div>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label class="form-label">Opciones de ejecución</label>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" id="soloNuevos" checked>
-                                        <label class="form-check-label" for="soloNuevos">
-                                            Solo requerimientos sin matching previo
-                                        </label>
-                                    </div>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" id="forzarReejecucion">
-                                        <label class="form-check-label" for="forzarReejecucion">
-                                            Forzar re-ejecución (sobrescribir resultados existentes)
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="d-grid">
-                            <button type="button" id="btnEjecutarConfigurado" class="btn btn-primary btn-lg">
-                                <i class="bi bi-play-fill me-2"></i> Ejecutar Matching Masivo con Configuración
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
+    <!-- INFO PANEL -->
+    <div class="info-panel">
+        <h4>💡 Información del Matching v2</h4>
+        <div class="alert alert-info">
+            <strong>Motor mejorado:</strong> El nuevo motor de matching resuelve automáticamente las diferencias entre
+            los IDs numéricos de las propiedades (FKs) y los textos de los requerimientos.
         </div>
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i> Información del Sistema</h5>
-                </div>
-                <div class="card-body">
-                    <div class="alert alert-info">
-                        <h6 class="alert-heading"><i class="bi bi-lightbulb me-2"></i> ¿Cómo funciona?</h6>
-                        <p class="mb-0 small">
-                            El sistema cruza automáticamente <strong>todas las propiedades</strong> con <strong>todos los requerimientos</strong>.
-                            El porcentaje de match se calcula basado en filtros discriminatorios y scoring ponderado.
-                        </p>
-                    </div>
-                    <div class="alert alert-warning">
-                        <h6 class="alert-heading"><i class="bi bi-exclamation-triangle me-2"></i> Notas importantes</h6>
-                        <ul class="mb-0 small">
-                            <li>Match Alto (>80%): Se muestra en <span class="text-danger">rojo</span> - Propiedades muy compatibles</li>
-                            <li>Match Medio (50-80%): Se muestra en <span class="text-warning">amarillo</span> - Compatibilidad moderada</li>
-                            <li>Match Bajo (<50%): Se muestra en <span class="text-success">verde</span> - Baja compatibilidad</li>
-                            <li>El matching masivo puede tomar varios minutos dependiendo del volumen de datos</li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
+        <div class="alert alert-success">
+            <strong>✅ Tipos de propiedad:</strong> "Departamento" en requerimiento → ID 2 en la propiedad
         </div>
+        <div class="alert alert-success">
+            <strong>✅ Distritos:</strong> "Cayma" en requerimiento → ID 3 en la propiedad
+        </div>
+        <div class="alert alert-success">
+            <strong>✅ Moneda:</strong> Soporta USD/PEN con tipo de cambio configurable (1 USD = 3.75 PEN)
+        </div>
+        <div class="alert alert-warning">
+            <strong>⚠️ Nota:</strong> Los resultados se calculan en tiempo real. Usa "Ejecutar Matching" para procesar todos los requerimientos.
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>Propifai • Matching Masivo v2 • Motor con resolución de FK IDs y soporte multi-moneda</p>
     </div>
 </div>
 
-<!-- Modal de progreso -->
-<div class="modal fade" id="modalProgreso" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-hourglass-split me-2"></i> Ejecutando Matching Masivo</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div class="text-center mb-3">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Cargando...</span>
-                    </div>
-                </div>
-                <p class="text-center">Procesando matching masivo. Esto puede tomar varios minutos...</p>
-                <div class="progress">
-                    <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%"></div>
-                </div>
-                <div class="mt-3 text-center text-muted small" id="progresoDetalle">
-                    Iniciando proceso...
-                </div>
-            </div>
+<!-- MODAL DE PROGRESO -->
+<div class="modal-overlay" id="modalProgreso">
+    <div class="modal-content">
+        <div class="spinner"></div>
+        <h3>⏳ Procesando Matching Masivo</h3>
+        <p>Evaluando requerimientos contra propiedades disponibles...</p>
+        <div class="progress-match" style="height: 6px; margin-top: 16px;">
+            <div class="progress-bar match-high" id="barraProgreso" style="width: 0%;"></div>
         </div>
+        <p id="textoProgreso" style="font-size: 13px; margin-top: 8px;">Iniciando...</p>
     </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-<script src="{% static 'matching/matching.js' %}"></script>
 <script>
-    $(document).ready(function() {
-        // Filtro de búsqueda
-        $('#searchRequerimientos').on('keyup', function() {
-            var value = $(this).val().toLowerCase();
-            $('#tablaRequerimientos tbody tr').filter(function() {
-                $(this).toggle($(this).text().toLowerCase().indexOf(value) > -1);
-            });
+document.addEventListener('DOMContentLoaded', function() {
+    const btnEjecutarMasivo = document.getElementById('btnEjecutarMasivo');
+    const modalProgreso = document.getElementById('modalProgreso');
+    const barraProgreso = document.getElementById('barraProgreso');
+    const textoProgreso = document.getElementById('textoProgreso');
+    const limiteInput = document.getElementById('limitePorRequerimiento');
+
+    // Botones de ejecución individual
+    document.querySelectorAll('.btn-ejecutar-individual').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const reqId = this.dataset.requerimientoId;
+            window.location.href = "{% url 'matching:dashboard' %}?requerimiento_id=" + reqId;
         });
-        
-        // Filtro por nivel de match
-        $('.btn-group button[data-filter]').on('click', function() {
-            var filter = $(this).data('filter');
-            $('.btn-group button').removeClass('active');
-            $(this).addClass('active');
-            
-            $('#tablaRequerimientos tbody tr').show();
-            
-            if (filter !== 'all') {
-                $('#tablaRequerimientos tbody tr').each(function() {
-                    var porcentaje = parseFloat($(this).data('porcentaje') || 0);
-                    var show = false;
-                    
-                    if (filter === 'high' && porcentaje >= 80) show = true;
-                    else if (filter === 'medium' && porcentaje >= 50 && porcentaje < 80) show = true;
-                    else if (filter === 'low' && porcentaje < 50) show = true;
-                    
-                    $(this).toggle(show);
-                });
-            }
-        });
-        
-        // Botón solo match alto
-        $('#btnFiltrarMatchAlto').on('click', function() {
-            $('.btn-group button[data-filter="high"]').click();
-        });
-        
-        // Ejecutar matching masivo
-        $('#btnEjecutarMatching').on('click', function() {
-            ejecutarMatchingMasivo();
-        });
-        
-        $('#btnEjecutarConfigurado').on('click', function() {
-            ejecutarMatchingMasivoConfigurado();
-        });
-        
-        // Ejecutar matching individual
-        $('.btn-ejecutar-individual').on('click', function() {
-            var requerimientoId = $(this).data('id');
-            ejecutarMatchingIndividual(requerimientoId);
-        });
-        
-        function ejecutarMatchingMasivo() {
-            $('#modalProgreso').modal('show');
-            
-            $.ajax({
-                url: '{% url "matching:ejecutar_masivo" %}',
-                type: 'POST',
-                data: {
-                    'limite_por_requerimiento': 10,
-                    'solo_nuevos': true,
-                    'csrfmiddlewaretoken': '{{ csrf_token }}'
-                },
-                success: function(response) {
-                    $('#modalProgreso').modal('hide');
-                    if (response.success) {
-                        alert('Éxito: ' + response.message);
-                        location.reload();
-                    } else {
-                        alert('Error: ' + response.error);
+    });
+
+    // Ejecutar matching masivo
+    btnEjecutarMasivo.addEventListener('click', function() {
+        const limite = parseInt(limiteInput.value) || 10;
+
+        // Mostrar modal
+        modalProgreso.classList.add('active');
+        barraProgreso.style.width = '10%';
+        textoProgreso.textContent = 'Iniciando matching masivo...';
+
+        // Obtener CSRF token
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
                     }
-                },
-                error: function(xhr) {
-                    $('#modalProgreso').modal('hide');
-                    alert('Error en la solicitud: ' + xhr.responseText);
                 }
-            });
-        }
-        
-        function ejecutarMatchingMasivoConfigurado() {
-            var limite = $('#limitePorRequerimiento').val();
-            var soloNuevos = $('#soloNuevos').is(':checked');
-            var forzarReejecucion = $('#forzarReejecucion').is(':checked');
-            
-            $('#modalProgreso').modal('show');
-            $('#progresoDetalle').text('Configuración: límite=' + limite + ', solo nuevos=' + soloNuevos);
-            
-            $.ajax({
-                url: '{% url "matching:ejecutar_masivo" %}',
-                type: 'POST',
-                data: {
-                    'limite_por_requerimiento': limite,
-                    'solo_nuevos': soloNuevos,
-                    'forzar_reejecucion': forzarReejecucion,
-                    'csrfmiddlewaretoken': '{{ csrf_token }}'
-                },
-                success: function(response) {
-                    $('#modalProgreso').modal('hide');
-                    if (response.success) {
-                        alert('Éxito: ' + response.message);
-                        location.reload();
-                    } else {
-                        alert('Error: ' + response.error);
-                    }
-                },
-                error: function(xhr) {
-                    $('#modalProgreso').modal('hide');
-                    alert('Error en la solicitud: ' + xhr.responseText);
-                }
-            });
-        }
-        
-        function ejecutarMatchingIndividual(requerimientoId) {
-            if (confirm('¿Ejecutar matching para el requerimiento #' + requerimientoId + '?')) {
-                window.location.href = '{% url "matching:dashboard" %}?requerimiento_id=' + requerimientoId;
             }
+            return cookieValue;
+        }
+        const csrftoken = getCookie('csrftoken');
+
+        // Enviar solicitud
+        fetch("{% url 'matching:ejecutar_masivo' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': csrftoken,
+            },
+            body: new URLSearchParams({
+                'limite_por_requerimiento': limite,
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            barraProgreso.style.width = '100%';
+            textoProgreso.textContent = '✅ ¡Completado!';
+
+            if (data.success) {
+                setTimeout(() => {
+                    modalProgreso.classList.remove('active');
+                    // Recargar la página para mostrar nuevos resultados
+                    location.reload();
+                }, 1000);
+            } else {
+                textoProgreso.textContent = '❌ Error: ' + (data.error || 'Error desconocido');
+                setTimeout(() => {
+                    modalProgreso.classList.remove('active');
+                }, 3000);
+            }
+        })
+        .catch(error => {
+            textoProgreso.textContent = '❌ Error de conexión: ' + error;
+            setTimeout(() => {
+                modalProgreso.classList.remove('active');
+            }, 3000);
+        });
+    });
+
+    // Cerrar modal al hacer clic fuera
+    modalProgreso.addEventListener('click', function(e) {
+        if (e.target === this) {
+            this.classList.remove('active');
         }
     });
+});
 </script>
 {% endblock %}

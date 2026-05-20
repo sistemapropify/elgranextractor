@@ -66,6 +66,26 @@ class PropifaiProperty(models.Model):
     availability_status = models.CharField(max_length=20)
     unit_location = models.CharField(max_length=20, blank=True, null=True)
     
+    # === CAMPOS FK QUE EXISTEN EN LA BD REAL (Azure SQL) ===
+    # property_type_id → FK a property_types(id): 1=Casa, 2=Departamento, 3=Oficina, 4=Terreno, 5=Local, 6=Otros
+    property_type_id = models.BigIntegerField(
+        null=True, blank=True,
+        db_column='property_type_id',
+        verbose_name='Tipo de propiedad (FK property_types)'
+    )
+    # operation_type_id → FK a operation_types(id): 1=Compra, 2=Venta, 3=Alquiler
+    operation_type_id = models.BigIntegerField(
+        null=True, blank=True,
+        db_column='operation_type_id',
+        verbose_name='Tipo de operación (FK operation_types)'
+    )
+    # currency_id → FK a currencies(id): 1=USD, 2=PEN
+    currency_id = models.BigIntegerField(
+        null=True, blank=True,
+        db_column='currency_id',
+        verbose_name='Moneda (FK currencies: 1=USD, 2=PEN)'
+    )
+    
     # Campos para parseo de coordenadas
     @property
     def latitude(self):
@@ -100,8 +120,13 @@ class PropifaiProperty(models.Model):
     
     @property
     def tipo_propiedad(self):
-        """Devuelve el tipo de propiedad basado en campos relacionados."""
-        # En una implementación real, se obtendría de property_type_id
+        """Devuelve el nombre del tipo de propiedad desde property_type_id."""
+        if self.property_type_id:
+            try:
+                pt = PropertyType.objects.using('propifai').get(id=self.property_type_id)
+                return pt.name
+            except PropertyType.DoesNotExist:
+                pass
         return "Propiedad"
     
     @property

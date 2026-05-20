@@ -1,0 +1,1228 @@
+{% extends "propifai_base.html" %}
+{% load static %}
+
+{% block title %}Calendario de Matching - Propifai{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --bg-primary: #0d1117;
+        --bg-secondary: #161b22;
+        --bg-tertiary: #21262d;
+        --border-color: #30363d;
+        --text-primary: #e6edf3;
+        --text-secondary: #8b949e;
+        --text-muted: #6e7681;
+        --accent-blue: #58a6ff;
+        --accent-green: #3fb950;
+        --accent-orange: #d29922;
+        --accent-red: #f85149;
+        --accent-purple: #bc8cff;
+        --hover-bg: #1c2128;
+        --card-radius: 8px;
+        --transition-speed: 0.2s;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+        background-color: var(--bg-primary);
+        color: var(--text-primary);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        margin: 0;
+        padding: 0;
+    }
+
+    .container-calendar {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 24px;
+    }
+
+    .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+        gap: 16px;
+    }
+
+    .header h1 {
+        font-size: 24px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--text-primary);
+    }
+
+    .header h1 small {
+        font-size: 14px;
+        color: var(--text-secondary);
+        font-weight: 400;
+        margin-left: 8px;
+    }
+
+    .header-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .nav-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--card-radius);
+        padding: 12px 16px;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .nav-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .nav-controls {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .btn-nav {
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        color: var(--text-primary);
+        padding: 6px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 13px;
+        transition: all var(--transition-speed);
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .btn-nav:hover {
+        background: var(--hover-bg);
+        border-color: var(--accent-blue);
+    }
+
+    .btn-nav.active {
+        background: var(--accent-blue);
+        border-color: var(--accent-blue);
+        color: #fff;
+    }
+
+    .btn-today {
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        color: var(--accent-blue);
+        padding: 6px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 500;
+        transition: all var(--transition-speed);
+        text-decoration: none;
+    }
+
+    .btn-today:hover {
+        background: var(--hover-bg);
+        border-color: var(--accent-blue);
+    }
+
+    .stats-bar {
+        display: flex;
+        gap: 16px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+    }
+
+    .stat-chip {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 20px;
+        padding: 6px 16px;
+        font-size: 13px;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .stat-chip strong { color: var(--text-primary); }
+    .stat-chip .dot-green { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-green); display: inline-block; }
+    .stat-chip .dot-blue { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-blue); display: inline-block; }
+
+    /* Month View */
+    .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        border: 1px solid var(--border-color);
+        border-radius: var(--card-radius);
+        overflow: hidden;
+        background: var(--bg-secondary);
+    }
+
+    .calendar-header-cell {
+        background: var(--bg-tertiary);
+        padding: 10px 8px;
+        text-align: center;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        border-bottom: 1px solid var(--border-color);
+        border-right: 1px solid var(--border-color);
+    }
+
+    .calendar-header-cell:last-child { border-right: none; }
+
+    .calendar-day-cell {
+        min-height: 100px;
+        padding: 8px;
+        border-right: 1px solid var(--border-color);
+        border-bottom: 1px solid var(--border-color);
+        background: var(--bg-secondary);
+        transition: background var(--transition-speed);
+        cursor: pointer;
+        position: relative;
+    }
+
+    .calendar-day-cell:hover { background: var(--hover-bg); }
+    .calendar-day-cell:nth-child(7n) { border-right: none; }
+    .calendar-day-cell.other-month { background: var(--bg-primary); opacity: 0.5; }
+    .calendar-day-cell.today { background: rgba(88, 166, 255, 0.08); border-color: var(--accent-blue); }
+
+    .day-number {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 6px;
+    }
+
+    .calendar-day-cell.today .day-number {
+        background: var(--accent-blue);
+        color: #fff;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .day-stats { display: flex; flex-direction: column; gap: 3px; }
+
+    .day-stat-item {
+        font-size: 11px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .day-stat-item.total { background: rgba(88, 166, 255, 0.1); color: var(--accent-blue); }
+    .day-stat-item.match-alto { background: rgba(63, 185, 80, 0.1); color: var(--accent-green); }
+    .day-stat-item .stat-label { font-size: 10px; color: var(--text-muted); }
+    .day-stat-item .stat-value { font-weight: 600; }
+
+    /* Week View */
+    .week-container {
+        border: 1px solid var(--border-color);
+        border-radius: var(--card-radius);
+        overflow: hidden;
+        background: var(--bg-secondary);
+    }
+
+    .week-header-row {
+        display: grid;
+        grid-template-columns: 60px repeat(7, 1fr);
+        background: var(--bg-tertiary);
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .week-header-cell {
+        padding: 10px 8px;
+        text-align: center;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        border-right: 1px solid var(--border-color);
+    }
+
+    .week-header-cell:last-child { border-right: none; }
+    .week-header-cell .day-name { text-transform: uppercase; letter-spacing: 0.5px; }
+    .week-header-cell .day-num { font-size: 18px; color: var(--text-primary); display: block; margin-top: 2px; }
+
+    .week-header-cell.today .day-num {
+        background: var(--accent-blue);
+        color: #fff;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .week-body {
+        overflow-y: auto;
+        max-height: 600px;
+    }
+
+    .week-hour-row {
+        display: grid;
+        grid-template-columns: 60px repeat(7, 1fr);
+        border-bottom: 1px solid var(--border-color);
+        min-height: 40px;
+    }
+
+    .week-hour-row:last-child { border-bottom: none; }
+
+    .week-time-label {
+        background: var(--bg-primary);
+        padding: 8px 4px;
+        text-align: center;
+        font-size: 11px;
+        color: var(--text-muted);
+        border-right: 1px solid var(--border-color);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .week-day-col {
+        border-right: 1px solid var(--border-color);
+        padding: 2px;
+        background: var(--bg-secondary);
+        overflow: hidden;
+        min-width: 0;
+    }
+
+    .week-day-col:last-child { border-right: none; }
+    .week-day-col.today { background: rgba(88, 166, 255, 0.05); }
+
+    .week-req-item {
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        padding: 3px 6px;
+        margin-bottom: 2px;
+        font-size: 10px;
+        cursor: pointer;
+        transition: all var(--transition-speed);
+        display: flex;
+        align-items: flex-start;
+        gap: 4px;
+        max-width: 100%;
+    }
+
+    .week-req-item:hover { border-color: var(--accent-blue); }
+    .week-req-item .req-hour { color: var(--text-muted); font-size: 9px; white-space: nowrap; flex-shrink: 0; margin-top: 1px; }
+    .week-req-item .req-title { color: var(--text-primary); flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 2px; word-break: break-word; }
+    .match-badge { flex-shrink: 0; margin-top: 1px; }
+
+    .match-badge {
+        font-size: 9px;
+        font-weight: 600;
+        padding: 1px 4px;
+        border-radius: 3px;
+        white-space: nowrap;
+    }
+
+    .match-badge.high { background: rgba(63, 185, 80, 0.2); color: var(--accent-green); }
+    .match-badge.medium { background: rgba(210, 153, 34, 0.2); color: var(--accent-orange); }
+    .match-badge.low { background: rgba(248, 81, 73, 0.2); color: var(--accent-red); }
+    .match-badge.none { background: rgba(110, 118, 129, 0.2); color: var(--text-muted); }
+
+    /* Day View */
+    .day-timeline {
+        border: 1px solid var(--border-color);
+        border-radius: var(--card-radius);
+        overflow: hidden;
+        background: var(--bg-secondary);
+    }
+
+    .day-header-info {
+        background: var(--bg-tertiary);
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .day-header-info h2 { margin: 0; font-size: 18px; font-weight: 600; }
+
+    .day-header-info .day-totals {
+        display: flex;
+        gap: 16px;
+        font-size: 13px;
+        color: var(--text-secondary);
+    }
+
+    .day-header-info .day-totals strong { color: var(--text-primary); }
+
+    .day-req-card {
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 12px 16px;
+        margin: 6px 12px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        transition: all var(--transition-speed);
+        cursor: pointer;
+        overflow: hidden;
+    }
+
+    .day-req-card:hover { border-color: var(--accent-blue); background: var(--hover-bg); }
+
+    .day-req-card .req-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+    .day-req-card .req-info .req-title { font-size: 14px; font-weight: 500; color: var(--text-primary); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; word-break: break-word; }
+    .day-req-card .req-info .req-detail { font-size: 12px; color: var(--text-secondary); }
+
+    .day-req-card .req-match { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+
+    .day-req-card .req-match .score-circle {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 700;
+        border: 2px solid;
+    }
+
+    .score-circle.high { border-color: var(--accent-green); color: var(--accent-green); }
+    .score-circle.medium { border-color: var(--accent-orange); color: var(--accent-orange); }
+    .score-circle.low { border-color: var(--accent-red); color: var(--accent-red); }
+    .score-circle.none { border-color: var(--text-muted); color: var(--text-muted); }
+
+    .day-req-card .req-match .match-link {
+        font-size: 12px;
+        color: var(--accent-blue);
+        text-decoration: none;
+    }
+
+    .day-req-card .req-match .match-link:hover { text-decoration: underline; }
+
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: var(--text-muted);
+    }
+
+    .empty-state .empty-icon { font-size: 48px; margin-bottom: 12px; opacity: 0.5; }
+    .empty-state p { font-size: 14px; margin: 0; }
+
+    .day-hour-label-small {
+        font-size: 11px;
+        color: var(--text-muted);
+        padding: 2px 12px;
+        background: var(--bg-primary);
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    @media (max-width: 768px) {
+        .container-calendar { padding: 12px; }
+        .header { flex-direction: column; align-items: flex-start; }
+        .calendar-day-cell { min-height: 60px; padding: 4px; }
+        .day-stat-item { font-size: 9px; padding: 1px 3px; }
+        .week-header-row { grid-template-columns: 40px repeat(7, 1fr); }
+        .week-hour-row { grid-template-columns: 40px repeat(7, 1fr); }
+        .week-time-label { font-size: 9px; }
+        .week-req-item { font-size: 8px; padding: 2px 3px; }
+    }
+
+    /* ===== MODAL MATCH DETALLE - REDISEÑO COMPARATIVO ===== */
+    .modal-match-overlay {
+        display: none;
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.75);
+        z-index: 10000;
+        justify-content: center;
+        align-items: center;
+        padding: 20px;
+    }
+    .modal-match-overlay.active { display: flex; }
+    .modal-match-content {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        max-width: 1200px;
+        width: 100%;
+        max-height: 92vh;
+        overflow-y: auto;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+    .modal-match-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 14px 20px;
+        border-bottom: 1px solid var(--border-color);
+        background: var(--bg-tertiary);
+        border-radius: 12px 12px 0 0;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+    .modal-match-header h2 { margin: 0; font-size: 16px; font-weight: 600; color: var(--text-primary); }
+    .btn-close-modal {
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        font-size: 22px;
+        cursor: pointer;
+        padding: 4px 10px;
+        border-radius: 4px;
+        transition: all var(--transition-speed);
+        line-height: 1;
+    }
+    .btn-close-modal:hover { background: var(--hover-bg); color: var(--text-primary); }
+
+    /* Body: layout principal: tabla comparativa (izq) + imagen+score (der) */
+    .modal-match-body {
+        display: grid;
+        grid-template-columns: 1fr 260px;
+        gap: 0;
+        padding: 0;
+    }
+
+    /* Panel izquierdo: tabla comparativa */
+    .modal-compare-panel {
+        padding: 16px 20px;
+        border-right: 1px solid var(--border-color);
+    }
+
+    /* Tabla comparativa lado a lado */
+    .compare-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .compare-table thead th {
+        text-align: left;
+        padding: 8px 10px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--text-muted);
+        border-bottom: 2px solid var(--border-color);
+        background: var(--bg-tertiary);
+    }
+    .compare-table thead th:first-child {
+        border-radius: 6px 0 0 0;
+        width: 28%;
+    }
+    .compare-table thead th:nth-child(2) {
+        width: 36%;
+    }
+    .compare-table thead th:nth-child(3) {
+        width: 36%;
+        border-radius: 0 6px 0 0;
+    }
+    .compare-table tbody td {
+        padding: 7px 10px;
+        font-size: 13px;
+        border-bottom: 1px solid rgba(48,54,61,0.35);
+        vertical-align: middle;
+    }
+    .compare-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+    .compare-table .col-label {
+        color: var(--text-secondary);
+        font-weight: 500;
+        white-space: nowrap;
+    }
+    .compare-table .col-req {
+        color: var(--text-primary);
+        font-weight: 500;
+    }
+    .compare-table .col-prop {
+        color: var(--text-primary);
+        font-weight: 500;
+    }
+
+    /* Indicadores de match en filas */
+    .compare-table tbody tr.row-match td {
+        background: rgba(63, 185, 80, 0.08);
+    }
+    .compare-table tbody tr.row-match .col-req,
+    .compare-table tbody tr.row-match .col-prop {
+        color: var(--accent-green);
+    }
+    .compare-table tbody tr.row-match .col-req::before {
+        content: "✅ ";
+        font-size: 12px;
+    }
+    .compare-table tbody tr.row-no-match td {
+        background: rgba(248, 81, 73, 0.06);
+    }
+    .compare-table tbody tr.row-no-match .col-req,
+    .compare-table tbody tr.row-no-match .col-prop {
+        color: var(--accent-red);
+    }
+    .compare-table tbody tr.row-no-match .col-req::before {
+        content: "❌ ";
+        font-size: 12px;
+    }
+    .compare-table tbody tr.row-partial td {
+        background: rgba(210, 153, 34, 0.07);
+    }
+    .compare-table tbody tr.row-partial .col-req,
+    .compare-table tbody tr.row-partial .col-prop {
+        color: var(--accent-orange);
+    }
+    .compare-table tbody tr.row-partial .col-req::before {
+        content: "⚠️ ";
+        font-size: 12px;
+    }
+
+    /* Panel derecho: imagen + score */
+    .modal-side-panel {
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    /* Score grande */
+    .modal-score-box {
+        text-align: center;
+        padding: 16px 12px;
+        background: var(--bg-tertiary);
+        border-radius: 10px;
+        border: 1px solid var(--border-color);
+    }
+    .modal-score-box .score-num {
+        font-size: 42px;
+        font-weight: 800;
+        line-height: 1;
+    }
+    .modal-score-box .score-num.high { color: var(--accent-green); text-shadow: 0 0 20px rgba(63,185,80,0.3); }
+    .modal-score-box .score-num.medium { color: var(--accent-orange); }
+    .modal-score-box .score-num.low { color: var(--accent-red); }
+    .modal-score-box .score-label {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-top: 4px;
+    }
+
+    /* Imagen propiedad */
+    .modal-side-img {
+        width: 100%;
+        height: 150px;
+        object-fit: cover;
+        border-radius: 8px;
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+    }
+    .modal-side-img-placeholder {
+        width: 100%;
+        height: 150px;
+        border-radius: 8px;
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-muted);
+        font-size: 13px;
+    }
+
+    /* Código y título de propiedad en side panel */
+    .modal-side-code {
+        font-size: 11px;
+        color: var(--accent-blue);
+        font-weight: 600;
+        text-align: center;
+    }
+    .modal-side-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-primary);
+        text-align: center;
+        line-height: 1.3;
+    }
+
+    /* Footer */
+    .modal-match-footer {
+        padding: 10px 20px;
+        border-top: 1px solid var(--border-color);
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        background: var(--bg-tertiary);
+        border-radius: 0 0 12px 12px;
+    }
+    .modal-match-footer .btn {
+        padding: 7px 14px;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        border: 1px solid var(--border-color);
+        transition: all var(--transition-speed);
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .modal-match-footer .btn-primary {
+        background: var(--accent-blue);
+        color: #fff;
+        border-color: var(--accent-blue);
+    }
+    .modal-match-footer .btn-primary:hover { opacity: 0.9; }
+    .modal-match-footer .btn-secondary {
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+    }
+    .modal-match-footer .btn-secondary:hover { background: var(--hover-bg); }
+
+    /* Estados de carga/error/vacío */
+    .modal-loading {
+        grid-column: 1 / -1;
+        text-align: center;
+        padding: 60px 20px;
+        color: var(--text-secondary);
+    }
+    .modal-loading .spinner {
+        width: 36px;
+        height: 36px;
+        border: 3px solid var(--border-color);
+        border-top-color: var(--accent-blue);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin: 0 auto 12px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .modal-no-match {
+        grid-column: 1 / -1;
+        text-align: center;
+        padding: 60px 20px;
+        color: var(--text-muted);
+    }
+    .modal-no-match .no-match-icon { font-size: 48px; margin-bottom: 12px; }
+    .modal-no-match p { font-size: 14px; margin: 0; }
+    .modal-match-error {
+        grid-column: 1 / -1;
+        text-align: center;
+        padding: 40px 20px;
+        color: var(--accent-red);
+    }
+    .modal-match-error .error-icon { font-size: 48px; margin-bottom: 12px; }
+    .modal-match-error p { font-size: 14px; margin: 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-calendar">
+    <!-- Header -->
+    <div class="header">
+        <div>
+            <h1>
+                📅 Calendario de Matching
+                <small>Requerimientos vs Propiedades</small>
+            </h1>
+        </div>
+        <div class="header-actions">
+            <a href="{% url 'matching:masivo' %}" class="btn-nav">← Vista Masiva</a>
+            <a href="{% url 'matching:dashboard' %}" class="btn-nav">Dashboard →</a>
+        </div>
+    </div>
+
+    <!-- Stats bar -->
+    <div class="stats-bar">
+        <span class="stat-chip">📋 <strong>{{ total_requerimientos }}</strong> requerimientos totales</span>
+        <span class="stat-chip">🏠 <strong>{{ total_propiedades }}</strong> propiedades</span>
+        <span class="stat-chip"><span class="dot-green"></span> Match ≥90%</span>
+        <span class="stat-chip"><span class="dot-blue"></span> Con requerimientos</span>
+    </div>
+
+    <!-- Navigation -->
+    <div class="nav-bar">
+        <div class="nav-controls">
+            {% if view_mode == 'month' %}
+                <a href="?view=month&year={{ prev_year }}&month={{ prev_month }}" class="btn-nav">‹ Anterior</a>
+                <a href="?view=month&year={{ next_year }}&month={{ next_month }}" class="btn-nav">Siguiente ›</a>
+            {% elif view_mode == 'week' %}
+                <a href="?view=week&year={{ prev_week_start.year }}&month={{ prev_week_start.month }}&day={{ prev_week_start.day }}" class="btn-nav">‹ Semana ant.</a>
+                <a href="?view=week&year={{ next_week_start.year }}&month={{ next_week_start.month }}&day={{ next_week_start.day }}" class="btn-nav">Semana sig. ›</a>
+            {% elif view_mode == 'day' %}
+                <a href="?view=day&year={{ prev_date.year }}&month={{ prev_date.month }}&day={{ prev_date.day }}" class="btn-nav">‹ Día ant.</a>
+                <a href="?view=day&year={{ next_date.year }}&month={{ next_date.month }}&day={{ next_date.day }}" class="btn-nav">Día sig. ›</a>
+            {% endif %}
+            <a href="?view={{ view_mode }}&year={{ today.year }}&month={{ today.month }}&day={{ today.day }}" class="btn-today">Hoy</a>
+        </div>
+
+        <div class="nav-title">
+            {% if view_mode == 'month' %}
+                {{ month_name }} {{ current_year }}
+            {% elif view_mode == 'week' %}
+                Semana del {{ week_start|date:"d/m/Y" }} al {{ week_end|date:"d/m/Y" }}
+            {% elif view_mode == 'day' %}
+                {{ target_date_display|default:target_date|date:"l, d F Y" }}
+            {% endif %}
+        </div>
+
+        <div class="nav-controls">
+            <a href="?view=month&year={{ current_year }}&month={{ current_month }}" class="btn-nav {% if view_mode == 'month' %}active{% endif %}">Mes</a>
+            <a href="?view=week&year={{ current_year }}&month={{ current_month }}&day={{ current_day }}" class="btn-nav {% if view_mode == 'week' %}active{% endif %}">Semana</a>
+            <a href="?view=day&year={{ current_year }}&month={{ current_month }}&day={{ current_day }}" class="btn-nav {% if view_mode == 'day' %}active{% endif %}">Día</a>
+        </div>
+    </div>
+
+    {% if view_mode == 'month' %}
+    <!-- ===== MONTH VIEW ===== -->
+    <div class="calendar-grid" id="calendarGrid">
+        <div class="calendar-header-cell">Lun</div>
+        <div class="calendar-header-cell">Mar</div>
+        <div class="calendar-header-cell">Mié</div>
+        <div class="calendar-header-cell">Jue</div>
+        <div class="calendar-header-cell">Vie</div>
+        <div class="calendar-header-cell">Sáb</div>
+        <div class="calendar-header-cell">Dom</div>
+
+        {% for week in month_days %}
+            {% for day_num, weekday in week %}
+                <div class="calendar-day-cell 
+                    {% if day_num == 0 %}other-month{% endif %}
+                    {% if day_num == today.day and current_month == today.month and current_year == today.year %}today{% endif %}"
+                    data-day="{{ day_num }}"
+                    data-month="{{ current_month }}"
+                    data-year="{{ current_year }}">
+                    {% if day_num > 0 %}
+                        <div class="day-number">{{ day_num }}</div>
+                        <div class="day-stats" data-day-num="{{ day_num }}"></div>
+                        <a href="?view=day&year={{ current_year }}&month={{ current_month }}&day={{ day_num }}" style="position:absolute;inset:0;" title="Ver día"></a>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        {% endfor %}
+    </div>
+
+    {% elif view_mode == 'week' %}
+    <!-- ===== WEEK VIEW ===== -->
+    <div class="week-container">
+        <div class="week-header-row" id="weekHeader"></div>
+        <div class="week-body" id="weekBody"></div>
+    </div>
+
+    {% elif view_mode == 'day' %}
+    <!-- ===== DAY VIEW ===== -->
+    <div class="day-timeline">
+        <div class="day-header-info">
+            <h2>{{ target_date|date:"l, d F Y" }}</h2>
+            <div class="day-totals">
+                <span>📋 Total: <strong>{{ total_reqs }}</strong> requerimientos</span>
+                <span>✅ Match ≥90%: <strong>{{ total_match_alto }}</strong></span>
+            </div>
+        </div>
+
+        {% if reqs_dia %}
+            {% for req in reqs_dia %}
+            <div class="day-req-card" onclick="window.location.href='{% url 'matching:dashboard' %}?requerimiento_id={{ req.id }}'">
+                <div class="req-info">
+                    <div class="req-title">
+                        <span style="font-size:11px;color:var(--text-muted);font-weight:400;margin-right:8px;">{{ req.hora_display }}</span>
+                        <span style="color:var(--accent-blue);font-weight:700;">BUSCO</span>
+                        <span style="margin-left:4px;">{{ req.tipo_display|capfirst }}</span>
+                        {% if req.presupuesto_display %}
+                            <span style="margin-left:6px;color:var(--accent-green);font-weight:600;">{{ req.presupuesto_display }}</span>
+                        {% endif %}
+                        {% if req.distritos %}
+                            <span style="margin-left:6px;color:var(--text-secondary);">· {{ req.distritos }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="req-detail">
+                        {% if req.agente %}
+                            <span style="color:#ff6d00;font-weight:600;">{{ req.agente }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="req-match">
+                    {% if req.porcentaje_match >= 90 %}
+                        <div class="score-circle high">{{ req.porcentaje_match|floatformat:0 }}%</div>
+                    {% elif req.porcentaje_match >= 50 %}
+                        <div class="score-circle medium">{{ req.porcentaje_match|floatformat:0 }}%</div>
+                    {% elif req.porcentaje_match > 0 %}
+                        <div class="score-circle low">{{ req.porcentaje_match|floatformat:0 }}%</div>
+                    {% else %}
+                        <div class="score-circle none">—</div>
+                    {% endif %}
+                    {% if req.mejor_propiedad_codigo %}
+                        <a href="{% url 'matching:dashboard' %}?requerimiento_id={{ req.id }}" class="match-link">{{ req.mejor_propiedad_codigo }}</a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="empty-state">
+                <div class="empty-icon">📭</div>
+                <p>No hay requerimientos para este día</p>
+            </div>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+<!-- ===== MODAL MATCH DETALLE ===== -->
+<div class="modal-match-overlay" id="modalMatchOverlay" onclick="if(event.target===this)closeMatchModal()">
+    <div class="modal-match-content">
+        <div class="modal-match-header">
+            <h2 id="modalMatchTitle">📊 Detalle del Matching</h2>
+            <button class="btn-close-modal" onclick="closeMatchModal()">✕</button>
+        </div>
+        <div class="modal-match-body" id="modalMatchBody">
+            <div class="modal-loading" id="modalLoading">
+                <div class="spinner"></div>
+                <p>Cargando matching...</p>
+            </div>
+        </div>
+        <div class="modal-match-footer">
+            <button class="btn btn-secondary" onclick="closeMatchModal()">Cerrar</button>
+            <a href="#" class="btn btn-primary" id="modalBtnDashboard" target="_blank">Ver Dashboard Completo →</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ===== DATA FROM SERVER =====
+const VIEW_MODE = '{{ view_mode }}';
+const CURRENT_YEAR = {{ current_year }};
+const CURRENT_MONTH = {{ current_month }};
+const CURRENT_DAY = {{ current_day }};
+const TODAY = '{{ today.isoformat }}';
+
+{% if view_mode == 'month' %}
+// ===== MONTH VIEW: Render day stats from JSON =====
+const reqsPorFecha = {{ reqs_por_fecha_json|safe }};
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.day-stats').forEach(function(el) {
+        const dayNum = el.dataset.dayNum;
+        if (!dayNum || dayNum === '0') return;
+        const monthStr = String(CURRENT_MONTH).padStart(2, '0');
+        const dayStr = String(dayNum).padStart(2, '0');
+        const fechaKey = `${CURRENT_YEAR}-${monthStr}-${dayStr}`;
+        const stats = reqsPorFecha[fechaKey];
+        if (stats) {
+            let html = `<div class="day-stat-item total"><span class="stat-label">Reqs</span><span class="stat-value">${stats.total}</span></div>`;
+            if (stats.con_match_alto > 0) {
+                html += `<div class="day-stat-item match-alto"><span class="stat-label">≥90%</span><span class="stat-value">${stats.con_match_alto}</span></div>`;
+            }
+            el.innerHTML = html;
+        }
+    });
+});
+{% endif %}
+
+{% if view_mode == 'week' %}
+// ===== WEEK VIEW: Render from JSON =====
+const diasSemana = {{ dias_semana_json|safe }};
+const DAY_NAMES = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+
+function getMatchBadgeClass(pct) {
+    if (pct >= 90) return 'high';
+    if (pct >= 50) return 'medium';
+    if (pct > 0) return 'low';
+    return 'none';
+}
+
+function getMatchBadgeText(pct) {
+    if (pct >= 90) return Math.round(pct) + '%';
+    if (pct >= 50) return Math.round(pct) + '%';
+    if (pct > 0) return Math.round(pct) + '%';
+    return '—';
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Render header
+    const header = document.getElementById('weekHeader');
+    let headerHtml = '<div class="week-header-cell"></div>';
+    diasSemana.forEach(function(dia) {
+        const todayClass = dia.is_today ? 'today' : '';
+        headerHtml += `<div class="week-header-cell ${todayClass}">
+            <span class="day-name">${dia.day_name}</span>
+            <span class="day-num">${dia.date_display}</span>
+        </div>`;
+    });
+    header.innerHTML = headerHtml;
+
+    // Render body - hours 7 to 22
+    const body = document.getElementById('weekBody');
+    let bodyHtml = '';
+    for (let h = 7; h <= 22; h++) {
+        const timeStr = String(h).padStart(2, '0') + ':00';
+        bodyHtml += `<div class="week-hour-row">
+            <div class="week-time-label">${timeStr}</div>`;
+        diasSemana.forEach(function(dia) {
+            const todayClass = dia.is_today ? 'today' : '';
+            bodyHtml += `<div class="week-day-col ${todayClass}">`;
+            // Find requerimientos at this hour
+            dia.requerimientos.forEach(function(req) {
+                if (req.hora && req.hora.startsWith(String(h).padStart(2, '0'))) {
+                    const badgeClass = getMatchBadgeClass(req.porcentaje_match);
+                    const badgeText = getMatchBadgeText(req.porcentaje_match);
+                    const presupuestoHtml = req.presupuesto_display ? `<span style="color:#3fb950;font-weight:600;margin-left:2px;">${req.presupuesto_display}</span>` : '';
+                    const agenteHtml = req.agente ? `<span style="color:#ff6d00;font-weight:600;margin-left:2px;">${req.agente}</span>` : '';
+                    const distritosHtml = req.distritos ? `<span style="color:var(--text-secondary);margin-left:2px;">· ${req.distritos.substring(0,20)}</span>` : '';
+                    bodyHtml += `<div class="week-req-item" onclick="openMatchModal(${req.id})">
+                        <span class="req-hour">${req.hora_display}</span>
+                        <span class="req-title">
+                            <span style="color:#58a6ff;font-weight:700;">BUSCO</span>
+                            <span style="margin-left:2px;">${req.tipo_propiedad}</span>
+                            ${presupuestoHtml}
+                            ${distritosHtml}
+                            ${agenteHtml}
+                        </span>
+                        <span class="match-badge ${badgeClass}">${badgeText}</span>
+                    </div>`;
+                }
+            });
+            bodyHtml += '</div>';
+        });
+        bodyHtml += '</div>';
+    }
+    body.innerHTML = bodyHtml;
+});
+{% endif %}
+
+// ===== MODAL MATCH DETALLE =====
+const API_BASE = '/matching/api/matching';
+
+function closeMatchModal() {
+    document.getElementById('modalMatchOverlay').classList.remove('active');
+}
+
+function openMatchModal(requerimientoId) {
+    const overlay = document.getElementById('modalMatchOverlay');
+    const body = document.getElementById('modalMatchBody');
+    const title = document.getElementById('modalMatchTitle');
+    const btnDashboard = document.getElementById('modalBtnDashboard');
+
+    // Show loading
+    overlay.classList.add('active');
+    body.innerHTML = `<div class="modal-loading">
+        <div class="spinner"></div>
+        <p>Cargando matching para requerimiento #${requerimientoId}...</p>
+    </div>`;
+    title.textContent = `📊 Matching #${requerimientoId}`;
+    btnDashboard.href = `/matching/dashboard/?requerimiento_id=${requerimientoId}`;
+
+    // Fetch matching data - traer todos los resultados sin filtro de score mínimo
+    fetch(`${API_BASE}/${requerimientoId}/ejecutar/?score_minimo=0`)
+        .then(function(res) {
+            if (!res.ok) throw new Error('Error al ejecutar matching');
+            return res.json();
+        })
+        .then(function(data) {
+            renderMatchModal(data, body, title);
+        })
+        .catch(function(err) {
+            body.innerHTML = `<div class="modal-match-error">
+                <div class="error-icon">⚠️</div>
+                <p>Error: ${err.message}</p>
+            </div>`;
+        });
+}
+
+// ===== MAPA DE DISTRITOS (de mapeo_ubicaciones.py) =====
+var DISTRITOS_MAP = {
+    "1":"Arequipa","2":"Alto Selva Alegre","3":"Cayma","4":"Cerro Colorado",
+    "5":"Characato","6":"Chiguata","7":"Jacobo Hunter","8":"Jose Luis Bustamante y Rivero",
+    "9":"La Joya","10":"Mariano Melgar","11":"Miraflores","12":"Mollebaya",
+    "13":"Paucarpata","14":"Pocsi","15":"Polobaya","16":"Quequeña",
+    "17":"Sabandia","18":"Sachaca","19":"San Juan de Siguas","20":"San Juan de Tarucani",
+    "21":"Santa Isabel de Siguas","22":"Santa Rita de Siguas","23":"Socabaya",
+    "24":"Tiabaya","25":"Uchumayo","26":"Vitor","27":"Yanahuara","28":"Yarabamba",
+    "29":"Yura","30":"Camana","31":"Jose Maria Quimper","32":"Mariano Nicolas Quimper",
+    "33":"Mariscal Caceres","34":"Nicolas de Perierola","35":"Ocoña","36":"Quilca",
+    "37":"Samuel Pastor","38":"Umacollo"
+};
+
+function getDistritoName(val) {
+    if (!val && val !== 0) return '—';
+    var key = String(val).trim();
+    return DISTRITOS_MAP[key] || key;
+}
+
+function getCurrencySymbol(currencyId) {
+    if (currencyId == 1) return '$';
+    if (currencyId == 2) return 'S/';
+    return '';
+}
+
+function formatPrice(price, currencyId) {
+    if (!price && price !== 0) return '—';
+    var sym = getCurrencySymbol(currencyId);
+    var num = parseFloat(price).toLocaleString('en-US', {minimumFractionDigits:0, maximumFractionDigits:0});
+    return sym ? sym + ' ' + num : num;
+}
+
+function renderMatchModal(data, body, title) {
+    const req = data.requerimiento || {};
+    const resultados = data.resultados || [];
+    const estadisticas = data.estadisticas || {};
+
+    if (resultados.length === 0) {
+        body.innerHTML = `<div class="modal-no-match">
+            <div class="no-match-icon">🔍</div>
+            <p>No se encontraron propiedades con coincidencia para este requerimiento.</p>
+        </div>`;
+        return;
+    }
+
+    const topResult = resultados[0];
+    const prop = topResult.propiedad || {};
+    const scoreDetalle = topResult.score_detalle || {};
+    const scoreTotal = parseFloat(topResult.score_total || 0);
+
+    // Determine score class
+    var scoreClass = 'low';
+    if (scoreTotal >= 90) scoreClass = 'high';
+    else if (scoreTotal >= 50) scoreClass = 'medium';
+
+    // Resolver distrito de propiedad (ID → nombre)
+    var propDistrito = getDistritoName(prop.district);
+
+    // Resolver moneda de propiedad
+    var propCurrencySym = getCurrencySymbol(prop.currency_id);
+    var propPriceFormatted = formatPrice(prop.price, prop.currency_id);
+
+    // Helper: get row class based on score_detalle
+    function getRowClass(key) {
+        if (!key || scoreDetalle[key] === undefined) return '';
+        var val = parseFloat(scoreDetalle[key]);
+        if (val >= 0.8) return 'row-match';
+        if (val >= 0.3) return 'row-partial';
+        return 'row-no-match';
+    }
+
+    // Helper: format value for display
+    function fmt(val, fallback) {
+        return (val !== null && val !== undefined && val !== '') ? val : (fallback || '—');
+    }
+
+    // Property image
+    var propImgHtml = '';
+    if (prop.imagen_url) {
+        propImgHtml = '<img src="' + prop.imagen_url + '" alt="' + (prop.title || 'Propiedad') + '" class="modal-side-img" onerror="this.style.display=\'none\'">';
+    } else {
+        propImgHtml = '<div class="modal-side-img-placeholder">🏠 Sin imagen</div>';
+    }
+
+    body.innerHTML = `
+        <!-- PANEL IZQUIERDO: TABLA COMPARATIVA -->
+        <div class="modal-compare-panel">
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>Campo</th>
+                        <th>📋 Requerimiento</th>
+                        <th>🏠 Propiedad</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="${getRowClass('tipo_propiedad')}">
+                        <td class="col-label">Tipo</td>
+                        <td class="col-req">${fmt(req.tipo_propiedad)}</td>
+                        <td class="col-prop">${fmt(prop.tipo_propiedad)}</td>
+                    </tr>
+                    <tr class="${getRowClass('condicion')}">
+                        <td class="col-label">Condición</td>
+                        <td class="col-req">${fmt(req.condicion)}</td>
+                        <td class="col-prop">${fmt(prop.operation_type_id == 2 ? 'compra' : prop.operation_type_id == 3 ? 'alquiler' : '—')}</td>
+                    </tr>
+                    <tr class="${getRowClass('distrito')}">
+                        <td class="col-label">Distrito</td>
+                        <td class="col-req">${fmt(req.distritos)}</td>
+                        <td class="col-prop">${propDistrito}</td>
+                    </tr>
+                    <tr class="${getRowClass('precio')}">
+                        <td class="col-label">Precio</td>
+                        <td class="col-req">${fmt(req.presupuesto_display)}</td>
+                        <td class="col-prop">${propPriceFormatted}</td>
+                    </tr>
+                    <tr class="${getRowClass('habitaciones')}">
+                        <td class="col-label">Habitaciones</td>
+                        <td class="col-req">${fmt(req.habitaciones)}</td>
+                        <td class="col-prop">${fmt(prop.bedrooms)}</td>
+                    </tr>
+                    <tr class="${getRowClass('banos')}">
+                        <td class="col-label">Baños</td>
+                        <td class="col-req">${fmt(req.banos)}</td>
+                        <td class="col-prop">${fmt(prop.bathrooms)}</td>
+                    </tr>
+                    <tr class="${getRowClass('area')}">
+                        <td class="col-label">Área m²</td>
+                        <td class="col-req">${fmt(req.area_m2)}</td>
+                        <td class="col-prop">${fmt(prop.built_area)}</td>
+                    </tr>
+                    <tr class="${getRowClass('estacionamiento')}">
+                        <td class="col-label">Cochera</td>
+                        <td class="col-req">${req.cochera ? 'Sí' : 'No'}</td>
+                        <td class="col-prop">${prop.garage_spaces ? prop.garage_spaces + ' auto(s)' : 'No'}</td>
+                    </tr>
+                    <tr class="${getRowClass('ascensor')}">
+                        <td class="col-label">Ascensor</td>
+                        <td class="col-req">${req.ascensor ? 'Sí' : 'No'}</td>
+                        <td class="col-prop">${prop.ascensor ? 'Sí' : 'No'}</td>
+                    </tr>
+                    <tr class="${getRowClass('amenities')}">
+                        <td class="col-label">Amueblado</td>
+                        <td class="col-req">${req.amueblado ? 'Sí' : 'No'}</td>
+                        <td class="col-prop">${prop.amenities ? 'Sí' : 'No'}</td>
+                    </tr>
+                </tbody>
+            </table>
+            ${req.caracteristicas_extra ? '<div style="margin-top:12px;padding:8px 12px;background:var(--bg-tertiary);border-radius:6px;font-size:12px;color:var(--text-secondary);"><strong>Extra req:</strong> ' + req.caracteristicas_extra + '</div>' : ''}
+            ${req.agente ? '<div style="margin-top:8px;padding:8px 12px;background:var(--bg-tertiary);border-radius:6px;font-size:12px;"><span style="color:var(--text-secondary);">Agente:</span> <span style="color:#ff6d00;font-weight:600;">' + req.agente + '</span></div>' : ''}
+        </div>
+
+        <!-- PANEL DERECHO: IMAGEN + SCORE -->
+        <div class="modal-side-panel">
+            <div class="modal-score-box">
+                <div class="score-num ${scoreClass}">${Math.round(scoreTotal)}%</div>
+                <div class="score-label">Coincidencia total</div>
+            </div>
+
+            ${propImgHtml}
+
+            <div class="modal-side-code">${fmt(prop.code)}</div>
+            <div class="modal-side-title">${fmt(prop.title)}</div>
+
+            ${prop.real_address ? '<div style="font-size:11px;color:var(--text-muted);text-align:center;">' + prop.real_address + '</div>' : ''}
+        </div>
+    `;
+
+    title.textContent = `📊 Match #${req.id || ''} — ${Math.round(scoreTotal)}%`;
+}
+
+// Close modal on Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeMatchModal();
+});
+</script>
+{% endblock %}

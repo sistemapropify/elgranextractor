@@ -1,10 +1,13 @@
 """
-Motor de matching inmobiliario.
+Motor de matching inmobiliario v2 — MEJORADO.
 
-Evalúa la compatibilidad entre un requerimiento y las propiedades disponibles.
-Implementa dos fases:
-1. Filtros discriminatorios (eliminación inmediata)
-2. Scoring ponderado (0-100)
+Corrige los problemas identificados en la versión anterior:
+1. Resuelve FK IDs (property_type_id, district) vs texto del requerimiento
+2. Usa mapeo_ubicaciones.py como fuente única de verdad para distritos
+3. Soporta moneda (USD/PEN) con tipo de cambio configurable
+4. Corrige nombres de campo (amenities, availability_status, zoning)
+5. Agrega filtro por condicion (compra/alquiler → operation_type_id)
+6. Ajusta PESOS a campos que realmente existen en la BD
 """
 
 import logging
@@ -13,38 +16,152 @@ from typing import Dict, List, Optional, Tuple, Any
 from django.db.models import QuerySet
 
 from requerimientos.models import Requerimiento
-from propifai.models import PropifaiProperty
+from propifai.models import PropifaiProperty, PropertyType
+from propifai.mapeo_ubicaciones import DISTRITOS
 from .models import MatchResult
 
 logger = logging.getLogger(__name__)
 
+# Cache global de PropertyTypes (se carga una vez)
+_PROPERTY_TYPES_CACHE = None
+_PROPERTY_TYPES_NAME_TO_ID = None
+
+# Tipo de cambio configurable (PEN por USD)
+# 1 USD = 3.75 PEN (tipo de cambio referencial, ajustable)
+TIPO_CAMBIO_USD_PEN = Decimal('3.75')
+
+
+def _recargar_cache_property_types():
+    """Recarga el cache de PropertyTypes desde la BD propifai."""
+    global _PROPERTY_TYPES_CACHE, _PROPERTY_TYPES_NAME_TO_ID
+    try:
+        types = PropertyType.objects.using('propifai').all()
+        _PROPERTY_TYPES_CACHE = {pt.id: pt.name for pt in types}
+        _PROPERTY_TYPES_NAME_TO_ID = {}
+        for pt in types:
+            nombre_key = pt.name.lower().strip()
+            _PROPERTY_TYPES_NAME_TO_ID[nombre_key] = pt.id
+            # También mapear variantes comunes
+            if nombre_key == 'departamento':
+                _PROPERTY_TYPES_NAME_TO_ID['depto'] = pt.id
+                _PROPERTY_TYPES_NAME_TO_ID['departamento'] = pt.id
+                _PROPERTY_TYPES_NAME_TO_ID['deptos'] = pt.id
+                _PROPERTY_TYPES_NAME_TO_ID['dpto'] = pt.id
+            elif nombre_key == 'casa':
+                _PROPERTY_TYPES_NAME_TO_ID['casa'] = pt.id
+                _PROPERTY_TYPES_NAME_TO_ID['casas'] = pt.id
+            elif nombre_key == 'terreno':
+                _PROPERTY_TYPES_NAME_TO_ID['terreno'] = pt.id
+                _PROPERTY_TYPES_NAME_TO_ID['terrenos'] = pt.id
+            elif nombre_key == 'local':
+                _PROPERTY_TYPES_NAME_TO_ID['local'] = pt.id
+                _PROPERTY_TYPES_NAME_TO_ID['local_comercial'] = pt.id  # Requerimiento usa snake_case
+                _PROPERTY_TYPES_NAME_TO_ID['local comercial'] = pt.id
+                _PROPERTY_TYPES_NAME_TO_ID['locales'] = pt.id
+                _PROPERTY_TYPES_NAME_TO_ID['locales comerciales'] = pt.id
+            elif nombre_key == 'oficina':
+                _PROPERTY_TYPES_NAME_TO_ID['oficina'] = pt.id
+                _PROPERTY_TYPES_NAME_TO_ID['oficinas'] = pt.id
+        logger.debug(f"Cache de PropertyTypes recargado: {_PROPERTY_TYPES_CACHE}")
+    except Exception as e:
+        logger.error(f"Error al cargar PropertyTypes: {e}")
+        _PROPERTY_TYPES_CACHE = {}
+        _PROPERTY_TYPES_NAME_TO_ID = {}
+
+
+def _get_property_type_id(nombre_tipo: str) -> Optional[int]:
+    """
+    Resuelve un nombre de tipo de propiedad (del requerimiento) a un ID de property_types.
+    
+    Args:
+        nombre_tipo: Nombre del tipo (ej: 'departamento', 'casa', 'terreno')
+        
+    Returns:
+        ID numérico en property_types, o None si no se encuentra.
+    """
+    global _PROPERTY_TYPES_NAME_TO_ID
+    if _PROPERTY_TYPES_NAME_TO_ID is None:
+        _recargar_cache_property_types()
+    
+    nombre_limpio = nombre_tipo.lower().strip()
+    return _PROPERTY_TYPES_NAME_TO_ID.get(nombre_limpio)
+
+
+def _get_distrito_id(nombre_distrito: str) -> Optional[str]:
+    """
+    Resuelve un nombre de distrito (del requerimiento) a su ID numérico.
+    Usa mapeo_ubicaciones.DISTRITOS como fuente única de verdad.
+    
+    Args:
+        nombre_distrito: Nombre del distrito (ej: 'Cayma', 'Miraflores')
+        
+    Returns:
+        ID del distrito (string) o None si no se encuentra.
+    """
+    nombre_limpio = nombre_distrito.lower().strip()
+    
+    # Búsqueda directa inversa en DISTRITOS
+    for id_dist, nombre in DISTRITOS.items():
+        if nombre.lower().strip() == nombre_limpio:
+            return id_dist
+    
+    # Búsqueda parcial (substring) para variaciones
+    for id_dist, nombre in DISTRITOS.items():
+        nombre_normalizado = nombre.lower().strip()
+        # "Cayma alta" → contiene "Cayma"
+        if nombre_limpio in nombre_normalizado or nombre_normalizado in nombre_limpio:
+            return id_dist
+    
+    return None
+
+
+def _convertir_moneda(monto: Decimal, moneda_origen: str, moneda_destino: str) -> Decimal:
+    """
+    Convierte un monto entre USD y PEN.
+    
+    Args:
+        monto: Monto a convertir
+        moneda_origen: 'USD' o 'PEN'
+        moneda_destino: 'USD' o 'PEN'
+        
+    Returns:
+        Monto convertido
+    """
+    if moneda_origen == moneda_destino:
+        return monto
+    
+    if moneda_origen == 'USD' and moneda_destino == 'PEN':
+        return monto * TIPO_CAMBIO_USD_PEN
+    elif moneda_origen == 'PEN' and moneda_destino == 'USD':
+        return monto / TIPO_CAMBIO_USD_PEN
+    
+    return monto
+
 
 class MatchingEngine:
     """
-    Motor principal de matching.
+    Motor principal de matching v2.
+    
+    Mejoras respecto a v1:
+    - Resuelve FK IDs vs texto usando PropertyType cache y mapeo_ubicaciones
+    - Soporta moneda (USD/PEN) en comparación de precios
+    - Filtra por condicion (compra/alquiler) usando operation_type_id
+    - Usa nombres de campo correctos (amenities, availability_status, zoning)
     """
     
     # Pesos para campos de scoring (suman 100)
-    # Estos pesos se basan en la importancia relativa de cada campo
+    # Basados en campos que REALMENTE EXISTEN en PropifaiProperty
     PESOS = {
-        # Campos numéricos con rango (40% del total)
-        'precio': 15,           # Precio vs presupuesto
-        'area': 10,             # Área construida vs área deseada
-        'habitaciones': 8,      # Número de habitaciones
-        'banos': 5,             # Número de baños
+        'precio': 20,           # Precio vs presupuesto (con soporte de moneda)
+        'area': 12,             # Área construida vs área deseada
+        'habitaciones': 10,     # Número de habitaciones
+        'banos': 7,             # Número de baños
         'antiguedad': 5,        # Antigüedad de la propiedad
-        'pisos': 3,             # Número de pisos
-        'estacionamientos': 4,  # Espacios de estacionamiento
-        
-        # Campos cualitativos (35% del total)
-        'tipo_propiedad': 15,   # Tipo de propiedad (casa, departamento, etc.)
-        'distrito': 12,         # Ubicación geográfica
-        'amenidades': 8,        # Amenidades (ascensor, cochera, etc.)
-        
-        # Campos adicionales (25% del total)
-        'estado': 10,           # Estado de la propiedad (nueva, usada, etc.)
-        'zona': 8,              # Zonificación (residencial, comercial, etc.)
-        'accesibilidad': 7,     # Accesibilidad (cercanía a servicios)
+        'estacionamiento': 5,   # Espacios de garaje
+        'distrito': 15,         # Coincidencia de distrito
+        'amenities': 10,        # Amenidades vs características extra
+        'ascensor': 4,          # Ascensor
+        'tipo_propiedad': 12,   # Tipo de propiedad (resuelto vía PropertyType)
     }
     
     # Tolerancia para campos numéricos (porcentaje)
@@ -55,24 +172,29 @@ class MatchingEngine:
         self.propiedades_evaluadas = 0
         self.propiedades_descartadas = {
             'tipo_propiedad': 0,
-            'metodo_pago': 0,
+            'condicion': 0,
             'distrito': 0,
             'presupuesto': 0,
         }
         self.propiedades_compatibles = []
+        
+        # Cargar cache de PropertyTypes si no está cargado
+        global _PROPERTY_TYPES_NAME_TO_ID
+        if _PROPERTY_TYPES_NAME_TO_ID is None:
+            _recargar_cache_property_types()
         
     def ejecutar_matching(self, propiedades: QuerySet[PropifaiProperty] = None) -> List[Dict]:
         """
         Ejecuta el matching completo para el requerimiento.
         
         Args:
-            propiedades: QuerySet de propiedades a evaluar. Si es None, se evalúan todas.
+            propiedades: QuerySet de propiedades a evaluar. Si es None, se evalúan todas activas.
             
         Returns:
             Lista de diccionarios con resultados para cada propiedad que pasó la fase 1.
         """
         if propiedades is None:
-            propiedades = PropifaiProperty.objects.all()
+            propiedades = PropifaiProperty.objects.filter(is_active=True)
         
         resultados = []
         
@@ -107,7 +229,7 @@ class MatchingEngine:
             resultado['ranking'] = i
         
         logger.info(
-            f"Matching completado para requerimiento {self.requerimiento.id}. "
+            f"Matching v2 completado para requerimiento {self.requerimiento.id}. "
             f"Evaluadas: {self.propiedades_evaluadas}, "
             f"Compatibles: {len(resultados)}, "
             f"Descartadas: {sum(self.propiedades_descartadas.values())}"
@@ -122,19 +244,19 @@ class MatchingEngine:
         Returns:
             Nombre del campo que eliminó la propiedad, o None si pasó todos los filtros.
         """
-        # 1. Tipo de propiedad
+        # 1. Tipo de propiedad (resuelve texto del requerimiento → FK ID de la propiedad)
         if not self._coincide_tipo_propiedad(propiedad):
             return 'tipo_propiedad'
         
-        # 2. Método de pago
-        if not self._coincide_metodo_pago(propiedad):
-            return 'metodo_pago'
+        # 2. Condición (compra/alquiler → operation_type_id)
+        if not self._coincide_condicion(propiedad):
+            return 'condicion'
         
-        # 3. Distrito
+        # 3. Distrito (texto del requerimiento → ID numérico de la propiedad)
         if not self._coincide_distrito(propiedad):
             return 'distrito'
         
-        # 4. Presupuesto
+        # 4. Presupuesto (con soporte de moneda USD/PEN)
         if not self._dentro_de_presupuesto(propiedad):
             return 'presupuesto'
         
@@ -142,36 +264,80 @@ class MatchingEngine:
     
     def _coincide_tipo_propiedad(self, propiedad: PropifaiProperty) -> bool:
         """
-        Verifica si el tipo de propiedad coincide exactamente.
+        Verifica si el tipo de propiedad coincide.
         
-        NOTA: El modelo PropifaiProperty no tiene campo 'tipo_propiedad' explícito.
-        En una implementación real, se debería mapear desde algún campo existente.
-        Por ahora, asumimos que todas las propiedades son compatibles.
+        El requerimiento tiene tipo_propiedad como texto (ej: 'departamento', 'casa').
+        La propiedad tiene property_type_id como FK numérico (ej: 2 = Departamento).
+        
+        Se resuelve usando el cache de PropertyTypes.
         """
-        # TODO: Implementar mapeo real de tipos de propiedad
-        # Por ahora, retornamos True para no descartar propiedades
-        return True
+        tipo_req = self.requerimiento.tipo_propiedad
+        if not tipo_req:
+            # Si el requerimiento no especifica tipo, aceptar todas
+            return True
+        
+        # Valores que significan "sin filtro" / "no especificado"
+        valores_sin_filtro = {'no_especificado', 'no especificado', 'todos', 'cualquiera', ''}
+        if tipo_req.lower().strip() in valores_sin_filtro:
+            return True
+        
+        if not propiedad.property_type_id:
+            # Si la propiedad no tiene tipo definido, no podemos verificar
+            return False
+        
+        # Resolver el texto del requerimiento a un ID de property_types
+        tipo_id_esperado = _get_property_type_id(tipo_req)
+        if tipo_id_esperado is None:
+            logger.warning(
+                f"No se pudo resolver tipo_propiedad '{tipo_req}' del requerimiento "
+                f"{self.requerimiento.id}. Aceptando propiedad."
+            )
+            return True
+        
+        # Comparar IDs
+        return propiedad.property_type_id == tipo_id_esperado
     
-    def _coincide_metodo_pago(self, propiedad: PropifaiProperty) -> bool:
+    def _coincide_condicion(self, propiedad: PropifaiProperty) -> bool:
         """
-        Verifica si el método de pago coincide exactamente.
+        Verifica si la condición (compra/alquiler) coincide.
         
-        NOTA: El modelo PropifaiProperty no tiene campo 'metodo_pago'.
-        En una implementación real, se debería inferir de algún campo.
-        Por ahora, asumimos que todas las propiedades son compatibles.
+        El requerimiento tiene condicion como Choice: 'compra', 'alquiler', 'anticresis'.
+        La propiedad tiene operation_type_id como FK: 1=Compra, 2=Venta, 3=Alquiler.
+        
+        Mapeo:
+        - 'compra' → operation_type_id IN (1, 2)  # Compra o Venta
+        - 'alquiler' → operation_type_id = 3
+        - 'anticresis' → operation_type_id = 3 (se trata como alquiler)
         """
-        # TODO: Implementar lógica real de método de pago
+        condicion_req = self.requerimiento.condicion
+        if not condicion_req:
+            return True
+        
+        if not propiedad.operation_type_id:
+            # Si la propiedad no tiene operación definida, asumimos compatible
+            return True
+        
+        condicion = condicion_req.lower().strip()
+        
+        if condicion in ('compra',):
+            # Compra → IDs 1 (Compra) o 2 (Venta)
+            return propiedad.operation_type_id in (1, 2)
+        elif condicion in ('alquiler', 'anticresis'):
+            # Alquiler/Anticresis → ID 3 (Alquiler)
+            return propiedad.operation_type_id == 3
+        
+        # Si no se reconoce la condición, aceptar
         return True
     
     def _coincide_distrito(self, propiedad: PropifaiProperty) -> bool:
         """
         Verifica si el distrito de la propiedad está en la lista de distritos del requerimiento.
         
-        NOTA: Las propiedades tienen IDs numéricos de distrito (ej: '4', '23') mientras que
-        los requerimientos tienen nombres de distritos de Arequipa (ej: 'Miraflores', 'Yanahuara').
-        Se implementa un mapeo mejorado para aumentar las coincidencias.
+        El requerimiento tiene distritos como texto libre (ej: 'Cayma, Yanahuara').
+        La propiedad tiene district como ID numérico (ej: '3' = Cayma).
+        
+        Se usa mapeo_ubicaciones.DISTRITOS como fuente única de verdad.
         """
-        # Si el requerimiento no especifica distritos o es 'nan', se acepta cualquier propiedad
         if not self.requerimiento.distritos:
             return True
         
@@ -183,133 +349,87 @@ class MatchingEngine:
         distrito_propiedad = propiedad.district
         
         if not distrito_propiedad:
-            # Si la propiedad no tiene distrito, no podemos verificar
             return False
         
-        # Normalizar nombres (minúsculas, sin espacios extras)
-        distritos_req_norm = [d.strip().lower() for d in distritos_requerimiento]
-        distrito_prop_norm = distrito_propiedad.strip().lower()
+        distrito_prop_str = str(distrito_propiedad).strip()
         
-        # Verificación directa (si el distrito de propiedad ya es un nombre)
-        if distrito_prop_norm in distritos_req_norm:
-            return True
-        
-        # Mapeo de IDs numéricos a nombres de distritos de Arequipa
-        # Mapeo más completo basado en datos reales
-        mapeo_id_a_nombre = {
-            '1': 'cercado',
-            '2': 'yanahuara',
-            '3': 'cayma',
-            '4': 'miraflores',
-            '5': 'mariano melgar',
-            '6': 'alto selva alegre',
-            '7': 'cerro colorado',
-            '8': 'sachaca',
-            '9': 'jose luis bustamante y rivero',
-            '10': 'tiabaya',
-            '11': 'characato',
-            '12': 'polobaya',
-            '13': 'socabaya',
-            '14': 'hunter',
-            '15': 'la joya',
-            '16': 'mollendo',
-            '17': 'punta de bombon',
-            '18': 'umacollo',
-            '19': 'santa rosa',
-            '20': 'santa isabel de siguas',
-            '21': 'yura',
-            '22': 'la union',
-            '23': 'vallecito',
-            '24': 'paucarpata',
-            '25': 'bustamante',
-            '26': 'sabandia',
-            '27': 'yanahuara',
-            '28': 'chiguata',
-            '29': 'jacobo hunter',
-            '30': 'lari',
-        }
-        
-        # También mapeo inverso: nombres comunes a IDs
-        mapeo_nombre_a_id = {
-            'miraflores': ['4'],
-            'yanahuara': ['2', '27'],
-            'cercado': ['1'],
-            'cayma': ['3'],
-            'cerro colorado': ['7'],
-            'sachaca': ['8'],
-            'socabaya': ['13'],
-            'umacollo': ['18'],
-            'vallecito': ['23'],
-            'bustamante': ['25'],
-            'paucarpata': ['24'],
-            'sabandia': ['26'],
-            'mariano melgar': ['5'],
-            'alto selva alegre': ['6'],
-            'jose luis bustamante y rivero': ['9'],
-            'hunter': ['14', '29'],
-            'cerro': ['7'],  # Abreviatura
-            'yan': ['2', '27'],  # Abreviatura
-        }
-        
-        # 1. Si el distrito de propiedad es un ID numérico, mapearlo
-        if distrito_prop_norm in mapeo_id_a_nombre:
-            nombre_mapeado = mapeo_id_a_nombre[distrito_prop_norm]
-            if nombre_mapeado in distritos_req_norm:
+        # Verificar si el distrito de la propiedad (como ID) está en los nombres del requerimiento
+        for distrito_req in distritos_requerimiento:
+            distrito_req_limpio = distrito_req.strip().lower()
+            
+            # 1. Coincidencia directa: el nombre del requerimiento es el ID
+            if distrito_req_limpio == distrito_prop_str:
                 return True
-        
-        # 2. Si el distrito de propiedad es un nombre, verificar si coincide con IDs mapeados
-        for distrito_req in distritos_req_norm:
-            # Verificar si el nombre del requerimiento está en el mapeo inverso
-            if distrito_req in mapeo_nombre_a_id:
-                ids_posibles = mapeo_nombre_a_id[distrito_req]
-                if distrito_prop_norm in ids_posibles:
+            
+            # 2. Resolver nombre del requerimiento a ID usando DISTRITOS
+            id_resuelto = _get_distrito_id(distrito_req_limpio)
+            if id_resuelto and id_resuelto == distrito_prop_str:
+                return True
+            
+            # 3. Resolver ID de la propiedad a nombre y comparar
+            nombre_prop = DISTRITOS.get(distrito_prop_str)
+            if nombre_prop:
+                nombre_prop_norm = nombre_prop.lower().strip()
+                if distrito_req_limpio == nombre_prop_norm:
                     return True
-        
-        # 3. Verificación parcial (substring)
-        for distrito_req in distritos_req_norm:
-            if distrito_req in distrito_prop_norm or distrito_prop_norm in distrito_req:
-                return True
-        
-        # 4. Para pruebas, si el requerimiento tiene pocos distritos específicos,
-        # pero tenemos propiedades en distritos populares, permitir matching parcial
-        # Esto es solo para demostración hasta que se tenga un mapeo completo
-        distritos_populares = ['miraflores', 'yanahuara', 'cercado', 'cayma', 'cerro colorado', 'cerro', 'yan']
-        for distrito_popular in distritos_populares:
-            if distrito_popular in distritos_req_norm and distrito_prop_norm in ['4', '2', '1', '3', '7']:
-                return True
-        
-        # 5. Si después de todas las verificaciones no hay coincidencia,
-        # pero el requerimiento tiene muchos distritos (más de 3), permitir matching
-        # para no descartar todas las propiedades (solo en modo de prueba)
-        if len(distritos_req_norm) > 3:
-            logger.debug(f"Requerimiento {self.requerimiento.id} con muchos distritos ({len(distritos_req_norm)}), permitiendo matching parcial")
-            return True
+                # Coincidencia parcial
+                if distrito_req_limpio in nombre_prop_norm or nombre_prop_norm in distrito_req_limpio:
+                    return True
         
         return False
     
+    def _get_moneda_propiedad(self, propiedad: PropifaiProperty) -> str:
+        """
+        Determina la moneda de la propiedad basado en currency_id.
+        
+        currency_id: 1=USD, 2=PEN (según tabla currencies en Azure SQL)
+        Si no tiene currency_id, se asume PEN por defecto.
+        """
+        if hasattr(propiedad, 'currency_id') and propiedad.currency_id:
+            if propiedad.currency_id == 1:
+                return 'USD'
+            elif propiedad.currency_id == 2:
+                return 'PEN'
+        return 'PEN'  # default
+    
+    def _convertir_a_moneda_comun(self, monto: Decimal, moneda_origen: str, moneda_destino: str) -> Decimal:
+        """Convierte un monto entre USD y PEN."""
+        if moneda_origen == moneda_destino:
+            return monto
+        return _convertir_moneda(monto, moneda_origen, moneda_destino)
+    
     def _dentro_de_presupuesto(self, propiedad: PropifaiProperty) -> bool:
         """
-        Verifica si el precio de la propiedad está dentro del rango de presupuesto.
+        Verifica si el precio de la propiedad está dentro del presupuesto.
+        
+        SOPORTE DE MONEDA REAL:
+        - El requerimiento tiene presupuesto_monto y presupuesto_moneda (USD/PEN)
+        - La propiedad tiene price y currency_id (1=USD, 2=PEN)
+        - Si las monedas difieren, se convierte usando TIPO_CAMBIO_USD_PEN
+        
         Aplica una tolerancia del 10% hacia arriba del límite máximo.
         """
         if not self.requerimiento.presupuesto_monto:
-            # Si no hay presupuesto definido, se acepta cualquier precio
             return True
         
         if not propiedad.price:
-            # Si la propiedad no tiene precio, no podemos verificar
             return False
         
-        # Convertir a Decimal para comparaciones precisas
         presupuesto = Decimal(str(self.requerimiento.presupuesto_monto))
         precio = Decimal(str(propiedad.price))
         
-        # Calcular límite máximo con tolerancia del 10%
-        limite_maximo = presupuesto * Decimal('1.10')
+        # Obtener monedas reales
+        moneda_req = (self.requerimiento.presupuesto_moneda or 'PEN').upper()
+        moneda_prop = self._get_moneda_propiedad(propiedad)
         
-        # Verificar si el precio está dentro del rango (0 a límite máximo con tolerancia)
-        # Asumimos que el presupuesto es el máximo que el cliente puede pagar
-        return precio <= limite_maximo
+        # Convertir ambos a una moneda común (PEN) para comparar
+        presupuesto_en_pen = self._convertir_a_moneda_comun(presupuesto, moneda_req, 'PEN')
+        precio_en_pen = self._convertir_a_moneda_comun(precio, moneda_prop, 'PEN')
+        
+        # Calcular límite máximo con tolerancia del 10%
+        limite_maximo = presupuesto_en_pen * Decimal('1.10')
+        
+        return precio_en_pen <= limite_maximo
     
     def _calcular_scoring(self, propiedad: PropifaiProperty) -> Tuple[Decimal, Dict[str, Decimal]]:
         """
@@ -321,12 +441,12 @@ class MatchingEngine:
         score_detalle = {}
         score_total = Decimal('0.0')
         
-        # 1. Precio vs presupuesto
+        # 1. Precio vs presupuesto (con moneda)
         score_precio = self._calcular_score_precio(propiedad)
         score_detalle['precio'] = score_precio
         score_total += score_precio * Decimal(str(self.PESOS['precio'])) / 100
         
-        # 2. Área
+        # 2. Área construida
         score_area = self._calcular_score_area(propiedad)
         score_detalle['area'] = score_area
         score_total += score_area * Decimal(str(self.PESOS['area'])) / 100
@@ -346,15 +466,28 @@ class MatchingEngine:
         score_detalle['antiguedad'] = score_antiguedad
         score_total += score_antiguedad * Decimal(str(self.PESOS['antiguedad'])) / 100
         
-        # 6. Distrito (ya pasó el filtro discriminatorio, pero aún puede aportar score)
+        # 6. Distrito (ya pasó el filtro, score extra si es el preferido)
         score_distrito = self._calcular_score_distrito(propiedad)
         score_detalle['distrito'] = score_distrito
         score_total += score_distrito * Decimal(str(self.PESOS['distrito'])) / 100
         
-        # 7. Amenidades
-        score_amenidades = self._calcular_score_amenidades(propiedad)
-        score_detalle['amenidades'] = score_amenidades
-        score_total += score_amenidades * Decimal(str(self.PESOS['amenidades'])) / 100
+        # 7. Amenities (vs características extra del requerimiento)
+        score_amenities = self._calcular_score_amenities(propiedad)
+        score_detalle['amenities'] = score_amenities
+        score_total += score_amenities * Decimal(str(self.PESOS['amenities'])) / 100
+        
+        # 8. Ascensor
+        score_ascensor = self._calcular_score_ascensor(propiedad)
+        score_detalle['ascensor'] = score_ascensor
+        score_total += score_ascensor * Decimal(str(self.PESOS['ascensor'])) / 100
+        
+        # 9. Tipo de propiedad (score extra si coincide exactamente)
+        score_tipo = self._calcular_score_tipo_propiedad(propiedad)
+        score_detalle['tipo_propiedad'] = score_tipo
+        score_total += score_tipo * Decimal(str(self.PESOS['tipo_propiedad'])) / 100
+        
+        # Convertir a porcentaje (0-100)
+        score_total = score_total * Decimal('100.0')
         
         # Asegurar que el score esté entre 0 y 100
         score_total = max(Decimal('0.0'), min(Decimal('100.0'), score_total))
@@ -363,90 +496,85 @@ class MatchingEngine:
     
     def _calcular_score_precio(self, propiedad: PropifaiProperty) -> Decimal:
         """
-        Calcula score para precio vs presupuesto.
+        Calcula score para precio vs presupuesto con soporte de moneda REAL.
+        
+        Convierte TANTO el presupuesto como el precio a una moneda común (PEN)
+        antes de comparar, usando currency_id real de la propiedad.
+        
         Mientras más cerca del presupuesto, mayor score.
         """
         if not self.requerimiento.presupuesto_monto or not propiedad.price:
-            return Decimal('0.5')  # Score neutral
+            return Decimal('0.5')
         
         presupuesto = Decimal(str(self.requerimiento.presupuesto_monto))
         precio = Decimal(str(propiedad.price))
         
-        if precio <= presupuesto:
-            # Precio igual o menor al presupuesto: score máximo
+        # Obtener monedas reales
+        moneda_req = (self.requerimiento.presupuesto_moneda or 'PEN').upper()
+        moneda_prop = self._get_moneda_propiedad(propiedad)
+        
+        # Convertir AMBOS a PEN para comparación justa
+        presupuesto_pen = self._convertir_a_moneda_comun(presupuesto, moneda_req, 'PEN')
+        precio_pen = self._convertir_a_moneda_comun(precio, moneda_prop, 'PEN')
+        
+        if precio_pen <= presupuesto_pen:
             return Decimal('1.0')
         else:
-            # Precio mayor al presupuesto: penalización proporcional
-            # Usamos la tolerancia del 10% como límite
-            limite_maximo = presupuesto * Decimal('1.10')
-            
-            if precio > limite_maximo:
-                # Ya fue filtrado en fase 1, pero por si acaso
+            limite_maximo = presupuesto_pen * Decimal('1.10')
+            if precio_pen > limite_maximo:
                 return Decimal('0.0')
             
-            # Penalización lineal entre presupuesto y límite máximo
-            diferencia = precio - presupuesto
-            rango_tolerancia = limite_maximo - presupuesto
-            penalizacion = diferencia / rango_tolerancia
-            
-            return Decimal('1.0') - penalizacion
+            diferencia = precio_pen - presupuesto_pen
+            rango_tolerancia = limite_maximo - presupuesto_pen
+            if rango_tolerancia > 0:
+                penalizacion = diferencia / rango_tolerancia
+                return Decimal('1.0') - penalizacion
+            return Decimal('0.0')
     
     def _calcular_score_area(self, propiedad: PropifaiProperty) -> Decimal:
         """
         Calcula score para área construida vs área deseada.
         """
         if not self.requerimiento.area_m2 or not propiedad.built_area:
-            return Decimal('0.5')  # Score neutral
+            return Decimal('0.5')
         
         area_deseada = Decimal(str(self.requerimiento.area_m2))
         area_propiedad = Decimal(str(propiedad.built_area))
         
-        # Calcular diferencia porcentual
         if area_propiedad == 0:
             return Decimal('0.0')
         
         diferencia_porcentual = abs(area_propiedad - area_deseada) / area_deseada
         
-        # Score máximo si la diferencia es menor al 10%
         if diferencia_porcentual <= self.TOLERANCIA_NUMERICA:
             return Decimal('1.0')
         
-        # Penalización lineal hasta el 50% de diferencia
         if diferencia_porcentual > 0.5:
             return Decimal('0.0')
         
-        # Mapear diferencia (0.1 a 0.5) a score (1.0 a 0.0)
-        # Convertir TOLERANCIA_NUMERICA a Decimal para evitar error de tipos
         tolerancia_decimal = Decimal(str(self.TOLERANCIA_NUMERICA))
         return Decimal('1.0') - (diferencia_porcentual - tolerancia_decimal) / Decimal('0.4')
     
     def _calcular_score_habitaciones(self, propiedad: PropifaiProperty) -> Decimal:
-        """
-        Calcula score para número de habitaciones.
-        """
+        """Calcula score para número de habitaciones."""
         if not self.requerimiento.habitaciones or not propiedad.bedrooms:
-            return Decimal('0.5')  # Score neutral
+            return Decimal('0.5')
         
         habitaciones_deseadas = self.requerimiento.habitaciones
         habitaciones_propiedad = propiedad.bedrooms
         
         if habitaciones_propiedad >= habitaciones_deseadas:
-            # Más habitaciones de las deseadas: score máximo
             return Decimal('1.0')
         else:
-            # Menos habitaciones: penalización proporcional
             diferencia = habitaciones_deseadas - habitaciones_propiedad
-            if diferencia >= 3:  # Si faltan 3 o más habitaciones
+            if diferencia >= 3:
                 return Decimal('0.0')
-            
             return Decimal('1.0') - Decimal(str(diferencia)) / Decimal('3.0')
     
     def _calcular_score_banos(self, propiedad: PropifaiProperty) -> Decimal:
-        """
-        Calcula score para número de baños.
-        """
+        """Calcula score para número de baños."""
         if not self.requerimiento.banos or not propiedad.bathrooms:
-            return Decimal('0.5')  # Score neutral
+            return Decimal('0.5')
         
         banos_deseados = self.requerimiento.banos
         banos_propiedad = propiedad.bathrooms
@@ -455,100 +583,111 @@ class MatchingEngine:
             return Decimal('1.0')
         else:
             diferencia = banos_deseados - banos_propiedad
-            if diferencia >= 2:  # Si faltan 2 o más baños
+            if diferencia >= 2:
                 return Decimal('0.0')
-            
             return Decimal('1.0') - Decimal(str(diferencia)) / Decimal('2.0')
     
     def _calcular_score_antiguedad(self, propiedad: PropifaiProperty) -> Decimal:
-        """
-        Calcula score para antigüedad de la propiedad.
-        Generalmente, los clientes prefieren propiedades más nuevas.
-        """
+        """Calcula score para antigüedad de la propiedad."""
         if not propiedad.antiquity_years:
-            return Decimal('0.5')  # Score neutral
+            return Decimal('0.5')
         
         antiguedad = propiedad.antiquity_years
         
-        # Score máximo para propiedades nuevas (0-5 años)
         if antiguedad <= 5:
             return Decimal('1.0')
-        # Buen score para propiedades de 6-15 años
         elif antiguedad <= 15:
             return Decimal('0.7')
-        # Score medio para propiedades de 16-30 años
         elif antiguedad <= 30:
             return Decimal('0.4')
-        # Score bajo para propiedades muy antiguas
         else:
             return Decimal('0.1')
     
     def _calcular_score_distrito(self, propiedad: PropifaiProperty) -> Decimal:
         """
         Calcula score adicional para distrito.
-        Ya pasó el filtro discriminatorio, pero podemos dar score extra
-        si es el distrito preferido del cliente.
+        Ya pasó el filtro discriminatorio, score extra si es el distrito preferido.
         """
         if not self.requerimiento.distritos or not propiedad.district:
             return Decimal('0.5')
         
         distritos_requerimiento = self.requerimiento.distritos_lista
-        distrito_propiedad = propiedad.district.strip().lower()
+        distrito_prop_str = str(propiedad.district).strip()
         
-        # Si el requerimiento tiene múltiples distritos, el primero podría ser el preferido
-        if distritos_requerimiento and distrito_propiedad == distritos_requerimiento[0].strip().lower():
-            return Decimal('1.0')  # Distrito preferido
-        else:
-            return Decimal('0.8')  # Distrito aceptable
+        # El primer distrito en la lista podría ser el preferido
+        if distritos_requerimiento:
+            primer_distrito = distritos_requerimiento[0].strip().lower()
+            id_primer_distrito = _get_distrito_id(primer_distrito)
+            if id_primer_distrito and id_primer_distrito == distrito_prop_str:
+                return Decimal('1.0')  # Distrito preferido
+        
+        return Decimal('0.8')  # Distrito aceptable
     
-    def _calcular_score_amenidades(self, propiedad: PropifaiProperty) -> Decimal:
+    def _calcular_score_amenities(self, propiedad: PropifaiProperty) -> Decimal:
         """
-        Calcula score para amenidades (ascensor, cochera, amueblado).
-        """
-        score = Decimal('0.0')
-        criterios_cumplidos = 0
-        total_criterios = 3  # ascensor, cochera, amueblado
+        Calcula score para amenities vs características extra del requerimiento.
         
-        # Ascensor
-        if self.requerimiento.ascensor == 'indiferente':
-            criterios_cumplidos += 1
-        elif self.requerimiento.ascensor == 'si':
-            # Verificar si la propiedad tiene ascensor
+        Usa matching de palabras clave entre:
+        - propiedad.amenities (texto libre con amenidades)
+        - requerimiento.caracteristicas_extra (texto libre con características deseadas)
+        """
+        score = Decimal('0.5')  # Score base neutral
+        
+        if not propiedad.amenities or not self.requerimiento.caracteristicas_extra:
+            return score
+        
+        amenities_prop = propiedad.amenities.lower()
+        extras_req = self.requerimiento.caracteristicas_extra.lower()
+        
+        # Palabras clave a buscar en amenities
+        palabras_clave = extras_req.replace(',', ' ').split()
+        palabras_clave = [p.strip() for p in palabras_clave if len(p.strip()) > 2]
+        
+        if not palabras_clave:
+            return score
+        
+        coincidencias = sum(1 for palabra in palabras_clave if palabra in amenities_prop)
+        ratio_coincidencias = coincidencias / len(palabras_clave)
+        
+        # Score proporcional a las coincidencias
+        return Decimal('0.5') + Decimal(str(ratio_coincidencias)) * Decimal('0.5')
+    
+    def _calcular_score_ascensor(self, propiedad: PropifaiProperty) -> Decimal:
+        """
+        Calcula score para ascensor.
+        El requerimiento tiene ascensor como Ternario (si/no/indiferente).
+        La propiedad tiene ascensor como CharField (sí/no).
+        """
+        if self.requerimiento.ascensor == 'indiferente' or not self.requerimiento.ascensor:
+            return Decimal('0.5')
+        
+        if self.requerimiento.ascensor == 'si':
             if propiedad.ascensor and propiedad.ascensor.lower() in ['si', 'sí', 'yes', 'true']:
-                criterios_cumplidos += 1
+                return Decimal('1.0')
+            return Decimal('0.0')
         elif self.requerimiento.ascensor == 'no':
-            # El cliente no quiere ascensor
             if not propiedad.ascensor or propiedad.ascensor.lower() in ['no', 'false']:
-                criterios_cumplidos += 1
+                return Decimal('1.0')
+            return Decimal('0.0')
         
-        # Cochera
-        if self.requerimiento.cochera == 'indiferente':
-            criterios_cumplidos += 1
-        elif self.requerimiento.cochera == 'si':
-            if propiedad.garage_spaces and propiedad.garage_spaces > 0:
-                criterios_cumplidos += 1
-        elif self.requerimiento.cochera == 'no':
-            if not propiedad.garage_spaces or propiedad.garage_spaces == 0:
-                criterios_cumplidos += 1
+        return Decimal('0.5')
+    
+    def _calcular_score_tipo_propiedad(self, propiedad: PropifaiProperty) -> Decimal:
+        """
+        Score extra si el tipo de propiedad coincide exactamente.
+        Ya pasó el filtro discriminatorio, esto da un bonus adicional.
+        """
+        if not self.requerimiento.tipo_propiedad or not propiedad.property_type_id:
+            return Decimal('0.5')
         
-        # Amueblado (no hay campo directo en PropifaiProperty, asumimos neutral)
-        # Por ahora, si el cliente es indiferente o no especifica, contamos como cumplido
-        if self.requerimiento.amueblado in ['indiferente', 'no_especificado']:
-            criterios_cumplidos += 1
-        else:
-            # No podemos verificar, asumimos neutral
-            criterios_cumplidos += 0.5
+        tipo_id_esperado = _get_property_type_id(self.requerimiento.tipo_propiedad)
+        if tipo_id_esperado and propiedad.property_type_id == tipo_id_esperado:
+            return Decimal('1.0')
         
-        # Calcular score proporcional
-        if total_criterios > 0:
-            score = Decimal(str(criterios_cumplidos / total_criterios))
-        
-        return score
+        return Decimal('0.5')
     
     def obtener_estadisticas(self) -> Dict[str, Any]:
-        """
-        Devuelve estadísticas del matching ejecutado.
-        """
+        """Devuelve estadísticas del matching ejecutado."""
         total_descartadas = sum(self.propiedades_descartadas.values())
         
         return {
@@ -576,7 +715,10 @@ class MatchingEngine:
         return max(self.propiedades_compatibles, key=lambda x: x['score_total'])
 
 
-# Función de conveniencia para uso rápido
+# ============================================================
+# Funciones de conveniencia (compatibles con la API anterior)
+# ============================================================
+
 def ejecutar_matching_requerimiento(requerimiento_id: int, propiedades=None) -> Tuple[List[Dict], Dict[str, Any]]:
     """
     Función de conveniencia para ejecutar matching para un requerimiento.
@@ -611,8 +753,6 @@ def guardar_resultados_matching(requerimiento_id: int, resultados: List[Dict]) -
     Returns:
         Lista de objetos MatchResult creados.
     """
-    from .models import MatchResult
-    
     requerimiento = Requerimiento.objects.get(id=requerimiento_id)
     objetos_creados = []
     
@@ -643,23 +783,15 @@ def ejecutar_matching_masivo(requerimientos=None, propiedades=None, limite_por_r
         limite_por_requerimiento: Máximo de propiedades a retornar por requerimiento
         
     Returns:
-        Dict con {
-            'requerimiento_id': {
-                'mejor_score': float,
-                'total_compatibles': int,
-                'mejor_propiedad': dict,
-                'score_promedio': float,
-                'timestamp': datetime
-            }
-        }
+        Dict con resultados por requerimiento
     """
     from django.utils import timezone
     
     if requerimientos is None:
-        requerimientos = Requerimiento.objects.all().order_by('-fecha', '-hora')[:2000]  # Limitar a 2000
+        requerimientos = Requerimiento.objects.all().order_by('-fecha', '-hora')[:2000]
     
     if propiedades is None:
-        propiedades = PropifaiProperty.objects.filter(is_active=True)[:1000]  # Limitar a 1000 propiedades activas
+        propiedades = PropifaiProperty.objects.filter(is_active=True)[:1000]
     
     resultados_masivo = {}
     
@@ -667,22 +799,22 @@ def ejecutar_matching_masivo(requerimientos=None, propiedades=None, limite_por_r
         engine = MatchingEngine(requerimiento)
         resultados = engine.ejecutar_matching(propiedades)
         
-        # Obtener estadísticas
         compatibles = [r for r in resultados if r['fase_eliminada'] is None]
         total_compatibles = len(compatibles)
         
         if total_compatibles > 0:
-            mejor_resultado = compatibles[0]  # Ya está ordenado por score descendente
+            mejor_resultado = compatibles[0]
             mejor_score = float(mejor_resultado['score_total'])
             score_promedio = sum(r['score_total'] for r in compatibles) / total_compatibles
             
-            # Información de la mejor propiedad
             mejor_propiedad = {
                 'id': mejor_resultado['propiedad'].id,
                 'code': mejor_resultado['propiedad'].code,
                 'title': mejor_resultado['propiedad'].title,
                 'district': mejor_resultado['propiedad'].district,
+                'district_name': mejor_resultado['propiedad'].distrito_nombre,
                 'price': float(mejor_resultado['propiedad'].price) if mejor_resultado['propiedad'].price else None,
+                'property_type': mejor_resultado['propiedad'].tipo_propiedad,
             }
         else:
             mejor_score = 0.0
@@ -690,139 +822,38 @@ def ejecutar_matching_masivo(requerimientos=None, propiedades=None, limite_por_r
             mejor_propiedad = None
         
         resultados_masivo[requerimiento.id] = {
-            'requerimiento': {
-                'id': requerimiento.id,
-                'agente': requerimiento.agente,
-                'tipo_propiedad': requerimiento.get_tipo_propiedad_display(),
-                'distritos': requerimiento.distritos,
-                'presupuesto_display': requerimiento.presupuesto_display,
-            },
-            'mejor_score': mejor_score,
+            'requerimiento_id': requerimiento.id,
+            'requerimiento_nombre': str(requerimiento),
+            'porcentaje_match': float(mejor_score),
+            'score_promedio': float(score_promedio),
             'total_compatibles': total_compatibles,
-            'mejor_propiedad': mejor_propiedad,
-            'score_promedio': score_promedio,
-            'timestamp': timezone.now(),
-            'tiene_match_alto': mejor_score >= 80.0,  # Match alto si >= 80%
+            'mejor_propiedad_id': mejor_propiedad['id'] if mejor_propiedad else None,
+            'mejor_propiedad_codigo': mejor_propiedad['code'] if mejor_propiedad else None,
+            'mejor_propiedad_titulo': mejor_propiedad['title'] if mejor_propiedad else None,
+            'mejor_propiedad_distrito': mejor_propiedad['district_name'] if mejor_propiedad else None,
+            'mejor_propiedad_precio': mejor_propiedad['price'] if mejor_propiedad else None,
+            'mejor_propiedad_tipo': mejor_propiedad['property_type'] if mejor_propiedad else None,
+            'fecha_ultimo_matching': timezone.now().isoformat(),
         }
     
     return resultados_masivo
 
 
-def obtener_resumen_matching_masivo():
+def obtener_resumen_matching_masivo(limite=500):
     """
-    Obtiene un resumen rápido del matching masivo para mostrar en grilla.
-    Retorna los requerimientos con su porcentaje de match para visualización rápida.
+    Obtiene un resumen rápido del matching masivo.
     
-    Si no hay resultados guardados, ejecuta matching en tiempo real con límites
-    para no afectar el rendimiento.
+    Args:
+        limite: Número máximo de requerimientos a procesar.
+        
+    Returns:
+        Lista de diccionarios con resumen de matching por requerimiento.
     """
-    import logging
-    logger = logging.getLogger(__name__)
-    
-    # Limitar a 50 requerimientos más recientes para rendimiento
-    requerimientos = Requerimiento.objects.all().order_by('-fecha', '-hora')[:50]
-    
-    # Obtener IDs de requerimientos
-    requerimiento_ids = [req.id for req in requerimientos]
-    
-    # Buscar los últimos matches por requerimiento (solo los más recientes)
-    from django.db.models import Subquery, OuterRef
-    
-    # Primero, obtener la fecha del último match por requerimiento
-    subquery = MatchResult.objects.filter(
-        requerimiento_id=OuterRef('pk'),
-        fase_eliminada__isnull=True
-    ).order_by('-ejecutado_en').values('ejecutado_en')[:1]
-
-    # Anotar cada requerimiento con su último match
-    requerimientos_con_fecha = Requerimiento.objects.filter(
-        id__in=requerimiento_ids
-    ).annotate(
-        ultima_fecha_match=Subquery(subquery)
-    )
-    
-    # Obtener propiedades activas (limitadas para rendimiento)
-    propiedades = PropifaiProperty.objects.filter(is_active=True)[:200]
-    
-    # Ahora obtener los matches correspondientes a esas fechas
-    resumen = []
-    for req in requerimientos_con_fecha:
-        porcentaje_match = 0.0
-        fecha_match = None
-        mejor_propiedad_id = None
-        mejor_propiedad_codigo = None
-        mejor_propiedad_distrito = None
-        mejor_propiedad_precio = None
-        total_compatibles = 0
-        
-        if req.ultima_fecha_match:
-            # Usar resultado guardado
-            ultimo_match = MatchResult.objects.filter(
-                requerimiento=req,
-                fase_eliminada__isnull=True,
-                ejecutado_en=req.ultima_fecha_match
-            ).order_by('-score_total').first()
-            if ultimo_match:
-                porcentaje_match = float(ultimo_match.score_total)
-                fecha_match = req.ultima_fecha_match
-                mejor_propiedad_id = ultimo_match.propiedad.id
-                mejor_propiedad_codigo = ultimo_match.propiedad.code
-                mejor_propiedad_distrito = ultimo_match.propiedad.district
-                mejor_propiedad_precio = float(ultimo_match.propiedad.price) if ultimo_match.propiedad.price else None
-                # Contar compatibles
-                total_compatibles = MatchResult.objects.filter(
-                    requerimiento=req,
-                    fase_eliminada__isnull=True,
-                    ejecutado_en=req.ultima_fecha_match
-                ).count()
-                logger.debug(f"Requerimiento {req.id}: usando resultado guardado ({porcentaje_match:.1f}%)")
-        else:
-            # No hay resultado guardado, ejecutar matching en tiempo real
-            try:
-                from .engine import MatchingEngine
-                engine = MatchingEngine(req)
-                resultados = engine.ejecutar_matching(propiedades)
-                
-                # Filtrar compatibles y obtener mejor score
-                compatibles = [r for r in resultados if r['fase_eliminada'] is None]
-                total_compatibles = len(compatibles)
-                
-                if compatibles:
-                    mejor_resultado = compatibles[0]  # Ya ordenado por score
-                    porcentaje_match = float(mejor_resultado['score_total'])
-                    mejor_propiedad_id = mejor_resultado['propiedad'].id
-                    mejor_propiedad_codigo = mejor_resultado['propiedad'].code
-                    mejor_propiedad_distrito = mejor_resultado['propiedad'].district
-                    mejor_propiedad_precio = float(mejor_resultado['propiedad'].price) if mejor_resultado['propiedad'].price else None
-                    logger.debug(f"Requerimiento {req.id}: matching en tiempo real ({porcentaje_match:.1f}%)")
-                else:
-                    logger.debug(f"Requerimiento {req.id}: sin propiedades compatibles")
-            except Exception as e:
-                logger.error(f"Error al ejecutar matching para requerimiento {req.id}: {e}")
-                porcentaje_match = 0.0
-        
-        tiene_match_alto = porcentaje_match >= 80.0
-        tiene_propiedad_match = mejor_propiedad_id is not None
-        
-        resumen.append({
-            'requerimiento_id': req.id,
-            'porcentaje_match': porcentaje_match,
-            'tiene_match_alto': tiene_match_alto,
-            'tiene_propiedad_match': tiene_propiedad_match,
-            'fecha_ultimo_matching': fecha_match,
-            'agente': req.agente or 'Sin agente',
-            'tipo_propiedad': req.get_tipo_propiedad_display(),
-            'distritos': req.distritos or 'Sin distrito',
-            'presupuesto': req.presupuesto_display,
-            'fecha_requerimiento': req.fecha,
-            'mejor_propiedad_id': mejor_propiedad_id,
-            'mejor_propiedad_codigo': mejor_propiedad_codigo,
-            'mejor_propiedad_distrito': mejor_propiedad_distrito,
-            'mejor_propiedad_precio': mejor_propiedad_precio,
-            'total_compatibles': total_compatibles,
-        })
-    
-    # Ordenar por porcentaje descendente para mejor visualización
-    resumen.sort(key=lambda x: x['porcentaje_match'], reverse=True)
-    
-    return resumen
+    try:
+        resultados = ejecutar_matching_masivo()
+        resumen = list(resultados.values())
+        resumen.sort(key=lambda x: x['porcentaje_match'], reverse=True)
+        return resumen[:limite]
+    except Exception as e:
+        logger.error(f"Error al obtener resumen de matching masivo: {e}")
+        return []

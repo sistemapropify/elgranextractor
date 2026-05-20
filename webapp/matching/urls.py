@@ -29,4 +29,7 @@ urlpatterns = [
     # Matching masivo
     path('masivo/', views.MatchingMasivoView.as_view(), name='masivo'),
     path('ejecutar-masivo/', views.EjecutarMatchingMasivoView.as_view(), name='ejecutar_masivo'),
+    
+    # Vista calendario
+    path('calendar/', views.MatchingCalendarView.as_view(), name='calendar'),
 ]

@@ -13,14 +13,24 @@ class PropiedadSimpleSerializer(serializers.ModelSerializer):
     
     precio_formateado = serializers.CharField(read_only=True)
     tipo_propiedad = serializers.CharField(read_only=True)
+    currency_symbol = serializers.SerializerMethodField()
     
     class Meta:
         model = PropifaiProperty
         fields = [
             'id', 'code', 'title', 'district', 'price', 'precio_formateado',
             'bedrooms', 'bathrooms', 'built_area', 'antiquity_years',
-            'garage_spaces', 'ascensor', 'real_address', 'tipo_propiedad'
+            'garage_spaces', 'ascensor', 'real_address', 'tipo_propiedad',
+            'imagen_url', 'currency_id', 'currency_symbol'
         ]
+    
+    def get_currency_symbol(self, obj):
+        """Retorna el símbolo de moneda según currency_id."""
+        if obj.currency_id == 1:
+            return '$'
+        elif obj.currency_id == 2:
+            return 'S/'
+        return ''
 
 
 class RequerimientoSimpleSerializer(serializers.ModelSerializer):

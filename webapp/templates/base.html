@@ -1140,11 +1140,26 @@
                     <span>Requerimientos</span>
                 </a>
             </li>
-            <li>
-                <a href="/matching/masivo/" class="{% if '/matching/' in request.path %}active{% endif %}">
+            <li class="has-submenu {% if '/matching/' in request.path %}active{% endif %}">
+                <a href="#">
                     <i class="bi bi-lightning-charge-fill"></i>
-                    <span>Matching Masivo</span>
+                    <span>Matching</span>
+                    <i class="bi bi-chevron-down ms-auto"></i>
                 </a>
+                <ul class="submenu">
+                    <li>
+                        <a href="/matching/masivo/" class="{% if '/matching/masivo/' in request.path %}active{% endif %}">
+                            <i class="bi bi-list-ul"></i>
+                            <span>Masivo</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/matching/calendar/" class="{% if '/matching/calendar/' in request.path %}active{% endif %}">
+                            <i class="bi bi-calendar3"></i>
+                            <span>Calendario</span>
+                        </a>
+                    </li>
+                </ul>
             </li>
             <li>
                 <a href="/acm/analisis/" class="{% if '/acm/' in request.path %}active{% endif %}">

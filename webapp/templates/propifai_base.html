@@ -556,10 +556,24 @@
                     </div>
                 </div>
 
-                <a href="/matching/masivo/" class="nav-item {% if '/matching/' in request.path %}active{% endif %}">
-                    <span class="nav-icon">&#x26A1;</span>
-                    <span>Matching</span>
-                </a>
+                <!-- Matching con submenú -->
+                <div class="nav-item has-submenu {% if '/matching/' in request.path %}active{% endif %}">
+                    <a href="#" class="nav-link submenu-toggle">
+                        <span class="nav-icon">&#x26A1;</span>
+                        <span>Matching</span>
+                        <span class="submenu-arrow">&#x25BC;</span>
+                    </a>
+                    <div class="submenu-items">
+                        <a href="/matching/masivo/" class="submenu-item {% if '/matching/masivo/' in request.path %}active{% endif %}">
+                            <span class="submenu-icon">&#x1F4CA;</span>
+                            <span>Masivo</span>
+                        </a>
+                        <a href="/matching/calendar/" class="submenu-item {% if '/matching/calendar/' in request.path %}active{% endif %}">
+                            <span class="submenu-icon">&#x1F4C5;</span>
+                            <span>Calendario</span>
+                        </a>
+                    </div>
+                </div>
 
                 <!-- Agentes con submenú -->
                 <div class="nav-item has-submenu {% if '/agentes/' in request.path %}active{% endif %}">

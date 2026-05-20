@@ -422,6 +422,212 @@ class MatchingMasivoView(TemplateView):
         return context
 
 
+class MatchingCalendarView(TemplateView):
+    """
+    Vista calendario tipo Google Calendar para requerimientos y sus matches.
+    
+    Soporta 3 vistas: mes, semana, día.
+    Muestra total de requerimientos por día y total de matches >= 90%.
+    """
+    template_name = 'matching/calendar.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        import json
+        from datetime import datetime, timedelta, date
+        import calendar
+        
+        # Obtener parámetros de vista
+        view_mode = self.request.GET.get('view', 'month')
+        year = int(self.request.GET.get('year', datetime.now().year))
+        month = int(self.request.GET.get('month', datetime.now().month))
+        day = int(self.request.GET.get('day', datetime.now().day))
+        
+        # Fecha actual para navegación
+        today = date.today()
+        context['today'] = today
+        context['current_year'] = year
+        context['current_month'] = month
+        context['current_day'] = day
+        context['view_mode'] = view_mode
+        
+        # Obtener resumen de matching masivo para todos los requerimientos
+        resumen = obtener_resumen_matching_masivo()
+        resumen_por_req = {item['requerimiento_id']: item for item in resumen}
+        
+        # Filtrar requerimientos no deseados (no_especificado y compartido)
+        condicion_excluir = ['no_especificado', 'compartido']
+        
+        if view_mode == 'month':
+            # Construir grid del mes
+            cal = calendar.Calendar()
+            month_days = cal.monthdays2calendar(year, month)
+            
+            # Construir reqs_por_fecha como dict con key "YYYY-MM-DD"
+            reqs_por_fecha = {}
+            for req_id, info in resumen_por_req.items():
+                try:
+                    r = Requerimiento.objects.get(id=req_id)
+                    # Excluir no_especificado y compartido
+                    if r.condicion in condicion_excluir:
+                        continue
+                    if r.fecha:
+                        fecha_key = r.fecha.isoformat()  # "2026-05-15"
+                        if fecha_key not in reqs_por_fecha:
+                            reqs_por_fecha[fecha_key] = {'total': 0, 'con_match_alto': 0}
+                        reqs_por_fecha[fecha_key]['total'] += 1
+                        if info['porcentaje_match'] >= 90:
+                            reqs_por_fecha[fecha_key]['con_match_alto'] += 1
+                except Requerimiento.DoesNotExist:
+                    pass
+            
+            context['month_days'] = month_days
+            context['reqs_por_fecha_json'] = json.dumps(reqs_por_fecha)
+            context['month_name'] = calendar.month_name[month]
+            
+            # Navegación mes anterior/siguiente
+            if month == 1:
+                prev_month = 12
+                prev_year = year - 1
+            else:
+                prev_month = month - 1
+                prev_year = year
+            if month == 12:
+                next_month = 1
+                next_year = year + 1
+            else:
+                next_month = month + 1
+                next_year = year
+            
+            context['prev_month'] = prev_month
+            context['prev_year'] = prev_year
+            context['next_month'] = next_month
+            context['next_year'] = next_year
+            
+        elif view_mode == 'week':
+            # Calcular inicio y fin de la semana
+            week_start = date(year, month, day)
+            week_start = week_start - timedelta(days=week_start.weekday())
+            week_end = week_start + timedelta(days=6)
+            
+            # Obtener requerimientos de esa semana (excluyendo no_especificado y compartido)
+            reqs_semana = Requerimiento.objects.filter(
+                fecha__isnull=False,
+                fecha__gte=week_start,
+                fecha__lte=week_end
+            ).exclude(
+                condicion__in=condicion_excluir
+            ).order_by('fecha', 'hora')
+            
+            # Agrupar por día con info de match serializada
+            dias_semana = []
+            for i in range(7):
+                d = week_start + timedelta(days=i)
+                reqs_dia = [r for r in reqs_semana if r.fecha == d]
+                reqs_serializados = []
+                for r in reqs_dia:
+                    info = resumen_por_req.get(r.id, {})
+                    # Formatear presupuesto con signo de moneda
+                    presupuesto_monto = float(r.presupuesto_monto) if r.presupuesto_monto else None
+                    presupuesto_display = ''
+                    if presupuesto_monto and r.presupuesto_moneda:
+                        signo = '$' if r.presupuesto_moneda == 'USD' else 'S/'
+                        presupuesto_display = f'{signo}{presupuesto_monto:,.0f}'
+                    reqs_serializados.append({
+                        'id': r.id,
+                        'hora': r.hora.isoformat() if r.hora else None,
+                        'hora_display': r.hora.strftime('%H:%M') if r.hora else '--:--',
+                        'tipo_propiedad': (r.get_tipo_propiedad_display() or r.tipo_propiedad or 'Propiedad').upper(),
+                        'presupuesto_display': presupuesto_display,
+                        'presupuesto_monto': presupuesto_monto,
+                        'presupuesto_moneda': r.presupuesto_moneda or '',
+                        'agente': r.agente or '',
+                        'distritos': r.distritos[:50] if r.distritos else '',
+                        'porcentaje_match': info.get('porcentaje_match', 0),
+                        'mejor_propiedad_codigo': info.get('mejor_propiedad_codigo'),
+                    })
+                dias_semana.append({
+                    'date_iso': d.isoformat(),
+                    'date_display': d.strftime('%d'),
+                    'day_name': d.strftime('%a'),
+                    'is_today': d == today,
+                    'requerimientos': reqs_serializados,
+                    'total': len(reqs_dia),
+                    'con_match_alto': sum(
+                        1 for r in reqs_dia
+                        if resumen_por_req.get(r.id, {}).get('porcentaje_match', 0) >= 90
+                    ),
+                })
+            
+            # Generar horas del día (7am a 11pm)
+            horas_del_dia = []
+            for h in range(7, 23):
+                horas_del_dia.append(datetime(2000, 1, 1, h, 0).time())
+            
+            context['dias_semana'] = dias_semana
+            context['dias_semana_json'] = json.dumps(dias_semana)
+            context['horas_del_dia'] = horas_del_dia
+            context['week_start'] = week_start
+            context['week_end'] = week_end
+            context['resumen_por_req'] = resumen_por_req
+            
+            # Navegación
+            context['prev_week_start'] = week_start - timedelta(days=7)
+            context['next_week_start'] = week_start + timedelta(days=7)
+            
+        elif view_mode == 'day':
+            target_date = date(year, month, day)
+            
+            # Obtener requerimientos de ese día (excluyendo no_especificado y compartido)
+            reqs_dia = Requerimiento.objects.filter(
+                fecha=target_date
+            ).exclude(
+                condicion__in=condicion_excluir
+            ).order_by('hora')
+            
+            reqs_serializados = []
+            for r in reqs_dia:
+                info = resumen_por_req.get(r.id, {})
+                # Formatear presupuesto con signo de moneda
+                presupuesto_monto = float(r.presupuesto_monto) if r.presupuesto_monto else None
+                presupuesto_display = ''
+                if presupuesto_monto and r.presupuesto_moneda:
+                    signo = '$' if r.presupuesto_moneda == 'USD' else 'S/'
+                    presupuesto_display = f'{signo}{presupuesto_monto:,.0f}'
+                reqs_serializados.append({
+                    'id': r.id,
+                    'hora_display': r.hora.strftime('%H:%M') if r.hora else '--:--',
+                    'tipo_display': (r.get_tipo_propiedad_display() or r.tipo_propiedad or 'Propiedad').upper(),
+                    'presupuesto_display': presupuesto_display,
+                    'presupuesto_monto': presupuesto_monto,
+                    'presupuesto_moneda': r.presupuesto_moneda or '',
+                    'agente': r.agente or '',
+                    'distritos': r.distritos[:50] if r.distritos else '',
+                    'porcentaje_match': info.get('porcentaje_match', 0),
+                    'mejor_propiedad_codigo': info.get('mejor_propiedad_codigo'),
+                })
+            
+            context['reqs_dia'] = reqs_serializados
+            context['target_date'] = target_date
+            context['target_date_display'] = target_date.strftime('%A, %d %B %Y')
+            context['total_reqs'] = len(reqs_serializados)
+            context['total_match_alto'] = sum(
+                1 for r in reqs_serializados
+                if r['porcentaje_match'] >= 90
+            )
+            
+            # Navegación
+            context['prev_date'] = target_date - timedelta(days=1)
+            context['next_date'] = target_date + timedelta(days=1)
+        
+        # Estadísticas generales
+        context['total_requerimientos'] = Requerimiento.objects.count()
+        context['total_propiedades'] = PropifaiProperty.objects.count()
+        
+        return context
+
+
 @method_decorator(csrf_exempt, name='dispatch')
 class EjecutarMatchingMasivoView(TemplateView):
     """
