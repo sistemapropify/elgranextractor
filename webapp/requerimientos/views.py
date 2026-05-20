@@ -1354,6 +1354,18 @@ class ConfiguracionCalidadView(TemplateView):
             ctx['config_obj'] = None
             from .models import CONFIG_CALIDAD_DEFAULT
             ctx['config'] = CONFIG_CALIDAD_DEFAULT
+
+        # Propiedades Propifai disponibles (activas, listas para venta, no borrador)
+        try:
+            from propifai.models import PropifaiProperty
+            propiedades = PropifaiProperty.objects.filter(
+                is_active=True,
+                is_ready_for_sale=True,
+                is_draft=False,
+            ).order_by('-created_at')[:50]
+            ctx['propiedades_propifai'] = propiedades
+        except Exception:
+            ctx['propiedades_propifai'] = []
         return ctx
 
 
