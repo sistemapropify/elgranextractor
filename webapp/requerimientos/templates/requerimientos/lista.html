@@ -639,8 +639,8 @@
             <div class="header-subtitle">CRM de demanda — Requerimientos de clientes buscando propiedades</div>
         </div>
         <div class="req-header-actions">
-            <a href="/" class="btn btn-secondary">← Dashboard</a>
-            <a href="/whatsapp-extractor/upload/" class="btn btn-primary">📤 Subir Archivo</a>
+            <a href="{% url 'home' %}" class="btn btn-secondary">← Dashboard</a>
+            <a href="{% url 'whatsapp_extractor:upload_extract_file' %}" class="btn btn-primary">📤 Subir Archivo</a>
             <div class="column-toggle-wrapper" style="position:relative;display:inline-block;">
                 <button type="button" class="btn btn-secondary" id="btnToggleColumnas" title="Mostrar/ocultar columnas">
                     ⚙️ Columnas
