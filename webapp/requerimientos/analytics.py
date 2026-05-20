@@ -10,7 +10,7 @@ from django.db.models import (
     Case, When, IntegerField, DecimalField,
     ExpressionWrapper, Func, Subquery, OuterRef
 )
-from django.db.models.functions import TruncMonth, TruncYear, ExtractMonth, ExtractYear
+from django.db.models.functions import TruncMonth, TruncYear, TruncDay, ExtractMonth, ExtractYear
 from django.utils import timezone
 from .models import Requerimiento, CondicionChoices, TipoPropiedadChoices, TernarioChoices
 import statistics
@@ -68,6 +68,54 @@ def obtener_requerimientos_por_mes(fecha_inicio=None, fecha_fin=None, filtros=No
         ascensor_si=Count('id', filter=Q(ascensor=TernarioChoices.SI)),
         amueblado_si=Count('id', filter=Q(amueblado=TernarioChoices.SI)),
     ).order_by('mes')
+
+
+def obtener_requerimientos_por_dia(fecha_inicio=None, fecha_fin=None, filtros=None):
+    """
+    Retorna un QuerySet agrupado por día con conteo de requerimientos.
+    
+    Args:
+        fecha_inicio (date): Fecha inicial para filtrar
+        fecha_fin (date): Fecha final para filtrar
+        filtros (dict): Diccionario con filtros adicionales (condicion, tipo_propiedad, etc.)
+    
+    Returns:
+        QuerySet annotado con 'dia', 'total', y otras métricas
+    """
+    queryset = Requerimiento.objects.all()
+    
+    # Aplicar filtros de fecha
+    if fecha_inicio:
+        queryset = queryset.filter(fecha__gte=fecha_inicio)
+    if fecha_fin:
+        queryset = queryset.filter(fecha__lte=fecha_fin)
+    
+    # Aplicar filtros adicionales
+    if filtros:
+        if 'condicion' in filtros and filtros['condicion']:
+            queryset = queryset.filter(condicion=filtros['condicion'])
+        if 'tipo_propiedad' in filtros and filtros['tipo_propiedad']:
+            queryset = queryset.filter(tipo_propiedad=filtros['tipo_propiedad'])
+        if 'distrito' in filtros and filtros['distrito']:
+            queryset = queryset.filter(distritos__icontains=filtros['distrito'])
+        if 'fuente' in filtros and filtros['fuente']:
+            queryset = queryset.filter(fuente=filtros['fuente'])
+    
+    # Agrupar por día
+    return queryset.annotate(
+        dia=TruncDay('fecha')
+    ).values('dia').annotate(
+        total=Count('id'),
+        compra=Count('id', filter=Q(condicion=CondicionChoices.COMPRA)),
+        alquiler=Count('id', filter=Q(condicion=CondicionChoices.ALQUILER)),
+        departamento=Count('id', filter=Q(tipo_propiedad=TipoPropiedadChoices.DEPARTAMENTO)),
+        casa=Count('id', filter=Q(tipo_propiedad=TipoPropiedadChoices.CASA)),
+        terreno=Count('id', filter=Q(tipo_propiedad=TipoPropiedadChoices.TERRENO)),
+        presupuesto_promedio=Avg('presupuesto_monto'),
+        cochera_si=Count('id', filter=Q(cochera=TernarioChoices.SI)),
+        ascensor_si=Count('id', filter=Q(ascensor=TernarioChoices.SI)),
+        amueblado_si=Count('id', filter=Q(amueblado=TernarioChoices.SI)),
+    ).order_by('dia')
 
 
 def calcular_crecimiento_porcentual(valores: List[float]) -> List[Optional[float]]:
@@ -651,7 +699,10 @@ def calcular_antiguedad_score(req, config=None) -> float:
         except ValueError:
             return 0.0
     
-    dias = (timezone.now().date() - fecha).days if hasattr(fecha, 'date') else 0
+    # Normalizar: si fecha es datetime, convertir a date para evitar TypeError
+    if hasattr(fecha, 'date'):
+        fecha = fecha.date() if hasattr(fecha, 'time') else fecha
+    dias = (timezone.now().date() - fecha).days if not isinstance(fecha, str) else 0
     if dias < 0:
         dias = 0
     

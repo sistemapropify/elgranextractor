@@ -256,6 +256,33 @@
         font-size: 16px;
     }
 
+    /* ── Selector de rango ──────────────────── */
+    .rango-selector {
+        display: flex;
+        gap: 4px;
+    }
+    .rango-btn {
+        padding: 4px 12px;
+        border: 1px solid #30363d;
+        border-radius: 6px;
+        background: #0d1117;
+        color: #8b949e;
+        font-size: 11px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .rango-btn:hover {
+        background: #21262d;
+        color: #c9d1d9;
+        border-color: #58a6ff;
+    }
+    .rango-btn.active {
+        background: #1f6f3a;
+        border-color: #238636;
+        color: #fff;
+    }
+
     .chart-card .chart-body {
         padding: 16px 20px;
         position: relative;
@@ -563,8 +590,15 @@
         <!-- Tendencia mensual -->
         <div class="chart-card full-width">
             <div class="chart-header">
-                <h3><i class="bi bi-bar-chart-line"></i> Tendencia mensual de requerimientos</h3>
-                <span style="font-size:12px;color:#8b949e;" id="chartTendenciaLabel">Evolución en el tiempo</span>
+                <h3><i class="bi bi-bar-chart-line"></i> Tendencia de requerimientos</h3>
+                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                    <span style="font-size:12px;color:#8b949e;" id="chartTendenciaLabel">Evolución en el tiempo</span>
+                    <div class="rango-selector" style="display:flex;gap:4px;margin-left:8px;">
+                        <button class="rango-btn active" data-rango="semana" onclick="cambiarRango('semana')">Semana</button>
+                        <button class="rango-btn" data-rango="mes" onclick="cambiarRango('mes')">Mes</button>
+                        <button class="rango-btn" data-rango="6meses" onclick="cambiarRango('6meses')">6 Meses</button>
+                    </div>
+                </div>
             </div>
             <div class="chart-body" style="position:relative;">
                 <div class="loading-overlay" id="loadingTendencia">
@@ -690,6 +724,7 @@
 
 // Referencias a instancias de Chart.js para destruir antes de recrear
 let charts = {};
+let rangoActual = 'semana';  // semana, mes, 6meses
 
 // Colores del tema oscuro
 const COLORS = {
@@ -823,10 +858,42 @@ function formatearMes(fechaStr) {
     return meses[d.getMonth()] + ' ' + d.getFullYear();
 }
 
+function formatearDia(fechaStr) {
+    // Formatea una fecha como día de semana abreviado + día
+    // Ej: "Lun 15", "Mar 16"
+    const d = new Date(fechaStr + 'T00:00:00');  // Evitar timezone offset
+    const dias = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+    return dias[d.getDay()] + ' ' + d.getDate();
+}
+
 function formatearMesCompleto(fechaStr) {
     const d = new Date(fechaStr);
     const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
     return meses[d.getMonth()] + ' ' + d.getFullYear();
+}
+
+// ============================================================
+// SELECTOR DE RANGO
+// ============================================================
+
+function cambiarRango(rango) {
+    rangoActual = rango;
+
+    // Actualizar botones activos
+    document.querySelectorAll('.rango-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.rango === rango);
+    });
+
+    // Actualizar label del chart
+    const labels = {
+        'semana': 'Última semana (lunes a domingo)',
+        'mes': 'Últimos 30 días',
+        '6meses': 'Últimos 6 meses',
+    };
+    document.getElementById('chartTendenciaLabel').textContent = labels[rango] || 'Evolución en el tiempo';
+
+    // Recargar datos
+    cargarDatos();
 }
 
 // ============================================================
@@ -835,6 +902,9 @@ function formatearMesCompleto(fechaStr) {
 
 async function cargarDatos() {
     const filtros = obtenerFiltros();
+
+    // Agregar rango a los filtros
+    filtros.set('rango', rangoActual);
 
     // Mostrar loadings en todos los charts
     const loadingIds = ['loadingTendencia','loadingDistritos','loadingTipos',
@@ -881,7 +951,7 @@ async function cargarDatos() {
     } catch (error) {
         console.error('Error cargando datos:', error);
         loadingIds.forEach(id => ocultarLoading(id));
-        mostrarError('Error de conexión al cargar los datos');
+        mostrarError('Error al procesar los datos: ' + error.message);
     }
 }
 
@@ -916,9 +986,16 @@ function actualizarKPIs(data) {
 
     // Período
     if (datosMes.length > 0) {
-        const primero = formatearMes(datosMes[0].mes);
-        const ultimo = formatearMes(datosMes[datosMes.length - 1].mes);
-        document.getElementById('kpiPeriodo').textContent = `${primero} - ${ultimo}`;
+        const esDiario = datosMes[0] && datosMes[0].dia !== undefined;
+        if (esDiario) {
+            const primero = formatearDia(datosMes[0].dia);
+            const ultimo = formatearDia(datosMes[datosMes.length - 1].dia);
+            document.getElementById('kpiPeriodo').textContent = `${primero} - ${ultimo}`;
+        } else {
+            const primero = formatearMes(datosMes[0].mes);
+            const ultimo = formatearMes(datosMes[datosMes.length - 1].mes);
+            document.getElementById('kpiPeriodo').textContent = `${primero} - ${ultimo}`;
+        }
     } else {
         document.getElementById('kpiPeriodo').textContent = 'Sin datos';
     }
@@ -1037,7 +1114,9 @@ function crearChartTendencia(datosMes) {
     const ctx = document.getElementById('chartTendencia');
     if (!ctx || datosMes.length === 0) return;
 
-    const labels = datosMes.map(d => formatearMes(d.mes));
+    // Usar 'dia' si son datos diarios (semana/mes), 'mes' si son mensuales (6meses)
+    const esDiario = datosMes[0] && datosMes[0].dia !== undefined;
+    const labels = datosMes.map(d => esDiario ? formatearDia(d.dia) : formatearMes(d.mes));
     const totales = datosMes.map(d => d.total);
     const compra = datosMes.map(d => d.compra || 0);
     const alquiler = datosMes.map(d => d.alquiler || 0);
@@ -1193,12 +1272,25 @@ function crearChartTipos(tiposMes) {
 function crearChartPresupuesto(presupuestoMes) {
     destruirChart('presupuesto');
     const ctx = document.getElementById('chartPresupuesto');
-    if (!ctx || presupuestoMes.length === 0) return;
+    if (!ctx) return;
 
-    const labels = presupuestoMes.map(d => formatearMes(d.mes));
-    const promedios = presupuestoMes.map(d => d.presupuesto_promedio || 0);
-    const medianos = presupuestoMes.map(d => d.presupuesto_mediano || null);
-    const cantidades = presupuestoMes.map(d => d.cantidad || 0);
+    // El backend retorna un objeto {meses:[], promedio:[], mediano:[], ...}
+    // Verificar si es array (formato antiguo) u objeto (formato actual)
+    const esArray = Array.isArray(presupuestoMes);
+    const labels = esArray
+        ? presupuestoMes.map(d => formatearMes(d.mes))
+        : (presupuestoMes.meses || []).map(m => formatearMes(m));
+    const promedios = esArray
+        ? presupuestoMes.map(d => d.presupuesto_promedio || 0)
+        : (presupuestoMes.promedio || []);
+    const medianos = esArray
+        ? presupuestoMes.map(d => d.presupuesto_mediano || null)
+        : (presupuestoMes.mediano || []);
+    const cantidades = esArray
+        ? presupuestoMes.map(d => d.cantidad || 0)
+        : (presupuestoMes.cantidad || []);
+
+    if (labels.length === 0) return;
 
     charts.presupuesto = new Chart(ctx, {
         type: 'bar',
@@ -1276,7 +1368,8 @@ function crearChartOperacion(datosMes) {
     const ctx = document.getElementById('chartOperacion');
     if (!ctx || datosMes.length === 0) return;
 
-    const labels = datosMes.map(d => formatearMes(d.mes));
+    const esDiario = datosMes[0] && datosMes[0].dia !== undefined;
+    const labels = datosMes.map(d => esDiario ? formatearDia(d.dia) : formatearMes(d.mes));
     const compra = datosMes.map(d => d.compra || 0);
     const alquiler = datosMes.map(d => d.alquiler || 0);
 
@@ -1425,7 +1518,8 @@ function crearChartCrecimiento(datosMes, crecimiento) {
     if (!ctx || datosMes.length < 2) return;
 
     // El crecimiento tiene un elemento menos que datosMes (el primero es null)
-    const labels = datosMes.slice(1).map(d => formatearMes(d.mes));
+    const esDiario = datosMes[0] && datosMes[0].dia !== undefined;
+    const labels = datosMes.slice(1).map(d => esDiario ? formatearDia(d.dia) : formatearMes(d.mes));
     const valores = crecimiento.slice(1).filter(v => v != null);
 
     if (valores.length === 0) return;

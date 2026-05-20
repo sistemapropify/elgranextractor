@@ -23,6 +23,7 @@ from .models import (
 )
 from .analytics import (
     obtener_requerimientos_por_mes,
+    obtener_requerimientos_por_dia,
     calcular_crecimiento_porcentual,
     obtener_distritos_por_mes,
     obtener_tipos_propiedad_por_mes,
@@ -363,16 +364,33 @@ class ApiAnalisisTemporalView(TemplateView):
             # Obtener filtros
             fecha_inicio = request.GET.get('fecha_inicio')
             fecha_fin = request.GET.get('fecha_fin')
+            rango = request.GET.get('rango', '6meses')  # semana, mes, 6meses
             condicion = request.GET.get('condicion')
             tipo_propiedad = request.GET.get('tipo_propiedad')
             distrito = request.GET.get('distrito')
             fuente = request.GET.get('fuente')
             
             # Convertir fechas
-            if fecha_inicio:
-                fecha_inicio = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
-            if fecha_fin:
-                fecha_fin = datetime.strptime(fecha_fin, '%Y-%m-%d').date()
+            hoy = timezone.now().date()
+            
+            # Si no hay filtros de fecha, aplicar según rango
+            if not fecha_inicio and not fecha_fin:
+                if rango == 'semana':
+                    # Última semana: lunes a domingo
+                    dia_semana = hoy.weekday()  # 0=lunes
+                    fecha_inicio = hoy - timedelta(days=dia_semana)  # lunes de esta semana
+                    fecha_fin = fecha_inicio + timedelta(days=6)  # domingo
+                elif rango == 'mes':
+                    fecha_inicio = hoy - timedelta(days=30)
+                    fecha_fin = hoy
+                else:  # 6meses
+                    fecha_inicio = hoy - timedelta(days=180)
+                    fecha_fin = hoy
+            else:
+                if fecha_inicio:
+                    fecha_inicio = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
+                if fecha_fin:
+                    fecha_fin = datetime.strptime(fecha_fin, '%Y-%m-%d').date()
             
             filtros = {
                 'condicion': condicion,
@@ -381,9 +399,15 @@ class ApiAnalisisTemporalView(TemplateView):
                 'fuente': fuente,
             }
             
-            # Obtener todos los datos con manejo de errores individual
+            # Obtener datos según el rango
+            # Para semana y mes: agrupación diaria. Para 6 meses: agrupación mensual
+            usar_datos_diarios = rango in ('semana', 'mes')
+            
             try:
-                datos_mes = list(obtener_requerimientos_por_mes(fecha_inicio, fecha_fin, filtros))
+                if usar_datos_diarios:
+                    datos_mes = list(obtener_requerimientos_por_dia(fecha_inicio, fecha_fin, filtros))
+                else:
+                    datos_mes = list(obtener_requerimientos_por_mes(fecha_inicio, fecha_fin, filtros))
             except Exception as e:
                 import logging
                 logger = logging.getLogger(__name__)
@@ -451,6 +475,7 @@ class ApiAnalisisTemporalView(TemplateView):
             response_data = {
                 'success': True,
                 'mode': 'sync',
+                'rango': rango,
                 'datos_mes': datos_mes,
                 'distritos_mes': distritos_mes,
                 'tipos_mes': tipos_mes,

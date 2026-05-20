@@ -257,6 +257,9 @@
         border: 1px solid #30363d;
         border-radius: 8px;
         overflow-x: auto;
+        overflow-y: auto;
+        max-height: calc(100vh * 0.33);
+        min-height: 250px;
     }
     
     .req-table {
@@ -278,6 +281,7 @@
         text-align: left;
         position: sticky;
         top: 0;
+        z-index: 3;
     }
     
     .req-table tbody td {
@@ -441,6 +445,7 @@
     }
     .req-table thead th:last-child {
         background-color: #21262d;
+        z-index: 4;
     }
     .req-table tbody tr:hover td:last-child {
         background-color: #1c2128;
@@ -635,7 +640,7 @@
         </div>
         <div class="req-header-actions">
             <a href="/" class="btn btn-secondary">← Dashboard</a>
-            <a href="{% url 'requerimientos:subir' %}" class="btn btn-primary">📤 Importar Excel</a>
+            <a href="/whatsapp-extractor/upload/" class="btn btn-primary">📤 Subir Archivo</a>
         </div>
     </div>
     
