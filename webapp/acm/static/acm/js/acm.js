@@ -954,6 +954,32 @@ function mostrarDetallePropiedad(propiedad) {
         adicionalDiv.innerHTML = html || '<p>No hay información adicional disponible.</p>';
     }
     
+    // Actualizar enlace a página web
+    const urlLink = document.getElementById('detalle-url');
+    if (urlLink) {
+        // Determinar la URL: priorizar url_propiedad (enlace original externo)
+        let url = propiedad.url_propiedad || '';
+        
+        // Si es Propifai y tiene código pero no URL directa, construir enlace a Propifai
+        if (!url && propiedad.es_propify && propiedad.codigo) {
+            url = `https://propifai.com/propiedad/${propiedad.codigo}`;
+        }
+        
+        if (url) {
+            urlLink.href = url;
+            urlLink.target = '_blank';
+            urlLink.rel = 'noopener noreferrer';
+            urlLink.classList.remove('disabled');
+            urlLink.innerHTML = '<i class="bi bi-box-arrow-up-right me-1"></i>Ver pagina web original &raquo;';
+            console.log(`ACM: URL para propiedad ${propiedad.id}: ${url}`);
+        } else {
+            urlLink.href = '#';
+            urlLink.classList.add('disabled');
+            urlLink.innerHTML = '<i class="bi bi-box-arrow-up-right me-1"></i>Sin enlace disponible';
+            console.log(`ACM: Sin URL para propiedad ${propiedad.id}`);
+        }
+    }
+    
     // Mostrar modal
     const modal = new bootstrap.Modal(document.getElementById('modalDetallePropiedad'));
     modal.show();

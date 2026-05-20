@@ -76,7 +76,7 @@ class WhatsAppTxtParser:
         re.IGNORECASE | re.UNICODE
     )
     PATRON_FORMATO_3 = re.compile(
-        r'^\[(\d{1,2}/\d{1,2}/\d{2,4}\s+\d{1,2}:\d{2}(?::\d{2})?)\]\s*([^:]+):\s*(.*)',
+        r'^\[(\d{1,2}/\d{1,2}/\d{2,4},?\s+\d{1,2}:\d{2}(?::\d{2})?(?:[\s\u202f]*[aApP][\.\s\u202f]*[mM][\.\s\u202f]*)?)\]\s*([^:]+):\s*(.*)',
         re.UNICODE
     )
     PATRON_FORMATO_4 = re.compile(
@@ -410,6 +410,53 @@ class WhatsAppTxtParser:
         try:
             limpio = re.sub(r'(\d{1,4}),\s+', r'\1 ', timestamp_str)
             dt = datetime.strptime(limpio, '%d/%m/%y %I:%M %p')
+            return dt.isoformat()
+        except ValueError:
+            pass
+
+        # --- Formatos para iOS con coma, segundos y AM/PM con puntos (a. m. / p. m.) ---
+        # Estos formatos usan \u202f (espacio estrecho) antes de a.m./p.m.
+        # Ej: "11/05/26, 7:16:03 a. m." o "11/05/26, 7:16:03 p. m."
+        # Primero normalizar: quitar \u202f y espacios alrededor de a.m./p.m.
+
+        # Formato 10: DD/MM/YY, HH:MM:SS a. m. (con segundos, AM/PM con puntos y \u202f)
+        try:
+            # Normalizar: reemplazar \u202f por espacio, quitar coma
+            limpio = re.sub(r'[\u202f]', ' ', timestamp_str)
+            limpio = re.sub(r'(\d{1,4}),\s+', r'\1 ', limpio)
+            # Convertir "a. m." → "AM" (incluyendo punto final opcional)
+            limpio = re.sub(r'\s*a\s*\.\s*m\s*\.?\s*', ' AM', limpio, flags=re.IGNORECASE)
+            limpio = re.sub(r'\s*p\s*\.\s*m\s*\.?\s*', ' PM', limpio, flags=re.IGNORECASE)
+            limpio = limpio.strip()
+            dt = datetime.strptime(limpio, '%d/%m/%y %I:%M:%S %p')
+            return dt.isoformat()
+        except ValueError:
+            pass
+
+        # Formato 11: DD/MM/YY, HH:MM:SS (con segundos, sin AM/PM)
+        try:
+            limpio = re.sub(r'(\d{1,4}),\s+', r'\1 ', timestamp_str)
+            dt = datetime.strptime(limpio, '%d/%m/%y %H:%M:%S')
+            return dt.isoformat()
+        except ValueError:
+            pass
+
+        # Formato 12: DD/MM/YYYY, HH:MM:SS a. m. (año 4 dígitos, con segundos, AM/PM con puntos)
+        try:
+            limpio = re.sub(r'[\u202f]', ' ', timestamp_str)
+            limpio = re.sub(r'(\d{1,4}),\s+', r'\1 ', limpio)
+            limpio = re.sub(r'\s*a\s*\.\s*m\s*\.?\s*', ' AM', limpio, flags=re.IGNORECASE)
+            limpio = re.sub(r'\s*p\s*\.\s*m\s*\.?\s*', ' PM', limpio, flags=re.IGNORECASE)
+            limpio = limpio.strip()
+            dt = datetime.strptime(limpio, '%d/%m/%Y %I:%M:%S %p')
+            return dt.isoformat()
+        except ValueError:
+            pass
+
+        # Formato 13: DD/MM/YYYY, HH:MM:SS (año 4 dígitos, con segundos, sin AM/PM)
+        try:
+            limpio = re.sub(r'(\d{1,4}),\s+', r'\1 ', timestamp_str)
+            dt = datetime.strptime(limpio, '%d/%m/%Y %H:%M:%S')
             return dt.isoformat()
         except ValueError:
             pass

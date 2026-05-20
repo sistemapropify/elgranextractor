@@ -320,6 +320,9 @@ def buscar_comparables(request):
                     'distancia_metros': round(distancia, 2),
                     'fuente': 'local',
                     'es_propify': False,
+                    'codigo': prop.id_propiedad or str(prop.id),
+                    'titulo': prop.descripcion[:100] if prop.descripcion else '',
+                    'url_propiedad': prop.url_propiedad or '',
                 }
                 
             else:
@@ -405,6 +408,7 @@ def buscar_comparables(request):
                     'es_propify': True,
                     'codigo': prop.code,
                     'titulo': prop.title,
+                    'url_propiedad': f"https://propifai.com/propiedad/{prop.code}" if prop.code else '',
                 }
             
             propiedades_cercanas.append(propiedad_dict)

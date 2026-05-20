@@ -107,11 +107,38 @@ def _truncar(valor: Optional[str], max_length: int) -> str:
     return valor
 
 # Patrón para extraer nombre del grupo del filename
+# VERSIÓN GENÉRICA: captura cualquier texto después de "WhatsApp" hasta ".txt"
+# Elimina automáticamente preposiciones/conectores comunes del resultado
+# SIN lista fija en el regex - usa limpieza post-extracción para escalabilidad
 # Ej: "Chat de WhatsApp con RED INMOBILIARIA AREQUIPA.txt" → "RED INMOBILIARIA AREQUIPA"
+# Ej: "Chat de WhatsApp de EXITO INMOBILIARIO AGENTES.txt" → "EXITO INMOBILIARIO AGENTES"
+# Ej: "Chat de WhatsApp por GRUPO VENTAS.txt" → "GRUPO VENTAS"
+# Ej: "WhatsApp Chat with ENGLISH GROUP.txt" → "ENGLISH GROUP"
+# Ej: "Chat WhatsApp - Grupo Ejemplo.txt" → "Grupo Ejemplo"
+# Ej: "Chat de WhatsApp del GRUPO TEST.txt" → "GRUPO TEST"
+# Ej: "Chat de WhatsApp en MI GRUPO.txt" → "MI GRUPO"
+# Ej: "WhatsApp Chat GROUP NAME.txt" → "GROUP NAME"
 PATRON_NOMBRE_GRUPO = re.compile(
-    r'Chat\s+de\s+WhatsApp\s+con\s+(.+)\.txt$',
+    r'(?:Chat\s+(?:de\s+)?)?WhatsApp(?:\s*Chat)?(?:\s*[-–—]\s*|\s+(?:con|de|por|para|del|en|desde|with|from|by|for)\s+|\s+)?(.+?)\.txt$',
     re.IGNORECASE
 )
+
+# Preposiciones/conectores a eliminar del inicio del nombre extraído
+_PREPOSICIONES_INICIO = (
+    'con', 'de', 'por', 'para', 'del', 'en', 'desde',
+    'with', 'from', 'by', 'for', 'the', 'a', 'an',
+    'el', 'la', 'los', 'las', 'un', 'una',
+)
+
+
+def _limpiar_nombre_grupo(nombre: str) -> str:
+    """Limpia el nombre del grupo eliminando preposiciones/conectores del inicio."""
+    nombre = nombre.strip()
+    # Separar en palabras y eliminar preposiciones del inicio
+    palabras = nombre.split()
+    while palabras and palabras[0].lower() in _PREPOSICIONES_INICIO:
+        palabras = palabras[1:]
+    return ' '.join(palabras).strip() or nombre
 
 
 def _extraer_nombre_grupo(archivo: ArchivoExtraccionWhatsApp) -> str:
@@ -124,7 +151,8 @@ def _extraer_nombre_grupo(archivo: ArchivoExtraccionWhatsApp) -> str:
     nombre = archivo.nombre_archivo_original
     match = PATRON_NOMBRE_GRUPO.search(nombre)
     if match:
-        return match.group(1).strip()
+        nombre_extraido = match.group(1).strip()
+        return _limpiar_nombre_grupo(nombre_extraido)
 
     # 3. Fallback: usar el nombre del archivo sin extensión
     return nombre.replace('.txt', '').strip()

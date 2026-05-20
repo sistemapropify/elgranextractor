@@ -13,10 +13,12 @@ logger = logging.getLogger(__name__)
 class APIExternaService:
     """Servicio para consumir API externa de propiedades"""
     
+    _cache = None  # Cache de clase para evitar múltiples llamadas en un mismo request
+    
     def __init__(self, api_url: str = None, api_key: str = None):
         self.api_url = api_url or getattr(settings, 'API_EXTERNA_URL', 'http://localhost/dashboard/api/properties/with-docs/')
         self.api_key = api_key or getattr(settings, 'API_EXTERNA_KEY', 'ItBJSnE6F7gIG5uhnPh0mtXmQ9yjE8ZgqtIjTU')
-        self.timeout = getattr(settings, 'API_EXTERNA_TIMEOUT', 3)  # Reducido de 10s a 3s para no bloquear la página
+        self.timeout = getattr(settings, 'API_EXTERNA_TIMEOUT', 1)  # Timeout bajo (1s) para no bloquear la página
     
     def obtener_propiedades(self) -> List[Dict[str, Any]]:
         """
@@ -258,8 +260,15 @@ api_service = APIExternaService()
 def obtener_propiedades_externas() -> List[Dict[str, Any]]:
     """
     Función de conveniencia para obtener propiedades de la API externa.
+    Usa cache de clase para evitar múltiples llamadas HTTP en un mismo ciclo de request.
     
     Returns:
         Lista de propiedades externas en formato estandarizado.
     """
-    return api_service.obtener_propiedades()
+    # Usar cache si ya se obtuvo en este ciclo
+    if APIExternaService._cache is not None:
+        return APIExternaService._cache
+    
+    resultado = api_service.obtener_propiedades()
+    APIExternaService._cache = resultado
+    return resultado

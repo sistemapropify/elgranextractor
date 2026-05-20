@@ -345,7 +345,7 @@
     .match-badge.low { background: rgba(248, 81, 73, 0.2); color: var(--accent-red); }
     .match-badge.none { background: rgba(110, 118, 129, 0.2); color: var(--text-muted); }
 
-    /* Day View */
+    /* ===== DAY VIEW - AGENDA TIMELINE (Google Calendar style) ===== */
     .day-timeline {
         border: 1px solid var(--border-color);
         border-radius: var(--card-radius);
@@ -375,38 +375,125 @@
 
     .day-header-info .day-totals strong { color: var(--text-primary); }
 
-    .day-req-card {
+    /* Timeline body */
+    .day-timeline-body {
+        overflow-y: auto;
+        max-height: 800px;
+        position: relative;
+    }
+
+    /* Each hour row */
+    .day-hour-row {
+        display: grid;
+        grid-template-columns: 60px 1fr;
+        border-bottom: 1px solid rgba(48,54,61,0.3);
+        min-height: 60px;
+        transition: background var(--transition-speed);
+    }
+
+    .day-hour-row:last-child { border-bottom: none; }
+    .day-hour-row:hover { background: rgba(88,166,255,0.03); }
+
+    .day-hour-row.has-events {
+        background: rgba(63,185,80,0.02);
+    }
+
+    .day-hour-label {
+        background: var(--bg-primary);
+        padding: 4px;
+        text-align: center;
+        font-size: 11px;
+        color: var(--text-muted);
+        border-right: 1px solid var(--border-color);
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        padding-top: 6px;
+        font-weight: 500;
+        position: sticky;
+        left: 0;
+    }
+
+    .day-hour-label .hour-text {
+        font-size: 11px;
+        color: var(--text-muted);
+    }
+
+    .day-hour-label .hour-ampm {
+        font-size: 9px;
+        color: var(--text-muted);
+        margin-left: 2px;
+    }
+
+    .day-hour-content {
+        padding: 4px 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-height: 52px;
+    }
+
+    /* Event card inside timeline */
+    .day-event-card {
         background: var(--bg-tertiary);
         border: 1px solid var(--border-color);
         border-radius: 6px;
-        padding: 12px 16px;
-        margin: 6px 12px;
+        padding: 8px 12px;
         display: flex;
         justify-content: space-between;
         align-items: center;
         transition: all var(--transition-speed);
         cursor: pointer;
-        overflow: hidden;
+        gap: 8px;
     }
 
-    .day-req-card:hover { border-color: var(--accent-blue); background: var(--hover-bg); }
+    .day-event-card:hover {
+        border-color: var(--accent-blue);
+        background: var(--hover-bg);
+    }
 
-    .day-req-card .req-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
-    .day-req-card .req-info .req-title { font-size: 14px; font-weight: 500; color: var(--text-primary); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; word-break: break-word; }
-    .day-req-card .req-info .req-detail { font-size: 12px; color: var(--text-secondary); }
+    .day-event-card .event-info {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+        flex: 1;
+    }
 
-    .day-req-card .req-match { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+    .day-event-card .event-title {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+        word-break: break-word;
+    }
 
-    .day-req-card .req-match .score-circle {
-        width: 44px;
-        height: 44px;
+    .day-event-card .event-detail {
+        font-size: 11px;
+        color: var(--text-secondary);
+    }
+
+    .day-event-card .event-match {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+    }
+
+    .day-event-card .event-match .score-circle {
+        width: 38px;
+        height: 38px;
         border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 700;
         border: 2px solid;
+        flex-shrink: 0;
     }
 
     .score-circle.high { border-color: var(--accent-green); color: var(--accent-green); }
@@ -414,14 +501,16 @@
     .score-circle.low { border-color: var(--accent-red); color: var(--accent-red); }
     .score-circle.none { border-color: var(--text-muted); color: var(--text-muted); }
 
-    .day-req-card .req-match .match-link {
-        font-size: 12px;
+    .day-event-card .event-match .match-link {
+        font-size: 11px;
         color: var(--accent-blue);
         text-decoration: none;
+        white-space: nowrap;
     }
 
-    .day-req-card .req-match .match-link:hover { text-decoration: underline; }
+    .day-event-card .event-match .match-link:hover { text-decoration: underline; }
 
+    /* Empty state */
     .empty-state {
         text-align: center;
         padding: 60px 20px;
@@ -430,14 +519,6 @@
 
     .empty-state .empty-icon { font-size: 48px; margin-bottom: 12px; opacity: 0.5; }
     .empty-state p { font-size: 14px; margin: 0; }
-
-    .day-hour-label-small {
-        font-size: 11px;
-        color: var(--text-muted);
-        padding: 2px 12px;
-        background: var(--bg-primary);
-        border-bottom: 1px solid var(--border-color);
-    }
 
     @media (max-width: 768px) {
         .container-calendar { padding: 12px; }
@@ -829,7 +910,7 @@
     </div>
 
     {% elif view_mode == 'day' %}
-    <!-- ===== DAY VIEW ===== -->
+    <!-- ===== DAY VIEW - AGENDA TIMELINE (Google Calendar style) ===== -->
     <div class="day-timeline">
         <div class="day-header-info">
             <h2>{{ target_date|date:"l, d F Y" }}</h2>
@@ -839,48 +920,62 @@
             </div>
         </div>
 
-        {% if reqs_dia %}
-            {% for req in reqs_dia %}
-            <div class="day-req-card" onclick="window.location.href='{% url 'matching:dashboard' %}?requerimiento_id={{ req.id }}'">
-                <div class="req-info">
-                    <div class="req-title">
-                        <span style="font-size:11px;color:var(--text-muted);font-weight:400;margin-right:8px;">{{ req.hora_display }}</span>
-                        <span style="color:var(--accent-blue);font-weight:700;">BUSCO</span>
-                        <span style="margin-left:4px;">{{ req.tipo_display|capfirst }}</span>
-                        {% if req.presupuesto_display %}
-                            <span style="margin-left:6px;color:var(--accent-green);font-weight:600;">{{ req.presupuesto_display }}</span>
-                        {% endif %}
-                        {% if req.distritos %}
-                            <span style="margin-left:6px;color:var(--text-secondary);">· {{ req.distritos }}</span>
-                        {% endif %}
-                    </div>
-                    <div class="req-detail">
-                        {% if req.agente %}
-                            <span style="color:#ff6d00;font-weight:600;">{{ req.agente }}</span>
-                        {% endif %}
-                    </div>
+        <div class="day-timeline-body">
+            {% for hora_slot in horas_del_dia %}
+            <div class="day-hour-row" data-hour="{{ hora_slot|time:'H' }}">
+                <div class="day-hour-label">
+                    <span class="hour-text">{{ hora_slot|time:"H" }}</span>
+                    <span class="hour-ampm">{{ hora_slot|time:"A" }}</span>
                 </div>
-                <div class="req-match">
-                    {% if req.porcentaje_match >= 90 %}
-                        <div class="score-circle high">{{ req.porcentaje_match|floatformat:0 }}%</div>
-                    {% elif req.porcentaje_match >= 50 %}
-                        <div class="score-circle medium">{{ req.porcentaje_match|floatformat:0 }}%</div>
-                    {% elif req.porcentaje_match > 0 %}
-                        <div class="score-circle low">{{ req.porcentaje_match|floatformat:0 }}%</div>
-                    {% else %}
-                        <div class="score-circle none">—</div>
-                    {% endif %}
-                    {% if req.mejor_propiedad_codigo %}
-                        <a href="{% url 'matching:dashboard' %}?requerimiento_id={{ req.id }}" class="match-link">{{ req.mejor_propiedad_codigo }}</a>
-                    {% endif %}
+                <div class="day-hour-content" id="hour-{{ hora_slot|time:'H' }}">
+                    {% for req in reqs_dia %}
+                        {% if req.hora_display|slice:":2" == hora_slot|time:"H" %}
+                        <div class="day-event-card" onclick="openMatchModal({{ req.id }})">
+                            <div class="event-info">
+                                <div class="event-title">
+                                    <span style="font-size:11px;color:var(--text-muted);font-weight:400;margin-right:4px;">{{ req.hora_display }}</span>
+                                    <span style="color:var(--accent-blue);font-weight:700;">BUSCO</span>
+                                    <span style="margin-left:2px;">{{ req.tipo_display|capfirst }}</span>
+                                    {% if req.presupuesto_display %}
+                                        <span style="margin-left:4px;color:var(--accent-green);font-weight:600;">{{ req.presupuesto_display }}</span>
+                                    {% endif %}
+                                    {% if req.distritos %}
+                                        <span style="margin-left:4px;color:var(--text-secondary);">· {{ req.distritos }}</span>
+                                    {% endif %}
+                                </div>
+                                <div class="event-detail">
+                                    {% if req.agente %}
+                                        <span style="color:#ff6d00;font-weight:600;">{{ req.agente }}</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="event-match">
+                                {% if req.porcentaje_match >= 90 %}
+                                    <div class="score-circle high">{{ req.porcentaje_match|floatformat:0 }}%</div>
+                                {% elif req.porcentaje_match >= 50 %}
+                                    <div class="score-circle medium">{{ req.porcentaje_match|floatformat:0 }}%</div>
+                                {% elif req.porcentaje_match > 0 %}
+                                    <div class="score-circle low">{{ req.porcentaje_match|floatformat:0 }}%</div>
+                                {% else %}
+                                    <div class="score-circle none">—</div>
+                                {% endif %}
+                                {% if req.mejor_propiedad_codigo %}
+                                    <a href="{% url 'matching:dashboard' %}?requerimiento_id={{ req.id }}" class="match-link">{{ req.mejor_propiedad_codigo }}</a>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+                    {% endfor %}
                 </div>
             </div>
             {% endfor %}
-        {% else %}
-            <div class="empty-state">
-                <div class="empty-icon">📭</div>
-                <p>No hay requerimientos para este día</p>
-            </div>
+        </div>
+
+        {% if total_reqs == 0 %}
+        <div class="empty-state">
+            <div class="empty-icon">📭</div>
+            <p>No hay requerimientos para este día</p>
+        </div>
         {% endif %}
     </div>
     {% endif %}

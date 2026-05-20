@@ -579,6 +579,11 @@ class MatchingCalendarView(TemplateView):
         elif view_mode == 'day':
             target_date = date(year, month, day)
             
+            # Generar horas del día (6am a 11pm)
+            horas_del_dia = []
+            for h in range(6, 23):
+                horas_del_dia.append(datetime(2000, 1, 1, h, 0).time())
+            
             # Obtener requerimientos de ese día (excluyendo no_especificado y compartido)
             reqs_dia = Requerimiento.objects.filter(
                 fecha=target_date
@@ -597,6 +602,7 @@ class MatchingCalendarView(TemplateView):
                     presupuesto_display = f'{signo}{presupuesto_monto:,.0f}'
                 reqs_serializados.append({
                     'id': r.id,
+                    'hora': r.hora.isoformat() if r.hora else None,
                     'hora_display': r.hora.strftime('%H:%M') if r.hora else '--:--',
                     'tipo_display': (r.get_tipo_propiedad_display() or r.tipo_propiedad or 'Propiedad').upper(),
                     'presupuesto_display': presupuesto_display,
@@ -609,6 +615,7 @@ class MatchingCalendarView(TemplateView):
                 })
             
             context['reqs_dia'] = reqs_serializados
+            context['reqs_dia_json'] = json.dumps(reqs_serializados)
             context['target_date'] = target_date
             context['target_date_display'] = target_date.strftime('%A, %d %B %Y')
             context['total_reqs'] = len(reqs_serializados)
@@ -616,6 +623,7 @@ class MatchingCalendarView(TemplateView):
                 1 for r in reqs_serializados
                 if r['porcentaje_match'] >= 90
             )
+            context['horas_del_dia'] = horas_del_dia
             
             # Navegación
             context['prev_date'] = target_date - timedelta(days=1)
