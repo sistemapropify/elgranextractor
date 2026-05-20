@@ -296,6 +296,85 @@
         white-space: nowrap;
     }
 
+    .btn-clear-selection {
+        font-size: 0.6rem;
+        padding: 0.1rem 0.4rem;
+        height: auto;
+        line-height: 1.4;
+        color: var(--accent-red);
+        border-color: rgba(248,81,73,0.3);
+        background: transparent;
+        cursor: pointer;
+        border-radius: 4px;
+        border: 1px solid var(--border-color);
+        transition: all 0.15s;
+        white-space: nowrap;
+    }
+    .btn-clear-selection:hover {
+        background: rgba(248,81,73,0.1);
+        border-color: var(--accent-red);
+    }
+
+    /* Badge numerado en tarjetas seleccionadas */
+    .card-number-badge {
+        position: absolute;
+        top: -8px;
+        left: -8px;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        font-weight: bold;
+        font-family: Arial, sans-serif;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        z-index: 10;
+        border: 2px solid;
+        transition: transform 0.15s;
+    }
+    .card-number-badge:hover {
+        transform: scale(1.1);
+    }
+
+    /* Botón remover tarjeta */
+    .btn-remove-card {
+        position: absolute;
+        top: -8px;
+        right: -8px;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        color: white;
+        border: 2px solid;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: bold;
+        cursor: pointer;
+        z-index: 10;
+        line-height: 1;
+        padding: 0;
+        transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .btn-remove-card:hover {
+        transform: scale(1.15);
+        box-shadow: 0 2px 8px rgba(248,81,73,0.4);
+    }
+
+    /* Tarjeta seleccionada con número */
+    .selected-card {
+        position: relative;
+        border-color: var(--accent-blue);
+        box-shadow: 0 0 12px rgba(88,166,255,0.3);
+    }
+    .selected-card:hover {
+        border-color: var(--accent-blue);
+        box-shadow: 0 0 16px rgba(88,166,255,0.4);
+    }
+
     /* Contenedor de tarjetas con scroll */
     .properties-container {
         flex: 1;
@@ -775,16 +854,21 @@
         <!-- Propiedades filtradas a la derecha -->
         <div class="properties-section">
             <div class="properties-header">
-                <h3 class="properties-title">Propiedades en mapa</h3>
-                <span class="properties-count" id="filtered-count">0 propiedades</span>
+                <h3 class="properties-title">Propiedades seleccionadas</h3>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <button class="btn-clear-selection" id="btn-clear-selection" style="display: none;" onclick="limpiarSeleccion()">
+                        <i class="fas fa-times"></i> Limpiar
+                    </button>
+                    <span class="properties-count" id="filtered-count">0 propiedades</span>
+                </div>
             </div>
 
             <div class="properties-container" id="propertiesContainer">
                 <!-- Estado vacío inicial -->
                 <div class="empty-state" id="empty-state">
                     <i class="fas fa-map-marked-alt" style="font-size: 2rem; color: var(--text-secondary); margin-bottom: 8px;"></i>
-                    <h5 style="color: var(--text-primary); margin-bottom: 4px; font-size: 0.9rem;">Selecciona un marcador</h5>
-                    <p style="color: var(--text-secondary); font-size: 0.75rem;">Activa distritos con los checkboxes y haz clic en un marcador del mapa para ver la propiedad aquí</p>
+                    <h5 style="color: var(--text-primary); margin-bottom: 4px; font-size: 0.9rem;">Haz clic en los marcadores del mapa</h5>
+                    <p style="color: var(--text-secondary); font-size: 0.75rem;">Activa distritos con los checkboxes y haz clic en los marcadores del mapa. Cada marcador que selecciones agregará una tarjeta numerada aquí.</p>
                 </div>
                 <div id="selected-property" style="display: none;"></div>
             </div>
@@ -806,12 +890,12 @@
     // URLs de iconos
     const ICONO_PROPIFFY = '{% static "requerimientos/data/Pin-propify.png" %}';
     const ICONO_REMAX = '{% static "requerimientos/data/pin-remax.png" %}';
+    const ICONO_ADONDEVIVIR = '{% static "requerimientos/data/adondevivir-pin.png" %}';
     const ICONO_LOCAL = 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png';
     
     let map = null;
     let markers = [];           // Todos los marcadores creados
     let activeMarkers = [];     // Marcadores actualmente visibles en el mapa
-    let infoWindow = null;
     let zonePolygons = [];
     let zoneLabels = [];
     let googleMapsLoaded = false;
@@ -821,6 +905,9 @@
     
     // Mapa: distrito -> array de propiedades con coordenadas
     const propiedadesPorDistrito = {};
+    
+    // === SISTEMA DE SELECCIÓN ACUMULATIVA ===
+    const selectedMarkers = new Map(); // numero -> { marker, numero, propertyData }
     
     // Pre-calcular propiedades por distrito
     todasPropiedadesJSON.forEach(p => {
@@ -907,7 +994,6 @@
                     ]
                 });
                 
-                infoWindow = new google.maps.InfoWindow();
                 mapInitialized = true;
                 
                 // Cargar zonas de cuadrantización
@@ -919,6 +1005,53 @@
                 console.error('Error al cargar Google Maps:', error);
                 mapContainer.innerHTML = '<div class="alert alert-danger m-3">Error al cargar el mapa. Verifica tu conexión a internet.</div>';
             });
+    }
+
+    /**
+     * Genera un icono SVG numerado para el marcador.
+     * El número se muestra dentro de un círculo con color según la fuente.
+     */
+    function crearIconoNumerado(numero, esPropify, esExterno, esRemax, esAdondevivir) {
+        const size = 36;
+        let fillColor, strokeColor, textColor;
+        
+        if (esPropify) {
+            fillColor = '#238636';    // verde Propify
+            strokeColor = '#2ea043';
+            textColor = '#ffffff';
+        } else if (esRemax) {
+            fillColor = '#da3633';    // rojo Remax
+            strokeColor = '#f85149';
+            textColor = '#ffffff';
+        } else if (esAdondevivir) {
+            fillColor = '#1f6feb';    // azul Adondevivir
+            strokeColor = '#58a6ff';
+            textColor = '#ffffff';
+        } else if (esExterno) {
+            fillColor = '#d29922';    // naranja externo
+            strokeColor = '#e3b341';
+            textColor = '#ffffff';
+        } else {
+            fillColor = '#58a6ff';    // azul local
+            strokeColor = '#79c0ff';
+            textColor = '#ffffff';
+        }
+        
+        const svg = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+                <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 2}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="2"/>
+                <text x="${size/2}" y="${size/2}" text-anchor="middle" dominant-baseline="central"
+                      fill="${textColor}" font-size="14" font-weight="bold" font-family="Arial, sans-serif">
+                    ${numero}
+                </text>
+            </svg>
+        `;
+        
+        return {
+            url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+            scaledSize: new google.maps.Size(size, size),
+            anchor: new google.maps.Point(size/2, size/2)
+        };
     }
 
     /**
@@ -943,11 +1076,45 @@
             }
         });
         
+        // Primero, recolectar todos los números a remover
+        const numerosARemover = [];
+        markersToRemove.forEach(m => {
+            if (m._selectedNumero) {
+                numerosARemover.push(m._selectedNumero);
+            }
+        });
+        
+        // Remover marcadores del mapa
         markersToRemove.forEach(m => {
             m.setMap(null);
             const idx = activeMarkers.indexOf(m);
             if (idx > -1) activeMarkers.splice(idx, 1);
         });
+        
+        // Remover tarjetas del DOM y restaurar iconos (sin renumerar aún)
+        numerosARemover.forEach(numero => {
+            const card = document.getElementById(`selected-card-${numero}`);
+            if (card) card.remove();
+            
+            const entry = selectedMarkers.get(numero);
+            if (entry && entry.marker) {
+                entry.marker._selectedNumero = null;
+                const p = entry.marker._propertyData;
+                let iconUrl;
+                if (p.es_propify) iconUrl = ICONO_PROPIFFY;
+                else if (p.portal === 'Remax') iconUrl = ICONO_REMAX;
+                else if (p.portal === 'Adondevivir') iconUrl = ICONO_ADONDEVIVIR;
+                else if (p.es_externo) iconUrl = ICONO_REMAX;
+                else iconUrl = ICONO_LOCAL;
+                entry.marker.setIcon({ url: iconUrl, scaledSize: new google.maps.Size(32, 32) });
+            }
+            selectedMarkers.delete(numero);
+        });
+        
+        // Renumerar todas las tarjetas restantes (una sola vez)
+        if (numerosARemover.length > 0) {
+            reordenarNumeracion();
+        }
         
         // Agregar marcadores de distritos recién seleccionados
         const distritosActuales = new Set(activeMarkers.map(m => m._distrito));
@@ -960,43 +1127,22 @@
             console.log(`Agregando ${propiedades.length} marcadores para distrito: ${distrito}`);
             
             propiedades.forEach(p => {
-                let iconUrl;
-                if (p.es_propify) {
-                    iconUrl = ICONO_PROPIFFY;
-                } else if (p.es_externo || p.fuente === 'Remax') {
-                    iconUrl = ICONO_REMAX;
-                } else {
-                    iconUrl = ICONO_LOCAL;
-                }
-                
+                // Crear marcador sin número inicialmente
                 const marker = new google.maps.Marker({
                     position: { lat: p.lat, lng: p.lng },
                     map: map,
                     title: p.titulo || p.descripcion || '',
                     icon: {
-                        url: iconUrl,
+                        url: ICONO_LOCAL,
                         scaledSize: new google.maps.Size(32, 32)
                     },
-                    _distrito: distrito,  // Tag para identificar el distrito
-                    _propertyData: p      // Referencia directa al objeto propiedad
+                    _distrito: distrito,
+                    _propertyData: p,
+                    _selectedNumero: null  // Se asigna al hacer clic
                 });
                 
-                const precioVal = p.precio_usd || p.precio;
-                const precioStr = precioVal ? '$' + Number(precioVal).toLocaleString('es-PE', {minimumFractionDigits: 0}) : '';
-                const contentString = `
-                    <div class="map-info-window">
-                        <h6>${p.tipo_propiedad || 'Propiedad'}</h6>
-                        <p class="mb-1">${p.titulo || p.descripcion || ''}</p>
-                        <p class="mb-1"><strong>${precioStr}</strong></p>
-                        <p class="mb-1"><small>Fuente: ${p.fuente || 'Local'} | ${distrito}</small></p>
-                    </div>
-                `;
-                
                 marker.addListener('click', () => {
-                    infoWindow.setContent(contentString);
-                    infoWindow.open(map, marker);
-                    // Mostrar la propiedad en el panel derecho
-                    showSelectedProperty(p);
+                    agregarPropiedadSeleccionada(marker);
                 });
                 
                 activeMarkers.push(marker);
@@ -1018,22 +1164,58 @@
     }
 
     /**
-     * Muestra UNA SOLA tarjeta de propiedad en el panel derecho.
-     * Se llama al hacer clic en un marcador del mapa.
+     * Agrega una propiedad a la lista de seleccionadas (acumulativa).
+     * Si ya está seleccionada, hace scroll hasta su tarjeta.
      */
-    function showSelectedProperty(propertyData) {
-        const container = document.getElementById('selected-property');
-        const emptyState = document.getElementById('empty-state');
-        const countSpan = document.getElementById('filtered-count');
+    function agregarPropiedadSeleccionada(marker) {
+        const p = marker._propertyData;
         
-        if (!propertyData) {
-            emptyState.style.display = 'flex';
-            container.style.display = 'none';
-            countSpan.textContent = '0 propiedades';
+        // Si ya está seleccionada, hacer scroll a su tarjeta
+        if (marker._selectedNumero) {
+            const card = document.getElementById(`selected-card-${marker._selectedNumero}`);
+            if (card) {
+                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // Resaltar temporalmente
+                card.style.transition = 'box-shadow 0.3s';
+                card.style.boxShadow = '0 0 20px rgba(88,166,255,0.6)';
+                setTimeout(() => {
+                    card.style.boxShadow = '';
+                }, 1500);
+            }
             return;
         }
         
-        const p = propertyData;
+        // Asignar número secuencial basado en la cantidad actual + 1
+        // Esto asegura que siempre sea 1, 2, 3... incluso después de limpiar
+        const numero = selectedMarkers.size + 1;
+        
+        marker._selectedNumero = numero;
+        
+        // Actualizar icono del marcador con el número
+        const esPropify = p.es_propify;
+        const portal = (p.portal || '').toLowerCase();
+        const esRemax = portal === 'remax';
+        const esAdondevivir = portal === 'adondevivir';
+        const esExterno = p.es_externo || esRemax || esAdondevivir;
+        marker.setIcon(crearIconoNumerado(numero, esPropify, esExterno, esRemax, esAdondevivir));
+        
+        // Registrar en el mapa de seleccionados
+        selectedMarkers.set(numero, { marker, numero, propertyData: p });
+        
+        // Agregar tarjeta
+        agregarTarjetaPropiedad(p, numero);
+        
+        // Actualizar contador
+        actualizarContadorSeleccionadas();
+    }
+
+    /**
+     * Agrega una tarjeta de propiedad al panel derecho.
+     */
+    function agregarTarjetaPropiedad(p, numero) {
+        const container = document.getElementById('selected-property');
+        const emptyState = document.getElementById('empty-state');
+        
         const precioVal = p.precio_usd || p.precio;
         const precioStr = precioVal ? '$' + Number(precioVal).toLocaleString('es-PE', {minimumFractionDigits: 0}) : 'Consultar';
         const distrito = p.distrito || p.distrito_nombre || '';
@@ -1043,16 +1225,92 @@
         const area = p.area_construida ? p.area_construida.toFixed(0) + ' m²' : '';
         const habs = p.habitaciones || p.numero_habitaciones || '';
         const banos = p.banios || p.numero_banos || '';
-        const fuente = p.fuente || (p.es_propify ? 'Propify' : p.es_externo ? 'Externa' : 'Local');
-        const badgeClass = p.es_propify ? 'bg-success' : p.es_externo ? 'bg-warning text-dark' : 'bg-info';
-        const badgeText = p.es_propify ? 'Propify' : p.es_externo ? 'Externa' : 'Local';
+        
+        // Determinar portal/fuente para mostrar logo
+        const portal = (p.portal || '').toLowerCase();
+        let badgeClass, badgeText, logoSrc;
+        if (p.es_propify) {
+            badgeClass = 'bg-success';
+            badgeText = 'Propify';
+            logoSrc = ICONO_PROPIFFY;
+        } else if (portal === 'remax') {
+            badgeClass = 'bg-danger';
+            badgeText = 'Remax';
+            logoSrc = ICONO_REMAX;
+        } else if (portal === 'adondevivir') {
+            badgeClass = 'bg-info';
+            badgeText = 'Adondevivir';
+            logoSrc = ICONO_ADONDEVIVIR;
+        } else if (p.es_externo) {
+            badgeClass = 'bg-warning text-dark';
+            badgeText = 'Externa';
+            logoSrc = ICONO_REMAX;
+        } else {
+            badgeClass = 'bg-info';
+            badgeText = 'Local';
+            logoSrc = ICONO_LOCAL;
+        }
         
         emptyState.style.display = 'none';
         container.style.display = 'block';
-        countSpan.textContent = '1 propiedad seleccionada';
         
-        container.innerHTML = `
-            <div class="property-card" data-distrito="${distrito}" style="border-color: var(--accent-blue); box-shadow: 0 0 12px rgba(88,166,255,0.3);">
+        // Determinar colores del badge numerado según portal
+        let badgeBg, badgeBorder;
+        if (p.es_propify) {
+            badgeBg = '#238636'; badgeBorder = '#2ea043';
+        } else if (portal === 'remax') {
+            badgeBg = '#da3633'; badgeBorder = '#f85149';
+        } else if (portal === 'adondevivir') {
+            badgeBg = '#1f6feb'; badgeBorder = '#58a6ff';
+        } else if (p.es_externo) {
+            badgeBg = '#d29922'; badgeBorder = '#e3b341';
+        } else {
+            badgeBg = '#58a6ff'; badgeBorder = '#79c0ff';
+        }
+        
+        const cardHtml = `
+            <div class="property-card selected-card" id="selected-card-${numero}" data-numero="${numero}" style="border-color: var(--accent-blue); box-shadow: 0 0 12px rgba(88,166,255,0.3); position: relative;">
+                <!-- Número grande en la esquina superior izquierda -->
+                <div class="card-number-badge" style="
+                    position: absolute;
+                    top: -8px;
+                    left: -8px;
+                    width: 32px;
+                    height: 32px;
+                    border-radius: 50%;
+                    background: ${badgeBg};
+                    color: white;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 14px;
+                    font-weight: bold;
+                    font-family: Arial, sans-serif;
+                    border: 2px solid ${badgeBorder};
+                    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+                    z-index: 10;
+                ">${numero}</div>
+                <!-- Botón para remover -->
+                <button class="btn-remove-card" onclick="removerTarjetaPorNumero(${numero})" style="
+                    position: absolute;
+                    top: -8px;
+                    right: -8px;
+                    width: 24px;
+                    height: 24px;
+                    border-radius: 50%;
+                    background: #f85149;
+                    color: white;
+                    border: 2px solid #ff6b63;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 12px;
+                    font-weight: bold;
+                    cursor: pointer;
+                    z-index: 10;
+                    line-height: 1;
+                    padding: 0;
+                ">&times;</button>
                 <div class="property-image-container" style="width: 120px; height: 120px;">
                     ${img ? `<img src="${img}" alt="${tipo}" class="property-image" onerror="this.parentElement.innerHTML='<div class=\\'property-image-placeholder\\'><i class=\\'fas fa-home\\'></i></div>'">`
                           : `<div class="property-image-placeholder"><i class="fas fa-home"></i></div>`}
@@ -1061,7 +1319,10 @@
                     <div class="property-header">
                         <span class="property-type">
                             ${tipo}
-                            <span class="badge ${badgeClass} ms-1" style="font-size: 0.6rem; padding: 0.1rem 0.3rem;">${badgeText}</span>
+                            <span class="badge ${badgeClass} ms-1" style="font-size: 0.6rem; padding: 0.1rem 0.3rem; display: inline-flex; align-items: center; gap: 3px;">
+                                ${logoSrc ? `<img src="${logoSrc}" style="width: 12px; height: 12px; border-radius: 50%; object-fit: cover;">` : ''}
+                                ${badgeText}
+                            </span>
                         </span>
                         <div class="property-price" style="font-size: 1.1rem;">${precioStr}</div>
                     </div>
@@ -1074,7 +1335,7 @@
                         ${area ? `<div class="feature-item"><i class="fas fa-ruler-combined"></i><span>${area}</span></div>` : ''}
                         ${habs ? `<div class="feature-item"><i class="fas fa-bed"></i><span>${habs} hab.</span></div>` : ''}
                         ${banos ? `<div class="feature-item"><i class="fas fa-bath"></i><span>${banos} baños</span></div>` : ''}
-                        <div class="feature-item"><i class="fas fa-tag"></i><span>${fuente}</span></div>
+                        <div class="feature-item"><i class="fas fa-tag"></i><span>${badgeText}</span></div>
                     </div>
                     <div class="property-footer">
                         <span class="property-source">${p.direccion || ''}</span>
@@ -1085,6 +1346,129 @@
                 </div>
             </div>
         `;
+        
+        container.insertAdjacentHTML('beforeend', cardHtml);
+        
+        // Scroll a la nueva tarjeta
+        setTimeout(() => {
+            const newCard = document.getElementById(`selected-card-${numero}`);
+            if (newCard) {
+                newCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }, 100);
+    }
+
+    /**
+     * Reordena la numeración de todas las tarjetas/marcadores seleccionados
+     * para que queden 1, 2, 3... sin huecos.
+     */
+    function reordenarNumeracion() {
+        const cardsContainer = document.getElementById('selected-property');
+        const remainingCards = cardsContainer.querySelectorAll('.selected-card');
+        
+        if (remainingCards.length === 0) {
+            document.getElementById('empty-state').style.display = 'flex';
+            cardsContainer.style.display = 'none';
+            actualizarContadorSeleccionadas();
+            return;
+        }
+        
+        // Convertir el Map a array ordenado por número original
+        const entries = Array.from(selectedMarkers.entries()).sort((a, b) => a[0] - b[0]);
+        
+        // Limpiar el Map actual
+        selectedMarkers.clear();
+        
+        // Reconstruir con nueva numeración
+        entries.forEach(([, entry], index) => {
+            const nuevoNumero = index + 1;
+            const marker = entry.marker;
+            const p = marker._propertyData;
+            
+            // Actualizar marker
+            marker._selectedNumero = nuevoNumero;
+            const esPropify = p.es_propify;
+            const esExterno = p.es_externo || p.fuente === 'Remax';
+            marker.setIcon(crearIconoNumerado(nuevoNumero, esPropify, esExterno));
+            
+            // Actualizar tarjeta en el DOM
+            const oldCard = document.getElementById(`selected-card-${entry.numero}`);
+            if (oldCard) {
+                oldCard.id = `selected-card-${nuevoNumero}`;
+                oldCard.setAttribute('data-numero', nuevoNumero);
+                
+                // Actualizar el badge numérico
+                const badge = oldCard.querySelector('.card-number-badge');
+                if (badge) {
+                    badge.textContent = nuevoNumero;
+                    badge.style.background = p.es_propify ? '#238636' : p.es_externo ? '#d29922' : '#58a6ff';
+                    badge.style.borderColor = p.es_propify ? '#2ea043' : p.es_externo ? '#e3b341' : '#79c0ff';
+                }
+                
+                // Actualizar el onclick del botón remover
+                const removeBtn = oldCard.querySelector('.btn-remove-card');
+                if (removeBtn) {
+                    removeBtn.setAttribute('onclick', `removerTarjetaPorNumero(${nuevoNumero})`);
+                }
+            }
+            
+            // Guardar con nuevo número
+            selectedMarkers.set(nuevoNumero, { marker, numero: nuevoNumero, propertyData: p });
+        });
+        
+        actualizarContadorSeleccionadas();
+    }
+
+    /**
+     * Remueve una tarjeta por su número y actualiza el marcador correspondiente.
+     * Luego renumera todas las tarjetas restantes para que queden 1,2,3... sin huecos.
+     */
+    function removerTarjetaPorNumero(numero) {
+        // Remover tarjeta del DOM
+        const card = document.getElementById(`selected-card-${numero}`);
+        if (card) {
+            card.remove();
+        }
+        
+        // Restaurar icono del marcador a su estado original (sin número)
+        const entry = selectedMarkers.get(numero);
+        if (entry && entry.marker) {
+            entry.marker._selectedNumero = null;
+            const p = entry.marker._propertyData;
+            let iconUrl;
+            if (p.es_propify) {
+                iconUrl = ICONO_PROPIFFY;
+            } else if (p.es_externo || p.fuente === 'Remax') {
+                iconUrl = ICONO_REMAX;
+            } else {
+                iconUrl = ICONO_LOCAL;
+            }
+            entry.marker.setIcon({
+                url: iconUrl,
+                scaledSize: new google.maps.Size(32, 32)
+            });
+        }
+        
+        selectedMarkers.delete(numero);
+        
+        // Renumerar todas las tarjetas restantes
+        reordenarNumeracion();
+    }
+
+    /**
+     * Actualiza el contador de propiedades seleccionadas y el botón Limpiar.
+     */
+    function actualizarContadorSeleccionadas() {
+        const countSpan = document.getElementById('filtered-count');
+        const btnClear = document.getElementById('btn-clear-selection');
+        const total = selectedMarkers.size;
+        if (total === 0) {
+            countSpan.textContent = '0 propiedades';
+            if (btnClear) btnClear.style.display = 'none';
+        } else {
+            countSpan.textContent = `${total} propiedad${total !== 1 ? 'es' : ''} seleccionada${total !== 1 ? 's' : ''}`;
+            if (btnClear) btnClear.style.display = 'inline-flex';
+        }
     }
 
     /**
@@ -1119,21 +1503,7 @@
                         polygon.setMap(map);
                         polygon.zoneData = zone;
                         
-                        google.maps.event.addListener(polygon, 'click', function() {
-                            const contentString = `
-                                <div class="map-info-window">
-                                    <h6>${zone.nombre_zona}</h6>
-                                    <p class="mb-1">${zone.descripcion || 'Sin descripción'}</p>
-                                    <p class="mb-1"><strong>Nivel:</strong> ${zone.nivel || 'No especificado'}</p>
-                                    <p class="mb-1"><strong>Área:</strong> ${zone.area_total ? zone.area_total.toFixed(2) + ' m²' : 'No calculada'}</p>
-                                    <p class="mb-1"><strong>Precio promedio m²:</strong> ${zone.precio_promedio_m2 ? '$' + zone.precio_promedio_m2.toFixed(2) : 'No disponible'}</p>
-                                </div>
-                            `;
-                            
-                            infoWindow.setContent(contentString);
-                            infoWindow.open(map);
-                            infoWindow.setPosition(this.getPath().getAt(0));
-                        });
+                        // Sin infoWindow al hacer clic en polígonos
                         
                         zonePolygons.push(polygon);
                         
@@ -1173,6 +1543,43 @@
             .catch(error => {
                 console.error('Error al cargar zonas:', error);
             });
+    }
+
+    /**
+     * Limpia toda la selección: remueve todas las tarjetas y resetea los marcadores.
+     */
+    function limpiarSeleccion() {
+        // Remover todas las tarjetas del DOM
+        const cardsContainer = document.getElementById('selected-property');
+        cardsContainer.querySelectorAll('.selected-card').forEach(card => card.remove());
+        
+        // Restaurar iconos de todos los marcadores seleccionados
+        selectedMarkers.forEach((entry) => {
+            if (entry.marker) {
+                entry.marker._selectedNumero = null;
+                const p = entry.marker._propertyData;
+                let iconUrl;
+                if (p.es_propify) {
+                    iconUrl = ICONO_PROPIFFY;
+                } else if (p.es_externo || p.fuente === 'Remax') {
+                    iconUrl = ICONO_REMAX;
+                } else {
+                    iconUrl = ICONO_LOCAL;
+                }
+                entry.marker.setIcon({
+                    url: iconUrl,
+                    scaledSize: new google.maps.Size(32, 32)
+                });
+            }
+        });
+        
+        selectedMarkers.clear();
+        
+        // Mostrar estado vacío
+        document.getElementById('empty-state').style.display = 'flex';
+        cardsContainer.style.display = 'none';
+        
+        actualizarContadorSeleccionadas();
     }
 
     // Inicializar todo al cargar la página

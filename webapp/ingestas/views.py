@@ -785,6 +785,31 @@ def extraer_imagen_propiedad(propiedad):
 
 
 # Nueva vista para listar propiedades en tarjetas
+# Distritos principales de Arequipa para la botonera de filtro rápido
+DISTRITOS_AREQUIPA = [
+    'Todos',
+    'Cercado',
+    'Yanahuara',
+    'Cayma',
+    'Miraflores',
+    'José Luis Bustamante y Rivero',
+    'Sachaca',
+    'Cerro Colorado',
+    'Mariano Melgar',
+    'Paucarpata',
+    'Alto Selva Alegre',
+    'Jacobo Hunter',
+    'Socabaya',
+    'Tiabaya',
+    'Characato',
+    'Sabandia',
+    'Yura',
+    'Uchumayo',
+    'Mollebaya',
+    'La Joya',
+]
+
+
 class ListaPropiedadesView(ListView):
     model = PropiedadRaw
     template_name = 'ingestas/lista_propiedades_rediseno.html'
@@ -907,24 +932,15 @@ class ListaPropiedadesView(ListView):
         )
         
         if not has_any_checkbox_param:
-            # No hay parámetros de checkbox - mostrar todos por defecto
+            # No hay parámetros de checkbox - mostrar solo locales por defecto
             fuente_local = True
-            fuente_externa = True
-            fuente_propify = True
+            fuente_externa = False
+            fuente_propify = False
         else:
             # Hay al menos un parámetro de checkbox - respetar solo los presentes
             fuente_local = 'fuente_local' in self.request.GET
             fuente_externa = 'fuente_externa' in self.request.GET
             fuente_propify = 'fuente_propify' in self.request.GET
-        
-        # FORZAR SIEMPRE mostrar Propify para debugging
-        fuente_propify = True
-        
-        # DEBUG
-        print(f"DEBUG _calcular_checkboxes:")
-        print(f"  Parámetros GET: {dict(self.request.GET)}")
-        print(f"  has_any_checkbox_param: {has_any_checkbox_param}")
-        print(f"  Resultado - Local: {fuente_local}, Externa: {fuente_externa}, Propify: {fuente_propify} (FORZADO)")
         
         return fuente_local, fuente_externa, fuente_propify
     
@@ -937,8 +953,6 @@ class ListaPropiedadesView(ListView):
         # Calcular checkboxes PRIMERO para saber qué fuentes necesitamos
         fuente_local, fuente_externa, fuente_propify = self._calcular_checkboxes()
         
-        print(f"DEBUG _obtener_todas_propiedades: Checkboxes - Local: {fuente_local}, Externa: {fuente_externa}, Propify: {fuente_propify}")
-        
         # Obtener parámetros de filtro
         tipo_propiedad = self.request.GET.get('tipo_propiedad', '').strip()
         departamento = self.request.GET.get('departamento', '').strip()
@@ -947,8 +961,6 @@ class ListaPropiedadesView(ListView):
         precio_max = self.request.GET.get('precio_max', '').strip()
         habitaciones = self.request.GET.get('habitaciones', '').strip()
         banios = self.request.GET.get('banios', '').strip()
-        
-        print(f"DEBUG _obtener_todas_propiedades: Filtros - tipo: '{tipo_propiedad}', depto: '{departamento}', distrito: '{distrito}', precio_min: '{precio_min}', precio_max: '{precio_max}', hab: '{habitaciones}', baños: '{banios}'")
         
         # Función para aplicar filtros a una lista de propiedades (diccionarios)
         def _aplicar_filtros(propiedades):
@@ -1044,52 +1056,28 @@ class ListaPropiedadesView(ListView):
         
         # Obtener solo las fuentes necesarias
         if fuente_externa:
-            # Obtener propiedades externas de la API
             from ingestas.services_api import obtener_propiedades_externas
             propiedades_externas = obtener_propiedades_externas()
-            print(f"DEBUG _obtener_todas_propiedades: Obtenidas {len(propiedades_externas)} propiedades externas")
-            # Aplicar filtros
             propiedades_externas = _aplicar_filtros(propiedades_externas)
-            print(f"DEBUG _obtener_todas_propiedades: Después de filtros externas: {len(propiedades_externas)}")
         
         if fuente_propify:
-            # Obtener propiedades de Propifai (segunda base de datos)
             try:
                 from propifai.models import PropifaiProperty
-                print(f"DEBUG _obtener_todas_propiedades: Obteniendo propiedades de Propifai...")
-                
-                # Usar la base de datos 'propifai' explícitamente
-                propiedades_propifai = list(PropifaiProperty.objects.using('propifai').all()[:100])  # Limitar a 100 para rendimiento
-                print(f"DEBUG _obtener_todas_propiedades: Obtenidas {len(propiedades_propifai)} propiedades de la BD propifai")
-                
-                # Convertir a diccionarios
-                for i, prop in enumerate(propiedades_propifai):
+                propiedades_propifai = list(PropifaiProperty.objects.using('propifai').all()[:100])
+                for prop in propiedades_propifai:
                     try:
                         prop_dict = self._convertir_propiedad_propifai_a_dict(prop)
                         propiedades_propifai_dict.append(prop_dict)
-                        if i < 3:  # Log solo para las primeras 3
-                            print(f"DEBUG _obtener_todas_propiedades: Propiedad {i+1} convertida - es_propify: {prop_dict.get('es_propify')}")
-                    except Exception as e2:
-                        print(f"DEBUG _obtener_todas_propiedades: Error convirtiendo propiedad {i+1}: {e2}")
-                
-                print(f"DEBUG _obtener_todas_propiedades: Total convertidas Propify: {len(propiedades_propifai_dict)}")
-                # Aplicar filtros
+                    except Exception:
+                        pass
                 propiedades_propifai_dict = _aplicar_filtros(propiedades_propifai_dict)
-                print(f"DEBUG _obtener_todas_propiedades: Después de filtros Propify: {len(propiedades_propifai_dict)}")
-                
-            except Exception as e:
-                print(f"Error obteniendo propiedades de Propifai: {e}")
-                import traceback
-                traceback.print_exc()
+            except Exception:
+                propiedades_propifai_dict = []
         
         if fuente_local:
-            # Obtener propiedades locales con filtros aplicados al queryset
             propiedades_locales = list(self.get_queryset())
             propiedades_locales_dict = [self._convertir_propiedad_local_a_dict(prop) for prop in propiedades_locales]
-            print(f"DEBUG _obtener_todas_propiedades: Obtenidas {len(propiedades_locales_dict)} propiedades locales")
-            # Aplicar filtros
             propiedades_locales_dict = _aplicar_filtros(propiedades_locales_dict)
-            print(f"DEBUG _obtener_todas_propiedades: Después de filtros locales: {len(propiedades_locales_dict)}")
         
         # Preparar listas para intercalar
         listas_propiedades = []
@@ -1106,37 +1094,27 @@ class ListaPropiedadesView(ListView):
         # Si solo hay una fuente, devolverla directamente (sin intercalar)
         if len(listas_propiedades) == 1:
             fuente, propiedades = listas_propiedades[0]
-            print(f"DEBUG _obtener_todas_propiedades: Solo una fuente ({fuente}), devolviendo {len(propiedades)} propiedades directamente")
-            
-            # Agregar indicador de fuente
             todas_propiedades = []
             for prop in propiedades:
                 prop_copy = prop.copy() if hasattr(prop, 'copy') else dict(prop)
                 prop_copy['_fuente_original'] = fuente
                 todas_propiedades.append(prop_copy)
-            
             return todas_propiedades
         
         # Intercalar propiedades de diferentes fuentes (si hay más de una)
         todas_propiedades = []
         
         if listas_propiedades:
-            # Encontrar la lista más larga
             max_len = max(len(propiedades) for _, propiedades in listas_propiedades)
-            
-            print(f"DEBUG _obtener_todas_propiedades: Intercalando {len(listas_propiedades)} fuentes, max_len: {max_len}")
-            print(f"DEBUG _obtener_todas_propiedades: Listas a intercalar: {[(fuente, len(props)) for fuente, props in listas_propiedades]}")
             
             # Intercalar propiedades
             for i in range(max_len):
                 for fuente, propiedades in listas_propiedades:
                     if i < len(propiedades):
-                        # Agregar un indicador de fuente para debugging
                         prop = propiedades[i].copy() if hasattr(propiedades[i], 'copy') else dict(propiedades[i])
                         prop['_fuente_original'] = fuente
                         todas_propiedades.append(prop)
         
-        print(f"DEBUG _obtener_todas_propiedades: Total propiedades a devolver: {len(todas_propiedades)}")
         return todas_propiedades
     
     def _convertir_propiedad_local_a_dict(self, propiedad):
@@ -1190,6 +1168,7 @@ class ListaPropiedadesView(ListView):
             'imagen_principal': primera_imagen,
             'url_propiedad': propiedad.url_propiedad,
             'fuente': propiedad.fuente_excel or 'Local',  # Usar fuente_excel en lugar de fuente
+            'portal': propiedad.portal or '',  # Portal de origen: Remax, Adondevivir, etc.
             'fecha_publicacion': propiedad.fecha_publicacion,
             'fecha_ingesta': propiedad.fecha_ingesta,
             # Campos adicionales para compatibilidad
@@ -1249,99 +1228,66 @@ class ListaPropiedadesView(ListView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # Agregar campos dinámicos para referencia
         context['campos_dinamicos'] = CampoDinamico.objects.all()
         
-        # Obtener todas las propiedades según los filtros
-        # NOTA: _obtener_todas_propiedades() ya obtiene propiedades_externas y propifai internamente
+        # Calcular estado de checkboxes
+        fuente_local, fuente_externa, fuente_propify = self._calcular_checkboxes()
+        
+        # Obtener todas las propiedades según los filtros (ya incluye locales, externas y propifai)
         todas_propiedades = self._obtener_todas_propiedades()
         
-        # Obtener propiedades externas para los filtros (solo si no se obtuvieron ya)
-        from ingestas.services_api import obtener_propiedades_externas
-        propiedades_externas = obtener_propiedades_externas()
-        
-        try:
-            from propifai.models import PropifaiProperty
-            propiedades_propifai = list(PropifaiProperty.objects.using('propifai').all()[:100])
-            propiedades_propifai_dict = [self._convertir_propiedad_propifai_a_dict(prop) for prop in propiedades_propifai]
-        except Exception as e:
-            print(f"Error obteniendo propiedades de Propifai: {e}")
-            propiedades_propifai_dict = []
+        # Extraer propiedades externas y propifai de todas_propiedades para los filtros
+        propiedades_externas = [p for p in todas_propiedades if p.get('es_externo') and not p.get('es_propify')]
+        propiedades_propifai_dict = [p for p in todas_propiedades if p.get('es_propify')]
         
         # Calcular conteos
         conteo_locales = sum(1 for p in todas_propiedades if not p.get('es_externo') and not p.get('es_propify'))
-        conteo_externas = sum(1 for p in todas_propiedades if p.get('es_externo') and not p.get('es_propify'))
-        conteo_propify = sum(1 for p in todas_propiedades if p.get('es_propify'))
+        conteo_externas = len(propiedades_externas)
+        conteo_propify = len(propiedades_propifai_dict)
         
-        # Obtener valores de checkboxes usando el método común
-        fuente_local, fuente_externa, fuente_propify = self._calcular_checkboxes()
-        
-        # DEBUG: Imprimir valores para diagnóstico (directo a consola)
-        print(f"\n=== DEBUG get_context_data ===")
-        print(f"  Parámetros GET: {dict(self.request.GET)}")
-        print(f"  Checkboxes calculados - Local: {fuente_local}, Externa: {fuente_externa}, Propify: {fuente_propify}")
-        print(f"  Conteos - Locales: {conteo_locales}, Externas: {conteo_externas}, Propify: {conteo_propify}")
-        
-        # Usar object_list (que ya está paginado) en lugar de todas_propiedades
-        # object_list contiene la página actual de todas_propiedades gracias a paginate_queryset
         context['todas_propiedades'] = self.object_list  # Ya paginado
-        context['todas_propiedades_completas'] = todas_propiedades  # Todas sin paginar
-        context['total_propiedades'] = len(todas_propiedades)  # Total sin paginar
+        context['todas_propiedades_completas'] = todas_propiedades
+        context['total_propiedades'] = len(todas_propiedades)
         context['conteo_locales'] = conteo_locales
         context['conteo_externas'] = conteo_externas
         context['conteo_propify'] = conteo_propify
-        
-        # Pasar todas las propiedades (sin serializar) para que json_script las serialice correctamente
         context['todas_propiedades_json'] = todas_propiedades
         
-        # DEBUG: Verificar que las propiedades Propify estén en object_list
-        propify_in_object_list = sum(1 for p in self.object_list if isinstance(p, dict) and p.get('es_propify'))
-        print(f"  Propify en object_list: {propify_in_object_list} de {len(self.object_list)}")
-        print(f"=== FIN DEBUG ===\n")
-        
-        # Agregar opciones para filtros (combinando fuentes)
+        # Agregar opciones para filtros
         queryset = self.get_queryset()
         
-        # Tipos de propiedad (locales + externas + propifai)
+        # Tipos de propiedad
         tipos_locales = queryset.exclude(tipo_propiedad__isnull=True).exclude(tipo_propiedad='').values_list('tipo_propiedad', flat=True).distinct()
         tipos_externos = {prop.get('tipo_propiedad') for prop in propiedades_externas if prop.get('tipo_propiedad')}
         tipos_propifai = {prop.get('tipo_propiedad') for prop in propiedades_propifai_dict if prop.get('tipo_propiedad')}
         todos_tipos = sorted(set(list(tipos_locales) + list(tipos_externos) + list(tipos_propifai)))
         context['tipos_propiedad'] = todos_tipos
         
-        # Departamentos (locales + externas + propifai)
+        # Departamentos
         deptos_locales = queryset.exclude(departamento__isnull=True).exclude(departamento='').values_list('departamento', flat=True).distinct()
         deptos_externos = {prop.get('departamento') for prop in propiedades_externas if prop.get('departamento')}
-        
-        # Para Propifai, usar nombres mapeados en lugar de índices
         deptos_propifai = set()
         for prop in propiedades_propifai_dict:
             depto = prop.get('departamento')
             depto_nombre = prop.get('departamento_nombre')
-            # Preferir el nombre mapeado, pero si no existe, usar el índice
             if depto_nombre and depto_nombre != str(depto):
                 deptos_propifai.add(depto_nombre)
             elif depto:
                 deptos_propifai.add(str(depto))
-        
         todos_deptos = sorted(set(list(deptos_locales) + list(deptos_externos) + list(deptos_propifai)))
         context['departamentos'] = todos_deptos
         
-        # Distritos (locales + externas + propifai)
+        # Distritos
         distritos_locales = queryset.exclude(distrito__isnull=True).exclude(distrito='').values_list('distrito', flat=True).distinct()
         distritos_externos = {prop.get('distrito') for prop in propiedades_externas if prop.get('distrito')}
-        
-        # Para Propifai, usar nombres mapeados en lugar de índices
         distritos_propifai = set()
         for prop in propiedades_propifai_dict:
             distrito = prop.get('distrito')
             distrito_nombre = prop.get('distrito_nombre')
-            # Preferir el nombre mapeado, pero si no existe, usar el índice
             if distrito_nombre and distrito_nombre != str(distrito):
                 distritos_propifai.add(distrito_nombre)
             elif distrito:
                 distritos_propifai.add(str(distrito))
-        
         todos_distritos = sorted(set(list(distritos_locales) + list(distritos_externos) + list(distritos_propifai)))
         context['distritos'] = todos_distritos
         
@@ -1351,10 +1297,9 @@ class ListaPropiedadesView(ListView):
         context['fuente_externa_checked'] = fuente_externa
         context['fuente_propify_checked'] = fuente_propify
         
-        # DEBUG: Verificar que las variables se están agregando al contexto
-        print(f"  Contexto DEBUG - fuente_local_checked: {context.get('fuente_local_checked')}")
-        print(f"  Contexto DEBUG - fuente_externa_checked: {context.get('fuente_externa_checked')}")
-        print(f"  Contexto DEBUG - fuente_propify_checked: {context.get('fuente_propify_checked')}")
+        # Distrito seleccionado para la botonera
+        context['distrito_seleccionado'] = self.request.GET.get('distrito', 'Todos')
+        context['distritos_arequipa'] = DISTRITOS_AREQUIPA
         
         # Agregar API key de Google Maps (misma que usan otras vistas)
         context['google_maps_api_key'] = 'AIzaSyBrL1QF7vTl9zF8FmCUumfRpFJcaYokO7Q'
