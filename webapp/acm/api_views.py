@@ -118,6 +118,8 @@ class ComparablesAPIView(APIView):
                 'precio_m2_final': precio_m2_info.get('precio_m2_final'),
                 'distancia_metros': round(distancia, 2),
                 'fuente': 'local',
+                'cochera': prop.numero_cocheras,
+                'antiguedad': prop.antiguedad,
             })
 
         # Propiedades Propifai
@@ -163,6 +165,8 @@ class ComparablesAPIView(APIView):
                     'fuente': 'propifai',
                     'codigo': prop.code,
                     'titulo': prop.title,
+                    'cochera': prop.garage_spaces,
+                    'antiguedad': None,
                 })
         except Exception:
             pass
