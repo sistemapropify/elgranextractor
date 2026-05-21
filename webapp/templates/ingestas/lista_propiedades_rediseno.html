@@ -923,19 +923,16 @@
     });
 
     /**
-     * Obtiene el nombre real del distrito para una propiedad.
-     * Las propiedades Propifai tienen distrito_nombre (texto) y distrito (índice numérico).
-     * Las propiedades locales (PropiedadRaw) tienen solo distrito como índice numérico.
+     * Obtiene el nombre del distrito exactamente como está en el registro.
+     * Prioriza distrito_nombre (texto) si existe, si no devuelve el valor crudo de distrito.
+     * Sin mapeo — para detectar incongruencias y anomalías en los datos.
      */
     function obtenerNombreDistrito(p) {
         if (p.distrito_nombre && p.distrito_nombre.toString().trim()) {
             return p.distrito_nombre.toString().trim();
         }
         const distritoVal = (p.distrito || '').toString().trim();
-        if (distritoVal && MAPEO_DISTRITOS[distritoVal]) {
-            return MAPEO_DISTRITOS[distritoVal];
-        }
-        return distritoVal;
+        return distritoVal || 'Sin distrito';
     }
     let map = null;
     let markers = [];           // Todos los marcadores creados
@@ -1053,14 +1050,15 @@
     }
 
     /**
-     * Genera el label de texto para mostrar debajo del marcador PNG.
-     * Muestra el nombre del distrito y el precio por metro cuadrado.
+     * Genera el label de texto para mostrar sobre el marcador PNG.
+     * Muestra el nombre del distrito (tal cual del registro) y el precio por metro cuadrado.
+     * Color negro con fondo semitransparente para visibilidad.
      */
     function crearLabelDistrito(distrito, precioM2) {
         const texto = distrito + (precioM2 ? ` S/${precioM2}` : '');
         return {
             text: texto,
-            color: '#e6edf3',
+            color: '#000000',
             fontSize: '10px',
             fontWeight: 'bold',
             fontFamily: 'Arial, sans-serif'
@@ -1175,7 +1173,10 @@
                         precioM2 = Math.round(precioNum / p.area_construida).toString();
                     }
                 }
-                entry.marker.setIcon({ url: iconUrl, scaledSize: new google.maps.Size(32, 32) });
+                entry.marker.setIcon({
+                    url: iconUrl,
+                    scaledSize: new google.maps.Size(32, 32)
+                });
                 entry.marker.setLabel(crearLabelDistrito(nombreDistrito, precioM2));
             }
             selectedMarkers.delete(numero);
@@ -1543,7 +1544,10 @@
                     precioM2 = Math.round(precioNum / p.area_construida).toString();
                 }
             }
-            entry.marker.setIcon({ url: iconUrl, scaledSize: new google.maps.Size(32, 32) });
+            entry.marker.setIcon({
+                url: iconUrl,
+                scaledSize: new google.maps.Size(32, 32)
+            });
             entry.marker.setLabel(crearLabelDistrito(nombreDistrito, precioM2));
         }
         
@@ -1672,7 +1676,10 @@
                         precioM2 = Math.round(precioNum / p.area_construida).toString();
                     }
                 }
-                entry.marker.setIcon({ url: iconUrl, scaledSize: new google.maps.Size(32, 32) });
+                entry.marker.setIcon({
+                    url: iconUrl,
+                    scaledSize: new google.maps.Size(32, 32)
+                });
                 entry.marker.setLabel(crearLabelDistrito(nombreDistrito, precioM2));
             }
         });
