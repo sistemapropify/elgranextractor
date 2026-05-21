@@ -835,8 +835,8 @@
                 <div class="distrito-checkboxes">
                     {% for distrito in distritos_arequipa %}
                         {% if distrito != 'Todos' %}
-                        <label class="distrito-checkbox-label" onclick="this.querySelector('.distrito-checkbox').click(); event.stopPropagation();">
-                            <input type="checkbox" class="distrito-checkbox" name="distrito" value="{{ distrito }}" onchange="this.closest('label').classList.toggle('active', this.checked);">
+                        <label class="distrito-checkbox-label" onclick="event.preventDefault(); var cb=this.querySelector('.distrito-checkbox'); cb.checked=!cb.checked; cb.dispatchEvent(new Event('change'));">
+                            <input type="checkbox" class="distrito-checkbox" name="distrito" value="{{ distrito }}" onchange="this.closest('label').classList.toggle('active', this.checked);" style="display:none;">
                             {{ distrito }}
                         </label>
                         {% endif %}
@@ -1710,9 +1710,8 @@
                 e.preventDefault();
                 document.querySelectorAll('.distrito-checkbox:checked').forEach(cb => {
                     cb.checked = false;
-                    // Actualizar clase active del label
-                    const label = cb.closest('.distrito-checkbox-label');
-                    if (label) label.classList.remove('active');
+                    // Disparar evento change para actualizar clase active
+                    cb.dispatchEvent(new Event('change'));
                 });
                 actualizarMarcadores();
             });
