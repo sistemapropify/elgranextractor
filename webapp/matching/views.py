@@ -465,22 +465,25 @@ class MatchingCalendarView(TemplateView):
             month_days = cal.monthdays2calendar(year, month)
             
             # Construir reqs_por_fecha como dict con key "YYYY-MM-DD"
+            # Optimización: cargar todos los requerimientos en UNA consulta en lugar de N+1
+            req_ids = list(resumen_por_req.keys())
+            requerimientos = Requerimiento.objects.filter(
+                id__in=req_ids
+            ).exclude(condicion__in=condicion_excluir)
+            reqs_map = {r.id: r for r in requerimientos}
+            
             reqs_por_fecha = {}
             for req_id, info in resumen_por_req.items():
-                try:
-                    r = Requerimiento.objects.get(id=req_id)
-                    # Excluir no_especificado y compartido
-                    if r.condicion in condicion_excluir:
-                        continue
-                    if r.fecha:
-                        fecha_key = r.fecha.isoformat()  # "2026-05-15"
-                        if fecha_key not in reqs_por_fecha:
-                            reqs_por_fecha[fecha_key] = {'total': 0, 'con_match_alto': 0}
-                        reqs_por_fecha[fecha_key]['total'] += 1
-                        if info['porcentaje_match'] >= 90:
-                            reqs_por_fecha[fecha_key]['con_match_alto'] += 1
-                except Requerimiento.DoesNotExist:
-                    pass
+                r = reqs_map.get(req_id)
+                if not r:
+                    continue
+                if r.fecha:
+                    fecha_key = r.fecha.isoformat()  # "2026-05-15"
+                    if fecha_key not in reqs_por_fecha:
+                        reqs_por_fecha[fecha_key] = {'total': 0, 'con_match_alto': 0}
+                    reqs_por_fecha[fecha_key]['total'] += 1
+                    if info['porcentaje_match'] >= 90:
+                        reqs_por_fecha[fecha_key]['con_match_alto'] += 1
             
             context['month_days'] = month_days
             context['reqs_por_fecha_json'] = json.dumps(reqs_por_fecha)
@@ -546,6 +549,8 @@ class MatchingCalendarView(TemplateView):
                         'distritos': r.distritos[:50] if r.distritos else '',
                         'porcentaje_match': info.get('porcentaje_match', 0),
                         'mejor_propiedad_codigo': info.get('mejor_propiedad_codigo'),
+                        'mejor_propiedad_precio': info.get('mejor_propiedad_precio'),
+                        'mejor_propiedad_moneda_id': info.get('mejor_propiedad_moneda_id'),
                     })
                 dias_semana.append({
                     'date_iso': d.isoformat(),
@@ -612,6 +617,8 @@ class MatchingCalendarView(TemplateView):
                     'distritos': r.distritos[:50] if r.distritos else '',
                     'porcentaje_match': info.get('porcentaje_match', 0),
                     'mejor_propiedad_codigo': info.get('mejor_propiedad_codigo'),
+                    'mejor_propiedad_precio': info.get('mejor_propiedad_precio'),
+                    'mejor_propiedad_moneda_id': info.get('mejor_propiedad_moneda_id'),
                 })
             
             context['reqs_dia'] = reqs_serializados

@@ -9,16 +9,20 @@ from .models import MatchResult
 
 
 class PropiedadSimpleSerializer(serializers.ModelSerializer):
-    """Serializer simplificado para propiedades."""
+    """Serializer simplificado para propiedades.
     
-    precio_formateado = serializers.CharField(read_only=True)
+    NOTA: El precio se envía como 'price' (valor raw de BD) + 'currency_id' (1=USD, 2=PEN).
+    El frontend debe usar formatPrice(price, currency_id) para mostrar correctamente.
+    NO usar 'precio_formateado' del modelo porque fuerza S/. siempre.
+    """
+    
     tipo_propiedad = serializers.CharField(read_only=True)
     currency_symbol = serializers.SerializerMethodField()
     
     class Meta:
         model = PropifaiProperty
         fields = [
-            'id', 'code', 'title', 'district', 'price', 'precio_formateado',
+            'id', 'code', 'title', 'district', 'price',
             'bedrooms', 'bathrooms', 'built_area', 'antiquity_years',
             'garage_spaces', 'ascensor', 'real_address', 'tipo_propiedad',
             'imagen_url', 'currency_id', 'currency_symbol'

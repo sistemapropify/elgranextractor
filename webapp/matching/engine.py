@@ -776,6 +776,7 @@ def guardar_resultados_matching(requerimiento_id: int, resultados: List[Dict]) -
 def ejecutar_matching_masivo(requerimientos=None, propiedades=None, limite_por_requerimiento=10):
     """
     Ejecuta matching para múltiples requerimientos de forma optimizada.
+    Los resultados se guardan en la tabla MatchResult para persistencia.
     
     Args:
         requerimientos: QuerySet de requerimientos (si None, todos)
@@ -799,6 +800,13 @@ def ejecutar_matching_masivo(requerimientos=None, propiedades=None, limite_por_r
         engine = MatchingEngine(requerimiento)
         resultados = engine.ejecutar_matching(propiedades)
         
+        # Guardar resultados en MatchResult para persistencia
+        try:
+            top_resultados = resultados[:limite_por_requerimiento]
+            guardar_resultados_matching(requerimiento.id, top_resultados)
+        except Exception as e:
+            logger.error(f"Error guardando matching para req {requerimiento.id}: {e}")
+        
         compatibles = [r for r in resultados if r['fase_eliminada'] is None]
         total_compatibles = len(compatibles)
         
@@ -814,6 +822,7 @@ def ejecutar_matching_masivo(requerimientos=None, propiedades=None, limite_por_r
                 'district': mejor_resultado['propiedad'].district,
                 'district_name': mejor_resultado['propiedad'].distrito_nombre,
                 'price': float(mejor_resultado['propiedad'].price) if mejor_resultado['propiedad'].price else None,
+                'currency_id': mejor_resultado['propiedad'].currency_id,
                 'property_type': mejor_resultado['propiedad'].tipo_propiedad,
             }
         else:
@@ -832,6 +841,7 @@ def ejecutar_matching_masivo(requerimientos=None, propiedades=None, limite_por_r
             'mejor_propiedad_titulo': mejor_propiedad['title'] if mejor_propiedad else None,
             'mejor_propiedad_distrito': mejor_propiedad['district_name'] if mejor_propiedad else None,
             'mejor_propiedad_precio': mejor_propiedad['price'] if mejor_propiedad else None,
+            'mejor_propiedad_moneda_id': mejor_propiedad['currency_id'] if mejor_propiedad else None,
             'mejor_propiedad_tipo': mejor_propiedad['property_type'] if mejor_propiedad else None,
             'fecha_ultimo_matching': timezone.now().isoformat(),
         }
@@ -839,9 +849,71 @@ def ejecutar_matching_masivo(requerimientos=None, propiedades=None, limite_por_r
     return resultados_masivo
 
 
+def _obtener_desde_cache(limite=500):
+    """
+    Lee los resultados de matching desde la tabla MatchResult.
+    Es rápido porque no ejecuta el motor de matching.
+    Los resultados persisten aunque se reinicie el servidor.
+    
+    Args:
+        limite: Número máximo de requerimientos a retornar.
+        
+    Returns:
+        Lista de diccionarios con resumen de matching por requerimiento.
+    """
+    from django.db.models import Max
+    
+    # Obtener el último ejecutado_en por requerimiento, ordenado por score
+    ultimos = MatchResult.objects.values(
+        'requerimiento_id'
+    ).annotate(
+        ultimo_ejecutado=Max('ejecutado_en'),
+        max_score=Max('score_total')
+    ).order_by('-max_score')[:limite]
+    
+    resumen = []
+    for item in ultimos:
+        req_id = item['requerimiento_id']
+        try:
+            req = Requerimiento.objects.get(id=req_id)
+        except Requerimiento.DoesNotExist:
+            continue
+        
+        # Obtener el mejor match de ese batch
+        mejor = MatchResult.objects.filter(
+            requerimiento_id=req_id,
+            ejecutado_en=item['ultimo_ejecutado']
+        ).order_by('-score_total').first()
+        
+        if mejor:
+            precio = float(mejor.propiedad.price) if mejor.propiedad and mejor.propiedad.price else None
+            currency_id = mejor.propiedad.currency_id if mejor.propiedad else None
+            
+            resumen.append({
+                'requerimiento_id': req_id,
+                'requerimiento_nombre': str(req),
+                'porcentaje_match': float(mejor.score_total),
+                'score_promedio': float(mejor.score_total),
+                'total_compatibles': 1,
+                'mejor_propiedad_id': mejor.propiedad_id,
+                'mejor_propiedad_codigo': mejor.propiedad.code if mejor.propiedad else None,
+                'mejor_propiedad_titulo': mejor.propiedad.title if mejor.propiedad else None,
+                'mejor_propiedad_distrito': mejor.propiedad.district if mejor.propiedad else None,
+                'mejor_propiedad_precio': precio,
+                'mejor_propiedad_moneda_id': currency_id,
+                'mejor_propiedad_tipo': None,
+                'fecha_ultimo_matching': mejor.ejecutado_en.isoformat() if mejor.ejecutado_en else None,
+            })
+    
+    resumen.sort(key=lambda x: x['porcentaje_match'], reverse=True)
+    return resumen[:limite]
+
+
 def obtener_resumen_matching_masivo(limite=500):
     """
     Obtiene un resumen rápido del matching masivo.
+    Primero intenta leer desde MatchResult (resultados guardados).
+    Solo ejecuta matching si no hay resultados guardados o hay propiedades nuevas.
     
     Args:
         limite: Número máximo de requerimientos a procesar.
@@ -850,10 +922,33 @@ def obtener_resumen_matching_masivo(limite=500):
         Lista de diccionarios con resumen de matching por requerimiento.
     """
     try:
-        resultados = ejecutar_matching_masivo()
-        resumen = list(resultados.values())
-        resumen.sort(key=lambda x: x['porcentaje_match'], reverse=True)
-        return resumen[:limite]
+        from django.db.models import Max
+        
+        # 1. Verificar si hay resultados guardados en MatchResult
+        ultimo_matching = MatchResult.objects.aggregate(
+            max_ejecutado=Max('ejecutado_en')
+        )['max_ejecutado']
+        
+        # 2. Verificar si hay propiedades más nuevas que el último matching
+        hay_propiedades_nuevas = False
+        if ultimo_matching:
+            ultima_propiedad = PropifaiProperty.objects.aggregate(
+                max_updated=Max('updated_at')
+            )['max_updated']
+            if ultima_propiedad and ultima_propiedad > ultimo_matching:
+                hay_propiedades_nuevas = True
+        
+        # 3. Decidir: usar resultados guardados o recalcular
+        if ultimo_matching and not hay_propiedades_nuevas:
+            # Leer desde MatchResult (rápido, no ejecuta matching)
+            return _obtener_desde_cache(limite)
+        else:
+            # Recalcular y guardar (lento pero necesario)
+            resultados = ejecutar_matching_masivo()
+            resumen = list(resultados.values())
+            resumen.sort(key=lambda x: x['porcentaje_match'], reverse=True)
+            return resumen[:limite]
+            
     except Exception as e:
         logger.error(f"Error al obtener resumen de matching masivo: {e}")
         return []

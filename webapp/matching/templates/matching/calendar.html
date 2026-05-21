@@ -1,5 +1,6 @@
 {% extends "propifai_base.html" %}
 {% load static %}
+{% load humanize %}
 
 {% block title %}Calendario de Matching - Propifai{% endblock %}
 
@@ -960,7 +961,12 @@
                                     <div class="score-circle none">—</div>
                                 {% endif %}
                                 {% if req.mejor_propiedad_codigo %}
-                                    <a href="{% url 'matching:dashboard' %}?requerimiento_id={{ req.id }}" class="match-link">{{ req.mejor_propiedad_codigo }}</a>
+                                    <a href="{% url 'matching:dashboard' %}?requerimiento_id={{ req.id }}" class="match-link">
+                                        {% if req.mejor_propiedad_precio and req.mejor_propiedad_moneda_id %}
+                                            {% if req.mejor_propiedad_moneda_id == 1 %}${% else %}S/.{% endif %}{{ req.mejor_propiedad_precio|floatformat:0|intcomma }} ·
+                                        {% endif %}
+                                        {{ req.mejor_propiedad_codigo }}
+                                    </a>
                                 {% endif %}
                             </div>
                         </div>
@@ -1083,6 +1089,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     const presupuestoHtml = req.presupuesto_display ? `<span style="color:#3fb950;font-weight:600;margin-left:2px;">${req.presupuesto_display}</span>` : '';
                     const agenteHtml = req.agente ? `<span style="color:#ff6d00;font-weight:600;margin-left:2px;">${req.agente}</span>` : '';
                     const distritosHtml = req.distritos ? `<span style="color:var(--text-secondary);margin-left:2px;">· ${req.distritos.substring(0,20)}</span>` : '';
+                    const precioPropHtml = (req.mejor_propiedad_precio && req.mejor_propiedad_moneda_id)
+                        ? `<span style="color:var(--accent-green);font-weight:600;margin-left:2px;font-size:10px;">· ${getCurrencySymbol(req.mejor_propiedad_moneda_id)}${Number(req.mejor_propiedad_precio).toLocaleString('en-US')}</span>`
+                        : '';
                     bodyHtml += `<div class="week-req-item" onclick="openMatchModal(${req.id})">
                         <span class="req-hour">${req.hora_display}</span>
                         <span class="req-title">
@@ -1091,6 +1100,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             ${presupuestoHtml}
                             ${distritosHtml}
                             ${agenteHtml}
+                            ${precioPropHtml}
                         </span>
                         <span class="match-badge ${badgeClass}">${badgeText}</span>
                     </div>`;
