@@ -931,7 +931,9 @@
         const lng = parseFloat(p.lng);
         if (isNaN(lat) || isNaN(lng)) return;
         
-        const distrito = (p.distrito || p.distrito_nombre || '').trim();
+        // Usar distrito_nombre primero (nombre real), luego distrito (índice numérico)
+        // Las propiedades Propifai tienen distrito como índice numérico y distrito_nombre como texto
+        const distrito = (p.distrito_nombre || p.distrito || '').toString().trim();
         if (!distrito) return;
         
         if (!propiedadesPorDistrito[distrito]) {
@@ -1244,7 +1246,7 @@
         
         const precioVal = p.precio_usd || p.precio;
         const precioStr = precioVal ? '$' + Number(precioVal).toLocaleString('es-PE', {minimumFractionDigits: 0}) : 'Consultar';
-        const distrito = p.distrito || p.distrito_nombre || '';
+        const distrito = p.distrito_nombre || p.distrito || '';
         const tipo = p.tipo_propiedad || 'Propiedad';
         const desc = p.titulo || p.descripcion || 'Sin descripción';
         const img = p.primera_imagen || p.imagen_principal || '';
