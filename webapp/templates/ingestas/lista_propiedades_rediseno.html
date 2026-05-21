@@ -954,9 +954,6 @@
     // === SISTEMA DE SELECCIÓN ACUMULATIVA ===
     const selectedMarkers = new Map(); // numero -> { marker, numero, propertyData }
     
-    // InfoWindow reutilizable para mostrar distrito y precio/m²
-    let infoWindow = null;
-    
     // Pre-calcular propiedades por distrito
     todasPropiedadesJSON.forEach(p => {
         const lat = parseFloat(p.lat);
@@ -1080,59 +1077,63 @@
     }
 
     /**
-     * Genera un icono SVG para el marcador con el texto del distrito y precio/m² debajo.
-     * El círculo numerado (si seleccionado) o el icono del portal (si no) arriba,
-     * y el distrito + precio/m² en texto rojo debajo.
+     * Obtiene la URL del icono PNG para una propiedad según su portal/fuente.
      */
-    function crearIconoConTexto(p, numero) {
+    function obtenerIconoUrl(p) {
+        const portal = (p.portal || '').toLowerCase();
+        if (p.es_propify) return ICONO_PROPIFFY;
+        if (portal === 'remax') return ICONO_REMAX;
+        if (portal === 'adondevivir') return ICONO_ADONDEVIVIR;
+        if (p.es_externo) return ICONO_REMAX;
+        return ICONO_LOCAL;
+    }
+
+    /**
+     * Genera un icono SVG que incrusta el PNG original y agrega texto debajo.
+     * El PNG se muestra en la parte superior (32x32), y debajo en texto rojo
+     * aparece el nombre del distrito y el precio por metro cuadrado.
+     * Si numero está definido, se superpone un círculo numerado sobre el PNG.
+     */
+    function crearIconoConTexto(p, numero, pngUrl) {
         const distrito = (p.distrito_nombre || p.distrito || '').toString().trim();
         const precioM2Data = calcularPrecioM2(p);
         const precioM2Str = precioM2Data
             ? '$' + precioM2Data.precioM2.toLocaleString('es-PE', {minimumFractionDigits: 0, maximumFractionDigits: 0}) + '/m² (' + precioM2Data.tipoArea + ')'
             : '';
         
-        // Dimensiones del círculo superior
-        const circleSize = 32;
-        const circleRadius = 14;
-        const circleCenter = circleSize / 2;
+        // Dimensiones del PNG
+        const pngSize = 32;
+        const pngCenter = pngSize / 2;
         
         // Texto debajo
         const fontSize = 11;
         const lineHeight = 13;
-        const textTop = circleSize + 2;  // espacio después del círculo
+        const textTop = pngSize + 1;  // espacio después del PNG
         
         // Calcular altura total del SVG
-        let totalHeight = circleSize;
+        let totalHeight = pngSize;
         if (distrito) totalHeight += lineHeight + 1;
         if (precioM2Str) totalHeight += lineHeight + 1;
-        totalHeight += 4; // padding inferior
+        totalHeight += 3; // padding inferior
         
-        const width = 120; // ancho fijo para que quepa el texto
-        
-        let fillColor, strokeColor, textColor;
-        const portal = (p.portal || '').toLowerCase();
-        
-        if (p.es_propify) {
-            fillColor = '#238636'; strokeColor = '#2ea043'; textColor = '#ffffff';
-        } else if (portal === 'remax') {
-            fillColor = '#da3633'; strokeColor = '#f85149'; textColor = '#ffffff';
-        } else if (portal === 'adondevivir') {
-            fillColor = '#1f6feb'; strokeColor = '#58a6ff'; textColor = '#ffffff';
-        } else if (p.es_externo) {
-            fillColor = '#d29922'; strokeColor = '#e3b341'; textColor = '#ffffff';
-        } else {
-            fillColor = '#58a6ff'; strokeColor = '#79c0ff'; textColor = '#ffffff';
-        }
+        const width = 130; // ancho fijo para que quepa el texto
         
         let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${totalHeight}" viewBox="0 0 ${width} ${totalHeight}">`;
         
-        // Círculo con número o sin número
+        // Incrustar el PNG original
+        svg += `<image href="${pngUrl}" x="${pngCenter - pngSize/2}" y="0" width="${pngSize}" height="${pngSize}" preserveAspectRatio="xMidYMid meet"/>`;
+        
+        // Si tiene número, superponer círculo numerado sobre el PNG
         if (numero !== null && numero !== undefined) {
-            svg += `<circle cx="${circleCenter}" cy="${circleCenter}" r="${circleRadius}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="2"/>`;
-            svg += `<text x="${circleCenter}" y="${circleCenter}" text-anchor="middle" dominant-baseline="central" fill="${textColor}" font-size="13" font-weight="bold" font-family="Arial, sans-serif">${numero}</text>`;
-        } else {
-            // Sin número: círculo más pequeño como indicador
-            svg += `<circle cx="${circleCenter}" cy="${circleCenter}" r="${circleRadius}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="2"/>`;
+            const portal = (p.portal || '').toLowerCase();
+            let fillColor, strokeColor;
+            if (p.es_propify) { fillColor = '#238636'; strokeColor = '#2ea043'; }
+            else if (portal === 'remax') { fillColor = '#da3633'; strokeColor = '#f85149'; }
+            else if (portal === 'adondevivir') { fillColor = '#1f6feb'; strokeColor = '#58a6ff'; }
+            else if (p.es_externo) { fillColor = '#d29922'; strokeColor = '#e3b341'; }
+            else { fillColor = '#58a6ff'; strokeColor = '#79c0ff'; }
+            svg += `<circle cx="${pngCenter}" cy="${pngCenter}" r="14" fill="${fillColor}" stroke="${strokeColor}" stroke-width="2" fill-opacity="0.85"/>`;
+            svg += `<text x="${pngCenter}" y="${pngCenter}" text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-size="13" font-weight="bold" font-family="Arial, sans-serif">${numero}</text>`;
         }
         
         // Texto del distrito en rojo debajo
@@ -1152,48 +1153,8 @@
         return {
             url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
             scaledSize: new google.maps.Size(width, totalHeight),
-            anchor: new google.maps.Point(width/2, circleCenter)  // Anclar en el centro del círculo
+            anchor: new google.maps.Point(width/2, pngCenter)  // Anclar en el centro del PNG
         };
-    }
-
-    /**
-     * Genera el contenido HTML para el InfoWindow de un marcador.
-     * Muestra el distrito y el precio por metro cuadrado.
-     */
-    function crearInfoWindowContent(p) {
-        const distrito = p.distrito_nombre || p.distrito || '';
-        
-        // Calcular precio por metro cuadrado
-        let precioM2 = null;
-        let tipoArea = '';
-        const precio = parseFloat(p.precio_usd || p.precio || 0);
-        
-        if (precio > 0) {
-            // Si es terreno, usar área de terreno
-            const esTerreno = (p.tipo_propiedad || '').toLowerCase().includes('terreno');
-            const areaTerreno = parseFloat(p.area_terreno || 0);
-            const areaConstruida = parseFloat(p.area_construida || 0);
-            
-            if (esTerreno && areaTerreno > 0) {
-                precioM2 = precio / areaTerreno;
-                tipoArea = 'T';
-            } else if (areaConstruida > 0) {
-                precioM2 = precio / areaConstruida;
-                tipoArea = 'C';
-            } else if (areaTerreno > 0) {
-                precioM2 = precio / areaTerreno;
-                tipoArea = 'T';
-            }
-        }
-        
-        const precioM2Str = precioM2 !== null
-            ? '$' + precioM2.toLocaleString('es-PE', {minimumFractionDigits: 0, maximumFractionDigits: 0}) + '/m² (' + tipoArea + ')'
-            : '';
-        
-        return '<div style="font-size:12px;line-height:1.4;text-align:center;min-width:120px;">' +
-            '<div style="font-weight:600;color:#c9d1d9;">' + distrito + '</div>' +
-            (precioM2Str ? '<div style="color:#58a6ff;font-weight:500;margin-top:2px;">' + precioM2Str + '</div>' : '') +
-            '</div>';
     }
 
     /**
@@ -1242,14 +1203,8 @@
             if (entry && entry.marker) {
                 entry.marker._selectedNumero = null;
                 const p = entry.marker._propertyData;
-                const portal = (p.portal || '').toLowerCase();
-                let iconUrl;
-                if (p.es_propify) iconUrl = ICONO_PROPIFFY;
-                else if (portal === 'remax') iconUrl = ICONO_REMAX;
-                else if (portal === 'adondevivir') iconUrl = ICONO_ADONDEVIVIR;
-                else if (p.es_externo) iconUrl = ICONO_REMAX;
-                else iconUrl = ICONO_LOCAL;
-                entry.marker.setIcon({ url: iconUrl, scaledSize: new google.maps.Size(32, 32) });
+                const pngUrl = obtenerIconoUrl(p);
+                entry.marker.setIcon(crearIconoConTexto(p, null, pngUrl));
             }
             selectedMarkers.delete(numero);
         });
@@ -1270,24 +1225,14 @@
             console.log(`Agregando ${propiedades.length} marcadores para distrito: ${distrito}`);
             
             propiedades.forEach(p => {
-                // Determinar icono según portal
-                const portal = (p.portal || '').toLowerCase();
-                let iconUrl;
-                if (p.es_propify) iconUrl = ICONO_PROPIFFY;
-                else if (portal === 'remax') iconUrl = ICONO_REMAX;
-                else if (portal === 'adondevivir') iconUrl = ICONO_ADONDEVIVIR;
-                else if (p.es_externo) iconUrl = ICONO_REMAX;
-                else iconUrl = ICONO_LOCAL;
+                const pngUrl = obtenerIconoUrl(p);
                 
-                // Crear marcador sin número inicialmente
+                // Crear marcador con icono que incluye PNG + texto debajo
                 const marker = new google.maps.Marker({
                     position: { lat: p.lat, lng: p.lng },
                     map: map,
                     title: p.titulo || p.descripcion || '',
-                    icon: {
-                        url: iconUrl,
-                        scaledSize: new google.maps.Size(32, 32)
-                    },
+                    icon: crearIconoConTexto(p, null, pngUrl),
                     _distrito: distrito,
                     _propertyData: p,
                     _selectedNumero: null  // Se asigna al hacer clic
@@ -1295,26 +1240,6 @@
                 
                 marker.addListener('click', () => {
                     agregarPropiedadSeleccionada(marker);
-                });
-                
-                // Mostrar InfoWindow al hover (mouseenter)
-                marker.addListener('mouseover', () => {
-                    if (!infoWindow) {
-                        infoWindow = new google.maps.InfoWindow({
-                            disableAutoPan: true,
-                            pixelOffset: new google.maps.Size(0, -30)
-                        });
-                    }
-                    infoWindow.setContent(crearInfoWindowContent(p));
-                    infoWindow.setPosition(marker.getPosition());
-                    infoWindow.open(map);
-                });
-                
-                // Ocultar InfoWindow al salir
-                marker.addListener('mouseout', () => {
-                    if (infoWindow) {
-                        infoWindow.close();
-                    }
                 });
                 
                 activeMarkers.push(marker);
@@ -1365,13 +1290,9 @@
         
         marker._selectedNumero = numero;
         
-        // Actualizar icono del marcador con el número
-        const esPropify = p.es_propify;
-        const portal = (p.portal || '').toLowerCase();
-        const esRemax = portal === 'remax';
-        const esAdondevivir = portal === 'adondevivir';
-        const esExterno = p.es_externo || esRemax || esAdondevivir;
-        marker.setIcon(crearIconoNumerado(numero, esPropify, esExterno, esRemax, esAdondevivir));
+        // Actualizar icono del marcador con número + texto debajo
+        const pngUrl = obtenerIconoUrl(p);
+        marker.setIcon(crearIconoConTexto(p, numero, pngUrl));
         
         // Registrar en el mapa de seleccionados
         selectedMarkers.set(numero, { marker, numero, propertyData: p });
@@ -1559,14 +1480,10 @@
             const marker = entry.marker;
             const p = marker._propertyData;
             
-            // Actualizar marker
+            // Actualizar marker con número + texto debajo
             marker._selectedNumero = nuevoNumero;
-            const esPropify = p.es_propify;
-            const portal = (p.portal || '').toLowerCase();
-            const esRemax = portal === 'remax';
-            const esAdondevivir = portal === 'adondevivir';
-            const esExterno = p.es_externo || esRemax || esAdondevivir;
-            marker.setIcon(crearIconoNumerado(nuevoNumero, esPropify, esExterno, esRemax, esAdondevivir));
+            const pngUrl = obtenerIconoUrl(p);
+            marker.setIcon(crearIconoConTexto(p, nuevoNumero, pngUrl));
             
             // Actualizar tarjeta en el DOM
             const oldCard = document.getElementById(`selected-card-${entry.numero}`);
@@ -1610,30 +1527,13 @@
             card.remove();
         }
         
-        // Restaurar icono del marcador a su estado original (sin número)
+        // Restaurar icono del marcador a su estado original (sin número, con texto debajo)
         const entry = selectedMarkers.get(numero);
         if (entry && entry.marker) {
             entry.marker._selectedNumero = null;
             const p = entry.marker._propertyData;
-            let iconUrl;
-            if (p.es_propify) {
-                iconUrl = ICONO_PROPIFFY;
-            } else {
-                const portal = (p.portal || '').toLowerCase();
-                if (portal === 'remax') {
-                    iconUrl = ICONO_REMAX;
-                } else if (portal === 'adondevivir') {
-                    iconUrl = ICONO_ADONDEVIVIR;
-                } else if (p.es_externo) {
-                    iconUrl = ICONO_REMAX;
-                } else {
-                    iconUrl = ICONO_LOCAL;
-                }
-            }
-            entry.marker.setIcon({
-                url: iconUrl,
-                scaledSize: new google.maps.Size(32, 32)
-            });
+            const pngUrl = obtenerIconoUrl(p);
+            entry.marker.setIcon(crearIconoConTexto(p, null, pngUrl));
         }
         
         selectedMarkers.delete(numero);
@@ -1740,26 +1640,13 @@
         const cardsContainer = document.getElementById('selected-property');
         cardsContainer.querySelectorAll('.selected-card').forEach(card => card.remove());
         
-        // Restaurar iconos de todos los marcadores seleccionados
+        // Restaurar iconos de todos los marcadores seleccionados (con texto debajo)
         selectedMarkers.forEach((entry) => {
             if (entry.marker) {
                 entry.marker._selectedNumero = null;
                 const p = entry.marker._propertyData;
-                let iconUrl;
-                if (p.es_propify) {
-                    iconUrl = ICONO_PROPIFFY;
-                } else {
-                    const portal = (p.portal || '').toLowerCase();
-                    if (portal === 'remax' || portal === 'adondevivir' || p.es_externo) {
-                        iconUrl = portal === 'remax' ? ICONO_REMAX : portal === 'adondevivir' ? ICONO_ADONDEVIVIR : ICONO_REMAX;
-                    } else {
-                        iconUrl = ICONO_LOCAL;
-                    }
-                }
-                entry.marker.setIcon({
-                    url: iconUrl,
-                    scaledSize: new google.maps.Size(32, 32)
-                });
+                const pngUrl = obtenerIconoUrl(p);
+                entry.marker.setIcon(crearIconoConTexto(p, null, pngUrl));
             }
         });
         
