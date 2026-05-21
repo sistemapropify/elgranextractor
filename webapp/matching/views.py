@@ -551,6 +551,7 @@ class MatchingCalendarView(TemplateView):
                         'mejor_propiedad_codigo': info.get('mejor_propiedad_codigo'),
                         'mejor_propiedad_precio': info.get('mejor_propiedad_precio'),
                         'mejor_propiedad_moneda_id': info.get('mejor_propiedad_moneda_id'),
+                        'verificado': r.verificado,
                     })
                 dias_semana.append({
                     'date_iso': d.isoformat(),
@@ -619,6 +620,7 @@ class MatchingCalendarView(TemplateView):
                     'mejor_propiedad_codigo': info.get('mejor_propiedad_codigo'),
                     'mejor_propiedad_precio': info.get('mejor_propiedad_precio'),
                     'mejor_propiedad_moneda_id': info.get('mejor_propiedad_moneda_id'),
+                    'verificado': r.verificado,
                 })
             
             context['reqs_dia'] = reqs_serializados

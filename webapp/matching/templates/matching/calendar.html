@@ -511,6 +511,35 @@
 
     .day-event-card .event-match .match-link:hover { text-decoration: underline; }
 
+    /* ── Estrella de verificación verde fosforescente ── */
+    .verified-star {
+        position: absolute;
+        bottom: 4px;
+        right: 4px;
+        width: 22px;
+        height: 22px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 5;
+        pointer-events: none;
+    }
+    .verified-star svg {
+        width: 18px;
+        height: 18px;
+        filter: drop-shadow(0 0 6px #00ff88) drop-shadow(0 0 12px #00ff88);
+        animation: verifiedPulse 2s ease-in-out infinite;
+    }
+    @keyframes verifiedPulse {
+        0%, 100% { filter: drop-shadow(0 0 6px #00ff88) drop-shadow(0 0 12px #00ff88); }
+        50% { filter: drop-shadow(0 0 10px #00ff88) drop-shadow(0 0 20px #00ff88) drop-shadow(0 0 30px #00ff88); }
+    }
+    .day-event-card,
+    .week-req-item,
+    .day-hour-content .day-event-card {
+        position: relative;
+    }
+
     /* Empty state */
     .empty-state {
         text-align: center;
@@ -932,6 +961,14 @@
                     {% for req in reqs_dia %}
                         {% if req.hora_display|slice:":2" == hora_slot|time:"H" %}
                         <div class="day-event-card" onclick="openMatchModal({{ req.id }})">
+                            {% if req.verificado %}
+                            <div class="verified-star">
+                                <svg viewBox="0 0 24 24" fill="#00ff88">
+                                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                                    <path d="M10 13l-2-2-1.5 1.5L10 16l6-6-1.5-1.5z" fill="#0d1117"/>
+                                </svg>
+                            </div>
+                            {% endif %}
                             <div class="event-info">
                                 <div class="event-title">
                                     <span style="font-size:11px;color:var(--text-muted);font-weight:400;margin-right:4px;">{{ req.hora_display }}</span>
@@ -1092,7 +1129,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     const precioPropHtml = (req.mejor_propiedad_precio && req.mejor_propiedad_moneda_id)
                         ? `<span style="color:var(--accent-green);font-weight:600;margin-left:2px;font-size:10px;">· ${getCurrencySymbol(req.mejor_propiedad_moneda_id)}${Number(req.mejor_propiedad_precio).toLocaleString('en-US')}</span>`
                         : '';
-                    bodyHtml += `<div class="week-req-item" onclick="openMatchModal(${req.id})">
+                    const verifiedStarHtml = req.verificado
+                        ? `<div class="verified-star" style="position:absolute;bottom:2px;right:2px;width:16px;height:16px;z-index:5;pointer-events:none;">
+                            <svg viewBox="0 0 24 24" fill="#00ff88" style="width:14px;height:14px;filter:drop-shadow(0 0 6px #00ff88) drop-shadow(0 0 12px #00ff88);animation:verifiedPulse 2s ease-in-out infinite;">
+                                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                                <path d="M10 13l-2-2-1.5 1.5L10 16l6-6-1.5-1.5z" fill="#0d1117"/>
+                            </svg>
+                        </div>`
+                        : '';
+                    bodyHtml += `<div class="week-req-item" onclick="openMatchModal(${req.id})" style="position:relative;">
+                        ${verifiedStarHtml}
                         <span class="req-hour">${req.hora_display}</span>
                         <span class="req-title">
                             <span style="color:#58a6ff;font-weight:700;">BUSCO</span>
