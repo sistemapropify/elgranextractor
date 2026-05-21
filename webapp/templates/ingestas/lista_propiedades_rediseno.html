@@ -95,6 +95,12 @@
         background: var(--bg-hover);
     }
 
+    .distrito-checkbox-label.active {
+        border-color: var(--accent-blue);
+        background: var(--bg-hover);
+        box-shadow: 0 0 0 1px var(--accent-blue);
+    }
+
     .distrito-checkbox-label input[type="checkbox"] {
         accent-color: var(--accent-blue);
         margin: 0;
@@ -157,6 +163,29 @@
         font-size: 0.65rem;
         height: 22px;
         line-height: 1;
+    }
+
+    /* Labels de fuente tipo pill-button */
+    .fuente-checkbox-label {
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        border-radius: 12px;
+        border: 1px solid var(--border-color);
+        background: var(--bg-secondary);
+        font-size: 0.75rem;
+        user-select: none;
+        transition: all 0.15s;
+    }
+    .fuente-checkbox-label:hover {
+        border-color: var(--accent-blue);
+        background: var(--bg-hover);
+    }
+    .fuente-checkbox-label.active {
+        border-color: var(--accent-blue);
+        box-shadow: 0 0 0 1px var(--accent-blue);
     }
 
     /* ===== BOTONES ===== */
@@ -806,8 +835,8 @@
                 <div class="distrito-checkboxes">
                     {% for distrito in distritos_arequipa %}
                         {% if distrito != 'Todos' %}
-                        <label class="distrito-checkbox-label">
-                            <input type="checkbox" class="distrito-checkbox" value="{{ distrito }}">
+                        <label class="distrito-checkbox-label" onclick="this.querySelector('.distrito-checkbox').click(); event.stopPropagation();">
+                            <input type="checkbox" class="distrito-checkbox" name="distrito" value="{{ distrito }}" onchange="this.closest('label').classList.toggle('active', this.checked);">
                             {{ distrito }}
                         </label>
                         {% endif %}
@@ -827,19 +856,19 @@
                     </select>
                 </div>
 
-                <div class="filter-group" style="flex-direction: row; align-items: center; gap: 12px;">
-                    <label style="margin-bottom: 0; white-space: nowrap;">Fuentes:</label>
-                    <label class="distrito-checkbox-label" style="font-size: 0.75rem;">
-                        <input type="checkbox" name="fuente_local" value="1" {% if fuente_local_checked %}checked{% endif %}>
-                        <span class="badge bg-info" style="font-size: 0.65rem;">Local</span>
+                <div class="filter-group" style="flex-direction: row; align-items: center; gap: 8px;">
+                    <label style="margin-bottom: 0; white-space: nowrap; font-size: 0.75rem;">Fuentes:</label>
+                    <label class="fuente-checkbox-label" style="cursor:pointer; display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:12px; border:1px solid var(--border-color); background:var(--bg-secondary); font-size:0.75rem; user-select:none;" onclick="toggleFuenteCheckbox(this);">
+                        <input type="checkbox" name="fuente_local" value="1" {% if fuente_local_checked %}checked{% endif %} style="display:none;">
+                        <span class="badge bg-info" style="font-size:0.7rem; padding:2px 8px; pointer-events:none;">Local</span>
                     </label>
-                    <label class="distrito-checkbox-label" style="font-size: 0.75rem;">
-                        <input type="checkbox" name="fuente_externa" value="1" {% if fuente_externa_checked %}checked{% endif %}>
-                        <span class="badge bg-warning text-dark" style="font-size: 0.65rem;">Externa</span>
+                    <label class="fuente-checkbox-label" style="cursor:pointer; display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:12px; border:1px solid var(--border-color); background:var(--bg-secondary); font-size:0.75rem; user-select:none;" onclick="toggleFuenteCheckbox(this);">
+                        <input type="checkbox" name="fuente_externa" value="1" {% if fuente_externa_checked %}checked{% endif %} style="display:none;">
+                        <span class="badge bg-warning text-dark" style="font-size:0.7rem; padding:2px 8px; pointer-events:none;">Externa</span>
                     </label>
-                    <label class="distrito-checkbox-label" style="font-size: 0.75rem;">
-                        <input type="checkbox" name="fuente_propify" value="1" {% if fuente_propify_checked %}checked{% endif %}>
-                        <span class="badge bg-success" style="font-size: 0.65rem;">Propify</span>
+                    <label class="fuente-checkbox-label" style="cursor:pointer; display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:12px; border:1px solid var(--border-color); background:var(--bg-secondary); font-size:0.75rem; user-select:none;" onclick="toggleFuenteCheckbox(this);">
+                        <input type="checkbox" name="fuente_propify" value="1" {% if fuente_propify_checked %}checked{% endif %} style="display:none;">
+                        <span class="badge bg-success" style="font-size:0.7rem; padding:2px 8px; pointer-events:none;">Propify</span>
                     </label>
                 </div>
 
@@ -1194,7 +1223,10 @@
     /**
      * Agrega una propiedad a la lista de seleccionadas (acumulativa).
      * Si ya está seleccionada, hace scroll hasta su tarjeta.
+     * Usa un contador global incremental para números únicos y correlativos.
      */
+    let nextMarkerNumber = 1;  // Contador global para números de marcador
+
     function agregarPropiedadSeleccionada(marker) {
         const p = marker._propertyData;
         
@@ -1213,9 +1245,8 @@
             return;
         }
         
-        // Asignar número secuencial basado en la cantidad actual + 1
-        // Esto asegura que siempre sea 1, 2, 3... incluso después de limpiar
-        const numero = selectedMarkers.size + 1;
+        // Asignar número secuencial usando contador global
+        const numero = nextMarkerNumber++;
         
         marker._selectedNumero = numero;
         
@@ -1416,8 +1447,11 @@
             // Actualizar marker
             marker._selectedNumero = nuevoNumero;
             const esPropify = p.es_propify;
-            const esExterno = p.es_externo || p.fuente === 'Remax';
-            marker.setIcon(crearIconoNumerado(nuevoNumero, esPropify, esExterno));
+            const portal = (p.portal || '').toLowerCase();
+            const esRemax = portal === 'remax';
+            const esAdondevivir = portal === 'adondevivir';
+            const esExterno = p.es_externo || esRemax || esAdondevivir;
+            marker.setIcon(crearIconoNumerado(nuevoNumero, esPropify, esExterno, esRemax, esAdondevivir));
             
             // Actualizar tarjeta en el DOM
             const oldCard = document.getElementById(`selected-card-${entry.numero}`);
@@ -1429,8 +1463,8 @@
                 const badge = oldCard.querySelector('.card-number-badge');
                 if (badge) {
                     badge.textContent = nuevoNumero;
-                    badge.style.background = p.es_propify ? '#238636' : p.es_externo ? '#d29922' : '#58a6ff';
-                    badge.style.borderColor = p.es_propify ? '#2ea043' : p.es_externo ? '#e3b341' : '#79c0ff';
+                    badge.style.background = p.es_propify ? '#238636' : esRemax ? '#da3633' : esAdondevivir ? '#1f6feb' : esExterno ? '#d29922' : '#58a6ff';
+                    badge.style.borderColor = p.es_propify ? '#2ea043' : esRemax ? '#f85149' : esAdondevivir ? '#58a6ff' : esExterno ? '#e3b341' : '#79c0ff';
                 }
                 
                 // Actualizar el onclick del botón remover
@@ -1443,6 +1477,9 @@
             // Guardar con nuevo número
             selectedMarkers.set(nuevoNumero, { marker, numero: nuevoNumero, propertyData: p });
         });
+        
+        // Reiniciar contador global para que el próximo marcador use el siguiente número
+        nextMarkerNumber = entries.length + 1;
         
         actualizarContadorSeleccionadas();
     }
@@ -1466,10 +1503,17 @@
             let iconUrl;
             if (p.es_propify) {
                 iconUrl = ICONO_PROPIFFY;
-            } else if (p.es_externo || p.fuente === 'Remax') {
-                iconUrl = ICONO_REMAX;
             } else {
-                iconUrl = ICONO_LOCAL;
+                const portal = (p.portal || '').toLowerCase();
+                if (portal === 'remax') {
+                    iconUrl = ICONO_REMAX;
+                } else if (portal === 'adondevivir') {
+                    iconUrl = ICONO_ADONDEVIVIR;
+                } else if (p.es_externo) {
+                    iconUrl = ICONO_REMAX;
+                } else {
+                    iconUrl = ICONO_LOCAL;
+                }
             }
             entry.marker.setIcon({
                 url: iconUrl,
@@ -1589,10 +1633,13 @@
                 let iconUrl;
                 if (p.es_propify) {
                     iconUrl = ICONO_PROPIFFY;
-                } else if (p.es_externo || p.fuente === 'Remax') {
-                    iconUrl = ICONO_REMAX;
                 } else {
-                    iconUrl = ICONO_LOCAL;
+                    const portal = (p.portal || '').toLowerCase();
+                    if (portal === 'remax' || portal === 'adondevivir' || p.es_externo) {
+                        iconUrl = portal === 'remax' ? ICONO_REMAX : portal === 'adondevivir' ? ICONO_ADONDEVIVIR : ICONO_REMAX;
+                    } else {
+                        iconUrl = ICONO_LOCAL;
+                    }
                 }
                 entry.marker.setIcon({
                     url: iconUrl,
@@ -1602,6 +1649,7 @@
         });
         
         selectedMarkers.clear();
+        nextMarkerNumber = 1;  // Reiniciar contador global
         
         // Mostrar estado vacío
         document.getElementById('empty-state').style.display = 'flex';
@@ -1610,12 +1658,40 @@
         actualizarContadorSeleccionadas();
     }
 
+    /**
+     * Toggle checkbox de fuente (Local/Externa/Propify) al hacer clic en el label.
+     */
+    function toggleFuenteCheckbox(labelEl) {
+        const checkbox = labelEl.querySelector('input[type="checkbox"]');
+        if (!checkbox) return;
+        checkbox.checked = !checkbox.checked;
+        labelEl.classList.toggle('active', checkbox.checked);
+        // Disparar submit del formulario para recargar con el nuevo filtro
+        document.getElementById('filter-form').submit();
+    }
+
     // Inicializar todo al cargar la página
     document.addEventListener('DOMContentLoaded', function() {
         // Inicializar filtro tipo desde URL
         const urlParams = new URLSearchParams(window.location.search);
         const tipoEl = document.getElementById('filter-type');
         if (tipoEl) tipoEl.value = urlParams.get('tipo_propiedad') || '';
+        
+        // Inicializar estado activo de los labels de fuente según su checkbox
+        document.querySelectorAll('.fuente-checkbox-label').forEach(label => {
+            const checkbox = label.querySelector('input[type="checkbox"]');
+            if (checkbox) {
+                label.classList.toggle('active', checkbox.checked);
+            }
+        });
+        
+        // Inicializar estado activo de los labels de distrito según su checkbox
+        document.querySelectorAll('.distrito-checkbox-label').forEach(label => {
+            const checkbox = label.querySelector('.distrito-checkbox');
+            if (checkbox) {
+                label.classList.toggle('active', checkbox.checked);
+            }
+        });
         
         // Inicializar el mapa vacío (siempre visible)
         inicializarMapaVacio();
@@ -1634,6 +1710,9 @@
                 e.preventDefault();
                 document.querySelectorAll('.distrito-checkbox:checked').forEach(cb => {
                     cb.checked = false;
+                    // Actualizar clase active del label
+                    const label = cb.closest('.distrito-checkbox-label');
+                    if (label) label.classList.remove('active');
                 });
                 actualizarMarcadores();
             });
