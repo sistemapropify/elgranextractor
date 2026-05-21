@@ -452,6 +452,16 @@ class MatchingCalendarView(TemplateView):
         context['current_day'] = day
         context['view_mode'] = view_mode
         
+        # ── Tipos de propiedad para filtros ──
+        from requerimientos.models import TipoPropiedadChoices
+        tipos_propiedad = [
+            {'key': choice.value, 'label': choice.label}
+            for choice in TipoPropiedadChoices
+            if choice.value != 'no_especificado'
+        ]
+        context['tipos_propiedad'] = tipos_propiedad
+        context['tipos_propiedad_json'] = json.dumps(tipos_propiedad)
+        
         # Obtener resumen de matching masivo para todos los requerimientos
         resumen = obtener_resumen_matching_masivo()
         resumen_por_req = {item['requerimiento_id']: item for item in resumen}
@@ -542,6 +552,7 @@ class MatchingCalendarView(TemplateView):
                         'hora': r.hora.isoformat() if r.hora else None,
                         'hora_display': r.hora.strftime('%H:%M') if r.hora else '--:--',
                         'tipo_propiedad': (r.get_tipo_propiedad_display() or r.tipo_propiedad or 'Propiedad').upper(),
+                        'tipo_propiedad_key': r.tipo_propiedad or '',
                         'presupuesto_display': presupuesto_display,
                         'presupuesto_monto': presupuesto_monto,
                         'presupuesto_moneda': r.presupuesto_moneda or '',
@@ -611,6 +622,7 @@ class MatchingCalendarView(TemplateView):
                     'hora': r.hora.isoformat() if r.hora else None,
                     'hora_display': r.hora.strftime('%H:%M') if r.hora else '--:--',
                     'tipo_display': (r.get_tipo_propiedad_display() or r.tipo_propiedad or 'Propiedad').upper(),
+                    'tipo_propiedad_key': r.tipo_propiedad or '',
                     'presupuesto_display': presupuesto_display,
                     'presupuesto_monto': presupuesto_monto,
                     'presupuesto_moneda': r.presupuesto_moneda or '',
