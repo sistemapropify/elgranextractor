@@ -953,6 +953,16 @@
     // === SISTEMA DE SELECCIÓN ACUMULATIVA ===
     const selectedMarkers = new Map(); // numero -> { marker, numero, propertyData }
     
+    /**
+     * Manejador global para error de carga de imágenes en tarjetas seleccionadas.
+     * Reemplaza la imagen con un placeholder de icono.
+     */
+    window.handleImageError = function(imgEl) {
+        if (imgEl && imgEl.parentElement) {
+            imgEl.parentElement.innerHTML = '<div class="property-image-placeholder"><i class="fas fa-home"></i></div>';
+        }
+    };
+    
     // Pre-calcular propiedades por distrito
     todasPropiedadesJSON.forEach(p => {
         const lat = parseFloat(p.lat);
@@ -1308,15 +1318,48 @@
         const container = document.getElementById('selected-property');
         const emptyState = document.getElementById('empty-state');
         
+        // Validar que los elementos existan
+        if (!container || !emptyState) {
+            console.error('agregarTarjetaPropiedad: no se encontraron contenedores en el DOM');
+            return;
+        }
+        
+        // Escapar caracteres HTML en valores de texto para evitar que rompan el DOM
+        // al insertarlos via insertAdjacentHTML
+        function escaparHTML(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&')
+                .replace(/\"/g, '"')
+                .replace(/\'/g, '&#x27;')
+                .replace(/</g, '<')
+                .replace(/>/g, '>');
+        }
+        
         const precioVal = p.precio_usd || p.precio;
-        const precioStr = precioVal ? '$' + Number(precioVal).toLocaleString('es-PE', {minimumFractionDigits: 0}) : 'Consultar';
-        const distrito = p.distrito_nombre || p.distrito || '';
-        const tipo = p.tipo_propiedad || 'Propiedad';
-        const desc = p.titulo || p.descripcion || 'Sin descripción';
+        let precioStr = 'Consultar';
+        try {
+            const precioNum = Number(precioVal);
+            if (!isNaN(precioNum) && precioNum > 0) {
+                precioStr = '$' + precioNum.toLocaleString('es-PE', {minimumFractionDigits: 0});
+            }
+        } catch(e) {
+            precioStr = 'Consultar';
+        }
+        const distrito = escaparHTML(p.distrito_nombre || p.distrito || '');
+        const tipo = escaparHTML(p.tipo_propiedad || 'Propiedad');
+        const desc = escaparHTML(p.titulo || p.descripcion || 'Sin descripci\u00f3n');
         const img = p.primera_imagen || p.imagen_principal || '';
-        const area = p.area_construida ? p.area_construida.toFixed(0) + ' m²' : '';
-        const habs = p.habitaciones || p.numero_habitaciones || '';
-        const banos = p.banios || p.numero_banos || '';
+        const imgSrc = img.replace(/"/g, '%22').replace(/'/g, '%27');
+        let area = '';
+        try {
+            area = p.area_construida ? Number(p.area_construida).toFixed(0) + ' m\u00b2' : '';
+        } catch(e) { area = ''; }
+        const habs = escaparHTML(p.habitaciones || p.numero_habitaciones || '');
+        const banos = escaparHTML(p.banios || p.numero_banos || '');
+        const direccion = escaparHTML(p.direccion || '');
+        const url = p.url || '';
+        const urlAttr = url.replace(/"/g, '%22').replace(/'/g, '%27');
         
         // Determinar portal/fuente para mostrar logo
         const portal = (p.portal || '').toLowerCase();
@@ -1404,7 +1447,7 @@
                     padding: 0;
                 ">&times;</button>
                 <div class="property-image-container" style="width: 120px; height: 120px;">
-                    ${img ? `<img src="${img}" alt="${tipo}" class="property-image" onerror="this.parentElement.innerHTML='<div class=\\'property-image-placeholder\\'><i class=\\'fas fa-home\\'></i></div>'">`
+                    ${imgSrc ? `<img src="${imgSrc}" alt="${tipo}" class="property-image" onerror="window.handleImageError(this)">`
                           : `<div class="property-image-placeholder"><i class="fas fa-home"></i></div>`}
                 </div>
                 <div class="property-content">
@@ -1430,16 +1473,21 @@
                         <div class="feature-item"><i class="fas fa-tag"></i><span>${badgeText}</span></div>
                     </div>
                     <div class="property-footer">
-                        <span class="property-source">${p.direccion || ''}</span>
+                        <span class="property-source">${direccion}</span>
                         <div class="property-actions">
-                            ${p.url ? `<a href="${p.url}" target="_blank" class="btn btn-external btn-sm"><i class="fas fa-external-link-alt"></i> Ver original</a>` : ''}
+                            ${urlAttr ? `<a href="${urlAttr}" target="_blank" class="btn btn-external btn-sm"><i class="fas fa-external-link-alt"></i> Ver original</a>` : ''}
                         </div>
                     </div>
                 </div>
             </div>
         `;
         
-        container.insertAdjacentHTML('beforeend', cardHtml);
+        try {
+            container.insertAdjacentHTML('beforeend', cardHtml);
+        } catch(e) {
+            console.error('Error al insertar tarjeta en el DOM:', e);
+            return;
+        }
         
         // Scroll a la nueva tarjeta
         setTimeout(() => {
@@ -1480,8 +1528,11 @@
             // Actualizar marker
             marker._selectedNumero = nuevoNumero;
             const esPropify = p.es_propify;
-            const esExterno = p.es_externo || p.fuente === 'Remax';
-            marker.setIcon(crearIconoNumerado(nuevoNumero, esPropify, esExterno));
+            const portal = (p.portal || '').toLowerCase();
+            const esRemax = portal === 'remax';
+            const esAdondevivir = portal === 'adondevivir';
+            const esExterno = p.es_externo || esRemax || esAdondevivir;
+            marker.setIcon(crearIconoNumerado(nuevoNumero, esPropify, esExterno, esRemax, esAdondevivir));
             
             // Actualizar tarjeta en el DOM
             const oldCard = document.getElementById(`selected-card-${entry.numero}`);
@@ -1527,10 +1578,15 @@
         if (entry && entry.marker) {
             entry.marker._selectedNumero = null;
             const p = entry.marker._propertyData;
+            const portal = (p.portal || '').toLowerCase();
             let iconUrl;
             if (p.es_propify) {
                 iconUrl = ICONO_PROPIFFY;
-            } else if (p.es_externo || p.fuente === 'Remax') {
+            } else if (portal === 'remax') {
+                iconUrl = ICONO_REMAX;
+            } else if (portal === 'adondevivir') {
+                iconUrl = ICONO_ADONDEVIVIR;
+            } else if (p.es_externo) {
                 iconUrl = ICONO_REMAX;
             } else {
                 iconUrl = ICONO_LOCAL;
@@ -1656,10 +1712,15 @@
             if (entry.marker) {
                 entry.marker._selectedNumero = null;
                 const p = entry.marker._propertyData;
+                const portal = (p.portal || '').toLowerCase();
                 let iconUrl;
                 if (p.es_propify) {
                     iconUrl = ICONO_PROPIFFY;
-                } else if (p.es_externo || p.fuente === 'Remax') {
+                } else if (portal === 'remax') {
+                    iconUrl = ICONO_REMAX;
+                } else if (portal === 'adondevivir') {
+                    iconUrl = ICONO_ADONDEVIVIR;
+                } else if (p.es_externo) {
                     iconUrl = ICONO_REMAX;
                 } else {
                     iconUrl = ICONO_LOCAL;
