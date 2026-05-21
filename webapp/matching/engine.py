@@ -753,15 +753,25 @@ def guardar_resultados_matching(requerimiento_id: int, resultados: List[Dict]) -
     Returns:
         Lista de objetos MatchResult creados.
     """
+    from decimal import Decimal
+    
     requerimiento = Requerimiento.objects.get(id=requerimiento_id)
     objetos_creados = []
     
     for resultado in resultados:
+        # Convertir valores Decimal del score_detalle a float para JSON serializable
+        score_detalle = resultado['score_detalle']
+        if isinstance(score_detalle, dict):
+            score_detalle = {
+                k: float(v) if isinstance(v, Decimal) else v
+                for k, v in score_detalle.items()
+            }
+        
         match_result = MatchResult(
             requerimiento=requerimiento,
             propiedad=resultado['propiedad'],
             score_total=resultado['score_total'],
-            score_detalle=resultado['score_detalle'],
+            score_detalle=score_detalle,
             fase_eliminada=resultado['fase_eliminada'],
             porcentaje_compatibilidad=resultado['porcentaje_compatibilidad'],
             ranking=resultado.get('ranking'),
