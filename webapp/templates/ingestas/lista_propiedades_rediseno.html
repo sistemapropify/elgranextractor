@@ -954,6 +954,9 @@
     // === SISTEMA DE SELECCIÓN ACUMULATIVA ===
     const selectedMarkers = new Map(); // numero -> { marker, numero, propertyData }
     
+    // InfoWindow reutilizable para mostrar distrito y precio/m²
+    let infoWindow = null;
+    
     // Pre-calcular propiedades por distrito
     todasPropiedadesJSON.forEach(p => {
         const lat = parseFloat(p.lat);
@@ -1055,50 +1058,142 @@
     }
 
     /**
-     * Genera un icono SVG numerado para el marcador.
-     * El número se muestra dentro de un círculo con color según la fuente.
+     * Calcula el precio por metro cuadrado y el tipo de área.
+     * Retorna { precioM2, tipoArea } o null si no se puede calcular.
      */
-    function crearIconoNumerado(numero, esPropify, esExterno, esRemax, esAdondevivir) {
-        const size = 36;
-        let fillColor, strokeColor, textColor;
+    function calcularPrecioM2(p) {
+        const precio = parseFloat(p.precio_usd || p.precio || 0);
+        if (precio <= 0) return null;
         
-        if (esPropify) {
-            fillColor = '#238636';    // verde Propify
-            strokeColor = '#2ea043';
-            textColor = '#ffffff';
-        } else if (esRemax) {
-            fillColor = '#da3633';    // rojo Remax
-            strokeColor = '#f85149';
-            textColor = '#ffffff';
-        } else if (esAdondevivir) {
-            fillColor = '#1f6feb';    // azul Adondevivir
-            strokeColor = '#58a6ff';
-            textColor = '#ffffff';
-        } else if (esExterno) {
-            fillColor = '#d29922';    // naranja externo
-            strokeColor = '#e3b341';
-            textColor = '#ffffff';
+        const esTerreno = (p.tipo_propiedad || '').toLowerCase().includes('terreno');
+        const areaTerreno = parseFloat(p.area_terreno || 0);
+        const areaConstruida = parseFloat(p.area_construida || 0);
+        
+        if (esTerreno && areaTerreno > 0) {
+            return { precioM2: precio / areaTerreno, tipoArea: 'T' };
+        } else if (areaConstruida > 0) {
+            return { precioM2: precio / areaConstruida, tipoArea: 'C' };
+        } else if (areaTerreno > 0) {
+            return { precioM2: precio / areaTerreno, tipoArea: 'T' };
+        }
+        return null;
+    }
+
+    /**
+     * Genera un icono SVG para el marcador con el texto del distrito y precio/m² debajo.
+     * El círculo numerado (si seleccionado) o el icono del portal (si no) arriba,
+     * y el distrito + precio/m² en texto rojo debajo.
+     */
+    function crearIconoConTexto(p, numero) {
+        const distrito = (p.distrito_nombre || p.distrito || '').toString().trim();
+        const precioM2Data = calcularPrecioM2(p);
+        const precioM2Str = precioM2Data
+            ? '$' + precioM2Data.precioM2.toLocaleString('es-PE', {minimumFractionDigits: 0, maximumFractionDigits: 0}) + '/m² (' + precioM2Data.tipoArea + ')'
+            : '';
+        
+        // Dimensiones del círculo superior
+        const circleSize = 32;
+        const circleRadius = 14;
+        const circleCenter = circleSize / 2;
+        
+        // Texto debajo
+        const fontSize = 11;
+        const lineHeight = 13;
+        const textTop = circleSize + 2;  // espacio después del círculo
+        
+        // Calcular altura total del SVG
+        let totalHeight = circleSize;
+        if (distrito) totalHeight += lineHeight + 1;
+        if (precioM2Str) totalHeight += lineHeight + 1;
+        totalHeight += 4; // padding inferior
+        
+        const width = 120; // ancho fijo para que quepa el texto
+        
+        let fillColor, strokeColor, textColor;
+        const portal = (p.portal || '').toLowerCase();
+        
+        if (p.es_propify) {
+            fillColor = '#238636'; strokeColor = '#2ea043'; textColor = '#ffffff';
+        } else if (portal === 'remax') {
+            fillColor = '#da3633'; strokeColor = '#f85149'; textColor = '#ffffff';
+        } else if (portal === 'adondevivir') {
+            fillColor = '#1f6feb'; strokeColor = '#58a6ff'; textColor = '#ffffff';
+        } else if (p.es_externo) {
+            fillColor = '#d29922'; strokeColor = '#e3b341'; textColor = '#ffffff';
         } else {
-            fillColor = '#58a6ff';    // azul local
-            strokeColor = '#79c0ff';
-            textColor = '#ffffff';
+            fillColor = '#58a6ff'; strokeColor = '#79c0ff'; textColor = '#ffffff';
         }
         
-        const svg = `
-            <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-                <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 2}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="2"/>
-                <text x="${size/2}" y="${size/2}" text-anchor="middle" dominant-baseline="central"
-                      fill="${textColor}" font-size="14" font-weight="bold" font-family="Arial, sans-serif">
-                    ${numero}
-                </text>
-            </svg>
-        `;
+        let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${totalHeight}" viewBox="0 0 ${width} ${totalHeight}">`;
+        
+        // Círculo con número o sin número
+        if (numero !== null && numero !== undefined) {
+            svg += `<circle cx="${circleCenter}" cy="${circleCenter}" r="${circleRadius}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="2"/>`;
+            svg += `<text x="${circleCenter}" y="${circleCenter}" text-anchor="middle" dominant-baseline="central" fill="${textColor}" font-size="13" font-weight="bold" font-family="Arial, sans-serif">${numero}</text>`;
+        } else {
+            // Sin número: círculo más pequeño como indicador
+            svg += `<circle cx="${circleCenter}" cy="${circleCenter}" r="${circleRadius}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="2"/>`;
+        }
+        
+        // Texto del distrito en rojo debajo
+        let yPos = textTop;
+        if (distrito) {
+            svg += `<text x="${width/2}" y="${yPos}" text-anchor="middle" fill="#f85149" font-size="${fontSize}" font-weight="600" font-family="Arial, sans-serif">${distrito}</text>`;
+            yPos += lineHeight;
+        }
+        
+        // Texto del precio/m² en rojo más pequeño
+        if (precioM2Str) {
+            svg += `<text x="${width/2}" y="${yPos}" text-anchor="middle" fill="#f85149" font-size="${fontSize - 2}" font-family="Arial, sans-serif">${precioM2Str}</text>`;
+        }
+        
+        svg += '</svg>';
         
         return {
             url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
-            scaledSize: new google.maps.Size(size, size),
-            anchor: new google.maps.Point(size/2, size/2)
+            scaledSize: new google.maps.Size(width, totalHeight),
+            anchor: new google.maps.Point(width/2, circleCenter)  // Anclar en el centro del círculo
         };
+    }
+
+    /**
+     * Genera el contenido HTML para el InfoWindow de un marcador.
+     * Muestra el distrito y el precio por metro cuadrado.
+     */
+    function crearInfoWindowContent(p) {
+        const distrito = p.distrito_nombre || p.distrito || '';
+        
+        // Calcular precio por metro cuadrado
+        let precioM2 = null;
+        let tipoArea = '';
+        const precio = parseFloat(p.precio_usd || p.precio || 0);
+        
+        if (precio > 0) {
+            // Si es terreno, usar área de terreno
+            const esTerreno = (p.tipo_propiedad || '').toLowerCase().includes('terreno');
+            const areaTerreno = parseFloat(p.area_terreno || 0);
+            const areaConstruida = parseFloat(p.area_construida || 0);
+            
+            if (esTerreno && areaTerreno > 0) {
+                precioM2 = precio / areaTerreno;
+                tipoArea = 'T';
+            } else if (areaConstruida > 0) {
+                precioM2 = precio / areaConstruida;
+                tipoArea = 'C';
+            } else if (areaTerreno > 0) {
+                precioM2 = precio / areaTerreno;
+                tipoArea = 'T';
+            }
+        }
+        
+        const precioM2Str = precioM2 !== null
+            ? '$' + precioM2.toLocaleString('es-PE', {minimumFractionDigits: 0, maximumFractionDigits: 0}) + '/m² (' + tipoArea + ')'
+            : '';
+        
+        return '<div style="font-size:12px;line-height:1.4;text-align:center;min-width:120px;">' +
+            '<div style="font-weight:600;color:#c9d1d9;">' + distrito + '</div>' +
+            (precioM2Str ? '<div style="color:#58a6ff;font-weight:500;margin-top:2px;">' + precioM2Str + '</div>' : '') +
+            '</div>';
     }
 
     /**
@@ -1200,6 +1295,26 @@
                 
                 marker.addListener('click', () => {
                     agregarPropiedadSeleccionada(marker);
+                });
+                
+                // Mostrar InfoWindow al hover (mouseenter)
+                marker.addListener('mouseover', () => {
+                    if (!infoWindow) {
+                        infoWindow = new google.maps.InfoWindow({
+                            disableAutoPan: true,
+                            pixelOffset: new google.maps.Size(0, -30)
+                        });
+                    }
+                    infoWindow.setContent(crearInfoWindowContent(p));
+                    infoWindow.setPosition(marker.getPosition());
+                    infoWindow.open(map);
+                });
+                
+                // Ocultar InfoWindow al salir
+                marker.addListener('mouseout', () => {
+                    if (infoWindow) {
+                        infoWindow.close();
+                    }
                 });
                 
                 activeMarkers.push(marker);
