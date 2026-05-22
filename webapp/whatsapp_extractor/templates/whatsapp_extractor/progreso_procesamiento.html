@@ -425,6 +425,48 @@
         </div>
     </div>
 </div>
+
+<!-- Tabla de requerimientos en tiempo real -->
+<div class="progress-container" style="margin-top:16px;">
+    <div class="progress-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <h3 style="margin:0;font-size:1rem;color:var(--text-primary);">📋 Requerimientos en Tiempo Real (últimos 10)</h3>
+            <span style="font-size:0.8rem;color:var(--text-muted);" id="reqLastUpdate">⏳ Actualizando...</span>
+        </div>
+        <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:0.75rem;">
+                <thead>
+                    <tr style="background:var(--bg-tertiary);">
+                        <th style="padding:6px 8px;text-align:left;color:var(--text-secondary);border-bottom:1px solid var(--border-color);">#</th>
+                        <th style="padding:6px 8px;text-align:left;color:var(--text-secondary);border-bottom:1px solid var(--border-color);">📝 Requerimiento</th>
+                        <th style="padding:6px 8px;text-align:left;color:var(--text-secondary);border-bottom:1px solid var(--border-color);">📋 Fuente</th>
+                        <th style="padding:6px 8px;text-align:left;color:var(--text-secondary);border-bottom:1px solid var(--border-color);">👤 Agente</th>
+                        <th style="padding:6px 8px;text-align:left;color:var(--text-secondary);border-bottom:1px solid var(--border-color);">📅 Fecha</th>
+                        <th style="padding:6px 8px;text-align:left;color:var(--text-secondary);border-bottom:1px solid var(--border-color);">⏰ Hora</th>
+                        <th style="padding:6px 8px;text-align:left;color:var(--text-secondary);border-bottom:1px solid var(--border-color);">🏷️ Condición</th>
+                        <th style="padding:6px 8px;text-align:left;color:var(--text-secondary);border-bottom:1px solid var(--border-color);">🏠 Tipo</th>
+                        <th style="padding:6px 8px;text-align:left;color:var(--text-secondary);border-bottom:1px solid var(--border-color);">📍 Distritos</th>
+                        <th style="padding:6px 8px;text-align:left;color:var(--text-secondary);border-bottom:1px solid var(--border-color);">💰 Presupuesto</th>
+                        <th style="padding:6px 8px;text-align:left;color:var(--text-secondary);border-bottom:1px solid var(--border-color);">🛏️ Hab</th>
+                        <th style="padding:6px 8px;text-align:left;color:var(--text-secondary);border-bottom:1px solid var(--border-color);">🚿 Baños</th>
+                        <th style="padding:6px 8px;text-align:left;color:var(--text-secondary);border-bottom:1px solid var(--border-color);">🚗 Cochera</th>
+                        <th style="padding:6px 8px;text-align:left;color:var(--text-secondary);border-bottom:1px solid var(--border-color);">📐 Área</th>
+                        <th style="padding:6px 8px;text-align:left;color:var(--text-secondary);border-bottom:1px solid var(--border-color);">🛗 Ascensor</th>
+                        <th style="padding:6px 8px;text-align:left;color:var(--text-secondary);border-bottom:1px solid var(--border-color);">📱 Teléfono</th>
+                        <th style="padding:6px 8px;text-align:left;color:var(--text-secondary);border-bottom:1px solid var(--border-color);">🕐 Creado</th>
+                    </tr>
+                </thead>
+                <tbody id="requerimientosTableBody">
+                    <tr>
+                        <td colspan="17" style="text-align:center;padding:20px;color:var(--text-muted);">
+                            Esperando primeros requerimientos...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_scripts %}
@@ -453,6 +495,9 @@ const statDuplicados = document.getElementById('statDuplicados');
 const statErrores = document.getElementById('statErrores');
 const controlButtons = document.getElementById('controlButtons');
 const totalRequerimientosEl = document.getElementById('totalRequerimientos');
+const API_REQUERIMIENTOS = '{% url "whatsapp_extractor:api_requerimientos_en_tiempo_real" %}';
+const requerimientosTableBody = document.getElementById('requerimientosTableBody');
+const reqLastUpdate = document.getElementById('reqLastUpdate');
 
 let lastLogId = 0;
     let extractorLogId = EXTRACTOR_LOG_ID; // Usar el ID inyectado desde Django
@@ -744,6 +789,61 @@ let lastLogId = 0;
             }, 3000);
         }
     }
+
+    /**
+     * Actualiza la tabla de requerimientos en tiempo real.
+     * Hace polling cada 2 segundos a la API de requerimientos.
+     */
+    function updateRequerimientosTable() {
+        if (!extractorLogId) return;
+        fetch(API_REQUERIMIENTOS + '?extractor_log_id=' + extractorLogId + '&limit=10')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (!data.requerimientos || data.requerimientos.length === 0) {
+                    requerimientosTableBody.innerHTML = '<tr><td colspan="17" style="text-align:center;padding:20px;color:var(--text-muted);">No se han creado requerimientos aún...</td></tr>';
+                    reqLastUpdate.textContent = '📡 Esperando...';
+                    return;
+                }
+                var rows = '';
+                for (var i = 0; i < data.requerimientos.length; i++) {
+                    var req = data.requerimientos[i];
+                    var presupuesto = req.presupuesto_monto
+                        ? (req.presupuesto_moneda || 'S/') + ' ' + req.presupuesto_monto.toLocaleString('es-PE')
+                        : '—';
+                    if (req.presupuesto_forma_pago) {
+                        presupuesto += ' (' + req.presupuesto_forma_pago + ')';
+                    }
+                    rows += '<tr style="border-bottom:1px solid var(--border-color);">'
+                        + '<td style="padding:4px 8px;color:var(--text-muted);">' + (i + 1) + '</td>'
+                        + '<td style="padding:4px 8px;max-width:200px;white-space:pre-wrap;word-break:break-word;font-size:11px;">' + (req.requerimiento || '—') + '</td>'
+                        + '<td style="padding:4px 8px;font-size:11px;">' + (req.fuente || '—') + '</td>'
+                        + '<td style="padding:4px 8px;font-size:11px;">' + (req.agente || '—') + '</td>'
+                        + '<td style="padding:4px 8px;font-size:11px;">' + (req.fecha || '—') + '</td>'
+                        + '<td style="padding:4px 8px;font-size:11px;">' + (req.hora || '—') + '</td>'
+                        + '<td style="padding:4px 8px;font-size:11px;">' + (req.condicion || '—') + '</td>'
+                        + '<td style="padding:4px 8px;font-size:11px;">' + (req.tipo_propiedad || '—') + '</td>'
+                        + '<td style="padding:4px 8px;font-size:11px;">' + (req.distritos || '—') + '</td>'
+                        + '<td style="padding:4px 8px;font-size:11px;">' + presupuesto + '</td>'
+                        + '<td style="padding:4px 8px;font-size:11px;">' + (req.habitaciones || '—') + '</td>'
+                        + '<td style="padding:4px 8px;font-size:11px;">' + (req.banos || '—') + '</td>'
+                        + '<td style="padding:4px 8px;font-size:11px;">' + (req.cochera || '—') + '</td>'
+                        + '<td style="padding:4px 8px;font-size:11px;">' + (req.area_construida ? req.area_construida + ' m²' : '—') + '</td>'
+                        + '<td style="padding:4px 8px;font-size:11px;">' + (req.ascensor || '—') + '</td>'
+                        + '<td style="padding:4px 8px;font-size:11px;">' + (req.agente_telefono || '—') + '</td>'
+                        + '<td style="padding:4px 8px;font-size:11px;color:var(--text-muted);">' + (req.creado_en || '—') + '</td>'
+                        + '</tr>';
+                }
+                requerimientosTableBody.innerHTML = rows;
+                var now = new Date();
+                reqLastUpdate.textContent = '🕐 ' + now.toLocaleTimeString('es-PE');
+            })
+            .catch(function(error) {
+                console.error('Error al cargar requerimientos en tiempo real:', error);
+            });
+    }
+
+    // Iniciar polling de requerimientos cada 2 segundos
+    var reqInterval = setInterval(updateRequerimientosTable, 2000);
 
     // Iniciar
     init();
