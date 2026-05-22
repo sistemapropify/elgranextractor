@@ -422,6 +422,91 @@ class MatchingMasivoView(TemplateView):
         return context
 
 
+def _obtener_resumen_calendario(limite=500):
+    """
+    Obtiene resumen de matching para el calendario.
+    Optimizado: una sola consulta con select_related, sin N+1.
+    Si la tabla MatchResult no existe o hay error, retorna lista vacía.
+    """
+    try:
+        from django.db.models import Max, OuterRef, Subquery
+        from .models import MatchResult
+        
+        # Subquery: obtener el mejor score por requerimiento en UNA consulta
+        mejor_por_req = MatchResult.objects.filter(
+            requerimiento_id=OuterRef('requerimiento_id')
+        ).order_by('-score_total').values('score_total')[:1]
+        
+        mejor_propiedad_por_req = MatchResult.objects.filter(
+            requerimiento_id=OuterRef('requerimiento_id')
+        ).order_by('-score_total').values('propiedad_id')[:1]
+        
+        ultimo_ejecutado_por_req = MatchResult.objects.filter(
+            requerimiento_id=OuterRef('requerimiento_id')
+        ).order_by('-ejecutado_en').values('ejecutado_en')[:1]
+        
+        # Una sola consulta con subqueries
+        resultados = MatchResult.objects.values(
+            'requerimiento_id'
+        ).annotate(
+            max_score=Max('score_total')
+        ).order_by('-max_score')[:limite]
+        
+        if not resultados:
+            return []
+        
+        req_ids = [r['requerimiento_id'] for r in resultados]
+        
+        # Cargar todos los requerimientos en UNA consulta
+        from requerimientos.models import Requerimiento
+        reqs = Requerimiento.objects.filter(id__in=req_ids)
+        reqs_map = {r.id: r for r in reqs}
+        
+        # Cargar mejores matches en UNA consulta (con select_related)
+        mejores = MatchResult.objects.filter(
+            requerimiento_id__in=req_ids
+        ).select_related('propiedad').order_by('requerimiento_id', '-score_total')
+        
+        # Quedarse con el primero (mejor score) por requerimiento
+        mejores_por_req = {}
+        for m in mejores:
+            if m.requerimiento_id not in mejores_por_req:
+                mejores_por_req[m.requerimiento_id] = m
+        
+        resumen = []
+        for item in resultados:
+            req_id = item['requerimiento_id']
+            req = reqs_map.get(req_id)
+            if not req:
+                continue
+            mejor = mejores_por_req.get(req_id)
+            if mejor:
+                precio = float(mejor.propiedad.price) if mejor.propiedad and mejor.propiedad.price else None
+                currency_id = mejor.propiedad.currency_id if mejor.propiedad else None
+                resumen.append({
+                    'requerimiento_id': req_id,
+                    'requerimiento_nombre': str(req),
+                    'porcentaje_match': float(mejor.score_total),
+                    'score_promedio': float(mejor.score_total),
+                    'total_compatibles': 1,
+                    'mejor_propiedad_id': mejor.propiedad_id,
+                    'mejor_propiedad_codigo': mejor.propiedad.code if mejor.propiedad else None,
+                    'mejor_propiedad_titulo': mejor.propiedad.title if mejor.propiedad else None,
+                    'mejor_propiedad_distrito': mejor.propiedad.district if mejor.propiedad else None,
+                    'mejor_propiedad_precio': precio,
+                    'mejor_propiedad_moneda_id': currency_id,
+                    'mejor_propiedad_tipo': None,
+                    'fecha_ultimo_matching': mejor.ejecutado_en.isoformat() if mejor.ejecutado_en else None,
+                })
+        
+        resumen.sort(key=lambda x: x['porcentaje_match'], reverse=True)
+        return resumen[:limite]
+        
+    except Exception as e:
+        logger.warning(f"No se pudo obtener resumen de matching para calendario: {e}")
+        return []
+
+
 class MatchingCalendarView(TemplateView):
     """
     Vista calendario tipo Google Calendar para requerimientos y sus matches.
@@ -484,7 +569,8 @@ class MatchingCalendarView(TemplateView):
         context['distritos_disponibles_json'] = json.dumps(distritos_ordenados)
         
         # Obtener resumen de matching masivo para todos los requerimientos
-        resumen = obtener_resumen_matching_masivo()
+        # Optimizado: una sola consulta con select_related, sin N+1
+        resumen = _obtener_resumen_calendario()
         resumen_por_req = {item['requerimiento_id']: item for item in resumen}
         
         # Filtrar requerimientos no deseados (no_especificado y compartido)
