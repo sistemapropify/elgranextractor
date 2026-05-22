@@ -642,6 +642,28 @@
         background: rgba(248,81,73,0.1);
     }
 
+    /* Separador entre secciones de filtro */
+    .filter-section {
+        width: 100%;
+        height: 1px;
+        background: var(--border-color);
+        margin: 4px 0;
+        opacity: 0.3;
+    }
+
+    /* Filtros de distrito - color verde para diferenciar */
+    .filter-chip.district {
+        border-color: rgba(63,185,80,0.3);
+    }
+    .filter-chip.district:hover {
+        border-color: var(--accent-green);
+    }
+    .filter-chip.district.active {
+        background: var(--accent-green);
+        border-color: var(--accent-green);
+        color: #fff;
+    }
+
     /* ===== MODAL MATCH DETALLE - REDISEÑO COMPARATIVO ===== */
     .modal-match-overlay {
         display: none;
@@ -963,6 +985,17 @@
         <span class="filter-chip btn-reset" onclick="resetFilters()">✕ Limpiar</span>
     </div>
 
+    <!-- Filter bar: distrito -->
+    <div class="filter-bar" id="filterBarDistritos">
+        <span class="filter-label">📍 Distrito:</span>
+        {% for distrito in distritos_disponibles %}
+        <span class="filter-chip district active" data-distrito="{{ distrito }}" onclick="toggleDistrictFilter(this)">
+            {{ distrito }}
+        </span>
+        {% endfor %}
+        <span class="filter-chip btn-reset" onclick="resetDistrictFilters()">✕ Limpiar</span>
+    </div>
+
     <!-- Navigation -->
     <div class="nav-bar">
         <div class="nav-controls">
@@ -1053,7 +1086,7 @@
                 <div class="day-hour-content" id="hour-{{ hora_slot|time:'H' }}">
                     {% for req in reqs_dia %}
                         {% if req.hora_display|slice:":2" == hora_slot|time:"H" %}
-                        <div class="day-event-card" onclick="openMatchModal({{ req.id }})" data-tipo-key="{{ req.tipo_propiedad_key }}">
+                        <div class="day-event-card" onclick="openMatchModal({{ req.id }})" data-tipo-key="{{ req.tipo_propiedad_key }}" data-distritos="{{ req.distritos_list|join:',' }}">
                             {% if req.verificado %}
                             <div class="verified-star">
                                 <svg viewBox="0 0 24 24" fill="#00ff88">
@@ -1230,7 +1263,8 @@ document.addEventListener('DOMContentLoaded', function() {
                             </svg>
                         </div>`
                         : '';
-                    bodyHtml += `<div class="week-req-item" onclick="openMatchModal(${req.id})" style="position:relative;" data-tipo-key="${req.tipo_propiedad_key}">
+                    const distritosStr = req.distritos_list ? req.distritos_list.join(',') : '';
+                    bodyHtml += `<div class="week-req-item" onclick="openMatchModal(${req.id})" style="position:relative;" data-tipo-key="${req.tipo_propiedad_key}" data-distritos="${distritosStr}">
                         ${verifiedStarHtml}
                         <span class="req-hour">${req.hora_display}</span>
                         <span class="req-title">
@@ -1254,13 +1288,18 @@ document.addEventListener('DOMContentLoaded', function() {
 {% endif %}
 
 // ===== FILTROS DE TIPO DE PROPIEDAD =====
-// Almacena el estado activo/inactivo de cada chip
 let activeFilters = new Set();
 
-// Inicializar: todos los tipos activos por defecto
+// ===== FILTROS DE DISTRITO =====
+let activeDistrictFilters = new Set();
+
+// Inicializar: todos los tipos y distritos activos por defecto
 document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.filter-chip[data-tipo]').forEach(function(chip) {
         activeFilters.add(chip.dataset.tipo);
+    });
+    document.querySelectorAll('.filter-chip[data-distrito]').forEach(function(chip) {
+        activeDistrictFilters.add(chip.dataset.distrito);
     });
     // Si hay datos cargados, aplicar filtro inicial
     if (typeof diasSemana !== 'undefined') {
@@ -1271,7 +1310,6 @@ document.addEventListener('DOMContentLoaded', function() {
 function toggleFilter(el) {
     const tipo = el.dataset.tipo;
     if (activeFilters.has(tipo)) {
-        // No permitir deseleccionar todos - mantener al menos uno
         if (activeFilters.size <= 1) return;
         activeFilters.delete(tipo);
         el.classList.remove('active');
@@ -1283,7 +1321,6 @@ function toggleFilter(el) {
 }
 
 function resetFilters() {
-    // Reactivar todos
     document.querySelectorAll('.filter-chip[data-tipo]').forEach(function(chip) {
         activeFilters.add(chip.dataset.tipo);
         chip.classList.add('active');
@@ -1291,27 +1328,55 @@ function resetFilters() {
     applyFilters();
 }
 
+function toggleDistrictFilter(el) {
+    const distrito = el.dataset.distrito;
+    if (activeDistrictFilters.has(distrito)) {
+        if (activeDistrictFilters.size <= 1) return;
+        activeDistrictFilters.delete(distrito);
+        el.classList.remove('active');
+    } else {
+        activeDistrictFilters.add(distrito);
+        el.classList.add('active');
+    }
+    applyFilters();
+}
+
+function resetDistrictFilters() {
+    document.querySelectorAll('.filter-chip[data-distrito]').forEach(function(chip) {
+        activeDistrictFilters.add(chip.dataset.distrito);
+        chip.classList.add('active');
+    });
+    applyFilters();
+}
+
+function matchesDistrictFilter(item) {
+    const distritosAttr = item.dataset.distritos;
+    if (!distritosAttr) return activeDistrictFilters.size === 0;
+    const itemDistritos = distritosAttr.split(',').map(function(d) { return d.trim(); });
+    // El item pasa si ALGUNO de sus distritos está en activeDistrictFilters
+    for (var i = 0; i < itemDistritos.length; i++) {
+        if (activeDistrictFilters.has(itemDistritos[i])) {
+            return true;
+        }
+    }
+    return false;
+}
+
 function applyFilters() {
     // Aplicar a vista week (renderizada con JS)
     if (VIEW_MODE === 'week' && typeof diasSemana !== 'undefined') {
         document.querySelectorAll('.week-req-item').forEach(function(item) {
-            // Buscar el tipo de propiedad en el texto del item
             const reqTipoKey = item.dataset.tipoKey;
-            if (reqTipoKey) {
-                item.style.display = activeFilters.has(reqTipoKey) ? '' : 'none';
+            var visible = true;
+            // Filtro por tipo
+            if (reqTipoKey && !activeFilters.has(reqTipoKey)) {
+                visible = false;
             }
-        });
-        // Ocultar columnas de día si no tienen items visibles
-        document.querySelectorAll('.week-day-col').forEach(function(col) {
-            const visibleItems = col.querySelectorAll('.week-req-item[style=""], .week-req-item:not([style*="display"])');
-            // También considerar items sin style (nunca ocultos)
-            const allVisible = col.querySelectorAll('.week-req-item').length > 0;
-            const hasVisible = Array.from(col.querySelectorAll('.week-req-item')).some(function(el) {
-                return el.style.display !== 'none';
-            });
-            if (!hasVisible && allVisible) {
-                // No ocultar columnas completamente, solo los items
+            // Filtro por distrito
+            if (visible && !matchesDistrictFilter(item)) {
+                visible = false;
             }
+            item.style.display = visible ? '' : 'none';
         });
     }
 
@@ -1319,15 +1384,21 @@ function applyFilters() {
     if (VIEW_MODE === 'day') {
         document.querySelectorAll('.day-event-card').forEach(function(card) {
             const reqTipoKey = card.dataset.tipoKey;
-            if (reqTipoKey) {
-                card.style.display = activeFilters.has(reqTipoKey) ? '' : 'none';
+            var visible = true;
+            // Filtro por tipo
+            if (reqTipoKey && !activeFilters.has(reqTipoKey)) {
+                visible = false;
             }
+            // Filtro por distrito
+            if (visible && !matchesDistrictFilter(card)) {
+                visible = false;
+            }
+            card.style.display = visible ? '' : 'none';
         });
         // Ocultar filas de hora sin eventos visibles
         document.querySelectorAll('.day-hour-row').forEach(function(row) {
             const hourContent = row.querySelector('.day-hour-content');
             if (hourContent) {
-                const visibleCards = hourContent.querySelectorAll('.day-event-card[style=""], .day-event-card:not([style*="display"])');
                 const hasVisible = Array.from(hourContent.querySelectorAll('.day-event-card')).some(function(card) {
                     return card.style.display !== 'none';
                 });

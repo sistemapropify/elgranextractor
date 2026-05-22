@@ -462,6 +462,21 @@ class MatchingCalendarView(TemplateView):
         context['tipos_propiedad'] = tipos_propiedad
         context['tipos_propiedad_json'] = json.dumps(tipos_propiedad)
         
+        # ── Distritos de Arequipa para filtros ──
+        # Lista fija de distritos de la provincia de Arequipa
+        DISTRITOS_AREQUIPA = [
+            "Arequipa", "Alto Selva Alegre", "Cayma", "Cerro Colorado",
+            "Characato", "Chiguata", "Jacobo Hunter", "Jose Luis Bustamante y Rivero",
+            "La Joya", "Mariano Melgar", "Miraflores", "Mollebaya",
+            "Paucarpata", "Pocsi", "Polobaya", "Quequeña",
+            "Sabandia", "Sachaca", "San Juan de Siguas", "San Juan de Tarucani",
+            "Santa Isabel de Siguas", "Santa Rita de Siguas", "Socabaya",
+            "Tiabaya", "Uchumayo", "Vitor", "Yanahuara", "Yarabamba",
+            "Yura",
+        ]
+        context['distritos_disponibles'] = DISTRITOS_AREQUIPA
+        context['distritos_disponibles_json'] = json.dumps(DISTRITOS_AREQUIPA)
+        
         # Obtener resumen de matching masivo para todos los requerimientos
         resumen = obtener_resumen_matching_masivo()
         resumen_por_req = {item['requerimiento_id']: item for item in resumen}
@@ -547,6 +562,9 @@ class MatchingCalendarView(TemplateView):
                     if presupuesto_monto and r.presupuesto_moneda:
                         signo = '$' if r.presupuesto_moneda == 'USD' else 'S/'
                         presupuesto_display = f'{signo}{presupuesto_monto:,.0f}'
+                    # Lista de distritos (separados por coma)
+                    distritos_raw = r.distritos or ''
+                    distritos_list = [d.strip() for d in distritos_raw.split(',') if d.strip()]
                     reqs_serializados.append({
                         'id': r.id,
                         'hora': r.hora.isoformat() if r.hora else None,
@@ -558,6 +576,7 @@ class MatchingCalendarView(TemplateView):
                         'presupuesto_moneda': r.presupuesto_moneda or '',
                         'agente': r.agente or '',
                         'distritos': r.distritos[:50] if r.distritos else '',
+                        'distritos_list': distritos_list,
                         'porcentaje_match': info.get('porcentaje_match', 0),
                         'mejor_propiedad_codigo': info.get('mejor_propiedad_codigo'),
                         'mejor_propiedad_precio': info.get('mejor_propiedad_precio'),
@@ -617,6 +636,9 @@ class MatchingCalendarView(TemplateView):
                 if presupuesto_monto and r.presupuesto_moneda:
                     signo = '$' if r.presupuesto_moneda == 'USD' else 'S/'
                     presupuesto_display = f'{signo}{presupuesto_monto:,.0f}'
+                # Lista de distritos (separados por coma)
+                distritos_raw = r.distritos or ''
+                distritos_list = [d.strip() for d in distritos_raw.split(',') if d.strip()]
                 reqs_serializados.append({
                     'id': r.id,
                     'hora': r.hora.isoformat() if r.hora else None,
@@ -628,6 +650,7 @@ class MatchingCalendarView(TemplateView):
                     'presupuesto_moneda': r.presupuesto_moneda or '',
                     'agente': r.agente or '',
                     'distritos': r.distritos[:50] if r.distritos else '',
+                    'distritos_list': distritos_list,
                     'porcentaje_match': info.get('porcentaje_match', 0),
                     'mejor_propiedad_codigo': info.get('mejor_propiedad_codigo'),
                     'mejor_propiedad_precio': info.get('mejor_propiedad_precio'),
