@@ -996,6 +996,15 @@
         <span class="filter-chip btn-reset" onclick="resetDistrictFilters()">✕ Limpiar</span>
     </div>
 
+    <!-- Switch: mostrar/ocultar requerimientos sin match -->
+    <div class="filter-bar" id="filterBarSinMatch" style="display:flex;align-items:center;gap:8px;padding:4px 0;margin-top:2px;">
+        <span class="filter-label">🎯 Match:</span>
+        <label class="switch-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;">
+            <input type="checkbox" id="switchSinMatch" checked onchange="toggleSinMatch(this)" style="width:18px;height:18px;accent-color:var(--accent-green);cursor:pointer;">
+            <span style="font-size:13px;color:var(--text-secondary);">Mostrar solo con match</span>
+        </label>
+    </div>
+
     <!-- Navigation -->
     <div class="nav-bar">
         <div class="nav-controls">
@@ -1086,7 +1095,7 @@
                 <div class="day-hour-content" id="hour-{{ hora_slot|time:'H' }}">
                     {% for req in reqs_dia %}
                         {% if req.hora_display|slice:":2" == hora_slot|time:"H" %}
-                        <div class="day-event-card" onclick="openMatchModal({{ req.id }})" data-tipo-key="{{ req.tipo_propiedad_key }}" data-distritos="{{ req.distritos_list|join:',' }}">
+                        <div class="day-event-card" onclick="openMatchModal({{ req.id }})" data-tipo-key="{{ req.tipo_propiedad_key }}" data-distritos="{{ req.distritos_list|join:',' }}" data-porcentaje-match="{{ req.porcentaje_match|default:'0' }}">
                             {% if req.verificado %}
                             <div class="verified-star">
                                 <svg viewBox="0 0 24 24" fill="#00ff88">
@@ -1264,7 +1273,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>`
                         : '';
                     const distritosStr = req.distritos_list ? req.distritos_list.join(',') : '';
-                    bodyHtml += `<div class="week-req-item" onclick="openMatchModal(${req.id})" style="position:relative;" data-tipo-key="${req.tipo_propiedad_key}" data-distritos="${distritosStr}">
+                    bodyHtml += `<div class="week-req-item" onclick="openMatchModal(${req.id})" style="position:relative;" data-tipo-key="${req.tipo_propiedad_key}" data-distritos="${distritosStr}" data-porcentaje-match="${req.porcentaje_match}">
                         ${verifiedStarHtml}
                         <span class="req-hour">${req.hora_display}</span>
                         <span class="req-title">
@@ -1292,6 +1301,9 @@ let activeFilters = new Set();
 
 // ===== FILTROS DE DISTRITO =====
 let activeDistrictFilters = new Set();
+
+// ===== SWITCH: SOLO CON MATCH =====
+let showOnlyWithMatch = false;
 
 // Inicializar: todos los tipos y distritos activos por defecto
 document.addEventListener('DOMContentLoaded', function() {
@@ -1362,6 +1374,11 @@ function matchesDistrictFilter(item) {
     return false;
 }
 
+function toggleSinMatch(checkbox) {
+    showOnlyWithMatch = checkbox.checked;
+    applyFilters();
+}
+
 function applyFilters() {
     // Aplicar a vista week (renderizada con JS)
     if (VIEW_MODE === 'week' && typeof diasSemana !== 'undefined') {
@@ -1375,6 +1392,13 @@ function applyFilters() {
             // Filtro por distrito
             if (visible && !matchesDistrictFilter(item)) {
                 visible = false;
+            }
+            // Filtro: solo con match
+            if (visible && showOnlyWithMatch) {
+                const pct = parseFloat(item.dataset.porcentajeMatch);
+                if (!pct || pct <= 0) {
+                    visible = false;
+                }
             }
             item.style.display = visible ? '' : 'none';
         });
@@ -1392,6 +1416,13 @@ function applyFilters() {
             // Filtro por distrito
             if (visible && !matchesDistrictFilter(card)) {
                 visible = false;
+            }
+            // Filtro: solo con match
+            if (visible && showOnlyWithMatch) {
+                const pct = parseFloat(card.dataset.porcentajeMatch);
+                if (!pct || pct <= 0) {
+                    visible = false;
+                }
             }
             card.style.display = visible ? '' : 'none';
         });
