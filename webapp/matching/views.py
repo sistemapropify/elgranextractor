@@ -462,20 +462,26 @@ class MatchingCalendarView(TemplateView):
         context['tipos_propiedad'] = tipos_propiedad
         context['tipos_propiedad_json'] = json.dumps(tipos_propiedad)
         
-        # ── Distritos de Arequipa para filtros ──
-        # Lista fija de distritos de la provincia de Arequipa
-        DISTRITOS_AREQUIPA = [
-            "Arequipa", "Alto Selva Alegre", "Cayma", "Cerro Colorado",
-            "Characato", "Chiguata", "Jacobo Hunter", "Jose Luis Bustamante y Rivero",
-            "La Joya", "Mariano Melgar", "Miraflores", "Mollebaya",
-            "Paucarpata", "Pocsi", "Polobaya", "Quequeña",
-            "Sabandia", "Sachaca", "San Juan de Siguas", "San Juan de Tarucani",
-            "Santa Isabel de Siguas", "Santa Rita de Siguas", "Socabaya",
-            "Tiabaya", "Uchumayo", "Vitor", "Yanahuara", "Yarabamba",
-            "Yura",
-        ]
-        context['distritos_disponibles'] = DISTRITOS_AREQUIPA
-        context['distritos_disponibles_json'] = json.dumps(DISTRITOS_AREQUIPA)
+        # ── Distritos para filtros (extraídos de la BD) ──
+        from requerimientos.models import Requerimiento
+        from django.db.models import Value as V
+        from django.db.models.functions import Replace, Trim
+        import re
+        # Obtener todos los valores del campo distritos, separar por coma y limpiar
+        distritos_raw = Requerimiento.objects.exclude(
+            distritos=''
+        ).values_list('distritos', flat=True)
+        distritos_set = set()
+        for raw in distritos_raw:
+            if raw:
+                for d in raw.split(','):
+                    d_clean = d.strip()
+                    if d_clean and len(d_clean) > 2:
+                        distritos_set.add(d_clean)
+        # Ordenar alfabéticamente
+        distritos_ordenados = sorted(distritos_set)
+        context['distritos_disponibles'] = distritos_ordenados
+        context['distritos_disponibles_json'] = json.dumps(distritos_ordenados)
         
         # Obtener resumen de matching masivo para todos los requerimientos
         resumen = obtener_resumen_matching_masivo()
