@@ -612,40 +612,28 @@ let lastLogId = 0;
 
     /**
      * Actualiza la barra de progreso y estadísticas.
+     * Usa SOLO los campos del log (log_mensajes_total, log_mensajes_validos, log_duplicados)
+     * que vienen directamente de la API. NO usa los detalles de LogEntry porque
+     * pueden tener valores inconsistentes entre diferentes entries.
+     *
+     * El progreso se calcula como: (mensajes_validos + duplicados) / mensajes_total
+     * Esto representa cuántos mensajes se han procesado (ya sea como válidos o duplicados).
      */
     function updateProgress(data) {
         var total = data.log_mensajes_total || 0;
-        var procesados = 0;
         var validos = data.log_mensajes_validos || 0;
         var duplicados = data.log_duplicados || 0;
+        // Los mensajes procesados son la suma de válidos + duplicados
+        var procesados = validos + duplicados;
 
-        // Intentar obtener progreso más fino desde los detalles de LogEntry
-        if (data.entries && data.entries.length > 0) {
-            var lastEntry = null;
-            for (var i = data.entries.length - 1; i >= 0; i--) {
-                if (data.entries[i].detalles && data.entries[i].detalles.porcentaje !== undefined) {
-                    lastEntry = data.entries[i];
-                    break;
-                }
-            }
-            if (lastEntry) {
-                var detalles = lastEntry.detalles || {};
-                if (detalles.progreso !== undefined) procesados = detalles.progreso;
-                if (detalles.validos !== undefined) validos = detalles.validos;
-                if (detalles.duplicados !== undefined) duplicados = detalles.duplicados;
-                if (detalles.total !== undefined) total = detalles.total;
-            }
-        }
-
-        // Calcular porcentaje
-        var pct = total > 0 ? Math.round((procesados / total) * 100) : 0;
-
-        // Si total es 0 pero hay entradas de log, mostrar "Iniciando..." en lugar de 0%
+        // Si total es 0 pero ya hay entradas de log, el archivo se está parseando
         if (total === 0 && data.entries && data.entries.length > 0) {
             progressFill.style.width = '2%';
             progressPercentage.textContent = '⏳ Iniciando...';
             progressCount.textContent = 'Parseando archivo...';
         } else {
+            // Calcular porcentaje basado en procesados/total
+            var pct = total > 0 ? Math.round((procesados / total) * 100) : 0;
             progressFill.style.width = pct + '%';
             progressPercentage.textContent = pct + '%';
             progressCount.textContent = procesados + ' / ' + total + ' mensajes';
