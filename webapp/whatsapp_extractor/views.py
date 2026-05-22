@@ -798,7 +798,15 @@ class ProcesarArchivoConProgresoView(View):
         archivo = get_object_or_404(
             ArchivoExtraccionWhatsApp, pk=kwargs['pk']
         )
-        extractor_log_id = request.GET.get('extractor_log_id')
+        extractor_log_id_raw = request.GET.get('extractor_log_id')
+
+        # Convertir a entero para que el template renderice como número JS
+        extractor_log_id = None
+        if extractor_log_id_raw:
+            try:
+                extractor_log_id = int(extractor_log_id_raw)
+            except (ValueError, TypeError):
+                extractor_log_id = None
 
         # Obtener el log activo si existe
         log_activo = None

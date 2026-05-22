@@ -1,31 +1,12 @@
-{% extends "intelligence/base/base.html" %}
+{% extends "propifai_base.html" %}
 {% load static %}
 
 {% block title %}Procesando: {{ archivo.nombre_archivo_original }} — Propifai{% endblock %}
 
 {% block extra_css %}
 <style>
-    :root {
-        --we-bg-primary: #0d1117;
-        --we-bg-secondary: #161b22;
-        --we-bg-tertiary: #21262d;
-        --we-border: #30363d;
-        --we-text: #c9d1d9;
-        --we-text-muted: #8b949e;
-        --we-accent-blue: #58a6ff;
-        --we-accent-green: #3fb950;
-        --we-accent-red: #f85149;
-        --we-accent-orange: #d29922;
-        --we-accent-purple: #bc8cff;
-    }
-
-    body {
-        background: var(--we-bg-primary);
-        color: var(--we-text);
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-        margin: 0;
-        padding: 20px;
-    }
+    /* ===== ESTILOS PROGRESO PROCESAMIENTO ===== */
+    /* Usa las variables CSS estándar de propifai_base (--bg-card, --border-color, etc.) */
 
     .progress-container {
         max-width: 900px;
@@ -33,8 +14,8 @@
     }
 
     .progress-card {
-        background: #161b22;
-        border: 1px solid var(--we-border);
+        background: var(--bg-card, #161b22);
+        border: 1px solid var(--border-color, #30363d);
         border-radius: 12px;
         padding: 32px;
         margin-bottom: 20px;
@@ -44,11 +25,11 @@
         margin: 0 0 8px 0;
         font-size: 1.3rem;
         font-weight: 600;
-        color: var(--we-text);
+        color: var(--text-primary, #c9d1d9);
     }
 
     .progress-card .subtitle {
-        color: var(--we-text-muted);
+        color: var(--text-secondary, #8b949e);
         font-size: 0.9rem;
         margin-bottom: 24px;
     }
@@ -61,17 +42,17 @@
     .progress-bar-container {
         width: 100%;
         height: 28px;
-        background: #21262d;
+        background: var(--bg-hover, #21262d);
         border-radius: 14px;
         overflow: hidden;
         position: relative;
-        border: 1px solid var(--we-border);
+        border: 1px solid var(--border-color, #30363d);
     }
 
     .progress-bar-fill {
         height: 100%;
         width: 0%;
-        background: linear-gradient(90deg, var(--we-accent-blue), var(--we-accent-green));
+        background: linear-gradient(90deg, var(--accent-blue, #58a6ff), var(--accent-green, #3fb950));
         border-radius: 14px;
         transition: width 0.5s ease;
         position: relative;
@@ -109,7 +90,7 @@
     .progress-percentage {
         font-size: 1.5rem;
         font-weight: 700;
-        color: var(--we-accent-blue);
+        color: var(--accent-blue, #58a6ff);
     }
 
     .progress-stats {
@@ -117,7 +98,7 @@
         gap: 20px;
         margin-top: 16px;
         padding-top: 16px;
-        border-top: 1px solid var(--we-border);
+        border-top: 1px solid var(--border-color, #30363d);
     }
 
     .progress-stat {
@@ -127,19 +108,19 @@
     .progress-stat .stat-value {
         font-size: 1.2rem;
         font-weight: 600;
-        color: var(--we-text);
+        color: var(--text-primary, #c9d1d9);
     }
 
     .progress-stat .stat-label {
         font-size: 0.8rem;
-        color: var(--we-text-muted);
+        color: var(--text-secondary, #8b949e);
         margin-top: 2px;
     }
 
     /* Terminal de logs */
     .terminal {
         background: #000;
-        border: 1px solid var(--we-border);
+        border: 1px solid var(--border-color, #30363d);
         border-radius: 12px;
         overflow: hidden;
         font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
@@ -148,12 +129,12 @@
     }
 
     .terminal-header {
-        background: #21262d;
+        background: var(--bg-hover, #21262d);
         padding: 10px 16px;
         display: flex;
         align-items: center;
         gap: 8px;
-        border-bottom: 1px solid var(--we-border);
+        border-bottom: 1px solid var(--border-color, #30363d);
     }
 
     .terminal-dot {
@@ -168,7 +149,7 @@
     .terminal-dot.green { background: #27c93f; }
 
     .terminal-title {
-        color: var(--we-text-muted);
+        color: var(--text-secondary, #8b949e);
         font-size: 0.8rem;
         margin-left: 8px;
     }
@@ -207,7 +188,7 @@
     }
 
     .log-time {
-        color: var(--we-text-muted);
+        color: var(--text-secondary, #8b949e);
         min-width: 60px;
         flex-shrink: 0;
     }
@@ -218,19 +199,19 @@
         font-weight: 600;
     }
 
-    .log-level.INFO { color: var(--we-accent-blue); }
-    .log-level.WARNING { color: var(--we-accent-orange); }
-    .log-level.ERROR { color: var(--we-accent-red); }
-    .log-level.DEBUG { color: var(--we-text-muted); }
+    .log-level.INFO { color: var(--accent-blue, #58a6ff); }
+    .log-level.WARNING { color: var(--accent-orange, #d29922); }
+    .log-level.ERROR { color: var(--accent-red, #f85149); }
+    .log-level.DEBUG { color: var(--text-secondary, #8b949e); }
 
     .log-message {
-        color: var(--we-text);
+        color: var(--text-primary, #c9d1d9);
         word-break: break-word;
     }
 
     .log-line.info .log-message { color: #c9d1d9; }
-    .log-line.warning .log-message { color: var(--we-accent-orange); }
-    .log-line.error .log-message { color: var(--we-accent-red); }
+    .log-line.warning .log-message { color: var(--accent-orange, #d29922); }
+    .log-line.error .log-message { color: var(--accent-red, #f85149); }
 
     /* Spinner */
     .spinner {
@@ -238,7 +219,7 @@
         width: 16px;
         height: 16px;
         border: 2px solid #30363d;
-        border-top-color: var(--we-accent-blue);
+        border-top-color: var(--accent-blue, #58a6ff);
         border-radius: 50%;
         animation: spin 0.8s linear infinite;
         margin-right: 8px;
@@ -261,25 +242,25 @@
 
     .status-badge.processing {
         background: rgba(88, 166, 255, 0.15);
-        color: var(--we-accent-blue);
+        color: var(--accent-blue, #58a6ff);
         border: 1px solid rgba(88, 166, 255, 0.3);
     }
 
     .status-badge.completed {
         background: rgba(63, 185, 80, 0.15);
-        color: var(--we-accent-green);
+        color: var(--accent-green, #3fb950);
         border: 1px solid rgba(63, 185, 80, 0.3);
     }
 
     .status-badge.error {
         background: rgba(248, 81, 73, 0.15);
-        color: var(--we-accent-red);
+        color: var(--accent-red, #f85149);
         border: 1px solid rgba(248, 81, 73, 0.3);
     }
 
     .status-badge.paused {
         background: rgba(210, 153, 34, 0.15);
-        color: var(--we-accent-orange);
+        color: var(--accent-orange, #d29922);
         border: 1px solid rgba(210, 153, 34, 0.3);
     }
 
@@ -293,12 +274,12 @@
         font-size: 0.85rem;
         font-weight: 600;
         cursor: pointer;
-        border: 1px solid #30363d;
+        border: 1px solid var(--border-color, #30363d);
         font-family: inherit;
     }
     .btn-pause {
         background: rgba(210, 153, 34, 0.15);
-        color: var(--we-accent-orange);
+        color: var(--accent-orange, #d29922);
         border-color: rgba(210, 153, 34, 0.3);
     }
     .btn-pause:hover {
@@ -306,7 +287,7 @@
     }
     .btn-resume {
         background: rgba(63, 185, 80, 0.15);
-        color: var(--we-accent-green);
+        color: var(--accent-green, #3fb950);
         border-color: rgba(63, 185, 80, 0.3);
     }
     .btn-resume:hover {
@@ -314,7 +295,7 @@
     }
     .btn-stop {
         background: rgba(248, 81, 73, 0.15);
-        color: var(--we-accent-red);
+        color: var(--accent-red, #f85149);
         border-color: rgba(248, 81, 73, 0.3);
     }
     .btn-stop:hover {
@@ -328,7 +309,7 @@
         align-items: center;
         justify-content: center;
         height: 100%;
-        color: var(--we-text-muted);
+        color: var(--text-secondary, #8b949e);
         text-align: center;
         gap: 8px;
     }
@@ -358,8 +339,8 @@
                     Procesando...
                 </span>
                 <!-- Total de requerimientos acumulados -->
-                <div style="font-size:0.8rem;color:var(--we-text-muted);text-align:right;">
-                    📊 Total requerimientos en BD: <strong id="totalRequerimientos" style="color:var(--we-accent-green);">{{ total_requerimientos|default:"0" }}</strong>
+                <div style="font-size:0.8rem;color:var(--text-secondary);text-align:right;">
+                    📊 Total requerimientos en BD: <strong id="totalRequerimientos" style="color:var(--accent-green);">{{ total_requerimientos|default:"0" }}</strong>
                 </div>
             </div>
         </div>
@@ -402,7 +383,7 @@
             </div>
             <div class="progress-text">
                 <span class="progress-percentage" id="progressPercentage">0%</span>
-                <span style="color:var(--we-text-muted);" id="progressCount">0 / 0 mensajes</span>
+                <span style="color:var(--text-secondary);" id="progressCount">0 / 0 mensajes</span>
             </div>
         </div>
 
@@ -413,15 +394,15 @@
                 <div class="stat-label">Procesados</div>
             </div>
             <div class="progress-stat">
-                <div class="stat-value" id="statValidos" style="color:var(--we-accent-green);">0</div>
+                <div class="stat-value" id="statValidos" style="color:var(--accent-green);">0</div>
                 <div class="stat-label">Válidos ✅</div>
             </div>
             <div class="progress-stat">
-                <div class="stat-value" id="statDuplicados" style="color:var(--we-accent-orange);">0</div>
+                <div class="stat-value" id="statDuplicados" style="color:var(--accent-orange);">0</div>
                 <div class="stat-label">Duplicados 🔄</div>
             </div>
             <div class="progress-stat">
-                <div class="stat-value" id="statErrores" style="color:var(--we-accent-red);">0</div>
+                <div class="stat-value" id="statErrores" style="color:var(--accent-red);">0</div>
                 <div class="stat-label">Errores ❌</div>
             </div>
         </div>
@@ -446,12 +427,13 @@
 </div>
 {% endblock %}
 
-{% block extra_js %}
+{% block extra_scripts %}
 <script>
 (function() {
 'use strict';
 
 const ARCHIVO_ID = {{ archivo.id }};
+const EXTRACTOR_LOG_ID = {{ extractor_log_id|default:"null" }};
 const API_LOG_ENTRIES = '{% url "whatsapp_extractor:api_log_entries" %}';
 const DETAIL_URL = '{% url "whatsapp_extractor:archivo_detail" pk=archivo.pk %}';
 const PAUSAR_URL = '{% url "whatsapp_extractor:archivo_pausar" pk=archivo.pk %}';
@@ -473,16 +455,29 @@ const controlButtons = document.getElementById('controlButtons');
 const totalRequerimientosEl = document.getElementById('totalRequerimientos');
 
 let lastLogId = 0;
-    let extractorLogId = null;
+    let extractorLogId = EXTRACTOR_LOG_ID; // Usar el ID inyectado desde Django
     let pollingInterval = null;
     let isComplete = false;
     let retryCount = 0;
-    const MAX_RETRIES = 30; // 30 intentos ~ 60 segundos
+    const MAX_RETRIES = 30;
     let isPaused = false;
 
     /**
+     * Inicia el polling inmediatamente si ya tenemos extractorLogId.
+     * Si no, busca el log por archivo_id (modo legacy).
+     */
+    function init() {
+        if (extractorLogId) {
+            // Ya tenemos el ID desde la URL/Django, empezar polling directo
+            startPolling();
+        } else {
+            // No hay ID, buscar por archivo (modo legacy)
+            findLogByArchivo();
+        }
+    }
+
+    /**
      * Busca el extractor_log_id usando archivo_id.
-     * La API ahora soporta ?archivo_id=X para buscar el log más reciente.
      */
     function findLogByArchivo() {
         var url = API_LOG_ENTRIES + '?archivo_id=' + ARCHIVO_ID;
@@ -490,7 +485,6 @@ let lastLogId = 0;
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.log_id) {
-                    // Encontramos el log
                     extractorLogId = data.log_id;
                     lastLogId = 0;
                     if (data.entries && data.entries.length > 0) {
@@ -499,19 +493,16 @@ let lastLogId = 0;
                     }
                     startPolling();
 
-                    // Si ya está completado, no esperar
                     if (data.log_estado === 'completed' || data.log_estado === 'error') {
                         isComplete = true;
                         clearInterval(pollingInterval);
                         onProcessingComplete(data);
                     }
                 } else {
-                    // Aún no hay log, reintentar
                     retryCount++;
                     if (retryCount < MAX_RETRIES) {
                         setTimeout(findLogByArchivo, 2000);
                     } else {
-                        // Timeout: recargar la página
                         window.location.reload();
                     }
                 }
@@ -531,9 +522,10 @@ let lastLogId = 0;
         if (pollingInterval) {
             clearInterval(pollingInterval);
         }
-        pollingInterval = setInterval(pollLogs, 2000);
-        // También hacer una llamada inmediata
+        // Primera llamada inmediata
         pollLogs();
+        // Luego cada 2 segundos
+        pollingInterval = setInterval(pollLogs, 2000);
     }
 
     /**
@@ -555,7 +547,7 @@ let lastLogId = 0;
                 }
                 updateProgress(data);
 
-                // Manejar estado 'paused' (valor interno del campo, no display name)
+                // Manejar estado 'paused'
                 if (data.log_estado === 'paused') {
                     if (!isPaused) {
                         isPaused = true;
@@ -584,7 +576,6 @@ let lastLogId = 0;
      * Agrega entradas de log al terminal.
      */
     function addLogEntries(entries) {
-        // Ocultar empty state
         if (terminalEmpty) {
             terminalEmpty.style.display = 'none';
         }
@@ -616,17 +607,13 @@ let lastLogId = 0;
             terminalBody.appendChild(line);
         }
 
-        // Scroll al final
         terminalBody.scrollTop = terminalBody.scrollHeight;
     }
 
     /**
      * Actualiza la barra de progreso y estadísticas.
-     * Usa los campos del log (log_mensajes_total, log_mensajes_validos, log_duplicados)
-     * que vienen directamente de la API, complementados con detalles de LogEntry.
      */
     function updateProgress(data) {
-        // Usar los campos del log directamente desde la respuesta API
         var total = data.log_mensajes_total || 0;
         var procesados = 0;
         var validos = data.log_mensajes_validos || 0;
@@ -652,24 +639,28 @@ let lastLogId = 0;
 
         // Calcular porcentaje
         var pct = total > 0 ? Math.round((procesados / total) * 100) : 0;
-        progressFill.style.width = pct + '%';
-        progressPercentage.textContent = pct + '%';
+
+        // Si total es 0 pero hay entradas de log, mostrar "Iniciando..." en lugar de 0%
+        if (total === 0 && data.entries && data.entries.length > 0) {
+            progressFill.style.width = '2%';
+            progressPercentage.textContent = '⏳ Iniciando...';
+            progressCount.textContent = 'Parseando archivo...';
+        } else {
+            progressFill.style.width = pct + '%';
+            progressPercentage.textContent = pct + '%';
+            progressCount.textContent = procesados + ' / ' + total + ' mensajes';
+        }
 
         // Actualizar contadores
-        progressCount.textContent = procesados + ' / ' + total + ' mensajes';
         statProcesados.textContent = procesados;
         statValidos.textContent = validos;
         statDuplicados.textContent = duplicados;
     }
 
-    /**
-     * Cuando el procesamiento se pausa, actualiza la UI.
-     */
     function onProcessingPaused() {
         statusBadge.className = 'status-badge paused';
         statusBadge.innerHTML = '⏸️ Pausado';
 
-        // Reemplazar botones: mostrar Reanudar + Detener
         if (controlButtons) {
             controlButtons.innerHTML = `
                 <form method="post" action="${REANUDAR_URL}" style="display:inline;">
@@ -684,14 +675,10 @@ let lastLogId = 0;
         }
     }
 
-    /**
-     * Cuando el procesamiento se reanuda, actualiza la UI.
-     */
     function onProcessingResumed() {
         statusBadge.className = 'status-badge processing';
         statusBadge.innerHTML = '<span class="spinner"></span> Procesando...';
 
-        // Reemplazar botones: mostrar Pausar + Detener
         if (controlButtons) {
             controlButtons.innerHTML = `
                 <form method="post" action="${PAUSAR_URL}" style="display:inline;">
@@ -706,9 +693,6 @@ let lastLogId = 0;
         }
     }
 
-    /**
-     * Obtiene el token CSRF de la cookie.
-     */
     function getCsrfToken() {
         var name = 'csrftoken';
         var value = '; ' + document.cookie;
@@ -717,37 +701,30 @@ let lastLogId = 0;
         return '';
     }
 
-    /**
-     * Cuando el procesamiento termina, actualiza la UI y redirige.
-     */
     function onProcessingComplete(data) {
         var isError = data.log_estado === 'error';
 
-        // Actualizar badge de estado
         statusBadge.className = 'status-badge ' + (isError ? 'error' : 'completed');
         statusBadge.innerHTML = isError
             ? '❌ Error en procesamiento'
             : '✅ Procesamiento completado';
 
-        // Barra al 100% si completado
         if (!isError) {
             progressFill.style.width = '100%';
             progressPercentage.textContent = '100%';
         }
 
-        // Mostrar mensaje de redirección
         var redirectMsg = document.createElement('div');
-        redirectMsg.style.cssText = 'padding:12px 16px;margin-top:12px;background:var(--we-bg-tertiary);border-radius:8px;text-align:center;';
+        redirectMsg.style.cssText = 'padding:12px 16px;margin-top:12px;background:var(--bg-hover, #21262d);border-radius:8px;text-align:center;';
         redirectMsg.innerHTML = isError
-            ? '❌ <a href="' + DETAIL_URL + '" style="color:var(--we-accent-blue);">Ver detalle del archivo</a>'
-            : '✅ Redirigiendo al detalle... <a href="' + DETAIL_URL + '" style="color:var(--we-accent-blue);">Ir ahora</a>';
+            ? '❌ <a href="' + DETAIL_URL + '" style="color:var(--accent-blue);">Ver detalle del archivo</a>'
+            : '✅ Redirigiendo al detalle... <a href="' + DETAIL_URL + '" style="color:var(--accent-blue);">Ir ahora</a>';
 
         var card = document.querySelector('.progress-card');
         if (card) {
             card.appendChild(redirectMsg);
         }
 
-        // Redirigir automáticamente después de 3 segundos (solo si completado)
         if (!isError) {
             setTimeout(function() {
                 window.location.href = DETAIL_URL;
@@ -755,8 +732,8 @@ let lastLogId = 0;
         }
     }
 
-    // Iniciar: buscar el log por archivo_id
-    findLogByArchivo();
+    // Iniciar
+    init();
 
     // Timeout de seguridad: si después de 5 minutos no termina, recargar
     setTimeout(function() {
@@ -767,5 +744,4 @@ let lastLogId = 0;
 
     })();
 </script>
-
 {% endblock %}
