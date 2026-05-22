@@ -423,23 +423,41 @@ class LogEntriesApiView(View):
         entries = entries.order_by('timestamp', 'id')
 
         data = []
+        ultimo_entry_con_detalles = None
         for entry in entries:
-            data.append({
+            entry_data = {
                 'id': entry.id,
                 'timestamp': entry.timestamp.strftime('%H:%M:%S'),
                 'nivel': entry.nivel,
                 'mensaje': entry.mensaje,
                 'detalles': entry.detalles,
-            })
+            }
+            data.append(entry_data)
+            # Guardar el último entry que tenga detalles de progreso
+            if entry.detalles and entry.detalles.get('progreso') is not None:
+                ultimo_entry_con_detalles = entry
+
+        # Obtener valores reales desde el último entry con detalles (más actualizado)
+        # Los campos del log (log.mensajes_validos, log.requerimientos_duplicados)
+        # solo se actualizan cada 10 mensajes, pero los LogEntry se crean cada 5.
+        if ultimo_entry_con_detalles:
+            detalles = ultimo_entry_con_detalles.detalles
+            validos_reales = detalles.get('validos', log.mensajes_validos)
+            duplicados_reales = detalles.get('duplicados', log.requerimientos_duplicados)
+            total_reporte = detalles.get('total', log.mensajes_extraidos_total)
+        else:
+            validos_reales = log.mensajes_validos
+            duplicados_reales = log.requerimientos_duplicados
+            total_reporte = log.mensajes_extraidos_total
 
         return JsonResponse({
             'entries': data,
             'total': len(data),
             'log_estado': log.estado,
             'log_id': log.id,
-            'log_mensajes_total': log.mensajes_extraidos_total,
-            'log_mensajes_validos': log.mensajes_validos,
-            'log_duplicados': log.requerimientos_duplicados,
+            'log_mensajes_total': total_reporte,
+            'log_mensajes_validos': validos_reales,
+            'log_duplicados': duplicados_reales,
         })
 
 
