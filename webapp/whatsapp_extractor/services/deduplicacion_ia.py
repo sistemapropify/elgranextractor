@@ -237,6 +237,7 @@ Responde SOLO con un JSON válido con esta estructura:
         cls,
         texto_mensaje: str,
         agente: str = '',
+        extractor_log_id: Optional[int] = None,
     ) -> Tuple[bool, Optional[int]]:
         """
         Versión simplificada que solo retorna si es duplicado y el ID.
@@ -253,19 +254,23 @@ Responde SOLO con un JSON válido con esta estructura:
         Args:
             texto_mensaje: Texto del mensaje nuevo.
             agente: Nombre del autor/agente que publicó el mensaje.
+            extractor_log_id: ID del ExtractorLog actual. Si se proporciona,
+                              se excluyen los requerimientos de este log
+                              para evitar falsos duplicados durante el
+                              procesamiento en vivo del mismo archivo.
 
         Returns:
             Tuple (is_duplicate, matching_id)
         """
         # Usar deduplicación local rápida
-        resultado = cls._verificar_duplicado_local(texto_mensaje, agente=agente)
+        resultado = cls._verificar_duplicado_local(texto_mensaje, agente=agente, extractor_log_id=extractor_log_id)
         return (
             resultado.get('is_duplicate', False),
             resultado.get('matching_id'),
         )
 
     @classmethod
-    def _verificar_duplicado_local(cls, texto_mensaje: str, agente: str = '') -> Dict:
+    def _verificar_duplicado_local(cls, texto_mensaje: str, agente: str = '', extractor_log_id: Optional[int] = None) -> Dict:
         """
         Deduplicación LOCAL rápida usando hash de texto normalizado
         y nombre del agente (autor).
@@ -276,13 +281,10 @@ Responde SOLO con un JSON válido con esta estructura:
         2. Coeficiente Jaccard (detección de mensajes muy similares)
         3. Nombre del agente/autor (mismo texto + mismo autor = duplicado)
 
-        Busca en TODOS los requerimientos históricos sin filtro de fecha,
-        para asegurar que mensajes re-subidos se detecten como duplicados
-        incluso si su fecha original es None.
-
         Args:
             texto_mensaje: Texto del mensaje nuevo.
             agente: Nombre del autor/agente que publicó el mensaje.
+            extractor_log_id: No se usa (se compara contra todo el histórico siempre).
 
         Returns:
             Dict con is_duplicate, matching_id, match_score, reason.
@@ -301,9 +303,7 @@ Responde SOLO con un JSON válido con esta estructura:
             hash_nuevo = hashlib.sha256(texto_normalizado.encode()).hexdigest()
             agente_normalizado = agente.strip().lower()
 
-            # 2. Obtener historial COMPLETO (sin filtro de fecha)
-            #    Buscar en TODOS los requerimientos para detectar duplicados
-            #    incluso si tienen fecha=None (mensajes sin timestamp válido)
+            # 2. Obtener historial para comparar (siempre contra todo el histórico)
             historial = list(Requerimiento.objects.filter(
                 requerimiento__isnull=False
             ).exclude(

@@ -22,7 +22,7 @@ class DeduplicadorIAError(Exception):
 logger = logging.getLogger(__name__)
 
 # Cada cuántos mensajes se reporta progreso vía LogEntry
-LOTE_PROGRESO = 50
+LOTE_PROGRESO = 5
 
 # Timeout máximo por mensaje (segundos) para evitar que una llamada
 # a DeepSeek se cuelgue y detenga todo el procesamiento
@@ -246,18 +246,40 @@ def procesar_archivo_extraccion(archivo_id: int, extractor_log_id: Optional[int]
         extractor_log.mensajes_extraidos_total = total_mensajes
         extractor_log.save(update_fields=['mensajes_extraidos_total'])
 
+        # --- FILTRO DE DUPLICADOS DENTRO DEL MISMO ARCHIVO TXT ---
+        # Antes de procesar, detectamos mensajes repetidos dentro del mismo archivo
+        # para no llamar a DeepSeek ni a la BD innecesariamente.
+        mensajes_unicos = set()
+        mensajes_filtrados = []
+        duplicados_en_txt = 0
+        for msg in mensajes:
+            texto_normalizado = ' '.join(msg.get('texto', '').lower().split())
+            if texto_normalizado in mensajes_unicos:
+                duplicados_en_txt += 1
+                continue
+            mensajes_unicos.add(texto_normalizado)
+            mensajes_filtrados.append(msg)
+
+        mensajes = mensajes_filtrados
+        total_mensajes_original = extractor_log.mensajes_extraidos_total
+        total_mensajes = len(mensajes)
+
         LogEntry.objects.create(
             extractor_log=extractor_log,
             nivel='INFO',
-            mensaje=f'Archivo parseado: {total_mensajes} mensajes extraídos',
-            detalles={'total_mensajes': total_mensajes},
+            mensaje=f'Archivo parseado: {total_mensajes_original} mensajes totales, {duplicados_en_txt} duplicados dentro del archivo, {total_mensajes} únicos a procesar',
+            detalles={
+                'total_mensajes': total_mensajes_original,
+                'duplicados_en_txt': duplicados_en_txt,
+                'mensajes_unicos': total_mensajes,
+            },
         )
 
         if total_mensajes == 0:
             LogEntry.objects.create(
                 extractor_log=extractor_log,
                 nivel='WARNING',
-                mensaje='El archivo no contiene mensajes para procesar',
+                mensaje='El archivo no contiene mensajes nuevos para procesar (todos son duplicados dentro del archivo)',
                 detalles={},
             )
             extractor_log.mensajes_extraidos_total = 0
@@ -270,7 +292,7 @@ def procesar_archivo_extraccion(archivo_id: int, extractor_log_id: Optional[int]
                 'archivo_id': archivo.id,
                 'mensajes_procesados': 0,
                 'mensajes_validos': 0,
-                'mensajes_duplicados': 0,
+                'mensajes_duplicados': duplicados_en_txt,
                 'extractor_log_id': extractor_log.id,
             }
 
@@ -324,7 +346,7 @@ def procesar_archivo_extraccion(archivo_id: int, extractor_log_id: Optional[int]
                             'archivo_id': archivo.id,
                             'mensajes_procesados': idx - 1,
                             'mensajes_validos': extractor_log.mensajes_validos,
-                            'mensajes_duplicados': extractor_log.requerimientos_duplicados,
+                            'mensajes_duplicados': extractor_log.requerimientos_duplicados + duplicados_en_txt,
                             'extractor_log_id': extractor_log.id,
                         }
                     elif log_refreshed.estado in ('completed',):
@@ -334,7 +356,7 @@ def procesar_archivo_extraccion(archivo_id: int, extractor_log_id: Optional[int]
                             'archivo_id': archivo.id,
                             'mensajes_procesados': idx - 1,
                             'mensajes_validos': extractor_log.mensajes_validos,
-                            'mensajes_duplicados': extractor_log.requerimientos_duplicados,
+                            'mensajes_duplicados': extractor_log.requerimientos_duplicados + duplicados_en_txt,
                             'extractor_log_id': extractor_log.id,
                         }
 
@@ -356,33 +378,22 @@ def procesar_archivo_extraccion(archivo_id: int, extractor_log_id: Optional[int]
                     'archivo_id': archivo.id,
                     'mensajes_procesados': idx - 1,
                     'mensajes_validos': extractor_log.mensajes_validos,
-                    'mensajes_duplicados': extractor_log.requerimientos_duplicados,
+                    'mensajes_duplicados': extractor_log.requerimientos_duplicados + duplicados_en_txt,
                     'extractor_log_id': extractor_log.id,
                 }
 
             # 5. Normalizar texto
             texto_limpio = TextNormalizer.limpiar_texto(msg['texto'])
 
-            # 5b. Reportar progreso ANTES de procesar cada mensaje (para que el frontend vea avance)
-            if idx % 5 == 0 or idx == 1:
-                _reportar_progreso(
-                    extractor_log,
-                    mensajes_procesados=idx - 1,
-                    total=total_mensajes,
-                    mensajes_validos=extractor_log.mensajes_validos,
-                    duplicados=extractor_log.requerimientos_duplicados,
-                )
-
             try:
-                # 6. Verificar duplicado (ahora es LOCAL, rápido ~0.001s)
-                # Incluir agente (autor) para detección más precisa
+                # 6. Verificar duplicado contra BD (histórico de requerimientos)
                 is_duplicate, matching_id = DeduplicadorIA.verificar_duplicado_simple(
                     texto_limpio,
                     agente=msg.get('autor', ''),
                 )
 
                 if is_duplicate:
-                    logger.info(f'Mensaje duplicado: {msg["texto"][:50]}')
+                    logger.info(f'Mensaje duplicado en BD: {msg["texto"][:50]}')
                     extractor_log.requerimientos_duplicados += 1
                     continue
 
@@ -515,6 +526,7 @@ def procesar_archivo_extraccion(archivo_id: int, extractor_log_id: Optional[int]
                 )
 
         # 8. Finalizar log
+        total_duplicados = extractor_log.requerimientos_duplicados + duplicados_en_txt
         extractor_log.mensajes_extraidos_total = total_mensajes
         extractor_log.estado = 'completed'
         extractor_log.save()
@@ -525,16 +537,19 @@ def procesar_archivo_extraccion(archivo_id: int, extractor_log_id: Optional[int]
             nivel='INFO',
             mensaje=(
                 f'✅ Procesamiento completado: '
-                f'{extractor_log.mensajes_validos} válidos, '
-                f'{extractor_log.requerimientos_duplicados} duplicados '
-                f'de {total_mensajes} totales'
+                f'{extractor_log.mensajes_validos} nuevos, '
+                f'{total_duplicados} duplicados '
+                f'({duplicados_en_txt} en TXT, {extractor_log.requerimientos_duplicados} en BD) '
+                f'de {total_mensajes_original} mensajes totales'
             ),
             detalles={
                 'progreso': total_mensajes,
-                'total': total_mensajes,
+                'total': total_mensajes_original,
                 'porcentaje': 100.0,
                 'validos': extractor_log.mensajes_validos,
-                'duplicados': extractor_log.requerimientos_duplicados,
+                'duplicados': total_duplicados,
+                'duplicados_en_txt': duplicados_en_txt,
+                'duplicados_en_bd': extractor_log.requerimientos_duplicados,
             }
         )
 
@@ -544,8 +559,9 @@ def procesar_archivo_extraccion(archivo_id: int, extractor_log_id: Optional[int]
 
         logger.info(
             f'Archivo {archivo.nombre_archivo_original} procesado: '
-            f'{extractor_log.mensajes_validos} válidos, '
-            f'{extractor_log.requerimientos_duplicados} duplicados'
+            f'{extractor_log.mensajes_validos} nuevos, '
+            f'{total_duplicados} duplicados '
+            f'({duplicados_en_txt} en TXT, {extractor_log.requerimientos_duplicados} en BD)'
         )
 
         return {
@@ -553,7 +569,7 @@ def procesar_archivo_extraccion(archivo_id: int, extractor_log_id: Optional[int]
             'archivo_id': archivo.id,
             'mensajes_procesados': extractor_log.mensajes_extraidos_total,
             'mensajes_validos': extractor_log.mensajes_validos,
-            'mensajes_duplicados': extractor_log.requerimientos_duplicados,
+            'mensajes_duplicados': total_duplicados,
             'extractor_log_id': extractor_log.id,
         }
 
