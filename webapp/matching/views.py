@@ -425,27 +425,14 @@ class MatchingMasivoView(TemplateView):
 def _obtener_resumen_calendario(limite=500):
     """
     Obtiene resumen de matching para el calendario.
-    Optimizado: una sola consulta con select_related, sin N+1.
-    Si la tabla MatchResult no existe o hay error, retorna lista vacía.
+    Optimizado: evita JOIN con PropifaiProperty para no depender de esa tabla.
+    Usa solo datos de MatchResult + Requerimiento.
     """
     try:
-        from django.db.models import Max, OuterRef, Subquery
+        from django.db.models import Max
         from .models import MatchResult
         
-        # Subquery: obtener el mejor score por requerimiento en UNA consulta
-        mejor_por_req = MatchResult.objects.filter(
-            requerimiento_id=OuterRef('requerimiento_id')
-        ).order_by('-score_total').values('score_total')[:1]
-        
-        mejor_propiedad_por_req = MatchResult.objects.filter(
-            requerimiento_id=OuterRef('requerimiento_id')
-        ).order_by('-score_total').values('propiedad_id')[:1]
-        
-        ultimo_ejecutado_por_req = MatchResult.objects.filter(
-            requerimiento_id=OuterRef('requerimiento_id')
-        ).order_by('-ejecutado_en').values('ejecutado_en')[:1]
-        
-        # Una sola consulta con subqueries
+        # Una sola consulta: mejor score por requerimiento
         resultados = MatchResult.objects.values(
             'requerimiento_id'
         ).annotate(
@@ -457,15 +444,15 @@ def _obtener_resumen_calendario(limite=500):
         
         req_ids = [r['requerimiento_id'] for r in resultados]
         
-        # Cargar todos los requerimientos en UNA consulta
+        # Cargar requerimientos en UNA consulta
         from requerimientos.models import Requerimiento
         reqs = Requerimiento.objects.filter(id__in=req_ids)
         reqs_map = {r.id: r for r in reqs}
         
-        # Cargar mejores matches en UNA consulta (con select_related)
+        # Cargar mejores matches en UNA consulta (SIN select_related a propiedad)
         mejores = MatchResult.objects.filter(
             requerimiento_id__in=req_ids
-        ).select_related('propiedad').order_by('requerimiento_id', '-score_total')
+        ).order_by('requerimiento_id', '-score_total')
         
         # Quedarse con el primero (mejor score) por requerimiento
         mejores_por_req = {}
@@ -481,8 +468,6 @@ def _obtener_resumen_calendario(limite=500):
                 continue
             mejor = mejores_por_req.get(req_id)
             if mejor:
-                precio = float(mejor.propiedad.price) if mejor.propiedad and mejor.propiedad.price else None
-                currency_id = mejor.propiedad.currency_id if mejor.propiedad else None
                 resumen.append({
                     'requerimiento_id': req_id,
                     'requerimiento_nombre': str(req),
@@ -490,11 +475,11 @@ def _obtener_resumen_calendario(limite=500):
                     'score_promedio': float(mejor.score_total),
                     'total_compatibles': 1,
                     'mejor_propiedad_id': mejor.propiedad_id,
-                    'mejor_propiedad_codigo': mejor.propiedad.code if mejor.propiedad else None,
-                    'mejor_propiedad_titulo': mejor.propiedad.title if mejor.propiedad else None,
-                    'mejor_propiedad_distrito': mejor.propiedad.district if mejor.propiedad else None,
-                    'mejor_propiedad_precio': precio,
-                    'mejor_propiedad_moneda_id': currency_id,
+                    'mejor_propiedad_codigo': None,
+                    'mejor_propiedad_titulo': None,
+                    'mejor_propiedad_distrito': None,
+                    'mejor_propiedad_precio': None,
+                    'mejor_propiedad_moneda_id': None,
                     'mejor_propiedad_tipo': None,
                     'fecha_ultimo_matching': mejor.ejecutado_en.isoformat() if mejor.ejecutado_en else None,
                 })
