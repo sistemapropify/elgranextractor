@@ -478,9 +478,10 @@ let lastLogId = 0;
 
     /**
      * Busca el extractor_log_id usando archivo_id.
+     * Usa since_id=0 para traer todos los entries desde el inicio.
      */
     function findLogByArchivo() {
-        var url = API_LOG_ENTRIES + '?archivo_id=' + ARCHIVO_ID;
+        var url = API_LOG_ENTRIES + '?archivo_id=' + ARCHIVO_ID + '&since_id=0';
         fetch(url)
             .then(function(r) { return r.json(); })
             .then(function(data) {
@@ -491,7 +492,9 @@ let lastLogId = 0;
                         addLogEntries(data.entries);
                         updateProgress(data);
                     }
-                    startPolling();
+                    // Iniciar polling después de un breve delay para evitar
+                    // que pollLogs() reciba los mismos entries que findLogByArchivo
+                    setTimeout(startPolling, 500);
 
                     if (data.log_estado === 'completed' || data.log_estado === 'error') {
                         isComplete = true;
@@ -612,19 +615,37 @@ let lastLogId = 0;
 
     /**
      * Actualiza la barra de progreso y estadísticas.
-     * Usa SOLO los campos del log (log_mensajes_total, log_mensajes_validos, log_duplicados)
-     * que vienen directamente de la API. NO usa los detalles de LogEntry porque
-     * pueden tener valores inconsistentes entre diferentes entries.
+     * Usa los detalles del ÚLTIMO LogEntry que tenga 'progreso' como fuente principal,
+     * porque la tarea actualiza los LogEntry cada 5 mensajes pero los campos del log
+     * (log_mensajes_validos, log_duplicados) solo cada 10 mensajes.
      *
-     * El progreso se calcula como: (mensajes_validos + duplicados) / mensajes_total
-     * Esto representa cuántos mensajes se han procesado (ya sea como válidos o duplicados).
+     * Los detalles de LogEntry SIEMPRE tienen valores consistentes y actualizados.
      */
     function updateProgress(data) {
         var total = data.log_mensajes_total || 0;
         var validos = data.log_mensajes_validos || 0;
         var duplicados = data.log_duplicados || 0;
-        // Los mensajes procesados son la suma de válidos + duplicados
-        var procesados = validos + duplicados;
+        var procesados = 0;
+
+        // Buscar el último entry con detalles de progreso (más actualizado que los campos del log)
+        if (data.entries && data.entries.length > 0) {
+            for (var i = data.entries.length - 1; i >= 0; i--) {
+                var entry = data.entries[i];
+                if (entry.detalles && entry.detalles.progreso !== undefined) {
+                    // Usar SOLO progreso y total de los detalles, NO sobreescribir validos/duplicados
+                    if (entry.detalles.progreso !== undefined) procesados = entry.detalles.progreso;
+                    if (entry.detalles.total !== undefined) total = entry.detalles.total;
+                    if (entry.detalles.validos !== undefined) validos = entry.detalles.validos;
+                    if (entry.detalles.duplicados !== undefined) duplicados = entry.detalles.duplicados;
+                    break; // Usar solo el último entry con datos de progreso
+                }
+            }
+        }
+
+        // Si no hay entry con progreso, calcular como validos + duplicados
+        if (procesados === 0 && total > 0) {
+            procesados = validos + duplicados;
+        }
 
         // Si total es 0 pero ya hay entradas de log, el archivo se está parseando
         if (total === 0 && data.entries && data.entries.length > 0) {
@@ -632,10 +653,14 @@ let lastLogId = 0;
             progressPercentage.textContent = '⏳ Iniciando...';
             progressCount.textContent = 'Parseando archivo...';
         } else {
-            // Calcular porcentaje basado en procesados/total
+            // Calcular porcentaje
             var pct = total > 0 ? Math.round((procesados / total) * 100) : 0;
-            progressFill.style.width = pct + '%';
-            progressPercentage.textContent = pct + '%';
+            // Asegurar que el porcentaje nunca baje (evitar rebotes)
+            var currentPct = parseFloat(progressFill.style.width) || 0;
+            if (pct >= currentPct) {
+                progressFill.style.width = pct + '%';
+                progressPercentage.textContent = pct + '%';
+            }
             progressCount.textContent = procesados + ' / ' + total + ' mensajes';
         }
 
