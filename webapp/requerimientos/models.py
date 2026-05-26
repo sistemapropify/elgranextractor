@@ -226,6 +226,13 @@ class Requerimiento(models.Model):
         verbose_name='Requerimiento (texto original)',
         help_text='Mensaje completo tal como fue publicado en el grupo de WhatsApp',
     )
+    texto_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        editable=False,
+        verbose_name='Hash SHA256 del texto',
+        help_text='Hash del campo requerimiento para unique constraint (SQL Server no permite índices en TEXT/NVARCHAR(MAX))',
+    )
 
     # ── Verificación / Revisión ────────────────
     verificado = models.BooleanField(
@@ -273,6 +280,7 @@ class Requerimiento(models.Model):
         verbose_name        = 'Requerimiento'
         verbose_name_plural = 'Requerimientos'
         ordering            = ['-fecha', '-hora']
+        unique_together     = [('texto_hash', 'fecha', 'hora', 'fuente')]
         indexes = [
             models.Index(fields=['condicion', 'tipo_propiedad'], name='idx_cond_tipo'),
             models.Index(fields=['fecha'],                        name='idx_fecha'),

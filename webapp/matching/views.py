@@ -623,7 +623,7 @@ class MatchingCalendarView(TemplateView):
                 fecha__lte=week_end
             ).exclude(
                 condicion__in=condicion_excluir
-            ).order_by('fecha', 'hora')
+            ).order_by('fecha', 'hora').distinct()
             
             # Agrupar por día con info de match serializada
             dias_semana = []

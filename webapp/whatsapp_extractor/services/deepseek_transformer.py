@@ -201,14 +201,16 @@ class DeepSeekTransformer:
                     fecha=fecha, hora=hora,
                 )
 
-            if not extracted.get('es_requerimiento_valido', True):
-                logger.info("DeepSeek clasificó el mensaje como no válido")
-                return cls._crear_resultado_vacio(
-                    texto, fuente, autor,
-                    error="Mensaje no es un requerimiento válido",
-                    es_valido=False,
-                    fecha=fecha, hora=hora,
-                )
+            # Previously, messages with es_requerimiento_valido=false were discarded.
+            # Now we attempt mapping regardless, allowing partial data extraction.
+            # if not extracted.get('es_requerimiento_valido', True):
+            #     logger.info("DeepSeek clasificó el mensaje como no válido")
+            #     return cls._crear_resultado_vacio(
+            #         texto, fuente, autor,
+            #         error="Mensaje no es un requerimiento válido",
+            #         es_valido=False,
+            #         fecha=fecha, hora=hora,
+            #     )
 
             requerimiento_data = cls._mapear_campos(
                 extracted=extracted,

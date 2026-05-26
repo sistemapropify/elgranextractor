@@ -217,20 +217,12 @@ class ClasificarIntencionWhatsAppSkill(BaseSkill):
                 )
 
             # 2. Validar si es un requerimiento válido
+            # Previously, messages flagged as not valid were discarded, causing empty results.
+            # We now treat missing or false flags as still attempt to map fields, allowing partial data extraction.
             es_valido = str(extracted.get("es_requerimiento_valido", "true")).lower() == "true"
             if not es_valido:
-                logger.info("Mensaje clasificado como no válido")
-                return SkillResult.ok(
-                    data=self._crear_resultado_vacio(
-                        texto, fuente, autor,
-                        error="Mensaje no es un requerimiento válido",
-                        es_valido=False,
-                        fecha=fecha, hora=hora,
-                    ),
-                    message="Mensaje no es un requerimiento válido",
-                    metadata={"es_valido": False},
-                    skill_name=self.name,
-                )
+                logger.info("Mensaje clasificado como no válido, pero se intentará extraer campos disponibles.")
+            # Continue to mapping regardless of es_valido flag.
 
             # 3. Mapear campos extraídos al modelo Requerimiento
             requerimiento_data = self._mapear_campos(
@@ -244,9 +236,9 @@ class ClasificarIntencionWhatsAppSkill(BaseSkill):
 
             return SkillResult.ok(
                 data=requerimiento_data,
-                message="Mensaje clasificado y datos extraídos correctamente",
+                message="Mensaje procesado, datos extraídos (validación opcional).",
                 metadata={
-                    "es_valido": True,
+                    "es_valido": es_valido,
                     "intencion": extracted.get("intencion", "no_determinado"),
                     "tipo_original": requerimiento_data.get("tipo_original", "OTRO"),
                 },
