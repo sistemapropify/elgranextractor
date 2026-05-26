@@ -133,10 +133,10 @@ class DeepSeekTransformer:
             cache = SkillCache()
             orchestrator = SkillOrchestrator(registry=registry, cache=cache)
 
-            # Verificar que el skill existe
-            skill_class = registry.get_skill_class("clasificar_intencion_whatsapp")
-            if skill_class is None:
-                logger.debug("Skill 'clasificar_intencion_whatsapp' no encontrado")
+            # Verificar que el skill existe en el registro
+            # El nuevo SkillRegistry almacena las skills en _skill_classes (dict)
+            if "clasificar_intencion_whatsapp" not in registry._skill_classes:
+                logger.debug("Skill 'clasificar_intencion_whatsapp' no encontrado en registry._skill_classes")
                 return None
 
             # Ejecutar skill

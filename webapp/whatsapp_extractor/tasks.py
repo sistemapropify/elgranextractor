@@ -434,6 +434,17 @@ def procesar_archivo_extraccion(archivo_id: int, extractor_log_id: Optional[int]
                     logger.warning(f'No se obtuvieron datos para mensaje {idx}')
                     continue
 
+                # --- FILTRO: Saltar si la extracción devolvió un resultado vacío (con _error) ---
+                if datos_extraidos.get('_error'):
+                    logger.warning(f'Mensaje {idx}: extracción fallida: {datos_extraidos["_error"]}')
+                    LogEntry.objects.create(
+                        extractor_log=extractor_log,
+                        nivel='WARNING',
+                        mensaje=f'Mensaje #{idx}: extracción fallida (todos los campos vacíos): {datos_extraidos["_error"]}',
+                        detalles={'mensaje_idx': idx, 'error': datos_extraidos['_error']},
+                    )
+                    continue
+
                 # 8. Guardar como Requerimiento con todos los campos extraídos
                 tipo_original = _truncar(datos_extraidos.get('tipo_original'), 80) or 'EXTRACCION_WHATSAPP'
                 # Extraer fecha y hora del mensaje original (fecha_hora viene del parser en ISO format)
