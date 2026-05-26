@@ -860,15 +860,50 @@ def intelligence_errors(request):
         for row in cursor.fetchall():
             errors.append({
                 'id': row[0],
+                'modulo': 'Skills',
                 'skill_name': row[1],
                 'status': row[2],
                 'error_message': row[3],
                 'executed_at': row[4]
             })
 
+    # También consultar LogEntry del extractor WhatsApp con nivel WARNING/ERROR
+    extractor_errors = []
+    try:
+        from django.db.models import F as models_F
+        from whatsapp_extractor.models import LogEntry
+        extractor_errors = list(
+            LogEntry.objects
+            .filter(nivel__in=['WARNING', 'ERROR'])
+            .select_related('extractor_log')
+            .order_by('-timestamp')[:50]
+            .values(
+                'id', 'nivel', 'mensaje', 'timestamp',
+                extractor_log_id=models_F('extractor_log_id'),
+                archivo_nombre=models_F('extractor_log__archivo__nombre_archivo'),
+            )
+        )
+        # Renombrar campos para unificarlos con errors[]
+        for ee in extractor_errors:
+            ee['modulo'] = 'Extractor WhatsApp'
+            ee['skill_name'] = ee.pop('archivo_nombre', '') or f"Log #{ee['extractor_log_id']}"
+            ee['status'] = ee.pop('nivel')
+            ee['error_message'] = ee.pop('mensaje')
+            ee['executed_at'] = ee.pop('timestamp')
+            ee['id'] = f"ext_{ee['id']}"
+    except Exception:
+        pass
+
+    # Combinar y ordenar por fecha descendente
+    all_errors = sorted(
+        errors + extractor_errors,
+        key=lambda x: x.get('executed_at') or '',
+        reverse=True
+    )[:100]
+
     return render(request, 'intelligence/errors.html', {
         'active_section': 'errors',
-        'errors': errors
+        'errors': all_errors,
     })
 
 def intelligence_tests(request):
