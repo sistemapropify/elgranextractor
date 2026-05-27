@@ -15,6 +15,8 @@ import os
 import json
 import re
 import logging
+import time
+import inspect
 from typing import Dict, List, Optional, Tuple, Any, Generator
 from datetime import datetime
 
@@ -23,7 +25,7 @@ from django.conf import settings
 from django.utils import timezone
 
 from .rag import RAGService
-from ..models import IntelligenceCollection
+from ..models import IntelligenceCollection, AIConsumptionLog
 from ..skills.registry import SkillRegistry
 from ..skills.base import SkillResult
 
@@ -66,7 +68,9 @@ class LLMService:
         cls,
         messages: List[Dict[str, str]],
         system_prompt: str = "",
-        stream: bool = False
+        stream: bool = False,
+        caller_app: str = "",
+        endpoint: str = ""
     ) -> Tuple[bool, str, Optional[Dict]]:
         """
         Llama a la API de DeepSeek.
@@ -75,12 +79,63 @@ class LLMService:
             messages: Lista de mensajes en formato OpenAI
             system_prompt: Prompt del sistema (opcional)
             stream: Si es True, devuelve un generador de streaming
+            caller_app: App Django que origina la llamada (para logging)
+            endpoint: Endpoint o función que llamó a la API (para logging)
             
         Returns:
             Tuple (success, message, response_data) o generador para streaming
         """
         if not cls.API_KEY:
             return False, "API key de DeepSeek no configurada", None
+        
+        # ── Auto-detección de caller_app y endpoint ──
+        if not caller_app or not endpoint:
+            try:
+                stack = inspect.stack()
+                # stack[0] = _call_deepseek_api, stack[1] = método público que llama
+                # stack[2] = quien llamó al método público
+                for frame_info in stack[2:]:
+                    frame = frame_info.frame
+                    module = inspect.getmodule(frame)
+                    if module and module.__file__:
+                        fpath = module.__file__.replace('\\', '/')
+                        # Detectar app por la ruta del archivo
+                        if 'intelligence/services/' in fpath:
+                            caller_app = 'intelligence.services'
+                            endpoint = frame_info.function
+                            break
+                        elif 'intelligence/skills/' in fpath:
+                            caller_app = f'intelligence.skills.{frame_info.function}'
+                            endpoint = frame_info.function
+                            break
+                        elif 'intelligence/views.py' in fpath:
+                            caller_app = 'intelligence.views'
+                            endpoint = frame_info.function
+                            break
+                        elif 'whatsapp_extractor/' in fpath:
+                            caller_app = 'whatsapp_extractor'
+                            endpoint = frame_info.function
+                            break
+                        elif 'ingestas/' in fpath:
+                            caller_app = 'ingestas'
+                            endpoint = frame_info.function
+                            break
+                        elif 'chat_processor' in fpath:
+                            caller_app = 'intelligence.chat_processor'
+                            endpoint = frame_info.function
+                            break
+                        elif 'episodic_memory' in fpath:
+                            caller_app = 'intelligence.episodic_memory'
+                            endpoint = frame_info.function
+                            break
+                        elif 'memory' in fpath:
+                            caller_app = 'intelligence.memory'
+                            endpoint = frame_info.function
+                            break
+                    del frame
+                del stack
+            except Exception:
+                pass
         
         # Preparar mensajes con system prompt si se proporciona
         api_messages = []
@@ -96,6 +151,8 @@ class LLMService:
             "stream": stream
         }
         
+        start_time = time.time()
+        
         try:
             logger.info(f"Llamando a DeepSeek API con {len(messages)} mensajes, stream={stream}")
             
@@ -109,9 +166,37 @@ class LLMService:
                     stream=True
                 )
                 
+                duration_ms = int((time.time() - start_time) * 1000)
+                
                 if response.status_code != 200:
                     logger.error(f"Error API DeepSeek (streaming): {response.status_code} - {response.text}")
+                    # Registrar consumo fallido
+                    try:
+                        AIConsumptionLog.registrar_llamada(
+                            model_name=cls.DEEPSEEK_MODEL,
+                            endpoint=endpoint or 'stream',
+                            caller_app=caller_app,
+                            duration_ms=duration_ms,
+                            success=False,
+                            status_code=response.status_code,
+                            error_message=response.text[:500],
+                        )
+                    except Exception as log_err:
+                        logger.warning(f"No se pudo registrar consumo IA: {log_err}")
                     return False, f"Error API: {response.status_code}", None
+                
+                # Registrar consumo exitoso (sin datos de tokens porque streaming no los devuelve)
+                try:
+                    AIConsumptionLog.registrar_llamada(
+                        model_name=cls.DEEPSEEK_MODEL,
+                        endpoint=endpoint or 'stream',
+                        caller_app=caller_app,
+                        duration_ms=duration_ms,
+                        success=True,
+                        status_code=response.status_code,
+                    )
+                except Exception as log_err:
+                    logger.warning(f"No se pudo registrar consumo IA: {log_err}")
                 
                 # Devolvemos el response para que el llamador pueda procesar el streaming
                 return True, "OK", {"stream_response": response}
@@ -125,13 +210,32 @@ class LLMService:
                     timeout=30
                 )
                 
+                duration_ms = int((time.time() - start_time) * 1000)
+                
                 if response.status_code != 200:
                     logger.error(f"Error API DeepSeek: {response.status_code} - {response.text}")
+                    # Registrar consumo fallido
+                    try:
+                        AIConsumptionLog.registrar_llamada(
+                            model_name=cls.DEEPSEEK_MODEL,
+                            endpoint=endpoint or 'unknown',
+                            caller_app=caller_app,
+                            duration_ms=duration_ms,
+                            success=False,
+                            status_code=response.status_code,
+                            error_message=response.text[:500],
+                        )
+                    except Exception as log_err:
+                        logger.warning(f"No se pudo registrar consumo IA: {log_err}")
                     return False, f"Error API: {response.status_code}", None
                 
                 data = response.json()
                 # Proteger contra respuestas inesperadas de la API
                 choices = data.get("choices", [{}])
+                prompt_tokens = data.get("usage", {}).get("prompt_tokens", 0)
+                completion_tokens = data.get("usage", {}).get("completion_tokens", 0)
+                total_tokens = data.get("usage", {}).get("total_tokens", 0)
+                
                 if choices and isinstance(choices, list) and len(choices) > 0:
                     first_choice = choices[0]
                     if isinstance(first_choice, dict):
@@ -143,18 +247,89 @@ class LLMService:
                     content = ""
                 
                 if not content:
+                    # Registrar consumo con datos parciales
+                    try:
+                        AIConsumptionLog.registrar_llamada(
+                            model_name=cls.DEEPSEEK_MODEL,
+                            endpoint=endpoint or 'unknown',
+                            caller_app=caller_app,
+                            prompt_tokens=prompt_tokens,
+                            completion_tokens=completion_tokens,
+                            total_tokens=total_tokens,
+                            duration_ms=duration_ms,
+                            success=False,
+                            status_code=response.status_code,
+                            error_message="Respuesta vacía de la API",
+                        )
+                    except Exception as log_err:
+                        logger.warning(f"No se pudo registrar consumo IA: {log_err}")
                     return False, "Respuesta vacía de la API", None
                 
-                logger.info(f"Respuesta DeepSeek recibida ({len(content)} caracteres)")
+                # Registrar consumo exitoso con datos de tokens
+                try:
+                    AIConsumptionLog.registrar_llamada(
+                        model_name=cls.DEEPSEEK_MODEL,
+                        endpoint=endpoint or 'unknown',
+                        caller_app=caller_app,
+                        prompt_tokens=prompt_tokens,
+                        completion_tokens=completion_tokens,
+                        total_tokens=total_tokens,
+                        duration_ms=duration_ms,
+                        success=True,
+                        status_code=response.status_code,
+                    )
+                except Exception as log_err:
+                    logger.warning(f"No se pudo registrar consumo IA: {log_err}")
+                
+                logger.info(
+                    f"Respuesta DeepSeek recibida ({len(content)} caracteres, "
+                    f"{total_tokens} tokens, {duration_ms}ms)"
+                )
                 return True, "OK", {"content": content, "raw_response": data}
             
         except requests.exceptions.Timeout:
+            duration_ms = int((time.time() - start_time) * 1000)
+            try:
+                AIConsumptionLog.registrar_llamada(
+                    model_name=cls.DEEPSEEK_MODEL,
+                    endpoint=endpoint or 'unknown',
+                    caller_app=caller_app,
+                    duration_ms=duration_ms,
+                    success=False,
+                    error_message="Timeout en la llamada a la API",
+                )
+            except Exception as log_err:
+                logger.warning(f"No se pudo registrar consumo IA: {log_err}")
             logger.error("Timeout llamando a DeepSeek API")
             return False, "Timeout en la llamada a la API", None
         except requests.exceptions.RequestException as e:
+            duration_ms = int((time.time() - start_time) * 1000)
+            try:
+                AIConsumptionLog.registrar_llamada(
+                    model_name=cls.DEEPSEEK_MODEL,
+                    endpoint=endpoint or 'unknown',
+                    caller_app=caller_app,
+                    duration_ms=duration_ms,
+                    success=False,
+                    error_message=f"Error de conexión: {str(e)[:500]}",
+                )
+            except Exception as log_err:
+                logger.warning(f"No se pudo registrar consumo IA: {log_err}")
             logger.error(f"Error de conexión con DeepSeek API: {e}")
             return False, f"Error de conexión: {str(e)}", None
         except Exception as e:
+            duration_ms = int((time.time() - start_time) * 1000)
+            try:
+                AIConsumptionLog.registrar_llamada(
+                    model_name=cls.DEEPSEEK_MODEL,
+                    endpoint=endpoint or 'unknown',
+                    caller_app=caller_app,
+                    duration_ms=duration_ms,
+                    success=False,
+                    error_message=f"Error inesperado: {str(e)[:500]}",
+                )
+            except Exception as log_err:
+                logger.warning(f"No se pudo registrar consumo IA: {log_err}")
             logger.error(f"Error inesperado llamando a DeepSeek API: {e}")
             return False, f"Error inesperado: {str(e)}", None
     

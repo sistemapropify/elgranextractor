@@ -817,3 +817,126 @@ class SkillExecution(models.Model):
 
     def __str__(self):
         return f"Skill {self.skill_name} - {self.status} ({self.executed_at.strftime('%d/%m/%Y %H:%M') if self.executed_at else 'sin fecha'})"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MODELO: AIConsumptionLog — Registro de consumo de API de DeepSeek
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class AIConsumptionLog(models.Model):
+    """
+    Registro de cada llamada a la API de DeepSeek para monitorear consumo de tokens,
+    costos y patrones de uso por hora.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    
+    # Metadatos de la llamada
+    model_name = models.CharField(
+        max_length=100, default='deepseek-chat',
+        verbose_name="Modelo usado"
+    )
+    endpoint = models.CharField(
+        max_length=255, blank=True, default='',
+        verbose_name="Endpoint o función que llamó a la API"
+    )
+    caller_app = models.CharField(
+        max_length=100, blank=True, default='',
+        verbose_name="App Django que originó la llamada"
+    )
+    
+    # Tokens
+    prompt_tokens = models.IntegerField(
+        default=0, verbose_name="Tokens de entrada (prompt)"
+    )
+    completion_tokens = models.IntegerField(
+        default=0, verbose_name="Tokens de salida (completion)"
+    )
+    total_tokens = models.IntegerField(
+        default=0, verbose_name="Tokens totales"
+    )
+    
+    # Costo estimado (DeepSeek: $0.14/1M input, $0.28/1M output para deepseek-chat)
+    estimated_cost_usd = models.DecimalField(
+        max_digits=10, decimal_places=8, default=0,
+        verbose_name="Costo estimado USD"
+    )
+    
+    # Métricas de rendimiento
+    duration_ms = models.IntegerField(
+        default=0, verbose_name="Duración de la llamada (ms)"
+    )
+    success = models.BooleanField(
+        default=True, verbose_name="¿La llamada fue exitosa?"
+    )
+    status_code = models.IntegerField(
+        null=True, blank=True, verbose_name="Código de estado HTTP"
+    )
+    error_message = models.TextField(
+        blank=True, default='', verbose_name="Mensaje de error si falló"
+    )
+    
+    # Timestamps
+    created_at = models.DateTimeField(
+        auto_now_add=True, verbose_name="Fecha/hora de la llamada"
+    )
+    
+    class Meta:
+        verbose_name = "Registro de consumo IA"
+        verbose_name_plural = "Registros de consumo IA"
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['created_at']),
+            models.Index(fields=['model_name']),
+            models.Index(fields=['success']),
+        ]
+    
+    def __str__(self):
+        return (
+            f"{self.model_name} | "
+            f"{self.total_tokens} tokens | "
+            f"{'OK' if self.success else 'ERROR'} | "
+            f"{self.created_at.strftime('%d/%m/%Y %H:%M:%S') if self.created_at else 'sin fecha'}"
+        )
+    
+    @classmethod
+    def registrar_llamada(
+        cls,
+        model_name: str = 'deepseek-chat',
+        endpoint: str = '',
+        caller_app: str = '',
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+        total_tokens: int = 0,
+        duration_ms: int = 0,
+        success: bool = True,
+        status_code: int = None,
+        error_message: str = '',
+    ) -> 'AIConsumptionLog':
+        """
+        Crea un registro de consumo de IA.
+        
+        Calcula automáticamente el costo estimado basado en los precios de DeepSeek:
+        - Input: $0.14 por 1M tokens (deepseek-chat)
+        - Output: $0.28 por 1M tokens (deepseek-chat)
+        """
+        # Precios DeepSeek (deepseek-chat)
+        PRICE_INPUT_PER_1M = 0.14
+        PRICE_OUTPUT_PER_1M = 0.28
+        
+        cost_input = (prompt_tokens / 1_000_000) * PRICE_INPUT_PER_1M
+        cost_output = (completion_tokens / 1_000_000) * PRICE_OUTPUT_PER_1M
+        estimated_cost = cost_input + cost_output
+        
+        return cls.objects.create(
+            model_name=model_name,
+            endpoint=endpoint,
+            caller_app=caller_app,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens or (prompt_tokens + completion_tokens),
+            estimated_cost_usd=round(estimated_cost, 8),
+            duration_ms=duration_ms,
+            success=success,
+            status_code=status_code,
+            error_message=error_message,
+        )

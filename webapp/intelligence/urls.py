@@ -108,4 +108,7 @@ urlpatterns = [
     path('api/profiles/<uuid:profile_id>/', views.api_profile_detail, name='api_profile_detail'),
     path('api/profiles/<uuid:profile_id>/update/', views.api_profile_update, name='api_profile_update'),
     path('api/collections/<str:collection_name>/check-access/', views.api_check_collection_access, name='api_check_collection_access'),
+
+    # Dashboard de Consumo de IA
+    path('consumo-ia/', views.ai_consumption_dashboard, name='ai_consumption_dashboard'),
 ]

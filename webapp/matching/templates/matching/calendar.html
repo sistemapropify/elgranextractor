@@ -642,28 +642,6 @@
         background: rgba(248,81,73,0.1);
     }
 
-    /* Separador entre secciones de filtro */
-    .filter-section {
-        width: 100%;
-        height: 1px;
-        background: var(--border-color);
-        margin: 4px 0;
-        opacity: 0.3;
-    }
-
-    /* Filtros de distrito - color verde para diferenciar */
-    .filter-chip.district {
-        border-color: rgba(63,185,80,0.3);
-    }
-    .filter-chip.district:hover {
-        border-color: var(--accent-green);
-    }
-    .filter-chip.district.active {
-        background: var(--accent-green);
-        border-color: var(--accent-green);
-        color: #fff;
-    }
-
     /* ===== MODAL MATCH DETALLE - REDISEÑO COMPARATIVO ===== */
     .modal-match-overlay {
         display: none;
@@ -985,17 +963,6 @@
         <span class="filter-chip btn-reset" onclick="resetFilters()">✕ Limpiar</span>
     </div>
 
-    <!-- Filter bar: distrito -->
-    <div class="filter-bar" id="filterBarDistritos">
-        <span class="filter-label">📍 Distrito:</span>
-        {% for distrito in distritos_disponibles %}
-        <span class="filter-chip district active" data-distrito="{{ distrito }}" onclick="toggleDistrictFilter(this)">
-            {{ distrito }}
-        </span>
-        {% endfor %}
-        <span class="filter-chip btn-reset" onclick="resetDistrictFilters()">✕ Limpiar</span>
-    </div>
-
     <!-- Switch: mostrar/ocultar requerimientos sin match -->
     <div class="filter-bar" id="filterBarSinMatch" style="display:flex;align-items:center;gap:8px;padding:4px 0;margin-top:2px;">
         <span class="filter-label">🎯 Match:</span>
@@ -1005,20 +972,40 @@
         </label>
     </div>
 
-    <!-- Navigation -->
+    <!-- Navigation: selector de año, mes y semana -->
     <div class="nav-bar">
         <div class="nav-controls">
-            {% if view_mode == 'month' %}
-                <a href="?view=month&year={{ prev_year }}&month={{ prev_month }}" class="btn-nav">‹ Anterior</a>
-                <a href="?view=month&year={{ next_year }}&month={{ next_month }}" class="btn-nav">Siguiente ›</a>
-            {% elif view_mode == 'week' %}
-                <a href="?view=week&year={{ prev_week_start.year }}&month={{ prev_week_start.month }}&day={{ prev_week_start.day }}" class="btn-nav">‹ Semana ant.</a>
-                <a href="?view=week&year={{ next_week_start.year }}&month={{ next_week_start.month }}&day={{ next_week_start.day }}" class="btn-nav">Semana sig. ›</a>
-            {% elif view_mode == 'day' %}
-                <a href="?view=day&year={{ prev_date.year }}&month={{ prev_date.month }}&day={{ prev_date.day }}" class="btn-nav">‹ Día ant.</a>
-                <a href="?view=day&year={{ next_date.year }}&month={{ next_date.month }}&day={{ next_date.day }}" class="btn-nav">Día sig. ›</a>
-            {% endif %}
-            <a href="?view={{ view_mode }}&year={{ today.year }}&month={{ today.month }}&day={{ today.day }}" class="btn-today">Hoy</a>
+            <form method="GET" id="navForm" class="nav-form" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <input type="hidden" name="view" value="{{ view_mode }}">
+                
+                <!-- Selector de AÑO -->
+                <select name="year" class="nav-select" onchange="this.form.submit()" style="background:var(--bg-tertiary);border:1px solid var(--border-color);color:var(--text-primary);padding:6px 10px;border-radius:6px;font-size:13px;cursor:pointer;">
+                    {% for y in years_disponibles %}
+                    <option value="{{ y }}" {% if y == current_year %}selected{% endif %}>{{ y }}</option>
+                    {% endfor %}
+                </select>
+
+                <!-- Selector de MES -->
+                <select name="month" class="nav-select" onchange="this.form.submit()" style="background:var(--bg-tertiary);border:1px solid var(--border-color);color:var(--text-primary);padding:6px 10px;border-radius:6px;font-size:13px;cursor:pointer;">
+                    {% for m in months_disponibles %}
+                    <option value="{{ m.num }}" {% if m.num == current_month %}selected{% endif %}>{{ m.nombre }}</option>
+                    {% endfor %}
+                </select>
+
+                <!-- Selector de SEMANA del mes (solo en vista month) -->
+                {% if view_mode == 'month' and semanas_del_mes %}
+                <select name="semana" class="nav-select" onchange="this.form.submit()" style="background:var(--bg-tertiary);border:1px solid var(--border-color);color:var(--text-primary);padding:6px 10px;border-radius:6px;font-size:13px;cursor:pointer;">
+                    <option value="">— Todas las semanas —</option>
+                    {% for s in semanas_del_mes %}
+                    <option value="{{ s.num }}" {% if s.num|stringformat:"s" == semana_seleccionada|stringformat:"s" %}selected{% endif %}>
+                        Semana {{ s.num }} ({{ s.inicio }} - {{ s.fin }})
+                    </option>
+                    {% endfor %}
+                </select>
+                {% endif %}
+
+                <a href="?view={{ view_mode }}&year={{ today.year }}&month={{ today.month }}&day={{ today.day }}" class="btn-today" style="text-decoration:none;">Hoy</a>
+            </form>
         </div>
 
         <div class="nav-title">
@@ -1032,13 +1019,181 @@
         </div>
 
         <div class="nav-controls">
+            <a href="?view=year&year={{ current_year }}" class="btn-nav {% if view_mode == 'year' %}active{% endif %}">Año</a>
             <a href="?view=month&year={{ current_year }}&month={{ current_month }}" class="btn-nav {% if view_mode == 'month' %}active{% endif %}">Mes</a>
             <a href="?view=week&year={{ current_year }}&month={{ current_month }}&day={{ current_day }}" class="btn-nav {% if view_mode == 'week' %}active{% endif %}">Semana</a>
             <a href="?view=day&year={{ current_year }}&month={{ current_month }}&day={{ current_day }}" class="btn-nav {% if view_mode == 'day' %}active{% endif %}">Día</a>
         </div>
     </div>
 
-    {% if view_mode == 'month' %}
+    {% if view_mode == 'year' %}
+    <!-- ===== YEAR VIEW ===== -->
+    <div class="year-view-container">
+        <div class="year-stats-bar">
+            <span>📅 <strong>{{ year_view }}</strong></span>
+            <span style="margin-left:16px;">📋 Total año: <strong>{{ total_anual }}</strong> requerimientos</span>
+        </div>
+        <div class="year-grid">
+            {% for month_data in year_months %}
+            <div class="year-month-column">
+                <div class="year-month-header">{{ month_data.month_name }}</div>
+                <div class="year-month-days">
+                    {% for week in month_data.weeks %}
+                        {% for day_info in week %}
+                            {% if day_info.is_current_month %}
+                            <div class="year-day-cell"
+                                 data-req-count="{{ day_info.req_count }}"
+                                 title="{{ day_info.date_iso }} — {{ day_info.req_count }} requerimiento{{ day_info.req_count|pluralize:'s' }}"
+                                 onclick="window.location='?view=day&year={{ year_view }}&month={{ month_data.month_num }}&day={{ day_info.day_num }}'"
+                                 style="cursor:pointer;">
+                            </div>
+                            {% else %}
+                            <div class="year-day-cell year-day-empty"></div>
+                            {% endif %}
+                        {% endfor %}
+                    {% endfor %}
+                </div>
+                <div class="year-month-total">{{ month_data.total_reqs }} req.</div>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="year-legend">
+            <span class="legend-label">Sin req.</span>
+            <div class="year-day-cell" style="width:14px;height:14px;display:inline-block;vertical-align:middle;border-radius:3px;background:#161b22;"></div>
+            <div class="year-day-cell" style="width:14px;height:14px;display:inline-block;vertical-align:middle;border-radius:3px;background:#0e4429;"></div>
+            <div class="year-day-cell" style="width:14px;height:14px;display:inline-block;vertical-align:middle;border-radius:3px;background:#006d32;"></div>
+            <div class="year-day-cell" style="width:14px;height:14px;display:inline-block;vertical-align:middle;border-radius:3px;background:#26a641;"></div>
+            <div class="year-day-cell" style="width:14px;height:14px;display:inline-block;vertical-align:middle;border-radius:3px;background:#39d353;"></div>
+            <span class="legend-label" style="margin-left:8px;">Muchos req.</span>
+        </div>
+    </div>
+
+    <style>
+    .year-view-container {
+        padding: 16px 0;
+    }
+    .year-stats-bar {
+        display:flex;
+        align-items:center;
+        padding:8px 16px;
+        background:var(--bg-secondary);
+        border:1px solid var(--border-color);
+        border-radius:8px;
+        margin-bottom:20px;
+        font-size:14px;
+        color:var(--text-primary);
+    }
+    .year-grid {
+        display:grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap:16px;
+    }
+    @media (max-width: 900px) {
+        .year-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 600px) {
+        .year-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    .year-month-column {
+        background:var(--bg-secondary);
+        border:1px solid var(--border-color);
+        border-radius:8px;
+        padding:10px;
+        display:flex;
+        flex-direction:column;
+        align-items:center;
+    }
+    .year-month-header {
+        font-size:13px;
+        font-weight:700;
+        color:var(--text-primary);
+        text-align:center;
+        padding-bottom:8px;
+        margin-bottom:8px;
+        border-bottom:1px solid var(--border-color);
+        width:100%;
+        text-transform:uppercase;
+        letter-spacing:0.5px;
+    }
+    .year-month-days {
+        display:grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap:3px;
+        width:100%;
+    }
+    .year-day-cell {
+        width:100%;
+        aspect-ratio:1;
+        border-radius:3px;
+        background:#161b22;
+        transition:transform 0.1s, box-shadow 0.1s;
+    }
+    .year-day-cell:hover {
+        transform:scale(1.3);
+        box-shadow:0 0 8px rgba(57,211,83,0.4);
+        z-index:2;
+        position:relative;
+    }
+    .year-day-empty {
+        background:transparent !important;
+        pointer-events:none;
+    }
+    .year-day-cell[data-req-count="1"] { background:#0e4429; }
+    .year-day-cell[data-req-count="2"] { background:#006d32; }
+    .year-day-cell[data-req-count="3"] { background:#26a641; }
+    .year-day-cell[data-req-count="4"] { background:#39d353; }
+    .year-day-cell[data-req-count="5"] { background:#39d353; }
+    .year-day-cell[data-req-count="6"] { background:#39d353; }
+    .year-day-cell[data-req-count="7"] { background:#39d353; }
+    .year-day-cell[data-req-count="8"] { background:#39d353; }
+    .year-day-cell[data-req-count="9"] { background:#39d353; }
+    .year-day-cell[data-req-count="10"] { background:#39d353; }
+    .year-day-cell[data-req-count="11"] { background:#39d353; }
+    .year-day-cell[data-req-count="12"] { background:#39d353; }
+    .year-day-cell[data-req-count="13"] { background:#39d353; }
+    .year-day-cell[data-req-count="14"] { background:#39d353; }
+    .year-day-cell[data-req-count="15"] { background:#39d353; }
+    .year-day-cell[data-req-count="16"] { background:#39d353; }
+    .year-day-cell[data-req-count="17"] { background:#39d353; }
+    .year-day-cell[data-req-count="18"] { background:#39d353; }
+    .year-day-cell[data-req-count="19"] { background:#39d353; }
+    .year-day-cell[data-req-count="20"] { background:#39d353; }
+    .year-day-cell[data-req-count^="2"] { background:#39d353; }
+    .year-day-cell[data-req-count^="3"] { background:#39d353; }
+    .year-day-cell[data-req-count^="4"] { background:#39d353; }
+    .year-day-cell[data-req-count^="5"] { background:#39d353; }
+    .year-day-cell[data-req-count^="6"] { background:#39d353; }
+    .year-day-cell[data-req-count^="7"] { background:#39d353; }
+    .year-day-cell[data-req-count^="8"] { background:#39d353; }
+    .year-day-cell[data-req-count^="9"] { background:#39d353; }
+    .year-month-total {
+        font-size:11px;
+        color:var(--text-secondary);
+        margin-top:8px;
+        padding-top:6px;
+        border-top:1px solid var(--border-color);
+        width:100%;
+        text-align:center;
+    }
+    .year-legend {
+        display:flex;
+        align-items:center;
+        gap:4px;
+        justify-content:center;
+        margin-top:20px;
+        padding:8px 16px;
+        background:var(--bg-secondary);
+        border:1px solid var(--border-color);
+        border-radius:8px;
+        font-size:12px;
+        color:var(--text-secondary);
+    }
+    .legend-label {
+        margin:0 4px;
+    }
+    </style>
+
+    {% elif view_mode == 'month' %}
     <!-- ===== MONTH VIEW ===== -->
     <div class="calendar-grid" id="calendarGrid">
         <div class="calendar-header-cell">Lun</div>
@@ -1299,19 +1454,13 @@ document.addEventListener('DOMContentLoaded', function() {
 // ===== FILTROS DE TIPO DE PROPIEDAD =====
 let activeFilters = new Set();
 
-// ===== FILTROS DE DISTRITO =====
-let activeDistrictFilters = new Set();
-
 // ===== SWITCH: SOLO CON MATCH =====
 let showOnlyWithMatch = false;
 
-// Inicializar: todos los tipos y distritos activos por defecto
+// Inicializar: todos los tipos activos por defecto
 document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.filter-chip[data-tipo]').forEach(function(chip) {
         activeFilters.add(chip.dataset.tipo);
-    });
-    document.querySelectorAll('.filter-chip[data-distrito]').forEach(function(chip) {
-        activeDistrictFilters.add(chip.dataset.distrito);
     });
     // Si hay datos cargados, aplicar filtro inicial
     if (typeof diasSemana !== 'undefined') {
@@ -1340,40 +1489,6 @@ function resetFilters() {
     applyFilters();
 }
 
-function toggleDistrictFilter(el) {
-    const distrito = el.dataset.distrito;
-    if (activeDistrictFilters.has(distrito)) {
-        if (activeDistrictFilters.size <= 1) return;
-        activeDistrictFilters.delete(distrito);
-        el.classList.remove('active');
-    } else {
-        activeDistrictFilters.add(distrito);
-        el.classList.add('active');
-    }
-    applyFilters();
-}
-
-function resetDistrictFilters() {
-    document.querySelectorAll('.filter-chip[data-distrito]').forEach(function(chip) {
-        activeDistrictFilters.add(chip.dataset.distrito);
-        chip.classList.add('active');
-    });
-    applyFilters();
-}
-
-function matchesDistrictFilter(item) {
-    const distritosAttr = item.dataset.distritos;
-    if (!distritosAttr) return activeDistrictFilters.size === 0;
-    const itemDistritos = distritosAttr.split(',').map(function(d) { return d.trim(); });
-    // El item pasa si ALGUNO de sus distritos está en activeDistrictFilters
-    for (var i = 0; i < itemDistritos.length; i++) {
-        if (activeDistrictFilters.has(itemDistritos[i])) {
-            return true;
-        }
-    }
-    return false;
-}
-
 function toggleSinMatch(checkbox) {
     showOnlyWithMatch = checkbox.checked;
     applyFilters();
@@ -1387,10 +1502,6 @@ function applyFilters() {
             var visible = true;
             // Filtro por tipo
             if (reqTipoKey && !activeFilters.has(reqTipoKey)) {
-                visible = false;
-            }
-            // Filtro por distrito
-            if (visible && !matchesDistrictFilter(item)) {
                 visible = false;
             }
             // Filtro: solo con match
@@ -1411,10 +1522,6 @@ function applyFilters() {
             var visible = true;
             // Filtro por tipo
             if (reqTipoKey && !activeFilters.has(reqTipoKey)) {
-                visible = false;
-            }
-            // Filtro por distrito
-            if (visible && !matchesDistrictFilter(card)) {
                 visible = false;
             }
             // Filtro: solo con match

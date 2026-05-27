@@ -21,6 +21,7 @@ import json
 import os
 import uuid
 import logging
+from datetime import datetime, date, timedelta
 
 from django.contrib import messages
 from django.db import connection
@@ -3840,3 +3841,188 @@ def api_check_collection_access(request, collection_name):
             'allowed_domains': profile.allowed_domains,
         },
     })
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DASHBOARD DE CONSUMO DE IA (DeepSeek)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def ai_consumption_dashboard(request):
+    """
+    Dashboard de consumo de tokens de IA (DeepSeek).
+    Muestra un gráfico de barras por hora para una fecha seleccionada,
+    con métricas de total de tokens, llamadas, costo estimado, etc.
+    Incluye desglose granular por caller_app (chatbot, extractor, skills, etc.)
+    """
+    from .models import AIConsumptionLog
+    from django.db.models import Sum, Count, Avg
+    from django.db.models.functions import ExtractHour
+    from datetime import date, timedelta
+    
+    # Fecha seleccionada (por defecto hoy)
+    fecha_str = request.GET.get('fecha', '')
+    if fecha_str:
+        try:
+            fecha_seleccionada = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+        except ValueError:
+            fecha_seleccionada = timezone.now().date()
+    else:
+        fecha_seleccionada = timezone.now().date()
+    
+    # Filtro opcional por caller_app
+    caller_filter = request.GET.get('caller', '')
+    
+    # Rango de fechas para el selector (últimos 30 días)
+    hoy = timezone.now().date()
+    fechas_disponibles = [
+        (hoy - timedelta(days=i)).isoformat()
+        for i in range(30)
+    ]
+    
+    # Query base para la fecha seleccionada
+    logs_del_dia = AIConsumptionLog.objects.filter(
+        created_at__date=fecha_seleccionada
+    )
+    
+    # Aplicar filtro por caller_app si se especificó
+    if caller_filter:
+        logs_del_dia = logs_del_dia.filter(caller_app=caller_filter)
+    
+    # Métricas generales del día
+    total_llamadas = logs_del_dia.count()
+    total_tokens = logs_del_dia.aggregate(
+        total=Sum('total_tokens')
+    )['total'] or 0
+    total_prompt = logs_del_dia.aggregate(
+        total=Sum('prompt_tokens')
+    )['total'] or 0
+    total_completion = logs_del_dia.aggregate(
+        total=Sum('completion_tokens')
+    )['total'] or 0
+    costo_total = logs_del_dia.aggregate(
+        total=Sum('estimated_cost_usd')
+    )['total'] or 0
+    llamadas_exitosas = logs_del_dia.filter(success=True).count()
+    llamadas_fallidas = logs_del_dia.filter(success=False).count()
+    duracion_promedio = logs_del_dia.aggregate(
+        avg=Avg('duration_ms')
+    )['avg'] or 0
+    
+    # Agregación por hora (0-23)
+    horas_data = []
+    for hora in range(24):
+        logs_hora = logs_del_dia.filter(
+            created_at__hour=hora
+        )
+        count = logs_hora.count()
+        tokens_hora = logs_hora.aggregate(
+            total=Sum('total_tokens')
+        )['total'] or 0
+        costo_hora = logs_hora.aggregate(
+            total=Sum('estimated_cost_usd')
+        )['total'] or 0
+        
+        horas_data.append({
+            'hora': hora,
+            'hora_label': f'{hora:02d}:00',
+            'llamadas': count,
+            'tokens': tokens_hora,
+            'costo': float(costo_hora),
+        })
+    
+    # ── DESGLOSE GRANULAR POR caller_app ──
+    caller_stats = []
+    callers_disponibles = logs_del_dia.values('caller_app').distinct()
+    
+    for item in callers_disponibles:
+        app_name = item['caller_app'] or 'desconocido'
+        qs = logs_del_dia.filter(caller_app=app_name)
+        stats = qs.aggregate(
+            llamadas=Count('id'),
+            tokens=Sum('total_tokens'),
+            prompt=Sum('prompt_tokens'),
+            completion=Sum('completion_tokens'),
+            costo=Sum('estimated_cost_usd'),
+            duracion=Avg('duration_ms'),
+        )
+        exitosas = qs.filter(success=True).count()
+        fallidas = qs.filter(success=False).count()
+        
+        caller_stats.append({
+            'caller_app': app_name,
+            'llamadas': stats['llamadas'] or 0,
+            'tokens': stats['tokens'] or 0,
+            'prompt': stats['prompt'] or 0,
+            'completion': stats['completion'] or 0,
+            'costo': float(stats['costo'] or 0),
+            'duracion_promedio': int(stats['duracion'] or 0),
+            'exitosas': exitosas,
+            'fallidas': fallidas,
+            'tasa_exito': round((exitosas / (exitosas + fallidas) * 100) if (exitosas + fallidas) > 0 else 0, 1),
+        })
+    
+    # Ordenar por llamadas descendente
+    caller_stats.sort(key=lambda x: x['llamadas'], reverse=True)
+    
+    # ── DESGLOSE POR ENDPOINT (función específica) ──
+    endpoint_stats = []
+    endpoints = logs_del_dia.values('endpoint').distinct()
+    
+    for item in endpoints:
+        ep_name = item['endpoint'] or 'desconocido'
+        qs = logs_del_dia.filter(endpoint=ep_name)
+        stats = qs.aggregate(
+            llamadas=Count('id'),
+            tokens=Sum('total_tokens'),
+            costo=Sum('estimated_cost_usd'),
+        )
+        endpoint_stats.append({
+            'endpoint': ep_name,
+            'llamadas': stats['llamadas'] or 0,
+            'tokens': stats['tokens'] or 0,
+            'costo': float(stats['costo'] or 0),
+        })
+    
+    endpoint_stats.sort(key=lambda x: x['llamadas'], reverse=True)
+    
+    # Últimos registros (para la tabla)
+    ultimos_registros = logs_del_dia.order_by('-created_at')[:20]
+    
+    # Datos para el gráfico (JSON)
+    chart_labels = [h['hora_label'] for h in horas_data]
+    chart_llamadas = [h['llamadas'] for h in horas_data]
+    chart_tokens = [h['tokens'] for h in horas_data]
+    
+    # Datos para gráfico de caller_app (top 5)
+    caller_chart_labels = [c['caller_app'][:25] for c in caller_stats[:5]]
+    caller_chart_llamadas = [c['llamadas'] for c in caller_stats[:5]]
+    caller_chart_tokens = [c['tokens'] for c in caller_stats[:5]]
+    
+    context = {
+        'fecha_seleccionada': fecha_seleccionada,
+        'fecha_seleccionada_str': fecha_seleccionada.isoformat(),
+        'fechas_disponibles': fechas_disponibles,
+        'total_llamadas': total_llamadas,
+        'total_tokens': total_tokens,
+        'total_prompt': total_prompt,
+        'total_completion': total_completion,
+        'costo_total': float(costo_total),
+        'llamadas_exitosas': llamadas_exitosas,
+        'llamadas_fallidas': llamadas_fallidas,
+        'duracion_promedio': int(duracion_promedio),
+        'horas_data': horas_data,
+        'caller_stats': caller_stats,
+        'endpoint_stats': endpoint_stats,
+        'ultimos_registros': ultimos_registros,
+        'chart_labels': json.dumps(chart_labels),
+        'chart_llamadas': json.dumps(chart_llamadas),
+        'chart_tokens': json.dumps(chart_tokens),
+        'caller_chart_labels': json.dumps(caller_chart_labels),
+        'caller_chart_llamadas': json.dumps(caller_chart_llamadas),
+        'caller_chart_tokens': json.dumps(caller_chart_tokens),
+        'caller_filter': caller_filter,
+        'hoy': hoy,
+        'seccion_actual': 'consumo-ia',
+    }
+    
+    return render(request, 'intelligence/ai_consumption_dashboard.html', context)

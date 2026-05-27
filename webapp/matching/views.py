@@ -513,6 +513,7 @@ class MatchingCalendarView(TemplateView):
         year = int(self.request.GET.get('year', datetime.now().year))
         month = int(self.request.GET.get('month', datetime.now().month))
         day = int(self.request.GET.get('day', datetime.now().day))
+        semana_seleccionada = self.request.GET.get('semana', '')
         
         # Fecha actual para navegación
         today = date.today()
@@ -521,6 +522,34 @@ class MatchingCalendarView(TemplateView):
         context['current_month'] = month
         context['current_day'] = day
         context['view_mode'] = view_mode
+        context['semana_seleccionada'] = semana_seleccionada
+        
+        # ── Años disponibles (últimos 5, siguientes 2) ──
+        context['years_disponibles'] = list(range(today.year - 5, today.year + 3))
+        
+        # ── Meses disponibles ──
+        meses_nombres = [
+            'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+            'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+        ]
+        context['months_disponibles'] = [
+            {'num': i + 1, 'nombre': meses_nombres[i]}
+            for i in range(12)
+        ]
+        
+        # ── Semanas del mes ──
+        cal = calendar.Calendar()
+        month_days = cal.monthdays2calendar(year, month)
+        semanas_del_mes = []
+        for idx, week in enumerate(month_days):
+            dias_reales = [d[0] for d in week if d[0] > 0]
+            if dias_reales:
+                semanas_del_mes.append({
+                    'num': idx + 1,
+                    'inicio': f"{min(dias_reales):02d}/{month:02d}",
+                    'fin': f"{max(dias_reales):02d}/{month:02d}",
+                })
+        context['semanas_del_mes'] = semanas_del_mes
         
         # ── Tipos de propiedad para filtros ──
         from requerimientos.models import TipoPropiedadChoices
@@ -531,27 +560,6 @@ class MatchingCalendarView(TemplateView):
         ]
         context['tipos_propiedad'] = tipos_propiedad
         context['tipos_propiedad_json'] = json.dumps(tipos_propiedad)
-        
-        # ── Distritos para filtros (extraídos de la BD) ──
-        from requerimientos.models import Requerimiento
-        from django.db.models import Value as V
-        from django.db.models.functions import Replace, Trim
-        import re
-        # Obtener todos los valores del campo distritos, separar por coma y limpiar
-        distritos_raw = Requerimiento.objects.exclude(
-            distritos=''
-        ).values_list('distritos', flat=True)
-        distritos_set = set()
-        for raw in distritos_raw:
-            if raw:
-                for d in raw.split(','):
-                    d_clean = d.strip()
-                    if d_clean and len(d_clean) > 2:
-                        distritos_set.add(d_clean)
-        # Ordenar alfabéticamente
-        distritos_ordenados = sorted(distritos_set)
-        context['distritos_disponibles'] = distritos_ordenados
-        context['distritos_disponibles_json'] = json.dumps(distritos_ordenados)
         
         # Obtener resumen de matching masivo para todos los requerimientos
         # Optimizado: una sola consulta con select_related, sin N+1
@@ -565,6 +573,15 @@ class MatchingCalendarView(TemplateView):
             # Construir grid del mes
             cal = calendar.Calendar()
             month_days = cal.monthdays2calendar(year, month)
+            
+            # ── Filtrar por semana seleccionada ──
+            if semana_seleccionada:
+                try:
+                    semana_idx = int(semana_seleccionada) - 1
+                    if 0 <= semana_idx < len(month_days):
+                        month_days = [month_days[semana_idx]]
+                except (ValueError, IndexError):
+                    pass
             
             # Construir reqs_por_fecha como dict con key "YYYY-MM-DD"
             # Optimización: cargar todos los requerimientos en UNA consulta en lugar de N+1
@@ -590,25 +607,6 @@ class MatchingCalendarView(TemplateView):
             context['month_days'] = month_days
             context['reqs_por_fecha_json'] = json.dumps(reqs_por_fecha)
             context['month_name'] = calendar.month_name[month]
-            
-            # Navegación mes anterior/siguiente
-            if month == 1:
-                prev_month = 12
-                prev_year = year - 1
-            else:
-                prev_month = month - 1
-                prev_year = year
-            if month == 12:
-                next_month = 1
-                next_year = year + 1
-            else:
-                next_month = month + 1
-                next_year = year
-            
-            context['prev_month'] = prev_month
-            context['prev_year'] = prev_year
-            context['next_month'] = next_month
-            context['next_year'] = next_year
             
         elif view_mode == 'week':
             # Calcular inicio y fin de la semana
@@ -688,6 +686,62 @@ class MatchingCalendarView(TemplateView):
             # Navegación
             context['prev_week_start'] = week_start - timedelta(days=7)
             context['next_week_start'] = week_start + timedelta(days=7)
+            
+        elif view_mode == 'year':
+            # ── VISTA AÑO: 12 meses, todos los días del año ──
+            # Optimización: una sola consulta agregada en lugar de 365 queries
+            from django.db.models import Count
+            year_start = date(year, 1, 1)
+            year_end = date(year, 12, 31)
+            reqs_por_dia = (
+                Requerimiento.objects.filter(
+                    fecha__gte=year_start,
+                    fecha__lte=year_end,
+                )
+                .exclude(condicion__in=condicion_excluir)
+                .values('fecha')
+                .annotate(total=Count('id'))
+            )
+            # Convertir a dict para lookup O(1): { '2026-05-15': 3 }
+            reqs_count_map = {}
+            for item in reqs_por_dia:
+                if item['fecha']:
+                    reqs_count_map[item['fecha'].isoformat()] = item['total']
+            
+            year_months = []
+            total_anual = sum(reqs_count_map.values())
+            for m in range(1, 13):
+                cal_m = calendar.Calendar()
+                month_weeks = cal_m.monthdays2calendar(year, m)
+                month_data = {
+                    'month_num': m,
+                    'month_name': calendar.month_name[m][:3].upper(),  # ENE, FEB, etc.
+                    'weeks': [],
+                    'total_reqs': 0,
+                }
+                for week in month_weeks:
+                    week_days = []
+                    for day_num, weekday in week:
+                        day_info = {
+                            'day_num': day_num,
+                            'weekday': weekday,
+                            'is_current_month': day_num > 0,
+                            'req_count': 0,
+                            'date_iso': '',
+                        }
+                        if day_num > 0:
+                            d = date(year, m, day_num)
+                            day_info['date_iso'] = d.isoformat()
+                            day_info['req_count'] = reqs_count_map.get(d.isoformat(), 0)
+                            month_data['total_reqs'] += day_info['req_count']
+                        week_days.append(day_info)
+                    month_data['weeks'].append(week_days)
+                year_months.append(month_data)
+            
+            context['year_months'] = year_months
+            context['year_view'] = year
+            context['total_anual'] = total_anual
+            context['view_mode'] = 'year'
             
         elif view_mode == 'day':
             target_date = date(year, month, day)

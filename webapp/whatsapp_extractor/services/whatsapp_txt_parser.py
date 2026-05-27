@@ -76,7 +76,7 @@ class WhatsAppTxtParser:
         re.IGNORECASE | re.UNICODE
     )
     PATRON_FORMATO_3 = re.compile(
-        r'^\[(\d{1,2}/\d{1,2}/\d{2,4},?\s+\d{1,2}:\d{2}(?::\d{2})?(?:[\s\u202f]*[aApP][\.\s\u202f]*[mM][\.\s\u202f]*)?)\]\s*([^:]+):\s*(.*)',
+        r'^\[(\d{1,2}/\d{1,2}/\d{2,4},?\s+\d{1,2}:\d{2}(?::\d{2})?(?:[\s\u202f\xa0]*[aApP][\.\s\u202f\xa0]*[mM][\.\s\u202f\xa0]*)?)\]\s*([^:]+):\s*(.*)',
         re.UNICODE
     )
     PATRON_FORMATO_4 = re.compile(
@@ -415,14 +415,16 @@ class WhatsAppTxtParser:
             pass
 
         # --- Formatos para iOS con coma, segundos y AM/PM con puntos (a. m. / p. m.) ---
-        # Estos formatos usan \u202f (espacio estrecho) antes de a.m./p.m.
+        # Estos formatos usan \u202f (espacio estrecho) y \xa0 (non-breaking space)
+        # antes/entre a.m./p.m.
         # Ej: "11/05/26, 7:16:03 a. m." o "11/05/26, 7:16:03 p. m."
-        # Primero normalizar: quitar \u202f y espacios alrededor de a.m./p.m.
+        # Ej: "11/05/26, 7:16:03 a. m." (con \xa0 entre a. y m.)
+        # Primero normalizar: quitar \u202f, \xa0 y espacios alrededor de a.m./p.m.
 
-        # Formato 10: DD/MM/YY, HH:MM:SS a. m. (con segundos, AM/PM con puntos y \u202f)
+        # Formato 10: DD/MM/YY, HH:MM:SS a. m. (con segundos, AM/PM con puntos y \u202f/\xa0)
         try:
-            # Normalizar: reemplazar \u202f por espacio, quitar coma
-            limpio = re.sub(r'[\u202f]', ' ', timestamp_str)
+            # Normalizar: reemplazar \u202f y \xa0 por espacio, quitar coma
+            limpio = re.sub(r'[\u202f\xa0]', ' ', timestamp_str)
             limpio = re.sub(r'(\d{1,4}),\s+', r'\1 ', limpio)
             # Convertir "a. m." → "AM" (incluyendo punto final opcional)
             limpio = re.sub(r'\s*a\s*\.\s*m\s*\.?\s*', ' AM', limpio, flags=re.IGNORECASE)
@@ -443,7 +445,7 @@ class WhatsAppTxtParser:
 
         # Formato 12: DD/MM/YYYY, HH:MM:SS a. m. (año 4 dígitos, con segundos, AM/PM con puntos)
         try:
-            limpio = re.sub(r'[\u202f]', ' ', timestamp_str)
+            limpio = re.sub(r'[\u202f\xa0]', ' ', timestamp_str)
             limpio = re.sub(r'(\d{1,4}),\s+', r'\1 ', limpio)
             limpio = re.sub(r'\s*a\s*\.\s*m\s*\.?\s*', ' AM', limpio, flags=re.IGNORECASE)
             limpio = re.sub(r'\s*p\s*\.\s*m\s*\.?\s*', ' PM', limpio, flags=re.IGNORECASE)
