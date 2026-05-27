@@ -699,6 +699,7 @@ class MatchingCalendarView(TemplateView):
                     fecha__lte=year_end,
                 )
                 .exclude(condicion__in=condicion_excluir)
+                .order_by()  # ← Limpia cualquier ordering por defecto (SQL Server no permite ORDER BY fuera de GROUP BY)
                 .values('fecha')
                 .annotate(total=Count('id'))
             )
