@@ -264,6 +264,16 @@ class Requerimiento(models.Model):
         verbose_name='Quality Score actualizado en',
     )
 
+    # ── Hash para deduplicación ────────────────
+    texto_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        default='',
+        verbose_name='Hash SHA256 del texto',
+        help_text='Hash SHA256 del texto normalizado para detección rápida de duplicados',
+        db_index=True,
+    )
+
     # ── Auditoría ─────────────────────────────
     creado_en = models.DateTimeField(
         auto_now_add=True,

@@ -1,9 +1,11 @@
 import re
 import signal
+import hashlib
 from datetime import datetime
 from celery import shared_task
 import logging
 from typing import List, Dict, Optional
+from django.db import IntegrityError
 from .models import ExtractorLog, ArchivoExtraccionWhatsApp, LogEntry
 from requerimientos.models import Requerimiento
 from .services.whatsapp_txt_parser import WhatsAppTxtParser
@@ -490,32 +492,62 @@ def procesar_archivo_extraccion(archivo_id: int, extractor_log_id: Optional[int]
                     nombre_agente = autor_raw
                 else:
                     nombre_agente = telefono_final or autor_raw
-                Requerimiento.objects.create(
-                    requerimiento=texto_original,
-                    fuente=_truncar(nombre_grupo, 60),
-                    agente=_truncar(nombre_agente, 120),
+                # Calcular hash SHA256 del texto normalizado para deduplicación
+                texto_normalizado = ' '.join(texto_original.lower().split())
+                texto_hash = hashlib.sha256(texto_normalizado.encode()).hexdigest()
+
+                # --- Verificar duplicado por texto_hash ANTES de insertar ---
+                # El índice único en BD es (texto_hash, fecha, hora, fuente)
+                # Hacemos una verificación extra aquí para atraparlo antes del error de BD
+                duplicado_bd = Requerimiento.objects.filter(
+                    texto_hash=texto_hash,
                     fecha=fecha_msg,
                     hora=hora_msg,
-                    extractor_log=extractor_log,
-                    tipo_original=tipo_original,
-                    condicion=_truncar(datos_extraidos.get('condicion'), 20) or 'no_especificado',
-                    tipo_propiedad=_truncar(datos_extraidos.get('tipo_propiedad'), 20) or 'no_especificado',
-                    distritos=_truncar(datos_extraidos.get('distritos'), 300),
-                    presupuesto_monto=datos_extraidos.get('presupuesto_monto'),
-                    presupuesto_moneda=_truncar(datos_extraidos.get('presupuesto_moneda'), 20) or 'no_especificado',
-                    presupuesto_forma_pago=_truncar(datos_extraidos.get('presupuesto_forma_pago'), 20) or 'no_especificado',
-                    habitaciones=datos_extraidos.get('habitaciones'),
-                    banos=datos_extraidos.get('banos'),
-                    cochera=_truncar(datos_extraidos.get('cochera'), 12) or 'indiferente',
-                    ascensor=_truncar(datos_extraidos.get('ascensor'), 12) or 'indiferente',
-                    amueblado=_truncar(datos_extraidos.get('amueblado'), 12) or 'indiferente',
-                    area_m2=datos_extraidos.get('area_m2'),
-                    piso_preferencia=_truncar(datos_extraidos.get('piso_preferencia'), 60),
-                    caracteristicas_extra=_truncar(datos_extraidos.get('caracteristicas_extra'), 300),
-                    agente_telefono=_truncar(telefono_final, 20),
-                )
-                extractor_log.mensajes_validos += 1
+                    fuente=_truncar(nombre_grupo, 60),
+                ).exists()
+                if duplicado_bd:
+                    logger.info(f'Mensaje duplicado (por hash+BD): {texto_original[:50]}')
+                    extractor_log.requerimientos_duplicados += 1
+                    continue
 
+                try:
+                    Requerimiento.objects.create(
+                        requerimiento=texto_original,
+                        texto_hash=texto_hash,
+                        fuente=_truncar(nombre_grupo, 60),
+                        agente=_truncar(nombre_agente, 120),
+                        fecha=fecha_msg,
+                        hora=hora_msg,
+                        extractor_log=extractor_log,
+                        tipo_original=tipo_original,
+                        condicion=_truncar(datos_extraidos.get('condicion'), 20) or 'no_especificado',
+                        tipo_propiedad=_truncar(datos_extraidos.get('tipo_propiedad'), 20) or 'no_especificado',
+                        distritos=_truncar(datos_extraidos.get('distritos'), 300),
+                        presupuesto_monto=datos_extraidos.get('presupuesto_monto'),
+                        presupuesto_moneda=_truncar(datos_extraidos.get('presupuesto_moneda'), 20) or 'no_especificado',
+                        presupuesto_forma_pago=_truncar(datos_extraidos.get('presupuesto_forma_pago'), 20) or 'no_especificado',
+                        habitaciones=datos_extraidos.get('habitaciones'),
+                        banos=datos_extraidos.get('banos'),
+                        cochera=_truncar(datos_extraidos.get('cochera'), 12) or 'indiferente',
+                        ascensor=_truncar(datos_extraidos.get('ascensor'), 12) or 'indiferente',
+                        amueblado=_truncar(datos_extraidos.get('amueblado'), 12) or 'indiferente',
+                        area_m2=datos_extraidos.get('area_m2'),
+                        piso_preferencia=_truncar(datos_extraidos.get('piso_preferencia'), 60),
+                        caracteristicas_extra=_truncar(datos_extraidos.get('caracteristicas_extra'), 300),
+                        agente_telefono=_truncar(telefono_final, 20),
+                    )
+                    extractor_log.mensajes_validos += 1
+                except IntegrityError:
+                    # El índice único de BD detectó un duplicado que no atrapamos antes
+                    logger.info(f'Mensaje duplicado (IntegrityError BD): {texto_original[:50]}')
+                    extractor_log.requerimientos_duplicados += 1
+                    continue
+
+            except IntegrityError:
+                # IntegrityError del create() si no pasó por el bloque try anidado
+                logger.info(f'Mensaje duplicado (IntegrityError BD, outer): {texto_original[:50]}')
+                extractor_log.requerimientos_duplicados += 1
+                continue
             except Exception as e:
                 logger.error(f'Error procesando mensaje {idx}: {e}', exc_info=True)
                 LogEntry.objects.create(

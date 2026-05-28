@@ -45,6 +45,8 @@ class MatchingViewSet(viewsets.ViewSet):
         GET /api/matching/{requerimiento_id}/ejecutar/
         
         Ejecuta el matching para un requerimiento y retorna resultados.
+        Además, GUARDA automáticamente los resultados en MatchResult
+        para que persistan y se vean en el calendario.
         """
         requerimiento = get_object_or_404(Requerimiento, pk=pk)
         
@@ -74,6 +76,14 @@ class MatchingViewSet(viewsets.ViewSet):
         if score_minimo > 0:
             resultados = [r for r in resultados if r['score_total'] >= score_minimo]
             estadisticas['total_compatibles'] = len(resultados)
+        
+        # ── Guardar resultados automáticamente en MatchResult ──
+        try:
+            from .engine import guardar_resultados_matching
+            guardar_resultados_matching(requerimiento.id, resultados)
+            logger.info(f"Resultados de matching guardados para requerimiento #{requerimiento.id}")
+        except Exception as e:
+            logger.warning(f"No se pudieron guardar resultados de matching: {e}")
         
         # Serializar resultados
         resultados_serializer = MatchingResultSerializer(resultados, many=True)
@@ -422,67 +432,72 @@ class MatchingMasivoView(TemplateView):
         return context
 
 
-def _obtener_resumen_calendario(limite=500):
+def _obtener_resumen_calendario(limite=500, umbral_minimo=70):
     """
     Obtiene resumen de matching para el calendario.
     Optimizado: evita JOIN con PropifaiProperty para no depender de esa tabla.
-    Usa solo datos de MatchResult + Requerimiento.
+    Usa datos de MatchResult + Requerimiento.
+    
+    Solo incluye requerimientos con porcentaje_match >= umbral_minimo (default: 70%).
+    Los requerimientos sin MatchResult (score 0) NO se incluyen.
     """
     try:
         from django.db.models import Max
         from .models import MatchResult
+        from requerimientos.models import Requerimiento
         
-        # Una sola consulta: mejor score por requerimiento
-        resultados = MatchResult.objects.values(
+        # ── Solo requerimientos CON MatchResult ──
+        resultados_con_match = MatchResult.objects.values(
             'requerimiento_id'
         ).annotate(
             max_score=Max('score_total')
-        ).order_by('-max_score')[:limite]
+        ).order_by('-max_score')
         
-        if not resultados:
+        req_ids_con_match = [r['requerimiento_id'] for r in resultados_con_match]
+        
+        if not req_ids_con_match:
             return []
         
-        req_ids = [r['requerimiento_id'] for r in resultados]
+        # Cargar requerimientos con match
+        reqs_con_match = Requerimiento.objects.filter(id__in=req_ids_con_match)
+        reqs_map = {r.id: r for r in reqs_con_match}
         
-        # Cargar requerimientos en UNA consulta
-        from requerimientos.models import Requerimiento
-        reqs = Requerimiento.objects.filter(id__in=req_ids)
-        reqs_map = {r.id: r for r in reqs}
-        
-        # Cargar mejores matches en UNA consulta (SIN select_related a propiedad)
+        # Cargar mejores matches
         mejores = MatchResult.objects.filter(
-            requerimiento_id__in=req_ids
+            requerimiento_id__in=req_ids_con_match
         ).order_by('requerimiento_id', '-score_total')
         
-        # Quedarse con el primero (mejor score) por requerimiento
         mejores_por_req = {}
         for m in mejores:
             if m.requerimiento_id not in mejores_por_req:
                 mejores_por_req[m.requerimiento_id] = m
         
         resumen = []
-        for item in resultados:
+        for item in resultados_con_match:
             req_id = item['requerimiento_id']
             req = reqs_map.get(req_id)
             if not req:
                 continue
             mejor = mejores_por_req.get(req_id)
             if mejor:
-                resumen.append({
-                    'requerimiento_id': req_id,
-                    'requerimiento_nombre': str(req),
-                    'porcentaje_match': float(mejor.score_total),
-                    'score_promedio': float(mejor.score_total),
-                    'total_compatibles': 1,
-                    'mejor_propiedad_id': mejor.propiedad_id,
-                    'mejor_propiedad_codigo': None,
-                    'mejor_propiedad_titulo': None,
-                    'mejor_propiedad_distrito': None,
-                    'mejor_propiedad_precio': None,
-                    'mejor_propiedad_moneda_id': None,
-                    'mejor_propiedad_tipo': None,
-                    'fecha_ultimo_matching': mejor.ejecutado_en.isoformat() if mejor.ejecutado_en else None,
-                })
+                score = float(mejor.score_total)
+                # Solo incluir si supera el umbral mínimo
+                if score >= umbral_minimo:
+                    resumen.append({
+                        'requerimiento_id': req_id,
+                        'requerimiento_nombre': str(req),
+                        'porcentaje_match': score,
+                        'score_promedio': score,
+                        'total_compatibles': 1,
+                        'mejor_propiedad_id': mejor.propiedad_id,
+                        'mejor_propiedad_codigo': None,
+                        'mejor_propiedad_titulo': None,
+                        'mejor_propiedad_distrito': None,
+                        'mejor_propiedad_precio': None,
+                        'mejor_propiedad_moneda_id': None,
+                        'mejor_propiedad_tipo': None,
+                        'fecha_ultimo_matching': mejor.ejecutado_en.isoformat() if mejor.ejecutado_en else None,
+                    })
         
         resumen.sort(key=lambda x: x['porcentaje_match'], reverse=True)
         return resumen[:limite]

@@ -278,8 +278,9 @@ Responde SOLO con un JSON válido con esta estructura:
         NO llama a DeepSeek API. Compara el texto del mensaje contra
         los requerimientos existentes usando:
         1. Hash SHA256 del texto normalizado (detección exacta)
-        2. Coeficiente Jaccard (detección de mensajes muy similares)
-        3. Nombre del agente/autor (mismo texto + mismo autor = duplicado)
+        2. Búsqueda directa por texto_hash en BD (mismo criterio que índice único)
+        3. Coeficiente Jaccard (detección de mensajes muy similares)
+        4. Nombre del agente/autor (mismo texto + mismo autor = duplicado)
 
         Args:
             texto_mensaje: Texto del mensaje nuevo.
@@ -303,7 +304,32 @@ Responde SOLO con un JSON válido con esta estructura:
             hash_nuevo = hashlib.sha256(texto_normalizado.encode()).hexdigest()
             agente_normalizado = agente.strip().lower()
 
-            # 2. Obtener historial para comparar (siempre contra todo el histórico)
+            # 2. Búsqueda DIRECTA por texto_hash en BD (más rápida y exacta)
+            #    Esto replica el mismo criterio del índice único de SQL Server
+            duplicado_por_hash = Requerimiento.objects.filter(
+                texto_hash=hash_nuevo
+            ).values('id', 'agente').first()
+            if duplicado_por_hash:
+                req_agente = (duplicado_por_hash['agente'] or '').strip().lower()
+                if agente_normalizado and req_agente and agente_normalizado == req_agente:
+                    return {
+                        'is_duplicate': True,
+                        'match_score': 100,
+                        'matching_id': duplicado_por_hash['id'],
+                        'reason': 'Texto duplicado exacto (por texto_hash) + mismo agente',
+                        'error': None,
+                    }
+                return {
+                    'is_duplicate': True,
+                    'match_score': 100,
+                    'matching_id': duplicado_por_hash['id'],
+                    'reason': 'Texto duplicado exacto (por texto_hash)',
+                    'error': None,
+                }
+
+            # 3. Obtener historial COMPLETO (sin filtro de fecha) para Jaccard
+            #    Buscar en TODOS los requerimientos para detectar duplicados
+            #    incluso si tienen fecha=None (mensajes sin timestamp válido)
             historial = list(Requerimiento.objects.filter(
                 requerimiento__isnull=False
             ).exclude(
@@ -313,15 +339,14 @@ Responde SOLO con un JSON válido con esta estructura:
             if not historial:
                 return resultado_base
 
-            # 3. Comparar contra cada requerimiento histórico
+            # 4. Comparar contra cada requerimiento histórico (Jaccard)
             for req in historial:
                 req_texto = ' '.join((req['requerimiento'] or '').lower().split())
                 req_hash = hashlib.sha256(req_texto.encode()).hexdigest()
                 req_agente = (req['agente'] or '').strip().lower()
 
-                # Coincidencia exacta de hash
+                # Coincidencia exacta de hash (respaldo por si la query directa falló)
                 if hash_nuevo == req_hash:
-                    # Si además el agente coincide, es duplicado SEGURO
                     if agente_normalizado and req_agente and agente_normalizado == req_agente:
                         return {
                             'is_duplicate': True,
@@ -330,7 +355,6 @@ Responde SOLO con un JSON válido con esta estructura:
                             'reason': f'Texto duplicado exacto + mismo agente',
                             'error': None,
                         }
-                    # Si solo el texto coincide (sin agente o agente diferente), también es duplicado
                     return {
                         'is_duplicate': True,
                         'match_score': 100,
