@@ -1781,7 +1781,29 @@ function enviarPropuestaWhatsApp() {
     
     var mensaje = lineas.join('\n');
     
-    // 6. Abrir WhatsApp con número si está disponible
+    // 6. Guardar propuesta en BD via API
+    var bodyData = {
+        requerimiento_id: req.id,
+        propiedad_id: prop ? prop.id : null,
+        propiedad_code: prop ? prop.code : '',
+        propiedad_title: prop ? prop.title : '',
+        propiedad_price: prop ? prop.price : null,
+        propiedad_currency_id: prop ? prop.currency_id : null,
+        propiedad_district_id: prop ? (prop.district ? parseInt(prop.district) : null) : null,
+        agente_nombre: req.agente || '',
+        agente_telefono: req.agente_telefono || '',
+        mensaje: mensaje,
+    };
+
+    fetch('/matching/api/propuesta/guardar/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(bodyData),
+    }).catch(function(err) {
+        console.warn('Error guardando propuesta:', err);
+    });
+
+    // 7. Abrir WhatsApp con número si está disponible
     var telefono = (req.agente_telefono || '').replace(/[^0-9]/g, '');
     var url;
     if (telefono) {

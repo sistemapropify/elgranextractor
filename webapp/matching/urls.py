@@ -22,6 +22,12 @@ urlpatterns = [
     # Incluir router para resultados
     path('api/matching/', include(router.urls)),
     
+    # API de propuestas WhatsApp
+    path('api/propuesta/guardar/', views.PropuestaWhatsAppViewSet.as_view({'post': 'guardar'}), name='propuesta-guardar'),
+    path('api/propuesta/<int:pk>/actualizar-status/', views.PropuestaWhatsAppViewSet.as_view({'post': 'actualizar_status'}), name='propuesta-actualizar-status'),
+    path('api/propuesta/listar/', views.PropuestaWhatsAppViewSet.as_view({'get': 'listar'}), name='propuesta-listar'),
+    path('api/propuesta/', include(router.urls)),
+
     # Dashboard visual
     path('dashboard/', views.MatchingDashboardView.as_view(), name='dashboard'),
     path('', views.MatchingDashboardView.as_view(), name='home'),

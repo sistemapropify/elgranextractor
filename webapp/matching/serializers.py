@@ -5,7 +5,7 @@ Serializers para la app de matching.
 from rest_framework import serializers
 from requerimientos.models import Requerimiento
 from propifai.models import PropifaiProperty
-from .models import MatchResult
+from .models import MatchResult, PropuestaWhatsApp
 
 
 class PropiedadSimpleSerializer(serializers.ModelSerializer):
@@ -174,6 +174,39 @@ class EjecutarMatchingSerializer(serializers.Serializer):
         except Requerimiento.DoesNotExist:
             raise serializers.ValidationError(f"Requerimiento con ID {value} no existe.")
         return value
+
+
+class PropuestaWhatsAppSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PropuestaWhatsApp
+        fields = '__all__'
+        read_only_fields = ['enviado_en', 'respondido_en']
+
+
+class PropuestaWhatsAppCreateSerializer(serializers.Serializer):
+    requerimiento_id = serializers.IntegerField()
+    propiedad_id = serializers.IntegerField(required=False, allow_null=True)
+    propiedad_code = serializers.CharField(required=False, allow_blank=True)
+    propiedad_title = serializers.CharField(required=False, allow_blank=True)
+    propiedad_price = serializers.DecimalField(
+        max_digits=15, decimal_places=2, required=False, allow_null=True
+    )
+    propiedad_currency_id = serializers.IntegerField(required=False, allow_null=True)
+    propiedad_district_id = serializers.IntegerField(required=False, allow_null=True)
+    agente_nombre = serializers.CharField(required=False, allow_blank=True)
+    agente_telefono = serializers.CharField(required=False, allow_blank=True)
+    mensaje = serializers.CharField(required=False, allow_blank=True)
+
+    def validate_requerimiento_id(self, value):
+        try:
+            Requerimiento.objects.get(id=value)
+        except Requerimiento.DoesNotExist:
+            raise serializers.ValidationError(f"Requerimiento con ID {value} no existe.")
+        return value
+
+
+class PropuestaWhatsAppStatusSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=PropuestaWhatsApp.Status.choices)
 
 
 class GuardarMatchingSerializer(serializers.Serializer):

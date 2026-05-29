@@ -3,6 +3,51 @@ from requerimientos.models import Requerimiento
 from propifai.models import PropifaiProperty
 
 
+class PropuestaWhatsApp(models.Model):
+    class Status(models.TextChoices):
+        ENVIADA = 'enviada', 'Enviada'
+        RESPONDIDA = 'respondida', 'Respondida'
+        INTERESADO = 'interesado', 'Interesado'
+        NO_INTERESADO = 'no_interesado', 'No interesado'
+        VISITA_AGENDADA = 'visita_agendada', 'Visita agendada'
+        CERRADA = 'cerrada', 'Cerrada'
+
+    requerimiento = models.ForeignKey(
+        Requerimiento, on_delete=models.CASCADE,
+        db_constraint=False,
+        verbose_name='Requerimiento'
+    )
+    propiedad_id = models.BigIntegerField(
+        null=True, blank=True,
+        verbose_name='ID de propiedad en dbpropify_be'
+    )
+    propiedad_code = models.CharField(max_length=50, blank=True)
+    propiedad_title = models.CharField(max_length=500, blank=True)
+    propiedad_price = models.DecimalField(
+        max_digits=15, decimal_places=2, null=True, blank=True
+    )
+    propiedad_currency_id = models.BigIntegerField(null=True, blank=True)
+    propiedad_district_id = models.BigIntegerField(null=True, blank=True)
+    agente_nombre = models.CharField(max_length=200, blank=True)
+    agente_telefono = models.CharField(max_length=20, blank=True)
+    mensaje_enviado = models.TextField(blank=True)
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.ENVIADA
+    )
+    enviado_en = models.DateTimeField(auto_now_add=True)
+    respondido_en = models.DateTimeField(null=True, blank=True)
+    notas = models.TextField(blank=True)
+
+    class Meta:
+        db_table = 'matching_propuestawhatsapp'
+        ordering = ['-enviado_en']
+        verbose_name = 'Propuesta WhatsApp'
+        verbose_name_plural = 'Propuestas WhatsApp'
+
+    def __str__(self):
+        return f"Propuesta #{self.id} - Req {self.requerimiento_id} - {self.agente_nombre}"
+
+
 class MatchResult(models.Model):
     """
     Resultado de un proceso de matching entre un requerimiento y una propiedad.

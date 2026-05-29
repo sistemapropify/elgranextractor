@@ -824,6 +824,9 @@
                     </td>
                     <td data-label="Acciones">
                         <div class="action-group">
+                            <a href="{% url 'agentes:agente-propuestas' agente.id %}" class="action-btn" title="Propuestas WhatsApp" style="border-color:rgba(37,211,102,0.3);color:#25D366;">
+                                <i class="fab fa-whatsapp"></i>
+                            </a>
                             <a href="{% url 'agentes:editar_agente' agente.id %}" class="action-btn edit" title="Editar">
                                 <i class="fas fa-edit"></i>
                             </a>

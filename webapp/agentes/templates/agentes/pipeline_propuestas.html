@@ -1,0 +1,239 @@
+{% extends 'propifai_base.html' %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Propuestas WhatsApp - {{ agente.nombre_completo }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --bg-primary: #0d1117;
+        --bg-secondary: #161b22;
+        --bg-tertiary: #21262d;
+        --border-color: #30363d;
+        --text-primary: #e6edf3;
+        --text-secondary: #8b949e;
+        --text-muted: #6e7681;
+        --accent-blue: #58a6ff;
+        --accent-green: #3fb950;
+        --accent-orange: #d29922;
+        --accent-red: #f85149;
+        --card-radius: 8px;
+        --transition: 0.2s;
+    }
+
+    .pipeline-container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+    .page-header h1 { font-size: 22px; font-weight: 600; color: var(--text-primary); margin: 0; }
+    .page-header h1 small { font-size: 14px; color: var(--text-secondary); font-weight: 400; margin-left: 8px; }
+
+    .stats-row { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+    .stat-pill {
+        background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 20px;
+        padding: 6px 14px; font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px;
+    }
+    .stat-pill strong { color: var(--text-primary); }
+    .stat-pill .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .dot.env { background: var(--accent-blue); }
+    .dot.resp { background: var(--accent-orange); }
+    .dot.int { background: var(--accent-green); }
+    .dot.noi { background: var(--accent-red); }
+
+    .filter-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .filter-chip {
+        display: inline-flex; align-items: center; gap: 4px; padding: 5px 12px; border-radius: 14px;
+        font-size: 11px; font-weight: 500; cursor: pointer; border: 1px solid var(--border-color);
+        background: var(--bg-tertiary); color: var(--text-secondary); transition: var(--transition); text-decoration: none;
+    }
+    .filter-chip:hover { border-color: var(--accent-blue); color: var(--text-primary); }
+    .filter-chip.active { background: var(--accent-blue); border-color: var(--accent-blue); color: #fff; }
+    .filter-chip .count { font-size: 10px; background: rgba(255,255,255,0.15); padding: 0 5px; border-radius: 8px; }
+
+    .table-card { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--card-radius); overflow: hidden; }
+    .table-header { padding: 12px 16px; border-bottom: 1px solid var(--border-color); background: var(--bg-tertiary); display: flex; justify-content: space-between; align-items: center; }
+    .table-header h4 { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); }
+
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+        background: var(--bg-tertiary); color: var(--text-secondary); font-size: 11px; font-weight: 600;
+        text-transform: uppercase; letter-spacing: 0.5px; padding: 10px 12px; border-bottom: 1px solid var(--border-color); text-align: left;
+    }
+    tbody td { padding: 10px 12px; font-size: 13px; color: var(--text-primary); border-bottom: 1px solid rgba(48,54,61,0.3); vertical-align: middle; }
+    tbody tr:hover { background: rgba(88,166,255,0.04); }
+    tbody tr:last-child td { border-bottom: none; }
+
+    .status-badge {
+        display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 12px;
+        font-size: 11px; font-weight: 600;
+    }
+    .status-enviada { background: rgba(88,166,255,0.15); color: var(--accent-blue); }
+    .status-respondida { background: rgba(210,153,34,0.15); color: var(--accent-orange); }
+    .status-interesado { background: rgba(63,185,80,0.15); color: var(--accent-green); }
+    .status-no_interesado { background: rgba(248,81,73,0.15); color: var(--accent-red); }
+    .status-visita_agendada { background: rgba(188,140,255,0.15); color: #bc8cff; }
+    .status-cerrada { background: rgba(110,118,129,0.2); color: var(--text-muted); }
+
+    .status-select {
+        background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px;
+        color: var(--text-primary); padding: 4px 8px; font-size: 12px; cursor: pointer;
+    }
+    .status-select:focus { border-color: var(--accent-blue); outline: none; }
+
+    .action-btn {
+        display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px;
+        border-radius: 6px; border: 1px solid var(--border-color); background: transparent;
+        color: var(--text-secondary); text-decoration: none; transition: var(--transition); font-size: 13px;
+    }
+    .action-btn:hover { border-color: var(--accent-blue); color: var(--accent-blue); background: rgba(88,166,255,0.1); text-decoration: none; }
+
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+    .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+    .empty-state p { font-size: 14px; margin: 0; }
+
+    .prop-code { font-size: 12px; color: var(--accent-blue); font-weight: 600; }
+    .prop-title { font-size: 12px; color: var(--text-primary); }
+    .agente-info { font-size: 12px; color: var(--text-secondary); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="pipeline-container">
+    <div class="page-header">
+        <div>
+            <h1>
+                <i class="fab fa-whatsapp" style="color:#25D366;margin-right:8px;"></i>
+                Propuestas WhatsApp
+                <small>{{ agente.nombre_completo }}{% if agente.codigo_agente %} [{{ agente.codigo_agente }}]{% endif %}</small>
+            </h1>
+        </div>
+        <div>
+            <a href="{% url 'agentes:lista_agentes' %}" class="btn-acm btn-acm-outline" style="padding:6px 14px;font-size:13px;border-radius:6px;text-decoration:none;">
+                ← Volver a Agentes
+            </a>
+        </div>
+    </div>
+
+    <div class="stats-row">
+        <span class="stat-pill">📋 <strong>{{ total_propuestas }}</strong> total</span>
+        {% for s, info in status_counts.items %}
+        <span class="stat-pill">
+            <span class="dot {{ s|slice:':3' }}"></span>
+            <strong>{{ info.count }}</strong> {{ info.label }}
+        </span>
+        {% endfor %}
+    </div>
+
+    <div class="filter-bar">
+        <a href="{% url 'agentes:agente-propuestas' agente.id %}" class="filter-chip {% if not status_activo %}active{% endif %}">📋 Todas</a>
+        {% for s, info in status_counts.items %}
+        <a href="?status={{ s }}" class="filter-chip {% if status_activo == s %}active{% endif %}">
+            {{ info.label }} <span class="count">{{ info.count }}</span>
+        </a>
+        {% endfor %}
+    </div>
+
+    <div class="table-card">
+        <div class="table-header">
+            <h4><i class="fas fa-list"></i> Propuestas enviadas</h4>
+        </div>
+
+        {% if propuestas %}
+        <div style="overflow-x:auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Requerimiento</th>
+                        <th>Propiedad</th>
+                        <th>Precio</th>
+                        <th>Agente</th>
+                        <th>Status</th>
+                        <th style="text-align:center;">Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in propuestas %}
+                    <tr>
+                        <td style="white-space:nowrap;font-size:12px;color:var(--text-secondary);">
+                            {{ p.enviado_en|date:'d/m/Y H:i' }}
+                        </td>
+                        <td>
+                            <a href="{% url 'matching:dashboard' %}?requerimiento_id={{ p.requerimiento_id }}" style="color:var(--accent-blue);text-decoration:none;font-weight:600;font-size:13px;">
+                                #{{ p.requerimiento_id }}
+                            </a>
+                        </td>
+                        <td>
+                            {% if p.propiedad_code %}
+                            <div class="prop-code">{{ p.propiedad_code }}</div>
+                            {% endif %}
+                            {% if p.propiedad_title %}
+                            <div class="prop-title">{{ p.propiedad_title|truncatechars:40 }}</div>
+                            {% endif %}
+                        </td>
+                        <td style="font-weight:600;">
+                            {% if p.propiedad_price %}
+                                {% if p.propiedad_currency_id == 1 %}${% else %}S/.{% endif %}
+                                {{ p.propiedad_price|floatformat:0|intcomma }}
+                            {% else %}—{% endif %}
+                        </td>
+                        <td>
+                            <div class="agente-info">
+                                {% if p.agente_nombre %}<div>{{ p.agente_nombre }}</div>{% endif %}
+                                {% if p.agente_telefono %}<div style="font-size:11px;color:var(--text-muted);">{{ p.agente_telefono }}</div>{% endif %}
+                            </div>
+                        </td>
+                        <td>
+                            <span class="status-badge status-{{ p.status }}">
+                                {{ p.get_status_display }}
+                            </span>
+                        </td>
+                        <td style="text-align:center;">
+                            <select class="status-select" data-propuesta-id="{{ p.id }}" onchange="actualizarStatus(this)">
+                                <option value="">Cambiar...</option>
+                                {% for s, label in p.Status.choices %}
+                                <option value="{{ s }}" {% if p.status == s %}disabled style="display:none;"{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="icon">📭</div>
+            <p>No hay propuestas WhatsApp para este agente.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function actualizarStatus(select) {
+    var nuevoStatus = select.value;
+    if (!nuevoStatus) return;
+
+    var propuestaId = select.dataset.propuestaId;
+
+    fetch('/matching/api/propuesta/' + propuestaId + '/actualizar-status/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({status: nuevoStatus}),
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.status) {
+            location.reload();
+        } else {
+            alert('Error al actualizar status');
+        }
+    })
+    .catch(function(err) {
+        alert('Error de red: ' + err.message);
+    });
+}
+</script>
+{% endblock %}

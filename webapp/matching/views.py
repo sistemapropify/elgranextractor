@@ -20,8 +20,12 @@ from .serializers import (
     EjecutarMatchingSerializer,
     GuardarMatchingSerializer,
     RequerimientoSimpleSerializer,
+    PropuestaWhatsAppSerializer,
+    PropuestaWhatsAppCreateSerializer,
+    PropuestaWhatsAppStatusSerializer,
 )
 from .engine import ejecutar_matching_requerimiento, guardar_resultados_matching
+from .models import PropuestaWhatsApp
 
 logger = logging.getLogger(__name__)
 
@@ -283,6 +287,99 @@ class MatchResultViewSet(viewsets.ReadOnlyModelViewSet):
             queryset = queryset.filter(fase_eliminada__isnull=True)
         
         return queryset.order_by('-ejecutado_en', '-score_total')
+
+
+class PropuestaWhatsAppViewSet(viewsets.ViewSet):
+    """
+    ViewSet para gestionar propuestas enviadas por WhatsApp.
+    """
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    @action(detail=False, methods=['POST'])
+    def guardar(self, request):
+        """
+        POST /matching/api/propuesta/guardar/
+        Guarda un registro de propuesta enviada por WhatsApp.
+        """
+        serializer = PropuestaWhatsAppCreateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        data = serializer.validated_data
+        propuesta = PropuestaWhatsApp.objects.create(
+            requerimiento_id=data['requerimiento_id'],
+            propiedad_id=data.get('propiedad_id'),
+            propiedad_code=data.get('propiedad_code', ''),
+            propiedad_title=data.get('propiedad_title', ''),
+            propiedad_price=data.get('propiedad_price'),
+            propiedad_currency_id=data.get('propiedad_currency_id'),
+            propiedad_district_id=data.get('propiedad_district_id'),
+            agente_nombre=data.get('agente_nombre', ''),
+            agente_telefono=data.get('agente_telefono', ''),
+            mensaje_enviado=data.get('mensaje', ''),
+            status=PropuestaWhatsApp.Status.ENVIADA,
+        )
+
+        return Response(
+            PropuestaWhatsAppSerializer(propuesta).data,
+            status=status.HTTP_201_CREATED
+        )
+
+    @action(detail=True, methods=['POST'])
+    def actualizar_status(self, request, pk=None):
+        """
+        POST /matching/api/propuesta/<id>/actualizar-status/
+        Actualiza el status de una propuesta.
+        """
+        propuesta = get_object_or_404(PropuestaWhatsApp, pk=pk)
+
+        serializer = PropuestaWhatsAppStatusSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        nuevo_status = serializer.validated_data['status']
+        propuesta.status = nuevo_status
+
+        from django.utils import timezone
+        if nuevo_status in ('respondida', 'interesado', 'no_interesado'):
+            if not propuesta.respondido_en:
+                propuesta.respondido_en = timezone.now()
+
+        propuesta.save(update_fields=['status', 'respondido_en'])
+
+        return Response(PropuestaWhatsAppSerializer(propuesta).data)
+
+    @action(detail=False, methods=['GET'])
+    def listar(self, request):
+        """
+        GET /matching/api/propuesta/listar/
+        Lista todas las propuestas, opcionalmente filtradas por agente.
+        """
+        queryset = PropuestaWhatsApp.objects.all().order_by('-enviado_en')
+
+        agente_nombre = request.query_params.get('agente_nombre')
+        if agente_nombre:
+            queryset = queryset.filter(agente_nombre__icontains=agente_nombre)
+
+        agente_telefono = request.query_params.get('agente_telefono')
+        if agente_telefono:
+            queryset = queryset.filter(agente_telefono=agente_telefono)
+
+        status_filter = request.query_params.get('status')
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+
+        requerimiento_id = request.query_params.get('requerimiento_id')
+        if requerimiento_id:
+            queryset = queryset.filter(requerimiento_id=requerimiento_id)
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = PropuestaWhatsAppSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = PropuestaWhatsAppSerializer(queryset, many=True)
+        return Response(serializer.data)
 
 
 # Vista para el dashboard

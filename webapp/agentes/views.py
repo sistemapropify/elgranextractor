@@ -1,9 +1,10 @@
 from django.urls import reverse_lazy
-from django.views.generic import ListView, CreateView, UpdateView, DeleteView
+from django.views.generic import ListView, CreateView, UpdateView, DeleteView, DetailView
 from django.contrib import messages
-from django.db.models import Count
+from django.db.models import Count, Q
 from .models import Agente, Inmobiliaria
 from .forms import AgenteForm, InmobiliariaForm
+from matching.models import PropuestaWhatsApp
 
 
 # ===================================================================
@@ -104,6 +105,47 @@ class AgenteDeleteView(DeleteView):
     def form_valid(self, form):
         messages.success(self.request, 'Agente eliminado correctamente.')
         return super().form_valid(form)
+
+
+# ===================================================================
+# Vista de Pipeline de Propuestas WhatsApp
+# ===================================================================
+
+class AgentePropuestasView(DetailView):
+    """Pipeline de propuestas WhatsApp enviadas a un agente."""
+    model = Agente
+    template_name = 'agentes/pipeline_propuestas.html'
+    context_object_name = 'agente'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        agente = self.object
+
+        propuestas = PropuestaWhatsApp.objects.filter(
+            Q(agente_nombre__icontains=agente.nombre_completo) |
+            Q(agente_telefono=agente.telefono)
+        ).order_by('-enviado_en')
+
+        context['propuestas'] = propuestas
+
+        status_counts = {}
+        for s, label in PropuestaWhatsApp.Status.choices:
+            cnt = propuestas.filter(status=s).count()
+            if cnt > 0:
+                status_counts[s] = {'label': label, 'count': cnt}
+        context['status_counts'] = status_counts
+
+        context['total_propuestas'] = propuestas.count()
+
+        # Filtrar por status si viene en GET
+        status_filter = self.request.GET.get('status')
+        if status_filter:
+            context['propuestas'] = propuestas.filter(status=status_filter)
+            context['status_activo'] = status_filter
+        else:
+            context['status_activo'] = ''
+
+        return context
 
 
 # ===================================================================
