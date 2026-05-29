@@ -696,8 +696,7 @@
         grid-template-columns: 1fr 1fr 1.2fr;
         gap: 0;
         padding: 0;
-        min-height: 0;
-        max-height: 80vh;
+        height: 65vh;
     }
 
     .modal-compare-panel {
@@ -720,10 +719,12 @@
         display: flex;
         flex-direction: column;
         gap: 4px;
-        overflow-y: auto;
+        overflow: hidden;
     }
 
     .modal-req-panel .modal-req-text {
+        flex: 1;
+        min-height: 100px;
         font-size: 12px;
         color: var(--text-primary);
         line-height: 1.4;
@@ -734,7 +735,6 @@
         white-space: pre-wrap;
         word-break: break-word;
         overflow-y: auto;
-        height: 100%;
     }
 
     /* Tabla comparativa lado a lado */
@@ -1800,6 +1800,10 @@ function renderMatchModal(data, body, title) {
     // Guardar datos para WhatsApp
     ultimoRequerimientoData = req;
     ultimaPropiedadTop = resultados.length > 0 ? (resultados[0].propiedad || null) : null;
+    
+    // Debug
+    console.log('renderMatchModal - req.requerimiento:', req.requerimiento ? req.requerimiento.substring(0,50) : 'VACIO');
+    console.log('renderMatchModal - req keys:', Object.keys(req));
     
     // Mostrar/ocultar boton WhatsApp (solo si hay match >= 70%)
     var btnWA = document.getElementById('btnWhatsAppPropuesta');
