@@ -1849,9 +1849,9 @@ function renderMatchModal(data, body, title) {
     // Property image
     var propImgHtml = '';
     if (prop.imagen_url) {
-        propImgHtml = '<img src="' + prop.imagen_url + '" alt="' + (prop.title || 'Propiedad') + '" style="width:80px;height:80px;object-fit:cover;border-radius:6px;background:var(--bg-tertiary);border:1px solid var(--border-color);flex-shrink:0;" onerror="this.style.display=\'none\'">';
+        propImgHtml = '<img src="' + prop.imagen_url + '" alt="' + (prop.title || 'Propiedad') + '" style="width:120px;height:90px;object-fit:cover;border-radius:6px;background:var(--bg-tertiary);border:1px solid var(--border-color);" onerror="this.style.display=\'none\'">';
     } else {
-        propImgHtml = '<div style="width:80px;height:80px;border-radius:6px;background:var(--bg-tertiary);border:1px solid var(--border-color);display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:11px;flex-shrink:0;">🏠</div>';
+        propImgHtml = '<div style="width:120px;height:90px;border-radius:6px;background:var(--bg-tertiary);border:1px solid var(--border-color);display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:11px;margin:0 auto;">🏠 Sin imagen</div>';
     }
 
     body.innerHTML = `
@@ -1930,11 +1930,23 @@ function renderMatchModal(data, body, title) {
                 <div class="score-label" style="font-size:10px;">Coincidencia</div>
             </div>
 
-            <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+            <div style="text-align:center;">
                 ${propImgHtml}
-                <div class="modal-side-code" style="font-size:10px;">${fmt(prop.code)}</div>
-                <div class="modal-side-title" style="font-size:11px;text-align:center;">${fmt(prop.title)}</div>
-                ${prop.real_address ? '<div style="font-size:10px;color:var(--text-muted);text-align:center;">' + prop.real_address + '</div>' : ''}
+                <div class="modal-side-code" style="font-size:10px;margin-top:4px;">${fmt(prop.code)}</div>
+                <div class="modal-side-title" style="font-size:12px;font-weight:600;color:var(--text-primary);">${fmt(prop.title)}</div>
+                ${prop.real_address ? '<div style="font-size:10px;color:var(--text-muted);">' + prop.real_address + '</div>' : ''}
+            </div>
+
+            <div style="font-size:11px;margin-top:4px;">
+                <div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(48,54,61,0.3);"><span style="color:var(--text-secondary);">Precio</span><span style="color:var(--accent-green);font-weight:600;">${propPriceFormatted}</span></div>
+                <div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(48,54,61,0.3);"><span style="color:var(--text-secondary);">Distrito</span><span style="color:var(--text-primary);">${propDistrito}</span></div>
+                <div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(48,54,61,0.3);"><span style="color:var(--text-secondary);">Tipo</span><span style="color:var(--text-primary);">${fmt(prop.tipo_propiedad)}</span></div>
+                <div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(48,54,61,0.3);"><span style="color:var(--text-secondary);">Condición</span><span style="color:var(--text-primary);">${fmt(prop.operation_type_name || (prop.operation_type_id == 2 ? 'Venta' : prop.operation_type_id == 3 ? 'Alquiler' : '—'))}</span></div>
+                <div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(48,54,61,0.3);"><span style="color:var(--text-secondary);">Habitaciones</span><span style="color:var(--text-primary);">${fmt(prop.bedrooms)}</span></div>
+                <div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(48,54,61,0.3);"><span style="color:var(--text-secondary);">Baños</span><span style="color:var(--text-primary);">${fmt(prop.bathrooms)}</span></div>
+                <div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(48,54,61,0.3);"><span style="color:var(--text-secondary);">Área m²</span><span style="color:var(--text-primary);">${fmt(prop.built_area)}</span></div>
+                <div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(48,54,61,0.3);"><span style="color:var(--text-secondary);">Cochera</span><span style="color:var(--text-primary);">${prop.garage_spaces ? prop.garage_spaces + ' auto(s)' : 'No'}</span></div>
+                <div style="display:flex;justify-content:space-between;padding:3px 0;"><span style="color:var(--text-secondary);">Ascensor</span><span style="color:var(--text-primary);">${prop.ascensor ? 'Sí' : 'No'}</span></div>
             </div>
         </div>
     `;
