@@ -150,10 +150,16 @@ def _fetch_properties(is_active_only=True, limit=1000) -> List[Dict]:
                 s.has_air_conditioning, s.has_laundry_area, s.has_service_room, s.pet_friendly,
                 s.floors_total, s.unit_location,
                 -- Primera imagen de property_media
-                pm.file
+                (SELECT TOP 1 pm2.[file] FROM property_media pm2 
+                 WHERE pm2.property_id = p.id AND pm2.media_type = 'image' 
+                 ORDER BY pm2.[order]) AS [file],
+                -- Nombres de tipo y operación
+                pt.name AS property_type_name,
+                ot.name AS operation_type_name
             FROM property p
             LEFT JOIN property_specs s ON s.property_id = p.id
-            LEFT JOIN property_media pm ON pm.property_id = p.id AND pm.media_type = 'image' AND pm.order = 1
+            LEFT JOIN property_type pt ON pt.id = p.property_type_id
+            LEFT JOIN operation_type ot ON ot.id = p.operation_type_id
             {where_clause}
             ORDER BY p.id
         """

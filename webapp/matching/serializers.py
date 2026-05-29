@@ -120,9 +120,11 @@ class MatchingResultSerializer(serializers.Serializer):
             'garage_spaces': prop_dict.get('garage_spaces'),
             'ascensor': 'sí' if prop_dict.get('has_elevator') else 'no',
             'real_address': prop_dict.get('display_address') or prop_dict.get('map_address'),
-            'tipo_propiedad': None,
+            'tipo_propiedad': prop_dict.get('property_type_name'),
             'imagen_url': image_url,
             'currency_symbol': '$' if prop_dict.get('currency_id') == 1 else 'S/',
+            'operation_type_id': prop_dict.get('operation_type_id'),
+            'operation_type_name': prop_dict.get('operation_type_name'),
         }
         return ret
 
