@@ -1514,7 +1514,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     const badgeClass = getMatchBadgeClass(req.porcentaje_match);
                     const badgeText = getMatchBadgeText(req.porcentaje_match);
                     const presupuestoHtml = req.presupuesto_display ? `<span style="color:#3fb950;font-weight:600;margin-left:2px;">${req.presupuesto_display}</span>` : '';
-                    const agenteHtml = req.agente ? `<span style="color:#ff6d00;font-weight:600;margin-left:2px;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;" onclick="event.stopPropagation();var url=getAgenteUrl('${req.agente.replace(/'/g,"\\'")}');if(url!='#'){window.open(url,'_blank');}else{alert('Agente no encontrado');}" title="Ver propuestas WhatsApp">${req.agente}</span>` : '';
+                    const agenteHtml = req.agente ? `<span style="color:#ff6d00;font-weight:600;margin-left:2px;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;" onclick="event.stopPropagation();var url=getAgenteUrl('${req.agente.replace(/'/g,"\\'").replace(/\\n/g," ")}');if(url!='#'){window.open(url,'_blank');}else{alert('Agente no encontrado');}" title="Ver propuestas WhatsApp">${req.agente}</span>` : '';
                     const distritosHtml = req.distritos ? `<span style="color:var(--text-secondary);margin-left:2px;">· ${req.distritos.substring(0,20)}</span>` : '';
                     const precioPropHtml = (req.mejor_propiedad_precio && req.mejor_propiedad_moneda_id)
                         ? `<span style="color:var(--accent-green);font-weight:600;margin-left:2px;font-size:10px;">· ${getCurrencySymbol(req.mejor_propiedad_moneda_id)}${Number(req.mejor_propiedad_precio).toLocaleString('en-US')}</span>`

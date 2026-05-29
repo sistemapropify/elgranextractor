@@ -924,13 +924,7 @@ class MatchingCalendarView(TemplateView):
         for a in agentes_qs:
             nombre_key = a['nombre_completo'].lower().strip()
             agentes_map[nombre_key] = a['id']
-            # También guardar por partes del nombre para mejor matching
-            partes = a['nombre_completo'].lower().split()
-            for p in partes:
-                if len(p) > 3:
-                    agentes_map[p] = a['id']
-        context['agentes_map_json'] = json.dumps(agentes_map)
-        context['agentes_map'] = agentes_map
+        context['agentes_map_json'] = json.dumps(agentes_map, ensure_ascii=False)
         
         return context
 
