@@ -659,7 +659,9 @@
         border: 1px solid var(--border-color);
         border-radius: 12px;
         width: auto;
-        max-width: 900px;
+        max-width: 950px;
+        max-height: 90vh;
+        overflow: hidden;
         box-shadow: 0 8px 32px rgba(0,0,0,0.5);
     }
     .modal-match-header {
@@ -695,11 +697,13 @@
         gap: 0;
         padding: 0;
         min-height: 0;
+        max-height: 80vh;
     }
 
     .modal-compare-panel {
         padding: 8px 12px;
         border-right: 1px solid var(--border-color);
+        overflow-y: auto;
     }
 
     .modal-side-panel {
@@ -708,6 +712,7 @@
         display: flex;
         flex-direction: column;
         gap: 4px;
+        overflow-y: auto;
     }
 
     .modal-req-panel {
@@ -715,6 +720,7 @@
         display: flex;
         flex-direction: column;
         gap: 4px;
+        overflow-y: auto;
     }
 
     .modal-req-panel .modal-req-text {
@@ -727,8 +733,8 @@
         border: 1px solid var(--border-color);
         white-space: pre-wrap;
         word-break: break-word;
-        max-height: 250px;
         overflow-y: auto;
+        height: 100%;
     }
 
     /* Tabla comparativa lado a lado */
