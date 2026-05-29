@@ -692,35 +692,24 @@
 
     /* Body: layout principal: tabla comparativa (izq) + imagen+score (der) */
     .modal-match-body {
-        display: flex;
-        flex-direction: column;
+        display: grid;
+        grid-template-columns: 1.4fr 1fr;
+        gap: 0;
         padding: 0;
     }
 
     /* Panel izquierdo: tabla comparativa */
     .modal-compare-panel {
-        padding: 16px 20px;
-        border-bottom: 1px solid var(--border-color);
-    }
-
-    /* Sección inferior: dos columnas */
-    .modal-bottom-section {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 0;
-    }
-
-    .modal-bottom-left {
-        padding: 16px 20px;
+        padding: 12px 16px;
         border-right: 1px solid var(--border-color);
     }
 
-    .modal-bottom-right {
-        padding: 16px 20px;
-    }
-
-    .modal-bottom-right .modal-score-box {
-        margin-bottom: 12px;
+    /* Panel derecho: score + imagen + req original compacto */
+    .modal-side-panel {
+        padding: 12px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
     }
 
     /* Tabla comparativa lado a lado */
@@ -1842,7 +1831,6 @@ function renderMatchModal(data, body, title) {
     }
 
     body.innerHTML = `
-        <!-- PANEL SUPERIOR: TABLA COMPARATIVA -->
         <div class="modal-compare-panel">
             <table class="compare-table">
                 <thead>
@@ -1905,32 +1893,25 @@ function renderMatchModal(data, body, title) {
                     </tr>
                 </tbody>
             </table>
-            ${req.caracteristicas_extra ? '<div style="margin-top:12px;padding:8px 12px;background:var(--bg-tertiary);border-radius:6px;font-size:12px;color:var(--text-secondary);"><strong>Extra req:</strong> ' + req.caracteristicas_extra + '</div>' : ''}
-            ${req.agente ? '<div style="margin-top:8px;padding:8px 12px;background:var(--bg-tertiary);border-radius:6px;font-size:12px;"><span style="color:var(--text-secondary);">Agente:</span> <span style="color:#ff6d00;font-weight:600;">' + req.agente + '</span></div>' : ''}
+            ${req.caracteristicas_extra ? '<div style="margin-top:8px;padding:6px 10px;background:var(--bg-tertiary);border-radius:6px;font-size:11px;color:var(--text-secondary);"><strong>Extra:</strong> ' + req.caracteristicas_extra + '</div>' : ''}
         </div>
 
-        <!-- PANEL INFERIOR: DOS COLUMNAS -->
-        <div class="modal-bottom-section">
-            <!-- IZQUIERDA: REQUERIMIENTO ORIGINAL -->
-            <div class="modal-bottom-left">
-                <div style="font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;">📝 Requerimiento Original</div>
-                <div style="font-size:13px;color:var(--text-primary);line-height:1.5;background:var(--bg-tertiary);padding:12px;border-radius:8px;border:1px solid var(--border-color);max-height:200px;overflow-y:auto;white-space:pre-wrap;word-break:break-word;">${fmt(req.requerimiento || '—')}</div>
+        <div class="modal-side-panel">
+            <div class="modal-score-box">
+                <div class="score-num ${scoreClass}">${Math.round(scoreTotal)}%</div>
+                <div class="score-label">Coincidencia total</div>
             </div>
 
-            <!-- DERECHA: SCORE + IMAGEN + DATOS -->
-            <div class="modal-bottom-right">
-                <div class="modal-score-box">
-                    <div class="score-num ${scoreClass}">${Math.round(scoreTotal)}%</div>
-                    <div class="score-label">Coincidencia total</div>
-                </div>
+            ${propImgHtml}
 
-                ${propImgHtml}
+            <div class="modal-side-code">${fmt(prop.code)}</div>
+            <div class="modal-side-title">${fmt(prop.title)}</div>
+            ${prop.real_address ? '<div style="font-size:11px;color:var(--text-muted);text-align:center;">' + prop.real_address + '</div>' : ''}
 
-                <div class="modal-side-code">${fmt(prop.code)}</div>
-                <div class="modal-side-title">${fmt(prop.title)}</div>
-
-                ${prop.real_address ? '<div style="font-size:11px;color:var(--text-muted);text-align:center;">' + prop.real_address + '</div>' : ''}
-            </div>
+            <details style="margin-top:4px;">
+                <summary style="font-size:11px;color:var(--accent-blue);cursor:pointer;font-weight:500;">📝 Ver requerimiento original</summary>
+                <div style="margin-top:6px;font-size:12px;color:var(--text-primary);line-height:1.4;background:var(--bg-tertiary);padding:8px;border-radius:6px;border:1px solid var(--border-color);max-height:120px;overflow-y:auto;white-space:pre-wrap;word-break:break-word;">${fmt(req.requerimiento || '—')}</div>
+            </details>
         </div>
     `;
 
