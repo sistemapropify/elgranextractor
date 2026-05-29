@@ -148,9 +148,12 @@ def _fetch_properties(is_active_only=True, limit=1000) -> List[Dict]:
                 s.antiquity_years, s.delivery_date,
                 s.has_security, s.has_pool, s.has_garden, s.has_bbq, s.has_terrace,
                 s.has_air_conditioning, s.has_laundry_area, s.has_service_room, s.pet_friendly,
-                s.floors_total, s.unit_location
+                s.floors_total, s.unit_location,
+                -- Primera imagen de property_media
+                pm.file
             FROM property p
             LEFT JOIN property_specs s ON s.property_id = p.id
+            LEFT JOIN property_media pm ON pm.property_id = p.id AND pm.media_type = 'image' AND pm.order = 1
             {where_clause}
             ORDER BY p.id
         """

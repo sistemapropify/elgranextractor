@@ -91,10 +91,23 @@ class MatchingResultSerializer(serializers.Serializer):
     
     def to_representation(self, instance):
         ret = super().to_representation(instance)
-        # Agregar campos de propiedad simplificados desde propiedad_dict
         prop_dict = instance.get('propiedad_dict', {})
+        prop_id = prop_dict.get('id')
+        # Build image URL from property_media (ruta relativa + Azure Storage base)
+        image_url = None
+        file_path = prop_dict.get('file')  # from property_media join
+        if file_path:
+            base_url = "https://propifymedia01.blob.core.windows.net/media"
+            if file_path.startswith('/'):
+                file_path = file_path[1:]
+            image_url = f"{base_url}/{file_path}"
+        # Fallback: construir desde code
+        if not image_url and prop_dict.get('code'):
+            base_url = "https://propifymedia01.blob.core.windows.net/media"
+            image_url = f"{base_url}/{prop_dict['code']}.jpg"
+        
         ret['propiedad'] = {
-            'id': prop_dict.get('id'),
+            'id': prop_id,
             'code': prop_dict.get('code'),
             'title': prop_dict.get('title'),
             'district': str(prop_dict.get('district_id') or ''),
@@ -108,7 +121,7 @@ class MatchingResultSerializer(serializers.Serializer):
             'ascensor': 'sí' if prop_dict.get('has_elevator') else 'no',
             'real_address': prop_dict.get('display_address') or prop_dict.get('map_address'),
             'tipo_propiedad': None,
-            'imagen_url': None,
+            'imagen_url': image_url,
             'currency_symbol': '$' if prop_dict.get('currency_id') == 1 else 'S/',
         }
         return ret

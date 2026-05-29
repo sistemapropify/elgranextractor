@@ -693,7 +693,7 @@
     /* Body: layout principal: tabla comparativa (izq) + imagen+score (der) */
     .modal-match-body {
         display: grid;
-        grid-template-columns: 1fr 260px;
+        grid-template-columns: 1.3fr 1fr;
         gap: 0;
         padding: 0;
     }
@@ -722,13 +722,13 @@
     }
     .compare-table thead th:first-child {
         border-radius: 6px 0 0 0;
-        width: 28%;
+        width: 20%;
     }
     .compare-table thead th:nth-child(2) {
-        width: 36%;
+        width: 40%;
     }
     .compare-table thead th:nth-child(3) {
-        width: 36%;
+        width: 40%;
         border-radius: 0 6px 0 0;
     }
     .compare-table tbody td {
@@ -890,6 +890,27 @@
         color: var(--text-primary);
     }
     .modal-match-footer .btn-secondary:hover { background: var(--hover-bg); }
+    
+    /* Boton WhatsApp */
+    .btn-whatsapp {
+        background: #25D366;
+        color: #fff;
+        border: none;
+        padding: 10px 18px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.2s;
+    }
+    .btn-whatsapp:hover {
+        background: #1ebe5d;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(37, 211, 102, 0.3);
+    }
 
     /* Estados de carga/error/vacío */
     .modal-loading {
@@ -924,6 +945,26 @@
     }
     .modal-match-error .error-icon { font-size: 48px; margin-bottom: 12px; }
     .modal-match-error p { font-size: 14px; margin: 0; }
+    .btn-nav-week {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+        text-decoration: none;
+        font-size: 14px;
+        transition: background 0.2s, transform 0.1s;
+        vertical-align: middle;
+        margin: 0 4px;
+    }
+    .btn-nav-week:hover {
+        background: var(--accent-color);
+        color: white;
+        transform: scale(1.1);
+    }
 </style>
 {% endblock %}
 
@@ -1012,9 +1053,13 @@
             {% if view_mode == 'month' %}
                 {{ month_name }} {{ current_year }}
             {% elif view_mode == 'week' %}
+                <a href="?view=week&year={{ prev_week_start.year }}&month={{ prev_week_start.month }}&day={{ prev_week_start.day }}" class="btn-nav-week" title="Semana anterior">◀</a>
                 Semana del {{ week_start|date:"d/m/Y" }} al {{ week_end|date:"d/m/Y" }}
+                <a href="?view=week&year={{ next_week_start.year }}&month={{ next_week_start.month }}&day={{ next_week_start.day }}" class="btn-nav-week" title="Semana siguiente">▶</a>
             {% elif view_mode == 'day' %}
+                <a href="?view=day&year={{ prev_date.year }}&month={{ prev_date.month }}&day={{ prev_date.day }}" class="btn-nav-week" title="Día anterior">◀</a>
                 {{ target_date_display|default:target_date|date:"l, d F Y" }}
+                <a href="?view=day&year={{ next_date.year }}&month={{ next_date.month }}&day={{ next_date.day }}" class="btn-nav-week" title="Día siguiente">▶</a>
             {% endif %}
         </div>
 
@@ -1329,6 +1374,10 @@
         </div>
         <div class="modal-match-footer">
             <button class="btn btn-secondary" onclick="closeMatchModal()">Cerrar</button>
+            <button class="btn btn-whatsapp" id="btnWhatsAppPropuesta" onclick="enviarPropuestaWhatsApp()" style="display:none;">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="vertical-align:middle;margin-right:4px;"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                Enviar propuesta por WhatsApp
+            </button>
             <a href="#" class="btn btn-primary" id="modalBtnDashboard" target="_blank">Ver Dashboard Completo →</a>
         </div>
     </div>
@@ -1622,10 +1671,109 @@ function formatPrice(price, currencyId) {
     return sym ? sym + ' ' + num : num;
 }
 
+// ===== WHATSAPP: Enviar propuesta =====
+var ultimoRequerimientoData = null;
+var ultimaPropiedadTop = null;
+
+function enviarPropuestaWhatsApp() {
+    var req = ultimoRequerimientoData;
+    var prop = ultimaPropiedadTop;
+    
+    if (!req) {
+        alert('No hay datos de requerimiento disponibles.');
+        return;
+    }
+    
+    // 1. Saludo
+    var nombreAgente = (req.agente && req.agente.trim()) ? req.agente.trim() : '';
+    var saludo = nombreAgente
+        ? 'Hola ' + nombreAgente + ' \uD83D\uDC4B'
+        : 'Hola \uD83D\uDC4B';
+    
+    // 2. Cuerpo del mensaje
+    var codigo = req.id || '\u2014';
+    var fechaStr = '';
+    if (req.fecha) {
+        try {
+            var partes = req.fecha.split('-');
+            fechaStr = partes[2] + '/' + partes[1] + '/' + partes[0];
+        } catch(e) {
+            fechaStr = req.fecha;
+        }
+    }
+    
+    var lineas = [];
+    lineas.push(saludo);
+    lineas.push('');
+    lineas.push('Soy *Belen Aguilar De Propify*.');
+    lineas.push('');
+    lineas.push('Tengo una propiedad para tu requerimiento *' + codigo + '* del ' + fechaStr + '.');
+    lineas.push('');
+    lineas.push('\uD83D\uDCCB *Tu requerimiento:*');
+    lineas.push(req.requerimiento || '\u2014');
+    lineas.push('');
+    
+    // 3. Datos de la propiedad (si hay)
+    if (prop) {
+        lineas.push('\uD83C\uDFE0 *Mi propiedad es:*');
+        lineas.push('');
+        if (prop.title) lineas.push('\uD83D\uDCCC ' + prop.title);
+        if (prop.district) lineas.push('\uD83D\uDCCD Distrito: ' + getDistritoName(prop.district));
+        if (prop.price) lineas.push('\uD83D\uDCB0 Precio: ' + formatPrice(prop.price, prop.currency_id));
+        if (prop.bedrooms) lineas.push('\uD83D\uDECF\uFE0F Habitaciones: ' + prop.bedrooms);
+        if (prop.bathrooms) lineas.push('\uD83D\uDEBF Ba\u00F1os: ' + prop.bathrooms);
+        if (prop.built_area) lineas.push('\uD83D\uDCD0 \u00C1rea: ' + prop.built_area + ' m\u00B2');
+        if (prop.code) lineas.push('\uD83D\uDCDD C\u00F3digo: ' + prop.code);
+        lineas.push('');
+        if (prop.imagen_url) {
+            lineas.push('\uD83D\uDDBC\uFE0F ' + prop.imagen_url);
+            lineas.push('');
+        }
+    }
+    
+    // 4. Links de ejemplo
+    lineas.push('\uD83D\uDD17 Ver propiedad: https://propifai.com/propiedad/' + (prop ? prop.id : '\u2014'));
+    lineas.push('\uD83D\uDCC5 Agendar visita: https://propifai.com/agendar?ref=wa_' + codigo);
+    lineas.push('');
+    lineas.push('\u00BFTe interesa? Responde:');
+    
+    // 5. Botones visuales con Unicode box drawing
+    lineas.push('\u250C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510');
+    lineas.push('\u2502 \u2705 S\u00ED, me interesa           \u2502');
+    lineas.push('\u251C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524');
+    lineas.push('\u2502 \u274C No, gracias               \u2502');
+    lineas.push('\u251C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524');
+    lineas.push('\u2502 \uD83D\uDCC5 Agendar una visita        \u2502');
+    lineas.push('\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518');
+    
+    var mensaje = lineas.join('\n');
+    
+    // 6. Abrir WhatsApp con número si está disponible
+    var telefono = (req.agente_telefono || '').replace(/[^0-9]/g, '');
+    var url;
+    if (telefono) {
+        url = 'https://api.whatsapp.com/send?phone=' + telefono + '&text=' + encodeURIComponent(mensaje);
+    } else {
+        url = 'https://api.whatsapp.com/send?text=' + encodeURIComponent(mensaje);
+    }
+    window.open(url, '_blank');
+}
+
 function renderMatchModal(data, body, title) {
     const req = data.requerimiento || {};
     const resultados = data.resultados || [];
     const estadisticas = data.estadisticas || {};
+    
+    // Guardar datos para WhatsApp
+    ultimoRequerimientoData = req;
+    ultimaPropiedadTop = resultados.length > 0 ? (resultados[0].propiedad || null) : null;
+    
+    // Mostrar/ocultar boton WhatsApp (solo si hay match >= 70%)
+    var btnWA = document.getElementById('btnWhatsAppPropuesta');
+    if (btnWA) {
+        var scoreTotalWA = resultados.length > 0 ? parseFloat(resultados[0].score_total || 0) : 0;
+        btnWA.style.display = (scoreTotalWA >= 70) ? 'inline-flex' : 'none';
+    }
 
     if (resultados.length === 0) {
         body.innerHTML = `<div class="modal-no-match">
