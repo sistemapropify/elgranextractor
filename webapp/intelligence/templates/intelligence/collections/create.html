@@ -704,6 +704,15 @@
                     <h2>🗃️ Configuración de Origen de Datos</h2>
                     
                     <div class="form-group">
+                        <label for="database_alias">Base de Datos *</label>
+                        <select id="database_alias" name="database_alias" class="form-control" required>
+                            <option value="propifai">🔵 dbpropify_be — Base de datos Propifai (propiedades propias)</option>
+                            <option value="default">🟢 propiextractor — Base de datos principal (extractor, requerimientos)</option>
+                        </select>
+                        <div class="help-text">Selecciona la base de datos donde se encuentra la tabla. Cambia esta selección y luego haz clic en "Cargar Tablas" para ver las tablas disponibles.</div>
+                    </div>
+                    
+                    <div class="form-group">
                         <label for="table_name">Tabla de Base de Datos *</label>
                         <div style="display: flex; gap: 10px; align-items: center;">
                             <select id="table_name" name="table_name" class="form-control" required>
@@ -723,7 +732,7 @@
                     
                     <div class="form-group">
                         <label for="schema_name">Esquema (Schema)</label>
-                        <input type="text" id="schema_name" name="schema_name" class="form-control" 
+                        <input type="text" id="schema_name" name="schema_name" class="form-control"
                                placeholder="Ej: dbo (dejar vacío para default)" value="dbo">
                         <div class="help-text">Nombre del esquema de la tabla (generalmente 'dbo' para SQL Server)</div>
                     </div>
@@ -894,20 +903,23 @@
                 addManualRelationship();
             });
             
-            // Función para cargar tablas - VERSIÓN SIMPLIFICADA CON NUEVA ESTRUCTURA
+            // Función para cargar tablas - USA LA BASE DE DATOS SELECCIONADA
             function loadTables(forceRefresh = false) {
                 refreshBtn.disabled = true;
                 forceRefreshBtn.disabled = true;
                 refreshBtn.innerHTML = '🔄 Cargando...';
                 forceRefreshBtn.innerHTML = '🔥 Cargando...';
                 
-                // Usar la base de datos 'propifai' en lugar de 'default'
-                let url = '/api/v1/intelligence/rag/tables/?database=propifai';
+                // Obtener la base de datos seleccionada del desplegable
+                const dbSelect = document.getElementById('database_alias');
+                const selectedDb = dbSelect ? dbSelect.value : 'propifai';
+                
+                let url = '/api/v1/intelligence/rag/tables/?database=' + encodeURIComponent(selectedDb);
                 if (forceRefresh) {
                     url += '&nocache=true';
                 }
                 
-                console.log('[DEBUG DB] Cargando tablas de la base de datos propifai, URL:', url);
+                console.log('[DEBUG DB] Cargando tablas de la base de datos: ' + selectedDb + ', URL:', url);
                 
                 fetch(url)
                     .then(response => response.json())
@@ -966,16 +978,20 @@
             let currentFieldAnalysis = null;
             let currentSuggestions = null;
             
-            // Función para analizar tabla - CON BASE DE DATOS CORRECTA
+            // Función para analizar tabla - USA LA BASE DE DATOS SELECCIONADA
             function analyzeTable(tableName, schema) {
                 analyzeBtn.disabled = true;
                 analyzeBtn.innerHTML = '🔍 Analizando...';
                 fieldsContainer.classList.add('hidden');
                 
-                console.log(`[DEBUG DB] Analizando tabla: ${tableName}, schema: ${schema}, database: propifai`);
+                // Obtener la base de datos seleccionada del desplegable
+                const dbSelect = document.getElementById('database_alias');
+                const selectedDb = dbSelect ? dbSelect.value : 'propifai';
                 
-                // Incluir el parámetro database=propifai
-                fetch(`/api/v1/intelligence/rag/tables/${tableName}/schema/?schema=${schema}&database=propifai`)
+                console.log(`[DEBUG DB] Analizando tabla: ${tableName}, schema: ${schema}, database: ${selectedDb}`);
+                
+                // Incluir el parámetro database con la selección del usuario
+                fetch(`/api/v1/intelligence/rag/tables/${tableName}/schema/?schema=${schema}&database=${encodeURIComponent(selectedDb)}`)
                     .then(response => {
                         console.log(`[DEBUG DB] Respuesta HTTP: ${response.status}, ${response.statusText}`);
                         if (!response.ok) {

@@ -499,7 +499,10 @@
                 <div class="actions-cell">
                     <a href="{% url 'intelligence:collection_detail' collection.id %}" class="btn btn-primary btn-sm">📊 Ver</a>
                     <a href="{% url 'intelligence:collection_edit' collection.id %}" class="btn btn-sm">✏️ Editar</a>
-                    <a href="{% url 'intelligence:collection_sync' collection.id %}" class="btn btn-sm">🔄 Sinc.</a>
+                    <form method="post" action="{% url 'intelligence:collection_sync' collection.id %}" style="display:inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm" onclick="return confirm('¿Sincronizar colección {{ collection.name }}? Esto puede tomar varios minutos.');">🔄 Sinc.</button>
+                    </form>
                     <a href="{% url 'intelligence:collection_delete' collection.id %}" class="btn btn-danger btn-sm">🗑️</a>
                 </div>
             </div>

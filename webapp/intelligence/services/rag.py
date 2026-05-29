@@ -936,7 +936,7 @@ class RAGService:
         
         Args:
             schema: Esquema a consultar (default: 'dbo')
-            database_alias: Alias de la conexión de base de datos (default: 'default', 'propifai' para dbpropify)
+            database_alias: Alias de la conexión de base de datos (default: 'default', 'propifai' para dbpropify_be)
             force_refresh: Si True, ignora la caché y vuelve a consultar la base de datos
             
         Returns:
@@ -959,7 +959,7 @@ class RAGService:
         Args:
             table_name: Nombre de la tabla
             schema: Esquema de la tabla
-            database_alias: Alias de la conexión de base de datos (default: 'default', 'propifai' para dbpropify)
+            database_alias: Alias de la conexión de base de datos (default: 'default', 'propifai' para dbpropify_be)
             
         Returns:
             Diccionario con análisis completo de la tabla
@@ -1028,7 +1028,7 @@ class RAGService:
             is_public: Si es accesible públicamente
             description: Descripción opcional
             schema: Esquema de la tabla
-            database_alias: Alias de la conexión de base de datos (default: 'default', 'propifai' para dbpropify)
+            database_alias: Alias de la conexión de base de datos (default: 'default', 'propifai' para dbpropify_be)
             field_definitions: Definiciones de campos (si se proporciona, se usa en lugar de analizar la tabla)
             table_relationships: Lista de relaciones FK para resolver durante sync
             is_active: Si la colección está activa
@@ -1174,12 +1174,21 @@ class RAGService:
             logger.info(f"Consulta SQL devolvió {len(rows)} registros de '{table_name}'")
             
             # Obtener field_definitions de la colección
-            field_definitions = collection.field_definitions or {}
+            raw_field_defs = collection.field_definitions or {}
+            
+            # Normalizar: si es lista, convertir a dict indexado por 'name'
+            if isinstance(raw_field_defs, list):
+                field_definitions = {}
+                for item in raw_field_defs:
+                    if isinstance(item, dict) and 'name' in item:
+                        field_definitions[item['name']] = item
+            else:
+                field_definitions = raw_field_defs
             
             # Determinar campo ID
             primary_key = None
             for field_name, field_def in field_definitions.items():
-                if field_def.get('is_primary', False):
+                if isinstance(field_def, dict) and field_def.get('is_primary', False):
                     primary_key = field_name
                     break
             

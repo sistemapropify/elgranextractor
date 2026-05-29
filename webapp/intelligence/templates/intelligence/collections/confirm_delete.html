@@ -1,151 +1,450 @@
 {% extends 'intelligence/base/base.html' %}
+{% load static %}
 
-{% block title %}Confirmar Eliminación de Colección - Propifai{% endblock %}
+{% block title %}Eliminar Colección {{ collection.name }} - Propifai{% endblock %}
+
+{% block extra_css %}
+{{ block.super }}
+<style>
+    /* ===== TEMA OSCURO GITHUB (consistente con list.html) ===== */
+    .delete-container {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 32px 24px;
+    }
+
+    .delete-header {
+        margin-bottom: 24px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid var(--border-color, #30363d);
+    }
+
+    .delete-header h1 {
+        color: var(--accent-red, #f85149);
+        font-size: 24px;
+        font-weight: 700;
+        margin: 0 0 4px 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .delete-header p {
+        color: var(--text-secondary, #8b949e);
+        font-size: 14px;
+        margin: 0;
+    }
+
+    /* ===== CARD ===== */
+    .delete-card {
+        background-color: var(--bg-card, #161b22);
+        border: 1px solid var(--border-color, #30363d);
+        border-radius: var(--radius, 8px);
+        overflow: hidden;
+        margin-bottom: 20px;
+    }
+
+    .delete-card-header {
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--border-color, #30363d);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 600;
+        color: var(--text-primary, #c9d1d9);
+        font-size: 15px;
+    }
+
+    .delete-card-header.danger {
+        background-color: rgba(248,81,73,0.08);
+        border-bottom: 1px solid rgba(248,81,73,0.2);
+        color: var(--accent-red, #f85149);
+    }
+
+    .delete-card-body {
+        padding: 20px;
+    }
+
+    /* ===== ALERTAS ===== */
+    .alert-box {
+        padding: 16px 18px;
+        border-radius: var(--radius, 6px);
+        margin-bottom: 20px;
+        border: 1px solid transparent;
+        font-size: 14px;
+        line-height: 1.5;
+    }
+
+    .alert-box.warning {
+        background-color: rgba(210,153,34,0.08);
+        border-color: rgba(210,153,34,0.25);
+        color: var(--accent-orange, #d29922);
+    }
+
+    .alert-box.danger {
+        background-color: rgba(248,81,73,0.08);
+        border-color: rgba(248,81,73,0.25);
+        color: var(--accent-red, #f85149);
+    }
+
+    .alert-box.info {
+        background-color: rgba(88,166,255,0.08);
+        border-color: rgba(88,166,255,0.25);
+        color: var(--accent-blue, #58a6ff);
+    }
+
+    .alert-box h5,
+    .alert-box h6 {
+        margin: 0 0 6px 0;
+        font-weight: 600;
+    }
+
+    .alert-box p {
+        margin: 0;
+        color: var(--text-secondary, #8b949e);
+    }
+
+    .alert-box strong {
+        color: var(--text-primary, #c9d1d9);
+    }
+
+    /* ===== TABLA DE DETALLES ===== */
+    .details-table {
+        width: 100%;
+        margin-bottom: 20px;
+        border-collapse: collapse;
+    }
+
+    .details-table th,
+    .details-table td {
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border-color, #30363d);
+        text-align: left;
+        font-size: 14px;
+    }
+
+    .details-table th {
+        width: 30%;
+        color: var(--text-secondary, #8b949e);
+        font-weight: 500;
+        text-transform: uppercase;
+        font-size: 12px;
+        letter-spacing: 0.3px;
+    }
+
+    .details-table td {
+        color: var(--text-primary, #c9d1d9);
+    }
+
+    .details-table tr:last-child th,
+    .details-table tr:last-child td {
+        border-bottom: none;
+    }
+
+    .details-table code {
+        font-size: 12px;
+        background-color: var(--bg-primary, #0d1117);
+        padding: 2px 6px;
+        border-radius: 4px;
+        color: var(--accent-blue, #58a6ff);
+    }
+
+    /* ===== BADGE ===== */
+    .doc-badge {
+        display: inline-block;
+        padding: 3px 10px;
+        border-radius: 12px;
+        font-size: 13px;
+        font-weight: 600;
+        background-color: rgba(88,166,255,0.12);
+        color: var(--accent-blue, #58a6ff);
+        border: 1px solid rgba(88,166,255,0.2);
+    }
+
+    .doc-badge.warning {
+        background-color: rgba(210,153,34,0.12);
+        color: var(--accent-orange, #d29922);
+        border-color: rgba(210,153,34,0.2);
+    }
+
+    /* ===== FORMULARIO ===== */
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        display: block;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-secondary, #8b949e);
+        margin-bottom: 8px;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+
+    .form-control {
+        width: 100%;
+        padding: 10px 14px;
+        background-color: var(--bg-primary, #0d1117);
+        border: 1px solid var(--border-color, #30363d);
+        border-radius: var(--radius, 6px);
+        color: var(--text-primary, #c9d1d9);
+        font-size: 15px;
+        font-family: inherit;
+        transition: border-color 0.2s;
+        box-sizing: border-box;
+    }
+
+    .form-control:focus {
+        outline: none;
+        border-color: var(--accent-red, #f85149);
+        box-shadow: 0 0 0 2px rgba(248,81,73,0.15);
+    }
+
+    .form-control::placeholder {
+        color: var(--text-secondary, #8b949e);
+        font-size: 14px;
+        letter-spacing: 2px;
+        font-weight: 600;
+    }
+
+    .form-hint {
+        font-size: 12px;
+        color: var(--text-secondary, #8b949e);
+        margin-top: 6px;
+    }
+
+    /* ===== BOTONES ===== */
+    .actions-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        padding-top: 4px;
+    }
+
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 9px 18px;
+        border: 1px solid var(--border-color, #30363d);
+        border-radius: var(--radius, 6px);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        text-decoration: none;
+        transition: all 0.2s ease;
+        background-color: var(--bg-card, #161b22);
+        color: var(--text-primary, #c9d1d9);
+        font-family: inherit;
+    }
+
+    .btn:hover {
+        background-color: var(--bg-hover, #1c2128);
+        border-color: var(--text-secondary, #8b949e);
+    }
+
+    .btn-secondary {
+        background-color: var(--bg-card, #161b22);
+        color: var(--text-secondary, #8b949e);
+    }
+
+    .btn-secondary:hover {
+        color: var(--text-primary, #c9d1d9);
+        background-color: var(--bg-hover, #1c2128);
+    }
+
+    .btn-danger {
+        background-color: #da3633;
+        border-color: rgba(218,54,51,0.3);
+        color: #fff;
+    }
+
+    .btn-danger:hover {
+        background-color: #f85149;
+    }
+
+    .btn-danger:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+        background-color: var(--bg-card, #161b22);
+        border-color: var(--border-color, #30363d);
+        color: var(--text-secondary, #8b949e);
+    }
+
+    /* ===== SEPARADOR ===== */
+    .section-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-primary, #c9d1d9);
+        margin: 0 0 12px 0;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--border-color, #30363d);
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 640px) {
+        .delete-container {
+            padding: 20px 16px;
+        }
+        .actions-bar {
+            flex-direction: column-reverse;
+        }
+        .actions-bar .btn {
+            width: 100%;
+            justify-content: center;
+        }
+        .details-table th {
+            width: 40%;
+        }
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="container py-4">
-    <div class="row justify-content-center">
-        <div class="col-md-8">
-            <div class="card border-danger">
-                <div class="card-header bg-danger text-white">
-                    <h4 class="mb-0">
-                        <i class="fas fa-exclamation-triangle me-2"></i>
-                        Confirmar Eliminación de Colección
-                    </h4>
-                </div>
-                <div class="card-body">
-                    <div class="alert alert-warning">
-                        <h5 class="alert-heading">
-                            <i class="fas fa-warning me-2"></i>
-                            ¡ADVERTENCIA!
-                        </h5>
-                        <p class="mb-0">
-                            Estás a punto de eliminar permanentemente la colección <strong>"{{ collection.name }}"</strong>.
-                            Esta acción no se puede deshacer.
-                        </p>
-                    </div>
+<div class="delete-container">
+    <!-- HEADER -->
+    <div class="delete-header">
+        <h1>🗑️ Eliminar Colección</h1>
+        <p>Estás a punto de eliminar permanentemente la colección <strong>{{ collection.name }}</strong></p>
+    </div>
 
-                    <div class="mb-4">
-                        <h5>Detalles de la Colección</h5>
-                        <table class="table table-sm">
-                            <tbody>
-                                <tr>
-                                    <th scope="row" style="width: 30%;">Nombre:</th>
-                                    <td>{{ collection.name }}</td>
-                                </tr>
-                                <tr>
-                                    <th scope="row">ID:</th>
-                                    <td><code>{{ collection.id }}</code></td>
-                                </tr>
-                                <tr>
-                                    <th scope="row">Descripción:</th>
-                                    <td>{{ collection.description|default:"Sin descripción" }}</td>
-                                </tr>
-                                <tr>
-                                    <th scope="row">Documentos:</th>
-                                    <td>
-                                        <span class="badge bg-primary">{{ document_count }}</span>
-                                        {% if document_count > 0 %}
-                                        <small class="text-muted ms-2">(todos serán eliminados)</small>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <th scope="row">Creada:</th>
-                                    <td>{{ collection.created_at|date:"d/m/Y H:i" }}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    {% if document_count > 0 %}
-                    <div class="alert alert-danger">
-                        <h6 class="alert-heading">
-                            <i class="fas fa-file-alt me-2"></i>
-                            Documentos que serán eliminados
-                        </h6>
-                        <p class="mb-0">
-                            Esta colección contiene <strong>{{ document_count }}</strong> documento(s). 
-                            Todos los documentos asociados serán eliminados permanentemente junto con la colección.
-                        </p>
-                    </div>
-                    {% endif %}
-
-                    <div class="alert alert-info">
-                        <h6 class="alert-heading">
-                            <i class="fas fa-shield-alt me-2"></i>
-                            Confirmación de Seguridad
-                        </h6>
-                        <p class="mb-2">
-                            Para confirmar que realmente deseas eliminar esta colección, 
-                            escribe <strong>ELIMINAR</strong> en el campo de abajo.
-                        </p>
-                    </div>
-
-                    <form method="post" id="deleteForm">
-                        {% csrf_token %}
-                        
-                        <div class="mb-3">
-                            <label for="confirmation_text" class="form-label">
-                                Escribe <strong>ELIMINAR</strong> para confirmar:
-                            </label>
-                            <input type="text" 
-                                   class="form-control" 
-                                   id="confirmation_text" 
-                                   name="confirmation_text" 
-                                   required
-                                   placeholder="ELIMINAR"
-                                   autocomplete="off">
-                            <div class="form-text">
-                                Debe coincidir exactamente con "ELIMINAR" (en mayúsculas).
-                            </div>
-                        </div>
-
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <a href="{% url 'intelligence:collections_dashboard' %}" class="btn btn-outline-secondary">
-                                    <i class="fas fa-arrow-left me-1"></i>
-                                    Cancelar y Volver
-                                </a>
-                            </div>
-                            <div>
-                                <button type="submit" 
-                                        class="btn btn-danger" 
-                                        id="deleteButton"
-                                        disabled>
-                                    <i class="fas fa-trash-alt me-1"></i>
-                                    Eliminar Permanentemente
-                                </button>
-                            </div>
-                        </div>
-                    </form>
-                </div>
+    <!-- CARD PRINCIPAL -->
+    <div class="delete-card">
+        <div class="delete-card-header danger">
+            ⚠️ Confirmar Eliminación
+        </div>
+        <div class="delete-card-body">
+            <!-- ALERTA WARNING -->
+            <div class="alert-box warning">
+                <h5>⚠️ ¡ADVERTENCIA!</h5>
+                <p>
+                    Estás a punto de eliminar permanentemente la colección <strong>"{{ collection.name }}"</strong>.
+                    Esta acción <strong>no se puede deshacer</strong>.
+                </p>
             </div>
+
+            <!-- DETALLES -->
+            <h6 class="section-title">📋 Detalles de la Colección</h6>
+            <table class="details-table">
+                <tbody>
+                    <tr>
+                        <th>Nombre:</th>
+                        <td>{{ collection.name }}</td>
+                    </tr>
+                    <tr>
+                        <th>ID:</th>
+                        <td><code>{{ collection.id }}</code></td>
+                    </tr>
+                    <tr>
+                        <th>Descripción:</th>
+                        <td>{{ collection.description|default:"Sin descripción" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Documentos:</th>
+                        <td>
+                            <span class="doc-badge {% if document_count > 0 %}warning{% endif %}">
+                                {{ document_count }}
+                            </span>
+                            {% if document_count > 0 %}
+                            <span style="color:var(--text-secondary);font-size:13px;margin-left:8px;">
+                                (todos serán eliminados)
+                            </span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Tabla origen:</th>
+                        <td><code>{{ collection.table_name|default:"—" }}</code></td>
+                    </tr>
+                    <tr>
+                        <th>Creada:</th>
+                        <td>{{ collection.created_at|date:"d/m/Y H:i" }}</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- ALERTA DOCUMENTOS -->
+            {% if document_count > 0 %}
+            <div class="alert-box danger">
+                <h6>📄 Documentos que serán eliminados</h6>
+                <p>
+                    Esta colección contiene <strong>{{ document_count }}</strong> documento(s).
+                    Todos los documentos asociados serán eliminados permanentemente junto con la colección.
+                </p>
+            </div>
+            {% endif %}
+
+            <!-- CONFIRMACIÓN -->
+            <div class="alert-box info">
+                <h6>🛡️ Confirmación de Seguridad</h6>
+                <p>
+                    Para confirmar que realmente deseas eliminar esta colección,
+                    escribe <strong>ELIMINAR</strong> en el campo de abajo.
+                </p>
+            </div>
+
+            <!-- FORMULARIO -->
+            <form method="post" id="deleteForm">
+                {% csrf_token %}
+
+                <div class="form-group">
+                    <label for="confirmation_text">
+                        Escribe <strong>ELIMINAR</strong> para confirmar:
+                    </label>
+                    <input type="text"
+                           class="form-control"
+                           id="confirmation_text"
+                           name="confirmation_text"
+                           required
+                           placeholder="ELIMINAR"
+                           autocomplete="off">
+                    <div class="form-hint">
+                        Debe coincidir exactamente con <strong>ELIMINAR</strong> (en mayúsculas).
+                    </div>
+                </div>
+
+                <div class="actions-bar">
+                    <div>
+                        <a href="{% url 'intelligence:collections_dashboard' %}" class="btn btn-secondary">
+                            ← Cancelar y Volver
+                        </a>
+                    </div>
+                    <div>
+                        <button type="submit"
+                                class="btn btn-danger"
+                                id="deleteButton"
+                                disabled>
+                            🗑️ Eliminar Permanentemente
+                        </button>
+                    </div>
+                </div>
+            </form>
         </div>
     </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
+{{ block.super }}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const confirmationInput = document.getElementById('confirmation_text');
         const deleteButton = document.getElementById('deleteButton');
         const deleteForm = document.getElementById('deleteForm');
-        
+
         // Validar entrada en tiempo real
         confirmationInput.addEventListener('input', function() {
-            if (this.value.trim().toUpperCase() === 'ELIMINAR') {
-                deleteButton.disabled = false;
-                deleteButton.classList.remove('btn-secondary');
-                deleteButton.classList.add('btn-danger');
+            const esValido = this.value.trim().toUpperCase() === 'ELIMINAR';
+            deleteButton.disabled = !esValido;
+            if (esValido) {
+                deleteButton.style.opacity = '1';
             } else {
-                deleteButton.disabled = true;
-                deleteButton.classList.remove('btn-danger');
-                deleteButton.classList.add('btn-secondary');
+                deleteButton.style.opacity = '';
             }
         });
-        
+
         // Validar antes de enviar
         deleteForm.addEventListener('submit', function(e) {
             if (confirmationInput.value.trim().toUpperCase() !== 'ELIMINAR') {
@@ -154,18 +453,17 @@
                 confirmationInput.focus();
                 return false;
             }
-            
-            // Confirmación adicional
+
             if (!confirm('¿Estás absolutamente seguro de que deseas eliminar esta colección y todos sus documentos? Esta acción no se puede deshacer.')) {
                 e.preventDefault();
                 return false;
             }
-            
+
             // Mostrar indicador de carga
             deleteButton.disabled = true;
-            deleteButton.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Eliminando...';
+            deleteButton.innerHTML = '⏳ Eliminando...';
         });
-        
+
         // Enfocar el campo de confirmación
         confirmationInput.focus();
     });

@@ -524,6 +524,7 @@ def collection_create(request):
         description = request.POST.get('description', '')
         table_name = request.POST.get('table_name', '')
         schema_name = request.POST.get('schema_name', 'dbo')
+        database_alias = request.POST.get('database_alias', 'propifai')
         min_level = int(request.POST.get('min_level', 1))
         domain = request.POST.get('domain', 'general')
         is_public = request.POST.get('is_public') == 'on'
@@ -540,6 +541,7 @@ def collection_create(request):
                     description=description,
                     table_name=table_name,
                     schema_name=schema_name,
+                    database_alias=database_alias,
                     min_level=min_level,
                     domain=domain,
                     is_public=is_public,
@@ -625,18 +627,95 @@ def collection_sync(request, collection_id):
     if request.method == 'POST':
         try:
             from .services.rag import RAGService
-            result = RAGService.sync_collection(collection_id)
-            if result.get('success'):
-                messages.success(
-                    request,
-                    f'Colección sincronizada: {result.get("processed", 0)} documentos procesados, '
-                    f'{result.get("errors", 0)} errores.'
+            # Detectar tipo de colección: dinámica (con table_name) vs legacy
+            if collection.table_name:
+                # Colección dinámica → usa sync_collection_dynamic que resuelve FK,
+                # escribe en field_values y reconstruye FAISS
+                success, message, stats = RAGService.sync_collection_dynamic(
+                    collection_name=collection.name,
+                    force_full_sync=True,
                 )
             else:
-                messages.error(request, f'Error en sincronización: {result.get("error", "Desconocido")}')
+                # Colección legacy → usa sync_collection original
+                success, message, stats = RAGService.sync_collection(
+                    collection_id=collection_id,
+                    force_full_sync=True,
+                )
+            if success:
+                messages.success(
+                    request,
+                    f'Colección sincronizada: {stats.get("total_processed", 0)} documentos procesados, '
+                    f'{stats.get("created", 0)} creados, {stats.get("errors", 0)} errores.'
+                )
+            else:
+                messages.error(request, f'Error en sincronización: {message}')
         except Exception as e:
             messages.error(request, f'Error al sincronizar: {str(e)}')
     return redirect('intelligence:collections_dashboard')
+
+
+def collection_sync_api(request, collection_id):
+    """
+    API endpoint para sincronizar una colección vía JSON.
+    POST /api/v1/intelligence/collections/<uuid>/sync/api/
+    
+    Body (JSON):
+        force_full_sync (bool, opcional): Si True, regenera embeddings de todos los docs
+        database_alias (str, opcional): Alias de BD para la conexión
+    
+    Returns:
+        JSON con {success, message, stats, collection_id, collection_name}
+    """
+    from rest_framework.decorators import api_view, permission_classes, authentication_classes
+    from rest_framework.permissions import AllowAny
+    from rest_framework.response import Response
+    from rest_framework import status
+    
+    @api_view(['POST'])
+    @permission_classes([AllowAny])
+    @authentication_classes([])
+    def _sync_api_view(request, collection_id):
+        try:
+            collection = get_object_or_404(IntelligenceCollection, id=collection_id)
+            from .services.rag import RAGService
+            
+            force_full = request.data.get('force_full_sync', True)
+            database_alias = request.data.get('database_alias')
+            
+            if collection.table_name:
+                success, message, stats = RAGService.sync_collection_dynamic(
+                    collection_name=collection.name,
+                    force_full_sync=force_full,
+                    database_alias=database_alias,
+                )
+            else:
+                success, message, stats = RAGService.sync_collection(
+                    collection_id=collection_id,
+                    force_full_sync=force_full,
+                )
+            
+            return Response({
+                'success': success,
+                'message': message,
+                'stats': stats,
+                'collection_id': str(collection.id),
+                'collection_name': collection.name,
+            })
+        
+        except IntelligenceCollection.DoesNotExist:
+            return Response({
+                'success': False,
+                'error': 'Colección no encontrada',
+            }, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            import traceback
+            return Response({
+                'success': False,
+                'error': str(e),
+                'traceback': traceback.format_exc(),
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    return _sync_api_view(request, collection_id)
 
 
 def collection_stats(request, collection_id):
@@ -661,7 +740,15 @@ def collection_detail(request, collection_id):
     documents = IntelligenceDocument.objects.filter(collection=collection).order_by('-created_at')[:200]
 
     # Preparar datos de embedding_fields con info de field_definitions
-    field_defs = collection.field_definitions or {}
+    raw_field_defs = collection.field_definitions or {}
+    # field_definitions puede ser dict ({"campo": {...}}) o lista ([{...}, {...}])
+    if isinstance(raw_field_defs, list):
+        field_defs = {}
+        for item in raw_field_defs:
+            if isinstance(item, dict) and 'name' in item:
+                field_defs[item['name']] = item
+    else:
+        field_defs = raw_field_defs
     embedding_info = []
     for field_name in (collection.embedding_fields or []):
         info = field_defs.get(field_name, {})

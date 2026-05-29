@@ -1221,6 +1221,13 @@
                                         data-actualizado="{{ r.actualizado_en|date:'d/m/Y H:i' }}">
                                     <i class="bi bi-eye me-1"></i>Ver
                                 </button>
+                                {% if r.agente_telefono %}
+                                <button type="button" class="btn btn-success btn-sm" style="margin-left:4px;"
+                                        onclick="enviarWhatsAppLista('{{ r.agente_telefono|escapejs }}', '{{ r.agente|escapejs }}', '{{ r.pk }}', '{{ r.requerimiento|escapejs }}', '{% if r.fecha %}{{ r.fecha|date:'d/m/Y' }}{% endif %}')"
+                                        title="Enviar propuesta por WhatsApp">
+                                    <i class="bi bi-whatsapp"></i>
+                                </button>
+                                {% endif %}
                             </div>
                         </td>
                     </tr>
@@ -2716,31 +2723,32 @@ function actualizarFilaTabla(pk, d) {
 document.addEventListener('DOMContentLoaded', function() {
     const modal = document.getElementById('modalDetalleRequerimiento');
     
-    // Al hacer clic en "Ver"
-    document.querySelectorAll('.ver-detalle-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const d = this.dataset;
-            modalRequerimientoActual = d;
-            
-            // Limpiar estado de clonación al abrir un nuevo detalle
-            modoClonacion = false;
-            datosClonacion = null;
-            document.getElementById('btnGuardarEdicion').innerHTML = '<i class="bi bi-check2 me-1"></i>Guardar';
-            
-            // Reset a modo vista
-            toggleModoEdicion(false);
-            
-            // Poblar campos de edición
-            poblarCamposEdicion(d);
-            
-            // Actualizar vista
-            actualizarVista(d);
-            
-            document.getElementById('modalReqPk').textContent = d.pk;
-            
-            const bsModal = new bootstrap.Modal(modal);
-            bsModal.show();
-        });
+    // Al hacer clic en "Ver" — Usar DELEGACIÓN DE EVENTOS para que funcione con paginación
+    document.addEventListener('click', function(e) {
+        var btn = e.target.closest('.ver-detalle-btn');
+        if (!btn) return;
+        
+        const d = btn.dataset;
+        modalRequerimientoActual = d;
+        
+        // Limpiar estado de clonación al abrir un nuevo detalle
+        modoClonacion = false;
+        datosClonacion = null;
+        document.getElementById('btnGuardarEdicion').innerHTML = '<i class="bi bi-check2 me-1"></i>Guardar';
+        
+        // Reset a modo vista
+        toggleModoEdicion(false);
+        
+        // Poblar campos de edición
+        poblarCamposEdicion(d);
+        
+        // Actualizar vista
+        actualizarVista(d);
+        
+        document.getElementById('modalReqPk').textContent = d.pk;
+        
+        const bsModal = new bootstrap.Modal(modal);
+        bsModal.show();
     });
     
     // ── Botón Editar ──────────────────────────
