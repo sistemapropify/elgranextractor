@@ -1822,10 +1822,20 @@ function renderMatchModal(data, body, title) {
     // Guardar datos para WhatsApp
     ultimoRequerimientoData = req;
     ultimaPropiedadTop = resultados.length > 0 ? (resultados[0].propiedad || null) : null;
-    
-    // Debug
-    console.log('renderMatchModal - req.requerimiento:', req.requerimiento ? req.requerimiento.substring(0,50) : 'VACIO');
-    console.log('renderMatchModal - req keys:', Object.keys(req));
+
+    // Consultar si ya hay propuesta enviada para este requerimiento
+    var propuestaEnviada = false;
+    var propuestaId = null;
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', '/matching/api/propuesta/listar/?requerimiento_id=' + (req.id || ''), false);
+    xhr.send();
+    if (xhr.status === 200) {
+        var props = JSON.parse(xhr.responseText);
+        if (props && props.length > 0) {
+            propuestaEnviada = true;
+            propuestaId = props[0].id;
+        }
+    }
     
     // Mostrar/ocultar boton WhatsApp (solo si hay match >= 70%)
     var btnWA = document.getElementById('btnWhatsAppPropuesta');
@@ -1838,6 +1848,7 @@ function renderMatchModal(data, body, title) {
         body.innerHTML = `<div class="modal-no-match">
             <div class="no-match-icon">🔍</div>
             <p>No se encontraron propiedades con coincidencia para este requerimiento.</p>
+            ${propuestaEnviada ? '<div style="margin-top:12px;padding:8px 12px;border-radius:6px;background:rgba(0,255,136,0.12);border:1px solid rgba(0,255,136,0.4);text-align:center;font-size:13px;font-weight:600;color:#00ff88;">✅ WhatsApp enviado a ' + (req.agente || 'agente') + '</div>' : ''}
         </div>`;
         return;
     }
@@ -1975,7 +1986,15 @@ function renderMatchModal(data, body, title) {
                 <div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(48,54,61,0.3);"><span style="color:var(--text-secondary);">Cochera</span><span style="color:var(--text-primary);">${prop.garage_spaces ? prop.garage_spaces + ' auto(s)' : 'No'}</span></div>
                 <div style="display:flex;justify-content:space-between;padding:3px 0;"><span style="color:var(--text-secondary);">Ascensor</span><span style="color:var(--text-primary);">${prop.ascensor ? 'Sí' : 'No'}</span></div>
             </div>
+
+            ${propuestaEnviada ? '<div style="margin-top:6px;padding:6px 10px;border-radius:6px;background:rgba(0,255,136,0.12);border:1px solid rgba(0,255,136,0.4);text-align:center;font-size:11px;font-weight:600;color:#00ff88;text-shadow:0 0 8px rgba(0,255,136,0.3);animation:waPulse 2s ease-in-out infinite;">✅ WhatsApp enviado</div>' : ''}
         </div>
+    `;
+
+    // Estilo para la animacion del badge
+    var style = document.createElement('style');
+    style.textContent = '@keyframes waPulse { 0%,100% { box-shadow: 0 0 4px rgba(0,255,136,0.2); } 50% { box-shadow: 0 0 12px rgba(0,255,136,0.5); } }';
+    document.head.appendChild(style);
     `;
 
     title.textContent = `📊 Match #${req.id || ''} — ${Math.round(scoreTotal)}%`;
