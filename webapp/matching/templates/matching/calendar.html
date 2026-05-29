@@ -658,10 +658,8 @@
         background: var(--bg-secondary);
         border: 1px solid var(--border-color);
         border-radius: 12px;
-        max-width: 95vw;
-        width: 95vw;
-        max-height: 95vh;
-        overflow: hidden;
+        width: auto;
+        max-width: 900px;
         box-shadow: 0 8px 32px rgba(0,0,0,0.5);
     }
     .modal-match-header {
@@ -693,46 +691,43 @@
     /* Body: layout principal: tabla comparativa (izq) + imagen+score (der) */
     .modal-match-body {
         display: grid;
-        grid-template-columns: 1fr 1fr 1fr;
+        grid-template-columns: 1fr 1fr 1.2fr;
         gap: 0;
         padding: 0;
-        height: calc(95vh - 100px);
+        min-height: 0;
     }
 
     .modal-compare-panel {
-        padding: 10px 16px;
+        padding: 8px 12px;
         border-right: 1px solid var(--border-color);
-        overflow-y: auto;
     }
 
     .modal-side-panel {
-        padding: 10px 16px;
+        padding: 8px 12px;
         border-right: 1px solid var(--border-color);
         display: flex;
         flex-direction: column;
-        gap: 6px;
-        overflow-y: auto;
+        gap: 4px;
     }
 
     .modal-req-panel {
-        padding: 10px 16px;
+        padding: 8px 12px;
         display: flex;
         flex-direction: column;
-        gap: 6px;
-        overflow-y: auto;
+        gap: 4px;
     }
 
     .modal-req-panel .modal-req-text {
-        flex: 1;
         font-size: 12px;
         color: var(--text-primary);
         line-height: 1.4;
         background: var(--bg-tertiary);
-        padding: 8px 10px;
+        padding: 6px 8px;
         border-radius: 6px;
         border: 1px solid var(--border-color);
         white-space: pre-wrap;
         word-break: break-word;
+        max-height: 250px;
         overflow-y: auto;
     }
 
