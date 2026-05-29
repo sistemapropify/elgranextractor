@@ -1995,7 +1995,6 @@ function renderMatchModal(data, body, title) {
     var style = document.createElement('style');
     style.textContent = '@keyframes waPulse { 0%,100% { box-shadow: 0 0 4px rgba(0,255,136,0.2); } 50% { box-shadow: 0 0 12px rgba(0,255,136,0.5); } }';
     document.head.appendChild(style);
-    `;
 
     title.textContent = `MATCH Match #${req.id || ''} — ${Math.round(scoreTotal)}%`;
 }
