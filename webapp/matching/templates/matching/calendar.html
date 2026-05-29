@@ -713,7 +713,15 @@
         overflow-y: auto;
     }
 
-    .modal-req-text {
+    .modal-side-top {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+    }
+
+    .modal-side-top .modal-req-text {
+        flex: 1;
         font-size: 12px;
         color: var(--text-primary);
         line-height: 1.4;
@@ -723,7 +731,15 @@
         border: 1px solid var(--border-color);
         white-space: pre-wrap;
         word-break: break-word;
-        flex: 1;
+        overflow-y: auto;
+    }
+
+    .modal-side-bottom {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding-top: 8px;
+        border-top: 1px solid var(--border-color);
     }
 
     /* Tabla comparativa lado a lado */
@@ -1839,9 +1855,9 @@ function renderMatchModal(data, body, title) {
     // Property image
     var propImgHtml = '';
     if (prop.imagen_url) {
-        propImgHtml = '<img src="' + prop.imagen_url + '" alt="' + (prop.title || 'Propiedad') + '" class="modal-side-img" onerror="this.style.display=\'none\'">';
+        propImgHtml = '<img src="' + prop.imagen_url + '" alt="' + (prop.title || 'Propiedad') + '" style="width:80px;height:80px;object-fit:cover;border-radius:6px;background:var(--bg-tertiary);border:1px solid var(--border-color);flex-shrink:0;" onerror="this.style.display=\'none\'">';
     } else {
-        propImgHtml = '<div class="modal-side-img-placeholder">🏠 Sin imagen</div>';
+        propImgHtml = '<div style="width:80px;height:80px;border-radius:6px;background:var(--bg-tertiary);border:1px solid var(--border-color);display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:11px;flex-shrink:0;">🏠</div>';
     }
 
     body.innerHTML = `
@@ -1910,19 +1926,26 @@ function renderMatchModal(data, body, title) {
         </div>
 
         <div class="modal-side-panel">
-            <div class="modal-score-box" style="padding:10px;">
-                <div class="score-num ${scoreClass}" style="font-size:32px;">${Math.round(scoreTotal)}%</div>
-                <div class="score-label" style="font-size:10px;">Coincidencia</div>
+            <div class="modal-side-top">
+                <div style="font-size:12px;font-weight:600;color:var(--accent-blue);margin-bottom:4px;">📝 Requerimiento original</div>
+                <div class="modal-req-text">${fmt(req.requerimiento || '—')}</div>
             </div>
 
-            ${propImgHtml}
+            <div class="modal-side-bottom">
+                <div class="modal-score-box" style="padding:8px;text-align:center;">
+                    <div class="score-num ${scoreClass}" style="font-size:28px;display:inline;">${Math.round(scoreTotal)}%</div>
+                    <span class="score-label" style="font-size:10px;margin-left:6px;">Coincidencia</span>
+                </div>
 
-            <div class="modal-side-code" style="font-size:10px;">${fmt(prop.code)}</div>
-            <div class="modal-side-title" style="font-size:11px;">${fmt(prop.title)}</div>
-            ${prop.real_address ? '<div style="font-size:10px;color:var(--text-muted);text-align:center;">' + prop.real_address + '</div>' : ''}
-
-            <div style="font-size:12px;font-weight:600;color:var(--accent-blue);margin-top:4px;">📝 Requerimiento original</div>
-            <div class="modal-req-text">${fmt(req.requerimiento || '—')}</div>
+                <div style="display:flex;gap:8px;align-items:flex-start;">
+                    ${propImgHtml.replace('height:150px;', 'height:80px;width:80px;')}
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-size:11px;color:var(--accent-blue);font-weight:600;">${fmt(prop.code)}</div>
+                        <div style="font-size:12px;font-weight:600;color:var(--text-primary);">${fmt(prop.title)}</div>
+                        ${prop.real_address ? '<div style="font-size:10px;color:var(--text-muted);">' + prop.real_address + '</div>' : ''}
+                    </div>
+                </div>
+            </div>
         </div>
     `;
 
