@@ -693,33 +693,50 @@
     /* Body: layout principal: tabla comparativa (izq) + imagen+score (der) */
     .modal-match-body {
         display: grid;
-        grid-template-columns: 2fr 1fr 1fr;
+        grid-template-columns: 2fr 1fr;
         gap: 0;
         padding: 0;
+        min-height: 300px;
     }
 
     /* Panel izquierdo: tabla comparativa */
     .modal-compare-panel {
         padding: 12px 16px;
         border-right: 1px solid var(--border-color);
+        overflow-y: auto;
     }
 
-    /* Panel central: score + imagen */
-    .modal-center-panel {
-        padding: 12px 16px;
-        border-right: 1px solid var(--border-color);
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-    }
-
-    /* Panel derecho: requerimiento original */
-    .modal-right-panel {
+    /* Panel derecho: score + imagen + req original */
+    .modal-side-panel {
         padding: 12px 16px;
         display: flex;
         flex-direction: column;
         gap: 8px;
         overflow-y: auto;
+    }
+
+    .modal-side-panel .modal-score-box {
+        flex-shrink: 0;
+    }
+
+    .modal-side-panel .modal-side-img {
+        flex-shrink: 0;
+    }
+
+    .modal-req-text {
+        font-size: 11px;
+        color: var(--text-primary);
+        line-height: 1.4;
+        background: var(--bg-tertiary);
+        padding: 8px;
+        border-radius: 6px;
+        border: 1px solid var(--border-color);
+        overflow-y: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+        flex: 1;
+        min-height: 60px;
+        max-height: 180px;
     }
 
     /* Tabla comparativa lado a lado */
@@ -1906,7 +1923,7 @@ function renderMatchModal(data, body, title) {
             ${req.caracteristicas_extra ? '<div style="margin-top:8px;padding:6px 10px;background:var(--bg-tertiary);border-radius:6px;font-size:11px;color:var(--text-secondary);"><strong>Extra:</strong> ' + req.caracteristicas_extra + '</div>' : ''}
         </div>
 
-        <div class="modal-center-panel">
+        <div class="modal-side-panel">
             <div class="modal-score-box">
                 <div class="score-num ${scoreClass}">${Math.round(scoreTotal)}%</div>
                 <div class="score-label">Coincidencia</div>
@@ -1917,11 +1934,9 @@ function renderMatchModal(data, body, title) {
             <div class="modal-side-code">${fmt(prop.code)}</div>
             <div class="modal-side-title" style="font-size:12px;">${fmt(prop.title)}</div>
             ${prop.real_address ? '<div style="font-size:10px;color:var(--text-muted);text-align:center;">' + prop.real_address + '</div>' : ''}
-        </div>
 
-        <div class="modal-right-panel">
-            <div style="font-size:12px;font-weight:600;color:var(--accent-blue);">📝 Requerimiento</div>
-            <div style="font-size:12px;color:var(--text-primary);line-height:1.4;background:var(--bg-tertiary);padding:8px;border-radius:6px;border:1px solid var(--border-color);overflow-y:auto;white-space:pre-wrap;word-break:break-word;flex:1;">${fmt(req.requerimiento || '—')}</div>
+            <div style="font-size:11px;font-weight:600;color:var(--accent-blue);margin-top:4px;">📝 Requerimiento</div>
+            <div class="modal-req-text">${fmt(req.requerimiento || '—')}</div>
         </div>
     `;
 
