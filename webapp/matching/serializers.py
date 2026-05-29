@@ -51,7 +51,9 @@ class RequerimientoSimpleSerializer(serializers.ModelSerializer):
             'distritos_lista', 'presupuesto_monto', 'presupuesto_moneda',
             'presupuesto_forma_pago', 'presupuesto_display', 'habitaciones',
             'banos', 'cochera', 'ascensor', 'amueblado', 'area_m2',
-            'piso_preferencia', 'caracteristicas_extra', 'es_urgente'
+            'piso_preferencia', 'caracteristicas_extra', 'es_urgente',
+            # Campos para WhatsApp
+            'requerimiento', 'fecha', 'hora', 'agente_telefono',
         ]
 
 
@@ -79,18 +81,37 @@ class MatchingResultSerializer(serializers.Serializer):
     Serializer para resultados de matching en tiempo real (no persistidos).
     """
     
-    propiedad = PropiedadSimpleSerializer()
     score_total = serializers.DecimalField(max_digits=5, decimal_places=2)
     score_detalle = serializers.DictField()
     fase_eliminada = serializers.CharField(allow_null=True)
     porcentaje_compatibilidad = serializers.DecimalField(max_digits=5, decimal_places=2)
     ranking = serializers.IntegerField(required=False)
+    propiedad_id = serializers.IntegerField()
+    propiedad_dict = serializers.DictField()
     
-    class Meta:
-        fields = [
-            'propiedad', 'score_total', 'score_detalle',
-            'fase_eliminada', 'porcentaje_compatibilidad', 'ranking'
-        ]
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        # Agregar campos de propiedad simplificados desde propiedad_dict
+        prop_dict = instance.get('propiedad_dict', {})
+        ret['propiedad'] = {
+            'id': prop_dict.get('id'),
+            'code': prop_dict.get('code'),
+            'title': prop_dict.get('title'),
+            'district': str(prop_dict.get('district_id') or ''),
+            'price': prop_dict.get('price'),
+            'currency_id': prop_dict.get('currency_id'),
+            'bedrooms': prop_dict.get('bedrooms'),
+            'bathrooms': prop_dict.get('bathrooms'),
+            'built_area': prop_dict.get('built_area'),
+            'antiquity_years': prop_dict.get('antiquity_years'),
+            'garage_spaces': prop_dict.get('garage_spaces'),
+            'ascensor': 'sí' if prop_dict.get('has_elevator') else 'no',
+            'real_address': prop_dict.get('display_address') or prop_dict.get('map_address'),
+            'tipo_propiedad': None,
+            'imagen_url': None,
+            'currency_symbol': '$' if prop_dict.get('currency_id') == 1 else 'S/',
+        }
+        return ret
 
 
 class MatchingEstadisticasSerializer(serializers.Serializer):

@@ -1,115 +1,297 @@
-from django.db import models
-from .mapeo_ubicaciones import (
-    obtener_nombre_departamento,
-    obtener_nombre_provincia,
-    obtener_nombre_distrito,
-    formatear_ubicacion
-)
+import logging
+from decimal import Decimal
+from django.db import models, connections
+from django.conf import settings
+
+logger = logging.getLogger(__name__)
 
 
 class PropifaiProperty(models.Model):
-    """Modelo para propiedades de la base de datos Propifai."""
+    """
+    Modelo para propiedades de la base de datos Propifai (dbpropify_be).
     
-    # Campos principales
+    NOTA IMPORTANTE: Este modelo refleja SOLO los campos que existen en la tabla `property`
+    de dbpropify_be. Los campos de especificaciones (bedrooms, bathrooms, areas, amenities, etc.)
+    están en la tabla `property_specs` (relación 1:1).
+    
+    Para acceder a specs, usar el método `get_specs()` que hace raw SQL JOIN.
+    """
+    
+    # === CAMPOS REALES DE LA TABLA `property` EN dbpropify_be ===
     id = models.BigIntegerField(primary_key=True)
-    code = models.CharField(max_length=20)
-    codigo_unico_propiedad = models.CharField(max_length=11, blank=True, null=True)
-    title = models.CharField(max_length=255, blank=True, null=True)
-    description = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(null=True, blank=True)
     
-    # Características de la propiedad
-    antiquity_years = models.IntegerField(blank=True, null=True)
-    delivery_date = models.DateField(blank=True, null=True)
-    price = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
-    maintenance_fee = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
-    has_maintenance = models.BooleanField(default=False)
+    # Identificadores
+    code = models.CharField(max_length=50, null=True, blank=True)
+    uuid = models.CharField(max_length=36, null=True, blank=True)
+    wp_post_id = models.BigIntegerField(null=True, blank=True)
+    wp_slug = models.CharField(max_length=200, null=True, blank=True)
+    wp_last_sync = models.DateTimeField(null=True, blank=True)
     
-    # Dimensiones y espacios
-    floors = models.IntegerField(blank=True, null=True)
-    bedrooms = models.IntegerField(blank=True, null=True)
-    bathrooms = models.IntegerField(blank=True, null=True)
-    half_bathrooms = models.IntegerField(blank=True, null=True)
-    garage_spaces = models.IntegerField(blank=True, null=True)
+    # Información principal
+    title = models.CharField(max_length=500, null=True, blank=True)
+    description = models.TextField(null=True, blank=True)
     
-    # Áreas
-    land_area = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
-    built_area = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
-    front_measure = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
-    depth_measure = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
+    # Precios
+    price = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    maintenance_fee = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
     
     # Ubicación
-    real_address = models.TextField(blank=True, null=True)
-    exact_address = models.CharField(max_length=512, blank=True, null=True)
-    coordinates = models.CharField(max_length=512, blank=True, null=True)
-    department = models.CharField(max_length=100, blank=True, null=True)
-    province = models.CharField(max_length=100, blank=True, null=True)
-    district = models.CharField(max_length=100, blank=True, null=True)
-    urbanization = models.CharField(max_length=100, blank=True, null=True)
+    map_address = models.TextField(null=True, blank=True)
+    display_address = models.TextField(null=True, blank=True)
+    latitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
     
-    # Amenidades y zonificación
-    amenities = models.TextField(blank=True, null=True)
-    zoning = models.CharField(max_length=100, blank=True, null=True)
+    # Datos registrales
+    registry_number = models.CharField(max_length=100, null=True, blank=True)
     
-    # Fechas
-    created_at = models.DateTimeField()
-    updated_at = models.DateTimeField()
+    # Flags
+    is_project = models.BooleanField(default=False, null=True, blank=True)
+    is_visible = models.BooleanField(default=True, null=True, blank=True)
+    project_name = models.CharField(max_length=500, null=True, blank=True)
+    video_url = models.TextField(null=True, blank=True)
     
-    # Estados
-    is_active = models.BooleanField(default=False)
-    is_ready_for_sale = models.BooleanField(default=False)
-    is_draft = models.BooleanField(default=False)
-    is_project = models.BooleanField(default=False)
+    # Foreign Keys (como BigIntegerField porque son BD externa)
+    contact_id = models.BigIntegerField(null=True, blank=True)
+    created_by_id = models.BigIntegerField(null=True, blank=True)
+    currency_id = models.BigIntegerField(null=True, blank=True, db_column='currency_id')
+    district_id = models.BigIntegerField(null=True, blank=True, db_column='district_id')
+    operation_type_id = models.BigIntegerField(null=True, blank=True, db_column='operation_type_id')
+    payment_method_id = models.BigIntegerField(null=True, blank=True)
+    property_condition_id = models.BigIntegerField(null=True, blank=True, db_column='property_condition_id')
+    property_status_id = models.BigIntegerField(null=True, blank=True)
+    property_subtype_id = models.BigIntegerField(null=True, blank=True)
+    property_type_id = models.BigIntegerField(null=True, blank=True, db_column='property_type_id')
+    responsible_id = models.BigIntegerField(null=True, blank=True)
+    updated_by_id = models.BigIntegerField(null=True, blank=True)
+    urbanization_id = models.BigIntegerField(null=True, blank=True)
+    parent_project_id = models.BigIntegerField(null=True, blank=True)
     
-    # Información adicional
-    project_name = models.CharField(max_length=200, blank=True, null=True)
-    ascensor = models.CharField(max_length=3, blank=True, null=True)
-    availability_status = models.CharField(max_length=20)
-    unit_location = models.CharField(max_length=20, blank=True, null=True)
+    class Meta:
+        db_table = 'property'
+        managed = False
     
-    # === CAMPOS FK QUE EXISTEN EN LA BD REAL (Azure SQL) ===
-    # property_type_id → FK a property_types(id): 1=Casa, 2=Departamento, 3=Oficina, 4=Terreno, 5=Local, 6=Otros
-    property_type_id = models.BigIntegerField(
-        null=True, blank=True,
-        db_column='property_type_id',
-        verbose_name='Tipo de propiedad (FK property_types)'
-    )
-    # operation_type_id → FK a operation_types(id): 1=Compra, 2=Venta, 3=Alquiler
-    operation_type_id = models.BigIntegerField(
-        null=True, blank=True,
-        db_column='operation_type_id',
-        verbose_name='Tipo de operación (FK operation_types)'
-    )
-    # currency_id → FK a currencies(id): 1=USD, 2=PEN
-    currency_id = models.BigIntegerField(
-        null=True, blank=True,
-        db_column='currency_id',
-        verbose_name='Moneda (FK currencies: 1=USD, 2=PEN)'
-    )
+    def __str__(self):
+        return f"{self.code or '?'} - {self.title or 'Sin título'}"
     
-    # Campos para parseo de coordenadas
+    # ============================================================
+    # MÉTODOS PARA ACCEDER A property_specs (relación 1:1)
+    # ============================================================
+    
+    def get_specs(self, using='propifai'):
+        """
+        Obtiene los specs de la propiedad desde la tabla property_specs.
+        
+        Returns:
+            Dict con los campos de property_specs, o None si no existe.
+        """
+        try:
+            with connections['propifai'].cursor() as cursor:
+                cursor.execute(f"""
+                    SELECT
+                        bedrooms, bathrooms, half_bathrooms,
+                        has_elevator, land_area, built_area,
+                        front_measure, depth_measure, area_unit, linear_unit,
+                        garage_spaces, garage_type, parking_cost_included, parking_cost,
+                        antiquity_years, delivery_date,
+                        has_security, has_pool, has_garden, has_bbq, has_terrace,
+                        has_air_conditioning, has_laundry_area, has_service_room, pet_friendly,
+                        floors_total, unit_location
+                    FROM property_specs
+                    WHERE property_id = %s
+                """, [self.id])
+                row = cursor.fetchone()
+                if row:
+                    columns = [desc[0] for desc in cursor.description]
+                    return dict(zip(columns, row))
+            return None
+        except Exception as e:
+            logger.error(f"Error al obtener specs para property {self.id}: {e}")
+            return None
+    
+    def get_specs_value(self, field_name, default=None):
+        """Obtiene un valor específico de property_specs."""
+        specs = self.get_specs()
+        if specs:
+            return specs.get(field_name, default)
+        return default
+    
+    # ============================================================
+    # PROPIEDADES DE CONVENIENCIA (compatibilidad con código existente)
+    # ============================================================
+    
     @property
-    def latitude(self):
-        """Extrae la latitud de la columna coordinates."""
-        if self.coordinates:
-            try:
-                parts = self.coordinates.split(',')
-                if len(parts) >= 2:
-                    return float(parts[0].strip())
-            except (ValueError, AttributeError):
-                pass
+    def bedrooms(self):
+        return self.get_specs_value('bedrooms')
+    
+    @property
+    def bathrooms(self):
+        return self.get_specs_value('bathrooms')
+    
+    @property
+    def half_bathrooms(self):
+        return self.get_specs_value('half_bathrooms')
+    
+    @property
+    def has_elevator(self):
+        return self.get_specs_value('has_elevator')
+    
+    @property
+    def land_area(self):
+        return self.get_specs_value('land_area')
+    
+    @property
+    def built_area(self):
+        return self.get_specs_value('built_area')
+    
+    @property
+    def front_measure(self):
+        return self.get_specs_value('front_measure')
+    
+    @property
+    def depth_measure(self):
+        return self.get_specs_value('depth_measure')
+    
+    @property
+    def garage_spaces(self):
+        return self.get_specs_value('garage_spaces')
+    
+    @property
+    def antiquity_years(self):
+        return self.get_specs_value('antiquity_years')
+    
+    @property
+    def delivery_date(self):
+        return self.get_specs_value('delivery_date')
+    
+    @property
+    def pet_friendly(self):
+        return self.get_specs_value('pet_friendly')
+    
+    @property
+    def floors_total(self):
+        return self.get_specs_value('floors_total')
+    
+    @property
+    def unit_location(self):
+        return self.get_specs_value('unit_location')
+    
+    @property
+    def has_pool(self):
+        return self.get_specs_value('has_pool')
+    
+    @property
+    def has_garden(self):
+        return self.get_specs_value('has_garden')
+    
+    @property
+    def has_bbq(self):
+        return self.get_specs_value('has_bbq')
+    
+    @property
+    def has_terrace(self):
+        return self.get_specs_value('has_terrace')
+    
+    @property
+    def has_air_conditioning(self):
+        return self.get_specs_value('has_air_conditioning')
+    
+    @property
+    def has_laundry_area(self):
+        return self.get_specs_value('has_laundry_area')
+    
+    @property
+    def has_service_room(self):
+        return self.get_specs_value('has_service_room')
+    
+    @property
+    def amenities(self):
+        """
+        Construye un texto de amenities a partir de los booleanos de property_specs.
+        """
+        specs = self.get_specs()
+        if not specs:
+            return None
+        amenities_list = []
+        if specs.get('has_pool'):
+            amenities_list.append('piscina')
+        if specs.get('has_garden'):
+            amenities_list.append('jardín')
+        if specs.get('has_bbq'):
+            amenities_list.append('bbq')
+        if specs.get('has_terrace'):
+            amenities_list.append('terraza')
+        if specs.get('has_air_conditioning'):
+            amenities_list.append('aire acondicionado')
+        if specs.get('has_laundry_area'):
+            amenities_list.append('lavandería')
+        if specs.get('has_service_room'):
+            amenities_list.append('cuarto de servicio')
+        if specs.get('has_elevator'):
+            amenities_list.append('ascensor')
+        if specs.get('has_security'):
+            amenities_list.append('seguridad')
+        if specs.get('pet_friendly'):
+            amenities_list.append('mascotas permitidas')
+        return ', '.join(amenities_list) if amenities_list else None
+    
+    @property
+    def ascensor(self):
+        """Compatibilidad: retorna 'sí' o 'no' basado en has_elevator."""
+        val = self.get_specs_value('has_elevator')
+        if val is True:
+            return 'sí'
+        elif val is False:
+            return 'no'
         return None
     
     @property
-    def longitude(self):
-        """Extrae la longitud de la columna coordinates."""
-        if self.coordinates:
-            try:
-                parts = self.coordinates.split(',')
-                if len(parts) >= 2:
-                    return float(parts[1].strip())
-            except (ValueError, AttributeError):
-                pass
+    def coordinates(self):
+        """Compatibilidad: construye 'lat,lng' desde latitude, longitude."""
+        if self.latitude and self.longitude:
+            return f"{self.latitude},{self.longitude}"
         return None
+    
+    @property
+    def real_address(self):
+        """Compatibilidad: alias de map_address."""
+        return self.map_address
+    
+    @property
+    def district(self):
+        """Compatibilidad: retorna district_id como string (como antes)."""
+        return str(self.district_id) if self.district_id else None
+    
+    @property
+    def distrito_nombre(self):
+        """Obtiene el nombre del distrito desde la tabla district."""
+        if not self.district_id:
+            return None
+        try:
+            with connections['propifai'].cursor() as cursor:
+                cursor.execute("""
+                    SELECT name FROM district WHERE id = %s
+                """, [self.district_id])
+                row = cursor.fetchone()
+                return row[0] if row else None
+        except Exception:
+            return None
+    
+    @property
+    def tipo_propiedad(self):
+        """Obtiene el nombre del tipo de propiedad desde property_type."""
+        if not self.property_type_id:
+            return "Propiedad"
+        try:
+            with connections['propifai'].cursor() as cursor:
+                cursor.execute("""
+                    SELECT name FROM property_type WHERE id = %s
+                """, [self.property_type_id])
+                row = cursor.fetchone()
+                return row[0] if row else "Propiedad"
+        except Exception:
+            return "Propiedad"
     
     @property
     def precio_formateado(self):
@@ -119,192 +301,66 @@ class PropifaiProperty(models.Model):
         return "No especificado"
     
     @property
-    def tipo_propiedad(self):
-        """Devuelve el nombre del tipo de propiedad desde property_type_id."""
-        if self.property_type_id:
-            try:
-                pt = PropertyType.objects.using('propifai').get(id=self.property_type_id)
-                return pt.name
-            except PropertyType.DoesNotExist:
-                pass
-        return "Propiedad"
-    
-    @property
     def es_externo(self):
-        """Indica si es una propiedad externa (para compatibilidad con template)."""
         return True
     
     @property
     def fuente_excel(self):
-        """Fuente para compatibilidad con template."""
         return "Propify DB"
     
     @property
     def departamento_nombre(self):
-        """Devuelve el nombre del departamento en lugar del índice."""
-        return obtener_nombre_departamento(self.department)
+        return "Arequipa"
     
     @property
     def provincia_nombre(self):
-        """Devuelve el nombre de la provincia en lugar del índice."""
-        return obtener_nombre_provincia(self.province)
-    
-    @property
-    def distrito_nombre(self):
-        """Devuelve el nombre del distrito en lugar del índice."""
-        return obtener_nombre_distrito(self.district)
+        return "Arequipa"
     
     @property
     def ubicacion_completa(self):
-        """Devuelve la ubicación completa formateada con nombres."""
-        return formatear_ubicacion(
-            self.department,
-            self.province,
-            self.district,
-            separador=", "
-        )
+        distrito = self.distrito_nombre or f"Distrito {self.district_id}"
+        return f"Arequipa, Arequipa, {distrito}"
     
     @property
     def ubicacion_para_tarjeta(self):
-        """Devuelve la ubicación formateada para mostrar en tarjetas."""
-        # Prioridad: distrito, provincia, departamento
-        partes = []
-        if self.distrito_nombre and self.distrito_nombre != str(self.district):
-            partes.append(self.distrito_nombre)
-        if self.provincia_nombre and self.provincia_nombre != str(self.province):
-            partes.append(self.provincia_nombre)
-        if self.departamento_nombre and self.departamento_nombre != str(self.department):
-            partes.append(self.departamento_nombre)
-        
-        if partes:
-            return ", ".join(partes)
-        
-        # Si no hay nombres mapeados, mostrar los índices
-        return f"Distrito {self.district}, Provincia {self.province}, Departamento {self.department}"
+        return self.distrito_nombre or f"Distrito {self.district_id}"
     
     @property
     def imagen_url(self):
-        """
-        Devuelve la URL de la imagen de la propiedad desde Azure Storage.
-        Las imágenes se almacenan en: https://propifymedia01.blob.core.windows.net/media/{code}.jpg
-        """
+        """Devuelve URL de imagen desde Azure Storage."""
         if not self.code:
             return None
-        
-        # Formato de URL base proporcionado por el usuario
         base_url = "https://propifymedia01.blob.core.windows.net/media"
-        
-        # Intentar con diferentes extensiones comunes
         extensions = ['.jpg', '.jpeg', '.png', '.webp']
-        
-        # Primero intentar con el código exacto
-        for ext in extensions:
-            # Si el código ya tiene extensión, usarlo directamente
-            if self.code.lower().endswith(tuple(extensions)):
-                return f"{base_url}/{self.code}"
-        
-        # Si no tiene extensión, probar con extensiones
-        for ext in extensions:
-            potential_url = f"{base_url}/{self.code}{ext}"
-            # Nota: En una implementación real, podríamos verificar si el blob existe
-            # pero para el template basta con devolver la URL
-            return potential_url
-        
-        # Si no hay código válido, devolver None
-        return None
+        if self.code.lower().endswith(tuple(extensions)):
+            return f"{base_url}/{self.code}"
+        return f"{base_url}/{self.code}.jpg"
     
     @property
     def imagenes_relacionadas(self):
-        """
-        Devuelve las imágenes relacionadas con esta propiedad.
-        """
-        # Importar aquí para evitar import circular
         from .models import PropertyImage
         return PropertyImage.objects.filter(property_id=self.id).order_by('id')
     
     @property
     def primera_imagen_url(self):
-        """
-        Devuelve la URL de la primera imagen asociada a esta propiedad.
-        Usa la tabla property_images relacionada.
-        """
-        # Obtener la primera imagen relacionada
         primera_imagen = self.imagenes_relacionadas.first()
         if primera_imagen and primera_imagen.image:
-            # Convertir ruta relativa a URL completa de Azure Storage
             return self._convertir_a_url_azure(primera_imagen.image)
         return None
     
     def _convertir_a_url_azure(self, ruta_relativa):
-        """
-        Convierte una ruta relativa de imagen a URL completa de Azure Storage.
-        Ejemplo: 'properties/images/archivo.jpg' ->
-                 'https://propifymedia01.blob.core.windows.net/media/properties/images/archivo.jpg'
-        """
         if not ruta_relativa:
             return None
-        
-        # Si ya es una URL completa, devolverla tal cual
         if ruta_relativa.startswith(('http://', 'https://')):
             return ruta_relativa
-        
-        # Base URL de Azure Storage proporcionada por el usuario
         base_url = "https://propifymedia01.blob.core.windows.net/media"
-        
-        # Asegurar que la ruta no comience con /
         if ruta_relativa.startswith('/'):
             ruta_relativa = ruta_relativa[1:]
-        
-        # Codificar cada segmento de la ruta para manejar caracteres especiales
         import urllib.parse
         parts = ruta_relativa.split('/')
         encoded_parts = [urllib.parse.quote(part) for part in parts]
         encoded_path = '/'.join(encoded_parts)
-        
-        # Construir URL completa
         return f"{base_url}/{encoded_path}"
-    
-    # Sobrescribir la propiedad imagen_url para usar la primera imagen real
-    @property
-    def imagen_url(self):
-        """
-        Devuelve la URL de la imagen de la propiedad.
-        Prioridad: 1) Imagen de property_images, 2) URL generada desde código.
-        """
-        # Primero intentar con la imagen real de la tabla property_images
-        url_real = self.primera_imagen_url
-        if url_real:
-            return url_real
-        
-        # Si no hay imagen real, usar la URL generada desde el código
-        return self._imagen_url_generada()
-    
-    def _imagen_url_generada(self):
-        """Método privado para generar URL desde código (lógica anterior)."""
-        if not self.code:
-            return None
-        
-        base_url = "https://propifymedia01.blob.core.windows.net/media"
-        extensions = ['.jpg', '.jpeg', '.png', '.webp']
-        
-        # Primero intentar con el código exacto
-        for ext in extensions:
-            if self.code.lower().endswith(tuple(extensions)):
-                return f"{base_url}/{self.code}"
-        
-        # Si no tiene extensión, probar con extensiones
-        for ext in extensions:
-            potential_url = f"{base_url}/{self.code}{ext}"
-            return potential_url
-        
-        return None
-    
-    class Meta:
-        db_table = 'properties'
-        managed = False  # La tabla ya existe en la base de datos
-        
-    def __str__(self):
-        return f"{self.code} - {self.real_address or 'Sin dirección'}"
 
 
 class PropertyImage(models.Model):
@@ -312,19 +368,13 @@ class PropertyImage(models.Model):
     Modelo para imágenes de propiedades en la base de datos Propifai.
     Tabla: property_images
     """
-    # Campos principales - basados en la información del usuario
     id = models.BigIntegerField(primary_key=True)
-    property_id = models.BigIntegerField(db_column='property_id')  # Columna para relación con properties
-    image = models.CharField(max_length=500, blank=True, null=True, db_column='image')  # URL de la imagen
-    
-    # Otros campos comunes (ajustar si existen)
-    # order = models.IntegerField(default=0, blank=True, null=True, db_column='order')
-    # created_at = models.DateTimeField(blank=True, null=True, db_column='created_at')
-    # updated_at = models.DateTimeField(blank=True, null=True, db_column='updated_at')
+    property_id = models.BigIntegerField(db_column='property_id')
+    image = models.CharField(max_length=500, blank=True, null=True, db_column='image')
     
     class Meta:
         db_table = 'property_images'
-        managed = False  # La tabla ya existe en la base de datos
+        managed = False
         
     def __str__(self):
         return f"Imagen {self.id} para propiedad {self.property_id}"
@@ -396,14 +446,21 @@ class PropertyStatus(models.Model):
 
 
 class PropertyType(models.Model):
-    """Modelo para tipos de propiedades."""
+    """
+    Modelo para tipos de propiedades.
+    NOTA: La tabla real en dbpropify_be se llama 'property_type' (singular).
+    """
     id = models.BigIntegerField(primary_key=True)
     name = models.CharField(max_length=100)
-    description = models.TextField()
-    is_active = models.BooleanField()
+    description = models.TextField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(null=True, blank=True)
+    created_by_id = models.BigIntegerField(null=True, blank=True)
+    updated_by_id = models.BigIntegerField(null=True, blank=True)
 
     class Meta:
-        db_table = 'property_types'
+        db_table = 'property_type'  # CORREGIDO: antes era 'property_types' (plural)
         managed = False
 
     def __str__(self):

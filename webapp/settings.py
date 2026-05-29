@@ -147,7 +147,7 @@ DATABASES = {
     },
     'propifai': {
         'ENGINE': 'mssql',
-        'NAME': env('PROPIFAI_DB_NAME', default='dbpropify'),
+        'NAME': env('PROPIFAI_DB_NAME', default='dbpropify_be'),
         'USER': env('PROPIFAI_DB_USER', default='sqladmin'),
         'PASSWORD': env('PROPIFAI_DB_PASS', default='Propify12345@'),
         'HOST': env('PROPIFAI_DB_HOST', default='janis-server.database.windows.net'),

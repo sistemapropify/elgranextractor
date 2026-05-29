@@ -63,13 +63,9 @@ class MatchingViewSet(viewsets.ViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Obtener propiedades (con límite para performance)
-        propiedades = PropifaiProperty.objects.all()[:limite]
-        
-        # Ejecutar matching
+        # Ejecutar matching (el motor cargará las propiedades desde la BD)
         resultados, estadisticas = ejecutar_matching_requerimiento(
-            requerimiento.id,
-            propiedades=propiedades
+            requerimiento.id
         )
         
         # Filtrar por score mínimo
