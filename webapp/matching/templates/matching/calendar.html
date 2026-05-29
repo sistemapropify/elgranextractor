@@ -1396,7 +1396,7 @@
 <div class="modal-match-overlay" id="modalMatchOverlay" onclick="if(event.target===this)closeMatchModal()">
     <div class="modal-match-content">
         <div class="modal-match-header">
-            <h2 id="modalMatchTitle">📊 Detalle del Matching</h2>
+            <h2 id="modalMatchTitle">MATCH Detalle del Matching</h2>
             <button class="btn-close-modal" onclick="closeMatchModal()">✕</button>
         </div>
         <div class="modal-match-body" id="modalMatchBody">
@@ -1651,7 +1651,7 @@ function openMatchModal(requerimientoId) {
         <div class="spinner"></div>
         <p>Cargando matching para requerimiento #${requerimientoId}...</p>
     </div>`;
-    title.textContent = `📊 Matching #${requerimientoId}`;
+    title.textContent = `MATCH Matching #${requerimientoId}`;
     btnDashboard.href = `/matching/dashboard/?requerimiento_id=${requerimientoId}`;
 
     // Fetch matching data - traer todos los resultados sin filtro de score mínimo
@@ -1997,7 +1997,7 @@ function renderMatchModal(data, body, title) {
     document.head.appendChild(style);
     `;
 
-    title.textContent = `📊 Match #${req.id || ''} — ${Math.round(scoreTotal)}%`;
+    title.textContent = `MATCH Match #${req.id || ''} — ${Math.round(scoreTotal)}%`;
 }
 
 // Close modal on Escape key
