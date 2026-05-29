@@ -692,16 +692,35 @@
 
     /* Body: layout principal: tabla comparativa (izq) + imagen+score (der) */
     .modal-match-body {
-        display: grid;
-        grid-template-columns: 1.3fr 1fr;
-        gap: 0;
+        display: flex;
+        flex-direction: column;
         padding: 0;
     }
 
     /* Panel izquierdo: tabla comparativa */
     .modal-compare-panel {
         padding: 16px 20px;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    /* Sección inferior: dos columnas */
+    .modal-bottom-section {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0;
+    }
+
+    .modal-bottom-left {
+        padding: 16px 20px;
         border-right: 1px solid var(--border-color);
+    }
+
+    .modal-bottom-right {
+        padding: 16px 20px;
+    }
+
+    .modal-bottom-right .modal-score-box {
+        margin-bottom: 12px;
     }
 
     /* Tabla comparativa lado a lado */
@@ -1823,7 +1842,7 @@ function renderMatchModal(data, body, title) {
     }
 
     body.innerHTML = `
-        <!-- PANEL IZQUIERDO: TABLA COMPARATIVA -->
+        <!-- PANEL SUPERIOR: TABLA COMPARATIVA -->
         <div class="modal-compare-panel">
             <table class="compare-table">
                 <thead>
@@ -1842,7 +1861,7 @@ function renderMatchModal(data, body, title) {
                     <tr class="${getRowClass('condicion')}">
                         <td class="col-label">Condición</td>
                         <td class="col-req">${fmt(req.condicion)}</td>
-                        <td class="col-prop">${fmt(prop.operation_type_id == 2 ? 'compra' : prop.operation_type_id == 3 ? 'alquiler' : '—')}</td>
+                        <td class="col-prop">${fmt(prop.operation_type_name || (prop.operation_type_id == 2 ? 'compra' : prop.operation_type_id == 3 ? 'alquiler' : '—'))}</td>
                     </tr>
                     <tr class="${getRowClass('distrito')}">
                         <td class="col-label">Distrito</td>
@@ -1890,19 +1909,28 @@ function renderMatchModal(data, body, title) {
             ${req.agente ? '<div style="margin-top:8px;padding:8px 12px;background:var(--bg-tertiary);border-radius:6px;font-size:12px;"><span style="color:var(--text-secondary);">Agente:</span> <span style="color:#ff6d00;font-weight:600;">' + req.agente + '</span></div>' : ''}
         </div>
 
-        <!-- PANEL DERECHO: IMAGEN + SCORE -->
-        <div class="modal-side-panel">
-            <div class="modal-score-box">
-                <div class="score-num ${scoreClass}">${Math.round(scoreTotal)}%</div>
-                <div class="score-label">Coincidencia total</div>
+        <!-- PANEL INFERIOR: DOS COLUMNAS -->
+        <div class="modal-bottom-section">
+            <!-- IZQUIERDA: REQUERIMIENTO ORIGINAL -->
+            <div class="modal-bottom-left">
+                <div style="font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;">📝 Requerimiento Original</div>
+                <div style="font-size:13px;color:var(--text-primary);line-height:1.5;background:var(--bg-tertiary);padding:12px;border-radius:8px;border:1px solid var(--border-color);max-height:200px;overflow-y:auto;white-space:pre-wrap;word-break:break-word;">${fmt(req.requerimiento || '—')}</div>
             </div>
 
-            ${propImgHtml}
+            <!-- DERECHA: SCORE + IMAGEN + DATOS -->
+            <div class="modal-bottom-right">
+                <div class="modal-score-box">
+                    <div class="score-num ${scoreClass}">${Math.round(scoreTotal)}%</div>
+                    <div class="score-label">Coincidencia total</div>
+                </div>
 
-            <div class="modal-side-code">${fmt(prop.code)}</div>
-            <div class="modal-side-title">${fmt(prop.title)}</div>
+                ${propImgHtml}
 
-            ${prop.real_address ? '<div style="font-size:11px;color:var(--text-muted);text-align:center;">' + prop.real_address + '</div>' : ''}
+                <div class="modal-side-code">${fmt(prop.code)}</div>
+                <div class="modal-side-title">${fmt(prop.title)}</div>
+
+                ${prop.real_address ? '<div style="font-size:11px;color:var(--text-muted);text-align:center;">' + prop.real_address + '</div>' : ''}
+            </div>
         </div>
     `;
 
