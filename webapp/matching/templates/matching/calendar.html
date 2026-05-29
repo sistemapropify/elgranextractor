@@ -1427,21 +1427,10 @@ const CURRENT_YEAR = {{ current_year }};
 const CURRENT_MONTH = {{ current_month }};
 const CURRENT_DAY = {{ current_day }};
 const TODAY = '{{ today.isoformat }}';
-const AGENTES_MAP = {{ agentes_map_json|safe }};
 
 function getAgenteUrl(nombre) {
     if (!nombre) return '#';
-    var key = nombre.toLowerCase().trim();
-    var id = AGENTES_MAP[key];
-    if (id) return '/agentes/' + id + '/propuestas/';
-    // Buscar por palabra
-    var partes = key.split(/\s+/);
-    for (var i = 0; i < partes.length; i++) {
-        if (partes[i].length > 3 && AGENTES_MAP[partes[i]]) {
-            return '/agentes/' + AGENTES_MAP[partes[i]] + '/propuestas/';
-        }
-    }
-    return '#';
+    return '/agentes/?q=' + encodeURIComponent(nombre);
 }
 
 {% if view_mode == 'month' %}
