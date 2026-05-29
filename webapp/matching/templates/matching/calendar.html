@@ -693,7 +693,7 @@
     /* Body: layout principal: tabla comparativa (izq) + imagen+score (der) */
     .modal-match-body {
         display: grid;
-        grid-template-columns: 1.4fr 1fr;
+        grid-template-columns: 2fr 1fr 1fr;
         gap: 0;
         padding: 0;
     }
@@ -704,8 +704,17 @@
         border-right: 1px solid var(--border-color);
     }
 
-    /* Panel derecho: score + imagen + req original compacto */
-    .modal-side-panel {
+    /* Panel central: score + imagen */
+    .modal-center-panel {
+        padding: 12px 16px;
+        border-right: 1px solid var(--border-color);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    /* Panel derecho: requerimiento original */
+    .modal-right-panel {
         padding: 12px 16px;
         display: flex;
         flex-direction: column;
@@ -1836,8 +1845,8 @@ function renderMatchModal(data, body, title) {
                 <thead>
                     <tr>
                         <th>Campo</th>
-                        <th>📋 Requerimiento</th>
-                        <th>🏠 Propiedad</th>
+                        <th>📋 Req</th>
+                        <th>🏠 Prop</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -1896,22 +1905,22 @@ function renderMatchModal(data, body, title) {
             ${req.caracteristicas_extra ? '<div style="margin-top:8px;padding:6px 10px;background:var(--bg-tertiary);border-radius:6px;font-size:11px;color:var(--text-secondary);"><strong>Extra:</strong> ' + req.caracteristicas_extra + '</div>' : ''}
         </div>
 
-        <div class="modal-side-panel">
+        <div class="modal-center-panel">
             <div class="modal-score-box">
                 <div class="score-num ${scoreClass}">${Math.round(scoreTotal)}%</div>
-                <div class="score-label">Coincidencia total</div>
+                <div class="score-label">Coincidencia</div>
             </div>
 
             ${propImgHtml}
 
             <div class="modal-side-code">${fmt(prop.code)}</div>
-            <div class="modal-side-title">${fmt(prop.title)}</div>
-            ${prop.real_address ? '<div style="font-size:11px;color:var(--text-muted);text-align:center;">' + prop.real_address + '</div>' : ''}
+            <div class="modal-side-title" style="font-size:12px;">${fmt(prop.title)}</div>
+            ${prop.real_address ? '<div style="font-size:10px;color:var(--text-muted);text-align:center;">' + prop.real_address + '</div>' : ''}
+        </div>
 
-            <details style="margin-top:4px;">
-                <summary style="font-size:11px;color:var(--accent-blue);cursor:pointer;font-weight:500;">📝 Ver requerimiento original</summary>
-                <div style="margin-top:6px;font-size:12px;color:var(--text-primary);line-height:1.4;background:var(--bg-tertiary);padding:8px;border-radius:6px;border:1px solid var(--border-color);max-height:120px;overflow-y:auto;white-space:pre-wrap;word-break:break-word;">${fmt(req.requerimiento || '—')}</div>
-            </details>
+        <div class="modal-right-panel">
+            <div style="font-size:12px;font-weight:600;color:var(--accent-blue);">📝 Requerimiento</div>
+            <div style="font-size:12px;color:var(--text-primary);line-height:1.4;background:var(--bg-tertiary);padding:8px;border-radius:6px;border:1px solid var(--border-color);overflow-y:auto;white-space:pre-wrap;word-break:break-word;flex:1;">${fmt(req.requerimiento || '—')}</div>
         </div>
     `;
 
