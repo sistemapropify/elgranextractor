@@ -916,6 +916,21 @@ class MatchingCalendarView(TemplateView):
         # Estadísticas generales
         context['total_requerimientos'] = Requerimiento.objects.count()
         context['total_propiedades'] = PropifaiProperty.objects.count()
+
+        # Mapa de agentes (nombre → id) para enlaces en el calendario
+        from agentes.models import Agente
+        agentes_qs = Agente.objects.all().values('id', 'nombre_completo')
+        agentes_map = {}
+        for a in agentes_qs:
+            nombre_key = a['nombre_completo'].lower().strip()
+            agentes_map[nombre_key] = a['id']
+            # También guardar por partes del nombre para mejor matching
+            partes = a['nombre_completo'].lower().split()
+            for p in partes:
+                if len(p) > 3:
+                    agentes_map[p] = a['id']
+        context['agentes_map_json'] = json.dumps(agentes_map)
+        context['agentes_map'] = agentes_map
         
         return context
 

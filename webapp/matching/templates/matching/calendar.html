@@ -1351,7 +1351,9 @@
                                 </div>
                                 <div class="event-detail">
                                     {% if req.agente %}
-                                        <span style="color:#ff6d00;font-weight:600;">{{ req.agente }}</span>
+                                        <span style="color:#ff6d00;font-weight:600;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;" 
+                                              onclick="var url=getAgenteUrl('{{ req.agente|escapejs }}'); if(url!='#'){window.open(url,'_blank');} else {alert('Agente no encontrado en BD');}"
+                                              title="Ver propuestas WhatsApp">{{ req.agente }}</span>
                                     {% endif %}
                                 </div>
                             </div>
@@ -1425,6 +1427,22 @@ const CURRENT_YEAR = {{ current_year }};
 const CURRENT_MONTH = {{ current_month }};
 const CURRENT_DAY = {{ current_day }};
 const TODAY = '{{ today.isoformat }}';
+const AGENTES_MAP = {{ agentes_map_json|safe }};
+
+function getAgenteUrl(nombre) {
+    if (!nombre) return '#';
+    var key = nombre.toLowerCase().trim();
+    var id = AGENTES_MAP[key];
+    if (id) return '/agentes/' + id + '/propuestas/';
+    // Buscar por palabra
+    var partes = key.split(/\s+/);
+    for (var i = 0; i < partes.length; i++) {
+        if (partes[i].length > 3 && AGENTES_MAP[partes[i]]) {
+            return '/agentes/' + AGENTES_MAP[partes[i]] + '/propuestas/';
+        }
+    }
+    return '#';
+}
 
 {% if view_mode == 'month' %}
 // ===== MONTH VIEW: Render day stats from JSON =====
@@ -1496,7 +1514,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     const badgeClass = getMatchBadgeClass(req.porcentaje_match);
                     const badgeText = getMatchBadgeText(req.porcentaje_match);
                     const presupuestoHtml = req.presupuesto_display ? `<span style="color:#3fb950;font-weight:600;margin-left:2px;">${req.presupuesto_display}</span>` : '';
-                    const agenteHtml = req.agente ? `<span style="color:#ff6d00;font-weight:600;margin-left:2px;">${req.agente}</span>` : '';
+                    const agenteHtml = req.agente ? `<span style="color:#ff6d00;font-weight:600;margin-left:2px;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;" onclick="event.stopPropagation();var url=getAgenteUrl('${req.agente.replace(/'/g,"\\'")}');if(url!='#'){window.open(url,'_blank');}else{alert('Agente no encontrado');}" title="Ver propuestas WhatsApp">${req.agente}</span>` : '';
                     const distritosHtml = req.distritos ? `<span style="color:var(--text-secondary);margin-left:2px;">· ${req.distritos.substring(0,20)}</span>` : '';
                     const precioPropHtml = (req.mejor_propiedad_precio && req.mejor_propiedad_moneda_id)
                         ? `<span style="color:var(--accent-green);font-weight:600;margin-left:2px;font-size:10px;">· ${getCurrencySymbol(req.mejor_propiedad_moneda_id)}${Number(req.mejor_propiedad_precio).toLocaleString('en-US')}</span>`
