@@ -124,7 +124,7 @@ class AgentePropuestasView(DetailView):
         propuestas = PropuestaWhatsApp.objects.filter(
             Q(agente_nombre__icontains=agente.nombre_completo) |
             Q(agente_telefono=agente.telefono)
-        ).order_by('-enviado_en')
+        ).select_related('requerimiento').order_by('-enviado_en')
 
         context['propuestas'] = propuestas
 

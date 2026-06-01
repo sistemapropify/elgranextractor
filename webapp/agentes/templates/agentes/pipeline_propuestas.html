@@ -157,10 +157,13 @@
                         <td style="white-space:nowrap;font-size:12px;color:var(--text-secondary);">
                             {{ p.enviado_en|date:'d/m/Y H:i' }}
                         </td>
-                        <td>
-                            <a href="{% url 'matching:dashboard' %}?requerimiento_id={{ p.requerimiento_id }}" style="color:var(--accent-blue);text-decoration:none;font-weight:600;font-size:13px;">
-                                #{{ p.requerimiento_id }}
-                            </a>
+                        <td style="max-width:350px;">
+                            <div style="font-size:11px;color:var(--accent-blue);margin-bottom:2px;">
+                                <a href="{% url 'matching:dashboard' %}?requerimiento_id={{ p.requerimiento_id }}" style="color:var(--accent-blue);text-decoration:none;">#{{ p.requerimiento_id }}</a>
+                            </div>
+                            <div style="font-size:12px;color:var(--text-primary);line-height:1.4;word-break:break-word;white-space:pre-wrap;">
+                                {{ p.requerimiento.requerimiento }}
+                            </div>
                         </td>
                         <td>
                             {% if p.propiedad_code %}
