@@ -659,6 +659,12 @@ class MatchingCalendarView(TemplateView):
                 })
         context['semanas_del_mes'] = semanas_del_mes
         
+        # ── Totals para stats bar ──
+        context['total_requerimientos'] = Requerimiento.objects.exclude(
+            condicion__in=['no_especificado', 'compartido']
+        ).count()
+        context['total_propiedades'] = PropifaiProperty.objects.count()
+        
         # ── Tipos de propiedad para filtros ──
         from requerimientos.models import TipoPropiedadChoices
         tipos_propiedad = [
