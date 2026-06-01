@@ -1531,8 +1531,12 @@ function cargarBadgesWhatsAppLocalStorage() {
     }
 }
 
+// Cargar badges WhatsApp desde localStorage (para vista día que es HTML servidor)
 document.addEventListener('DOMContentLoaded', function() {
-    cargarBadgesWhatsAppLocalStorage();
+    setTimeout(cargarBadgesWhatsAppLocalStorage, 200);
+});
+
+document.addEventListener('DOMContentLoaded', function() {
     // Render header
     const header = document.getElementById('weekHeader');
     let headerHtml = '<div class="week-header-cell"></div>';
@@ -1608,6 +1612,8 @@ document.addEventListener('DOMContentLoaded', function() {
         bodyHtml += '</div>';
     }
     body.innerHTML = bodyHtml;
+    // Cargar badges WhatsApp después de renderizar tarjetas
+    setTimeout(cargarBadgesWhatsAppLocalStorage, 100);
 });
 {% endif %}
 
