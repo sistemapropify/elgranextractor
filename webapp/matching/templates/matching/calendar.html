@@ -1505,7 +1505,30 @@ function getMatchBadgeText(pct) {
     return '—';
 }
 
+// ===== WHATSAPP BADGES: Cargar desde localStorage =====
+function cargarBadgesWhatsAppLocalStorage() {
+    var svgWA = '<svg viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.01-.371-.01-.571.095-.198.084-.403.24-.594.383-.274.203-.305.422-.305.615 0 .2.037.4.111.617.074.217.432 1.307 1.06 2.01.018.022.033.034.052.05.397.558 1.064 1.465 1.847 2.025 1.15.823 2.182 1.137 2.906 1.257.373.062.707.037.957-.056.26-.097.422-.252.499-.396.077-.144.115-.3.128-.47.013-.17-.02-.31-.087-.42z"/><path d="M12 2C6.477 2 2 6.477 2 12c0 1.94.563 3.752 1.532 5.29L2 22l4.84-1.468A9.959 9.959 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18.286c-1.858 0-3.583-.637-4.944-1.696l-.353-.275-2.871.872.94-2.744-.226-.375A8.46 8.46 0 013.714 12c0-4.56 3.724-8.286 8.286-8.286S20.286 7.44 20.286 12 16.562 20.286 12 20.286z"/></svg>';
+    for (var i = 0; i < localStorage.length; i++) {
+        var key = localStorage.key(i);
+        if (key && key.startsWith('wa_sent_')) {
+            var rid = key.replace('wa_sent_', '');
+            document.querySelectorAll('.day-event-card, .week-req-item').forEach(function(card) {
+                var oc = (card.getAttribute('onclick') || '') + (card.getAttribute('data-requerimiento-id') || '');
+                if (oc.includes(rid)) {
+                    if (!card.querySelector('.whatsapp-badge')) {
+                        var b = document.createElement('div');
+                        b.className = 'whatsapp-badge';
+                        b.innerHTML = svgWA;
+                        card.appendChild(b);
+                    }
+                }
+            });
+        }
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
+    cargarBadgesWhatsAppLocalStorage();
     // Render header
     const header = document.getElementById('weekHeader');
     let headerHtml = '<div class="week-header-cell"></div>';
@@ -1828,7 +1851,12 @@ function enviarPropuestaWhatsApp() {
     
     var mensaje = lineas.join('\n');
     
-    // 6. Guardar propuesta en BD via API
+    // 6. Guardar en localStorage para badge inmediato
+    try {
+        localStorage.setItem('wa_sent_' + req.id, '1');
+    } catch(e) {}
+    
+    // 6b. Guardar propuesta en BD via API
     var bodyData = {
         requerimiento_id: req.id,
         propiedad_id: prop ? prop.id : null,
@@ -1842,17 +1870,17 @@ function enviarPropuestaWhatsApp() {
         mensaje: mensaje,
     };
 
+    // Marcar la tarjeta INMEDIATAMENTE (sin esperar fetch)
+    marcarWhatsAppEnviado(req.id);
+    
     fetch('/matching/api/propuesta/guardar/', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(bodyData),
     }).then(function() {
-        // Marcar la tarjeta con el icono WhatsApp en el calendario
-        marcarWhatsAppEnviado(req.id);
+        console.log('Propuesta guardada OK para req', req.id);
     }).catch(function(err) {
-        console.warn('Error guardando propuesta:', err);
-        // Aún así marcar como enviado para UX
-        marcarWhatsAppEnviado(req.id);
+        console.warn('Error guardando propuesta (no crítico):', err);
     });
 
     // 7. Abrir WhatsApp con número si está disponible
@@ -1905,11 +1933,6 @@ function marcarWhatsAppEnviado(requerimientoId) {
         }
     });
 
-    // Enfoque 3: Recargar página si no se encontró ninguna tarjeta (fallback)
-    // Esto asegura que el icono se vea aunque el DOM no se haya actualizado
-    setTimeout(function() {
-        location.reload();
-    }, 1500);
 }
 
 function renderMatchModal(data, body, title) {
