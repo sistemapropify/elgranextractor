@@ -737,6 +737,13 @@ class MatchingCalendarView(TemplateView):
                 d = week_start + timedelta(days=i)
                 reqs_dia = [r for r in reqs_semana if r.fecha == d]
                 reqs_serializados = []
+                # Obtener IDs de requerimientos con WhatsApp enviado
+                from .models import PropuestaWhatsApp
+                reqs_con_whatsapp = set(
+                    PropuestaWhatsApp.objects.filter(
+                        requerimiento_id__in=[r.id for r in reqs_dia]
+                    ).values_list('requerimiento_id', flat=True)
+                )
                 for r in reqs_dia:
                     info = resumen_por_req.get(r.id, {})
                     # Formatear presupuesto con signo de moneda
@@ -765,6 +772,7 @@ class MatchingCalendarView(TemplateView):
                         'mejor_propiedad_precio': info.get('mejor_propiedad_precio'),
                         'mejor_propiedad_moneda_id': info.get('mejor_propiedad_moneda_id'),
                         'verificado': r.verificado,
+                        'whatsapp_enviado': r.id in reqs_con_whatsapp,
                     })
                 dias_semana.append({
                     'date_iso': d.isoformat(),
@@ -868,6 +876,13 @@ class MatchingCalendarView(TemplateView):
             ).order_by('hora')
             
             reqs_serializados = []
+            # Obtener IDs de requerimientos con WhatsApp enviado
+            from .models import PropuestaWhatsApp
+            reqs_con_whatsapp = set(
+                PropuestaWhatsApp.objects.filter(
+                    requerimiento_id__in=[r.id for r in reqs_dia]
+                ).values_list('requerimiento_id', flat=True)
+            )
             for r in reqs_dia:
                 info = resumen_por_req.get(r.id, {})
                 # Formatear presupuesto con signo de moneda
@@ -896,6 +911,7 @@ class MatchingCalendarView(TemplateView):
                     'mejor_propiedad_precio': info.get('mejor_propiedad_precio'),
                     'mejor_propiedad_moneda_id': info.get('mejor_propiedad_moneda_id'),
                     'verificado': r.verificado,
+                    'whatsapp_enviado': r.id in reqs_con_whatsapp,
                 })
             
             context['reqs_dia'] = reqs_serializados
