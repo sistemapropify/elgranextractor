@@ -1868,31 +1868,48 @@ function enviarPropuestaWhatsApp() {
 
 // ===== MARCA TARJETA CON ICONO WHATSAPP DESPUÉS DE ENVIAR =====
 function marcarWhatsAppEnviado(requerimientoId) {
-    // 1. Tarjetas day-event-card (vista día)
-    var cards = document.querySelectorAll('.day-event-card');
-    cards.forEach(function(card) {
-        // El onclick tiene el ID del requerimiento: openMatchModal(ID)
-        var match = card.getAttribute('onclick');
-        if (match && match.includes('openMatchModal(' + requerimientoId + ')')) {
-            // Verificar si ya tiene el badge
+    // SVG del icono WhatsApp
+    var svgWhatsApp = '<svg viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.01-.371-.01-.571.095-.198.084-.403.24-.594.383-.274.203-.305.422-.305.615 0 .2.037.4.111.617.074.217.432 1.307 1.06 2.01.018.022.033.034.052.05.397.558 1.064 1.465 1.847 2.025 1.15.823 2.182 1.137 2.906 1.257.373.062.707.037.957-.056.26-.097.422-.252.499-.396.077-.144.115-.3.128-.47.013-.17-.02-.31-.087-.42z"/><path d="M12 2C6.477 2 2 6.477 2 12c0 1.94.563 3.752 1.532 5.29L2 22l4.84-1.468A9.959 9.959 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18.286c-1.858 0-3.583-.637-4.944-1.696l-.353-.275-2.871.872.94-2.744-.226-.375A8.46 8.46 0 013.714 12c0-4.56 3.724-8.286 8.286-8.286S20.286 7.44 20.286 12 16.562 20.286 12 20.286z"/></svg>';
+
+    // Enfoque 1: Buscar la tarjeta por onclick (vista día)
+    document.querySelectorAll('.day-event-card').forEach(function(card) {
+        var onclick = card.getAttribute('onclick') || '';
+        if (onclick.includes('openMatchModal(' + requerimientoId + ')') ||
+            onclick.includes('openMatchModal(' + requerimientoId + ',')) {
             if (!card.querySelector('.whatsapp-badge')) {
                 var badge = document.createElement('div');
                 badge.className = 'whatsapp-badge';
-                badge.innerHTML = '<svg viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.01-.371-.01-.571.095-.198.084-.403.24-.594.383-.274.203-.305.422-.305.615 0 .2.037.4.111.617.074.217.432 1.307 1.06 2.01.018.022.033.034.052.05.397.558 1.064 1.465 1.847 2.025 1.15.823 2.182 1.137 2.906 1.257.373.062.707.037.957-.056.26-.097.422-.252.499-.396.077-.144.115-.3.128-.47.013-.17-.02-.31-.087-.42z"/><path d="M12 2C6.477 2 2 6.477 2 12c0 1.94.563 3.752 1.532 5.29L2 22l4.84-1.468A9.959 9.959 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18.286c-1.858 0-3.583-.637-4.944-1.696l-.353-.275-2.871.872.94-2.744-.226-.375A8.46 8.46 0 013.714 12c0-4.56 3.724-8.286 8.286-8.286S20.286 7.44 20.286 12 16.562 20.286 12 20.286z"/></svg>';
+                badge.innerHTML = svgWhatsApp;
                 card.appendChild(badge);
             }
         }
     });
-    // 2. week-req-item se renderizan con JS, actualizar datos
-    if (typeof diasSemana !== 'undefined') {
-        diasSemana.forEach(function(dia) {
-            dia.requerimientos.forEach(function(req) {
-                if (req.id === requerimientoId) {
-                    req.whatsapp_enviado = true;
-                }
-            });
-        });
-    }
+
+    // Enfoque 2: Buscar en semana
+    document.querySelectorAll('.week-req-item').forEach(function(card) {
+        var onclick = card.getAttribute('onclick') || '';
+        if (onclick.includes('openMatchModal(' + requerimientoId + ')')) {
+            if (!card.querySelector('.whatsapp-badge')) {
+                var badge = document.createElement('div');
+                badge.className = 'whatsapp-badge';
+                badge.style.position = 'absolute';
+                badge.style.bottom = '2px';
+                badge.style.left = '2px';
+                badge.style.width = '14px';
+                badge.style.height = '14px';
+                badge.style.zIndex = '5';
+                badge.style.pointerEvents = 'none';
+                badge.innerHTML = svgWhatsApp.replace('width="16" height="16"', 'width="12" height="12"');
+                card.appendChild(badge);
+            }
+        }
+    });
+
+    // Enfoque 3: Recargar página si no se encontró ninguna tarjeta (fallback)
+    // Esto asegura que el icono se vea aunque el DOM no se haya actualizado
+    setTimeout(function() {
+        location.reload();
+    }, 1500);
 }
 
 function renderMatchModal(data, body, title) {
