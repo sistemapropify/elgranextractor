@@ -755,6 +755,19 @@ class MatchingCalendarView(TemplateView):
                     # Lista de distritos (separados por coma)
                     distritos_raw = r.distritos or ''
                     distritos_list = [d.strip() for d in distritos_raw.split(',') if d.strip()]
+                    # Buscar ID del agente por nombre
+                    agente_nombre_limpio = (r.agente or '').replace('\n', ' ').replace('\r', ' ').strip()
+                    agente_id = None
+                    if agente_nombre_limpio:
+                        try:
+                            from agentes.models import Agente
+                            agente_obj = Agente.objects.filter(
+                                nombre_completo__icontains=agente_nombre_limpio
+                            ).first()
+                            if agente_obj:
+                                agente_id = agente_obj.id
+                        except Exception:
+                            pass
                     reqs_serializados.append({
                         'id': r.id,
                         'hora': r.hora.isoformat() if r.hora else None,
@@ -764,7 +777,8 @@ class MatchingCalendarView(TemplateView):
                         'presupuesto_display': presupuesto_display,
                         'presupuesto_monto': presupuesto_monto,
                         'presupuesto_moneda': r.presupuesto_moneda or '',
-                        'agente': (r.agente or '').replace('\n', ' ').replace('\r', ' '),
+                        'agente': agente_nombre_limpio,
+                        'agente_id': agente_id,
                         'distritos': r.distritos[:50] if r.distritos else '',
                         'distritos_list': distritos_list,
                         'porcentaje_match': info.get('porcentaje_match', 0),
@@ -894,6 +908,19 @@ class MatchingCalendarView(TemplateView):
                 # Lista de distritos (separados por coma)
                 distritos_raw = r.distritos or ''
                 distritos_list = [d.strip() for d in distritos_raw.split(',') if d.strip()]
+                # Buscar ID del agente por nombre
+                agente_nombre_limpio = (r.agente or '').replace('\n', ' ').replace('\r', ' ').strip()
+                agente_id = None
+                if agente_nombre_limpio:
+                    try:
+                        from agentes.models import Agente
+                        agente_obj = Agente.objects.filter(
+                            nombre_completo__icontains=agente_nombre_limpio
+                        ).first()
+                        if agente_obj:
+                            agente_id = agente_obj.id
+                    except Exception:
+                        pass
                 reqs_serializados.append({
                     'id': r.id,
                     'hora': r.hora.isoformat() if r.hora else None,
@@ -903,7 +930,8 @@ class MatchingCalendarView(TemplateView):
                     'presupuesto_display': presupuesto_display,
                     'presupuesto_monto': presupuesto_monto,
                     'presupuesto_moneda': r.presupuesto_moneda or '',
-                    'agente': (r.agente or '').replace('\n', ' ').replace('\r', ' '),
+                    'agente': agente_nombre_limpio,
+                    'agente_id': agente_id,
                     'distritos': r.distritos[:50] if r.distritos else '',
                     'distritos_list': distritos_list,
                     'porcentaje_match': info.get('porcentaje_match', 0),

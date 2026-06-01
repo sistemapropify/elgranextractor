@@ -1389,7 +1389,11 @@
                                 </div>
                                 <div class="event-detail">
                                     {% if req.agente %}
+                                        {% if req.agente_id %}
+                                        <a href="/agentes/{{ req.agente_id }}/propuestas/" target="_blank" style="color:#ff6d00;font-weight:600;text-decoration:none;" title="Ver propuestas enviadas a {{ req.agente }}">{{ req.agente }}</a>
+                                        {% else %}
                                         <span style="color:#ff6d00;font-weight:600;">{{ req.agente }}</span>
+                                        {% endif %}
                                     {% endif %}
                                 </div>
                             </div>
@@ -1557,7 +1561,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     const badgeClass = getMatchBadgeClass(req.porcentaje_match);
                     const badgeText = getMatchBadgeText(req.porcentaje_match);
                     const presupuestoHtml = req.presupuesto_display ? `<span style="color:#3fb950;font-weight:600;margin-left:2px;">${req.presupuesto_display}</span>` : '';
-                    const agenteHtml = req.agente ? `<span style="color:#ff6d00;font-weight:600;margin-left:2px;">${req.agente}</span>` : '';
+                    const agenteHtml = req.agente
+                        ? (req.agente_id
+                            ? `<a href="/agentes/${req.agente_id}/propuestas/" target="_blank" style="color:#ff6d00;font-weight:600;text-decoration:none;margin-left:2px;" title="Ver propuestas enviadas a ${req.agente}">${req.agente}</a>`
+                            : `<span style="color:#ff6d00;font-weight:600;margin-left:2px;">${req.agente}</span>`)
+                        : '';
                     const distritosHtml = req.distritos ? `<span style="color:var(--text-secondary);margin-left:2px;">· ${req.distritos.substring(0,20)}</span>` : '';
                     const precioPropHtml = (req.mejor_propiedad_precio && req.mejor_propiedad_moneda_id)
                         ? `<span style="color:var(--accent-green);font-weight:600;margin-left:2px;font-size:10px;">· ${getCurrencySymbol(req.mejor_propiedad_moneda_id)}${Number(req.mejor_propiedad_precio).toLocaleString('en-US')}</span>`
