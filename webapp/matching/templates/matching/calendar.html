@@ -1842,26 +1842,16 @@ function enviarPropuestaWhatsApp() {
         if (prop.built_area) lineas.push('\uD83D\uDCD0 \u00C1rea: ' + prop.built_area + ' m\u00B2');
         if (prop.code) lineas.push('\uD83D\uDCDD C\u00F3digo: ' + prop.code);
         lineas.push('');
-        if (prop.imagen_url) {
-            lineas.push('\uD83D\uDDBC\uFE0F ' + prop.imagen_url);
-            lineas.push('');
-        }
     }
     
-    // 4. Links de ejemplo
+    // 4. Links y botones de acci\u00F3n
     lineas.push('\uD83D\uDD17 Ver propiedad: https://propifai.com/propiedad/' + (prop ? prop.id : '\u2014'));
-    lineas.push('\uD83D\uDCC5 Agendar visita: https://propifai.com/agendar?ref=wa_' + codigo);
     lineas.push('');
-    lineas.push('\u00BFTe interesa? Responde:');
-    
-    // 5. Botones visuales con Unicode box drawing
-    lineas.push('\u250C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510');
-    lineas.push('\u2502 \u2705 S\u00ED, me interesa           \u2502');
-    lineas.push('\u251C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524');
-    lineas.push('\u2502 \u274C No, gracias               \u2502');
-    lineas.push('\u251C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524');
-    lineas.push('\u2502 \uD83D\uDCC5 Agendar una visita        \u2502');
-    lineas.push('\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518');
+    lineas.push('\u00BFTe interesa? Responde con el n\u00FAmero:');
+    lineas.push('');
+    lineas.push('1\uFE0F\u20E3 \u2705 S\u00ED, me interesa');
+    lineas.push('2\uFE0F\u20E3 \u274C No, gracias');
+    lineas.push('3\uFE0F\u20E3 \uD83D\uDCC5 Agendar visita: https://propifai.com/agendar?ref=wa_' + codigo);
     
     var mensaje = lineas.join('\n');
     
