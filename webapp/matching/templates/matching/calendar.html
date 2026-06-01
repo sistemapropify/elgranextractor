@@ -1390,7 +1390,7 @@
                                 <div class="event-detail">
                                     {% if req.agente %}
                                         {% if req.agente_id %}
-                                        <a href="/agentes/{{ req.agente_id }}/propuestas/" target="_blank" style="color:#ff6d00;font-weight:600;text-decoration:none;" title="Ver propuestas enviadas a {{ req.agente }}">{{ req.agente }}</a>
+                                        <a href="/agentes/{{ req.agente_id }}/propuestas/" target="_blank" style="color:#ff6d00;font-weight:600;text-decoration:none;display:inline;" title="Ver propuestas enviadas a {{ req.agente }}">{{ req.agente }}</a>
                                         {% else %}
                                         <span style="color:#ff6d00;font-weight:600;">{{ req.agente }}</span>
                                         {% endif %}
@@ -1567,7 +1567,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     const presupuestoHtml = req.presupuesto_display ? `<span style="color:#3fb950;font-weight:600;margin-left:2px;">${req.presupuesto_display}</span>` : '';
                     const agenteHtml = req.agente
                         ? (req.agente_id
-                            ? `<a href="/agentes/${req.agente_id}/propuestas/" target="_blank" style="color:#ff6d00;font-weight:600;text-decoration:none;margin-left:2px;" title="Ver propuestas enviadas a ${req.agente}">${req.agente}</a>`
+                            ? `<a href="/agentes/${req.agente_id}/propuestas/" target="_blank" style="color:#ff6d00;font-weight:600;text-decoration:none;display:inline;margin-left:2px;" onclick="event.stopPropagation()" title="Ver propuestas enviadas a ${req.agente}">${req.agente}</a>`
                             : `<span style="color:#ff6d00;font-weight:600;margin-left:2px;">${req.agente}</span>`)
                         : '';
                     const distritosHtml = req.distritos ? `<span style="color:var(--text-secondary);margin-left:2px;">· ${req.distritos.substring(0,20)}</span>` : '';
