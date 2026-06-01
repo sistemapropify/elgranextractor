@@ -7,7 +7,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticatedOrReadOnly
+from rest_framework.permissions import IsAuthenticatedOrReadOnly, AllowAny
 from rest_framework.pagination import PageNumberPagination
 
 from requerimientos.models import Requerimiento
@@ -295,7 +295,7 @@ class PropuestaWhatsAppViewSet(viewsets.ViewSet):
     """
     permission_classes = [IsAuthenticatedOrReadOnly]
 
-    @action(detail=False, methods=['POST'])
+    @action(detail=False, methods=['POST'], permission_classes=[AllowAny])
     def guardar(self, request):
         """
         POST /matching/api/propuesta/guardar/
@@ -349,7 +349,7 @@ class PropuestaWhatsAppViewSet(viewsets.ViewSet):
 
         return Response(PropuestaWhatsAppSerializer(propuesta).data)
 
-    @action(detail=False, methods=['GET'])
+    @action(detail=False, methods=['GET'], permission_classes=[AllowAny])
     def listar(self, request):
         """
         GET /matching/api/propuesta/listar/
