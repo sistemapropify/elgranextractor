@@ -442,13 +442,34 @@ class MatchingMasivoView(TemplateView):
         }
         context['porcentajes_por_requerimiento'] = porcentajes_por_requerimiento
         
+        # ── Filtro por agente ──
+        agente_filter = self.request.GET.get('agente', '').strip()
+        context['agente_filter'] = agente_filter
+        
         # Obtener requerimientos paginados (solo los más recientes)
         requerimientos_qs = Requerimiento.objects.all().order_by('-fecha', '-hora')
+        
+        # Aplicar filtro por agente si está presente
+        if agente_filter:
+            requerimientos_qs = requerimientos_qs.filter(agente__icontains=agente_filter)
         
         # Paginación directa sobre QuerySet (más eficiente)
         paginator = Paginator(requerimientos_qs, 50)
         page_number = self.request.GET.get('page')
         page_obj = paginator.get_page(page_number)
+        
+        # ── Agentes disponibles para el filtro ──
+        import json
+        from django.db.models import Count
+        agentes_nombres = (
+            Requerimiento.objects.exclude(condicion__in=['no_especificado', 'compartido'])
+            .exclude(agente='')
+            .values('agente')
+            .annotate(total=Count('id'))
+            .order_by('-total')
+            .values_list('agente', flat=True)
+        )[:100]
+        context['agentes_json'] = json.dumps(list(agentes_nombres))
         
         # Crear diccionario con toda la información del resumen por requerimiento_id
         resumen_por_requerimiento = {item['requerimiento_id']: item for item in resumen}
@@ -664,6 +685,18 @@ class MatchingCalendarView(TemplateView):
             condicion__in=['no_especificado', 'compartido']
         ).count()
         context['total_propiedades'] = PropifaiProperty.objects.count()
+        
+        # ── Agentes para filtro autocomplete ──
+        from django.db.models import Count
+        agentes_nombres = (
+            Requerimiento.objects.exclude(condicion__in=['no_especificado', 'compartido'])
+            .exclude(agente='')
+            .values('agente')
+            .annotate(total=Count('id'))
+            .order_by('-total')
+            .values_list('agente', flat=True)
+        )[:100]
+        context['agentes_json'] = json.dumps(list(agentes_nombres))
         
         # ── Tipos de propiedad para filtros ──
         from requerimientos.models import TipoPropiedadChoices

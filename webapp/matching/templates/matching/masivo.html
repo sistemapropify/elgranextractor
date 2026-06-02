@@ -698,6 +698,21 @@
                     <option value="none" {% if request.GET.match_filter == 'none' %}selected{% endif %}>Sin match</option>
                 </select>
             </div>
+            <div class="form-group" style="min-width:140px;">
+                <label for="agente" style="font-size:11px;">👤 Agente</label>
+                <div style="position:relative;">
+                    <input type="text" id="inputAgente" name="agente" class="form-control"
+                           placeholder="Buscar agente..."
+                           autocomplete="off"
+                           value="{{ agente_filter|default:'' }}"
+                           oninput="onAgenteInput(this)"
+                           style="padding:6px 8px;font-size:12px;background-color:#0d1117;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;width:100%;box-sizing:border-box;">
+                    <div id="agenteSuggestions" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:6px;max-height:120px;overflow-y:auto;z-index:1000;font-size:12px;"></div>
+                </div>
+                {% if agente_filter %}
+                <button type="button" onclick="resetAgenteFilter()" style="background:transparent;border:1px solid var(--border-color);border-radius:4px;color:var(--text-secondary);font-size:10px;padding:1px 6px;cursor:pointer;margin-top:2px;">✕ Restablecer</button>
+                {% endif %}
+            </div>
             <div class="form-group">
                 <label for="sort">Ordenar por</label>
                 <select id="sort" name="sort" class="form-control">
@@ -826,12 +841,13 @@
         <div class="pagination-container">
             <nav>
                 <ul class="pagination">
+                    {% with agente_param=request.GET.agente|default:'' search_param=request.GET.search|default:'' match_filter_param=request.GET.match_filter|default:'' sort_param=request.GET.sort|default:'' %}
                     {% if page_obj.has_previous %}
                         <li class="page-item">
-                            <a class="page-link" href="?page=1{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.match_filter %}&match_filter={{ request.GET.match_filter }}{% endif %}{% if request.GET.sort %}&sort={{ request.GET.sort }}{% endif %}">««</a>
+                            <a class="page-link" href="?page=1{% if search_param %}&search={{ search_param }}{% endif %}{% if match_filter_param %}&match_filter={{ match_filter_param }}{% endif %}{% if agente_param %}&agente={{ agente_param }}{% endif %}{% if sort_param %}&sort={{ sort_param }}{% endif %}">««</a>
                         </li>
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.match_filter %}&match_filter={{ request.GET.match_filter }}{% endif %}{% if request.GET.sort %}&sort={{ request.GET.sort }}{% endif %}">«</a>
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_param %}&search={{ search_param }}{% endif %}{% if match_filter_param %}&match_filter={{ match_filter_param }}{% endif %}{% if agente_param %}&agente={{ agente_param }}{% endif %}{% if sort_param %}&sort={{ sort_param }}{% endif %}">«</a>
                         </li>
                     {% else %}
                         <li class="page-item disabled"><span class="page-link">«</span></li>
@@ -842,21 +858,22 @@
                             <li class="page-item active"><span class="page-link">{{ num }}</span></li>
                         {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
                             <li class="page-item">
-                                <a class="page-link" href="?page={{ num }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.match_filter %}&match_filter={{ request.GET.match_filter }}{% endif %}{% if request.GET.sort %}&sort={{ request.GET.sort }}{% endif %}">{{ num }}</a>
+                                <a class="page-link" href="?page={{ num }}{% if search_param %}&search={{ search_param }}{% endif %}{% if match_filter_param %}&match_filter={{ match_filter_param }}{% endif %}{% if agente_param %}&agente={{ agente_param }}{% endif %}{% if sort_param %}&sort={{ sort_param }}{% endif %}">{{ num }}</a>
                             </li>
                         {% endif %}
                     {% endfor %}
 
                     {% if page_obj.has_next %}
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.match_filter %}&match_filter={{ request.GET.match_filter }}{% endif %}{% if request.GET.sort %}&sort={{ request.GET.sort }}{% endif %}">»</a>
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_param %}&search={{ search_param }}{% endif %}{% if match_filter_param %}&match_filter={{ match_filter_param }}{% endif %}{% if agente_param %}&agente={{ agente_param }}{% endif %}{% if sort_param %}&sort={{ sort_param }}{% endif %}">»</a>
                         </li>
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}{% if request.GET.match_filter %}&match_filter={{ request.GET.match_filter }}{% endif %}{% if request.GET.sort %}&sort={{ request.GET.sort }}{% endif %}">»»</a>
+                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if search_param %}&search={{ search_param }}{% endif %}{% if match_filter_param %}&match_filter={{ match_filter_param }}{% endif %}{% if agente_param %}&agente={{ agente_param }}{% endif %}{% if sort_param %}&sort={{ sort_param }}{% endif %}">»»</a>
                         </li>
                     {% else %}
                         <li class="page-item disabled"><span class="page-link">»</span></li>
                     {% endif %}
+                    {% endwith %}
                 </ul>
             </nav>
         </div>
@@ -1014,6 +1031,60 @@ document.addEventListener('DOMContentLoaded', function() {
             this.classList.remove('active');
         }
     });
+});
+
+// ===== FILTRO DE AGENTE CON AUTOCOMPLETE =====
+var agentesDisponibles = {{ agentes_json|safe }};
+
+function onAgenteInput(input) {
+    var val = input.value.toLowerCase().trim();
+    var suggestions = document.getElementById('agenteSuggestions');
+
+    if (val.length === 0) {
+        suggestions.style.display = 'none';
+        return;
+    }
+
+    var matches = agentesDisponibles.filter(function(a) {
+        return a.toLowerCase().includes(val);
+    }).slice(0, 8);
+
+    if (matches.length === 0) {
+        suggestions.style.display = 'none';
+        return;
+    }
+
+    var html = '';
+    matches.forEach(function(m) {
+        var escaped = m.replace(/'/g, "\\'");
+        var highlight = m.replace(new RegExp('(' + val.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi'), '<strong>$1</strong>');
+        html += '<div onclick="selectAgente(\'' + escaped + '\')" style="padding:6px 10px;cursor:pointer;font-size:13px;color:var(--text-primary);border-bottom:1px solid var(--border-color);">' + highlight + '</div>';
+    });
+    suggestions.innerHTML = html;
+    suggestions.style.display = 'block';
+}
+
+function selectAgente(nombre) {
+    document.getElementById('inputAgente').value = nombre;
+    document.getElementById('agenteSuggestions').style.display = 'none';
+    // Enviar el formulario para aplicar el filtro server-side
+    document.querySelector('.filter-form').submit();
+}
+
+function resetAgenteFilter() {
+    document.getElementById('inputAgente').value = '';
+    document.getElementById('agenteSuggestions').style.display = 'none';
+    // Enviar el formulario para quitar el filtro
+    document.querySelector('.filter-form').submit();
+}
+
+// Ocultar sugerencias al hacer clic fuera
+document.addEventListener('click', function(e) {
+    var input = document.getElementById('inputAgente');
+    var suggestions = document.getElementById('agenteSuggestions');
+    if (input && suggestions && !input.contains(e.target) && !suggestions.contains(e.target)) {
+        suggestions.style.display = 'none';
+    }
 });
 </script>
 {% endblock %}

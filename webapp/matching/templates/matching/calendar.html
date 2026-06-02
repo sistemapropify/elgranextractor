@@ -1062,7 +1062,7 @@
 
     <!-- Toolbar row: filters + nav side by side -->
     <div class="toolbar-row" style="display:flex;gap:16px;align-items:flex-start;margin-bottom:8px;flex-shrink:0;">
-        <div class="toolbar-filters" style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;min-width:140px;">
+        <div class="toolbar-filters" style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;width:156px;">
             <div class="filter-bar" id="filterBar" style="flex-direction:column;align-items:flex-start;gap:4px;margin:0;">
                 <span class="filter-label">🏷️ Tipo:</span>
                 <select id="selectTipoFilter" onchange="onTipoFilterChange(this)" style="background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);padding:4px 8px;font-size:13px;cursor:pointer;">
@@ -1077,6 +1077,13 @@
                 <label class="switch-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;">
                     <input type="checkbox" id="switchSinMatch" onchange="toggleSinMatch(this)" style="width:18px;height:18px;accent-color:var(--accent-green);cursor:pointer;">
                 </label>
+            </div>
+            <!-- Filtro agente con autocomplete -->
+            <div class="filter-bar" style="flex-direction:column;align-items:flex-start;gap:4px;margin-top:4px;position:relative;max-width:100%;">
+                <span class="filter-label">👤 Agente:</span>
+                <input type="text" id="inputAgente" placeholder="Buscar agente..." autocomplete="off" style="background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);padding:4px 8px;font-size:13px;width:100%;max-width:100%;box-sizing:border-box;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;" oninput="onAgenteInput(this)">
+                <div id="agenteSuggestions" style="display:none;position:absolute;top:100%;left:0;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:6px;max-height:150px;overflow-y:auto;z-index:1000;width:100%;box-sizing:border-box;"></div>
+                <button id="btnResetAgente" onclick="resetAgenteFilter()" style="display:none;background:transparent;border:1px solid var(--border-color);border-radius:4px;color:var(--text-secondary);font-size:11px;padding:2px 8px;cursor:pointer;width:auto;align-self:flex-start;">✕ Restablecer</button>
             </div>
         </div>
         <div class="nav-bar" style="flex:1;margin-bottom:0;">
@@ -1128,7 +1135,7 @@
         </div>
     </div>
 
-    <div class="calendar-views-wrapper" style="margin-left:156px;flex:1;min-height:0;">
+    <div class="calendar-views-wrapper" style="margin-left:172px;flex:1;min-height:0;">
     {% if view_mode == 'year' %}
     <!-- ===== YEAR VIEW ===== -->
     <div class="year-view-container">
@@ -1353,7 +1360,7 @@
                 <div class="day-hour-content" id="hour-{{ hora_slot|time:'H' }}">
                     {% for req in reqs_dia %}
                         {% if req.hora_display|slice:":2" == hora_slot|time:"H" %}
-                        <div class="day-event-card" onclick="openMatchModal({{ req.id }})" data-tipo-key="{{ req.tipo_propiedad_key }}" data-distritos="{{ req.distritos_list|join:',' }}" data-porcentaje-match="{{ req.porcentaje_match|default:'0' }}">
+                        <div class="day-event-card" onclick="openMatchModal({{ req.id }})" data-tipo-key="{{ req.tipo_propiedad_key }}" data-distritos="{{ req.distritos_list|join:',' }}" data-porcentaje-match="{{ req.porcentaje_match|default:'0' }}" data-agente="{{ req.agente|default:'' }}">
                             {% if req.verificado %}
                             <div class="verified-star">
                                 <svg viewBox="0 0 24 24" fill="#00ff88">
@@ -1586,7 +1593,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>`
                         : '';
                     const distritosStr = req.distritos_list ? req.distritos_list.join(',') : '';
-                    bodyHtml += `<div class="week-req-item" onclick="openMatchModal(${req.id})" style="position:relative;" data-tipo-key="${req.tipo_propiedad_key}" data-distritos="${distritosStr}" data-porcentaje-match="${req.porcentaje_match}">
+                    var agenteStr = (req.agente || '').replace(/'/g, "\\'");
+                    bodyHtml += `<div class="week-req-item" onclick="openMatchModal(${req.id})" style="position:relative;" data-tipo-key="${req.tipo_propiedad_key}" data-distritos="${distritosStr}" data-porcentaje-match="${req.porcentaje_match}" data-agente="${agenteStr}">
                         ${verifiedStarHtml}
                         ${whatsappBadgeHtml}
                         <span class="req-hour">${req.hora_display}</span>
@@ -1612,11 +1620,69 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 {% endif %}
 
+// Ocultar sugerencias al hacer clic fuera
+document.addEventListener('click', function(e) {
+    var input = document.getElementById('inputAgente');
+    var suggestions = document.getElementById('agenteSuggestions');
+    if (input && suggestions && !input.contains(e.target) && !suggestions.contains(e.target)) {
+        suggestions.style.display = 'none';
+    }
+});
+
 // ===== FILTRO DE TIPO DE PROPIEDAD =====
 let selectedTipo = '';  // '' = todos
 
 // ===== SWITCH: SOLO CON MATCH =====
 let showOnlyWithMatch = false;
+
+// ===== FILTRO DE AGENTE =====
+let selectedAgente = '';
+let agentesDisponibles = {{ agentes_json|safe }};
+
+function onAgenteInput(input) {
+    const val = input.value.toLowerCase().trim();
+    const suggestions = document.getElementById('agenteSuggestions');
+    const resetBtn = document.getElementById('btnResetAgente');
+    
+    if (val.length === 0) {
+        suggestions.style.display = 'none';
+        if (!selectedAgente) resetBtn.style.display = 'none';
+        return;
+    }
+    
+    const matches = agentesDisponibles.filter(function(a) {
+        return a.toLowerCase().includes(val);
+    }).slice(0, 8);
+    
+    if (matches.length === 0) {
+        suggestions.style.display = 'none';
+        return;
+    }
+    
+    var html = '';
+    matches.forEach(function(m) {
+        var highlight = m.replace(new RegExp('(' + val.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi'), '<strong>$1</strong>');
+        html += '<div onclick="selectAgente(\'' + m.replace(/'/g, "\\'") + '\')" style="padding:4px 8px;cursor:pointer;font-size:12px;color:var(--text-primary);border-bottom:1px solid var(--border-color);">' + highlight + '</div>';
+    });
+    suggestions.innerHTML = html;
+    suggestions.style.display = 'block';
+}
+
+function selectAgente(nombre) {
+    selectedAgente = nombre;
+    document.getElementById('inputAgente').value = nombre;
+    document.getElementById('agenteSuggestions').style.display = 'none';
+    document.getElementById('btnResetAgente').style.display = '';
+    applyFilters();
+}
+
+function resetAgenteFilter() {
+    selectedAgente = '';
+    document.getElementById('inputAgente').value = '';
+    document.getElementById('agenteSuggestions').style.display = 'none';
+    document.getElementById('btnResetAgente').style.display = 'none';
+    applyFilters();
+}
 
 function onTipoFilterChange(select) {
     selectedTipo = select.value;
@@ -1628,20 +1694,30 @@ function toggleSinMatch(checkbox) {
     applyFilters();
 }
 
+function aplicarFiltroAgente(elemento, agenteDataAttr) {
+    if (!selectedAgente) return true;
+    var agenteNombre = (elemento.dataset.agente || '').toLowerCase();
+    return agenteNombre.indexOf(selectedAgente.toLowerCase()) >= 0;
+}
+
 function applyFilters() {
     // Aplicar a vista week (renderizada con JS)
     if (VIEW_MODE === 'week' && typeof diasSemana !== 'undefined') {
         document.querySelectorAll('.week-req-item').forEach(function(item) {
             const reqTipoKey = item.dataset.tipoKey;
             var visible = true;
-            // Filtro por tipo
             if (reqTipoKey && selectedTipo && reqTipoKey !== selectedTipo) {
                 visible = false;
             }
-            // Filtro: solo con match
             if (visible && showOnlyWithMatch) {
                 const pct = parseFloat(item.dataset.porcentajeMatch);
                 if (!pct || pct <= 0) {
+                    visible = false;
+                }
+            }
+            if (visible && selectedAgente) {
+                var agente = (item.dataset.agente || '').toLowerCase();
+                if (agente.indexOf(selectedAgente.toLowerCase()) < 0) {
                     visible = false;
                 }
             }
@@ -1654,14 +1730,18 @@ function applyFilters() {
         document.querySelectorAll('.day-event-card').forEach(function(card) {
             const reqTipoKey = card.dataset.tipoKey;
             var visible = true;
-            // Filtro por tipo
             if (reqTipoKey && selectedTipo && reqTipoKey !== selectedTipo) {
                 visible = false;
             }
-            // Filtro: solo con match
             if (visible && showOnlyWithMatch) {
                 const pct = parseFloat(card.dataset.porcentajeMatch);
                 if (!pct || pct <= 0) {
+                    visible = false;
+                }
+            }
+            if (visible && selectedAgente) {
+                var agente = (card.dataset.agente || '').toLowerCase();
+                if (agente.indexOf(selectedAgente.toLowerCase()) < 0) {
                     visible = false;
                 }
             }
