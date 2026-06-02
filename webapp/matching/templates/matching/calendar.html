@@ -1062,28 +1062,28 @@
 
     <!-- Toolbar row: filters + nav side by side -->
     <div class="toolbar-row" style="display:flex;gap:16px;align-items:flex-start;margin-bottom:0;flex-shrink:0;">
-        <div class="toolbar-filters" style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;width:156px;">
-            <div class="filter-bar" id="filterBar" style="flex-direction:column;align-items:flex-start;gap:4px;margin:0;">
+        <div class="toolbar-filters" style="display:flex;flex-direction:column;gap:2px;flex-shrink:0;width:156px;">
+            <div class="filter-bar" id="filterBar" style="display:flex;align-items:center;gap:6px;padding:0;margin:0;">
                 <span class="filter-label">🏷️ Tipo:</span>
-                <select id="selectTipoFilter" onchange="onTipoFilterChange(this)" style="background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);padding:4px 8px;font-size:13px;cursor:pointer;">
+                <select id="selectTipoFilter" onchange="onTipoFilterChange(this)" style="background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);padding:2px 6px;font-size:12px;cursor:pointer;flex:1;min-width:0;">
                     <option value="">📋 Todos</option>
                     {% for tipo in tipos_propiedad %}
                     <option value="{{ tipo.key }}">{{ tipo.label }}</option>
                     {% endfor %}
                 </select>
             </div>
-            <div class="filter-bar" id="filterBarSinMatch" style="display:flex;align-items:center;gap:8px;padding:2px 0;margin:0;">
+            <div class="filter-bar" id="filterBarSinMatch" style="display:flex;align-items:center;gap:6px;padding:0;margin:0;">
                 <span class="filter-label">🎯 Match:</span>
-                <label class="switch-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;">
-                    <input type="checkbox" id="switchSinMatch" onchange="toggleSinMatch(this)" style="width:18px;height:18px;accent-color:var(--accent-green);cursor:pointer;">
+                <label class="switch-label" style="display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none;">
+                    <input type="checkbox" id="switchSinMatch" onchange="toggleSinMatch(this)" style="width:14px;height:14px;accent-color:var(--accent-green);cursor:pointer;">
                 </label>
             </div>
-            <!-- Filtro agente con autocomplete -->
-            <div class="filter-bar" style="flex-direction:column;align-items:flex-start;gap:4px;margin-top:4px;position:relative;max-width:100%;">
-                <span class="filter-label">👤 Agente:</span>
-                <input type="text" id="inputAgente" placeholder="Buscar agente..." autocomplete="off" style="background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);padding:4px 8px;font-size:13px;width:100%;max-width:100%;box-sizing:border-box;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;" oninput="onAgenteInput(this)">
-                <div id="agenteSuggestions" style="display:none;position:absolute;top:100%;left:0;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:6px;max-height:150px;overflow-y:auto;z-index:1000;width:100%;box-sizing:border-box;"></div>
-                <button id="btnResetAgente" onclick="resetAgenteFilter()" style="display:none;background:transparent;border:1px solid var(--border-color);border-radius:4px;color:var(--text-secondary);font-size:11px;padding:2px 8px;cursor:pointer;width:auto;align-self:flex-start;">✕ Restablecer</button>
+            <!-- Filtro agente con autocomplete - horizontal -->
+            <div class="filter-bar" style="display:flex;align-items:center;gap:6px;padding:0;margin:0;position:relative;max-width:100%;">
+                <span class="filter-label" style="white-space:nowrap;">👤 Agente:</span>
+                <input type="text" id="inputAgente" placeholder="Buscar..." autocomplete="off" style="background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);padding:2px 6px;font-size:12px;width:100%;max-width:100%;box-sizing:border-box;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;flex:1;min-width:0;" oninput="onAgenteInput(this)">
+                <div id="agenteSuggestions" style="display:none;position:absolute;top:100%;left:0;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:6px;max-height:120px;overflow-y:auto;z-index:1000;width:100%;box-sizing:border-box;"></div>
+                <button id="btnResetAgente" onclick="resetAgenteFilter()" style="display:none;background:transparent;border:1px solid var(--border-color);border-radius:4px;color:var(--text-secondary);font-size:10px;padding:1px 6px;cursor:pointer;width:auto;flex-shrink:0;">✕</button>
             </div>
         </div>
         <div class="nav-bar" style="flex:1;margin-bottom:0;">
