@@ -1128,7 +1128,6 @@
                 <a href="?view=day&year={{ current_year }}&month={{ current_month }}&day={{ current_day }}" class="btn-nav {% if view_mode == 'day' %}active{% endif %}">Día</a>
             </div>
         </div>
-    </div>
 
     {% if view_mode == 'year' %}
     <!-- ===== YEAR VIEW ===== -->
@@ -1427,10 +1426,9 @@
         </div>
         {% endif %}
     </div>
-    </div> <!-- /content-area -->
-    </div> <!-- /main-layout -->
     {% endif %}
-</div>
+</div> <!-- /content-area -->
+</div> <!-- /main-layout -->
 
 <!-- ===== MODAL MATCH DETALLE ===== -->
 <div class="modal-match-overlay" id="modalMatchOverlay" onclick="if(event.target===this)closeMatchModal()">
