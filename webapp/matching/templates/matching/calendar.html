@@ -1047,10 +1047,9 @@
         </div>
     </div>
 
-    <div class="main-layout" style="display:flex;gap:16px;align-items:flex-start;">
-        <!-- Left sidebar: Filters -->
-        <div class="toolbar-filters" style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;position:sticky;top:8px;min-width:140px;">
-            <!-- Filter: tipo de propiedad (dropdown) -->
+    <!-- Toolbar: filters left, nav right -->
+    <div class="toolbar-row" style="display:flex;gap:16px;align-items:flex-start;margin-bottom:8px;">
+        <div class="toolbar-filters" style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;min-width:140px;">
             <div class="filter-bar" id="filterBar" style="flex-direction:column;align-items:flex-start;gap:4px;margin:0;">
                 <span class="filter-label">🏷️ Tipo:</span>
                 <select id="selectTipoFilter" onchange="onTipoFilterChange(this)" style="background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);padding:4px 8px;font-size:13px;cursor:pointer;">
@@ -1060,8 +1059,6 @@
                     {% endfor %}
                 </select>
             </div>
-
-            <!-- Switch: solo con match -->
             <div class="filter-bar" id="filterBarSinMatch" style="display:flex;align-items:center;gap:8px;padding:2px 0;margin:0;">
                 <span class="filter-label">🎯 Match:</span>
                 <label class="switch-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;">
@@ -1069,29 +1066,20 @@
                 </label>
             </div>
         </div>
-
-        <!-- Right: Navigation + Calendar -->
-        <div class="content-area" style="flex:1;min-width:0;display:flex;flex-direction:column;">
-        <div class="nav-bar" style="margin-bottom:12px;">
+        <div class="nav-bar" style="flex:1;margin-bottom:0;">
             <div class="nav-controls">
                 <form method="GET" id="navForm" class="nav-form" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                     <input type="hidden" name="view" value="{{ view_mode }}">
-                    
-                    <!-- Selector de AÑO -->
                     <select name="year" class="nav-select" onchange="this.form.submit()" style="background:var(--bg-tertiary);border:1px solid var(--border-color);color:var(--text-primary);padding:6px 10px;border-radius:6px;font-size:13px;cursor:pointer;">
                         {% for y in years_disponibles %}
                         <option value="{{ y }}" {% if y == current_year %}selected{% endif %}>{{ y }}</option>
                         {% endfor %}
                     </select>
-
-                    <!-- Selector de MES -->
                     <select name="month" class="nav-select" onchange="this.form.submit()" style="background:var(--bg-tertiary);border:1px solid var(--border-color);color:var(--text-primary);padding:6px 10px;border-radius:6px;font-size:13px;cursor:pointer;">
                         {% for m in months_disponibles %}
                         <option value="{{ m.num }}" {% if m.num == current_month %}selected{% endif %}>{{ m.nombre }}</option>
                         {% endfor %}
                     </select>
-
-                    <!-- Selector de SEMANA del mes (solo en vista month) -->
                     {% if view_mode == 'month' and semanas_del_mes %}
                     <select name="semana" class="nav-select" onchange="this.form.submit()" style="background:var(--bg-tertiary);border:1px solid var(--border-color);color:var(--text-primary);padding:6px 10px;border-radius:6px;font-size:13px;cursor:pointer;">
                         <option value="">— Todas las semanas —</option>
@@ -1102,11 +1090,9 @@
                         {% endfor %}
                     </select>
                     {% endif %}
-
                     <a href="?view={{ view_mode }}&year={{ today.year }}&month={{ today.month }}&day={{ today.day }}" class="btn-today" style="text-decoration:none;">Hoy</a>
                 </form>
             </div>
-
             <div class="nav-title">
                 {% if view_mode == 'month' %}
                     {{ month_name }} {{ current_year }}
@@ -1120,7 +1106,6 @@
                     <a href="?view=day&year={{ next_date.year }}&month={{ next_date.month }}&day={{ next_date.day }}" class="btn-nav-week" title="Día siguiente">▶</a>
                 {% endif %}
             </div>
-
             <div class="nav-controls">
                 <a href="?view=year&year={{ current_year }}" class="btn-nav {% if view_mode == 'year' %}active{% endif %}">Año</a>
                 <a href="?view=month&year={{ current_year }}&month={{ current_month }}" class="btn-nav {% if view_mode == 'month' %}active{% endif %}">Mes</a>
@@ -1128,6 +1113,7 @@
                 <a href="?view=day&year={{ current_year }}&month={{ current_month }}&day={{ current_day }}" class="btn-nav {% if view_mode == 'day' %}active{% endif %}">Día</a>
             </div>
         </div>
+    </div>
 
     {% if view_mode == 'year' %}
     <!-- ===== YEAR VIEW ===== -->
@@ -1427,9 +1413,7 @@
         {% endif %}
     </div>
     {% endif %}
-</div> <!-- /content-area -->
-</div> <!-- /main-layout -->
-
+</div>
 <!-- ===== MODAL MATCH DETALLE ===== -->
 <div class="modal-match-overlay" id="modalMatchOverlay" onclick="if(event.target===this)closeMatchModal()">
     <div class="modal-match-content">
