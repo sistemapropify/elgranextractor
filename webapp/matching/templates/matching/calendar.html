@@ -1071,8 +1071,8 @@
         </div>
 
         <!-- Right: Navigation + Calendar -->
-        <div class="content-area" style="flex:1;min-width:0;">
-        <div class="nav-bar">
+        <div class="content-area" style="flex:1;min-width:0;display:flex;flex-direction:column;">
+        <div class="nav-bar" style="margin-bottom:12px;">
             <div class="nav-controls">
                 <form method="GET" id="navForm" class="nav-form" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                     <input type="hidden" name="view" value="{{ view_mode }}">
