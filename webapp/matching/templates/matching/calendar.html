@@ -1047,8 +1047,8 @@
         </div>
     </div>
 
-    <!-- Toolbar: filters left, nav right -->
-    <div class="toolbar-row" style="display:flex;gap:16px;align-items:flex-start;margin-bottom:8px;">
+    <!-- Layout: sidebar filters + right column (nav + calendar) -->
+    <div class="main-flex" style="display:flex;gap:16px;align-items:flex-start;">
         <div class="toolbar-filters" style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;min-width:140px;">
             <div class="filter-bar" id="filterBar" style="flex-direction:column;align-items:flex-start;gap:4px;margin:0;">
                 <span class="filter-label">🏷️ Tipo:</span>
@@ -1066,7 +1066,8 @@
                 </label>
             </div>
         </div>
-        <div class="nav-bar" style="flex:1;margin-bottom:0;">
+        <div class="right-col" style="flex:1;min-width:0;display:flex;flex-direction:column;">
+        <div class="nav-bar" style="margin-bottom:12px;">
             <div class="nav-controls">
                 <form method="GET" id="navForm" class="nav-form" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                     <input type="hidden" name="view" value="{{ view_mode }}">
@@ -1413,6 +1414,8 @@
         {% endif %}
     </div>
     {% endif %}
+</div> <!-- /right-col -->
+</div> <!-- /main-flex -->
 </div>
 <!-- ===== MODAL MATCH DETALLE ===== -->
 <div class="modal-match-overlay" id="modalMatchOverlay" onclick="if(event.target===this)closeMatchModal()">
