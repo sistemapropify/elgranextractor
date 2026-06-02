@@ -1047,9 +1047,9 @@
         </div>
     </div>
 
-    <div class="toolbar-row" style="display:flex;gap:16px;align-items:flex-start;margin-bottom:8px;">
-        <!-- Left: Filters -->
-        <div class="toolbar-filters" style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;">
+    <div class="main-layout" style="display:flex;gap:16px;align-items:flex-start;">
+        <!-- Left sidebar: Filters -->
+        <div class="toolbar-filters" style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;position:sticky;top:8px;min-width:140px;">
             <!-- Filter: tipo de propiedad (dropdown) -->
             <div class="filter-bar" id="filterBar" style="flex-direction:column;align-items:flex-start;gap:4px;margin:0;">
                 <span class="filter-label">🏷️ Tipo:</span>
@@ -1070,8 +1070,9 @@
             </div>
         </div>
 
-        <!-- Right: Navigation -->
-        <div class="nav-bar" style="flex:1;min-width:0;">
+        <!-- Right: Navigation + Calendar -->
+        <div class="content-area" style="flex:1;min-width:0;">
+        <div class="nav-bar">
             <div class="nav-controls">
                 <form method="GET" id="navForm" class="nav-form" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                     <input type="hidden" name="view" value="{{ view_mode }}">
@@ -1426,6 +1427,8 @@
         </div>
         {% endif %}
     </div>
+    </div> <!-- /content-area -->
+    </div> <!-- /main-layout -->
     {% endif %}
 </div>
 
