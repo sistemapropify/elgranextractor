@@ -248,6 +248,9 @@
         border-radius: var(--card-radius);
         overflow: hidden;
         background: var(--bg-secondary);
+        display: flex;
+        flex-direction: column;
+        height: 100%;
     }
 
     .week-header-row {
@@ -282,8 +285,9 @@
     }
 
     .week-body {
+        flex: 1;
+        min-height: 0;
         overflow-y: auto;
-        max-height: 600px;
     }
 
     .week-hour-row {
@@ -358,6 +362,9 @@
         border-radius: var(--card-radius);
         overflow: hidden;
         background: var(--bg-secondary);
+        display: flex;
+        flex-direction: column;
+        height: 100%;
     }
 
     .day-header-info {
@@ -384,8 +391,9 @@
 
     /* Timeline body */
     .day-timeline-body {
+        flex: 1;
+        min-height: 0;
         overflow-y: auto;
-        max-height: 800px;
         position: relative;
     }
 
@@ -1120,7 +1128,7 @@
         </div>
     </div>
 
-    <div class="calendar-views-wrapper" style="margin-left:156px;flex:1;min-height:0;overflow-y:auto;">
+    <div class="calendar-views-wrapper" style="margin-left:156px;flex:1;min-height:0;">
     {% if view_mode == 'year' %}
     <!-- ===== YEAR VIEW ===== -->
     <div class="year-view-container">
