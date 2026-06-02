@@ -38,6 +38,10 @@
         max-width: 1400px;
         margin: 0 auto;
         padding: 4px 24px;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        box-sizing: border-box;
     }
 
     .header {
@@ -1034,7 +1038,7 @@
 {% block content %}
 <div class="container-calendar">
     <!-- Header -->
-    <div class="header">
+    <div class="header" style="flex-shrink:0;">
         <div>
             <h1>
                 📅 Calendario de Matching
@@ -1115,7 +1119,7 @@
         </div>
     </div>
 
-    <div class="calendar-views-wrapper" style="margin-left:156px;">
+    <div class="calendar-views-wrapper" style="margin-left:156px;flex:1;min-height:0;overflow-y:auto;">
     {% if view_mode == 'year' %}
     <!-- ===== YEAR VIEW ===== -->
     <div class="year-view-container">
