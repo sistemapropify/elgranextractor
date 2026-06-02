@@ -1913,8 +1913,11 @@ function enviarPropuestaWhatsApp() {
         lineas.push('');
         lineas.push('\u00BFTe interesa? Haz click en el enlace seg\u00FAn tu respuesta:');
         lineas.push('');
-        lineas.push('\u2705 S\u00ED, me interesa \u2192 ' + linkSi);
-        lineas.push('\u274C No, gracias \u2192 ' + linkNo);
+        lineas.push('\u2705 S\u00ED, me interesa');
+        lineas.push(linkSi);
+        lineas.push('');
+        lineas.push('\u274C No, gracias');
+        lineas.push(linkNo);
 
         var mensaje = lineas.join('\n');
 
