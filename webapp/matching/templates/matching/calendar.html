@@ -26,10 +26,6 @@
 
     * { box-sizing: border-box; }
 
-    html, body {
-        height: 100%;
-        overflow: hidden;
-    }
     body {
         background-color: var(--bg-primary);
         color: var(--text-primary);
@@ -42,11 +38,10 @@
         max-width: 1400px;
         margin: 0 auto;
         padding: 4px 24px;
-        flex: 1;
+        height: calc(100vh - 75px);
         display: flex;
         flex-direction: column;
         box-sizing: border-box;
-        min-height: 0;
         overflow: hidden;
     }
 
