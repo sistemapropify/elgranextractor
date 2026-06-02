@@ -1047,80 +1047,85 @@
         </div>
     </div>
 
-    <!-- Filter: tipo de propiedad (dropdown) -->
-    <div class="filter-bar" id="filterBar" style="flex-direction:column;align-items:flex-start;gap:4px;">
-        <span class="filter-label">🏷️ Tipo:</span>
-        <select id="selectTipoFilter" onchange="onTipoFilterChange(this)" style="background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);padding:4px 8px;font-size:13px;cursor:pointer;">
-            <option value="">📋 Todos</option>
-            {% for tipo in tipos_propiedad %}
-            <option value="{{ tipo.key }}">{{ tipo.label }}</option>
-            {% endfor %}
-        </select>
-    </div>
-
-    <!-- Switch: solo con match -->
-    <div class="filter-bar" id="filterBarSinMatch" style="display:flex;align-items:center;gap:8px;padding:4px 0;margin-top:2px;">
-        <span class="filter-label">🎯 Match:</span>
-        <label class="switch-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;">
-            <input type="checkbox" id="switchSinMatch" checked onchange="toggleSinMatch(this)" style="width:18px;height:18px;accent-color:var(--accent-green);cursor:pointer;">
-        </label>
-    </div>
-
-    <!-- Navigation: selector de año, mes y semana -->
-    <div class="nav-bar">
-        <div class="nav-controls">
-            <form method="GET" id="navForm" class="nav-form" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                <input type="hidden" name="view" value="{{ view_mode }}">
-                
-                <!-- Selector de AÑO -->
-                <select name="year" class="nav-select" onchange="this.form.submit()" style="background:var(--bg-tertiary);border:1px solid var(--border-color);color:var(--text-primary);padding:6px 10px;border-radius:6px;font-size:13px;cursor:pointer;">
-                    {% for y in years_disponibles %}
-                    <option value="{{ y }}" {% if y == current_year %}selected{% endif %}>{{ y }}</option>
+    <div class="toolbar-row" style="display:flex;gap:16px;align-items:flex-start;margin-bottom:8px;">
+        <!-- Left: Filters -->
+        <div class="toolbar-filters" style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;">
+            <!-- Filter: tipo de propiedad (dropdown) -->
+            <div class="filter-bar" id="filterBar" style="flex-direction:column;align-items:flex-start;gap:4px;margin:0;">
+                <span class="filter-label">🏷️ Tipo:</span>
+                <select id="selectTipoFilter" onchange="onTipoFilterChange(this)" style="background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);padding:4px 8px;font-size:13px;cursor:pointer;">
+                    <option value="">📋 Todos</option>
+                    {% for tipo in tipos_propiedad %}
+                    <option value="{{ tipo.key }}">{{ tipo.label }}</option>
                     {% endfor %}
                 </select>
+            </div>
 
-                <!-- Selector de MES -->
-                <select name="month" class="nav-select" onchange="this.form.submit()" style="background:var(--bg-tertiary);border:1px solid var(--border-color);color:var(--text-primary);padding:6px 10px;border-radius:6px;font-size:13px;cursor:pointer;">
-                    {% for m in months_disponibles %}
-                    <option value="{{ m.num }}" {% if m.num == current_month %}selected{% endif %}>{{ m.nombre }}</option>
-                    {% endfor %}
-                </select>
+            <!-- Switch: solo con match -->
+            <div class="filter-bar" id="filterBarSinMatch" style="display:flex;align-items:center;gap:8px;padding:2px 0;margin:0;">
+                <span class="filter-label">🎯 Match:</span>
+                <label class="switch-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;">
+                    <input type="checkbox" id="switchSinMatch" checked onchange="toggleSinMatch(this)" style="width:18px;height:18px;accent-color:var(--accent-green);cursor:pointer;">
+                </label>
+            </div>
+        </div>
 
-                <!-- Selector de SEMANA del mes (solo en vista month) -->
-                {% if view_mode == 'month' and semanas_del_mes %}
-                <select name="semana" class="nav-select" onchange="this.form.submit()" style="background:var(--bg-tertiary);border:1px solid var(--border-color);color:var(--text-primary);padding:6px 10px;border-radius:6px;font-size:13px;cursor:pointer;">
-                    <option value="">— Todas las semanas —</option>
-                    {% for s in semanas_del_mes %}
-                    <option value="{{ s.num }}" {% if s.num|stringformat:"s" == semana_seleccionada|stringformat:"s" %}selected{% endif %}>
-                        Semana {{ s.num }} ({{ s.inicio }} - {{ s.fin }})
-                    </option>
-                    {% endfor %}
-                </select>
+        <!-- Right: Navigation -->
+        <div class="nav-bar" style="flex:1;min-width:0;">
+            <div class="nav-controls">
+                <form method="GET" id="navForm" class="nav-form" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                    <input type="hidden" name="view" value="{{ view_mode }}">
+                    
+                    <!-- Selector de AÑO -->
+                    <select name="year" class="nav-select" onchange="this.form.submit()" style="background:var(--bg-tertiary);border:1px solid var(--border-color);color:var(--text-primary);padding:6px 10px;border-radius:6px;font-size:13px;cursor:pointer;">
+                        {% for y in years_disponibles %}
+                        <option value="{{ y }}" {% if y == current_year %}selected{% endif %}>{{ y }}</option>
+                        {% endfor %}
+                    </select>
+
+                    <!-- Selector de MES -->
+                    <select name="month" class="nav-select" onchange="this.form.submit()" style="background:var(--bg-tertiary);border:1px solid var(--border-color);color:var(--text-primary);padding:6px 10px;border-radius:6px;font-size:13px;cursor:pointer;">
+                        {% for m in months_disponibles %}
+                        <option value="{{ m.num }}" {% if m.num == current_month %}selected{% endif %}>{{ m.nombre }}</option>
+                        {% endfor %}
+                    </select>
+
+                    <!-- Selector de SEMANA del mes (solo en vista month) -->
+                    {% if view_mode == 'month' and semanas_del_mes %}
+                    <select name="semana" class="nav-select" onchange="this.form.submit()" style="background:var(--bg-tertiary);border:1px solid var(--border-color);color:var(--text-primary);padding:6px 10px;border-radius:6px;font-size:13px;cursor:pointer;">
+                        <option value="">— Todas las semanas —</option>
+                        {% for s in semanas_del_mes %}
+                        <option value="{{ s.num }}" {% if s.num|stringformat:"s" == semana_seleccionada|stringformat:"s" %}selected{% endif %}>
+                            Semana {{ s.num }} ({{ s.inicio }} - {{ s.fin }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                    {% endif %}
+
+                    <a href="?view={{ view_mode }}&year={{ today.year }}&month={{ today.month }}&day={{ today.day }}" class="btn-today" style="text-decoration:none;">Hoy</a>
+                </form>
+            </div>
+
+            <div class="nav-title">
+                {% if view_mode == 'month' %}
+                    {{ month_name }} {{ current_year }}
+                {% elif view_mode == 'week' %}
+                    <a href="?view=week&year={{ prev_week_start.year }}&month={{ prev_week_start.month }}&day={{ prev_week_start.day }}" class="btn-nav-week" title="Semana anterior">◀</a>
+                    Semana del {{ week_start|date:"d/m/Y" }} al {{ week_end|date:"d/m/Y" }}
+                    <a href="?view=week&year={{ next_week_start.year }}&month={{ next_week_start.month }}&day={{ next_week_start.day }}" class="btn-nav-week" title="Semana siguiente">▶</a>
+                {% elif view_mode == 'day' %}
+                    <a href="?view=day&year={{ prev_date.year }}&month={{ prev_date.month }}&day={{ prev_date.day }}" class="btn-nav-week" title="Día anterior">◀</a>
+                    {{ target_date_display|default:target_date|date:"l, d F Y" }}
+                    <a href="?view=day&year={{ next_date.year }}&month={{ next_date.month }}&day={{ next_date.day }}" class="btn-nav-week" title="Día siguiente">▶</a>
                 {% endif %}
+            </div>
 
-                <a href="?view={{ view_mode }}&year={{ today.year }}&month={{ today.month }}&day={{ today.day }}" class="btn-today" style="text-decoration:none;">Hoy</a>
-            </form>
-        </div>
-
-        <div class="nav-title">
-            {% if view_mode == 'month' %}
-                {{ month_name }} {{ current_year }}
-            {% elif view_mode == 'week' %}
-                <a href="?view=week&year={{ prev_week_start.year }}&month={{ prev_week_start.month }}&day={{ prev_week_start.day }}" class="btn-nav-week" title="Semana anterior">◀</a>
-                Semana del {{ week_start|date:"d/m/Y" }} al {{ week_end|date:"d/m/Y" }}
-                <a href="?view=week&year={{ next_week_start.year }}&month={{ next_week_start.month }}&day={{ next_week_start.day }}" class="btn-nav-week" title="Semana siguiente">▶</a>
-            {% elif view_mode == 'day' %}
-                <a href="?view=day&year={{ prev_date.year }}&month={{ prev_date.month }}&day={{ prev_date.day }}" class="btn-nav-week" title="Día anterior">◀</a>
-                {{ target_date_display|default:target_date|date:"l, d F Y" }}
-                <a href="?view=day&year={{ next_date.year }}&month={{ next_date.month }}&day={{ next_date.day }}" class="btn-nav-week" title="Día siguiente">▶</a>
-            {% endif %}
-        </div>
-
-        <div class="nav-controls">
-            <a href="?view=year&year={{ current_year }}" class="btn-nav {% if view_mode == 'year' %}active{% endif %}">Año</a>
-            <a href="?view=month&year={{ current_year }}&month={{ current_month }}" class="btn-nav {% if view_mode == 'month' %}active{% endif %}">Mes</a>
-            <a href="?view=week&year={{ current_year }}&month={{ current_month }}&day={{ current_day }}" class="btn-nav {% if view_mode == 'week' %}active{% endif %}">Semana</a>
-            <a href="?view=day&year={{ current_year }}&month={{ current_month }}&day={{ current_day }}" class="btn-nav {% if view_mode == 'day' %}active{% endif %}">Día</a>
+            <div class="nav-controls">
+                <a href="?view=year&year={{ current_year }}" class="btn-nav {% if view_mode == 'year' %}active{% endif %}">Año</a>
+                <a href="?view=month&year={{ current_year }}&month={{ current_month }}" class="btn-nav {% if view_mode == 'month' %}active{% endif %}">Mes</a>
+                <a href="?view=week&year={{ current_year }}&month={{ current_month }}&day={{ current_day }}" class="btn-nav {% if view_mode == 'week' %}active{% endif %}">Semana</a>
+                <a href="?view=day&year={{ current_year }}&month={{ current_month }}&day={{ current_day }}" class="btn-nav {% if view_mode == 'day' %}active{% endif %}">Día</a>
+            </div>
         </div>
     </div>
 
