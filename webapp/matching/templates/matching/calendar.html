@@ -1867,47 +1867,7 @@ function enviarPropuestaWhatsApp() {
         }
     }
     
-    var lineas = [];
-    lineas.push(saludo);
-    lineas.push('');
-    lineas.push('Soy *Belen Aguilar De Propify*.');
-    lineas.push('');
-    lineas.push('Tengo una propiedad para tu requerimiento *' + codigo + '* del ' + fechaStr + '.');
-    lineas.push('');
-    lineas.push('\uD83D\uDCCB *Tu requerimiento:*');
-    lineas.push(req.requerimiento || '\u2014');
-    lineas.push('');
-    
-    // 3. Datos de la propiedad (si hay)
-    if (prop) {
-        lineas.push('\uD83C\uDFE0 *Mi propiedad es:*');
-        lineas.push('');
-        if (prop.title) lineas.push('\uD83D\uDCCC ' + prop.title);
-        if (prop.district) lineas.push('\uD83D\uDCCD Distrito: ' + getDistritoName(prop.district));
-        if (prop.price) lineas.push('\uD83D\uDCB0 Precio: ' + formatPrice(prop.price, prop.currency_id));
-        if (prop.bedrooms) lineas.push('\uD83D\uDECF\uFE0F Habitaciones: ' + prop.bedrooms);
-        if (prop.bathrooms) lineas.push('\uD83D\uDEBF Ba\u00F1os: ' + prop.bathrooms);
-        if (prop.built_area) lineas.push('\uD83D\uDCD0 \u00C1rea: ' + prop.built_area + ' m\u00B2');
-        if (prop.code) lineas.push('\uD83D\uDCDD C\u00F3digo: ' + prop.code);
-        lineas.push('');
-    }
-    
-    // 4. Links y botones de acci\u00F3n
-    lineas.push('\uD83D\uDD17 Ver propiedad: https://propifai.com/propiedad/' + (prop ? prop.id : '\u2014'));
-    lineas.push('');
-    lineas.push('\u00BFTe interesa? Responde con el n\u00FAmero:');
-    lineas.push('');
-    lineas.push('1\uFE0F\u20E3 \u2705 S\u00ED, me interesa');
-    lineas.push('2\uFE0F\u20E3 \u274C No, gracias');
-    
-    var mensaje = lineas.join('\n');
-    
-    // 6. Guardar en localStorage para badge inmediato
-    try {
-        localStorage.setItem('wa_sent_' + req.id, '1');
-    } catch(e) {}
-    
-    // 6b. Guardar propuesta en BD via API
+    // ===== Guardar propuesta primero, luego construir mensaje con los links =====
     var bodyData = {
         requerimiento_id: req.id,
         propiedad_id: prop ? prop.id : null,
@@ -1918,31 +1878,100 @@ function enviarPropuestaWhatsApp() {
         propiedad_district_id: prop ? (prop.district ? parseInt(prop.district) : null) : null,
         agente_nombre: req.agente || '',
         agente_telefono: req.agente_telefono || '',
-        mensaje: mensaje,
+        mensaje: '',  // se actualizará después
     };
 
-    // Marcar la tarjeta INMEDIATAMENTE (sin esperar fetch)
+    // Marcar la tarjeta INMEDIATAMENTE
     marcarWhatsAppEnviado(req.id);
-    
+
+    var baseUrl = window.location.origin;
+
     fetch('/matching/api/propuesta/guardar/', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(bodyData),
-    }).then(function() {
-        console.log('Propuesta guardada OK para req', req.id);
-    }).catch(function(err) {
-        console.warn('Error guardando propuesta (no crítico):', err);
-    });
+    }).then(function(resp) {
+        return resp.json();
+    }).then(function(data) {
+        var propuestaId = data.id;
+        console.log('Propuesta guardada OK para req', req.id, 'propuesta ID:', propuestaId);
 
-    // 7. Abrir WhatsApp con número si está disponible
-    var telefono = (req.agente_telefono || '').replace(/[^0-9]/g, '');
-    var url;
-    if (telefono) {
-        url = 'https://api.whatsapp.com/send?phone=' + telefono + '&text=' + encodeURIComponent(mensaje);
-    } else {
-        url = 'https://api.whatsapp.com/send?text=' + encodeURIComponent(mensaje);
-    }
-    window.open(url, '_blank');
+        // Construir links de tracking
+        var linkSi = baseUrl + '/matching/propuesta/' + propuestaId + '/responder/?decision=interesado';
+        var linkNo = baseUrl + '/matching/propuesta/' + propuestaId + '/responder/?decision=rechazado';
+
+        // Construir mensaje SIN foto ni "Ver propiedad"
+        var lineas = [];
+        lineas.push(saludo);
+        lineas.push('');
+        lineas.push('Soy *Belen Aguilar De Propify*.');
+        lineas.push('');
+        lineas.push('Tengo una propiedad para tu requerimiento *' + codigo + '* del ' + fechaStr + '.');
+        lineas.push('');
+        lineas.push('\uD83D\uDCCB *Tu requerimiento:*');
+        lineas.push(req.requerimiento || '\u2014');
+        lineas.push('');
+        lineas.push('\u00BFTe interesa? Haz click en el enlace seg\u00FAn tu respuesta:');
+        lineas.push('');
+        lineas.push('\u2705 S\u00ED, me interesa \u2192 ' + linkSi);
+        lineas.push('\u274C No, gracias \u2192 ' + linkNo);
+
+        var mensaje = lineas.join('\n');
+
+        // Guardar el mensaje en la propuesta (update)
+        fetch('/matching/api/propuesta/' + propuestaId + '/actualizar-mensaje/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ mensaje: mensaje }),
+        }).catch(function(err) {
+            console.warn('Error actualizando mensaje:', err);
+        });
+
+        // Abrir WhatsApp con el mensaje
+        var telefono = (req.agente_telefono || '').replace(/[^0-9]/g, '');
+        var url;
+        if (telefono) {
+            url = 'https://api.whatsapp.com/send?phone=' + telefono + '&text=' + encodeURIComponent(mensaje);
+        } else {
+            url = 'https://api.whatsapp.com/send?text=' + encodeURIComponent(mensaje);
+        }
+        window.open(url, '_blank');
+
+        // Guardar en localStorage
+        try {
+            localStorage.setItem('wa_sent_' + req.id, '1');
+        } catch(e) {}
+
+    }).catch(function(err) {
+        console.warn('Error guardando propuesta (no cr\u00EDtico):', err);
+        // Fallback: abrir WhatsApp sin links de tracking
+        var lineas = [];
+        lineas.push(saludo);
+        lineas.push('');
+        lineas.push('Soy *Belen Aguilar De Propify*.');
+        lineas.push('');
+        lineas.push('Tengo una propiedad para tu requerimiento *' + codigo + '* del ' + fechaStr + '.');
+        lineas.push('');
+        lineas.push('\uD83D\uDCCB *Tu requerimiento:*');
+        lineas.push(req.requerimiento || '\u2014');
+        lineas.push('');
+        lineas.push('\u00BFTe interesa? Responde con el n\u00FAmero:');
+        lineas.push('');
+        lineas.push('1\uFE0F\u20E3 \u2705 S\u00ED, me interesa');
+        lineas.push('2\uFE0F\u20E3 \u274C No, gracias');
+        var mensaje = lineas.join('\n');
+        var telefono = (req.agente_telefono || '').replace(/[^0-9]/g, '');
+        var url;
+        if (telefono) {
+            url = 'https://api.whatsapp.com/send?phone=' + telefono + '&text=' + encodeURIComponent(mensaje);
+        } else {
+            url = 'https://api.whatsapp.com/send?text=' + encodeURIComponent(mensaje);
+        }
+        window.open(url, '_blank');
+        try {
+            localStorage.setItem('wa_sent_' + req.id, '1');
+        } catch(e) {}
+    });
 }
 
 // ===== MARCA TARJETA CON ICONO WHATSAPP DESPUÉS DE ENVIAR =====

@@ -349,6 +349,19 @@ class PropuestaWhatsAppViewSet(viewsets.ViewSet):
 
         return Response(PropuestaWhatsAppSerializer(propuesta).data)
 
+    @action(detail=True, methods=['POST'])
+    def actualizar_mensaje(self, request, pk=None):
+        """
+        POST /matching/api/propuesta/<id>/actualizar-mensaje/
+        Actualiza el mensaje_enviado de una propuesta (después de generar links).
+        """
+        propuesta = get_object_or_404(PropuestaWhatsApp, pk=pk)
+        mensaje = request.data.get('mensaje', '')
+        if mensaje:
+            propuesta.mensaje_enviado = mensaje
+            propuesta.save(update_fields=['mensaje_enviado'])
+        return Response({'status': 'ok'})
+
     @action(detail=False, methods=['GET'], permission_classes=[AllowAny])
     def listar(self, request):
         """
@@ -1036,3 +1049,51 @@ class EjecutarMatchingMasivoView(TemplateView):
                 'success': False,
                 'error': str(e)
             }, status=500)
+
+
+# ===================================================================
+# Vistas para tracking de respuestas WhatsApp (links en mensajes)
+# ===================================================================
+
+def responder_propuesta(request, pk):
+    """
+    GET /matching/propuesta/<pk>/responder/?decision=interesado|rechazado
+    Actualiza el status de una propuesta WhatsApp y redirige a la página de respuesta.
+    """
+    propuesta = get_object_or_404(PropuestaWhatsApp, pk=pk)
+    decision = request.GET.get('decision', '').strip().lower()
+
+    if decision == 'interesado':
+        propuesta.status = PropuestaWhatsApp.Status.INTERESADO
+    elif decision == 'rechazado':
+        propuesta.status = PropuestaWhatsApp.Status.RECHAZADO
+    else:
+        from django.http import HttpResponseBadRequest
+        return HttpResponseBadRequest("Decisión no válida. Use: decision=interesado o decision=rechazado")
+
+    from django.utils import timezone
+    propuesta.respondido_en = timezone.now()
+    propuesta.save(update_fields=['status', 'respondido_en'])
+
+    from django.shortcuts import redirect
+    return redirect(f'/matching/propuesta/respuesta/?pk={pk}&decision={decision}')
+
+
+def pagina_respuesta(request):
+    """
+    GET /matching/propuesta/respuesta/?pk=<pk>&decision=interesado|rechazado
+    Muestra una página de confirmación según la decisión del agente.
+    """
+    pk = request.GET.get('pk')
+    decision = request.GET.get('decision', '')
+    if not pk:
+        from django.http import HttpResponseBadRequest
+        return HttpResponseBadRequest("Falta parámetro pk")
+
+    propuesta = get_object_or_404(PropuestaWhatsApp, pk=pk)
+
+    from django.shortcuts import render
+    return render(request, 'matching/respuesta_propuesta.html', {
+        'propuesta': propuesta,
+        'decision': decision,
+    })

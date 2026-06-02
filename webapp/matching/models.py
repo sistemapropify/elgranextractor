@@ -8,6 +8,7 @@ class PropuestaWhatsApp(models.Model):
         ENVIADA = 'enviada', 'Enviada'
         RESPONDIDA = 'respondida', 'Respondida'
         INTERESADO = 'interesado', 'Interesado'
+        RECHAZADO = 'rechazado', 'Rechazado'
         NO_INTERESADO = 'no_interesado', 'No interesado'
         VISITA_AGENDADA = 'visita_agendada', 'Visita agendada'
         CERRADA = 'cerrada', 'Cerrada'
