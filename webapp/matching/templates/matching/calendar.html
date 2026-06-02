@@ -1058,15 +1058,6 @@
         </select>
     </div>
 
-    <!-- Switch: mostrar/ocultar requerimientos sin match -->
-    <div class="filter-bar" id="filterBarSinMatch" style="display:flex;align-items:center;gap:8px;padding:4px 0;margin-top:2px;">
-        <span class="filter-label">🎯 Match:</span>
-        <label class="switch-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;">
-            <input type="checkbox" id="switchSinMatch" checked onchange="toggleSinMatch(this)" style="width:18px;height:18px;accent-color:var(--accent-green);cursor:pointer;">
-            <span style="font-size:13px;color:var(--text-secondary);">Mostrar solo con match</span>
-        </label>
-    </div>
-
     <!-- Navigation: selector de año, mes y semana -->
     <div class="nav-bar">
         <div class="nav-controls">
@@ -1611,16 +1602,8 @@ document.addEventListener('DOMContentLoaded', function() {
 // ===== FILTRO DE TIPO DE PROPIEDAD =====
 let selectedTipo = '';  // '' = todos
 
-// ===== SWITCH: SOLO CON MATCH =====
-let showOnlyWithMatch = false;
-
 function onTipoFilterChange(select) {
     selectedTipo = select.value;
-    applyFilters();
-}
-
-function toggleSinMatch(checkbox) {
-    showOnlyWithMatch = checkbox.checked;
     applyFilters();
 }
 
@@ -1634,13 +1617,6 @@ function applyFilters() {
             if (reqTipoKey && selectedTipo && reqTipoKey !== selectedTipo) {
                 visible = false;
             }
-            // Filtro: solo con match
-            if (visible && showOnlyWithMatch) {
-                const pct = parseFloat(item.dataset.porcentajeMatch);
-                if (!pct || pct <= 0) {
-                    visible = false;
-                }
-            }
             item.style.display = visible ? '' : 'none';
         });
     }
@@ -1653,13 +1629,6 @@ function applyFilters() {
             // Filtro por tipo
             if (reqTipoKey && selectedTipo && reqTipoKey !== selectedTipo) {
                 visible = false;
-            }
-            // Filtro: solo con match
-            if (visible && showOnlyWithMatch) {
-                const pct = parseFloat(card.dataset.porcentajeMatch);
-                if (!pct || pct <= 0) {
-                    visible = false;
-                }
             }
             card.style.display = visible ? '' : 'none';
         });
