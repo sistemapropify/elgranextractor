@@ -1075,7 +1075,7 @@
             <div class="filter-bar" id="filterBarSinMatch" style="display:flex;align-items:center;gap:8px;padding:2px 0;margin:0;">
                 <span class="filter-label">🎯 Match:</span>
                 <label class="switch-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;">
-                    <input type="checkbox" id="switchSinMatch" checked onchange="toggleSinMatch(this)" style="width:18px;height:18px;accent-color:var(--accent-green);cursor:pointer;">
+                    <input type="checkbox" id="switchSinMatch" onchange="toggleSinMatch(this)" style="width:18px;height:18px;accent-color:var(--accent-green);cursor:pointer;">
                 </label>
             </div>
         </div>
@@ -1616,7 +1616,7 @@ document.addEventListener('DOMContentLoaded', function() {
 let selectedTipo = '';  // '' = todos
 
 // ===== SWITCH: SOLO CON MATCH =====
-let showOnlyWithMatch = true;
+let showOnlyWithMatch = false;
 
 function onTipoFilterChange(select) {
     selectedTipo = select.value;
