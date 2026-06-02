@@ -1900,7 +1900,7 @@ function enviarPropuestaWhatsApp() {
         var linkSi = baseUrl + '/matching/propuesta/' + propuestaId + '/responder/?decision=interesado';
         var linkNo = baseUrl + '/matching/propuesta/' + propuestaId + '/responder/?decision=rechazado';
 
-        // Construir mensaje SIN foto ni "Ver propiedad"
+        // Construir mensaje
         var lineas = [];
         lineas.push(saludo);
         lineas.push('');
@@ -1911,6 +1911,21 @@ function enviarPropuestaWhatsApp() {
         lineas.push('\uD83D\uDCCB *Tu requerimiento:*');
         lineas.push(req.requerimiento || '\u2014');
         lineas.push('');
+
+        // Datos de la propiedad (si hay)
+        if (prop) {
+            lineas.push('\uD83C\uDFE0 *Mi propiedad es:*');
+            lineas.push('');
+            if (prop.title) lineas.push('\uD83D\uDCCC ' + prop.title);
+            if (prop.district) lineas.push('\uD83D\uDCCD Distrito: ' + getDistritoName(prop.district));
+            if (prop.price) lineas.push('\uD83D\uDCB0 Precio: ' + formatPrice(prop.price, prop.currency_id));
+            if (prop.bedrooms) lineas.push('\uD83D\uDECF\uFE0F Hab: ' + prop.bedrooms);
+            if (prop.bathrooms) lineas.push('\uD83D\uDEBF Ba\u00F1os: ' + prop.bathrooms);
+            if (prop.built_area) lineas.push('\uD83D\uDCD0 \u00C1rea: ' + prop.built_area + ' m\u00B2');
+            if (prop.code) lineas.push('\uD83D\uDCDD C\u00F3digo: ' + prop.code);
+            lineas.push('');
+        }
+
         lineas.push('\u00BFTe interesa? Haz click en el enlace seg\u00FAn tu respuesta:');
         lineas.push('');
         lineas.push('\u2705 S\u00ED, me interesa');
