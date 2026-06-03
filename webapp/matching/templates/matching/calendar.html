@@ -1090,6 +1090,9 @@
             <div class="nav-controls">
                 <form method="GET" id="navForm" class="nav-form" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                     <input type="hidden" name="view" value="{{ view_mode }}">
+                    <input type="hidden" name="agente" id="navFilterAgente" value="">
+                    <input type="hidden" name="tipo" id="navFilterTipo" value="">
+                    <input type="hidden" name="sin_match" id="navFilterSinMatch" value="">
                     <select name="year" class="nav-select" onchange="this.form.submit()" style="background:var(--bg-tertiary);border:1px solid var(--border-color);color:var(--text-primary);padding:6px 10px;border-radius:6px;font-size:13px;cursor:pointer;">
                         {% for y in years_disponibles %}
                         <option value="{{ y }}" {% if y == current_year %}selected{% endif %}>{{ y }}</option>
@@ -1627,6 +1630,53 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 {% endif %}
 
+// ── Inicializar filtros desde URL ──
+document.addEventListener('DOMContentLoaded', function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    
+    // Restaurar filtro de tipo
+    const tipoParam = urlParams.get('tipo');
+    if (tipoParam) {
+        const selectTipo = document.getElementById('selectTipoFilter');
+        if (selectTipo) selectTipo.value = tipoParam;
+    }
+    
+    // Restaurar filtro de agente
+    const agenteParam = urlParams.get('agente');
+    if (agenteParam) {
+        document.getElementById('inputAgente').value = agenteParam;
+        document.getElementById('btnResetAgente').style.display = '';
+    }
+    
+    // Restaurar switch sin match
+    const sinMatchParam = urlParams.get('sin_match');
+    if (sinMatchParam === '1') {
+        document.getElementById('switchSinMatch').checked = true;
+    }
+    
+    // Sincronizar hidden inputs con valores actuales
+    updateFilterURL();
+    
+    // Aplicar filtros después de que el contenido se haya renderizado
+    setTimeout(applyFilters, 100);
+});
+
+// ── Interceptar links de cambio de vista para preservar filtros ──
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.nav-controls a, .btn-today, .btn-nav-week').forEach(function(link) {
+        link.addEventListener('click', function(e) {
+            const url = new URL(link.href, window.location.origin);
+            const currentUrl = new URL(window.location);
+            ['agente', 'tipo', 'sin_match'].forEach(function(param) {
+                if (currentUrl.searchParams.has(param)) {
+                    url.searchParams.set(param, currentUrl.searchParams.get(param));
+                }
+            });
+            link.href = url.toString();
+        });
+    });
+});
+
 // Ocultar sugerencias al hacer clic fuera
 document.addEventListener('click', function(e) {
     var input = document.getElementById('inputAgente');
@@ -1637,14 +1687,46 @@ document.addEventListener('click', function(e) {
 });
 
 // ===== FILTRO DE TIPO DE PROPIEDAD =====
-let selectedTipo = '';  // '' = todos
+let selectedTipo = '';
+// Obtener valor inicial desde URL
+(function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    selectedTipo = urlParams.get('tipo') || '';
+})();
 
 // ===== SWITCH: SOLO CON MATCH =====
 let showOnlyWithMatch = false;
+(function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    showOnlyWithMatch = urlParams.get('sin_match') === '1';
+})();
 
 // ===== FILTRO DE AGENTE =====
 let selectedAgente = '';
+(function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    selectedAgente = urlParams.get('agente') || '';
+})();
 let agentesDisponibles = {{ agentes_json|safe }};
+
+/**
+ * Actualiza los hidden inputs del formulario de navegación y la URL
+ * para que los filtros persistan al cambiar de vista.
+ */
+function updateFilterURL() {
+    document.getElementById('navFilterAgente').value = selectedAgente;
+    document.getElementById('navFilterTipo').value = selectedTipo;
+    document.getElementById('navFilterSinMatch').value = showOnlyWithMatch ? '1' : '';
+    
+    const url = new URL(window.location);
+    if (selectedAgente) url.searchParams.set('agente', selectedAgente);
+    else url.searchParams.delete('agente');
+    if (selectedTipo) url.searchParams.set('tipo', selectedTipo);
+    else url.searchParams.delete('tipo');
+    if (showOnlyWithMatch) url.searchParams.set('sin_match', '1');
+    else url.searchParams.delete('sin_match');
+    window.history.replaceState({}, '', url);
+}
 
 function onAgenteInput(input) {
     const val = input.value.toLowerCase().trim();
@@ -1680,6 +1762,7 @@ function selectAgente(nombre) {
     document.getElementById('inputAgente').value = nombre;
     document.getElementById('agenteSuggestions').style.display = 'none';
     document.getElementById('btnResetAgente').style.display = '';
+    updateFilterURL();
     applyFilters();
 }
 
@@ -1688,16 +1771,19 @@ function resetAgenteFilter() {
     document.getElementById('inputAgente').value = '';
     document.getElementById('agenteSuggestions').style.display = 'none';
     document.getElementById('btnResetAgente').style.display = 'none';
+    updateFilterURL();
     applyFilters();
 }
 
 function onTipoFilterChange(select) {
     selectedTipo = select.value;
+    updateFilterURL();
     applyFilters();
 }
 
 function toggleSinMatch(checkbox) {
     showOnlyWithMatch = checkbox.checked;
+    updateFilterURL();
     applyFilters();
 }
 
