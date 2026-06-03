@@ -181,6 +181,49 @@ def _reportar_progreso(extractor_log, mensajes_procesados: int, total: int,
     )
 
 
+def _crear_requerimiento_en_bd(
+    texto_original, texto_hash, nombre_grupo, nombre_agente,
+    fecha_msg, hora_msg, extractor_log, tipo_original,
+    datos_extraidos, telefono_final,
+):
+    """Crea un Requerimiento en BD con todos los campos extraídos.
+    Separada como función para poder ejecutarla con timeout."""
+    from requerimientos.models import Requerimiento
+    from django.db import IntegrityError
+    # Usar los imports del módulo si ya están disponibles
+    
+    def _truncar_local(valor, max_len):
+        if valor and len(str(valor)) > max_len:
+            return str(valor)[:max_len]
+        return valor
+
+    Requerimiento.objects.create(
+        requerimiento=texto_original,
+        texto_hash=texto_hash,
+        fuente=_truncar_local(nombre_grupo, 60),
+        agente=_truncar_local(nombre_agente, 120),
+        fecha=fecha_msg,
+        hora=hora_msg,
+        extractor_log=extractor_log,
+        tipo_original=tipo_original,
+        condicion=_truncar_local(datos_extraidos.get('condicion'), 20) or 'no_especificado',
+        tipo_propiedad=_truncar_local(datos_extraidos.get('tipo_propiedad'), 20) or 'no_especificado',
+        distritos=_truncar_local(datos_extraidos.get('distritos'), 300),
+        presupuesto_monto=datos_extraidos.get('presupuesto_monto'),
+        presupuesto_moneda=_truncar_local(datos_extraidos.get('presupuesto_moneda'), 20) or 'no_especificado',
+        presupuesto_forma_pago=_truncar_local(datos_extraidos.get('presupuesto_forma_pago'), 20) or 'no_especificado',
+        habitaciones=datos_extraidos.get('habitaciones'),
+        banos=datos_extraidos.get('banos'),
+        cochera=_truncar_local(datos_extraidos.get('cochera'), 12) or 'indiferente',
+        ascensor=_truncar_local(datos_extraidos.get('ascensor'), 12) or 'indiferente',
+        amueblado=_truncar_local(datos_extraidos.get('amueblado'), 12) or 'indiferente',
+        area_m2=datos_extraidos.get('area_m2'),
+        piso_preferencia=_truncar_local(datos_extraidos.get('piso_preferencia'), 60),
+        caracteristicas_extra=_truncar_local(datos_extraidos.get('caracteristicas_extra'), 300),
+        agente_telefono=_truncar_local(telefono_final, 20),
+    )
+
+
 @shared_task
 def procesar_archivo_extraccion(archivo_id: int, extractor_log_id: Optional[int] = None) -> Dict:
     '''Procesa un archivo de extracción WhatsApp.
@@ -386,21 +429,69 @@ def procesar_archivo_extraccion(archivo_id: int, extractor_log_id: Optional[int]
 
             # 5. Normalizar texto
             texto_limpio = TextNormalizer.limpiar_texto(msg['texto'])
+            texto_preview = texto_limpio[:80]
+
+            # === LOG: inicio del procesamiento del mensaje ===
+            LogEntry.objects.create(
+                extractor_log=extractor_log,
+                nivel='DEBUG',
+                mensaje=f'Mensaje #{idx}: iniciando procesamiento...',
+                detalles={'mensaje_idx': idx, 'texto_preview': texto_preview, 'paso': 'inicio'},
+            )
 
             try:
-                # 6. Verificar duplicado contra BD (histórico de requerimientos)
-                is_duplicate, matching_id = DeduplicadorIA.verificar_duplicado_simple(
-                    texto_limpio,
-                    agente=msg.get('autor', ''),
+                # === PASO 6: deduplicación (con timeout) ===
+                LogEntry.objects.create(
+                    extractor_log=extractor_log,
+                    nivel='DEBUG',
+                    mensaje=f'Mensaje #{idx}: verificando duplicados...',
+                    detalles={'mensaje_idx': idx, 'paso': 'dedup'},
                 )
+                try:
+                    is_duplicate, matching_id = _ejecutar_con_timeout(
+                        DeduplicadorIA.verificar_duplicado_simple,
+                        15,  # 15 segundos máximo para dedup
+                        texto_limpio,
+                        agente=msg.get('autor', ''),
+                    )
+                except TimeoutError:
+                    logger.warning(f'Timeout en deduplicación del mensaje {idx}, se omite')
+                    LogEntry.objects.create(
+                        extractor_log=extractor_log,
+                        nivel='WARNING',
+                        mensaje=f'Mensaje #{idx}: TIMEOUT en verificación de duplicados (>15s), mensaje omitido',
+                        detalles={'mensaje_idx': idx, 'texto_preview': texto_preview, 'paso': 'dedup_timeout'},
+                    )
+                    continue
+                except Exception as e:
+                    logger.error(f'Error en deduplicación del mensaje {idx}: {e}')
+                    LogEntry.objects.create(
+                        extractor_log=extractor_log,
+                        nivel='ERROR',
+                        mensaje=f'Mensaje #{idx}: error en verificación de duplicados: {str(e)[:200]}',
+                        detalles={'mensaje_idx': idx, 'error': str(e), 'paso': 'dedup_error'},
+                    )
+                    continue
 
                 if is_duplicate:
                     logger.info(f'Mensaje duplicado en BD: {msg["texto"][:50]}')
                     extractor_log.requerimientos_duplicados += 1
+                    LogEntry.objects.create(
+                        extractor_log=extractor_log,
+                        nivel='DEBUG',
+                        mensaje=f'Mensaje #{idx}: duplicado en BD, omitido',
+                        detalles={'mensaje_idx': idx, 'paso': 'dedup_ok_duplicado'},
+                    )
                     continue
 
-                # 7. Extraer campos estructurados con DeepSeek (con timeout)
-                # Pasar fecha y hora del mensaje parseado para que se usen en vez de timezone.now()
+                LogEntry.objects.create(
+                    extractor_log=extractor_log,
+                    nivel='DEBUG',
+                    mensaje=f'Mensaje #{idx}: no es duplicado, extrayendo con DeepSeek...',
+                    detalles={'mensaje_idx': idx, 'paso': 'deepseek_inicio'},
+                )
+
+                # === PASO 7: Extraer campos estructurados con DeepSeek (con timeout) ===
                 fecha_msg_param = msg.get('fecha', '')
                 hora_msg_param = msg.get('hora', '')
                 try:
@@ -413,13 +504,19 @@ def procesar_archivo_extraccion(archivo_id: int, extractor_log_id: Optional[int]
                         fecha=fecha_msg_param,
                         hora=hora_msg_param,
                     )
+                    LogEntry.objects.create(
+                        extractor_log=extractor_log,
+                        nivel='DEBUG',
+                        mensaje=f'Mensaje #{idx}: DeepSeek respondió OK',
+                        detalles={'mensaje_idx': idx, 'paso': 'deepseek_ok'},
+                    )
                 except TimeoutError:
                     logger.warning(f'Timeout extrayendo datos del mensaje {idx}, se omite')
                     LogEntry.objects.create(
                         extractor_log=extractor_log,
                         nivel='WARNING',
-                        mensaje=f'Mensaje #{idx}: timeout al extraer datos con DeepSeek (>={TIMEOUT_POR_MENSAJE}s)',
-                        detalles={'mensaje_idx': idx, 'texto_preview': texto_limpio[:100]},
+                        mensaje=f'Mensaje #{idx}: TIMEOUT al extraer datos con DeepSeek (>={TIMEOUT_POR_MENSAJE}s)',
+                        detalles={'mensaje_idx': idx, 'texto_preview': texto_preview, 'paso': 'deepseek_timeout'},
                     )
                     continue
                 except Exception as e:
@@ -427,13 +524,19 @@ def procesar_archivo_extraccion(archivo_id: int, extractor_log_id: Optional[int]
                     LogEntry.objects.create(
                         extractor_log=extractor_log,
                         nivel='ERROR',
-                        mensaje=f'Mensaje #{idx}: error al extraer datos: {str(e)[:200]}',
-                        detalles={'mensaje_idx': idx, 'error': str(e)},
+                        mensaje=f'Mensaje #{idx}: error al extraer datos con DeepSeek: {str(e)[:200]}',
+                        detalles={'mensaje_idx': idx, 'error': str(e), 'paso': 'deepseek_error'},
                     )
                     continue
 
                 if not datos_extraidos:
                     logger.warning(f'No se obtuvieron datos para mensaje {idx}')
+                    LogEntry.objects.create(
+                        extractor_log=extractor_log,
+                        nivel='WARNING',
+                        mensaje=f'Mensaje #{idx}: DeepSeek no devolvió datos',
+                        detalles={'mensaje_idx': idx, 'paso': 'deepseek_vacio'},
+                    )
                     continue
 
                 # --- FILTRO: Saltar si la extracción devolvió un resultado vacío (con _error) ---
@@ -443,9 +546,16 @@ def procesar_archivo_extraccion(archivo_id: int, extractor_log_id: Optional[int]
                         extractor_log=extractor_log,
                         nivel='WARNING',
                         mensaje=f'Mensaje #{idx}: extracción fallida (todos los campos vacíos): {datos_extraidos["_error"]}',
-                        detalles={'mensaje_idx': idx, 'error': datos_extraidos['_error']},
+                        detalles={'mensaje_idx': idx, 'error': datos_extraidos['_error'], 'paso': 'deepseek_error_vacio'},
                     )
                     continue
+
+                LogEntry.objects.create(
+                    extractor_log=extractor_log,
+                    nivel='DEBUG',
+                    mensaje=f'Mensaje #{idx}: guardando requerimiento en BD...',
+                    detalles={'mensaje_idx': idx, 'paso': 'guardado_inicio'},
+                )
 
                 # 8. Guardar como Requerimiento con todos los campos extraídos
                 tipo_original = _truncar(datos_extraidos.get('tipo_original'), 80) or 'EXTRACCION_WHATSAPP'
@@ -496,51 +606,87 @@ def procesar_archivo_extraccion(archivo_id: int, extractor_log_id: Optional[int]
                 texto_normalizado = ' '.join(texto_original.lower().split())
                 texto_hash = hashlib.sha256(texto_normalizado.encode()).hexdigest()
 
-                # --- Verificar duplicado por texto_hash ANTES de insertar ---
-                # El índice único en BD es (texto_hash, fecha, hora, fuente)
-                # Hacemos una verificación extra aquí para atraparlo antes del error de BD
-                duplicado_bd = Requerimiento.objects.filter(
-                    texto_hash=texto_hash,
-                    fecha=fecha_msg,
-                    hora=hora_msg,
-                    fuente=_truncar(nombre_grupo, 60),
-                ).exists()
+                # --- Verificar duplicado por texto_hash ANTES de insertar (con timeout) ---
+                try:
+                    duplicado_bd = _ejecutar_con_timeout(
+                        lambda: Requerimiento.objects.filter(
+                            texto_hash=texto_hash,
+                            fecha=fecha_msg,
+                            hora=hora_msg,
+                            fuente=_truncar(nombre_grupo, 60),
+                        ).exists(),
+                        15,  # 15s timeout para la consulta
+                    )
+                except TimeoutError:
+                    logger.warning(f'Timeout consultando duplicado BD para mensaje {idx}, se omite')
+                    LogEntry.objects.create(
+                        extractor_log=extractor_log,
+                        nivel='WARNING',
+                        mensaje=f'Mensaje #{idx}: TIMEOUT consultando duplicado en BD (>15s), omitido',
+                        detalles={'mensaje_idx': idx, 'paso': 'hash_check_timeout'},
+                    )
+                    continue
+                except Exception as e:
+                    logger.error(f'Error consultando duplicado BD mensaje {idx}: {e}')
+                    LogEntry.objects.create(
+                        extractor_log=extractor_log,
+                        nivel='ERROR',
+                        mensaje=f'Mensaje #{idx}: error consultando duplicado BD: {str(e)[:200]}',
+                        detalles={'mensaje_idx': idx, 'error': str(e), 'paso': 'hash_check_error'},
+                    )
+                    continue
+
                 if duplicado_bd:
                     logger.info(f'Mensaje duplicado (por hash+BD): {texto_original[:50]}')
                     extractor_log.requerimientos_duplicados += 1
+                    LogEntry.objects.create(
+                        extractor_log=extractor_log,
+                        nivel='DEBUG',
+                        mensaje=f'Mensaje #{idx}: duplicado por hash, omitido',
+                        detalles={'mensaje_idx': idx, 'paso': 'hash_check_duplicado'},
+                    )
                     continue
 
+                LogEntry.objects.create(
+                    extractor_log=extractor_log,
+                    nivel='DEBUG',
+                    mensaje=f'Mensaje #{idx}: insertando en BD...',
+                    detalles={'mensaje_idx': idx, 'paso': 'bd_insert_inicio'},
+                )
+
                 try:
-                    Requerimiento.objects.create(
-                        requerimiento=texto_original,
-                        texto_hash=texto_hash,
-                        fuente=_truncar(nombre_grupo, 60),
-                        agente=_truncar(nombre_agente, 120),
-                        fecha=fecha_msg,
-                        hora=hora_msg,
-                        extractor_log=extractor_log,
-                        tipo_original=tipo_original,
-                        condicion=_truncar(datos_extraidos.get('condicion'), 20) or 'no_especificado',
-                        tipo_propiedad=_truncar(datos_extraidos.get('tipo_propiedad'), 20) or 'no_especificado',
-                        distritos=_truncar(datos_extraidos.get('distritos'), 300),
-                        presupuesto_monto=datos_extraidos.get('presupuesto_monto'),
-                        presupuesto_moneda=_truncar(datos_extraidos.get('presupuesto_moneda'), 20) or 'no_especificado',
-                        presupuesto_forma_pago=_truncar(datos_extraidos.get('presupuesto_forma_pago'), 20) or 'no_especificado',
-                        habitaciones=datos_extraidos.get('habitaciones'),
-                        banos=datos_extraidos.get('banos'),
-                        cochera=_truncar(datos_extraidos.get('cochera'), 12) or 'indiferente',
-                        ascensor=_truncar(datos_extraidos.get('ascensor'), 12) or 'indiferente',
-                        amueblado=_truncar(datos_extraidos.get('amueblado'), 12) or 'indiferente',
-                        area_m2=datos_extraidos.get('area_m2'),
-                        piso_preferencia=_truncar(datos_extraidos.get('piso_preferencia'), 60),
-                        caracteristicas_extra=_truncar(datos_extraidos.get('caracteristicas_extra'), 300),
-                        agente_telefono=_truncar(telefono_final, 20),
+                    _ejecutar_con_timeout(
+                        _crear_requerimiento_en_bd,
+                        20,  # 20s timeout para el INSERT
+                        texto_original, texto_hash, nombre_grupo, nombre_agente,
+                        fecha_msg, hora_msg, extractor_log, tipo_original,
+                        datos_extraidos, telefono_final,
                     )
                     extractor_log.mensajes_validos += 1
+                    LogEntry.objects.create(
+                        extractor_log=extractor_log,
+                        nivel='DEBUG',
+                        mensaje=f'Mensaje #{idx}: insertado OK en BD',
+                        detalles={'mensaje_idx': idx, 'paso': 'bd_insert_ok'},
+                    )
+                except TimeoutError:
+                    logger.warning(f'Timeout insertando mensaje {idx} en BD, se omite')
+                    LogEntry.objects.create(
+                        extractor_log=extractor_log,
+                        nivel='WARNING',
+                        mensaje=f'Mensaje #{idx}: TIMEOUT insertando en BD (>20s), omitido',
+                        detalles={'mensaje_idx': idx, 'paso': 'bd_insert_timeout'},
+                    )
+                    continue
                 except IntegrityError:
-                    # El índice único de BD detectó un duplicado que no atrapamos antes
                     logger.info(f'Mensaje duplicado (IntegrityError BD): {texto_original[:50]}')
                     extractor_log.requerimientos_duplicados += 1
+                    LogEntry.objects.create(
+                        extractor_log=extractor_log,
+                        nivel='DEBUG',
+                        mensaje=f'Mensaje #{idx}: IntegrityError (duplicado BD), omitido',
+                        detalles={'mensaje_idx': idx, 'paso': 'bd_insert_duplicado'},
+                    )
                     continue
 
             except IntegrityError:
