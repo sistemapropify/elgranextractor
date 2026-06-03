@@ -1451,10 +1451,6 @@
         </div>
         <div class="modal-match-footer">
             <button class="btn btn-secondary" onclick="closeMatchModal()">Cerrar</button>
-            <button class="btn btn-whatsapp" id="btnWhatsAppPropuesta" onclick="enviarPropuestaWhatsApp()" style="display:none;">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="vertical-align:middle;margin-right:4px;"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-                Enviar propuesta por WhatsApp
-            </button>
             <a href="#" class="btn btn-primary" id="modalBtnDashboard" target="_blank">Ver Dashboard Completo →</a>
         </div>
     </div>
@@ -1564,8 +1560,6 @@ document.addEventListener('DOMContentLoaded', function() {
             // Find requerimientos at this hour
             dia.requerimientos.forEach(function(req) {
                 if (req.hora && req.hora.startsWith(String(h).padStart(2, '0'))) {
-                    const badgeClass = getMatchBadgeClass(req.porcentaje_match);
-                    const badgeText = getMatchBadgeText(req.porcentaje_match);
                     const presupuestoHtml = req.presupuesto_display ? `<span style="color:#3fb950;font-weight:600;margin-left:2px;">${req.presupuesto_display}</span>` : '';
                     const agenteHtml = req.agente
                         ? (req.agente_id
@@ -1594,6 +1588,18 @@ document.addEventListener('DOMContentLoaded', function() {
                         : '';
                     const distritosStr = req.distritos_list ? req.distritos_list.join(',') : '';
                     var agenteStr = (req.agente || '').replace(/'/g, "\\'");
+                    // Generar múltiples badges de match (hasta 3)
+                    var matchesBadgesHtml = '';
+                    var matchesArr = req.matches || [];
+                    if (matchesArr.length > 0) {
+                        matchesArr.forEach(function(m) {
+                            var cls = getMatchBadgeClass(m.score_total);
+                            var txt = getMatchBadgeText(m.score_total);
+                            matchesBadgesHtml += `<span class="match-badge ${cls}" style="display:block;margin-bottom:1px;text-align:center;">${txt}</span>`;
+                        });
+                    } else {
+                        matchesBadgesHtml = `<span class="match-badge none" style="display:block;text-align:center;">—</span>`;
+                    }
                     bodyHtml += `<div class="week-req-item" onclick="openMatchModal(${req.id})" style="position:relative;" data-tipo-key="${req.tipo_propiedad_key}" data-distritos="${distritosStr}" data-porcentaje-match="${req.porcentaje_match}" data-agente="${agenteStr}">
                         ${verifiedStarHtml}
                         ${whatsappBadgeHtml}
@@ -1606,7 +1612,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             ${agenteHtml}
                             ${precioPropHtml}
                         </span>
-                        <span class="match-badge ${badgeClass}">${badgeText}</span>
+                        <span class="req-matches" style="display:flex;flex-direction:column;gap:1px;flex-shrink:0;margin-left:2px;">${matchesBadgesHtml}</span>
                     </div>`;
                 }
             });
@@ -1839,6 +1845,7 @@ function formatPrice(price, currencyId) {
 // ===== WHATSAPP: Enviar propuesta =====
 var ultimoRequerimientoData = null;
 var ultimaPropiedadTop = null;
+var ultimosResultadosModal = [];
 
 function enviarPropuestaWhatsApp() {
     var req = ultimoRequerimientoData;
@@ -2036,186 +2043,86 @@ function marcarWhatsAppEnviado(requerimientoId) {
 function renderMatchModal(data, body, title) {
     const req = data.requerimiento || {};
     const resultados = data.resultados || [];
-    const estadisticas = data.estadisticas || {};
     
-    // Guardar datos para WhatsApp
+    // Guardar datos globales para WhatsApp
     ultimoRequerimientoData = req;
-    ultimaPropiedadTop = resultados.length > 0 ? (resultados[0].propiedad || null) : null;
-
-    // Consultar si ya hay propuesta enviada para este requerimiento
-    var propuestaEnviada = false;
-    var propuestaId = null;
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', '/matching/api/propuesta/listar/?requerimiento_id=' + (req.id || ''), false);
-    xhr.send();
-    if (xhr.status === 200) {
-        var props = JSON.parse(xhr.responseText);
-        if (props && props.length > 0) {
-            propuestaEnviada = true;
-            propuestaId = props[0].id;
-        }
-    }
+    ultimosResultadosModal = resultados;
     
-    // Mostrar/ocultar boton WhatsApp (solo si hay match >= 70%)
-    var btnWA = document.getElementById('btnWhatsAppPropuesta');
-    if (btnWA) {
-        var scoreTotalWA = resultados.length > 0 ? parseFloat(resultados[0].score_total || 0) : 0;
-        btnWA.style.display = (scoreTotalWA >= 70) ? 'inline-flex' : 'none';
+    // Helper: format value
+    function fmt(val, fallback) {
+        return (val !== null && val !== undefined && val !== '') ? val : (fallback || '—');
     }
 
     if (resultados.length === 0) {
         body.innerHTML = `<div class="modal-no-match">
             <div class="no-match-icon">🔍</div>
             <p>No se encontraron propiedades con coincidencia para este requerimiento.</p>
-            ${propuestaEnviada ? '<div style="margin-top:12px;padding:8px 12px;border-radius:6px;background:rgba(0,255,136,0.12);border:1px solid rgba(0,255,136,0.4);text-align:center;font-size:13px;font-weight:600;color:#00ff88;">✅ WhatsApp enviado a ' + (req.agente || 'agente') + '</div>' : ''}
         </div>`;
+        title.textContent = `MATCH #${req.id || ''} — Sin matches`;
         return;
     }
 
-    const topResult = resultados[0];
-    const prop = topResult.propiedad || {};
-    const scoreDetalle = topResult.score_detalle || {};
-    const scoreTotal = parseFloat(topResult.score_total || 0);
-
-    // Determine score class
-    var scoreClass = 'low';
-    if (scoreTotal >= 90) scoreClass = 'high';
-    else if (scoreTotal >= 50) scoreClass = 'medium';
-
-    // Resolver distrito de propiedad (ID → nombre)
-    var propDistrito = getDistritoName(prop.district);
-
-    // Resolver moneda de propiedad
-    var propCurrencySym = getCurrencySymbol(prop.currency_id);
-    var propPriceFormatted = formatPrice(prop.price, prop.currency_id);
-
-    // Helper: get row class based on score_detalle
-    function getRowClass(key) {
-        if (!key || scoreDetalle[key] === undefined) return '';
-        var val = parseFloat(scoreDetalle[key]);
-        if (val >= 0.8) return 'row-match';
-        if (val >= 0.3) return 'row-partial';
-        return 'row-no-match';
+    // Filtrar solo resultados con score >= 60% y máximo 3
+    var mejores = [];
+    for (var i = 0; i < resultados.length && mejores.length < 3; i++) {
+        var score = parseFloat(resultados[i].score_total || 0);
+        if (score >= 60) {
+            mejores.push(resultados[i]);
+        }
     }
 
-    // Helper: format value for display
-    function fmt(val, fallback) {
-        return (val !== null && val !== undefined && val !== '') ? val : (fallback || '—');
-    }
+    // Construir lista de propiedades del side panel
+    var propsHtml = '';
+    var totalDe = resultados.length > 0 ? resultados.length : 0;
+    var scoreTop = mejores.length > 0 ? parseFloat(mejores[0].score_total || 0) : 0;
 
-    // Property image
-    var propImgHtml = '';
-    if (prop.imagen_url) {
-        propImgHtml = '<img src="' + prop.imagen_url + '" alt="' + (prop.title || 'Propiedad') + '" style="width:120px;height:90px;object-fit:cover;border-radius:6px;background:var(--bg-tertiary);border:1px solid var(--border-color);" onerror="this.style.display=\'none\'">';
-    } else {
-        propImgHtml = '<div style="width:120px;height:90px;border-radius:6px;background:var(--bg-tertiary);border:1px solid var(--border-color);display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:11px;margin:0 auto;">🏠 Sin imagen</div>';
-    }
+    mejores.forEach(function(r, idx) {
+        var prop = r.propiedad || {};
+        var pct = parseFloat(r.score_total || 0);
+        var cls = pct >= 90 ? 'high' : (pct >= 50 ? 'medium' : 'low');
+        var distrito = getDistritoName(prop.district);
+        var precio = formatPrice(prop.price, prop.currency_id);
+        var yaEnviado = false;  // se puede mejorar consultando API
+
+        propsHtml += `
+        <div style="border:1px solid var(--border-color);border-radius:8px;padding:8px;margin-bottom:6px;background:var(--bg-tertiary);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                <span style="font-size:11px;font-weight:600;color:var(--accent-blue);">#${idx+1} ${fmt(prop.code)}</span>
+                <span class="match-badge ${cls}" style="font-size:11px;">${Math.round(pct)}%</span>
+            </div>
+            <div style="font-size:11px;font-weight:500;color:var(--text-primary);margin-bottom:2px;word-break:break-word;">${fmt(prop.title)}</div>
+            <div style="font-size:10px;color:var(--text-secondary);margin-bottom:4px;">${distrito} · ${precio}</div>
+            <button onclick="enviarPropuestaWhatsAppPropiedad(${idx})" style="width:100%;background:#25D366;color:#fff;border:none;border-radius:6px;padding:5px;font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;">
+                📤 Enviar propuesta
+            </button>
+            ${yaEnviado ? '<div style="margin-top:3px;font-size:10px;color:var(--accent-green);text-align:center;">✅ WhatsApp enviado</div>' : ''}
+        </div>`;
+    });
 
     body.innerHTML = `
-        <div class="modal-compare-panel">
-            <table class="compare-table">
-                <thead>
-                    <tr>
-                        <th>Campo</th>
-                        <th>📋 Req</th>
-                        <th>🏠 Prop</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr class="${getRowClass('tipo_propiedad')}">
-                        <td class="col-label">Tipo</td>
-                        <td class="col-req">${fmt(req.tipo_propiedad)}</td>
-                        <td class="col-prop">${fmt(prop.tipo_propiedad)}</td>
-                    </tr>
-                    <tr class="${getRowClass('condicion')}">
-                        <td class="col-label">Condición</td>
-                        <td class="col-req">${fmt(req.condicion)}</td>
-                        <td class="col-prop">${fmt(prop.operation_type_name || (prop.operation_type_id == 2 ? 'compra' : prop.operation_type_id == 3 ? 'alquiler' : '—'))}</td>
-                    </tr>
-                    <tr class="${getRowClass('distrito')}">
-                        <td class="col-label">Distrito</td>
-                        <td class="col-req">${fmt(req.distritos)}</td>
-                        <td class="col-prop">${propDistrito}</td>
-                    </tr>
-                    <tr class="${getRowClass('precio')}">
-                        <td class="col-label">Precio</td>
-                        <td class="col-req">${fmt(req.presupuesto_display)}</td>
-                        <td class="col-prop">${propPriceFormatted}</td>
-                    </tr>
-                    <tr class="${getRowClass('habitaciones')}">
-                        <td class="col-label">Habitaciones</td>
-                        <td class="col-req">${fmt(req.habitaciones)}</td>
-                        <td class="col-prop">${fmt(prop.bedrooms)}</td>
-                    </tr>
-                    <tr class="${getRowClass('banos')}">
-                        <td class="col-label">Baños</td>
-                        <td class="col-req">${fmt(req.banos)}</td>
-                        <td class="col-prop">${fmt(prop.bathrooms)}</td>
-                    </tr>
-                    <tr class="${getRowClass('area')}">
-                        <td class="col-label">Área m²</td>
-                        <td class="col-req">${fmt(req.area_m2)}</td>
-                        <td class="col-prop">${fmt(prop.built_area)}</td>
-                    </tr>
-                    <tr class="${getRowClass('estacionamiento')}">
-                        <td class="col-label">Cochera</td>
-                        <td class="col-req">${req.cochera ? 'Sí' : 'No'}</td>
-                        <td class="col-prop">${prop.garage_spaces ? prop.garage_spaces + ' auto(s)' : 'No'}</td>
-                    </tr>
-                    <tr class="${getRowClass('ascensor')}">
-                        <td class="col-label">Ascensor</td>
-                        <td class="col-req">${req.ascensor ? 'Sí' : 'No'}</td>
-                        <td class="col-prop">${prop.ascensor ? 'Sí' : 'No'}</td>
-                    </tr>
-                    <tr class="${getRowClass('amenities')}">
-                        <td class="col-label">Amueblado</td>
-                        <td class="col-req">${req.amueblado ? 'Sí' : 'No'}</td>
-                        <td class="col-prop">${prop.amenities ? 'Sí' : 'No'}</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-
-        <div class="modal-req-panel">
-            <div style="font-size:12px;font-weight:600;color:var(--accent-blue);">📝 Requerimiento original</div>
+        <div class="modal-req-panel" style="grid-column:1;">
+            <div style="font-size:12px;font-weight:600;color:var(--accent-blue);margin-bottom:4px;">📝 Requerimiento #${req.id || ''}</div>
             <div class="modal-req-text">${fmt(req.requerimiento || '—')}</div>
         </div>
-
-        <div class="modal-side-panel">
-            <div class="modal-score-box" style="padding:10px;text-align:center;">
-                <div class="score-num ${scoreClass}" style="font-size:32px;">${Math.round(scoreTotal)}%</div>
-                <div class="score-label" style="font-size:10px;">Coincidencia</div>
+        <div class="modal-side-panel" style="grid-column:2/4;overflow-y:auto;">
+            <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">
+                🏠 Propiedades compatibles (${mejores.length} de ${totalDe})
             </div>
-
-            <div style="text-align:center;">
-                ${propImgHtml}
-                <div class="modal-side-code" style="font-size:10px;margin-top:4px;">${fmt(prop.code)}</div>
-                <div class="modal-side-title" style="font-size:12px;font-weight:600;color:var(--text-primary);">${fmt(prop.title)}</div>
-                ${prop.real_address ? '<div style="font-size:10px;color:var(--text-muted);">' + prop.real_address + '</div>' : ''}
-            </div>
-
-            <div style="font-size:11px;margin-top:4px;">
-                <div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(48,54,61,0.3);"><span style="color:var(--text-secondary);">Precio</span><span style="color:var(--accent-green);font-weight:600;">${propPriceFormatted}</span></div>
-                <div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(48,54,61,0.3);"><span style="color:var(--text-secondary);">Distrito</span><span style="color:var(--text-primary);">${propDistrito}</span></div>
-                <div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(48,54,61,0.3);"><span style="color:var(--text-secondary);">Tipo</span><span style="color:var(--text-primary);">${fmt(prop.tipo_propiedad)}</span></div>
-                <div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(48,54,61,0.3);"><span style="color:var(--text-secondary);">Condición</span><span style="color:var(--text-primary);">${fmt(prop.operation_type_name || (prop.operation_type_id == 2 ? 'Venta' : prop.operation_type_id == 3 ? 'Alquiler' : '—'))}</span></div>
-                <div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(48,54,61,0.3);"><span style="color:var(--text-secondary);">Habitaciones</span><span style="color:var(--text-primary);">${fmt(prop.bedrooms)}</span></div>
-                <div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(48,54,61,0.3);"><span style="color:var(--text-secondary);">Baños</span><span style="color:var(--text-primary);">${fmt(prop.bathrooms)}</span></div>
-                <div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(48,54,61,0.3);"><span style="color:var(--text-secondary);">Área m²</span><span style="color:var(--text-primary);">${fmt(prop.built_area)}</span></div>
-                <div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(48,54,61,0.3);"><span style="color:var(--text-secondary);">Cochera</span><span style="color:var(--text-primary);">${prop.garage_spaces ? prop.garage_spaces + ' auto(s)' : 'No'}</span></div>
-                <div style="display:flex;justify-content:space-between;padding:3px 0;"><span style="color:var(--text-secondary);">Ascensor</span><span style="color:var(--text-primary);">${prop.ascensor ? 'Sí' : 'No'}</span></div>
-            </div>
-
-            ${propuestaEnviada ? '<div style="margin-top:6px;padding:6px 10px;border-radius:6px;background:rgba(0,255,136,0.12);border:1px solid rgba(0,255,136,0.4);text-align:center;font-size:11px;font-weight:600;color:#00ff88;text-shadow:0 0 8px rgba(0,255,136,0.3);animation:waPulse 2s ease-in-out infinite;">✅ WhatsApp enviado</div>' : ''}
+            ${propsHtml}
         </div>
     `;
 
-    // Estilo para la animacion del badge
-    var style = document.createElement('style');
-    style.textContent = '@keyframes waPulse { 0%,100% { box-shadow: 0 0 4px rgba(0,255,136,0.2); } 50% { box-shadow: 0 0 12px rgba(0,255,136,0.5); } }';
-    document.head.appendChild(style);
+    title.textContent = `MATCH #${req.id || ''} — Mejor ${Math.round(scoreTop)}% (${mejores.length} props)`;
+}
 
-    title.textContent = `MATCH Match #${req.id || ''} — ${Math.round(scoreTotal)}%`;
+// Enviar WhatsApp para una propiedad específica del modal
+function enviarPropuestaWhatsAppPropiedad(index) {
+    if (!ultimosResultadosModal || !ultimosResultadosModal[index]) {
+        console.warn('No hay datos para la propiedad', index);
+        return;
+    }
+    ultimaPropiedadTop = ultimosResultadosModal[index].propiedad || null;
+    enviarPropuestaWhatsApp();
 }
 
 // Close modal on Escape key

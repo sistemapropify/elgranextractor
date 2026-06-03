@@ -559,79 +559,67 @@ class MatchingMasivoView(TemplateView):
         return context
 
 
-def _obtener_resumen_calendario(limite=500, umbral_minimo=70):
+def _obtener_multiples_matches_calendario(limite=500, umbral_minimo=60.0):
     """
-    Obtiene resumen de matching para el calendario.
-    Optimizado: evita JOIN con PropifaiProperty para no depender de esa tabla.
-    Usa datos de MatchResult + Requerimiento.
-    
-    Solo incluye requerimientos con porcentaje_match >= umbral_minimo (default: 70%).
-    Los requerimientos sin MatchResult (score 0) NO se incluyen.
+    Obtiene hasta 3 MatchResult por requerimiento con score >= umbral_minimo.
+    Retorna un dict {req_id: {mejor_match_info, matches: [...]}}.
     """
     try:
-        from django.db.models import Max
         from .models import MatchResult
         from requerimientos.models import Requerimiento
         
-        # ── Solo requerimientos CON MatchResult ──
-        resultados_con_match = MatchResult.objects.values(
-            'requerimiento_id'
-        ).annotate(
-            max_score=Max('score_total')
-        ).order_by('-max_score')
-        
-        req_ids_con_match = [r['requerimiento_id'] for r in resultados_con_match]
-        
-        if not req_ids_con_match:
-            return []
-        
-        # Cargar requerimientos con match
-        reqs_con_match = Requerimiento.objects.filter(id__in=req_ids_con_match)
-        reqs_map = {r.id: r for r in reqs_con_match}
-        
-        # Cargar mejores matches
-        mejores = MatchResult.objects.filter(
-            requerimiento_id__in=req_ids_con_match
+        # Obtener todos los MatchResult no eliminados sobre el umbral
+        todos = MatchResult.objects.filter(
+            fase_eliminada__isnull=True,
+            score_total__gte=umbral_minimo
         ).order_by('requerimiento_id', '-score_total')
         
-        mejores_por_req = {}
-        for m in mejores:
-            if m.requerimiento_id not in mejores_por_req:
-                mejores_por_req[m.requerimiento_id] = m
+        # Agrupar hasta 3 por req_id
+        resumen_por_req = {}
+        for m in todos:
+            rid = m.requerimiento_id
+            if rid not in resumen_por_req:
+                resumen_por_req[rid] = []
+            if len(resumen_por_req[rid]) < 3:
+                match_info = {
+                    'score_total': float(m.score_total),
+                    'propiedad_id': m.propiedad_id,
+                    'propiedad_code': m.propiedad_code or '',
+                    'propiedad_title': m.propiedad_title or '',
+                    'propiedad_price': float(m.propiedad_price) if m.propiedad_price else None,
+                    'propiedad_currency_id': m.propiedad_currency_id,
+                    'propiedad_district_id': m.propiedad_district_id,
+                }
+                resumen_por_req[rid].append(match_info)
         
-        resumen = []
-        for item in resultados_con_match:
-            req_id = item['requerimiento_id']
-            req = reqs_map.get(req_id)
-            if not req:
-                continue
-            mejor = mejores_por_req.get(req_id)
-            if mejor:
-                score = float(mejor.score_total)
-                # Solo incluir si supera el umbral mínimo
-                if score >= umbral_minimo:
-                    resumen.append({
-                        'requerimiento_id': req_id,
-                        'requerimiento_nombre': str(req),
-                        'porcentaje_match': score,
-                        'score_promedio': score,
-                        'total_compatibles': 1,
-                        'mejor_propiedad_id': mejor.propiedad_id,
-                        'mejor_propiedad_codigo': None,
-                        'mejor_propiedad_titulo': None,
-                        'mejor_propiedad_distrito': None,
-                        'mejor_propiedad_precio': None,
-                        'mejor_propiedad_moneda_id': None,
-                        'mejor_propiedad_tipo': None,
-                        'fecha_ultimo_matching': mejor.ejecutado_en.isoformat() if mejor.ejecutado_en else None,
-                    })
+        # Construir resultado final: un dict por req_id con mejores scores
+        resultado = {}
+        for rid, matches in resumen_por_req.items():
+            mejor = matches[0]
+            try:
+                req = Requerimiento.objects.get(id=rid)
+                req_nombre = str(req)
+            except Requerimiento.DoesNotExist:
+                req_nombre = f'Requerimiento #{rid}'
+            
+            resultado[rid] = {
+                'requerimiento_id': rid,
+                'requerimiento_nombre': req_nombre,
+                'porcentaje_match': mejor['score_total'],
+                'total_compatibles': len(matches),
+                'matches': matches,
+            }
         
-        resumen.sort(key=lambda x: x['porcentaje_match'], reverse=True)
-        return resumen[:limite]
+        # Ordenar por mejor score, limitar
+        items = sorted(resultado.values(), key=lambda x: x['porcentaje_match'], reverse=True)
+        items = items[:limite]
+        
+        # Reconstruir dict ordenado
+        return {item['requerimiento_id']: item for item in items}
         
     except Exception as e:
-        logger.warning(f"No se pudo obtener resumen de matching para calendario: {e}")
-        return []
+        logger.warning(f"No se pudieron obtener matches multiples para calendario: {e}")
+        return {}
 
 
 class MatchingCalendarView(TemplateView):
@@ -721,10 +709,9 @@ class MatchingCalendarView(TemplateView):
         context['tipos_propiedad'] = tipos_propiedad
         context['tipos_propiedad_json'] = json.dumps(tipos_propiedad)
         
-        # Obtener resumen de matching masivo para todos los requerimientos
-        # Optimizado: una sola consulta con select_related, sin N+1
-        resumen = _obtener_resumen_calendario()
-        resumen_por_req = {item['requerimiento_id']: item for item in resumen}
+        # Obtener resumen de matching con múltiples matches por requerimiento
+        # Hasta 3 matches por req con score >= 60%
+        resumen_por_req = _obtener_multiples_matches_calendario()
         
         # Filtrar requerimientos no deseados (no_especificado y compartido)
         condicion_excluir = ['no_especificado', 'compartido']
@@ -820,6 +807,7 @@ class MatchingCalendarView(TemplateView):
                                 agente_id = agente_obj.id
                         except Exception:
                             pass
+                    matches_del_req = info.get('matches', []) if info else []
                     reqs_serializados.append({
                         'id': r.id,
                         'hora': r.hora.isoformat() if r.hora else None,
@@ -833,10 +821,11 @@ class MatchingCalendarView(TemplateView):
                         'agente_id': agente_id,
                         'distritos': r.distritos[:50] if r.distritos else '',
                         'distritos_list': distritos_list,
-                        'porcentaje_match': info.get('porcentaje_match', 0),
-                        'mejor_propiedad_codigo': info.get('mejor_propiedad_codigo'),
-                        'mejor_propiedad_precio': info.get('mejor_propiedad_precio'),
-                        'mejor_propiedad_moneda_id': info.get('mejor_propiedad_moneda_id'),
+                        'porcentaje_match': info.get('porcentaje_match', 0) if info else 0,
+                        'mejor_propiedad_codigo': matches_del_req[0].get('propiedad_code') if matches_del_req else None,
+                        'mejor_propiedad_precio': matches_del_req[0].get('propiedad_price') if matches_del_req else None,
+                        'mejor_propiedad_moneda_id': matches_del_req[0].get('propiedad_currency_id') if matches_del_req else None,
+                        'matches': matches_del_req,  # NUEVO: lista completa de hasta 3 matches
                         'verificado': r.verificado,
                         'whatsapp_enviado': r.id in reqs_con_whatsapp,
                     })
