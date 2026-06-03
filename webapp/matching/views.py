@@ -574,7 +574,7 @@ def _obtener_multiples_matches_calendario(limite=500, umbral_minimo=60.0):
             score_total__gte=umbral_minimo
         ).order_by('requerimiento_id', '-score_total')
         
-        # Agrupar hasta 3 por req_id
+        # Agrupar hasta 3 por req_id (solo score_total y propiedad_id)
         resumen_por_req = {}
         for m in todos:
             rid = m.requerimiento_id
@@ -584,11 +584,6 @@ def _obtener_multiples_matches_calendario(limite=500, umbral_minimo=60.0):
                 match_info = {
                     'score_total': float(m.score_total),
                     'propiedad_id': m.propiedad_id,
-                    'propiedad_code': m.propiedad_code or '',
-                    'propiedad_title': m.propiedad_title or '',
-                    'propiedad_price': float(m.propiedad_price) if m.propiedad_price else None,
-                    'propiedad_currency_id': m.propiedad_currency_id,
-                    'propiedad_district_id': m.propiedad_district_id,
                 }
                 resumen_por_req[rid].append(match_info)
         
