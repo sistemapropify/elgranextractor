@@ -684,7 +684,7 @@ class MatchingCalendarView(TemplateView):
         
         # ── Agentes para filtro autocomplete ──
         from django.db.models import Count
-        agentes_nombres = (
+        agentes_nombres_raw = (
             Requerimiento.objects.exclude(condicion__in=['no_especificado', 'compartido'])
             .exclude(agente='')
             .values('agente')
@@ -692,7 +692,13 @@ class MatchingCalendarView(TemplateView):
             .order_by('-total')
             .values_list('agente', flat=True)
         )[:100]
-        context['agentes_json'] = json.dumps(list(agentes_nombres))
+        # Limpiar nombres (quitar saltos de línea y espacios extra)
+        agentes_limpios = []
+        for nombre in agentes_nombres_raw:
+            nombre_limpio = (nombre or '').replace('\n', ' ').replace('\r', ' ').strip()
+            if nombre_limpio and nombre_limpio not in agentes_limpios:
+                agentes_limpios.append(nombre_limpio)
+        context['agentes_json'] = json.dumps(agentes_limpios)
         
         # ── Tipos de propiedad para filtros ──
         from requerimientos.models import TipoPropiedadChoices
@@ -703,6 +709,9 @@ class MatchingCalendarView(TemplateView):
         ]
         context['tipos_propiedad'] = tipos_propiedad
         context['tipos_propiedad_json'] = json.dumps(tipos_propiedad)
+        
+        # reqs_del_mes_json por defecto (vacío para vistas que no son month)
+        context['reqs_del_mes_json'] = json.dumps([])
         
         # Obtener resumen de matching con múltiples matches por requerimiento
         # Hasta 3 matches por req con score >= 60%
@@ -725,29 +734,59 @@ class MatchingCalendarView(TemplateView):
                 except (ValueError, IndexError):
                     pass
             
-            # Construir reqs_por_fecha como dict con key "YYYY-MM-DD"
-            # Optimización: cargar todos los requerimientos en UNA consulta en lugar de N+1
-            req_ids = list(resumen_por_req.keys())
-            requerimientos = Requerimiento.objects.filter(
-                id__in=req_ids
-            ).exclude(condicion__in=condicion_excluir)
-            reqs_map = {r.id: r for r in requerimientos}
+            # ── reqs_por_fecha: contar TOTAL de requerimientos y cuántos tienen match ──
+            # Query 1: Obtener TODOS los requerimientos del mes (no solo los que tienen match)
+            # para contar el total real por día
+            primer_dia = date(year, month, 1)
+            if month == 12:
+                ultimo_dia = date(year + 1, 1, 1) - timedelta(days=1)
+            else:
+                ultimo_dia = date(year, month + 1, 1) - timedelta(days=1)
+            
+            todos_reqs_mes = Requerimiento.objects.filter(
+                fecha__gte=primer_dia,
+                fecha__lte=ultimo_dia
+            ).exclude(
+                condicion__in=condicion_excluir
+            ).values('id', 'fecha')
+            
+            # IDs de requerimientos que tienen al menos un match (score >= 60%)
+            req_ids_con_match = set(resumen_por_req.keys())
             
             reqs_por_fecha = {}
-            for req_id, info in resumen_por_req.items():
-                r = reqs_map.get(req_id)
-                if not r:
+            for r in todos_reqs_mes:
+                if not r['fecha']:
                     continue
-                if r.fecha:
-                    fecha_key = r.fecha.isoformat()  # "2026-05-15"
-                    if fecha_key not in reqs_por_fecha:
-                        reqs_por_fecha[fecha_key] = {'total': 0, 'con_match_alto': 0}
-                    reqs_por_fecha[fecha_key]['total'] += 1
-                    if info['porcentaje_match'] >= 90:
-                        reqs_por_fecha[fecha_key]['con_match_alto'] += 1
+                fecha_key = r['fecha'].isoformat()
+                if fecha_key not in reqs_por_fecha:
+                    reqs_por_fecha[fecha_key] = {'total': 0, 'con_match': 0}
+                reqs_por_fecha[fecha_key]['total'] += 1
+                if r['id'] in req_ids_con_match:
+                    reqs_por_fecha[fecha_key]['con_match'] += 1
+            
+            # ── Datos de reqs del mes para filtros client-side ──
+            reqs_del_mes_qs = Requerimiento.objects.filter(
+                fecha__gte=primer_dia,
+                fecha__lte=ultimo_dia
+            ).exclude(
+                condicion__in=condicion_excluir
+            ).values('id', 'fecha', 'agente', 'tipo_propiedad')
+            
+            reqs_del_mes_list = []
+            for r in reqs_del_mes_qs:
+                # Limpiar el nombre del agente (quitando saltos de línea)
+                agente_limpio = (r['agente'] or '').replace('\n', ' ').replace('\r', ' ').strip()
+                reqs_del_mes_list.append({
+                    'id': r['id'],
+                    'fecha': r['fecha'].isoformat() if r['fecha'] else None,
+                    'agente': agente_limpio,
+                    'tipo_propiedad': r['tipo_propiedad'] or '',
+                    'has_match': r['id'] in req_ids_con_match,
+                })
             
             context['month_days'] = month_days
             context['reqs_por_fecha_json'] = json.dumps(reqs_por_fecha)
+            context['reqs_del_mes_json'] = json.dumps(reqs_del_mes_list)
             context['month_name'] = calendar.month_name[month]
             
         elif view_mode == 'week':

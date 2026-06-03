@@ -238,7 +238,7 @@
     }
 
     .day-stat-item.total { background: rgba(88, 166, 255, 0.1); color: var(--accent-blue); }
-    .day-stat-item.match-alto { background: rgba(63, 185, 80, 0.1); color: var(--accent-green); }
+    .day-stat-item.match { background: rgba(255, 165, 0, 0.15); color: #ff8c00; }
     .day-stat-item .stat-label { font-size: 10px; color: var(--text-muted); }
     .day-stat-item .stat-value { font-weight: 600; }
 
@@ -1464,6 +1464,7 @@ const VIEW_MODE = '{{ view_mode }}';
 const CURRENT_YEAR = {{ current_year }};
 const CURRENT_MONTH = {{ current_month }};
 const CURRENT_DAY = {{ current_day }};
+const reqsDelMes = {{ reqs_del_mes_json|safe }};
 const TODAY = '{{ today.isoformat }}';
 
 {% if view_mode == 'month' %}
@@ -1479,8 +1480,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const stats = reqsPorFecha[fechaKey];
         if (stats) {
             let html = `<div class="day-stat-item total"><span class="stat-label">Reqs</span><span class="stat-value">${stats.total}</span></div>`;
-            if (stats.con_match_alto > 0) {
-                html += `<div class="day-stat-item match-alto"><span class="stat-label">≥90%</span><span class="stat-value">${stats.con_match_alto}</span></div>`;
+            if (stats.con_match > 0) {
+                html += `<div class="day-stat-item match"><span class="stat-label">Match</span><span class="stat-value">${stats.con_match}</span></div>`;
             }
             el.innerHTML = html;
         }
@@ -1765,6 +1766,51 @@ function applyFilters() {
                 } else {
                     row.style.display = '';
                 }
+            }
+        });
+    }
+
+    // Aplicar a vista month (recalcular stats por día)
+    if (VIEW_MODE === 'month' && typeof reqsDelMes !== 'undefined') {
+        const filteredReqs = reqsDelMes.filter(function(req) {
+            // Filtro por tipo de propiedad
+            if (selectedTipo && req.tipo_propiedad !== selectedTipo) return false;
+            // Filtro por agente
+            if (selectedAgente && req.agente.toLowerCase().indexOf(selectedAgente.toLowerCase()) < 0) return false;
+            // Filtro solo con match
+            if (showOnlyWithMatch && !req.has_match) return false;
+            return true;
+        });
+
+        // Recalcular stats por día
+        const newStats = {};
+        filteredReqs.forEach(function(req) {
+            if (!req.fecha) return;
+            if (!newStats[req.fecha]) {
+                newStats[req.fecha] = { total: 0, con_match: 0 };
+            }
+            newStats[req.fecha].total += 1;
+            if (req.has_match) {
+                newStats[req.fecha].con_match += 1;
+            }
+        });
+
+        // Actualizar las celdas del calendario
+        document.querySelectorAll('.day-stats').forEach(function(el) {
+            const dayNum = el.dataset.dayNum;
+            if (!dayNum || dayNum === '0') return;
+            const monthStr = String(CURRENT_MONTH).padStart(2, '0');
+            const dayStr = String(dayNum).padStart(2, '0');
+            const fechaKey = CURRENT_YEAR + '-' + monthStr + '-' + dayStr;
+            const stats = newStats[fechaKey];
+            if (stats) {
+                let html = '<div class="day-stat-item total"><span class="stat-label">Reqs</span><span class="stat-value">' + stats.total + '</span></div>';
+                if (stats.con_match > 0) {
+                    html += '<div class="day-stat-item match"><span class="stat-label">Match</span><span class="stat-value">' + stats.con_match + '</span></div>';
+                }
+                el.innerHTML = html;
+            } else {
+                el.innerHTML = '';
             }
         });
     }
