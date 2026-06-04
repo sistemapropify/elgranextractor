@@ -312,3 +312,154 @@ def obtener_pipeline_requerimiento(requerimiento_id: int) -> Dict[str, Any]:
         'lapso_total': lapso_total,
         'stats': stats,
     }
+
+
+def obtener_pipeline_propuesta(propuesta_id: int) -> Dict[str, Any]:
+    """
+    Obtiene el pipeline de vida para una propuesta ESPECÍFICA.
+    Cada propuesta tiene su propio pipeline independiente.
+
+    Args:
+        propuesta_id: ID de la propuesta WhatsApp
+
+    Returns:
+        dict con las 4 etapas específicas de esta propuesta
+    """
+    try:
+        propuesta = PropuestaWhatsApp.objects.get(id=propuesta_id)
+    except PropuestaWhatsApp.DoesNotExist:
+        return {
+            'propuesta_id': propuesta_id,
+            'error': 'Propuesta no encontrada',
+            'etapas': {},
+        }
+
+    req = propuesta.requerimiento
+    requerimiento_id = req.id
+
+    # ── Etapa 1: Requerimiento (compartido) ──
+    fecha_req = _obtener_fecha_requerimiento(req)
+    etapa_req = {
+        'tipo': 'requerimiento',
+        'label': 'Requerimiento',
+        'icono': '📝',
+        'fecha': _formatear_fecha_completa(fecha_req) if fecha_req else None,
+        'fecha_display': _formatear_fecha(fecha_req) if fecha_req else '—',
+        'estado': 'ok' if fecha_req else 'pendiente',
+        'detalle': None,
+    }
+
+    # ── Etapa 2: Match (específico de la propiedad de esta propuesta) ──
+    fecha_match = None
+    score_match = None
+    try:
+        if propuesta.propiedad_id:
+            # Buscar el MatchResult para esta propiedad específica y este requerimiento
+            match = MatchResult.objects.filter(
+                requerimiento_id=requerimiento_id,
+                propiedad_id=propuesta.propiedad_id,
+            ).order_by('-ejecutado_en').first()
+
+            if match:
+                fecha_match = match.ejecutado_en
+                score_match = float(match.score_total)
+    except Exception as e:
+        logger.warning(f"Error al consultar MatchResult para propuesta #{propuesta_id}: {e}")
+
+    lapso_req_match = _calcular_lapso(fecha_req, fecha_match)
+
+    etapa_match = {
+        'tipo': 'match',
+        'label': 'Match',
+        'icono': '🎯',
+        'fecha': _formatear_fecha_completa(fecha_match) if fecha_match else None,
+        'fecha_display': _formatear_fecha(fecha_match) if fecha_match else '—',
+        'estado': 'ok' if fecha_match else ('pendiente' if fecha_req else 'no_aplica'),
+        'lapso_desde_anterior': lapso_req_match,
+        'detalle': f"Score: {score_match:.0f}%" if score_match else None,
+    }
+
+    # ── Etapa 3: Propuesta (ESTA propuesta específica) ──
+    fecha_propuesta = propuesta.enviado_en
+    status_propuesta = propuesta.status
+    nombres_status = dict(PropuestaWhatsApp.Status.choices)
+
+    lapso_match_propuesta = _calcular_lapso(fecha_match, fecha_propuesta)
+    lapso_total_req_propuesta = _calcular_lapso(fecha_req, fecha_propuesta)
+
+    etapa_propuesta = {
+        'tipo': 'propuesta',
+        'label': 'Propuesta',
+        'icono': '📤',
+        'fecha': _formatear_fecha_completa(fecha_propuesta) if fecha_propuesta else None,
+        'fecha_display': _formatear_fecha(fecha_propuesta) if fecha_propuesta else '—',
+        'estado': 'ok',
+        'lapso_desde_anterior': lapso_match_propuesta,
+        'lapso_desde_inicio': lapso_total_req_propuesta,
+        'detalle': nombres_status.get(status_propuesta, status_propuesta) if status_propuesta else None,
+    }
+
+    # ── Etapa 4: Decisión (solo de ESTA propuesta) ──
+    fecha_decision = propuesta.respondido_en
+    decision_status = None
+    detalle_decision = None
+    estado_decision = 'pendiente'
+
+    if fecha_decision:
+        st = propuesta.status
+        if st in STATUS_ACEPTADO:
+            decision_status = 'aceptado'
+            detalle_decision = '✅ Aceptado'
+            estado_decision = 'ok'
+        elif st in STATUS_RECHAZADO:
+            decision_status = 'rechazado'
+            detalle_decision = '❌ Rechazado'
+            estado_decision = 'ok'
+        else:
+            decision_status = 'respondido'
+            detalle_decision = f"Respondido: {nombres_status.get(st, st)}"
+            estado_decision = 'ok'
+    else:
+        detalle_decision = 'Esperando respuesta...'
+
+    lapso_propuesta_decision = _calcular_lapso(fecha_propuesta, fecha_decision)
+    lapso_total = _calcular_lapso(fecha_req, fecha_decision)
+
+    etapa_decision = {
+        'tipo': 'decision',
+        'label': 'Decisión',
+        'icono': '✅' if decision_status == 'aceptado' else ('❌' if decision_status == 'rechazado' else '⏳'),
+        'fecha': _formatear_fecha_completa(fecha_decision) if fecha_decision else None,
+        'fecha_display': _formatear_fecha(fecha_decision) if fecha_decision else '—',
+        'estado': estado_decision,
+        'lapso_desde_anterior': lapso_propuesta_decision,
+        'lapso_desde_inicio': _calcular_lapso(fecha_req, fecha_decision),
+        'detalle': detalle_decision,
+        'decision': decision_status,
+    }
+
+    etapas_orden = ['requerimiento', 'match', 'propuesta', 'decision']
+
+    return {
+        'propuesta_id': propuesta_id,
+        'requerimiento_id': requerimiento_id,
+        'requerimiento_texto': req.requerimiento[:200] if req.requerimiento else '',
+        'propiedad_code': propuesta.propiedad_code,
+        'propiedad_title': propuesta.propiedad_title,
+        'etapas': {
+            'requerimiento': etapa_req,
+            'match': etapa_match,
+            'propuesta': etapa_propuesta,
+            'decision': etapa_decision,
+        },
+        'etapas_orden': etapas_orden,
+        'lapso_total': lapso_total,
+        'stats': {
+            'mejor_score_match': score_match,
+            'tiene_match': fecha_match is not None,
+            'tiene_propuesta': True,
+            'tiene_decision': fecha_decision is not None,
+            'decision_final': decision_status,
+            'status_actual': status_propuesta,
+        },
+    }

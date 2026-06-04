@@ -2225,10 +2225,10 @@ function renderMatchModal(data, body, title) {
             </div>
             <div style="font-size:11px;font-weight:500;color:var(--text-primary);margin-bottom:2px;word-break:break-word;">${fmt(prop.title)}</div>
             <div style="font-size:10px;color:var(--text-secondary);margin-bottom:4px;">${distrito} · ${precio}</div>
-            <button onclick="enviarPropuestaWhatsAppPropiedad(${idx})" style="width:100%;background:#25D366;color:#fff;border:none;border-radius:6px;padding:5px;font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;">
+            <button class="btn-wa-${idx}" onclick="enviarPropuestaWhatsAppPropiedad(${idx})" style="width:100%;background:#25D366;color:#fff;border:none;border-radius:6px;padding:5px;font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;">
                 📤 Enviar propuesta
             </button>
-            ${yaEnviado ? '<div style="margin-top:3px;font-size:10px;color:var(--accent-green);text-align:center;">✅ WhatsApp enviado</div>' : ''}
+            <div id="wa-msg-${idx}" style="display:none;margin-top:3px;font-size:10px;color:var(--accent-green);text-align:center;">✅ WhatsApp enviado</div>
         </div>`;
     });
 
@@ -2246,6 +2246,35 @@ function renderMatchModal(data, body, title) {
     `;
 
     title.textContent = `MATCH #${req.id || ''} — Mejor ${Math.round(scoreTop)}% (${mejores.length} props)`;
+
+    // ── Verificar propuestas ya enviadas para cada match ──
+    mejores.forEach(function(r, idx) {
+        var prop = r.propiedad || {};
+        var propId = prop.id;
+        var reqId = req.id;
+        if (propId && reqId) {
+            fetch('/matching/api/propuesta/verificar-enviado/?requerimiento_id=' + reqId + '&propiedad_id=' + propId)
+                .then(function(res) { return res.json(); })
+                .then(function(data) {
+                    if (data.ya_enviado) {
+                        // Deshabilitar boton y mostrar mensaje
+                        var btn = document.querySelector('.modal-side-panel .btn-wa-' + idx);
+                        if (btn) {
+                            btn.disabled = true;
+                            btn.style.background = '#2d333b';
+                            btn.style.cursor = 'not-allowed';
+                            btn.style.opacity = '0.6';
+                            btn.innerHTML = '✅ Ya enviado';
+                        }
+                        var msgDiv = document.getElementById('wa-msg-' + idx);
+                        if (msgDiv) msgDiv.style.display = 'block';
+                    }
+                })
+                .catch(function(err) {
+                    console.warn('Error verificando propuesta enviada:', err);
+                });
+        }
+    });
 }
 
 // Enviar WhatsApp para una propiedad específica del modal

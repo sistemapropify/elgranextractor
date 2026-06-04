@@ -328,8 +328,8 @@ function togglePipeline(propuestaId, requerimientoId) {
     // Mostrar loading
     content.innerHTML = '<div class="pipeline-loading"><div class="pipeline-spinner"></div><span>Cargando pipeline...</span></div>';
 
-    // Fetch pipeline data
-    fetch('/matching/api/matching/' + requerimientoId + '/pipeline/')
+    // Fetch pipeline data (específico de esta propuesta, no del requerimiento general)
+    fetch('/matching/api/propuesta/' + propuestaId + '/pipeline/')
         .then(function(r) {
             if (!r.ok) throw new Error('Error al obtener pipeline');
             return r.json();

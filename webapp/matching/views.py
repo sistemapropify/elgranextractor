@@ -405,6 +405,47 @@ class PropuestaWhatsAppViewSet(viewsets.ViewSet):
             propuesta.save(update_fields=['mensaje_enviado'])
         return Response({'status': 'ok'})
 
+    @action(detail=True, methods=['GET'])
+    def pipeline(self, request, pk=None):
+        """
+        GET /matching/api/propuesta/<id>/pipeline/
+
+        Retorna el pipeline de vida para esta propuesta ESPECÍFICA.
+        Cada propuesta tiene su propio pipeline independiente,
+        con su propio match, su propio envio y su propia decision.
+        """
+        try:
+            from .pipeline_requerimiento import obtener_pipeline_propuesta
+            data = obtener_pipeline_propuesta(pk)
+            return Response(data)
+        except Exception as e:
+            logger.error(f"Error al obtener pipeline de propuesta #{pk}: {e}")
+            return Response(
+                {'error': f'Error al obtener pipeline: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['GET'], permission_classes=[AllowAny])
+    def verificar_enviado(self, request):
+        """
+        GET /matching/api/propuesta/verificar-enviado/?requerimiento_id=X&propiedad_id=Y
+        Retorna si ya se envió una propuesta para este requerimiento+propiedad.
+        """
+        req_id = request.query_params.get('requerimiento_id')
+        prop_id = request.query_params.get('propiedad_id')
+
+        if not req_id or not prop_id:
+            return Response({'error': 'requerimiento_id y propiedad_id requeridos'}, status=400)
+
+        try:
+            exists = PropuestaWhatsApp.objects.filter(
+                requerimiento_id=int(req_id),
+                propiedad_id=int(prop_id)
+            ).exists()
+            return Response({'ya_enviado': exists})
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+
     @action(detail=False, methods=['GET'], permission_classes=[AllowAny])
     def listar(self, request):
         """

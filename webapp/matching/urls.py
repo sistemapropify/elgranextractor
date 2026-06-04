@@ -28,6 +28,8 @@ urlpatterns = [
     path('api/propuesta/guardar/', views.PropuestaWhatsAppViewSet.as_view({'post': 'guardar'}), name='propuesta-guardar'),
     path('api/propuesta/<int:pk>/actualizar-status/', views.PropuestaWhatsAppViewSet.as_view({'post': 'actualizar_status'}), name='propuesta-actualizar-status'),
     path('api/propuesta/<int:pk>/actualizar-mensaje/', views.PropuestaWhatsAppViewSet.as_view({'post': 'actualizar_mensaje'}), name='propuesta-actualizar-mensaje'),
+    path('api/propuesta/<int:pk>/pipeline/', views.PropuestaWhatsAppViewSet.as_view({'get': 'pipeline'}), name='propuesta-pipeline'),
+    path('api/propuesta/verificar-enviado/', views.PropuestaWhatsAppViewSet.as_view({'get': 'verificar_enviado'}), name='propuesta-verificar-enviado'),
     path('api/propuesta/listar/', views.PropuestaWhatsAppViewSet.as_view({'get': 'listar'}), name='propuesta-listar'),
     path('api/propuesta/', include(router.urls)),
 
