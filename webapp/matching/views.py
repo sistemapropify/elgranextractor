@@ -677,13 +677,15 @@ def _obtener_multiples_matches_calendario(limite=500, umbral_minimo=60.0):
             score_total__gte=umbral_minimo
         ).order_by('requerimiento_id', '-score_total')
         
-        # Agrupar hasta 3 por req_id (solo score_total y propiedad_id)
+        # Agrupar hasta 3 propiedades DISTINTAS por req_id (mejor score)
         resumen_por_req = {}
         for m in todos:
             rid = m.requerimiento_id
             if rid not in resumen_por_req:
                 resumen_por_req[rid] = []
-            if len(resumen_por_req[rid]) < 3:
+            # Solo agregar si es una propiedad DISTINTA a las ya agregadas
+            prop_ids_existentes = {x['propiedad_id'] for x in resumen_por_req[rid]}
+            if m.propiedad_id not in prop_ids_existentes and len(resumen_por_req[rid]) < 3:
                 match_info = {
                     'score_total': float(m.score_total),
                     'propiedad_id': m.propiedad_id,
