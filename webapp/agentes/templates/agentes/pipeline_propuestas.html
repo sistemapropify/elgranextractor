@@ -93,6 +93,57 @@
     .prop-code { font-size: 12px; color: var(--accent-blue); font-weight: 600; }
     .prop-title { font-size: 12px; color: var(--text-primary); }
     .agente-info { font-size: 12px; color: var(--text-secondary); }
+
+    /* ===== PIPELINE HORIZONTAL ===== */
+    .pipeline-timeline {
+        display: flex; flex-direction: row; align-items: center; justify-content: flex-start;
+        gap: 0; padding: 8px 4px; width: 100%; overflow-x: auto;
+    }
+    .pipeline-node {
+        display: flex; flex-direction: column; align-items: center; gap: 2px;
+        background: var(--bg-tertiary); border: 1px solid var(--border-color);
+        border-radius: 6px; padding: 4px 8px; min-width: 72px; text-align: center;
+        flex-shrink: 0; transition: var(--transition);
+    }
+    .pipeline-node.completed { border-color: var(--accent-green); box-shadow: 0 0 4px rgba(63,185,80,0.1); }
+    .pipeline-node.pending { border-color: var(--accent-orange); opacity: 0.7; }
+    .pipeline-node.na { border-color: var(--text-muted); opacity: 0.4; }
+    .pipeline-marker { font-size: 14px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--bg-secondary); border: 2px solid var(--border-color); flex-shrink: 0; }
+    .pipeline-node.completed .pipeline-marker { border-color: var(--accent-green); }
+    .pipeline-title { font-size: 8px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.2px; white-space: nowrap; }
+    .pipeline-node.completed .pipeline-title { color: var(--accent-green); }
+    .pipeline-date { font-size: 9px; color: var(--text-primary); font-weight: 500; white-space: nowrap; }
+    .pipeline-score { font-size: 8px; color: var(--accent-blue); font-weight: 600; }
+    .pipeline-detalle { font-size: 8px; color: var(--accent-orange); font-weight: 500; max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pipeline-detalle.aceptado { color: var(--accent-green); }
+    .pipeline-detalle.rechazado { color: var(--accent-red); }
+    .pipeline-detalle.pendiente { color: var(--accent-orange); font-style: italic; }
+    .pipeline-detalle.na { color: var(--text-muted); font-style: italic; }
+    .pipeline-connector {
+        display: flex; flex-direction: column; align-items: center; gap: 1px;
+        min-width: 30px; flex-shrink: 0; position: relative;
+    }
+    .connector-line { width: 100%; height: 2px; background: var(--border-color); position: relative; }
+    .pipeline-node.completed + .pipeline-connector .connector-line { background: var(--accent-green); opacity: 0.35; }
+    .lapso-badge {
+        background: var(--bg-secondary); border: 1px solid var(--accent-blue); color: var(--accent-blue);
+        padding: 0 5px; border-radius: 7px; font-size: 8px; font-weight: 600; white-space: nowrap; line-height: 1.6;
+    }
+
+    .pipeline-expand-row { display: none; }
+    .pipeline-expand-row.visible { display: table-row; }
+    .pipeline-expand-row td { padding: 6px 12px 10px 12px; background: rgba(13,17,23,0.5); }
+    .pipeline-toggle {
+        display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px;
+        border-radius: 6px; border: 1px solid var(--border-color); background: transparent;
+        color: var(--text-secondary); cursor: pointer; transition: var(--transition); font-size: 12px;
+    }
+    .pipeline-toggle:hover { border-color: var(--accent-blue); color: var(--accent-blue); background: rgba(88,166,255,0.1); }
+    .pipeline-toggle.active { background: var(--accent-blue); border-color: var(--accent-blue); color: #fff; }
+    .pipeline-loading { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; color: var(--text-muted); font-size: 12px; }
+    .pipeline-spinner { width: 16px; height: 16px; border: 2px solid var(--border-color); border-top-color: var(--accent-blue); border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .pipeline-error { padding: 8px; color: var(--accent-red); font-size: 11px; text-align: center; }
 </style>
 {% endblock %}
 
@@ -142,6 +193,7 @@
             <table>
                 <thead>
                     <tr>
+                        <th style="width:36px;"></th>
                         <th>Fecha</th>
                         <th>Requerimiento</th>
                         <th>Propiedad</th>
@@ -154,6 +206,9 @@
                 <tbody>
                     {% for p in propuestas %}
                     <tr>
+                        <td style="text-align:center;">
+                            <button class="pipeline-toggle" id="pipe-btn-{{ p.id }}" onclick="togglePipeline({{ p.id }}, {{ p.requerimiento_id }})" title="Ver pipeline de vida">📊</button>
+                        </td>
                         <td style="white-space:nowrap;font-size:12px;color:var(--text-secondary);">
                             {{ p.enviado_en|date:'d/m/Y H:i' }}
                         </td>
@@ -199,6 +254,12 @@
                             </select>
                         </td>
                     </tr>
+                    <!-- Pipeline expand row -->
+                    <tr class="pipeline-expand-row" id="pipe-row-{{ p.id }}">
+                        <td colspan="8">
+                            <div id="pipe-content-{{ p.id }}"></div>
+                        </td>
+                    </tr>
                     {% endfor %}
                 </tbody>
             </table>
@@ -237,6 +298,125 @@ function actualizarStatus(select) {
     .catch(function(err) {
         alert('Error de red: ' + err.message);
     });
+}
+
+// ===== PIPELINE TOGGLE =====
+var pipelineCache = {};
+
+function togglePipeline(propuestaId, requerimientoId) {
+    var row = document.getElementById('pipe-row-' + propuestaId);
+    var btn = document.getElementById('pipe-btn-' + propuestaId);
+    var content = document.getElementById('pipe-content-' + propuestaId);
+
+    if (row.classList.contains('visible')) {
+        // Ocultar
+        row.classList.remove('visible');
+        btn.classList.remove('active');
+        return;
+    }
+
+    // Mostrar
+    row.classList.add('visible');
+    btn.classList.add('active');
+
+    // Verificar si ya tenemos datos en cache
+    if (pipelineCache[requerimientoId]) {
+        renderPipeline(pipelineCache[requerimientoId], content);
+        return;
+    }
+
+    // Mostrar loading
+    content.innerHTML = '<div class="pipeline-loading"><div class="pipeline-spinner"></div><span>Cargando pipeline...</span></div>';
+
+    // Fetch pipeline data
+    fetch('/matching/api/matching/' + requerimientoId + '/pipeline/')
+        .then(function(r) {
+            if (!r.ok) throw new Error('Error al obtener pipeline');
+            return r.json();
+        })
+        .then(function(data) {
+            pipelineCache[requerimientoId] = data;
+            renderPipeline(data, content);
+        })
+        .catch(function(err) {
+            content.innerHTML = '<div class="pipeline-error">⚠️ ' + err.message + '</div>';
+        });
+}
+
+function renderPipeline(data, container) {
+    if (data.error) {
+        container.innerHTML = '<div class="pipeline-error">⚠️ ' + data.error + '</div>';
+        return;
+    }
+
+    var etapas = data.etapas || {};
+    var orden = data.etapas_orden || ['requerimiento', 'match', 'propuesta', 'decision'];
+    var stats = data.stats || {};
+
+    var html = '<div class="pipeline-timeline">';
+
+    orden.forEach(function(key, idx) {
+        var etapa = etapas[key];
+        if (!etapa) return;
+
+        var nodeClass = 'pipeline-node';
+        if (etapa.estado === 'ok') nodeClass += ' completed';
+        else if (etapa.estado === 'pendiente') nodeClass += ' pending';
+        else nodeClass += ' na';
+
+        var detalleClass = 'pipeline-detalle';
+        if (key === 'decision') {
+            if (etapa.decision === 'aceptado') detalleClass += ' aceptado';
+            else if (etapa.decision === 'rechazado') detalleClass += ' rechazado';
+            else if (etapa.estado === 'pendiente') detalleClass += ' pendiente';
+            else detalleClass += ' na';
+        }
+
+        html += '<div class="' + nodeClass + '">';
+        html += '  <div class="pipeline-marker">' + (etapa.icono || '○') + '</div>';
+        html += '  <div class="pipeline-title">' + (etapa.label || key) + '</div>';
+        html += '  <div class="pipeline-date">' + (etapa.fecha_display || '—') + '</div>';
+
+        if (key === 'match' && etapa.detalle) {
+            html += '<div class="pipeline-score">' + etapa.detalle + '</div>';
+        } else if (key === 'propuesta' && etapa.detalle) {
+            html += '<div class="' + detalleClass + '">' + etapa.detalle + '</div>';
+        } else if (key === 'decision' && etapa.detalle) {
+            html += '<div class="' + detalleClass + '">' + etapa.detalle + '</div>';
+        }
+
+        html += '</div>';
+
+        if (idx < orden.length - 1) {
+            var lapso = etapa.lapso_desde_anterior;
+            var lapsoDisplay = (lapso && lapso.display) ? lapso.display : '';
+            html += '<div class="pipeline-connector">';
+            html += '  <div class="connector-line"></div>';
+            if (lapsoDisplay) {
+                html += '  <span class="lapso-badge">' + lapsoDisplay + '</span>';
+            }
+            html += '</div>';
+        }
+    });
+
+    html += '</div>';
+
+    // Stats badge
+    if (stats && stats.tiene_match) {
+        html += '<div style="display:flex;gap:8px;padding:4px 8px;flex-wrap:wrap;border-top:1px solid var(--border-color);margin-top:4px;">';
+        if (stats.mejor_score_match) {
+            html += '<span class="stat-pill" style="font-size:10px;padding:3px 10px;">🎯 <strong>' + stats.mejor_score_match + '%</strong> match</span>';
+        }
+        if (stats.total_ejecuciones_match > 0) {
+            html += '<span class="stat-pill" style="font-size:10px;padding:3px 10px;">🔄 <strong>' + stats.total_ejecuciones_match + '</strong> ejec.</span>';
+        }
+        if (data.lapso_total && data.lapso_total.display) {
+            html += '<span class="stat-pill" style="font-size:10px;padding:3px 10px;">⏱️ <strong>' + data.lapso_total.display + '</strong> total</span>';
+        }
+        html += '</div>';
+    }
+
+    container.innerHTML = html;
 }
 </script>
 {% endblock %}

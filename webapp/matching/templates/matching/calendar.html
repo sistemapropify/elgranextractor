@@ -1304,169 +1304,6 @@
     .legend-label {
         margin:0 4px;
     }
-
-    /* ===== PIPELINE HORIZONTAL ===== */
-    .pipeline-timeline {
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        justify-content: center;
-        gap: 0;
-        padding: 12px 4px;
-        width: 100%;
-        overflow-x: auto;
-        min-height: 80px;
-    }
-    .pipeline-node {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 2px;
-        background: var(--bg-tertiary);
-        border: 1px solid var(--border-color);
-        border-radius: 8px;
-        padding: 6px 10px;
-        min-width: 85px;
-        text-align: center;
-        flex-shrink: 0;
-        transition: all var(--transition-speed);
-    }
-    .pipeline-node.completed {
-        border-color: var(--accent-green);
-        box-shadow: 0 0 6px rgba(63, 185, 80, 0.12);
-    }
-    .pipeline-node.pending {
-        border-color: var(--accent-orange);
-        opacity: 0.75;
-    }
-    .pipeline-node.na {
-        border-color: var(--text-muted);
-        opacity: 0.45;
-    }
-    .pipeline-marker {
-        font-size: 18px;
-        width: 28px;
-        height: 28px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 50%;
-        background: var(--bg-secondary);
-        border: 2px solid var(--border-color);
-        flex-shrink: 0;
-        margin-bottom: 1px;
-    }
-    .pipeline-node.completed .pipeline-marker {
-        border-color: var(--accent-green);
-    }
-    .pipeline-title {
-        font-size: 9px;
-        font-weight: 600;
-        color: var(--text-secondary);
-        text-transform: uppercase;
-        letter-spacing: 0.3px;
-        white-space: nowrap;
-    }
-    .pipeline-node.completed .pipeline-title {
-        color: var(--accent-green);
-    }
-    .pipeline-date {
-        font-size: 10px;
-        color: var(--text-primary);
-        font-weight: 500;
-        white-space: nowrap;
-    }
-    .pipeline-score {
-        font-size: 9px;
-        color: var(--accent-blue);
-        font-weight: 600;
-    }
-    .pipeline-detalle {
-        font-size: 9px;
-        color: var(--accent-orange);
-        font-weight: 500;
-        max-width: 80px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    .pipeline-detalle.aceptado {
-        color: var(--accent-green);
-    }
-    .pipeline-detalle.rechazado {
-        color: var(--accent-red);
-    }
-    .pipeline-detalle.pendiente {
-        color: var(--accent-orange);
-        font-style: italic;
-    }
-    .pipeline-detalle.na {
-        color: var(--text-muted);
-        font-style: italic;
-    }
-    .pipeline-connector {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 1px;
-        min-width: 40px;
-        flex-shrink: 0;
-        position: relative;
-    }
-    .connector-line {
-        width: 100%;
-        height: 2px;
-        background: var(--border-color);
-        position: relative;
-    }
-    .pipeline-node.completed + .pipeline-connector .connector-line {
-        background: var(--accent-green);
-        opacity: 0.4;
-    }
-    .lapso-badge {
-        background: var(--bg-secondary);
-        border: 1px solid var(--accent-blue);
-        color: var(--accent-blue);
-        padding: 0 6px;
-        border-radius: 8px;
-        font-size: 9px;
-        font-weight: 600;
-        white-space: nowrap;
-        line-height: 1.6;
-    }
-
-    /* ===== MODAL TABS ===== */
-    .modal-tabs {
-        display: flex;
-        gap: 4px;
-        border-bottom: 1px solid var(--border-color);
-        padding: 0 12px;
-        background: var(--bg-secondary);
-    }
-    .modal-tab {
-        padding: 6px 14px;
-        font-size: 12px;
-        font-weight: 500;
-        color: var(--text-secondary);
-        cursor: pointer;
-        border-bottom: 2px solid transparent;
-        transition: all var(--transition-speed);
-        white-space: nowrap;
-    }
-    .modal-tab:hover {
-        color: var(--text-primary);
-        background: var(--hover-bg);
-    }
-    .modal-tab.active {
-        color: var(--accent-blue);
-        border-bottom-color: var(--accent-blue);
-    }
-    .modal-tab-content {
-        display: none;
-    }
-    .modal-tab-content.active {
-        display: block;
-    }
     </style>
 
     {% elif view_mode == 'month' %}
@@ -1609,26 +1446,10 @@
             <h2 id="modalMatchTitle">MATCH Detalle del Matching</h2>
             <button class="btn-close-modal" onclick="closeMatchModal()">✕</button>
         </div>
-        <!-- Tabs: Matches / Pipeline -->
-        <div class="modal-tabs" id="modalTabs">
-            <div class="modal-tab active" data-tab="matches" onclick="switchModalTab('matches')">🏠 Matches</div>
-            <div class="modal-tab" data-tab="pipeline" onclick="switchModalTab('pipeline')">📊 Pipeline</div>
-        </div>
         <div class="modal-match-body" id="modalMatchBody">
-            <!-- Tab: Matches (default active) -->
-            <div class="modal-tab-content active" id="tabContent-matches">
-                <div class="modal-loading" id="modalLoading">
-                    <div class="spinner"></div>
-                    <p>Cargando matching...</p>
-                </div>
-            </div>
-            <!-- Tab: Pipeline (hidden by default) -->
-            <div class="modal-tab-content" id="tabContent-pipeline">
-                <div class="pipeline-loading" id="pipelineLoading">
-                    <div class="spinner"></div>
-                    <p>Cargando pipeline...</p>
-                </div>
-                <div id="pipelineContent" style="display:none;"></div>
+            <div class="modal-loading" id="modalLoading">
+                <div class="spinner"></div>
+                <p>Cargando matching...</p>
             </div>
         </div>
         <div class="modal-match-footer">
@@ -2088,94 +1909,35 @@ function closeMatchModal() {
     document.getElementById('modalMatchOverlay').classList.remove('active');
 }
 
-// Global para pipeline data
-var ultimoPipelineData = null;
-
-function switchModalTab(tabName) {
-    // Update tab buttons
-    document.querySelectorAll('.modal-tab').forEach(function(t) {
-        if (t.dataset.tab === tabName) {
-            t.classList.add('active');
-        } else {
-            t.classList.remove('active');
-        }
-    });
-    // Update tab content
-    document.querySelectorAll('.modal-tab-content').forEach(function(tc) {
-        if (tc.id === 'tabContent-' + tabName) {
-            tc.classList.add('active');
-        } else {
-            tc.classList.remove('active');
-        }
-    });
-    // If switching to pipeline tab and we have data, render it
-    if (tabName === 'pipeline' && ultimoPipelineData) {
-        renderPipelineModal(ultimoPipelineData);
-    }
-}
-
 function openMatchModal(requerimientoId) {
     const overlay = document.getElementById('modalMatchOverlay');
     const body = document.getElementById('modalMatchBody');
     const title = document.getElementById('modalMatchTitle');
     const btnDashboard = document.getElementById('modalBtnDashboard');
 
-    // Reset to matches tab
-    switchModalTab('matches');
-
-    // Show loading in matches tab
-    document.getElementById('tabContent-matches').innerHTML = `<div class="modal-loading">
+    // Show loading
+    overlay.classList.add('active');
+    body.innerHTML = `<div class="modal-loading">
         <div class="spinner"></div>
         <p>Cargando matching para requerimiento #${requerimientoId}...</p>
     </div>`;
-
-    // Show loading in pipeline tab
-    document.getElementById('tabContent-pipeline').innerHTML = `<div class="pipeline-loading">
-        <div class="spinner"></div>
-        <p>Cargando pipeline...</p>
-    </div>`;
-
-    overlay.classList.add('active');
-    title.textContent = `MATCH #${requerimientoId}`;
+    title.textContent = `MATCH Matching #${requerimientoId}`;
     btnDashboard.href = `/matching/dashboard/?requerimiento_id=${requerimientoId}`;
 
-    // Reset cached pipeline data
-    ultimoPipelineData = null;
-
-    // ── Fetch match results (GUARDADOS) ──
+    // Usar resultados GUARDADOS (MatchResult) para que los porcentajes coincidan
+    // exactamente con lo que muestran las tarjetas del calendario.
     fetch(`${API_BASE}/${requerimientoId}/guardados/`)
         .then(function(res) {
             if (!res.ok) throw new Error('Error al obtener resultados guardados');
             return res.json();
         })
         .then(function(data) {
-            renderMatchTab(data, title);
+            renderMatchModal(data, body, title);
         })
         .catch(function(err) {
-            document.getElementById('tabContent-matches').innerHTML = `<div class="modal-match-error">
+            body.innerHTML = `<div class="modal-match-error">
                 <div class="error-icon">⚠️</div>
                 <p>Error: ${err.message}</p>
-            </div>`;
-        });
-
-    // ── Fetch pipeline data ──
-    fetch(`${API_BASE}/${requerimientoId}/pipeline/`)
-        .then(function(res) {
-            if (!res.ok) throw new Error('Error al obtener pipeline');
-            return res.json();
-        })
-        .then(function(data) {
-            ultimoPipelineData = data;
-            // If pipeline tab is active, render it
-            var activeTab = document.querySelector('.modal-tab.active');
-            if (activeTab && activeTab.dataset.tab === 'pipeline') {
-                renderPipelineModal(data);
-            }
-        })
-        .catch(function(err) {
-            document.getElementById('tabContent-pipeline').innerHTML = `<div class="modal-match-error">
-                <div class="error-icon">⚠️</div>
-                <p>Error al cargar pipeline: ${err.message}</p>
             </div>`;
         });
 }
@@ -2411,8 +2173,7 @@ function marcarWhatsAppEnviado(requerimientoId) {
 
 }
 
-function renderMatchTab(data, title) {
-    const tabContent = document.getElementById('tabContent-matches');
+function renderMatchModal(data, body, title) {
     const req = data.requerimiento || {};
     const resultados = data.resultados || [];
     
@@ -2420,13 +2181,13 @@ function renderMatchTab(data, title) {
     ultimoRequerimientoData = req;
     ultimosResultadosModal = resultados;
     
-    // Helper
+    // Helper: format value
     function fmt(val, fallback) {
         return (val !== null && val !== undefined && val !== '') ? val : (fallback || '—');
     }
 
     if (resultados.length === 0) {
-        tabContent.innerHTML = `<div class="modal-no-match">
+        body.innerHTML = `<div class="modal-no-match">
             <div class="no-match-icon">🔍</div>
             <p>No se encontraron propiedades con coincidencia para este requerimiento.</p>
         </div>`;
@@ -2434,7 +2195,7 @@ function renderMatchTab(data, title) {
         return;
     }
 
-    // Filtrar top 3 con score >= 60%
+    // Filtrar solo resultados con score >= 60% y máximo 3
     var mejores = [];
     for (var i = 0; i < resultados.length && mejores.length < 3; i++) {
         var score = parseFloat(resultados[i].score_total || 0);
@@ -2443,8 +2204,9 @@ function renderMatchTab(data, title) {
         }
     }
 
+    // Construir lista de propiedades del side panel
     var propsHtml = '';
-    var totalDe = resultados.length;
+    var totalDe = resultados.length > 0 ? resultados.length : 0;
     var scoreTop = mejores.length > 0 ? parseFloat(mejores[0].score_total || 0) : 0;
 
     mejores.forEach(function(r, idx) {
@@ -2453,6 +2215,7 @@ function renderMatchTab(data, title) {
         var cls = pct >= 90 ? 'high' : (pct >= 50 ? 'medium' : 'low');
         var distrito = getDistritoName(prop.district);
         var precio = formatPrice(prop.price, prop.currency_id);
+        var yaEnviado = false;
 
         propsHtml += `
         <div style="border:1px solid var(--border-color);border-radius:8px;padding:8px;margin-bottom:6px;background:var(--bg-tertiary);">
@@ -2465,114 +2228,24 @@ function renderMatchTab(data, title) {
             <button onclick="enviarPropuestaWhatsAppPropiedad(${idx})" style="width:100%;background:#25D366;color:#fff;border:none;border-radius:6px;padding:5px;font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;">
                 📤 Enviar propuesta
             </button>
+            ${yaEnviado ? '<div style="margin-top:3px;font-size:10px;color:var(--accent-green);text-align:center;">✅ WhatsApp enviado</div>' : ''}
         </div>`;
     });
 
-    tabContent.innerHTML = `
-        <div style="display:grid;grid-template-columns:1fr 2fr;gap:12px;padding:8px;">
-            <div class="modal-req-panel">
-                <div style="font-size:12px;font-weight:600;color:var(--accent-blue);margin-bottom:4px;">📝 Requerimiento #${req.id || ''}</div>
-                <div class="modal-req-text">${fmt(req.requerimiento || '—')}</div>
+    body.innerHTML = `
+        <div class="modal-req-panel" style="grid-column:1;">
+            <div style="font-size:12px;font-weight:600;color:var(--accent-blue);margin-bottom:4px;">📝 Requerimiento #${req.id || ''}</div>
+            <div class="modal-req-text">${fmt(req.requerimiento || '—')}</div>
+        </div>
+        <div class="modal-side-panel" style="grid-column:2/4;overflow-y:auto;">
+            <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">
+                🏠 Propiedades compatibles (${mejores.length} de ${totalDe})
             </div>
-            <div class="modal-side-panel" style="overflow-y:auto;">
-                <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">
-                    🏠 Propiedades compatibles (${mejores.length} de ${totalDe})
-                </div>
-                ${propsHtml}
-            </div>
+            ${propsHtml}
         </div>
     `;
 
     title.textContent = `MATCH #${req.id || ''} — Mejor ${Math.round(scoreTop)}% (${mejores.length} props)`;
-}
-
-// ===== PIPELINE RENDER =====
-function renderPipelineModal(data) {
-    var container = document.getElementById('tabContent-pipeline');
-    
-    if (data.error) {
-        container.innerHTML = `<div class="modal-match-error">
-            <div class="error-icon">⚠️</div>
-            <p>Error: ${data.error}</p>
-        </div>`;
-        return;
-    }
-
-    var etapas = data.etapas || {};
-    var orden = data.etapas_orden || ['requerimiento', 'match', 'propuesta', 'decision'];
-    var stats = data.stats || {};
-
-    // Build pipeline HTML
-    var pipelineHtml = '<div class="pipeline-timeline">';
-
-    orden.forEach(function(key, idx) {
-        var etapa = etapas[key];
-        if (!etapa) return;
-
-        // Determine CSS classes
-        var nodeClass = 'pipeline-node';
-        if (etapa.estado === 'ok') nodeClass += ' completed';
-        else if (etapa.estado === 'pendiente') nodeClass += ' pending';
-        else nodeClass += ' na';
-
-        // Detalle class
-        var detalleClass = 'pipeline-detalle';
-        if (key === 'decision') {
-            if (etapa.decision === 'aceptado') detalleClass += ' aceptado';
-            else if (etapa.decision === 'rechazado') detalleClass += ' rechazado';
-            else if (etapa.estado === 'pendiente') detalleClass += ' pendiente';
-            else detalleClass += ' na';
-        }
-
-        pipelineHtml += `<div class="${nodeClass}">
-            <div class="pipeline-marker">${etapa.icono || '○'}</div>
-            <div class="pipeline-title">${etapa.label || key}</div>
-            <div class="pipeline-date">${etapa.fecha_display || '—'}</div>`;
-
-        // Extra detail based on stage
-        if (key === 'match' && etapa.detalle) {
-            pipelineHtml += `<div class="pipeline-score">${etapa.detalle}</div>`;
-        } else if (key === 'propuesta' && etapa.detalle) {
-            pipelineHtml += `<div class="${detalleClass}">${etapa.detalle}</div>`;
-        } else if (key === 'decision' && etapa.detalle) {
-            pipelineHtml += `<div class="${detalleClass}">${etapa.detalle}</div>`;
-        }
-
-        pipelineHtml += '</div>';
-
-        // Add connector between nodes (except after the last one)
-        if (idx < orden.length - 1) {
-            var lapso = etapa.lapso_desde_anterior;
-            var lapsoDisplay = (lapso && lapso.display) ? lapso.display : '';
-            pipelineHtml += `<div class="pipeline-connector">
-                <div class="connector-line"></div>
-                ${lapsoDisplay ? `<span class="lapso-badge">${lapsoDisplay}</span>` : ''}
-            </div>`;
-        }
-    });
-
-    pipelineHtml += '</div>';
-
-    // Stats row below timeline
-    var statsHtml = '';
-    if (stats) {
-        statsHtml = '<div style="display:flex;gap:12px;justify-content:center;padding:8px 12px;border-top:1px solid var(--border-color);margin-top:8px;flex-wrap:wrap;">';
-        if (stats.tiene_match) {
-            statsHtml += '<div class="stat-chip"><span class="dot-green"></span><strong>Match:</strong> ' + (stats.mejor_score_match || 0) + '%</div>';
-        }
-        if (stats.total_ejecuciones_match > 0) {
-            statsHtml += '<div class="stat-chip">🔄 <strong>' + stats.total_ejecuciones_match + '</strong> ejecuciones</div>';
-        }
-        if (stats.total_propuestas_enviadas > 0) {
-            statsHtml += '<div class="stat-chip">📤 <strong>' + stats.total_propuestas_enviadas + '</strong> propuestas</div>';
-        }
-        if (data.lapso_total && data.lapso_total.display) {
-            statsHtml += '<div class="stat-chip">⏱️ <strong>Total:</strong> ' + data.lapso_total.display + '</div>';
-        }
-        statsHtml += '</div>';
-    }
-
-    container.innerHTML = pipelineHtml + statsHtml;
 }
 
 // Enviar WhatsApp para una propiedad específica del modal
