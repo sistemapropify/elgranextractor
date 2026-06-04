@@ -1924,10 +1924,11 @@ function openMatchModal(requerimientoId) {
     title.textContent = `MATCH Matching #${requerimientoId}`;
     btnDashboard.href = `/matching/dashboard/?requerimiento_id=${requerimientoId}`;
 
-    // Fetch matching data - traer todos los resultados sin filtro de score mínimo
-    fetch(`${API_BASE}/${requerimientoId}/ejecutar/?score_minimo=0`)
+    // Usar resultados GUARDADOS (MatchResult) para que los porcentajes coincidan
+    // exactamente con lo que muestran las tarjetas del calendario.
+    fetch(`${API_BASE}/${requerimientoId}/guardados/`)
         .then(function(res) {
-            if (!res.ok) throw new Error('Error al ejecutar matching');
+            if (!res.ok) throw new Error('Error al obtener resultados guardados');
             return res.json();
         })
         .then(function(data) {

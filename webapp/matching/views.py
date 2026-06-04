@@ -172,6 +172,30 @@ class MatchingViewSet(viewsets.ViewSet):
             'fecha_ultimo_matching': ultimo_matching.ejecutado_en,
         })
     
+    @action(detail=True, methods=['GET'])
+    def guardados(self, request, pk=None):
+        """
+        GET /api/matching/{requerimiento_id}/guardados/
+        
+        Retorna los resultados de matching guardados (MatchResult) para un
+        requerimiento, SIN re-ejecutar el motor. Solo los no eliminados
+        con score >= 60%, ordenados por score descendente (máximo 3).
+        Útil para el modal de calendario donde los scores deben coincidir
+        exactamente con lo que muestran las tarjetas.
+        """
+        requerimiento = get_object_or_404(Requerimiento, pk=pk)
+        
+        resultados = MatchResult.objects.filter(
+            requerimiento=requerimiento,
+            fase_eliminada__isnull=True,
+            score_total__gte=60.0
+        ).order_by('-score_total')[:3]
+        
+        return Response({
+            'requerimiento': RequerimientoSimpleSerializer(requerimiento).data,
+            'resultados': MatchResultSerializer(resultados, many=True).data,
+        })
+    
     @action(detail=True, methods=['POST'])
     def guardar(self, request, pk=None):
         """
