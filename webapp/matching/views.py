@@ -218,16 +218,26 @@ class MatchingViewSet(viewsets.ViewSet):
         Retorna los resultados de matching guardados (MatchResult) para un
         requerimiento, SIN re-ejecutar el motor. Solo los no eliminados
         con score >= 60%, ordenados por score descendente (máximo 3).
+        Filtra por propiedad_id DISTINTA para evitar duplicados.
         Útil para el modal de calendario donde los scores deben coincidir
         exactamente con lo que muestran las tarjetas.
         """
         requerimiento = get_object_or_404(Requerimiento, pk=pk)
         
-        resultados = MatchResult.objects.filter(
+        # Obtener resultados ordenados por score
+        todos = MatchResult.objects.filter(
             requerimiento=requerimiento,
             fase_eliminada__isnull=True,
             score_total__gte=60.0
-        ).order_by('-score_total')[:3]
+        ).order_by('-score_total')
+        
+        # Filtrar hasta 3 propiedades DISTINTAS
+        resultados = []
+        prop_ids_vistos = set()
+        for m in todos:
+            if m.propiedad_id not in prop_ids_vistos and len(resultados) < 3:
+                prop_ids_vistos.add(m.propiedad_id)
+                resultados.append(m)
         
         return Response({
             'requerimiento': RequerimientoSimpleSerializer(requerimiento).data,
