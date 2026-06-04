@@ -88,12 +88,22 @@ def _obtener_fecha_requerimiento(req: Requerimiento) -> Optional[datetime]:
     """
     Obtiene la mejor fecha disponible del requerimiento.
     Prioriza fecha+hora, luego creado_en.
+    Retorna siempre un datetime timezone-aware para evitar
+    errores de resta entre aware y naive.
     """
+    from django.utils import timezone as tz_utils
+
     if req.fecha:
         if req.hora:
-            return datetime.combine(req.fecha, req.hora)
-        return datetime.combine(req.fecha, datetime.min.time())
+            dt = datetime.combine(req.fecha, req.hora)
+        else:
+            dt = datetime.combine(req.fecha, datetime.min.time())
+        # Hacerlo timezone-aware
+        return tz_utils.make_aware(dt)
     if req.creado_en:
+        # creado_en es auto_now_add, debería ser aware ya
+        if tz_utils.is_naive(req.creado_en):
+            return tz_utils.make_aware(req.creado_en)
         return req.creado_en
     return None
 
