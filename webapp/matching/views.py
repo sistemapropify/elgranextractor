@@ -1144,3 +1144,260 @@ def pagina_respuesta(request):
         'propuesta': propuesta,
         'decision': decision,
     })
+
+
+from django.views.generic import TemplateView
+from django.utils import timezone
+from datetime import timedelta
+from django.db.models import Count, Q
+from django.db.models.functions import TruncDate
+from collections import defaultdict
+
+
+class PropuestasDashboardView(TemplateView):
+    """
+    Dashboard de propuestas WhatsApp con estadísticas y gráficos.
+    Muestra métricas de hoy, semana, mes y evolución temporal.
+    """
+    template_name = 'matching/propuestas_dashboard.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        import json
+
+        today = timezone.now().date()
+        week_ago = today - timedelta(days=7)
+        month_ago = today - timedelta(days=30)
+
+        # ── Helper: obtener counts por status ──
+        def _contar(queryset):
+            return {
+                'enviadas': queryset.filter(status=PropuestaWhatsApp.Status.ENVIADA).count(),
+                'respondidas': queryset.filter(
+                    Q(status=PropuestaWhatsApp.Status.RESPONDIDA) |
+                    Q(status=PropuestaWhatsApp.Status.INTERESADO) |
+                    Q(status=PropuestaWhatsApp.Status.RECHAZADO) |
+                    Q(status=PropuestaWhatsApp.Status.NO_INTERESADO) |
+                    Q(status=PropuestaWhatsApp.Status.VISITA_AGENDADA) |
+                    Q(status=PropuestaWhatsApp.Status.CERRADA)
+                ).count(),
+                'aceptadas': queryset.filter(
+                    Q(status=PropuestaWhatsApp.Status.INTERESADO) |
+                    Q(status=PropuestaWhatsApp.Status.VISITA_AGENDADA) |
+                    Q(status=PropuestaWhatsApp.Status.CERRADA)
+                ).count(),
+                'rechazadas': queryset.filter(
+                    Q(status=PropuestaWhatsApp.Status.RECHAZADO) |
+                    Q(status=PropuestaWhatsApp.Status.NO_INTERESADO)
+                ).count(),
+                'pendientes': queryset.filter(status=PropuestaWhatsApp.Status.ENVIADA).count(),
+            }
+
+        def _calc_tasas(stats_dict, total):
+            if total == 0:
+                stats_dict['tasa_respuesta'] = 0
+                stats_dict['tasa_aceptacion'] = 0
+                stats_dict['tasa_rechazo'] = 0
+            else:
+                stats_dict['tasa_respuesta'] = round(stats_dict['respondidas'] / total * 100, 1)
+                stats_dict['tasa_aceptacion'] = round(stats_dict['aceptadas'] / total * 100, 1)
+                stats_dict['tasa_rechazo'] = round(stats_dict['rechazadas'] / total * 100, 1)
+            return stats_dict
+
+        # ── Stats ──
+        qs_hoy = PropuestaWhatsApp.objects.filter(enviado_en__date=today)
+        stats_hoy = _contar(qs_hoy)
+        stats_hoy['total'] = qs_hoy.count()
+        stats_hoy = _calc_tasas(stats_hoy, stats_hoy['total'])
+
+        qs_semana = PropuestaWhatsApp.objects.filter(enviado_en__date__gte=week_ago)
+        stats_semana = _contar(qs_semana)
+        stats_semana['total'] = qs_semana.count()
+        stats_semana = _calc_tasas(stats_semana, stats_semana['total'])
+
+        qs_mes = PropuestaWhatsApp.objects.filter(enviado_en__date__gte=month_ago)
+        stats_mes = _contar(qs_mes)
+        stats_mes['total'] = qs_mes.count()
+        stats_mes = _calc_tasas(stats_mes, stats_mes['total'])
+
+        # ── Datos para charts ──
+        props_por_dia = (
+            PropuestaWhatsApp.objects
+            .filter(enviado_en__date__gte=month_ago)
+            .annotate(dia=TruncDate('enviado_en'))
+            .values('dia', 'status')
+            .annotate(total=Count('id'))
+            .order_by('dia')
+        )
+
+        charts = self._generar_charts(props_por_dia, today, week_ago, month_ago)
+        context['stats_hoy'] = stats_hoy
+        context['stats_semana'] = stats_semana
+        context['stats_mes'] = stats_mes
+        context['charts'] = charts
+
+        # ── Últimas 20 propuestas ──
+        ultimas = PropuestaWhatsApp.objects.select_related('requerimiento').order_by('-enviado_en')[:20]
+        context['ultimas_propuestas'] = ultimas
+        return context
+
+    def _generar_charts(self, props_por_dia, today, week_ago, month_ago):
+        """Genera gráficos matplotlib y retorna dict con base64."""
+        from collections import defaultdict
+        try:
+            import matplotlib
+            matplotlib.use('Agg')
+            import matplotlib.pyplot as plt
+            import numpy as np
+        except ImportError:
+            return {'error': 'matplotlib no disponible'}
+        
+        enviadas_por_dia = defaultdict(int)
+        aceptadas_por_dia = defaultdict(int)
+        rechazadas_por_dia = defaultdict(int)
+
+        for item in props_por_dia:
+            dia = item['dia']
+            status = item['status']
+            total = item['total']
+            if status == PropuestaWhatsApp.Status.ENVIADA:
+                enviadas_por_dia[dia] += total
+            elif status in (PropuestaWhatsApp.Status.INTERESADO,
+                            PropuestaWhatsApp.Status.VISITA_AGENDADA,
+                            PropuestaWhatsApp.Status.CERRADA):
+                aceptadas_por_dia[dia] += total
+            elif status in (PropuestaWhatsApp.Status.RECHAZADO,
+                            PropuestaWhatsApp.Status.NO_INTERESADO):
+                rechazadas_por_dia[dia] += total
+
+        plt.style.use('dark_background')
+        COLOR_BG = '#0d1117'
+        COLOR_TEXTO = '#e6edf3'
+        COLOR_AZUL = '#58a6ff'
+        COLOR_VERDE = '#3fb950'
+        COLOR_ROJO = '#f85149'
+        COLOR_NARANJA = '#d29922'
+
+        charts = {}
+
+        def fig_to_b64(fig):
+            import io, base64
+            buf = io.BytesIO()
+            fig.savefig(buf, format='png', dpi=100, bbox_inches='tight',
+                        facecolor=COLOR_BG)
+            plt.close(fig)
+            buf.seek(0)
+            return f"data:image/png;base64,{base64.b64encode(buf.read()).decode('utf-8')}"
+
+        # ── Chart 1: Evolución semanal ──
+        dias_semana = [today - timedelta(days=i) for i in range(6, -1, -1)]
+        dias_labels = [d.strftime('%d/%m') for d in dias_semana]
+        sem_env = [enviadas_por_dia.get(d, 0) for d in dias_semana]
+        sem_acep = [aceptadas_por_dia.get(d, 0) for d in dias_semana]
+        sem_rech = [rechazadas_por_dia.get(d, 0) for d in dias_semana]
+
+        fig, ax = plt.subplots(figsize=(7, 3.5))
+        ax.set_facecolor(COLOR_BG)
+        fig.patch.set_facecolor(COLOR_BG)
+        ax.plot(dias_labels, sem_env, color=COLOR_AZUL, marker='o', linewidth=2, label='Enviadas')
+        ax.plot(dias_labels, sem_acep, color=COLOR_VERDE, marker='s', linewidth=2, label='Aceptadas')
+        ax.plot(dias_labels, sem_rech, color=COLOR_ROJO, marker='x', linewidth=2, label='Rechazadas')
+        ax.set_title('Evolución Semanal', color=COLOR_TEXTO, fontsize=13, fontweight='bold')
+        ax.set_ylabel('Propuestas', color=COLOR_TEXTO)
+        ax.tick_params(colors=COLOR_TEXTO, labelsize=9)
+        ax.legend(loc='upper left', facecolor='#161b22', edgecolor='#30363d', labelcolor=COLOR_TEXTO)
+        ax.grid(True, alpha=0.15, color='#8b949e')
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout()
+        charts['evolucion_semanal'] = fig_to_b64(fig)
+
+        # ── Chart 2: Evolución mensual ──
+        todos_dias = [month_ago + timedelta(days=i) for i in range(31)]
+        intervalos, env_agrup, acep_agrup, rech_agrup = [], [], [], []
+        for i in range(0, 31, 3):
+            grupo = todos_dias[i:min(i+3, 31)]
+            intervalos.append(grupo[0].strftime('%d/%m'))
+            env_agrup.append(sum(enviadas_por_dia.get(d, 0) for d in grupo))
+            acep_agrup.append(sum(aceptadas_por_dia.get(d, 0) for d in grupo))
+            rech_agrup.append(sum(rechazadas_por_dia.get(d, 0) for d in grupo))
+
+        fig, ax = plt.subplots(figsize=(7, 3.5))
+        ax.set_facecolor(COLOR_BG)
+        fig.patch.set_facecolor(COLOR_BG)
+        ax.plot(intervalos, env_agrup, color=COLOR_AZUL, marker='o', linewidth=2, label='Enviadas')
+        ax.plot(intervalos, acep_agrup, color=COLOR_VERDE, marker='s', linewidth=2, label='Aceptadas')
+        ax.plot(intervalos, rech_agrup, color=COLOR_ROJO, marker='x', linewidth=2, label='Rechazadas')
+        ax.set_title('Evolución Mensual', color=COLOR_TEXTO, fontsize=13, fontweight='bold')
+        ax.set_ylabel('Propuestas', color=COLOR_TEXTO)
+        ax.tick_params(colors=COLOR_TEXTO, labelsize=8)
+        ax.legend(loc='upper left', facecolor='#161b22', edgecolor='#30363d', labelcolor=COLOR_TEXTO)
+        ax.grid(True, alpha=0.15, color='#8b949e')
+        plt.xticks(rotation=45, ha='right', fontsize=8)
+        plt.tight_layout()
+        charts['evolucion_mensual'] = fig_to_b64(fig)
+
+        # ── Chart 3: Barras semanales ──
+        fig, ax = plt.subplots(figsize=(7, 3.5))
+        ax.set_facecolor(COLOR_BG)
+        fig.patch.set_facecolor(COLOR_BG)
+        x = np.arange(len(dias_labels))
+        width = 0.25
+        ax.bar(x - width, sem_env, width, color=COLOR_AZUL, label='Enviadas', alpha=0.9)
+        ax.bar(x, sem_acep, width, color=COLOR_VERDE, label='Aceptadas', alpha=0.9)
+        ax.bar(x + width, sem_rech, width, color=COLOR_ROJO, label='Rechazadas', alpha=0.9)
+        ax.set_title('Propuestas por Día (Semana)', color=COLOR_TEXTO, fontsize=13, fontweight='bold')
+        ax.set_xticks(x)
+        ax.set_xticklabels(dias_labels, fontsize=8)
+        ax.set_ylabel('Cantidad', color=COLOR_TEXTO)
+        ax.tick_params(colors=COLOR_TEXTO, labelsize=9)
+        ax.legend(loc='upper left', facecolor='#161b22', edgecolor='#30363d', labelcolor=COLOR_TEXTO)
+        ax.grid(True, alpha=0.15, color='#8b949e', axis='y')
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout()
+        charts['barras_semana'] = fig_to_b64(fig)
+
+        # ── Chart 4: Distribución de status ──
+        status_counts = (
+            PropuestaWhatsApp.objects
+            .values('status')
+            .annotate(total=Count('id'))
+            .order_by('-total')
+        )
+        labels = []
+        sizes = []
+        colors_list = []
+        color_map = {
+            'enviada': COLOR_AZUL,
+            'respondida': COLOR_NARANJA,
+            'interesado': COLOR_VERDE,
+            'visita_agendada': '#56d36e',
+            'cerrada': '#1a7f37',
+            'rechazado': COLOR_ROJO,
+            'no_interesado': '#ff7b72',
+        }
+        status_names = dict(PropuestaWhatsApp.Status.choices)
+        for item in status_counts:
+            labels.append(status_names.get(item['status'], item['status']))
+            sizes.append(item['total'])
+            colors_list.append(color_map.get(item['status'], '#8b949e'))
+
+        fig, ax = plt.subplots(figsize=(5, 4))
+        ax.set_facecolor(COLOR_BG)
+        fig.patch.set_facecolor(COLOR_BG)
+        wedges, texts, autotexts = ax.pie(
+            sizes, labels=None, autopct='%1.0f%%',
+            colors=colors_list, startangle=90,
+            wedgeprops={'linewidth': 1, 'edgecolor': COLOR_BG},
+        )
+        for autotext in autotexts:
+            autotext.set_color('#ffffff')
+            autotext.set_fontweight('bold')
+        ax.legend(wedges, [f'{l} ({s})' for l, s in zip(labels, sizes)],
+                  loc='center left', bbox_to_anchor=(1, 0.5),
+                  facecolor='#161b22', edgecolor='#30363d',
+                  labelcolor=COLOR_TEXTO, fontsize=8)
+        ax.set_title('Distribución de Status', color=COLOR_TEXTO, fontsize=13, fontweight='bold')
+        plt.tight_layout()
+        charts['distribucion_status'] = fig_to_b64(fig)
+
+        return charts

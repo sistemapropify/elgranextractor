@@ -43,4 +43,7 @@ urlpatterns = [
     # Tracking de respuestas WhatsApp
     path('propuesta/<int:pk>/responder/', views.responder_propuesta, name='propuesta-responder'),
     path('propuesta/respuesta/', views.pagina_respuesta, name='propuesta-respuesta'),
+
+    # Dashboard de propuestas
+    path('propuestas/dashboard/', views.PropuestasDashboardView.as_view(), name='propuestas-dashboard'),
 ]

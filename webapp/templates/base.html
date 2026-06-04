@@ -1159,6 +1159,21 @@
                             <span>Calendario</span>
                         </a>
                     </li>
+                    <li class="has-submenu {% if '/matching/propuestas/' in request.path %}active{% endif %}">
+                        <a href="#">
+                            <i class="bi bi-whatsapp"></i>
+                            <span>Propuestas</span>
+                            <i class="bi bi-chevron-down ms-auto"></i>
+                        </a>
+                        <ul class="submenu" style="padding-left:20px;">
+                            <li>
+                                <a href="/matching/propuestas/dashboard/" class="{% if '/matching/propuestas/dashboard/' in request.path %}active{% endif %}">
+                                    <i class="bi bi-speedometer2"></i>
+                                    <span>Dashboard</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
                 </ul>
             </li>
             <li>
