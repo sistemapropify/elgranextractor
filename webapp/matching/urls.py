@@ -19,6 +19,7 @@ urlpatterns = [
     path('api/matching/<int:pk>/guardados/', views.MatchingViewSet.as_view({'get': 'guardados'}), name='matching-guardados'),
     path('api/matching/<int:pk>/guardar/', views.MatchingViewSet.as_view({'post': 'guardar'}), name='matching-guardar'),
     path('api/matching/<int:pk>/pipeline/', views.MatchingViewSet.as_view({'get': 'pipeline'}), name='matching-pipeline'),
+    path('api/matching/<int:pk>/pipeline-ramas/', views.MatchingViewSet.as_view({'get': 'pipeline_ramas'}), name='matching-pipeline-ramas'),
     path('api/matching/historial/<int:requerimiento_id>/', views.MatchingViewSet.as_view({'get': 'historial'}), name='matching-historial'),
     
     # Incluir router para resultados

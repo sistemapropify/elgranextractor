@@ -1,3 +1,4 @@
+from collections import defaultdict
 from django.urls import reverse_lazy
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView, DetailView
 from django.contrib import messages
@@ -126,7 +127,41 @@ class AgentePropuestasView(DetailView):
             Q(agente_telefono=agente.telefono)
         ).select_related('requerimiento').order_by('-enviado_en')
 
-        context['propuestas'] = propuestas
+        # ── Agrupar propuestas por requerimiento ──
+        propuestas_por_req = defaultdict(list)
+        for p in propuestas:
+            propuestas_por_req[p.requerimiento_id].append(p)
+
+        # Ordenar requerimientos por la propuesta más reciente
+        req_ids_ordenados = sorted(
+            propuestas_por_req.keys(),
+            key=lambda rid: max(p.enviado_en for p in propuestas_por_req[rid] if p.enviado_en) if any(p.enviado_en for p in propuestas_por_req[rid]) else rid,
+            reverse=True
+        )
+
+        # Información resumida de cada requerimiento para el template
+        # Y crear lista ordenada de tuplas (requerimiento_info, [propuestas])
+        requerimiento_list = []
+        for rid in req_ids_ordenados:
+            req = propuestas_por_req[rid][0].requerimiento
+            req_info = {
+                'id': rid,
+                'texto': req.requerimiento[:200] if req.requerimiento else '',
+                'agente': (req.agente or '').replace('\n', ' ').strip(),
+                'tipo_propiedad': req.get_tipo_propiedad_display() if req.tipo_propiedad else '—',
+                'presupuesto_monto': float(req.presupuesto_monto) if req.presupuesto_monto else None,
+                'presupuesto_moneda': req.presupuesto_moneda or '',
+                'fecha': req.fecha,
+            }
+            requerimiento_list.append({
+                'info': req_info,
+                'propuestas': propuestas_por_req[rid],
+            })
+
+        context['propuestas'] = propuestas  # Para la tabla original
+        context['propuestas_por_req'] = dict(propuestas_por_req)
+        context['req_ids_ordenados'] = req_ids_ordenados
+        context['requerimiento_list'] = requerimiento_list
 
         status_counts = {}
         for s, label in PropuestaWhatsApp.Status.choices:
@@ -140,7 +175,18 @@ class AgentePropuestasView(DetailView):
         # Filtrar por status si viene en GET
         status_filter = self.request.GET.get('status')
         if status_filter:
-            context['propuestas'] = propuestas.filter(status=status_filter)
+            # Filtrar propuestas_por_req también
+            filtered_reqs = defaultdict(list)
+            for rid, props in propuestas_por_req.items():
+                filtered = [p for p in props if p.status == status_filter]
+                if filtered:
+                    filtered_reqs[rid] = filtered
+            context['propuestas_por_req'] = dict(filtered_reqs)
+            filtered_ids = [rid for rid in req_ids_ordenados if rid in filtered_reqs]
+            context['req_ids_ordenados'] = filtered_ids
+            context['requerimiento_list'] = [
+                item for item in requerimiento_list if item['info']['id'] in filtered_reqs
+            ]
             context['status_activo'] = status_filter
         else:
             context['status_activo'] = ''

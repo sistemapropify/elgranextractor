@@ -463,3 +463,196 @@ def obtener_pipeline_propuesta(propuesta_id: int) -> Dict[str, Any]:
             'status_actual': status_propuesta,
         },
     }
+
+
+def obtener_pipeline_con_ramas(requerimiento_id: int) -> Dict[str, Any]:
+    """
+    Obtiene el pipeline multi-rama de un requerimiento.
+    Muestra el nodo principal (📝 → 🎯) y todas las ramas de propuestas
+    que se han enviado, cada una con su propia decisión.
+
+    Args:
+        requerimiento_id: ID del requerimiento
+
+    Returns:
+        dict con estructura:
+        {
+            'requerimiento_id': int,
+            'requerimiento_texto': str,
+            'requerimiento_agente': str,
+            'etapa_requerimiento': { ... },
+            'etapa_match': { ... },
+            'ramas': [
+                {
+                    'propuesta_id': int,
+                    'propiedad_code': str,
+                    'propiedad_title': str,
+                    'propiedad_price': float or None,
+                    'propiedad_currency_id': int or None,
+                    'enviado_en': datetime,
+                    'enviado_display': str,
+                    'respondido_en': datetime or None,
+                    'respondido_display': str or None,
+                    'status': str,
+                    'status_display': str,
+                    'decision': str or None,  # 'aceptado', 'rechazado', 'pendiente'
+                    'decision_icono': str,
+                    'lapso_envio': { ... } or None,  # match → propuesta
+                    'lapso_respuesta': { ... } or None,  # propuesta → decision
+                },
+            ],
+            'total_ramas': int,
+            'total_match_ejecuciones': int,
+            'mejor_score_match': float or None,
+        }
+    """
+    try:
+        req = Requerimiento.objects.get(id=requerimiento_id)
+    except Requerimiento.DoesNotExist:
+        return {
+            'requerimiento_id': requerimiento_id,
+            'error': 'Requerimiento no encontrado',
+            'etapas': {},
+        }
+
+    # ── Etapa 1: Requerimiento ──
+    fecha_req = _obtener_fecha_requerimiento(req)
+    etapa_requerimiento = {
+        'tipo': 'requerimiento',
+        'label': 'Requerimiento',
+        'icono': '📝',
+        'fecha': _formatear_fecha_completa(fecha_req) if fecha_req else None,
+        'fecha_display': _formatear_fecha(fecha_req) if fecha_req else '—',
+        'estado': 'ok' if fecha_req else 'pendiente',
+    }
+
+    # ── Etapa 2: Match (mejor score global) ──
+    fecha_match = None
+    mejor_score = None
+    total_ejecuciones = 0
+    try:
+        primer_match = MatchResult.objects.filter(
+            requerimiento_id=requerimiento_id
+        ).order_by('ejecutado_en').first()
+
+        if primer_match:
+            fecha_match = primer_match.ejecutado_en
+            mejor_match = MatchResult.objects.filter(
+                requerimiento_id=requerimiento_id,
+                fase_eliminada__isnull=True,
+            ).order_by('-score_total').first()
+
+            if mejor_match:
+                mejor_score = float(mejor_match.score_total)
+
+            total_ejecuciones = MatchResult.objects.filter(
+                requerimiento_id=requerimiento_id
+            ).values('ejecutado_en').distinct().count()
+    except Exception as e:
+        logger.warning(f"Error al consultar MatchResult para req #{requerimiento_id}: {e}")
+
+    lapso_req_match = _calcular_lapso(fecha_req, fecha_match)
+
+    etapa_match = {
+        'tipo': 'match',
+        'label': 'Match',
+        'icono': '🎯',
+        'fecha': _formatear_fecha_completa(fecha_match) if fecha_match else None,
+        'fecha_display': _formatear_fecha(fecha_match) if fecha_match else '—',
+        'estado': 'ok' if fecha_match else 'pendiente',
+        'lapso_desde_anterior': lapso_req_match,
+        'detalle': f"Score: {mejor_score:.0f}%" if mejor_score else None,
+    }
+
+    # ── Ramas: Propuestas ──
+    nombres_status = dict(PropuestaWhatsApp.Status.choices)
+    ramas = []
+    ultimo_enviado_en = fecha_match  # Para calcular lapso entre propuestas consecutivas
+
+    try:
+        propuestas = PropuestaWhatsApp.objects.filter(
+            requerimiento_id=requerimiento_id
+        ).order_by('enviado_en').select_related('requerimiento')
+
+        for propuesta in propuestas:
+            # Determinar decisión
+            decision = 'pendiente'
+            decision_icono = '⏳'
+            detalle_decision = 'Esperando respuesta...'
+
+            if propuesta.respondido_en:
+                st = propuesta.status
+                if st in STATUS_ACEPTADO:
+                    decision = 'aceptado'
+                    decision_icono = '✅'
+                    detalle_decision = 'Aceptado'
+                elif st in STATUS_RECHAZADO:
+                    decision = 'rechazado'
+                    decision_icono = '❌'
+                    detalle_decision = 'Rechazado'
+                else:
+                    decision = 'respondido'
+                    decision_icono = '💬'
+                    detalle_decision = nombres_status.get(st, st)
+
+            # Lapso desde el match hasta esta propuesta
+            lapso_desde_match = _calcular_lapso(fecha_match, propuesta.enviado_en)
+            lapso_desde_anterior = _calcular_lapso(ultimo_enviado_en, propuesta.enviado_en)
+            lapso_respuesta = _calcular_lapso(propuesta.enviado_en, propuesta.respondido_en)
+
+            # Actualizar referencia para próxima iteración
+            ultimo_enviado_en = propuesta.enviado_en
+
+            ramas.append({
+                'propuesta_id': propuesta.id,
+                'propiedad_code': propuesta.propiedad_code or '',
+                'propiedad_title': propuesta.propiedad_title or '',
+                'propiedad_price': float(propuesta.propiedad_price) if propuesta.propiedad_price else None,
+                'propiedad_currency_id': propuesta.propiedad_currency_id,
+                'enviado_en': propuesta.enviado_en,
+                'enviado_display': propuesta.enviado_en.strftime('%d/%m %H:%M') if propuesta.enviado_en else '—',
+                'respondido_en': propuesta.respondido_en,
+                'respondido_display': propuesta.respondido_en.strftime('%d/%m %H:%M') if propuesta.respondido_en else None,
+                'status': propuesta.status,
+                'status_display': nombres_status.get(propuesta.status, propuesta.status),
+                'decision': decision,
+                'decision_icono': decision_icono,
+                'detalle_decision': detalle_decision,
+                'lapso_desde_match': lapso_desde_match,
+                'lapso_desde_anterior': lapso_desde_anterior,
+                'lapso_respuesta': lapso_respuesta,
+            })
+    except Exception as e:
+        logger.warning(f"Error al consultar PropuestaWhatsApp para req #{requerimiento_id}: {e}")
+
+    # ── Lapso total ──
+    fecha_ultima_decision = None
+    if ramas:
+        # Buscar la última respuesta entre todas las ramas
+        for rama in ramas:
+            if rama['respondido_en']:
+                if not fecha_ultima_decision or rama['respondido_en'] > fecha_ultima_decision:
+                    fecha_ultima_decision = rama['respondido_en']
+
+    lapso_total = _calcular_lapso(fecha_req, fecha_ultima_decision or fecha_match)
+
+    return {
+        'requerimiento_id': requerimiento_id,
+        'requerimiento_texto': req.requerimiento[:200] if req.requerimiento else '',
+        'requerimiento_agente': (req.agente or '').replace('\n', ' ').strip(),
+        'etapa_requerimiento': etapa_requerimiento,
+        'etapa_match': etapa_match,
+        'ramas': ramas,
+        'total_ramas': len(ramas),
+        'lapso_total': lapso_total,
+        'stats': {
+            'total_ejecuciones_match': total_ejecuciones,
+            'mejor_score_match': mejor_score,
+            'tiene_match': fecha_match is not None,
+            'tiene_propuestas': len(ramas) > 0,
+            'total_propuestas': len(ramas),
+            'aceptadas': sum(1 for r in ramas if r['decision'] == 'aceptado'),
+            'rechazadas': sum(1 for r in ramas if r['decision'] == 'rechazado'),
+            'pendientes': sum(1 for r in ramas if r['decision'] == 'pendiente'),
+        },
+    }

@@ -94,16 +94,30 @@
     .prop-title { font-size: 12px; color: var(--text-primary); }
     .agente-info { font-size: 12px; color: var(--text-secondary); }
 
-    /* ===== PIPELINE HORIZONTAL ===== */
+    /* ===== PIPELINE HORIZONTAL NODES ===== */
     .pipeline-timeline {
-        display: flex; flex-direction: row; align-items: center; justify-content: flex-start;
-        gap: 0; padding: 8px 4px; width: 100%; overflow-x: auto;
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 0;
+        padding: 8px 4px;
+        width: 100%;
+        overflow-x: auto;
     }
     .pipeline-node {
-        display: flex; flex-direction: column; align-items: center; gap: 2px;
-        background: var(--bg-tertiary); border: 1px solid var(--border-color);
-        border-radius: 6px; padding: 4px 8px; min-width: 72px; text-align: center;
-        flex-shrink: 0; transition: var(--transition);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 4px 8px;
+        min-width: 72px;
+        text-align: center;
+        flex-shrink: 0;
+        transition: var(--transition);
     }
     .pipeline-node.completed { border-color: var(--accent-green); box-shadow: 0 0 4px rgba(63,185,80,0.1); }
     .pipeline-node.pending { border-color: var(--accent-orange); opacity: 0.7; }
@@ -114,14 +128,14 @@
     .pipeline-node.completed .pipeline-title { color: var(--accent-green); }
     .pipeline-date { font-size: 9px; color: var(--text-primary); font-weight: 500; white-space: nowrap; }
     .pipeline-score { font-size: 8px; color: var(--accent-blue); font-weight: 600; }
-    .pipeline-detalle { font-size: 8px; color: var(--accent-orange); font-weight: 500; max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .pipeline-detalle.aceptado { color: var(--accent-green); }
-    .pipeline-detalle.rechazado { color: var(--accent-red); }
-    .pipeline-detalle.pendiente { color: var(--accent-orange); font-style: italic; }
-    .pipeline-detalle.na { color: var(--text-muted); font-style: italic; }
     .pipeline-connector {
-        display: flex; flex-direction: column; align-items: center; gap: 1px;
-        min-width: 30px; flex-shrink: 0; position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1px;
+        min-width: 24px;
+        flex-shrink: 0;
+        position: relative;
     }
     .connector-line { width: 100%; height: 2px; background: var(--border-color); position: relative; }
     .pipeline-node.completed + .pipeline-connector .connector-line { background: var(--accent-green); opacity: 0.35; }
@@ -144,6 +158,94 @@
     .pipeline-spinner { width: 16px; height: 16px; border: 2px solid var(--border-color); border-top-color: var(--accent-blue); border-radius: 50%; animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .pipeline-error { padding: 8px; color: var(--accent-red); font-size: 11px; text-align: center; }
+
+    /* ===== TARJETAS DE RAMAS (dentro del pipeline expandido) ===== */
+    .branch-cards {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 4px 0;
+    }
+    .branch-row {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 0;
+        position: relative;
+    }
+    .branch-row.is-main {
+        /* Main branch: inline after match */
+    }
+    .branch-row.is-fork {
+        /* Fork branch: indented with connector from match */
+        margin-left: 40px;
+    }
+    .branch-row.is-fork::before {
+        content: '';
+        position: absolute;
+        left: -20px;
+        top: -8px;
+        width: 20px;
+        height: calc(50% + 8px);
+        border-left: 2px solid var(--border-color);
+        border-bottom: 2px solid var(--border-color);
+        border-radius: 0 0 0 6px;
+    }
+
+    .pipe-card {
+        display: flex;
+        flex-direction: column;
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 8px 10px;
+        min-width: 140px;
+        max-width: 180px;
+        flex-shrink: 0;
+    }
+    .pipe-card.card-prop {
+        border-left: 3px solid var(--accent-blue);
+    }
+    .pipe-card.card-decision.aceptado { border-left: 3px solid var(--accent-green); }
+    .pipe-card.card-decision.rechazado { border-left: 3px solid var(--accent-red); }
+    .pipe-card.card-decision.pendiente { border-left: 3px solid var(--accent-orange); }
+
+    .pipe-card .card-icon { font-size: 14px; margin-bottom: 2px; }
+    .pipe-card .card-code { font-size: 12px; font-weight: 700; color: var(--accent-blue); }
+    .pipe-card .card-title { font-size: 9px; color: var(--text-primary); line-height: 1.2; margin: 2px 0; }
+    .pipe-card .card-price { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+    .pipe-card .card-date { font-size: 9px; color: var(--text-muted); }
+    .pipe-card .card-lapso { font-size: 8px; color: var(--accent-blue); font-weight: 500; margin-top: 2px; }
+
+    .card-decision-label {
+        font-size: 12px;
+        font-weight: 700;
+        margin: 2px 0;
+    }
+    .card-decision-label.aceptado { color: var(--accent-green); }
+    .card-decision-label.rechazado { color: var(--accent-red); }
+    .card-decision-label.pendiente { color: var(--accent-orange); }
+
+    /* mini status selector inside card */
+    .card-status-select-sm {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        color: var(--text-primary);
+        padding: 2px 4px;
+        font-size: 9px;
+        cursor: pointer;
+        margin-top: 4px;
+        width: 100%;
+    }
+    .card-status-select-sm:focus { border-color: var(--accent-blue); outline: none; }
+
+    .branch-connector-v {
+        width: 2px;
+        height: 8px;
+        background: var(--border-color);
+        margin-left: 40px;
+    }
 </style>
 {% endblock %}
 
@@ -207,7 +309,7 @@
                     {% for p in propuestas %}
                     <tr>
                         <td style="text-align:center;">
-                            <button class="pipeline-toggle" id="pipe-btn-{{ p.id }}" onclick="togglePipeline({{ p.id }}, {{ p.requerimiento_id }})" title="Ver pipeline de vida">📊</button>
+                            <button class="pipeline-toggle" id="pipe-btn-{{ p.id }}" onclick="togglePipeline({{ p.id }}, {{ p.requerimiento_id }})" title="Ver pipeline multi-rama">📊</button>
                         </td>
                         <td style="white-space:nowrap;font-size:12px;color:var(--text-secondary);">
                             {{ p.enviado_en|date:'d/m/Y H:i' }}
@@ -254,7 +356,7 @@
                             </select>
                         </td>
                     </tr>
-                    <!-- Pipeline expand row -->
+                    <!-- Pipeline expand row (multi-rama del requerimiento completo) -->
                     <tr class="pipeline-expand-row" id="pipe-row-{{ p.id }}">
                         <td colspan="8">
                             <div id="pipe-content-{{ p.id }}"></div>
@@ -276,10 +378,231 @@
 
 {% block extra_js %}
 <script>
+var pipelineCache = {};
+
+function togglePipeline(propuestaId, requerimientoId) {
+    var row = document.getElementById('pipe-row-' + propuestaId);
+    var btn = document.getElementById('pipe-btn-' + propuestaId);
+    var content = document.getElementById('pipe-content-' + propuestaId);
+
+    if (row.classList.contains('visible')) {
+        row.classList.remove('visible');
+        btn.classList.remove('active');
+        return;
+    }
+
+    row.classList.add('visible');
+    btn.classList.add('active');
+
+    // Usar cache por requerimiento (todas las propuestas del mismo req comparten pipeline)
+    if (pipelineCache[requerimientoId]) {
+        renderMultiBranch(pipelineCache[requerimientoId], content);
+        return;
+    }
+
+    content.innerHTML = '<div class="pipeline-loading"><div class="pipeline-spinner"></div><span>Cargando pipeline...</span></div>';
+
+    // Fetch MULTI-BRANCH pipeline del requerimiento completo
+    fetch('/matching/api/matching/' + requerimientoId + '/pipeline-ramas/')
+        .then(function(r) {
+            if (!r.ok) throw new Error('Error al obtener pipeline');
+            return r.json();
+        })
+        .then(function(data) {
+            pipelineCache[requerimientoId] = data;
+            renderMultiBranch(data, content);
+        })
+        .catch(function(err) {
+            content.innerHTML = '<div class="pipeline-error">⚠️ ' + err.message + '</div>';
+        });
+}
+
+function renderMultiBranch(data, container) {
+    if (data.error) {
+        container.innerHTML = '<div class="pipeline-error">⚠️ ' + data.error + '</div>';
+        return;
+    }
+
+    var ramas = data.ramas || [];
+    var html = '';
+
+    // ===== PIPELINE PRINCIPAL: 📝 → 🎯 → 📤 Prop1 → ✅ Decisión1 =====
+    html += '<div class="pipeline-timeline" style="margin-bottom:0;">';
+
+    // 📝 Requerimiento
+    var etapaReq = data.etapa_requerimiento || {};
+    var nClass = 'pipeline-node' + (etapaReq.estado === 'ok' ? ' completed' : ' pending');
+    html += '<div class="' + nClass + '">';
+    html += '  <div class="pipeline-marker">' + (etapaReq.icono || '📝') + '</div>';
+    html += '  <div class="pipeline-title">' + (etapaReq.label || 'Req') + '</div>';
+    html += '  <div class="pipeline-date">' + (etapaReq.fecha_display || '—') + '</div>';
+    html += '</div>';
+
+    // connector 📝 → 🎯
+    var lapsoRM = data.etapa_match && data.etapa_match.lapso_desde_anterior;
+    html += '<div class="pipeline-connector">';
+    html += '  <div class="connector-line"></div>';
+    if (lapsoRM && lapsoRM.display) html += '  <span class="lapso-badge">' + lapsoRM.display + '</span>';
+    html += '</div>';
+
+    // 🎯 Match
+    var etapaMatch = data.etapa_match || {};
+    nClass = 'pipeline-node' + (etapaMatch.estado === 'ok' ? ' completed' : (etapaMatch.estado === 'pendiente' ? ' pending' : ' na'));
+    html += '<div class="' + nClass + '" style="position:relative;">';
+    html += '  <div class="pipeline-marker">' + (etapaMatch.icono || '🎯') + '</div>';
+    html += '  <div class="pipeline-title">' + (etapaMatch.label || 'Match') + '</div>';
+    html += '  <div class="pipeline-date">' + (etapaMatch.fecha_display || '—') + '</div>';
+    if (etapaMatch.detalle) html += '  <div class="pipeline-score">' + etapaMatch.detalle + '</div>';
+    html += '</div>';
+
+    // Si hay al menos 1 propuesta, agregarla a la línea principal
+    if (ramas.length > 0) {
+        var mainRama = ramas[0];
+
+        // connector 🎯 → 📤 Prop1
+        html += '<div class="pipeline-connector">';
+        html += '  <div class="connector-line"></div>';
+        if (mainRama.lapso_desde_match && mainRama.lapso_desde_match.display) {
+            html += '  <span class="lapso-badge">' + mainRama.lapso_desde_match.display + '</span>';
+        }
+        html += '</div>';
+
+        // 📤 Propuesta 1 (en la línea principal)
+        html += '<div class="pipeline-node completed" style="min-width:80px;">';
+        html += '  <div class="pipeline-marker">📤</div>';
+        html += '  <div class="pipeline-title">' + (mainRama.propiedad_code || 'PROP') + '</div>';
+        html += '  <div class="pipeline-date">' + mainRama.enviado_display + '</div>';
+        html += '</div>';
+
+        // connector 📤 Prop1 → ✅/❌
+        html += '<div class="pipeline-connector">';
+        html += '  <div class="connector-line"></div>';
+        if (mainRama.lapso_respuesta && mainRama.lapso_respuesta.display) {
+            html += '  <span class="lapso-badge">' + mainRama.lapso_respuesta.display + '</span>';
+        }
+        html += '</div>';
+
+        // ✅/❌ Decisión 1
+        var decEstado = (mainRama.decision === 'aceptado' || mainRama.decision === 'rechazado') ? 'completed' : 'pending';
+        var decNodeClass = 'pipeline-node ' + decEstado;
+        html += '<div class="' + decNodeClass + '" style="min-width:80px;">';
+        html += '  <div class="pipeline-marker">' + (mainRama.decision_icono || '⏳') + '</div>';
+        html += '  <div class="pipeline-title">' + mainRama.detalle_decision + '</div>';
+        if (mainRama.respondido_display) {
+            html += '  <div class="pipeline-date">' + mainRama.respondido_display + '</div>';
+        }
+        html += '</div>';
+    }
+
+    html += '</div>'; // end pipeline-timeline principal
+
+    // ── Stats mini ──
+    var stats = data.stats || {};
+    if (stats.tiene_match) {
+        html += '<div style="display:flex;gap:8px;padding:2px 8px 6px 8px;flex-wrap:wrap;">';
+        if (stats.mejor_score_match) {
+            html += '<span class="stat-pill" style="font-size:10px;padding:3px 10px;">🎯 <strong>' + stats.mejor_score_match + '%</strong></span>';
+        }
+        if (stats.total_ejecuciones_match > 0) {
+            html += '<span class="stat-pill" style="font-size:10px;padding:3px 10px;">🔄 <strong>' + stats.total_ejecuciones_match + '</strong></span>';
+        }
+        if (data.lapso_total && data.lapso_total.display) {
+            html += '<span class="stat-pill" style="font-size:10px;padding:3px 10px;">⏱️ <strong>' + data.lapso_total.display + '</strong></span>';
+        }
+        html += '</div>';
+    }
+
+    // ===== RAMAS: Propuestas 2, 3... (bifurcadas desde la última propuesta anterior) =====
+    if (ramas.length > 1) {
+        html += '<div class="branch-cards">';
+
+        for (var i = 1; i < ramas.length; i++) {
+            var rama = ramas[i];
+            var ramaAnterior = ramas[i - 1];
+
+            html += '<div class="branch-row is-fork">';
+
+            // ── Nodo: 📤 Propuesta N (bifurcada desde la propuesta anterior) ──
+            html += '<div class="pipeline-node completed" style="min-width:80px;">';
+            html += '  <div class="pipeline-marker">📤</div>';
+            html += '  <div class="pipeline-title">' + (rama.propiedad_code || 'PROP') + '</div>';
+            html += '  <div class="pipeline-date">' + rama.enviado_display + '</div>';
+            if (rama.lapso_desde_anterior && rama.lapso_desde_anterior.display) {
+                html += '  <div class="pipeline-score" style="font-size:8px;">⌛' + rama.lapso_desde_anterior.display + '</div>';
+            }
+            html += '</div>';
+
+            // ── Connector 📤 → ✅/❌ ──
+            html += '<div class="pipeline-connector">';
+            html += '  <div class="connector-line"></div>';
+            if (rama.lapso_respuesta && rama.lapso_respuesta.display) {
+                html += '  <span class="lapso-badge">' + rama.lapso_respuesta.display + '</span>';
+            }
+            html += '</div>';
+
+            // ── Nodo: ✅/❌ Decisión N ──
+            var decEstado = (rama.decision === 'aceptado' || rama.decision === 'rechazado') ? 'completed' : 'pending';
+            var decNodeClass = 'pipeline-node ' + decEstado;
+            html += '<div class="' + decNodeClass + '" style="min-width:80px;">';
+            html += '  <div class="pipeline-marker">' + (rama.decision_icono || '⏳') + '</div>';
+            html += '  <div class="pipeline-title">' + rama.detalle_decision + '</div>';
+            if (rama.respondido_display) {
+                html += '  <div class="pipeline-date">' + rama.respondido_display + '</div>';
+            }
+            html += '</div>';
+
+            html += '</div>'; // end branch-row
+        }
+
+        html += '</div>'; // end branch-cards
+    }
+
+    if (ramas.length === 0) {
+        html += '<div style="padding: 8px; text-align: center; color: var(--text-muted); font-size: 12px;">📭 Sin propuestas</div>';
+    }
+
+    container.innerHTML = html;
+
+    // ── Posicionar ramas dinámicamente desde el 📤 de la main ──
+    var mainTimeline = container.querySelector('.pipeline-timeline');
+    var branchCards = container.querySelector('.branch-cards');
+    if (mainTimeline && branchCards) {
+        // Encontrar el nodo 📤 Prop1 (tercer nodo de la main)
+        var propNodes = mainTimeline.querySelectorAll('.pipeline-node');
+        // El 📤 Prop1 es el índice 2 (tras 📝 idx0 y 🎯 idx1)
+        if (propNodes.length >= 3) {
+            var propNode = propNodes[2]; // 📤 Prop1
+            var offsetLeft = propNode.offsetLeft;
+            // Aplicar a todas las ramas
+            var branchRows = branchCards.querySelectorAll('.branch-row');
+            branchRows.forEach(function(row) {
+                row.style.marginLeft = offsetLeft + 'px';
+            });
+        }
+    }
+}
+
 function actualizarStatus(select) {
     var nuevoStatus = select.value;
     if (!nuevoStatus) return;
+    var propuestaId = select.dataset.propuestaId;
 
+    fetch('/matching/api/propuesta/' + propuestaId + '/actualizar-status/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({status: nuevoStatus}),
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.status) location.reload();
+        else alert('Error al actualizar status');
+    })
+    .catch(function(err) { alert('Error de red: ' + err.message); });
+}
+
+function actualizarStatusBranch(select) {
+    var nuevoStatus = select.value;
+    if (!nuevoStatus) return;
     var propuestaId = select.dataset.propuestaId;
 
     fetch('/matching/api/propuesta/' + propuestaId + '/actualizar-status/', {
@@ -290,133 +613,30 @@ function actualizarStatus(select) {
     .then(function(r) { return r.json(); })
     .then(function(data) {
         if (data.status) {
+            // Limpiar cache y recargar todo
+            pipelineCache = {};
             location.reload();
         } else {
             alert('Error al actualizar status');
         }
     })
-    .catch(function(err) {
-        alert('Error de red: ' + err.message);
-    });
+    .catch(function(err) { alert('Error de red: ' + err.message); });
 }
 
-// ===== PIPELINE TOGGLE =====
-var pipelineCache = {};
-
-function togglePipeline(propuestaId, requerimientoId) {
-    var row = document.getElementById('pipe-row-' + propuestaId);
-    var btn = document.getElementById('pipe-btn-' + propuestaId);
-    var content = document.getElementById('pipe-content-' + propuestaId);
-
-    if (row.classList.contains('visible')) {
-        // Ocultar
-        row.classList.remove('visible');
-        btn.classList.remove('active');
-        return;
-    }
-
-    // Mostrar
-    row.classList.add('visible');
-    btn.classList.add('active');
-
-    // Verificar si ya tenemos datos en cache
-    if (pipelineCache[requerimientoId]) {
-        renderPipeline(pipelineCache[requerimientoId], content);
-        return;
-    }
-
-    // Mostrar loading
-    content.innerHTML = '<div class="pipeline-loading"><div class="pipeline-spinner"></div><span>Cargando pipeline...</span></div>';
-
-    // Fetch pipeline data (específico de esta propuesta, no del requerimiento general)
-    fetch('/matching/api/propuesta/' + propuestaId + '/pipeline/')
-        .then(function(r) {
-            if (!r.ok) throw new Error('Error al obtener pipeline');
-            return r.json();
-        })
-        .then(function(data) {
-            pipelineCache[requerimientoId] = data;
-            renderPipeline(data, content);
-        })
-        .catch(function(err) {
-            content.innerHTML = '<div class="pipeline-error">⚠️ ' + err.message + '</div>';
-        });
+// ── Helpers ──
+function escapeHtml(text) {
+    if (!text) return '';
+    var div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
-
-function renderPipeline(data, container) {
-    if (data.error) {
-        container.innerHTML = '<div class="pipeline-error">⚠️ ' + data.error + '</div>';
-        return;
-    }
-
-    var etapas = data.etapas || {};
-    var orden = data.etapas_orden || ['requerimiento', 'match', 'propuesta', 'decision'];
-    var stats = data.stats || {};
-
-    var html = '<div class="pipeline-timeline">';
-
-    orden.forEach(function(key, idx) {
-        var etapa = etapas[key];
-        if (!etapa) return;
-
-        var nodeClass = 'pipeline-node';
-        if (etapa.estado === 'ok') nodeClass += ' completed';
-        else if (etapa.estado === 'pendiente') nodeClass += ' pending';
-        else nodeClass += ' na';
-
-        var detalleClass = 'pipeline-detalle';
-        if (key === 'decision') {
-            if (etapa.decision === 'aceptado') detalleClass += ' aceptado';
-            else if (etapa.decision === 'rechazado') detalleClass += ' rechazado';
-            else if (etapa.estado === 'pendiente') detalleClass += ' pendiente';
-            else detalleClass += ' na';
-        }
-
-        html += '<div class="' + nodeClass + '">';
-        html += '  <div class="pipeline-marker">' + (etapa.icono || '○') + '</div>';
-        html += '  <div class="pipeline-title">' + (etapa.label || key) + '</div>';
-        html += '  <div class="pipeline-date">' + (etapa.fecha_display || '—') + '</div>';
-
-        if (key === 'match' && etapa.detalle) {
-            html += '<div class="pipeline-score">' + etapa.detalle + '</div>';
-        } else if (key === 'propuesta' && etapa.detalle) {
-            html += '<div class="' + detalleClass + '">' + etapa.detalle + '</div>';
-        } else if (key === 'decision' && etapa.detalle) {
-            html += '<div class="' + detalleClass + '">' + etapa.detalle + '</div>';
-        }
-
-        html += '</div>';
-
-        if (idx < orden.length - 1) {
-            var lapso = etapa.lapso_desde_anterior;
-            var lapsoDisplay = (lapso && lapso.display) ? lapso.display : '';
-            html += '<div class="pipeline-connector">';
-            html += '  <div class="connector-line"></div>';
-            if (lapsoDisplay) {
-                html += '  <span class="lapso-badge">' + lapsoDisplay + '</span>';
-            }
-            html += '</div>';
-        }
-    });
-
-    html += '</div>';
-
-    // Stats badge
-    if (stats && stats.tiene_match) {
-        html += '<div style="display:flex;gap:8px;padding:4px 8px;flex-wrap:wrap;border-top:1px solid var(--border-color);margin-top:4px;">';
-        if (stats.mejor_score_match) {
-            html += '<span class="stat-pill" style="font-size:10px;padding:3px 10px;">🎯 <strong>' + stats.mejor_score_match + '%</strong> match</span>';
-        }
-        if (stats.total_ejecuciones_match > 0) {
-            html += '<span class="stat-pill" style="font-size:10px;padding:3px 10px;">🔄 <strong>' + stats.total_ejecuciones_match + '</strong> ejec.</span>';
-        }
-        if (data.lapso_total && data.lapso_total.display) {
-            html += '<span class="stat-pill" style="font-size:10px;padding:3px 10px;">⏱️ <strong>' + data.lapso_total.display + '</strong> total</span>';
-        }
-        html += '</div>';
-    }
-
-    container.innerHTML = html;
+function truncate(text, maxLen) {
+    if (!text || text.length <= maxLen) return text || '';
+    return text.substring(0, maxLen) + '...';
+}
+function numberFormat(num) {
+    if (num == null) return '';
+    return num.toLocaleString('es-PE', {maximumFractionDigits: 0});
 }
 </script>
 {% endblock %}

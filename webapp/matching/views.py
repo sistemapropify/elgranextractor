@@ -26,7 +26,7 @@ from .serializers import (
 )
 from .engine import ejecutar_matching_requerimiento, guardar_resultados_matching
 from .models import PropuestaWhatsApp
-from .pipeline_requerimiento import obtener_pipeline_requerimiento
+from .pipeline_requerimiento import obtener_pipeline_requerimiento, obtener_pipeline_con_ramas
 
 logger = logging.getLogger(__name__)
 
@@ -177,7 +177,7 @@ class MatchingViewSet(viewsets.ViewSet):
     def pipeline(self, request, pk=None):
         """
         GET /api/matching/{requerimiento_id}/pipeline/
-        
+
         Retorna el pipeline de vida del requerimiento con las 4 etapas
         y los lapsos de tiempo entre cada una.
         """
@@ -188,6 +188,25 @@ class MatchingViewSet(viewsets.ViewSet):
             logger.error(f"Error al obtener pipeline para req #{pk}: {e}")
             return Response(
                 {'error': f'Error al obtener pipeline: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=True, methods=['GET'])
+    def pipeline_ramas(self, request, pk=None):
+        """
+        GET /api/matching/{requerimiento_id}/pipeline-ramas/
+
+        Retorna el pipeline multi-rama de un requerimiento.
+        Muestra el nodo principal (📝 → 🎯) y todas las ramas de propuestas
+        que se han enviado, cada una con su propia decisión.
+        """
+        try:
+            data = obtener_pipeline_con_ramas(pk)
+            return Response(data)
+        except Exception as e:
+            logger.error(f"Error al obtener pipeline con ramas para req #{pk}: {e}")
+            return Response(
+                {'error': f'Error al obtener pipeline con ramas: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
