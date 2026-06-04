@@ -26,6 +26,7 @@ from .serializers import (
 )
 from .engine import ejecutar_matching_requerimiento, guardar_resultados_matching
 from .models import PropuestaWhatsApp
+from .pipeline_requerimiento import obtener_pipeline_requerimiento
 
 logger = logging.getLogger(__name__)
 
@@ -171,6 +172,24 @@ class MatchingViewSet(viewsets.ViewSet):
             'estadisticas': estadisticas_serializer.data,
             'fecha_ultimo_matching': ultimo_matching.ejecutado_en,
         })
+    
+    @action(detail=True, methods=['GET'])
+    def pipeline(self, request, pk=None):
+        """
+        GET /api/matching/{requerimiento_id}/pipeline/
+        
+        Retorna el pipeline de vida del requerimiento con las 4 etapas
+        y los lapsos de tiempo entre cada una.
+        """
+        try:
+            data = obtener_pipeline_requerimiento(pk)
+            return Response(data)
+        except Exception as e:
+            logger.error(f"Error al obtener pipeline para req #{pk}: {e}")
+            return Response(
+                {'error': f'Error al obtener pipeline: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
     @action(detail=True, methods=['GET'])
     def guardados(self, request, pk=None):
