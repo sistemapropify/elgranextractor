@@ -1289,12 +1289,24 @@ class PropuestasDashboardView(TemplateView):
             buf.seek(0)
             return f"data:image/png;base64,{base64.b64encode(buf.read()).decode('utf-8')}"
 
-        # ── Chart 1: Evolución semanal ──
+        # ── Chart 1: Evolución semanal (acumulativa) ──
         dias_semana = [today - timedelta(days=i) for i in range(6, -1, -1)]
         dias_labels = [d.strftime('%d/%m') for d in dias_semana]
-        sem_env = [enviadas_por_dia.get(d, 0) for d in dias_semana]
-        sem_acep = [aceptadas_por_dia.get(d, 0) for d in dias_semana]
-        sem_rech = [rechazadas_por_dia.get(d, 0) for d in dias_semana]
+        # Per-day values
+        sem_env_raw = [enviadas_por_dia.get(d, 0) for d in dias_semana]
+        sem_acep_raw = [aceptadas_por_dia.get(d, 0) for d in dias_semana]
+        sem_rech_raw = [rechazadas_por_dia.get(d, 0) for d in dias_semana]
+        # Acumulativos (running total)
+        def acumular(arr):
+            acc = 0
+            result = []
+            for v in arr:
+                acc += v
+                result.append(acc)
+            return result
+        sem_env = acumular(sem_env_raw)
+        sem_acep = acumular(sem_acep_raw)
+        sem_rech = acumular(sem_rech_raw)
 
         fig, ax = plt.subplots(figsize=(7, 3.5))
         ax.set_facecolor(COLOR_BG)
@@ -1302,7 +1314,7 @@ class PropuestasDashboardView(TemplateView):
         ax.plot(dias_labels, sem_env, color=COLOR_AZUL, marker='o', linewidth=2, label='Enviadas')
         ax.plot(dias_labels, sem_acep, color=COLOR_VERDE, marker='s', linewidth=2, label='Aceptadas')
         ax.plot(dias_labels, sem_rech, color=COLOR_ROJO, marker='x', linewidth=2, label='Rechazadas')
-        ax.set_title('Evolución Semanal', color=COLOR_TEXTO, fontsize=13, fontweight='bold')
+        ax.set_title('Evolución Semanal (Acumulado)', color=COLOR_TEXTO, fontsize=13, fontweight='bold')
         ax.set_ylabel('Propuestas', color=COLOR_TEXTO)
         ax.tick_params(colors=COLOR_TEXTO, labelsize=9)
         ax.legend(loc='upper left', facecolor='#161b22', edgecolor='#30363d', labelcolor=COLOR_TEXTO)
@@ -1311,15 +1323,19 @@ class PropuestasDashboardView(TemplateView):
         plt.tight_layout()
         charts['evolucion_semanal'] = fig_to_b64(fig)
 
-        # ── Chart 2: Evolución mensual ──
+        # ── Chart 2: Evolución mensual (acumulativa) ──
         todos_dias = [month_ago + timedelta(days=i) for i in range(31)]
         intervalos, env_agrup, acep_agrup, rech_agrup = [], [], [], []
+        env_acum, acep_acum, rech_acum = 0, 0, 0
         for i in range(0, 31, 3):
             grupo = todos_dias[i:min(i+3, 31)]
             intervalos.append(grupo[0].strftime('%d/%m'))
-            env_agrup.append(sum(enviadas_por_dia.get(d, 0) for d in grupo))
-            acep_agrup.append(sum(aceptadas_por_dia.get(d, 0) for d in grupo))
-            rech_agrup.append(sum(rechazadas_por_dia.get(d, 0) for d in grupo))
+            env_acum += sum(enviadas_por_dia.get(d, 0) for d in grupo)
+            acep_acum += sum(aceptadas_por_dia.get(d, 0) for d in grupo)
+            rech_acum += sum(rechazadas_por_dia.get(d, 0) for d in grupo)
+            env_agrup.append(env_acum)
+            acep_agrup.append(acep_acum)
+            rech_agrup.append(rech_acum)
 
         fig, ax = plt.subplots(figsize=(7, 3.5))
         ax.set_facecolor(COLOR_BG)
@@ -1327,7 +1343,7 @@ class PropuestasDashboardView(TemplateView):
         ax.plot(intervalos, env_agrup, color=COLOR_AZUL, marker='o', linewidth=2, label='Enviadas')
         ax.plot(intervalos, acep_agrup, color=COLOR_VERDE, marker='s', linewidth=2, label='Aceptadas')
         ax.plot(intervalos, rech_agrup, color=COLOR_ROJO, marker='x', linewidth=2, label='Rechazadas')
-        ax.set_title('Evolución Mensual', color=COLOR_TEXTO, fontsize=13, fontweight='bold')
+        ax.set_title('Evolución Mensual (Acumulado)', color=COLOR_TEXTO, fontsize=13, fontweight='bold')
         ax.set_ylabel('Propuestas', color=COLOR_TEXTO)
         ax.tick_params(colors=COLOR_TEXTO, labelsize=8)
         ax.legend(loc='upper left', facecolor='#161b22', edgecolor='#30363d', labelcolor=COLOR_TEXTO)
