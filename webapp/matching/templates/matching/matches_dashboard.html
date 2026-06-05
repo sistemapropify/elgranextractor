@@ -183,13 +183,15 @@
                             {% else %}---{% endif %}
                         </td>
                         <td>
-                            {% with score=m.score|default:'0'|slice:':2' %}
+                            {% with score=m.score|default:'0'|floatformat:0 %}
+                            {% with score_num=score|add:0 %}
                             <span class="score-badge
-                                {% if score|add:0 >= 80 %}score-high
-                                {% elif score|add:0 >= 50 %}score-medium
+                                {% if score_num >= 80 %}score-high
+                                {% elif score_num >= 50 %}score-medium
                                 {% else %}score-low{% endif %}">
-                                {{ score }}%
+                                {{ score_num }}%
                             </span>
+                            {% endwith %}
                             {% endwith %}
                         </td>
                         <td style="font-size:11px;color:var(--text-secondary);white-space:nowrap;">
