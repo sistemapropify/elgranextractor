@@ -114,19 +114,15 @@
     <div class="stats-row">
         <div class="stat-card">
             <div class="stat-number blue">{{ total_matches }}</div>
-            <div class="stat-label">Total Matches</div>
+            <div class="stat-label">Total Requirement-Matches</div>
         </div>
         <div class="stat-card">
-            <div class="stat-number green">{{ total_accepted }}</div>
-            <div class="stat-label">Aceptados</div>
+            <div class="stat-number green">{{ current_page }}</div>
+            <div class="stat-label">Pagina Actual</div>
         </div>
         <div class="stat-card">
-            <div class="stat-number red">{{ total_rejected }}</div>
-            <div class="stat-label">Rechazados</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-number orange">{{ total_pending }}</div>
-            <div class="stat-label">Pendientes</div>
+            <div class="stat-number orange">{{ total_pages }}</div>
+            <div class="stat-label">Total Paginas</div>
         </div>
     </div>
 
@@ -155,17 +151,15 @@
                     <tr>
                         <th>ID</th>
                         <th>Requerimiento</th>
-                        <th>Solicitante</th>
-                        <th>Agente Asignado</th>
                         <th>Propiedad</th>
+                        <th>Distrito</th>
                         <th>Precio</th>
-                        <th>Status</th>
-                        <th>Creado</th>
+                        <th>Score</th>
+                        <th>Computado</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for m in matches %}
-                    {% with prop=m.property_summary %}
                     <tr>
                         <td style="font-size:11px;color:var(--text-muted);">#{{ m.id }}</td>
                         <td>
@@ -174,39 +168,32 @@
                             </span>
                         </td>
                         <td>
-                            <span style="font-size:12px;color:var(--text-primary);">{{ m.requested_by_user_name|default:'---' }}</span>
+                            <div style="font-size:12px;font-weight:600;color:var(--accent-blue);">{{ m.property_code }}</div>
+                            <div style="font-size:10px;color:var(--text-secondary);">{{ m.property_title|truncatechars:45 }}</div>
                         </td>
-                        <td>
-                            {% with req_data=req_map|dictsort:m.requirement %}
-                            {% endwith %}
-                            <span style="font-size:12px;color:var(--text-primary);">
-                                {{ m.assigned_to_name|default:'---' }}
-                            </span>
-                        </td>
-                        <td>
-                            {% if prop %}
-                            <div style="font-size:12px;font-weight:600;color:var(--accent-blue);">{{ prop.code }}</div>
-                            <div style="font-size:10px;color:var(--text-secondary);">{{ prop.title|truncatechars:40 }}</div>
-                            {% else %}
-                            <span style="color:var(--text-muted);">ID: {{ m.property }}</span>
-                            {% endif %}
+                        <td style="font-size:12px;color:var(--text-primary);">
+                            {{ m.property_district_name|default:'---' }}
                         </td>
                         <td style="font-weight:600;font-size:12px;">
-                            {% if prop and prop.price %}
-                                {% if prop.currency_code == 'USD' %}${% else %}S/.{% endif %}
-                                {{ prop.price|floatformat:0|intcomma }}
+                            {% if m.property_price %}
+                                {% if m.property_currency_name == 'Dolares' %}${% else %}S/.{% endif %}
+                                {{ m.property_price|floatformat:0|intcomma }}
                             {% else %}---{% endif %}
                         </td>
                         <td>
-                            <span class="score-badge {% if m.match_status == 'accepted' %}score-high{% elif m.match_status == 'rejected' %}score-low{% else %}score-medium{% endif %}">
-                                {{ m.match_status|default:'pending' }}
+                            {% with score=m.score|default:'0'|slice:':2' %}
+                            <span class="score-badge
+                                {% if score|add:0 >= 80 %}score-high
+                                {% elif score|add:0 >= 50 %}score-medium
+                                {% else %}score-low{% endif %}">
+                                {{ score }}%
                             </span>
+                            {% endwith %}
                         </td>
                         <td style="font-size:11px;color:var(--text-secondary);white-space:nowrap;">
-                            {{ m.created_at|slice:':16'|default:'---' }}
+                            {{ m.computed_at|slice:':16'|default:'---' }}
                         </td>
                     </tr>
-                    {% endwith %}
                     {% endfor %}
                 </tbody>
             </table>

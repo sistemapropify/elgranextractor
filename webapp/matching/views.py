@@ -1558,32 +1558,15 @@ class MatchesDashboardView(TemplateView):
                 pass
 
         matches_data = client.get_matches(page=int(page), page_size=50, **api_filters)
-        requirements_data = client.get_requirements(page=1, page_size=100)
 
         # ── Procesar datos ──
         matches = matches_data.get('results', []) if matches_data else []
         total_count = matches_data.get('count', 0) if matches_data else 0
 
-        # Crear mapa de requirements por id para obtener agente asignado
-        req_map = {}
-        if requirements_data:
-            for req in requirements_data.get('results', []):
-                req_map[req['id']] = req
-
-        # Estad�sticas
-        status_counts = {}
-        for m in matches:
-            st = m.get('match_status', 'pending')
-            status_counts[st] = status_counts.get(st, 0) + 1
-
         context['total_matches'] = total_count
-        context['total_pending'] = status_counts.get('pending', 0)
-        context['total_accepted'] = status_counts.get('accepted', 0)
-        context['total_rejected'] = status_counts.get('rejected', 0)
         context['view_mode'] = view_mode
         context['filter_date'] = filter_date
         context['matches'] = matches
-        context['req_map'] = req_map
         context['current_page'] = int(page)
         context['total_pages'] = -(-total_count // 50) if total_count else 0  # ceil division
         context['has_next'] = matches_data.get('next') is not None if matches_data else False

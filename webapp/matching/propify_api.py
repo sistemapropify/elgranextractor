@@ -116,12 +116,12 @@ class PropifyApiClient:
         self, page: int = 1, page_size: int = 50, **filters
     ) -> Optional[Dict[str, Any]]:
         """
-        GET /api/crm/matches/
-        Retorna lista paginada de matches.
+        GET /api/crm/requirement-matches/
+        Retorna lista paginada de matches con score y detalles.
         """
         params = {"page": page, "page_size": page_size}
         params.update(filters)
-        return self._request("GET", "/api/crm/matches/", params=params)
+        return self._request("GET", "/api/crm/requirement-matches/", params=params)
 
     def get_requirements(
         self, page: int = 1, page_size: int = 50, **filters
