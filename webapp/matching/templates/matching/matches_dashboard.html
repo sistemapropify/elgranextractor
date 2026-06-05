@@ -1,0 +1,237 @@
+{% extends 'propifai_base.html' %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Matches de Propify - CRM{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --bg-primary: #0d1117;
+        --bg-secondary: #161b22;
+        --bg-tertiary: #21262d;
+        --border-color: #30363d;
+        --text-primary: #e6edf3;
+        --text-secondary: #8b949e;
+        --text-muted: #6e7681;
+        --accent-blue: #58a6ff;
+        --accent-green: #3fb950;
+        --accent-orange: #d29922;
+        --accent-red: #f85149;
+        --card-radius: 8px;
+        --transition: 0.2s;
+    }
+
+    .matches-container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+    .page-header h1 { font-size: 22px; font-weight: 600; color: var(--text-primary); margin: 0; }
+
+    .stats-row { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+    .stat-card {
+        background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--card-radius);
+        padding: 16px 20px; min-width: 160px; flex: 1;
+    }
+    .stat-card .stat-number { font-size: 28px; font-weight: 700; color: var(--text-primary); }
+    .stat-card .stat-label { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+    .stat-card .stat-number.blue { color: var(--accent-blue); }
+    .stat-card .stat-number.green { color: var(--accent-green); }
+    .stat-card .stat-number.red { color: var(--accent-red); }
+    .stat-card .stat-number.orange { color: var(--accent-orange); }
+
+    .filter-bar {
+        display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center;
+        background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--card-radius);
+        padding: 12px 16px;
+    }
+    .filter-bar label { font-size: 11px; color: var(--text-secondary); font-weight: 600; }
+    .filter-bar select, .filter-bar input {
+        background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px;
+        color: var(--text-primary); padding: 5px 8px; font-size: 12px;
+    }
+    .filter-bar select:focus, .filter-bar input:focus { border-color: var(--accent-blue); outline: none; }
+    .filter-btn {
+        background: var(--accent-blue); color: #fff; border: none; border-radius: 6px;
+        padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer;
+    }
+    .filter-btn:hover { opacity: 0.9; }
+
+    .table-card { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--card-radius); overflow: hidden; margin-top: 16px; }
+    .table-header { padding: 12px 16px; border-bottom: 1px solid var(--border-color); background: var(--bg-tertiary); display: flex; justify-content: space-between; align-items: center; }
+    .table-header h4 { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); }
+
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+        background: var(--bg-tertiary); color: var(--text-secondary); font-size: 11px; font-weight: 600;
+        text-transform: uppercase; letter-spacing: 0.5px; padding: 10px 12px; border-bottom: 1px solid var(--border-color); text-align: left;
+    }
+    tbody td { padding: 10px 12px; font-size: 13px; color: var(--text-primary); border-bottom: 1px solid rgba(48,54,61,0.3); vertical-align: middle; }
+    tbody tr:hover { background: rgba(88,166,255,0.04); }
+    tbody tr:last-child td { border-bottom: none; }
+
+    .score-badge {
+        display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 12px;
+        font-size: 11px; font-weight: 600;
+    }
+    .score-high { background: rgba(63,185,80,0.15); color: var(--accent-green); }
+    .score-medium { background: rgba(210,153,34,0.15); color: var(--accent-orange); }
+    .score-low { background: rgba(248,81,73,0.15); color: var(--accent-red); }
+
+    .phase-badge {
+        display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600;
+    }
+    .phase-ok { background: rgba(63,185,80,0.1); color: var(--accent-green); }
+    .phase-eliminated { background: rgba(248,81,73,0.1); color: var(--accent-red); }
+
+    .pagination { display: flex; gap: 4px; padding: 12px 16px; justify-content: center; align-items: center; }
+    .pagination a, .pagination span {
+        padding: 4px 10px; border-radius: 4px; font-size: 12px; text-decoration: none;
+        background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-secondary);
+    }
+    .pagination a:hover { border-color: var(--accent-blue); color: var(--accent-blue); }
+    .pagination .current { background: var(--accent-blue); color: #fff; border-color: var(--accent-blue); }
+
+    .view-tabs { display: flex; gap: 4px; }
+    .view-tab {
+        padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 600;
+        background: var(--bg-tertiary); border: 1px solid var(--border-color);
+        color: var(--text-secondary); cursor: pointer; text-decoration: none;
+    }
+    .view-tab.active { background: var(--accent-blue); color: #fff; border-color: var(--accent-blue); }
+    .view-tab:hover:not(.active) { border-color: var(--accent-blue); color: var(--text-primary); }
+
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+    .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+    .empty-state p { font-size: 14px; margin: 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="matches-container">
+    <div class="page-header">
+        <h1><i class="bi bi-search" style="color:var(--accent-blue);margin-right:8px;"></i> Matches de Propify</h1>
+        <div class="view-tabs">
+            <a href="?view=all" class="view-tab {% if view_mode == 'all' %}active{% endif %}">📋 Todas</a>
+            <a href="?view=day&date={% now 'Y-m-d' %}" class="view-tab {% if view_mode == 'day' %}active{% endif %}">📅 Hoy</a>
+            <a href="?view=week&date={% now 'Y-m-d' %}" class="view-tab {% if view_mode == 'week' %}active{% endif %}">📆 Semana</a>
+            <a href="?view=month&date={% now 'Y-m' %}" class="view-tab {% if view_mode == 'month' %}active{% endif %}">📆 Mes</a>
+        </div>
+    </div>
+
+    <div class="stats-row">
+        <div class="stat-card">
+            <div class="stat-number blue">{{ total_matches }}</div>
+            <div class="stat-label">Total Matches</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number green">{{ total_compatibles }}</div>
+            <div class="stat-label">Compatibles</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number red">{{ total_eliminados }}</div>
+            <div class="stat-label">Eliminados</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number orange">{{ score_promedio }}%</div>
+            <div class="stat-label">Score Promedio</div>
+        </div>
+    </div>
+
+    <form class="filter-bar" method="GET">
+        <label>Vista:</label>
+        <select name="view">
+            <option value="all" {% if view_mode == 'all' %}selected{% endif %}>Todas</option>
+            <option value="day" {% if view_mode == 'day' %}selected{% endif %}>Por día</option>
+            <option value="week" {% if view_mode == 'week' %}selected{% endif %}>Por semana</option>
+            <option value="month" {% if view_mode == 'month' %}selected{% endif %}>Por mes</option>
+        </select>
+        <input type="date" name="date" value="{{ filter_date }}" placeholder="Fecha">
+        <label>Requerimiento:</label>
+        <select name="requerimiento_id">
+            <option value="">Todos</option>
+            {% for r in requerimientos %}
+            <option value="{{ r.id }}" {% if request.GET.requerimiento_id == r.id|stringformat:'s' %}selected{% endif %}>#{{ r.id }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="filter-btn">Filtrar</button>
+    </form>
+
+    <div class="table-card">
+        <div class="table-header">
+            <h4><i class="bi bi-list"></i> Resultados de Matching</h4>
+            <span style="font-size:12px;color:var(--text-secondary);">{{ page_obj.paginator.count }} registros</span>
+        </div>
+
+        {% if page_obj %}
+        <div style="overflow-x:auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Requerimiento</th>
+                        <th>Propiedad</th>
+                        <th>Score</th>
+                        <th>Fase</th>
+                        <th>Ejecutado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for match in page_obj %}
+                    <tr>
+                        <td style="font-size:11px;color:var(--text-muted);">#{{ match.id }}</td>
+                        <td>
+                            <a href="{% url 'matching:dashboard' %}?requerimiento_id={{ match.requerimiento_id }}" style="color:var(--accent-blue);text-decoration:none;font-size:13px;">
+                                #{{ match.requerimiento_id }}
+                            </a>
+                        </td>
+                        <td>
+                            {% if match.propiedad %}
+                            <span style="color:var(--accent-blue);font-weight:600;">{{ match.propiedad.code|default:match.propiedad_id }}</span>
+                            {% else %}
+                            <span style="color:var(--text-muted);">ID: {{ match.propiedad_id }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% with score=match.score_total|default:0 %}
+                            <span class="score-badge {% if score >= 80 %}score-high{% elif score >= 50 %}score-medium{% else %}score-low{% endif %}">
+                                {{ score|floatformat:0 }}%
+                            </span>
+                            {% endwith %}
+                        </td>
+                        <td>
+                            {% if match.fase_eliminada %}
+                            <span class="phase-badge phase-eliminated">{{ match.fase_eliminada }}</span>
+                            {% else %}
+                            <span class="phase-badge phase-ok">Compatible</span>
+                            {% endif %}
+                        </td>
+                        <td style="font-size:12px;color:var(--text-secondary);white-space:nowrap;">
+                            {{ match.ejecutado_en|date:'d/m/Y H:i' }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="icon">🔍</div>
+            <p>No se encontraron matches con los filtros seleccionados.</p>
+        </div>
+        {% endif %}
+
+        {% if page_obj.has_other_pages %}
+        <div class="pagination">
+            {% if page_obj.has_previous %}
+            <a href="?page=1{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}">&laquo;</a>
+            <a href="?page={{ page_obj.previous_page_number }}{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}">&lsaquo;</a>
+            {% endif %}
+            <span class="current">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+            {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}">&rsaquo;</a>
+            <a href="?page={{ page_obj.paginator.num_pages }}{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}">&raquo;</a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

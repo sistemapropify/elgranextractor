@@ -51,4 +51,7 @@ urlpatterns = [
 
     # Dashboard de propuestas
     path('propuestas/dashboard/', views.PropuestasDashboardView.as_view(), name='propuestas-dashboard'),
+
+    # Matches de Propify (CRM)
+    path('matches/', views.MatchesDashboardView.as_view(), name='matches-dashboard'),
 ]

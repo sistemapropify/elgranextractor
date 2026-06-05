@@ -1508,3 +1508,97 @@ class PropuestasDashboardView(TemplateView):
         charts['distribucion_status'] = fig_to_b64(fig)
 
         return charts
+
+
+class MatchesDashboardView(TemplateView):
+    """
+    Dashboard CRM de Matches de Propify.
+    Lista todos los MatchResult con filtros por d�a, semana, mes.
+    """
+    template_name = 'matching/matches_dashboard.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from django.utils import timezone
+        from datetime import timedelta
+        from django.db.models import Count, Q
+        from django.db.models.functions import TruncDate
+        import json
+
+        today = timezone.now().date()
+
+        # ── Par�metros de filtro ──
+        view_mode = self.request.GET.get('view', 'all')
+        filter_date = self.request.GET.get('date', '')
+        filter_requerimiento = self.request.GET.get('requerimiento_id', '')
+        filter_propiedad = self.request.GET.get('propiedad_id', '')
+
+        # ── Base queryset ──
+        qs = MatchResult.objects.all()
+
+        if filter_requerimiento:
+            qs = qs.filter(requerimiento_id=int(filter_requerimiento))
+        if filter_propiedad:
+            qs = qs.filter(propiedad_id=int(filter_propiedad))
+
+        if view_mode == 'day' and filter_date:
+            qs = qs.filter(ejecutado_en__date=filter_date)
+        elif view_mode == 'week' and filter_date:
+            try:
+                from datetime import datetime as dt_mod
+                d = dt_mod.strptime(filter_date, '%Y-%m-%d').date()
+                week_start = d - timedelta(days=d.weekday())
+                week_end = week_start + timedelta(days=6)
+                qs = qs.filter(ejecutado_en__date__gte=week_start, ejecutado_en__date__lte=week_end)
+            except ValueError:
+                pass
+        elif view_mode == 'month' and filter_date:
+            try:
+                year, month = filter_date.split('-')
+                qs = qs.filter(ejecutado_en__year=int(year), ejecutado_en__month=int(month))
+            except ValueError:
+                pass
+
+        # ── Estad�sticas ──
+        total_matches = qs.count()
+        compatibles = qs.filter(fase_eliminada__isnull=True)
+        total_compatibles = compatibles.count()
+        eliminados = qs.filter(fase_eliminada__isnull=False)
+        total_eliminados = eliminados.count()
+
+        # Score promedio
+        score_promedio = 0
+        if total_compatibles > 0:
+            from django.db.models import Avg
+            score_promedio = round(compatibles.aggregate(Avg('score_total'))['score_total__avg'] or 0, 1)
+
+        # Match por d�a (para gr�fico)
+        matches_por_dia = qs.filter(
+            fase_eliminada__isnull=True
+        ).annotate(
+            dia=TruncDate('ejecutado_en')
+        ).values('dia').annotate(
+            total=Count('id'),
+            score_avg=Avg('score_total')
+        ).order_by('dia')[:60]
+
+        context['total_matches'] = total_matches
+        context['total_compatibles'] = total_compatibles
+        context['total_eliminados'] = total_eliminados
+        context['score_promedio'] = score_promedio
+        context['view_mode'] = view_mode
+        context['filter_date'] = filter_date
+        context['matches_por_dia_json'] = json.dumps(list(matches_por_dia), default=str)
+
+        # ── Requerimientos y propiedades para filtros ──
+        from requerimientos.models import Requerimiento
+        context['requerimientos'] = Requerimiento.objects.all().order_by('-fecha')[:100]
+        from propifai.models import PropifaiProperty
+        context['propiedades'] = PropifaiProperty.objects.all().order_by('code')[:100]
+
+        # ── Resultados paginados ──
+        paginator = Paginator(qs.select_related('requerimiento').order_by('-ejecutado_en'), 50)
+        page_number = self.request.GET.get('page')
+        context['page_obj'] = paginator.get_page(page_number)
+
+        return context
