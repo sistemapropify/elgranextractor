@@ -1529,6 +1529,7 @@ class MatchesDashboardView(TemplateView):
         # ── Par�metros de filtro ──
         view_mode = self.request.GET.get('view', 'all')
         filter_date = self.request.GET.get('date', '')
+        requirement_id = self.request.GET.get('requirement_id', '')
         page = self.request.GET.get('page', 1)
 
         # ── Cliente API Propify ──
@@ -1537,6 +1538,8 @@ class MatchesDashboardView(TemplateView):
 
         # ── Obtener matches desde API Propify ──
         api_filters = {}
+        if requirement_id:
+            api_filters['requirement_id'] = requirement_id
         if view_mode == 'day' and filter_date:
             api_filters['created_at__date'] = filter_date
         elif view_mode == 'week' and filter_date:
@@ -1566,6 +1569,7 @@ class MatchesDashboardView(TemplateView):
         context['total_matches'] = total_count
         context['view_mode'] = view_mode
         context['filter_date'] = filter_date
+        context['requirement_id'] = requirement_id
         context['matches'] = matches
         context['current_page'] = int(page)
         context['total_pages'] = -(-total_count // 50) if total_count else 0  # ceil division

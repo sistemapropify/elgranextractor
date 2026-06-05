@@ -135,6 +135,8 @@
             <option value="month" {% if view_mode == 'month' %}selected{% endif %}>Por mes</option>
         </select>
         <input type="date" name="date" value="{{ filter_date }}">
+        <label>Requerimiento #:</label>
+        <input type="number" name="requirement_id" value="{{ requirement_id }}" placeholder="ID" style="width:80px;">
         <button type="submit" class="filter-btn">Filtrar</button>
     </form>
 
