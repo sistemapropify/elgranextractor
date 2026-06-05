@@ -168,6 +168,7 @@
                     <tr>
                         <th>ID</th>
                         <th>Requerimiento</th>
+                        <th>Agente</th>
                         <th>Propiedad</th>
                         <th>Score</th>
                         <th>Fase</th>
@@ -182,6 +183,11 @@
                             <a href="{% url 'matching:dashboard' %}?requerimiento_id={{ match.requerimiento_id }}" style="color:var(--accent-blue);text-decoration:none;font-size:13px;">
                                 #{{ match.requerimiento_id }}
                             </a>
+                        </td>
+                        <td>
+                            <span style="font-size:12px;color:var(--text-primary);">
+                                {{ match.requerimiento.agente|default:'—' }}
+                            </span>
                         </td>
                         <td>
                             {% if match.propiedad %}
