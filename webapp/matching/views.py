@@ -1513,7 +1513,8 @@ class PropuestasDashboardView(TemplateView):
 class MatchesDashboardView(TemplateView):
     """
     Dashboard CRM de Matches de Propify.
-    Lista todos los MatchResult con filtros por d�a, semana, mes.
+    Consume la API externa de Propify (api.propify.pe) para mostrar
+    los matches del sistema Propify.
     """
     template_name = 'matching/matches_dashboard.html'
 
@@ -1521,8 +1522,6 @@ class MatchesDashboardView(TemplateView):
         context = super().get_context_data(**kwargs)
         from django.utils import timezone
         from datetime import timedelta
-        from django.db.models import Count, Q
-        from django.db.models.functions import TruncDate
         import json
 
         today = timezone.now().date()
@@ -1530,75 +1529,64 @@ class MatchesDashboardView(TemplateView):
         # ── Par�metros de filtro ──
         view_mode = self.request.GET.get('view', 'all')
         filter_date = self.request.GET.get('date', '')
-        filter_requerimiento = self.request.GET.get('requerimiento_id', '')
-        filter_propiedad = self.request.GET.get('propiedad_id', '')
+        page = self.request.GET.get('page', 1)
 
-        # ── Base queryset ──
-        qs = MatchResult.objects.all()
+        # ── Cliente API Propify ──
+        from .propify_api import get_propify_client
+        client = get_propify_client()
 
-        if filter_requerimiento:
-            qs = qs.filter(requerimiento_id=int(filter_requerimiento))
-        if filter_propiedad:
-            qs = qs.filter(propiedad_id=int(filter_propiedad))
-
+        # ── Obtener matches desde API Propify ──
+        api_filters = {}
         if view_mode == 'day' and filter_date:
-            qs = qs.filter(ejecutado_en__date=filter_date)
+            api_filters['created_at__date'] = filter_date
         elif view_mode == 'week' and filter_date:
             try:
                 from datetime import datetime as dt_mod
                 d = dt_mod.strptime(filter_date, '%Y-%m-%d').date()
                 week_start = d - timedelta(days=d.weekday())
                 week_end = week_start + timedelta(days=6)
-                qs = qs.filter(ejecutado_en__date__gte=week_start, ejecutado_en__date__lte=week_end)
+                api_filters['created_at__date__gte'] = week_start.isoformat()
+                api_filters['created_at__date__lte'] = week_end.isoformat()
             except ValueError:
                 pass
         elif view_mode == 'month' and filter_date:
             try:
                 year, month = filter_date.split('-')
-                qs = qs.filter(ejecutado_en__year=int(year), ejecutado_en__month=int(month))
+                api_filters['created_at__year'] = year
+                api_filters['created_at__month'] = month
             except ValueError:
                 pass
 
-        # ── Estad�sticas ──
-        total_matches = qs.count()
-        compatibles = qs.filter(fase_eliminada__isnull=True)
-        total_compatibles = compatibles.count()
-        eliminados = qs.filter(fase_eliminada__isnull=False)
-        total_eliminados = eliminados.count()
+        matches_data = client.get_matches(page=int(page), page_size=50, **api_filters)
+        requirements_data = client.get_requirements(page=1, page_size=100)
 
-        # Score promedio
-        score_promedio = 0
-        if total_compatibles > 0:
-            from django.db.models import Avg
-            score_promedio = round(compatibles.aggregate(Avg('score_total'))['score_total__avg'] or 0, 1)
+        # ── Procesar datos ──
+        matches = matches_data.get('results', []) if matches_data else []
+        total_count = matches_data.get('count', 0) if matches_data else 0
 
-        # Match por d�a (para gr�fico)
-        matches_por_dia = qs.filter(
-            fase_eliminada__isnull=True
-        ).annotate(
-            dia=TruncDate('ejecutado_en')
-        ).values('dia').annotate(
-            total=Count('id'),
-            score_avg=Avg('score_total')
-        ).order_by('dia')[:60]
+        # Crear mapa de requirements por id para obtener agente asignado
+        req_map = {}
+        if requirements_data:
+            for req in requirements_data.get('results', []):
+                req_map[req['id']] = req
 
-        context['total_matches'] = total_matches
-        context['total_compatibles'] = total_compatibles
-        context['total_eliminados'] = total_eliminados
-        context['score_promedio'] = score_promedio
+        # Estad�sticas
+        status_counts = {}
+        for m in matches:
+            st = m.get('match_status', 'pending')
+            status_counts[st] = status_counts.get(st, 0) + 1
+
+        context['total_matches'] = total_count
+        context['total_pending'] = status_counts.get('pending', 0)
+        context['total_accepted'] = status_counts.get('accepted', 0)
+        context['total_rejected'] = status_counts.get('rejected', 0)
         context['view_mode'] = view_mode
         context['filter_date'] = filter_date
-        context['matches_por_dia_json'] = json.dumps(list(matches_por_dia), default=str)
-
-        # ── Requerimientos y propiedades para filtros ──
-        from requerimientos.models import Requerimiento
-        context['requerimientos'] = Requerimiento.objects.all().order_by('-fecha')[:100]
-        from propifai.models import PropifaiProperty
-        context['propiedades'] = PropifaiProperty.objects.all().order_by('code')[:100]
-
-        # ── Resultados paginados ──
-        paginator = Paginator(qs.select_related('requerimiento').order_by('-ejecutado_en'), 50)
-        page_number = self.request.GET.get('page')
-        context['page_obj'] = paginator.get_page(page_number)
+        context['matches'] = matches
+        context['req_map'] = req_map
+        context['current_page'] = int(page)
+        context['total_pages'] = -(-total_count // 50) if total_count else 0  # ceil division
+        context['has_next'] = matches_data.get('next') is not None if matches_data else False
+        context['has_prev'] = matches_data.get('previous') is not None if matches_data else False
 
         return context

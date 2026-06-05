@@ -76,12 +76,6 @@
     .score-medium { background: rgba(210,153,34,0.15); color: var(--accent-orange); }
     .score-low { background: rgba(248,81,73,0.15); color: var(--accent-red); }
 
-    .phase-badge {
-        display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600;
-    }
-    .phase-ok { background: rgba(63,185,80,0.1); color: var(--accent-green); }
-    .phase-eliminated { background: rgba(248,81,73,0.1); color: var(--accent-red); }
-
     .pagination { display: flex; gap: 4px; padding: 12px 16px; justify-content: center; align-items: center; }
     .pagination a, .pagination span {
         padding: 4px 10px; border-radius: 4px; font-size: 12px; text-decoration: none;
@@ -110,10 +104,10 @@
     <div class="page-header">
         <h1><i class="bi bi-search" style="color:var(--accent-blue);margin-right:8px;"></i> Matches de Propify</h1>
         <div class="view-tabs">
-            <a href="?view=all" class="view-tab {% if view_mode == 'all' %}active{% endif %}">📋 Todas</a>
-            <a href="?view=day&date={% now 'Y-m-d' %}" class="view-tab {% if view_mode == 'day' %}active{% endif %}">📅 Hoy</a>
-            <a href="?view=week&date={% now 'Y-m-d' %}" class="view-tab {% if view_mode == 'week' %}active{% endif %}">📆 Semana</a>
-            <a href="?view=month&date={% now 'Y-m' %}" class="view-tab {% if view_mode == 'month' %}active{% endif %}">📆 Mes</a>
+            <a href="?view=all" class="view-tab {% if view_mode == 'all' %}active{% endif %}"> Todas</a>
+            <a href="?view=day&date={% now 'Y-m-d' %}" class="view-tab {% if view_mode == 'day' %}active{% endif %}"> Hoy</a>
+            <a href="?view=week&date={% now 'Y-m-d' %}" class="view-tab {% if view_mode == 'week' %}active{% endif %}"> Semana</a>
+            <a href="?view=month&date={% now 'Y-m' %}" class="view-tab {% if view_mode == 'month' %}active{% endif %}"> Mes</a>
         </div>
     </div>
 
@@ -123,16 +117,16 @@
             <div class="stat-label">Total Matches</div>
         </div>
         <div class="stat-card">
-            <div class="stat-number green">{{ total_compatibles }}</div>
-            <div class="stat-label">Compatibles</div>
+            <div class="stat-number green">{{ total_accepted }}</div>
+            <div class="stat-label">Aceptados</div>
         </div>
         <div class="stat-card">
-            <div class="stat-number red">{{ total_eliminados }}</div>
-            <div class="stat-label">Eliminados</div>
+            <div class="stat-number red">{{ total_rejected }}</div>
+            <div class="stat-label">Rechazados</div>
         </div>
         <div class="stat-card">
-            <div class="stat-number orange">{{ score_promedio }}%</div>
-            <div class="stat-label">Score Promedio</div>
+            <div class="stat-number orange">{{ total_pending }}</div>
+            <div class="stat-label">Pendientes</div>
         </div>
     </div>
 
@@ -140,80 +134,79 @@
         <label>Vista:</label>
         <select name="view">
             <option value="all" {% if view_mode == 'all' %}selected{% endif %}>Todas</option>
-            <option value="day" {% if view_mode == 'day' %}selected{% endif %}>Por día</option>
+            <option value="day" {% if view_mode == 'day' %}selected{% endif %}>Por dia</option>
             <option value="week" {% if view_mode == 'week' %}selected{% endif %}>Por semana</option>
             <option value="month" {% if view_mode == 'month' %}selected{% endif %}>Por mes</option>
         </select>
-        <input type="date" name="date" value="{{ filter_date }}" placeholder="Fecha">
-        <label>Requerimiento:</label>
-        <select name="requerimiento_id">
-            <option value="">Todos</option>
-            {% for r in requerimientos %}
-            <option value="{{ r.id }}" {% if request.GET.requerimiento_id == r.id|stringformat:'s' %}selected{% endif %}>#{{ r.id }}</option>
-            {% endfor %}
-        </select>
+        <input type="date" name="date" value="{{ filter_date }}">
         <button type="submit" class="filter-btn">Filtrar</button>
     </form>
 
     <div class="table-card">
         <div class="table-header">
-            <h4><i class="bi bi-list"></i> Resultados de Matching</h4>
-            <span style="font-size:12px;color:var(--text-secondary);">{{ page_obj.paginator.count }} registros</span>
+            <h4><i class="bi bi-list"></i> Matches de Propify</h4>
+            <span style="font-size:12px;color:var(--text-secondary);">{{ total_matches }} registros - Pagina {{ current_page }}/{{ total_pages }}</span>
         </div>
 
-        {% if page_obj %}
+        {% if matches %}
         <div style="overflow-x:auto;">
             <table>
                 <thead>
                     <tr>
                         <th>ID</th>
                         <th>Requerimiento</th>
-                        <th>Agente</th>
+                        <th>Solicitante</th>
+                        <th>Agente Asignado</th>
                         <th>Propiedad</th>
-                        <th>Score</th>
-                        <th>Fase</th>
-                        <th>Ejecutado</th>
+                        <th>Precio</th>
+                        <th>Status</th>
+                        <th>Creado</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for match in page_obj %}
+                    {% for m in matches %}
+                    {% with prop=m.property_summary %}
                     <tr>
-                        <td style="font-size:11px;color:var(--text-muted);">#{{ match.id }}</td>
+                        <td style="font-size:11px;color:var(--text-muted);">#{{ m.id }}</td>
                         <td>
-                            <a href="{% url 'matching:dashboard' %}?requerimiento_id={{ match.requerimiento_id }}" style="color:var(--accent-blue);text-decoration:none;font-size:13px;">
-                                #{{ match.requerimiento_id }}
-                            </a>
-                        </td>
-                        <td>
-                            <span style="font-size:12px;color:var(--text-primary);">
-                                {{ match.requerimiento.agente|default:'—' }}
+                            <span style="color:var(--accent-blue);font-weight:600;font-size:13px;">
+                                #{{ m.requirement }}
                             </span>
                         </td>
                         <td>
-                            {% if match.propiedad %}
-                            <span style="color:var(--accent-blue);font-weight:600;">{{ match.propiedad.code|default:match.propiedad_id }}</span>
-                            {% else %}
-                            <span style="color:var(--text-muted);">ID: {{ match.propiedad_id }}</span>
-                            {% endif %}
+                            <span style="font-size:12px;color:var(--text-primary);">{{ m.requested_by_user_name|default:'---' }}</span>
                         </td>
                         <td>
-                            {% with score=match.score_total|default:0 %}
-                            <span class="score-badge {% if score >= 80 %}score-high{% elif score >= 50 %}score-medium{% else %}score-low{% endif %}">
-                                {{ score|floatformat:0 }}%
-                            </span>
+                            {% with req_data=req_map|dictsort:m.requirement %}
                             {% endwith %}
+                            <span style="font-size:12px;color:var(--text-primary);">
+                                {{ m.assigned_to_name|default:'---' }}
+                            </span>
                         </td>
                         <td>
-                            {% if match.fase_eliminada %}
-                            <span class="phase-badge phase-eliminated">{{ match.fase_eliminada }}</span>
+                            {% if prop %}
+                            <div style="font-size:12px;font-weight:600;color:var(--accent-blue);">{{ prop.code }}</div>
+                            <div style="font-size:10px;color:var(--text-secondary);">{{ prop.title|truncatechars:40 }}</div>
                             {% else %}
-                            <span class="phase-badge phase-ok">Compatible</span>
+                            <span style="color:var(--text-muted);">ID: {{ m.property }}</span>
                             {% endif %}
                         </td>
-                        <td style="font-size:12px;color:var(--text-secondary);white-space:nowrap;">
-                            {{ match.ejecutado_en|date:'d/m/Y H:i' }}
+                        <td style="font-weight:600;font-size:12px;">
+                            {% if prop and prop.price %}
+                                {% if prop.currency_code == 'USD' %}${% else %}S/.{% endif %}
+                                {{ prop.price|floatformat:0|intcomma }}
+                            {% else %}---{% endif %}
+                        </td>
+                        <td>
+                            <span class="score-badge {% if m.match_status == 'accepted' %}score-high{% elif m.match_status == 'rejected' %}score-low{% else %}score-medium{% endif %}">
+                                {{ m.match_status|default:'pending' }}
+                            </span>
+                        </td>
+                        <td style="font-size:11px;color:var(--text-secondary);white-space:nowrap;">
+                            {{ m.created_at|slice:':16'|default:'---' }}
                         </td>
                     </tr>
+                    {% endwith %}
                     {% endfor %}
                 </tbody>
             </table>
@@ -221,20 +214,20 @@
         {% else %}
         <div class="empty-state">
             <div class="icon">🔍</div>
-            <p>No se encontraron matches con los filtros seleccionados.</p>
+            <p>No se encontraron matches desde Propify.</p>
         </div>
         {% endif %}
 
-        {% if page_obj.has_other_pages %}
+        {% if total_pages > 1 %}
         <div class="pagination">
-            {% if page_obj.has_previous %}
-            <a href="?page=1{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}">&laquo;</a>
-            <a href="?page={{ page_obj.previous_page_number }}{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}">&lsaquo;</a>
+            {% if has_prev %}
+            <a href="?page=1{% if filter_date %}&date={{ filter_date }}&view={{ view_mode }}{% endif %}">&laquo;</a>
+            <a href="?page={{ current_page|add:-1 }}{% if filter_date %}&date={{ filter_date }}&view={{ view_mode }}{% endif %}">&lsaquo;</a>
             {% endif %}
-            <span class="current">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
-            {% if page_obj.has_next %}
-            <a href="?page={{ page_obj.next_page_number }}{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}">&rsaquo;</a>
-            <a href="?page={{ page_obj.paginator.num_pages }}{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}">&raquo;</a>
+            <span class="current">{{ current_page }} / {{ total_pages }}</span>
+            {% if has_next %}
+            <a href="?page={{ current_page|add:1 }}{% if filter_date %}&date={{ filter_date }}&view={{ view_mode }}{% endif %}">&rsaquo;</a>
+            <a href="?page={{ total_pages }}{% if filter_date %}&date={{ filter_date }}&view={{ view_mode }}{% endif %}">&raquo;</a>
             {% endif %}
         </div>
         {% endif %}
