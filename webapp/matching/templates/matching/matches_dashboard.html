@@ -379,18 +379,6 @@ function renderMatchPipeline(data, container) {
         html += '  <div class="pipeline-score">' + scoreVal + '%</div>';
         if (matchDate) html += '  <div class="pipeline-date">Match: ' + matchDate + '</div>';
         html += '</div>';
-
-        // connector 🏠 Prop1 → 💯
-        html += '<div class="pipeline-connector">';
-        html += '  <div class="connector-line"></div>';
-        html += '</div>';
-
-        // 💯 Score node
-        html += '<div class="pipeline-node ' + scoreClass + '" style="min-width:80px;">';
-        html += '  <div class="pipeline-marker">💯</div>';
-        html += '  <div class="pipeline-title">Score</div>';
-        html += '  <div class="pipeline-score" style="font-size:12px;">' + scoreVal + '%</div>';
-        html += '</div>';
     }
 
     html += '</div>'; // end pipeline-timeline principal
@@ -417,18 +405,6 @@ function renderMatchPipeline(data, container) {
             html += '  <div class="pipeline-date">' + (rama.propiedad_district || '') + '</div>';
             html += '  <div class="pipeline-score">' + scoreVal + '%</div>';
             if (matchDate) html += '  <div class="pipeline-date">Match: ' + matchDate + '</div>';
-            html += '</div>';
-
-            // connector 🏠 → 💯
-            html += '<div class="pipeline-connector">';
-            html += '  <div class="connector-line"></div>';
-            html += '</div>';
-
-            // 💯 Score N
-            html += '<div class="pipeline-node ' + (scoreVal >= 80 ? 'completed' : 'pending') + '" style="min-width:80px;">';
-            html += '  <div class="pipeline-marker">💯</div>';
-            html += '  <div class="pipeline-title">Score</div>';
-            html += '  <div class="pipeline-score" style="font-size:12px;">' + scoreVal + '%</div>';
             html += '</div>';
 
             html += '</div>'; // end branch-row
