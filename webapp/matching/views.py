@@ -1537,19 +1537,31 @@ class MatchesDashboardView(TemplateView):
         from .propify_api import get_propify_client
         client = get_propify_client()
 
-        # ── Obtener matches desde API Propify ──
+        # ── Obtener requirements (TODAS las p�ginas) ──
+        # Debe ir PRIMERO para poder construir el autocomplete y filtros
+        req_map = {}
+        page_req = 1
+        while True:
+            reqs_data = client.get_requirements(page=page_req, page_size=200)
+            if not reqs_data or not reqs_data.get('results'):
+                break
+            for r in reqs_data['results']:
+                req_map[r['id']] = r
+            if not reqs_data.get('next'):
+                break
+            page_req += 1
+
         # ── Lista de asignados �nicos para autocomplete ──
-        # (debe construirse antes de filtrar para tener todas las opciones)
         unique_assigned = sorted(set(
             r.get('assigned_to_name', '') for r in req_map.values()
             if r.get('assigned_to_name')
         ), key=str.lower)
 
+        # ── Construir filtros y obtener matches ──
         api_filters = {}
         if requirement_id:
             api_filters['requirement_id'] = requirement_id
         if assigned_to:
-            # Buscar requirement ids de ese asignado
             req_ids_for_assigned = [
                 str(rid) for rid, r in req_map.items()
                 if r.get('assigned_to_name', '').lower() == assigned_to.lower()
@@ -1577,20 +1589,6 @@ class MatchesDashboardView(TemplateView):
                 pass
 
         matches_data = client.get_matches(page=int(page), page_size=50, **api_filters)
-
-        # ── Obtener requirements para tener asignado y c�digo ──
-        # Iterar todas las p�ginas para obtener TODOS los requirements
-        req_map = {}
-        page_req = 1
-        while True:
-            reqs_data = client.get_requirements(page=page_req, page_size=200)
-            if not reqs_data or not reqs_data.get('results'):
-                break
-            for r in reqs_data['results']:
-                req_map[r['id']] = r
-            if not reqs_data.get('next'):
-                break
-            page_req += 1
 
         # ── Procesar datos ──
         matches = matches_data.get('results', []) if matches_data else []
