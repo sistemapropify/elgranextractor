@@ -1563,11 +1563,18 @@ class MatchesDashboardView(TemplateView):
         matches_data = client.get_matches(page=int(page), page_size=50, **api_filters)
 
         # ── Obtener requirements para tener asignado y c�digo ──
-        reqs_data = client.get_requirements(page=1, page_size=500)
+        # Iterar todas las p�ginas para obtener TODOS los requirements
         req_map = {}
-        if reqs_data:
-            for r in reqs_data.get('results', []):
+        page_req = 1
+        while True:
+            reqs_data = client.get_requirements(page=page_req, page_size=200)
+            if not reqs_data or not reqs_data.get('results'):
+                break
+            for r in reqs_data['results']:
                 req_map[r['id']] = r
+            if not reqs_data.get('next'):
+                break
+            page_req += 1
 
         # ── Procesar datos ──
         matches = matches_data.get('results', []) if matches_data else []
