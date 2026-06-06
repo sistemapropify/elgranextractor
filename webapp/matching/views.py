@@ -1530,6 +1530,7 @@ class MatchesDashboardView(TemplateView):
         view_mode = self.request.GET.get('view', 'all')
         filter_date = self.request.GET.get('date', '')
         requirement_id = self.request.GET.get('requirement_id', '')
+        assigned_to = self.request.GET.get('assigned_to', '')
         page = self.request.GET.get('page', 1)
 
         # ── Cliente API Propify ──
@@ -1537,9 +1538,24 @@ class MatchesDashboardView(TemplateView):
         client = get_propify_client()
 
         # ── Obtener matches desde API Propify ──
+        # ── Lista de asignados �nicos para autocomplete ──
+        # (debe construirse antes de filtrar para tener todas las opciones)
+        unique_assigned = sorted(set(
+            r.get('assigned_to_name', '') for r in req_map.values()
+            if r.get('assigned_to_name')
+        ), key=str.lower)
+
         api_filters = {}
         if requirement_id:
             api_filters['requirement_id'] = requirement_id
+        if assigned_to:
+            # Buscar requirement ids de ese asignado
+            req_ids_for_assigned = [
+                str(rid) for rid, r in req_map.items()
+                if r.get('assigned_to_name', '').lower() == assigned_to.lower()
+            ]
+            if req_ids_for_assigned:
+                api_filters['requirement_id__in'] = ','.join(req_ids_for_assigned[:50])
         if view_mode == 'day' and filter_date:
             api_filters['created_at__date'] = filter_date
         elif view_mode == 'week' and filter_date:
@@ -1598,6 +1614,8 @@ class MatchesDashboardView(TemplateView):
         context['view_mode'] = view_mode
         context['filter_date'] = filter_date
         context['requirement_id'] = requirement_id
+        context['assigned_to'] = assigned_to
+        context['assigned_list_json'] = json.dumps(unique_assigned)
         context['matches'] = matches
         context['current_page'] = int(page)
         context['total_pages'] = -(-total_count // 50) if total_count else 0  # ceil division

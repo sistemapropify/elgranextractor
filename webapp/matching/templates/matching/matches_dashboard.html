@@ -97,6 +97,21 @@
     .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
     .empty-state p { font-size: 14px; margin: 0; }
 </style>
+{% block extra_js %}
+<script>
+// Poblar datalist de asignados
+(function() {
+    var data = {{ assigned_list_json|safe }};
+    var datalist = document.getElementById('assignedList');
+    if (datalist && data) {
+        data.forEach(function(name) {
+            var opt = document.createElement('option');
+            opt.value = name;
+            datalist.appendChild(opt);
+        });
+    }
+})();
+</script>
 {% endblock %}
 
 {% block content %}
@@ -137,6 +152,9 @@
         <input type="date" name="date" value="{{ filter_date }}">
         <label>Requerimiento #:</label>
         <input type="number" name="requirement_id" value="{{ requirement_id }}" placeholder="ID" style="width:80px;">
+        <label>Asignado:</label>
+        <input type="text" name="assigned_to" id="assignedInput" value="{{ assigned_to }}" placeholder="Escribe para buscar..." style="width:180px;" list="assignedList" autocomplete="off">
+        <datalist id="assignedList"></datalist>
         <button type="submit" class="filter-btn">Filtrar</button>
     </form>
 
