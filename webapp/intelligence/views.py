@@ -1561,9 +1561,11 @@ def chat_web(request):
                     description='Rol por defecto para usuarios nuevos'
                 )
 
+            anon_id = uuid.uuid4().hex[:10]
             user = User.objects.create(
                 role=default_role,
-                phone=f'anon_{uuid.uuid4().hex[:10]}',
+                username=f'anon_{anon_id}',
+                phone=f'anon_{anon_id}',
                 is_active=True,
                 metadata={'session_key': session_key, 'name': 'Visitante'}
             )
