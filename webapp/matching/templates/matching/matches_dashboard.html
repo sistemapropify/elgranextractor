@@ -371,11 +371,13 @@ function renderMatchPipeline(data, container) {
         var imgHtml = imgUrl ? '<img src="' + imgUrl + '" class="prop-thumb" onerror="this.style.display=\'none\'" alt="">' : '🏠';
         var createdDate = mainRama.propiedad_created_at || '';
         var matchDate = mainRama.computed_at ? formatDateShort(mainRama.computed_at) : '';
+        var responsable = mainRama.propiedad_responsable || '';
         html += '<div class="pipeline-node ' + scoreClass + '" style="min-width:80px;">';
         html += '  <div class="pipeline-marker">' + imgHtml + '</div>';
         html += '  <div class="pipeline-title">' + (mainRama.propiedad_code || 'PROP') + '</div>';
         if (createdDate) html += '  <div class="pipeline-date">' + createdDate + '</div>';
         html += '  <div class="pipeline-date">' + (mainRama.propiedad_district || '') + '</div>';
+        if (responsable) html += '  <div style="font-size:7px;color:var(--text-secondary);white-space:nowrap;">' + responsable + '</div>';
         html += '  <div class="pipeline-score">' + scoreVal + '%</div>';
         if (matchDate) html += '  <div class="pipeline-date">Match: ' + matchDate + '</div>';
         html += '</div>';
@@ -398,11 +400,13 @@ function renderMatchPipeline(data, container) {
             var imgHtml = imgUrl ? '<img src="' + imgUrl + '" class="prop-thumb" onerror="this.style.display=\'none\'" alt="">' : '🏠';
             var createdDate = rama.propiedad_created_at || '';
             var matchDate = rama.computed_at ? formatDateShort(rama.computed_at) : '';
+            var responsable = rama.propiedad_responsable || '';
             html += '<div class="pipeline-node ' + (scoreVal >= 80 ? 'completed' : 'pending') + '" style="min-width:80px;">';
             html += '  <div class="pipeline-marker">' + imgHtml + '</div>';
             html += '  <div class="pipeline-title">' + (rama.propiedad_code || 'PROP') + '</div>';
             if (createdDate) html += '  <div class="pipeline-date">' + createdDate + '</div>';
             html += '  <div class="pipeline-date">' + (rama.propiedad_district || '') + '</div>';
+            if (responsable) html += '  <div style="font-size:7px;color:var(--text-secondary);white-space:nowrap;">' + responsable + '</div>';
             html += '  <div class="pipeline-score">' + scoreVal + '%</div>';
             if (matchDate) html += '  <div class="pipeline-date">Match: ' + matchDate + '</div>';
             html += '</div>';

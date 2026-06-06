@@ -246,12 +246,23 @@ class MatchingViewSet(viewsets.ViewSet):
                 prop_image_url = ''
 
                 # Obtener datos adicionales de la propiedad desde la BD local
+                prop_responsable = ''
                 if prop_code:
                     try:
                         from propifai.models import PropifaiProperty
                         prop = PropifaiProperty.objects.filter(code=prop_code).first()
-                        if prop and prop.created_at:
-                            prop_created_at = prop.created_at.strftime('%Y-%m-%d')
+                        if prop:
+                            if prop.created_at:
+                                prop_created_at = prop.created_at.strftime('%Y-%m-%d')
+                            # Responsable de la propiedad (created_by_id / responsible_id)
+                            responsable_id = prop.created_by_id or prop.responsible_id
+                            if responsable_id:
+                                try:
+                                    from propifai.models import User as PropifaiUser
+                                    user = PropifaiUser.objects.get(id=responsable_id)
+                                    prop_responsable = f"{user.first_name} {user.last_name}".strip()
+                                except Exception:
+                                    pass
                             # Construir URL de imagen
                             base_url = "https://propifymedia01.blob.core.windows.net/media"
                             prop_image_url = f"{base_url}/{prop_code}.jpg"
@@ -267,6 +278,7 @@ class MatchingViewSet(viewsets.ViewSet):
                     'propiedad_currency_name': m.get('property_currency_name', ''),
                     'propiedad_created_at': prop_created_at,
                     'propiedad_image_url': prop_image_url,
+                    'propiedad_responsable': prop_responsable,
                     'score': float(m.get('score', 0) or 0),
                     'computed_at': m.get('computed_at', ''),
                 })
