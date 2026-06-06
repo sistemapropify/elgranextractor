@@ -180,13 +180,27 @@ class BusquedaPropiedadesSkill(BaseSkill):
             )
 
             if modo == 'sin_parametros':
-                return SkillResult.error(
-                    message="No se especificaron criterios de búsqueda. "
-                            "Por favor indica qué tipo de propiedad buscas, "
-                            "en qué distrito, o qué características debe tener.",
-                    metadata={'modo': modo},
-                    skill_name=self.name
-                )
+                # Intentar obtener conteo de propiedades disponibles
+                try:
+                    from propifai.models import PropifaiProperty
+                    total_props = PropifaiProperty.objects.count()
+                    return SkillResult.ok(
+                        data=[],
+                        message=f"Hay {total_props} propiedades disponibles en la base de datos. "
+                                "Por favor indica qué tipo de propiedad buscas, "
+                                "en qué distrito, o qué características debe tener para mostrarte las mejores opciones.",
+                        metadata={'modo': modo, 'total_properties': total_props},
+                        skill_name=self.name
+                    )
+                except Exception:
+                    return SkillResult.ok(
+                        data=[],
+                        message="No se especificaron criterios de búsqueda. "
+                                "Por favor indica qué tipo de propiedad buscas, "
+                                "en qué distrito, o qué características debe tener.",
+                        metadata={'modo': modo},
+                        skill_name=self.name
+                    )
 
             # ── Paso 2: Filtrado SQL sobre field_values ──
             # context puede ser dict (legacy) o ExecutionContext (nuevo orchestrator)
