@@ -228,6 +228,19 @@
 
 {% block extra_js %}
 <script>
+// Poblar datalist de asignados
+(function() {
+    var data = {{ assigned_list_json|safe }};
+    var datalist = document.getElementById('assignedList');
+    if (datalist && data) {
+        data.forEach(function(name) {
+            var opt = document.createElement('option');
+            opt.value = name;
+            datalist.appendChild(opt);
+        });
+    }
+})();
+
 var pipelineCache = {};
 
 function togglePipeline(groupId, requirementId) {
