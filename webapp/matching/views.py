@@ -238,15 +238,35 @@ class MatchingViewSet(viewsets.ViewSet):
             matches.sort(key=lambda m: float(m.get('score', 0) or 0), reverse=True)
 
             # Enriquecer cada match con datos del requerimiento
+            # Incluir fecha de creación de la propiedad y URL de imagen
             ramas = []
             for m in matches:
+                prop_code = m.get('property_code', '')
+                prop_created_at = ''
+                prop_image_url = ''
+
+                # Obtener datos adicionales de la propiedad desde la BD local
+                if prop_code:
+                    try:
+                        from propifai.models import PropifaiProperty
+                        prop = PropifaiProperty.objects.filter(code=prop_code).first()
+                        if prop and prop.created_at:
+                            prop_created_at = prop.created_at.strftime('%Y-%m-%d')
+                            # Construir URL de imagen
+                            base_url = "https://propifymedia01.blob.core.windows.net/media"
+                            prop_image_url = f"{base_url}/{prop_code}.jpg"
+                    except Exception:
+                        pass
+
                 ramas.append({
                     'match_id': m.get('id'),
-                    'propiedad_code': m.get('property_code', ''),
+                    'propiedad_code': prop_code,
                     'propiedad_title': m.get('property_title', ''),
                     'propiedad_district': m.get('property_district_name', ''),
                     'propiedad_price': m.get('property_price'),
                     'propiedad_currency_name': m.get('property_currency_name', ''),
+                    'propiedad_created_at': prop_created_at,
+                    'propiedad_image_url': prop_image_url,
                     'score': float(m.get('score', 0) or 0),
                     'computed_at': m.get('computed_at', ''),
                 })

@@ -223,6 +223,15 @@
         background: var(--border-color);
         margin-left: 40px;
     }
+
+    .prop-thumb {
+        width: 36px;
+        height: 36px;
+        border-radius: 4px;
+        object-fit: cover;
+        border: 1px solid var(--border-color);
+        margin-bottom: 2px;
+    }
 </style>
 {% endblock %}
 
@@ -254,6 +263,18 @@ function formatDate(isoStr) {
         return dd + '/' + mm + ' ' + hh + ':' + min;
     } catch(e) {
         return isoStr.substring(0, 16);
+    }
+}
+function formatDateShort(isoStr) {
+    if (!isoStr) return '';
+    try {
+        var d = new Date(isoStr);
+        if (isNaN(d.getTime())) return isoStr.substring(0, 10);
+        var dd = String(d.getDate()).padStart(2, '0');
+        var mm = String(d.getMonth() + 1).padStart(2, '0');
+        return dd + '/' + mm;
+    } catch(e) {
+        return isoStr.substring(0, 10);
     }
 }
 
@@ -346,13 +367,17 @@ function renderMatchPipeline(data, container) {
         // 🏠 Propiedad Principal (mejor score)
         var scoreVal = mainRama.score || 0;
         var scoreClass = scoreVal >= 80 ? 'completed' : (scoreVal >= 50 ? 'pending' : 'na');
-        var mainDate = mainRama.computed_at ? formatDate(mainRama.computed_at) : '';
+        var imgUrl = mainRama.propiedad_image_url || '';
+        var imgHtml = imgUrl ? '<img src="' + imgUrl + '" class="prop-thumb" onerror="this.style.display=\'none\'" alt="">' : '🏠';
+        var createdDate = mainRama.propiedad_created_at || '';
+        var matchDate = mainRama.computed_at ? formatDateShort(mainRama.computed_at) : '';
         html += '<div class="pipeline-node ' + scoreClass + '" style="min-width:80px;">';
-        html += '  <div class="pipeline-marker">🏠</div>';
+        html += '  <div class="pipeline-marker">' + imgHtml + '</div>';
         html += '  <div class="pipeline-title">' + (mainRama.propiedad_code || 'PROP') + '</div>';
+        if (createdDate) html += '  <div class="pipeline-date">' + createdDate + '</div>';
         html += '  <div class="pipeline-date">' + (mainRama.propiedad_district || '') + '</div>';
         html += '  <div class="pipeline-score">' + scoreVal + '%</div>';
-        if (mainDate) html += '  <div class="pipeline-date">' + mainDate + '</div>';
+        if (matchDate) html += '  <div class="pipeline-date">Match: ' + matchDate + '</div>';
         html += '</div>';
 
         // connector 🏠 Prop1 → 💯
@@ -381,13 +406,17 @@ function renderMatchPipeline(data, container) {
             html += '<div class="branch-row is-fork">';
 
             // 🏠 Propiedad N
-            var branchDate = rama.computed_at ? formatDate(rama.computed_at) : '';
+            var imgUrl = rama.propiedad_image_url || '';
+            var imgHtml = imgUrl ? '<img src="' + imgUrl + '" class="prop-thumb" onerror="this.style.display=\'none\'" alt="">' : '🏠';
+            var createdDate = rama.propiedad_created_at || '';
+            var matchDate = rama.computed_at ? formatDateShort(rama.computed_at) : '';
             html += '<div class="pipeline-node ' + (scoreVal >= 80 ? 'completed' : 'pending') + '" style="min-width:80px;">';
-            html += '  <div class="pipeline-marker">🏠</div>';
+            html += '  <div class="pipeline-marker">' + imgHtml + '</div>';
             html += '  <div class="pipeline-title">' + (rama.propiedad_code || 'PROP') + '</div>';
+            if (createdDate) html += '  <div class="pipeline-date">' + createdDate + '</div>';
             html += '  <div class="pipeline-date">' + (rama.propiedad_district || '') + '</div>';
             html += '  <div class="pipeline-score">' + scoreVal + '%</div>';
-            if (branchDate) html += '  <div class="pipeline-date">' + branchDate + '</div>';
+            if (matchDate) html += '  <div class="pipeline-date">Match: ' + matchDate + '</div>';
             html += '</div>';
 
             // connector 🏠 → 💯
