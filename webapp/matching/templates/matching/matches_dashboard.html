@@ -167,15 +167,15 @@
                         <td style="font-size:11px;color:var(--text-muted);">#{{ m.id }}</td>
                         <td>
                             <div style="color:var(--accent-blue);font-weight:600;font-size:13px;">
-                                {% if m._req_code %}{{ m._req_code }}{% else %}#{{ m.requirement }}{% endif %}
+                                {% if m.req_code %}{{ m.req_code }}{% else %}#{{ m.requirement }}{% endif %}
                             </div>
                             <div style="font-size:10px;color:var(--text-muted);">
-                                {{ m._req_operation|default:'' }} {{ m._req_property_type|default:'' }}
+                                {{ m.req_operation|default:'' }} {{ m.req_property_type|default:'' }}
                             </div>
                         </td>
                         <td>
                             <span style="font-size:12px;color:var(--text-primary);">
-                                {{ m._req_assigned|default:'---' }}
+                                {{ m.req_assigned|default:'---' }}
                             </span>
                         </td>
                         <td>

@@ -1577,15 +1577,15 @@ class MatchesDashboardView(TemplateView):
         for m in matches:
             req_info = req_map.get(m.get('requirement'))
             if req_info:
-                m['_req_code'] = req_info.get('code', '')
-                m['_req_assigned'] = req_info.get('assigned_to_name', '')
-                m['_req_operation'] = req_info.get('operation_type_name', '')
-                m['_req_property_type'] = req_info.get('property_type_name', '')
+                m['req_code'] = req_info.get('code', '')
+                m['req_assigned'] = req_info.get('assigned_to_name', '')
+                m['req_operation'] = req_info.get('operation_type_name', '')
+                m['req_property_type'] = req_info.get('property_type_name', '')
             else:
-                m['_req_code'] = ''
-                m['_req_assigned'] = ''
-                m['_req_operation'] = ''
-                m['_req_property_type'] = ''
+                m['req_code'] = ''
+                m['req_assigned'] = ''
+                m['req_operation'] = ''
+                m['req_property_type'] = ''
 
         context['total_matches'] = total_count
         context['view_mode'] = view_mode
