@@ -241,6 +241,40 @@
     }
 })();
 
+// ── Helpers de formato (idéntico a pipeline_propuestas.html) ──
+function formatDate(isoStr) {
+    if (!isoStr) return '';
+    try {
+        var d = new Date(isoStr);
+        if (isNaN(d.getTime())) return isoStr.substring(0, 16);
+        var dd = String(d.getDate()).padStart(2, '0');
+        var mm = String(d.getMonth() + 1).padStart(2, '0');
+        var hh = String(d.getHours()).padStart(2, '0');
+        var min = String(d.getMinutes()).padStart(2, '0');
+        return dd + '/' + mm + ' ' + hh + ':' + min;
+    } catch(e) {
+        return isoStr.substring(0, 16);
+    }
+}
+
+function calcLapso(isoDesde, isoHasta) {
+    if (!isoDesde || !isoHasta) return '';
+    try {
+        var d1 = new Date(isoDesde);
+        var d2 = new Date(isoHasta);
+        if (isNaN(d1.getTime()) || isNaN(d2.getTime())) return '';
+        var diffMs = Math.abs(d2 - d1);
+        var diffMin = Math.floor(diffMs / 60000);
+        if (diffMin < 60) return diffMin + 'm';
+        var diffHoras = Math.floor(diffMs / 3600000);
+        if (diffHoras < 24) return diffHoras + 'h';
+        var diffDias = Math.floor(diffMs / 86400000);
+        return diffDias + 'd';
+    } catch(e) {
+        return '';
+    }
+}
+
 var pipelineCache = {};
 
 function togglePipeline(groupId, requirementId) {
@@ -300,22 +334,25 @@ function renderMatchPipeline(data, container) {
     html += '</div>';
 
     if (ramas.length > 0) {
-        // connector 📝 → 🏠 Prop1
+        var mainRama = ramas[0];
+        var lapsoReqMatch = calcLapso(data.requerimiento_created_at, mainRama.computed_at);
+
+        // connector 📝 → 🏠 Prop1 (con lapso como en pipeline propuestas)
         html += '<div class="pipeline-connector">';
         html += '  <div class="connector-line"></div>';
+        if (lapsoReqMatch) html += '  <span class="lapso-badge">' + lapsoReqMatch + '</span>';
         html += '</div>';
 
         // 🏠 Propiedad Principal (mejor score)
-        var mainRama = ramas[0];
         var scoreVal = mainRama.score || 0;
         var scoreClass = scoreVal >= 80 ? 'completed' : (scoreVal >= 50 ? 'pending' : 'na');
-        var mainDate = mainRama.computed_at ? mainRama.computed_at.substring(0, 16) : '';
+        var mainDate = mainRama.computed_at ? formatDate(mainRama.computed_at) : '';
         html += '<div class="pipeline-node ' + scoreClass + '" style="min-width:80px;">';
         html += '  <div class="pipeline-marker">🏠</div>';
         html += '  <div class="pipeline-title">' + (mainRama.propiedad_code || 'PROP') + '</div>';
         html += '  <div class="pipeline-date">' + (mainRama.propiedad_district || '') + '</div>';
         html += '  <div class="pipeline-score">' + scoreVal + '%</div>';
-        if (mainDate) html += '  <div style="font-size:7px;color:var(--text-muted);">' + mainDate + '</div>';
+        if (mainDate) html += '  <div class="pipeline-date">' + mainDate + '</div>';
         html += '</div>';
 
         // connector 🏠 Prop1 → 💯
@@ -344,13 +381,13 @@ function renderMatchPipeline(data, container) {
             html += '<div class="branch-row is-fork">';
 
             // 🏠 Propiedad N
-            var branchDate = rama.computed_at ? rama.computed_at.substring(0, 16) : '';
+            var branchDate = rama.computed_at ? formatDate(rama.computed_at) : '';
             html += '<div class="pipeline-node ' + (scoreVal >= 80 ? 'completed' : 'pending') + '" style="min-width:80px;">';
             html += '  <div class="pipeline-marker">🏠</div>';
             html += '  <div class="pipeline-title">' + (rama.propiedad_code || 'PROP') + '</div>';
             html += '  <div class="pipeline-date">' + (rama.propiedad_district || '') + '</div>';
             html += '  <div class="pipeline-score">' + scoreVal + '%</div>';
-            if (branchDate) html += '  <div style="font-size:7px;color:var(--text-muted);">' + branchDate + '</div>';
+            if (branchDate) html += '  <div class="pipeline-date">' + branchDate + '</div>';
             html += '</div>';
 
             // connector 🏠 → 💯

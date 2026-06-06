@@ -271,12 +271,26 @@ class MatchingViewSet(viewsets.ViewSet):
                 'estado': 'ok',
             }
 
+            # Formatear fecha completa del requerimiento (DD/MM HH:MM como en pipeline propuestas)
+            try:
+                if fecha_req_str:
+                    fecha_req_dt = datetime.fromisoformat(fecha_req_str.replace('Z', '+00:00'))
+                    req_fecha_display = fecha_req_dt.strftime('%d/%m %H:%M')
+                    req_created_at_iso = fecha_req_dt.isoformat()
+                else:
+                    req_fecha_display = '—'
+                    req_created_at_iso = ''
+            except Exception:
+                req_fecha_display = '—'
+                req_created_at_iso = ''
+
             data = {
                 'requerimiento_id': pk,
                 'requerimiento_code': req_data.get('code', f'#{pk}'),
                 'requerimiento_asignado': req_data.get('assigned_to_name', ''),
                 'requerimiento_operacion': req_data.get('operation_type_name', ''),
                 'requerimiento_tipo': req_data.get('property_type_name', ''),
+                'requerimiento_created_at': req_created_at_iso,
                 'etapa_requerimiento': etapa_requerimiento,
                 'ramas': ramas,
                 'total_ramas': len(ramas),
