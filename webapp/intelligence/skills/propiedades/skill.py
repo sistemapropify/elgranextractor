@@ -7,8 +7,13 @@ Implementa los 4 pasos de SPEC-015:
   Paso 3: Re-ranking semántico (solo en modo hibrido o solo_semantico)
   Paso 4: Construir SkillResult estandarizado
 
-No modifica RAGService ni los embeddings existentes.
-Usa generate_embedding() de RAGService y accede a IntelligenceDocument directamente.
+CAMBIOS v2 — Adaptado a la colección real `propiedadespropify` (tabla `property` en dbpropify_be):
+  - Los campos en field_values usan nombres INGLESES reales de la tabla:
+    district_id / district_name, property_type_id / property_type_name, price, etc.
+  - Se eliminó el filtro automático de disponibilidad (no hay campo availability_status).
+  - Soporta tanto valores FK resueltos (_name) como valores raw (_id).
+  - Habitaciones/áreas no están en field_values (están en property_specs),
+    por lo que solo se filtran si existen en field_values.
 """
 
 from __future__ import annotations
@@ -28,32 +33,92 @@ from ..base import BaseSkill, SkillResult
 logger = logging.getLogger(__name__)
 
 
-# ── Normalizaciones ──────────────────────────────────────────────────────────
+# ── MAPEO DE NOMBRES DE CAMPO ──────────────────────────────────────────────
+# La colección `propiedadespropify` usa la tabla `property` (dbpropify_be).
+# Los field_values contienen nombres REALES de columnas (en INGLÉS).
+#
+# Para filtros por nombre (FK resuelto vía table_relationships):
+#   district_id (FK raw) → district_name (resuelto: "Cayma")
+#   property_type_id → property_type_name ("Departamento")
+#   operation_type_id → operation_type_name ("Venta")
+#   property_status_id → property_status_name ("Disponible")
+#   property_condition_id → property_condition_name ("Nueva")
+#   currency_id → currency_name ("PEN", "USD")
+#   urbanization_id → urbanization_name ("San Borja")
+#
+# Para filtros de precio: price (directo)
+# Para filtros de área/habitaciones: NO existen en property, están en property_specs
+
+# Mapeo de parámetro normalizado → campos posibles en field_values
+# Orden: preferir nombre resuelto (_name) primero, luego raw (_id), luego otros
+FIELD_MAP = {
+    'distrito': ['district_name', 'district_id', 'district', 'distrito'],
+    'tipo_propiedad': ['property_type_name', 'property_type_id', 'tipo_propiedad', 'property_type'],
+    'operacion': ['operation_type_name', 'operation_type_id', 'operacion', 'operation_type', 'tipo_operacion'],
+    'precio': ['price', 'precio', 'sale_price', 'precio_venta'],
+    'habitaciones': ['bedrooms', 'habitaciones', 'num_habitaciones', 'dormitorios'],
+    'area_min': ['built_area', 'area_construida', 'area', 'total_area', 'land_area'],
+    'condicion': ['property_status_name', 'property_condition_name', 'condicion', 'estado', 'status', 'availability_status'],
+    'moneda': ['currency_name', 'currency_id', 'moneda', 'currency'],
+}
+
+# Mapeo de valores de estado (property_status_name) para filtro condicion
+STATUS_MAP = {
+    'disponible': 'Disponible',
+    'disponibles': 'Disponible',
+    'vendida': 'Vendida',
+    'vendido': 'Vendida',
+    'vendidas': 'Vendida',
+    'reservada': 'Reservada',
+    'reservado': 'Reservada',
+    'reservadas': 'Reservada',
+    'pausada': 'Pausada',
+    'pausado': 'Pausada',
+    'alquilada': 'Alquilada',
+    'alquilado': 'Alquilada',
+}
 
 TIPO_PROPIEDAD_MAP = {
     'depa': 'Departamento',
     'departamento': 'Departamento',
+    'departamentos': 'Departamento',
     'dpto': 'Departamento',
     'casa': 'Casa',
+    'casas': 'Casa',
     'vivienda': 'Casa',
+    'viviendas': 'Casa',
     'terreno': 'Terreno',
-    'lote': 'Terreno',
+    'terrenos': 'Terreno',
+    'lote': 'Lote',
+    'lotes': 'Lote',
     'local': 'Local Comercial',
+    'locales': 'Local Comercial',
     'local comercial': 'Local Comercial',
     'oficina': 'Oficina',
+    'oficinas': 'Oficina',
+    'suite': 'Suite',
+    'penthouse': 'Penthouse',
+    'duplex': 'Dúplex',
+    'dúplex': 'Dúplex',
+    'loft': 'Loft',
+    'departamento': 'Departamento',
+    'departamentos': 'Departamento',
 }
 
 OPERACION_MAP = {
-    'venta': 'venta',
-    'vendo': 'venta',
-    'compro': 'venta',
-    'alquiler': 'alquiler',
-    'alquilo': 'alquiler',
-    'renta': 'alquiler',
+    'venta': 'Venta',
+    'vendo': 'Venta',
+    'compro': 'Venta',
+    'compra': 'Venta',
+    'vender': 'Venta',
+    'alquiler': 'Alquiler',
+    'alquilo': 'Alquiler',
+    'renta': 'Alquiler',
+    'alquilar': 'Alquiler',
 }
 
 # Colecciones que contienen propiedades (por naming)
-COLECCIONES_PROPIEDADES_KEYWORDS = ['propiedad', 'propifai', 'inmueble']
+COLECCIONES_PROPIEDADES_KEYWORDS = ['propiedad', 'propifai', 'inmueble', 'property']
 
 
 class BusquedaPropiedadesSkill(BaseSkill):
@@ -62,12 +127,15 @@ class BusquedaPropiedadesSkill(BaseSkill):
 
     Busca en las colecciones IntelligenceCollection que contengan propiedades
     y aplica filtros exactos + re-ranking semántico según los parámetros.
+
+    Los filtros SQL usan los nombres REALES de campos en field_values.
+    Soporta tanto valores FK resueltos (_name) como raw (_id).
     """
 
     name = "busqueda_propiedades"
     description = (
         "Busca propiedades en la base de datos usando filtros exactos "
-        "(distrito, tipo, precio, habitaciones, área) y búsqueda semántica "
+        "(distrito, tipo, precio, operación) y búsqueda semántica "
         "(descripciones, ambientes, características). Ideal para cuando el "
         "usuario pregunta por propiedades disponibles con características específicas."
     )
@@ -123,7 +191,7 @@ class BusquedaPropiedadesSkill(BaseSkill):
         },
         'condicion': {
             'type': 'string',
-            'description': 'Condición/estado de la propiedad: Disponible, Vendida, Reservada. Por defecto se filtran solo las Disponibles.',
+            'description': 'Estado/condición de la propiedad: Disponible, Vendida, Reservada. Si no se especifica, NO se filtra por estado.',
             'required': False,
         },
         'colecciones': {
@@ -145,7 +213,6 @@ class BusquedaPropiedadesSkill(BaseSkill):
         if not params:
             return False
 
-        # Verificar que no esté completamente vacío
         has_filter = any(
             params.get(k) is not None and params.get(k) != ''
             for k in ('distrito', 'tipo_propiedad', 'operacion',
@@ -210,9 +277,7 @@ class BusquedaPropiedadesSkill(BaseSkill):
                     )
 
             # ── Paso 2: Filtrado SQL sobre field_values ──
-            # context puede ser dict (legacy) o ExecutionContext (nuevo orchestrator)
             if hasattr(context, 'permissions'):
-                # Es ExecutionContext — extraer nivel desde metadata o default
                 user_level = context.metadata.get('user_level', 1) if hasattr(context, 'metadata') else 1
             else:
                 user_level = (context or {}).get('user_level', 1)
@@ -258,9 +323,8 @@ class BusquedaPropiedadesSkill(BaseSkill):
             if top_k and top_k > 0:
                 documentos_retornados = documentos[:top_k]
             else:
-                documentos_retornados = documentos  # Sin límite
+                documentos_retornados = documentos
 
-            # Extraer field_values para la respuesta
             resultados = []
             for doc, score in documentos_retornados:
                 field_values = self._build_field_values_to_display(doc)
@@ -350,7 +414,6 @@ class BusquedaPropiedadesSkill(BaseSkill):
         if colecciones_nombres:
             queryset = queryset.filter(name__in=colecciones_nombres)
         else:
-            # Detectar colecciones de propiedades por nombre
             q = Q()
             for keyword in COLECCIONES_PROPIEDADES_KEYWORDS:
                 q |= Q(name__icontains=keyword)
@@ -366,117 +429,101 @@ class BusquedaPropiedadesSkill(BaseSkill):
         """
         Aplica filtros SQL sobre field_values de IntelligenceDocument.
 
+        Usa FIELD_MAP para traducir parámetros normalizados a los nombres
+        de campo REALES que existen en field_values de la colección.
+
+        Soporta:
+        - Nombres de campo resueltos (_name): district_name, property_type_name
+        - Nombres de campo raw (_id): district_id, property_type_id
+        - Campos directos: price, title, description
+
         Returns:
             Lista de tuplas (documento, similarity_score_inicial)
-            similarity_score_inicial = 0.5 para modo solo_sql
         """
-        # Query base: documentos de las colecciones seleccionadas
         queryset = IntelligenceDocument.objects.filter(
             collection__in=colecciones,
-            embedding__isnull=False  # Solo documentos con embedding
+            embedding__isnull=False
         ).select_related('collection')
 
-        # Aplicar filtros usando JSONField key transforms de Django
         filter_q = Q()
 
-        # Filtro por distrito (case-insensitive via field_values)
+        # ── Filtro por distrito ──
         distrito = params.get('distrito')
         if distrito:
-            # Buscar en varios campos posibles donde puede estar el distrito
             distrito_q = Q()
-            for campo_distrito in ('district_name', 'district', 'distrito'):
-                distrito_q |= Q(**{
-                    f'field_values__{campo_distrito}__iexact': distrito
-                })
+            for campo in FIELD_MAP['distrito']:
+                distrito_q |= Q(**{f'field_values__{campo}__iexact': distrito})
             filter_q &= distrito_q
 
-        # Filtro por tipo de propiedad (normalizado)
+        # ── Filtro por tipo de propiedad ──
         tipo = params.get('tipo_propiedad')
         if tipo:
             tipo_normalizado = self._normalizar_tipo(tipo)
             tipo_q = Q()
-            for campoTipo in ('property_type_id', 'tipo_propiedad', 'property_type'):
-                tipo_q |= Q(**{
-                    f'field_values__{campoTipo}__iexact': tipo_normalizado
-                })
+            for campo in FIELD_MAP['tipo_propiedad']:
+                tipo_q |= Q(**{f'field_values__{campo}__iexact': tipo_normalizado})
             filter_q &= tipo_q
 
-        # Filtro por operación (venta/alquiler)
+        # ── Filtro por operación ──
         operacion = params.get('operacion')
         if operacion:
             op_normalizada = self._normalizar_operacion(operacion)
             if op_normalizada:
                 op_q = Q()
-                for campoOp in ('operation_type', 'operacion', 'tipo_operacion'):
-                    op_q |= Q(**{
-                        f'field_values__{campoOp}__iexact': op_normalizada
-                    })
+                for campo in FIELD_MAP['operacion']:
+                    op_q |= Q(**{f'field_values__{campo}__iexact': op_normalizada})
                 filter_q &= op_q
 
-        # Filtros de precio (rango numérico)
+        # ── Filtros de precio (rango numérico) ──
         precio_min = params.get('precio_min')
         precio_max = params.get('precio_max')
         if precio_min is not None or precio_max is not None:
-            # Los precios pueden estar en varios campos
             precio_q = Q()
-            for campo_precio in ('price', 'precio', 'precio_venta', 'precio_alquiler', 'sale_price'):
+            for campo in FIELD_MAP['precio']:
                 campo_q = Q()
                 if precio_min is not None:
-                    campo_q &= Q(**{f'field_values__{campo_precio}__gte': precio_min})
+                    campo_q &= Q(**{f'field_values__{campo}__gte': precio_min})
                 if precio_max is not None:
-                    campo_q &= Q(**{f'field_values__{campo_precio}__lte': precio_max})
+                    campo_q &= Q(**{f'field_values__{campo}__lte': precio_max})
                 precio_q |= campo_q
             filter_q &= precio_q
 
-        # Filtro por habitaciones (mayor o igual)
+        # ── Filtro por habitaciones (solo si el campo existe en field_values) ──
+        # NOTA: bedrooms/áreas están en property_specs, NO en property.
+        # Solo se filtran si el campo existe en field_values.
         habitaciones = params.get('habitaciones')
         if habitaciones is not None:
             hab_q = Q()
-            for campo_hab in ('bedrooms', 'habitaciones', 'num_habitaciones', 'dormitorios'):
-                hab_q |= Q(**{f'field_values__{campo_hab}__gte': habitaciones})
+            for campo in FIELD_MAP['habitaciones']:
+                hab_q |= Q(**{f'field_values__{campo}__gte': habitaciones})
             filter_q &= hab_q
 
-        # Filtro por área mínima
+        # ── Filtro por área mínima (solo si el campo existe) ──
         area_min = params.get('area_min')
         if area_min is not None:
             area_q = Q()
-            for campo_area in ('built_area', 'area_construida', 'area', 'total_area', 'land_area'):
-                area_q |= Q(**{f'field_values__{campo_area}__gte': area_min})
+            for campo in FIELD_MAP['area_min']:
+                area_q |= Q(**{f'field_values__{campo}__gte': area_min})
             filter_q &= area_q
 
-        # ── Filtro por availability_status ──
-        # El campo real en field_values es 'availability_status'
-        # Valores: available (disponible), sold (vendida), paused, unavailable, catchment
-        # Por defecto (sin condicion explícita) → solo 'available'
-        # Si el usuario pide "vendidas" → 'sold'
+        # ── Filtro por condición/estado (SOLO si el usuario lo pide) ──
+        # IMPORTANTE: NO se filtra por defecto. El campo 'condicion' en field_values
+        # no existe con ese nombre. El estado real está en property_status_name
+        # (resuelto desde property_status_id FK).
+        # Si el usuario pide "disponibles", "vendidas", etc., se filtra.
         condicion = params.get('condicion')
         if condicion:
-            # Mapear valores español → inglés
-            cond_map = {
-                'disponible': 'available',
-                'vendida': 'sold',
-                'vendido': 'sold',
-                'reservada': 'catchment',
-                'reservado': 'catchment',
-                'pausada': 'paused',
-                'pausado': 'paused',
-                'no disponible': 'unavailable',
-            }
-            valor_busqueda = cond_map.get(condicion.lower().strip(), condicion.lower().strip())
+            valor_busqueda = STATUS_MAP.get(
+                condicion.lower().strip(), condicion
+            )
             condicion_q = Q()
-            for campo_cond in ('availability_status', 'condicion', 'estado', 'status'):
+            for campo in FIELD_MAP['condicion']:
                 condicion_q |= Q(**{
-                    f'field_values__{campo_cond}__iexact': valor_busqueda
+                    f'field_values__{campo}__iexact': valor_busqueda
                 })
             filter_q &= condicion_q
-        else:
-            # Por defecto: SOLO propiedades 'available' (disponibles en venta)
-            condicion_q = Q()
-            for campo_cond in ('availability_status', 'condicion', 'estado', 'status'):
-                condicion_q |= Q(**{
-                    f'field_values__{campo_cond}__iexact': 'available'
-                })
-            filter_q &= condicion_q
+        # Si no se especifica condicion, NO filtrar.
+        # Cada colección puede tener o no este campo.
 
         # Ejecutar query
         if filter_q:
@@ -484,7 +531,6 @@ class BusquedaPropiedadesSkill(BaseSkill):
 
         documentos = list(queryset)
 
-        # En modo solo_sql, asignar similarity=0.5 (neutro)
         return [(doc, 0.5) for doc in documentos]
 
     # ── Paso 3: Re-ranking semántico ──────────────────────────────────────
@@ -499,19 +545,11 @@ class BusquedaPropiedadesSkill(BaseSkill):
 
         Genera embedding de la semantic_query y calcula similitud coseno
         contra el embedding de cada documento.
-
-        Args:
-            documentos: Lista de (documento, score_actual)
-            semantic_query: Texto semántico para comparar
-
-        Returns:
-            Lista re-ordenada por similitud descendente
         """
         if not documentos or not semantic_query:
             return documentos
 
         try:
-            # Generar embedding de la query semántica (modo query)
             query_embedding = RAGService.generate_embedding(
                 semantic_query, mode='query'
             )
@@ -524,7 +562,6 @@ class BusquedaPropiedadesSkill(BaseSkill):
 
             query_vector = np.frombuffer(query_embedding, dtype=np.float32)
 
-            # Calcular similitud para cada documento
             resultados_con_score = []
             for doc, _ in documentos:
                 try:
@@ -534,7 +571,7 @@ class BusquedaPropiedadesSkill(BaseSkill):
                             np.linalg.norm(query_vector) * np.linalg.norm(doc_vector)
                         ))
                     else:
-                        similarity = 0.0  # Sin embedding, score 0 pero no excluir
+                        similarity = 0.0
                 except Exception as e:
                     logger.warning(
                         f"Error calculando similitud para documento {doc.id}: {e}"
@@ -543,14 +580,7 @@ class BusquedaPropiedadesSkill(BaseSkill):
 
                 resultados_con_score.append((doc, similarity))
 
-            # Ordenar por similitud descendente
             resultados_con_score.sort(key=lambda x: x[1], reverse=True)
-
-            logger.info(
-                f"Re-ranking semántico completado: "
-                f"{len(resultados_con_score)} documentos re-ordenados"
-            )
-
             return resultados_con_score
 
         except Exception as e:
@@ -582,7 +612,7 @@ class BusquedaPropiedadesSkill(BaseSkill):
         }
 
     def _sanitize_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Sanitiza params para logging (oculta valores sensibles)."""
+        """Sanitiza params para logging."""
         return {
             k: v for k, v in params.items()
             if v is not None and v != ''
@@ -590,9 +620,14 @@ class BusquedaPropiedadesSkill(BaseSkill):
 
     def _build_field_values_to_display(self, doc: IntelligenceDocument) -> Dict[str, Any]:
         """
-        Extrae field_values del documento, limitados a display_fields de la colección.
+        Extrae field_values del documento para mostrar al usuario.
 
-        Similar a RAGService._build_field_values_to_display pero independiente.
+        Incluye campos relevantes como: title, price, district_name,
+        property_type_name, operation_type_name, property_status_name,
+        map_address, etc.
+
+        Si display_fields está configurado, lo respeta.
+        Además, siempre incluye los campos FK resueltos (_name) y campos clave.
         """
         try:
             collection = doc.collection
@@ -601,14 +636,25 @@ class BusquedaPropiedadesSkill(BaseSkill):
             if not doc.field_values:
                 return {}
 
+            all_values = dict(doc.field_values)
+
             if display_fields and isinstance(display_fields, list):
-                return {
-                    k: v for k, v in doc.field_values.items()
+                # Respetar display_fields pero siempre incluir campos _name resueltos
+                result = {
+                    k: v for k, v in all_values.items()
                     if k in display_fields
                 }
+                # Agregar campos _name (FK resueltos) aunque no estén en display_fields
+                for key, value in all_values.items():
+                    if key.endswith('_name') and value is not None and value != '':
+                        result[key] = value
+                # Asegurar campos clave siempre presentes
+                for key in ('title', 'price', 'code'):
+                    if key in all_values and key not in result:
+                        result[key] = all_values[key]
+                return result
 
-            # Si no hay display_fields, retornar todo
-            return dict(doc.field_values)
+            return all_values
 
         except Exception as e:
             logger.warning(f"Error extrayendo field_values del documento {doc.id}: {e}")

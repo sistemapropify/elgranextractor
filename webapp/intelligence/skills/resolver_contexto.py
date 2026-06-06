@@ -359,13 +359,24 @@ Devuelve el JSON con los parámetros resueltos completos para la próxima búsqu
             params_resueltos = datos.get('params_resueltos', {})
             cambio_de_tema = datos.get('cambio_de_tema', False)
 
-            # Sanidad: si el LLM dejó algún campo en null pero existe en contexto
-            # y NO es un cambio de tema, heredarlo
+            # Sanidad: heredar del contexto activo los campos que el LLM dejó en null
+            # y que NO fueron explícitamente cambiados por el usuario.
+            #
+            # - Si es cambio_de_tema (ej: "dame terrenos"), se hereda el distrito
+            #   y otros filtros no relacionados, pero se limpian habitaciones/baños.
+            # - Si NO es cambio_de_tema, se heredan todos los campos del contexto.
             for campo in self.CAMPOS_GESTIONADOS:
                 if params_resueltos.get(campo) is None:
                     valor_contexto = contexto_activo.get(campo)
-                    if valor_contexto is not None and not cambio_de_tema:
-                        params_resueltos[campo] = valor_contexto
+                    if valor_contexto is not None:
+                        if cambio_de_tema:
+                            # En cambio de tema: heredar distrito, precio, operacion, condicion
+                            # pero NO heredar habitaciones/banos (se limpian al cambiar tipo)
+                            if campo not in ('habitaciones', 'banos', 'tipo_propiedad', 'semantic_query'):
+                                params_resueltos[campo] = valor_contexto
+                        else:
+                            # Sin cambio de tema: heredar todo
+                            params_resueltos[campo] = valor_contexto
 
             # Construir contexto actualizado (solo campos no nulos)
             contexto_actualizado = {

@@ -351,13 +351,27 @@ def _format_field_values(field_values: dict) -> list:
     """Convierte field_values en una lista de líneas descriptivas.
     
     Incluye tanto los campos directos como los valores resueltos
-    de relaciones FK (ej: district_name, currency_name).
+    de relaciones FK (ej: district_name, currency_name, property_type_name).
+    
+    La colección `propiedadespropify` usa la tabla `property` (dbpropify_be)
+    con nombres de campo en INGLÉS:
+    - title, price, description, map_address, display_address
+    - district_id → district_name (resuelto vía FK)
+    - property_type_id → property_type_name
+    - operation_type_id → operation_type_name
+    - property_status_id → property_status_name
+    - property_condition_id → property_condition_name
+    - currency_id → currency_name
+    - urbanization_id → urbanization_name
     """
     desc_parts = []
     title = field_values.get('title', field_values.get('name', ''))
     price = field_values.get('price', '')
-    address = field_values.get(
-        'real_address', field_values.get('address', '')
+    address = (
+        field_values.get('map_address')
+        or field_values.get('display_address')
+        or field_values.get('real_address')
+        or field_values.get('address', '')
     )
     district = field_values.get(
         'district_name', field_values.get('district', '')
@@ -366,14 +380,14 @@ def _format_field_values(field_values: dict) -> list:
     bathrooms = field_values.get('bathrooms', '')
     built_area = field_values.get('built_area', '')
     land_area = field_values.get('land_area', '')
-    property_type = field_values.get('property_type', '')
     description = field_values.get('description', '')
     
     # Campos FK resueltos (añadidos por sync_collection_dynamic)
     currency_name = field_values.get('currency_name', '')
     urbanization_name = field_values.get('urbanization_name', '')
     operation_type_name = field_values.get('operation_type_name', '')
-    condition_name = field_values.get('condition_name', '')
+    property_status_name = field_values.get('property_status_name', '')
+    property_condition_name = field_values.get('property_condition_name', '')
     property_type_name = field_values.get('property_type_name', '')
 
     if title:
@@ -396,17 +410,15 @@ def _format_field_values(field_values: dict) -> list:
         desc_parts.append(f"Área construida: {built_area}")
     if land_area:
         desc_parts.append(f"Área terreno: {land_area}")
-    if property_type:
-        desc_parts.append(f"Tipo: {property_type}")
     if property_type_name:
-        desc_parts.append(f"Tipo (detalle): {property_type_name}")
+        desc_parts.append(f"Tipo: {property_type_name}")
     if operation_type_name:
         desc_parts.append(f"Operación: {operation_type_name}")
-    if condition_name:
-        desc_parts.append(f"Condición: {condition_name}")
+    if property_status_name:
+        desc_parts.append(f"Estado: {property_status_name}")
+    if property_condition_name:
+        desc_parts.append(f"Condición: {property_condition_name}")
     if description:
-        # Limite aumentado a 500 chars para capturar info completa
-        # (alcabala, coworking, terraza, etc. suelen estar al final)
         desc_parts.append(f"Descripción: {description[:500]}")
 
     return desc_parts

@@ -205,23 +205,50 @@ class SkillRegistry:
 
         intent_lower = intent.lower().strip()
 
+        # ── Detección de distritos multi-palabra en mensaje original ──────
+        # Algunos distritos tienen nombres compuestos como "cerro colorado",
+        # "selva alegre", "mariano melgar", etc. El tokenizer los divide
+        # y no coinciden con las keywords (que usan guión bajo).
+        # Verificamos si el mensaje ORIGINAL contiene algún distrito conocido.
+        _DISTRITOS_COMPUESTOS = [
+            'cerro colorado', 'cerrocolorado',
+            'jose luis bustamante', 'bustamante',
+            'mariano melgar',
+            'selva alegre', 'alto selva alegre',
+            'san juan de siguas', 'santa isabel de siguas',
+            'jacobo hunter',
+            'quebrada honda',
+            'la campiña', 'la campina',
+            'la joya',
+        ]
+        mensaje_menciona_distrito = any(
+            d in intent_lower for d in _DISTRITOS_COMPUESTOS
+        )
+
         # Extraer tokens relevantes (>= 3 caracteres)
         intent_tokens = set(
             t for t in re.findall(r'\b\w{3,}\b', intent_lower)
         )
 
-        if not intent_tokens:
+        # ── Detección de palabras de seguimiento en mensajes cortos ───────
+        # Para mensajes como "y en cerro colorado", tokenizamos palabras
+        # de 1+ caracter (no solo 3+) para capturar 'y', 'en', etc.
+        all_tokens_short = set(
+            t for t in re.findall(r'\b\w+\b', intent_lower)
+        )
+
+        if not intent_tokens and not mensaje_menciona_distrito:
             return None
 
         # Detectar si la intención es sobre propiedades
         es_consulta_propiedades = bool(
             intent_tokens & _KEYWORDS_PROPIEDADES
-        )
+        ) or mensaje_menciona_distrito
 
         # ── B4: Detección de mensajes de seguimiento ──────────────────────
         # Si hay contexto activo pero el mensaje NO contiene keywords de
         # propiedades, puede ser un mensaje de seguimiento (ej: "solo
-        # departamentos", "y en cayma", "muestrame").
+        # departamentos", "y en cayma", "muestrame", "y en cerro colorado").
         # En ese caso, forzamos busqueda_propiedades.
         es_seguimiento = False
         if (
@@ -229,14 +256,17 @@ class SkillRegistry:
             and not es_consulta_propiedades
         ):
             # Palabras que indican seguimiento/refinamiento
+            # Incluye palabras cortas como 'y', 'en' que se capturan con
+            # all_tokens_short (sin límite de 3 caracteres)
             _PALABRAS_SEGUIMIENTO = {
                 'solo', 'solamente', 'unicamente', 'tambien',
-                'y', 'pero', 'entonces', 'ahora',
+                'y', 'en', 'de', 'con', 'sin', 'por', 'para',
+                'pero', 'entonces', 'ahora',
                 'muestrame', 'listame', 'dime', 'ensename',
-                'cuales', 'cuales', 'cuantas', 'cuantos',
+                'cuales', 'cuantas', 'cuantos', 'cual',
                 'refinar', 'filtra', 'filtrar',
             }
-            if intent_tokens & _PALABRAS_SEGUIMIENTO:
+            if (intent_tokens & _PALABRAS_SEGUIMIENTO) or (all_tokens_short & _PALABRAS_SEGUIMIENTO):
                 es_seguimiento = True
                 logger.debug(
                     f"[find_best_skill] Mensaje de seguimiento detectado: "

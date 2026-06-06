@@ -1561,25 +1561,27 @@ class MatchesDashboardView(TemplateView):
         api_filters = {}
         if requirement_id:
             api_filters['requirement_id'] = requirement_id
-        if view_mode == 'day' and filter_date:
-            api_filters['created_at__date'] = filter_date
-        elif view_mode == 'week' and filter_date:
-            try:
-                from datetime import datetime as dt_mod
-                d = dt_mod.strptime(filter_date, '%Y-%m-%d').date()
-                week_start = d - timedelta(days=d.weekday())
-                week_end = week_start + timedelta(days=6)
-                api_filters['created_at__date__gte'] = week_start.isoformat()
-                api_filters['created_at__date__lte'] = week_end.isoformat()
-            except ValueError:
-                pass
-        elif view_mode == 'month' and filter_date:
-            try:
-                year, month = filter_date.split('-')
-                api_filters['created_at__year'] = year
-                api_filters['created_at__month'] = month
-            except ValueError:
-                pass
+        if filter_date:
+            if view_mode == 'day' or view_mode == 'all':
+                # view='all' con fecha → filtrar por día específico
+                api_filters['created_at__date'] = filter_date
+            elif view_mode == 'week':
+                try:
+                    from datetime import datetime as dt_mod
+                    d = dt_mod.strptime(filter_date, '%Y-%m-%d').date()
+                    week_start = d - timedelta(days=d.weekday())
+                    week_end = week_start + timedelta(days=6)
+                    api_filters['created_at__date__gte'] = week_start.isoformat()
+                    api_filters['created_at__date__lte'] = week_end.isoformat()
+                except ValueError:
+                    pass
+            elif view_mode == 'month':
+                try:
+                    year, month_parts = filter_date.split('-')
+                    api_filters['created_at__year'] = year
+                    api_filters['created_at__month'] = month_parts
+                except ValueError:
+                    pass
 
         matches_data = client.get_matches(page=int(page), page_size=50, **api_filters)
 

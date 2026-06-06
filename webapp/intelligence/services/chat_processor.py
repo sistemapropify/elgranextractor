@@ -561,8 +561,17 @@ class ChatProcessor:
         conversation_id: Optional[str] = None,
         streaming: bool = False,
     ) -> Conversation:
-        """Obtiene o crea una conversación."""
+        """
+        Obtiene o crea una conversación para el usuario.
+
+        Estrategia:
+        1. Si se proporciona conversation_id, buscar por ID.
+        2. Si no, buscar la última conversación activa del mismo usuario+app.
+        3. Si no existe ninguna, crear una nueva.
+        """
         conversation = None
+
+        # 1. Buscar por conversation_id explícito
         if conversation_id:
             try:
                 conversation = Conversation.objects.get(
@@ -571,10 +580,22 @@ class ChatProcessor:
             except Conversation.DoesNotExist:
                 conversation = None
 
+        # 2. Si no hay ID explícito, buscar la última conversación activa
+        if not conversation:
+            try:
+                app = cls._get_or_create_app(app_id)
+                conversation = Conversation.objects.filter(
+                    user=user,
+                    app=app,
+                    is_active=True,
+                ).order_by('-last_message_at').first()
+            except Exception:
+                conversation = None
+
+        # 3. Si no existe ninguna, crear una nueva
         if not conversation:
             app = cls._get_or_create_app(app_id)
             session_id = f'chat_{uuid.uuid4().hex[:16]}'
-
             conversation = Conversation.objects.create(
                 user=user,
                 app=app,
@@ -964,13 +985,17 @@ class ChatProcessor:
                 continue
 
             zona = (
-                field_values.get('zona') or field_values.get('zone')
+                field_values.get('district_name')
                 or field_values.get('district')
-                or field_values.get('district_name')
+                or field_values.get('distrito')
+                or field_values.get('zona')
+                or field_values.get('zone')
                 or ''
             )
             tipo_propiedad = (
-                field_values.get('tipo_propiedad')
+                field_values.get('property_type_name')
+                or field_values.get('property_type_id')
+                or field_values.get('tipo_propiedad')
                 or field_values.get('property_type')
                 or field_values.get('type')
                 or field_values.get('categoria')
@@ -1125,51 +1150,92 @@ class ChatProcessor:
             if tiene_contexto:
                 # ── Ruta con contexto: pipeline completo ──
                 historial = cls._get_historial_mensajes(ctx.conversation)
-                pipeline_steps = [
-                    SkillPipelineStep(
-                        name='resolver_contexto',
-                        parameters={
-                            'mensaje_actual': ctx.message,
-                            'contexto_activo': contexto_activo.to_dict(),
-                            'historial_mensajes': historial,
-                        },
-                        inject_previous_result=False,
-                        result_key='contexto_resuelto',
-                    ),
-                    SkillPipelineStep(
-                        name='busqueda_propiedades',
-                        parameters=ctx.skill_params or {},
-                        inject_previous_result=True,
-                        result_key='resultado_busqueda',
-                    ),
-                ]
 
-                pipeline_result = SKILL_SYSTEM.execute_skill_pipeline(
-                    pipeline_steps,
-                    execution_context,
-                    mode='sequential',
-                    stop_on_error=True,
+                # --- FIX: Resolver contexto PRIMERO, luego buscar con parámetros fusionados ---
+                # 1. Ejecutar resolver_contexto para obtener parámetros resueltos
+                skill_resolver = SKILL_SYSTEM.registry.get_by_name('resolver_contexto')
+                if skill_resolver:
+                    resultado_resolucion = skill_resolver.execute({
+                        'mensaje_actual': ctx.message,
+                        'contexto_activo': contexto_activo.to_dict(),
+                        'historial_mensajes': historial,
+                    }, execution_context)
+                    if resultado_resolucion.success:
+                        # Extraer params resueltos del resolver_contexto
+                        datos_resueltos = resultado_resolucion.data or {}
+                        if isinstance(datos_resueltos, dict):
+                            params_resueltos = datos_resueltos.get('params_resueltos', {}) or {}
+                        else:
+                            params_resueltos = {}
+                    else:
+                        params_resueltos = {}
+                else:
+                    params_resueltos = {}
+
+                # 2. Fusionar contexto activo + params del mensaje actual + params resueltos
+                #
+                # LÓGICA DE HERENCIA INTELIGENTE:
+                # - Si el usuario menciona un distrito NUEVO (búsqueda nueva), NO heredar
+                #   filtros no relacionados del contexto anterior (condicion, precio, etc.)
+                # - Si el usuario solo agrega filtros (condicion, tipo), heredar distrito
+                #   y otros filtros del contexto anterior (es seguimiento)
+                #
+                # Determinar si es búsqueda nueva o seguimiento:
+                skill_params = ctx.skill_params or {}
+                es_busqueda_nueva = bool(
+                    skill_params.get('distrito') or skill_params.get('tipo_propiedad')
+                ) and not bool(
+                    # Solo si el mensaje NO contiene solo palabras de seguimiento
+                    any(w in ctx.message.lower() for w in ['y ', 'las ', 'los ', 'tambien', 'también'])
                 )
 
-                # Extraer resultado del pipeline
-                if pipeline_result.success:
-                    contexto_resuelto = pipeline_result.data.get('contexto_resuelto', {})
-                    params_resueltos = contexto_resuelto.get('params_resueltos', {})
+                if es_busqueda_nueva:
+                    # Búsqueda nueva: solo usar params del mensaje + lo que resuelva el LLM
+                    params_fusionados = {}
+                    params_fusionados.update(skill_params)
+                    params_fusionados.update(params_resueltos)
+                    log.info(
+                        f"[_process_skill_request] Búsqueda NUEVA detectada "
+                        f"(distrito/tipo explícito). NO se heredan filtros del "
+                        f"contexto anterior. Fusionado: {params_fusionados}"
+                    )
+                else:
+                    # Seguimiento: heredar contexto activo y fusionar con nuevos params
+                    params_fusionados = {}
+                    params_fusionados.update(contexto_activo.to_dict())  # Base: contexto activo
+                    params_fusionados.update(skill_params)               # Nuevos del mensaje
+                    params_fusionados.update(params_resueltos)           # Resueltos por resolver_contexto
+                    log.info(
+                        f"[_process_skill_request] Seguimiento detectado. "
+                        f"Fusionado con contexto activo: {params_fusionados}"
+                    )
 
-                    # Fusión de contexto (A5)
-                    nuevos_params = params_resueltos or (ctx.skill_params or {})
-                    if nuevos_params:
-                        nuevo_contexto = ActiveContext.from_dict(nuevos_params)
-                        contexto_fusionado = contexto_activo.merge(nuevo_contexto)
-                        ContextManager.save_active_context(ctx.conversation, contexto_fusionado)
-                        log.info(
-                            f"[_process_skill_request] Contexto fusionado (con pipeline): "
-                            f"activo={contexto_activo.to_dict()} | "
-                            f"nuevo={nuevo_contexto.to_dict()} | "
-                            f"resultado={contexto_fusionado.to_dict()}"
-                        )
+                log.info(
+                    f"[_process_skill_request] Parámetros fusionados: "
+                    f"activo={contexto_activo.to_dict()} | "
+                    f"skill_params={ctx.skill_params} | "
+                    f"resueltos={params_resueltos} | "
+                    f"fusionados={params_fusionados}"
+                )
 
-                    resultado_busqueda_raw = pipeline_result.data.get('resultado_busqueda', [])
+                # 3. Guardar contexto fusionado para PRÓXIMOS turnos
+                nuevo_contexto = ActiveContext.from_dict(params_fusionados)
+                contexto_fusionado = contexto_activo.merge(nuevo_contexto)
+                ContextManager.save_active_context(ctx.conversation, contexto_fusionado)
+
+                # 4. Ejecutar búsqueda con parámetros fusionados (NO con ctx.skill_params solos)
+                skill_busqueda = SKILL_SYSTEM.registry.get_by_name('busqueda_propiedades')
+                if skill_busqueda:
+                    skill_result_busqueda = SKILL_SYSTEM.execute_skill(
+                        skill_name='busqueda_propiedades',
+                        parameters=params_fusionados,
+                        context=execution_context,
+                    )
+                    pipeline_result = skill_result_busqueda
+                    resultado_busqueda_raw = skill_result_busqueda.data if skill_result_busqueda.success else []
+                else:
+                    pipeline_result = type('obj', (object,), {'success': False})()
+                    resultado_busqueda_raw = []
             else:
                 # ── Ruta directa: sin resolver_contexto ──
                 log.info(
@@ -1239,7 +1305,8 @@ class ChatProcessor:
                                 or ''
                             )
                             tipo = (
-                                field_values.get('property_type_id')
+                                field_values.get('property_type_name')
+                                or field_values.get('property_type_id')
                                 or field_values.get('tipo_propiedad')
                                 or field_values.get('property_type')
                                 or ''
@@ -1265,19 +1332,31 @@ class ChatProcessor:
                                 or ''
                             )
                             operacion = (
-                                field_values.get('operation_type')
+                                field_values.get('operation_type_name')
+                                or field_values.get('operation_type_id')
+                                or field_values.get('operation_type')
                                 or field_values.get('operacion')
                                 or field_values.get('tipo_operacion')
                                 or ''
                             )
                             moneda = (
-                                field_values.get('currency')
+                                field_values.get('currency_name')
+                                or field_values.get('currency_id')
+                                or field_values.get('currency')
                                 or field_values.get('moneda')
                                 or ''
                             )
                             direccion = (
-                                field_values.get('address')
+                                field_values.get('map_address')
+                                or field_values.get('display_address')
+                                or field_values.get('address')
                                 or field_values.get('direccion')
+                                or ''
+                            )
+                            estado = (
+                                field_values.get('property_status_name')
+                                or field_values.get('property_condition_name')
+                                or field_values.get('condicion')
                                 or ''
                             )
 
@@ -1301,22 +1380,48 @@ class ChatProcessor:
                                 partes.append(f"Operación: {operacion}")
                             if direccion:
                                 partes.append(f"Dirección: {direccion}")
+                            if estado:
+                                partes.append(f"Estado: {estado}")
                             if descripcion:
                                 desc_truncada = descripcion if len(descripcion) <= 200 else descripcion[:200] + '...'
                                 partes.append(f"Descripción: {desc_truncada}")
 
                             propiedades_encontradas.append(" | ".join(partes))
 
+                    # ── Construir historial de la conversación para contexto ──
+                    historial_previo = cls._get_historial_mensajes(ctx.conversation)
+                    historial_texto = ""
+                    if historial_previo:
+                        historial_texto = "=== HISTORIAL DE LA CONVERSACIÓN ===\n" + \
+                            "\n".join(historial_previo) + "\n\n"
+
+                    # ── Construir contexto activo para el prompt ──
+                    contexto_activo_str = ""
+                    try:
+                        ctx_activo = ContextManager.get_active_context(ctx.conversation)
+                        if not ctx_activo.is_empty():
+                            filtros_str = ", ".join(
+                                f"{k}={v}" for k, v in ctx_activo.to_dict().items()
+                            )
+                            contexto_activo_str = f"Contexto de búsqueda activo: {filtros_str}\n\n"
+                    except Exception:
+                        pass
+
                     if propiedades_encontradas:
                         lista_propiedades_texto = "\n".join(propiedades_encontradas)
                         prompt_formateo = (
                             "El sistema de búsqueda encontró las siguientes propiedades "
                             "que coinciden con la consulta del usuario.\n\n"
+                            f"{historial_texto}"
+                            f"{contexto_activo_str}"
                             f"Consulta del usuario: \"{ctx.message}\"\n\n"
                             "=== PROPIEDADES ENCONTRADAS ===\n"
                             f"{lista_propiedades_texto}\n\n"
                             "=== INSTRUCCIONES ===\n"
                             "- Responde al usuario de forma NATURAL y CONVERSACIONAL en español.\n"
+                            "- USA EL HISTORIAL DE LA CONVERSACIÓN para mantener coherencia.\n"
+                            "- Si el usuario hace una pregunta de seguimiento (ej: 'cuáles son las vendidas'), "
+                            "USA EL CONTEXTO de filtros anteriores para responder.\n"
                             "- PRESENTA las propiedades listadas arriba de forma organizada.\n"
                             "- Para cada propiedad incluye: tipo, distrito, precio, área y otras características relevantes.\n"
                             "- USA ÚNICAMENTE las propiedades de esta lista. NO inventes propiedades que no estén aquí.\n"
@@ -1327,10 +1432,15 @@ class ChatProcessor:
                     else:
                         prompt_formateo = (
                             "El usuario ha hecho una búsqueda de propiedades inmobiliarias.\n\n"
+                            f"{historial_texto}"
+                            f"{contexto_activo_str}"
                             f"Consulta del usuario: \"{ctx.message}\"\n\n"
                             "La búsqueda no encontró propiedades que coincidan con los criterios.\n\n"
                             "INSTRUCCIONES:\n"
                             "- Responde al usuario de forma NATURAL y CONVERSACIONAL en español.\n"
+                            "- USA EL HISTORIAL DE LA CONVERSACIÓN para entender el contexto.\n"
+                            "- Si el usuario estaba viendo propiedades en un distrito y ahora pregunta por algo "
+                            "relacionado (ej: 'cuáles son las vendidas'), USA EL CONTEXTO del distrito anterior.\n"
                             "- Indica amablemente que no se encontraron propiedades con esos criterios.\n"
                             "- Sugiere al usuario refinar su búsqueda (cambiar distrito, tipo de propiedad, etc.).\n"
                             "- NO inventes propiedades que no existen.\n"

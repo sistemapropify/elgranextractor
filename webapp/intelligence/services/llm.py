@@ -404,19 +404,20 @@ class LLMService:
             field_values = doc.get('field_values', {})
             
             # Formatear información según el tipo de colección
-            if 'propiedades' in collection_name.lower():
+            if 'propiedades' in collection_name.lower() or 'propifai' in collection_name.lower():
                 # Mapeo de nombres de campo (inglés de BD → español para el prompt)
                 titulo = field_values.get('title') or field_values.get('titulo', 'Sin título')
                 descripcion = field_values.get('description') or field_values.get('descripcion', 'Sin descripción')
-                direccion = field_values.get('real_address') or field_values.get('exact_address') or field_values.get('direccion', 'Sin dirección')
+                direccion = field_values.get('map_address') or field_values.get('display_address') or field_values.get('real_address') or field_values.get('exact_address') or field_values.get('direccion', 'Sin dirección')
                 distrito = field_values.get('district_name') or field_values.get('district') or field_values.get('distrito', 'Sin distrito')
                 precio = field_values.get('price') or field_values.get('precio', 'N/A')
-                moneda = field_values.get('currency_id') or field_values.get('moneda', '')
+                moneda = field_values.get('currency_name') or field_values.get('currency_id') or field_values.get('moneda', '')
                 area_construida = field_values.get('built_area') or field_values.get('area_construida', 'N/A')
-                tipo = field_values.get('property_type_id') or field_values.get('tipo_propiedad', 'Sin tipo')
+                tipo = field_values.get('property_type_name') or field_values.get('property_type_id') or field_values.get('tipo_propiedad', 'Sin tipo')
                 habitaciones = field_values.get('bedrooms', 'N/A')
                 banos = field_values.get('bathrooms', 'N/A')
                 terreno = field_values.get('land_area', 'N/A')
+                estado = field_values.get('property_status_name') or field_values.get('property_condition_name') or ''
                 
                 context_parts.append(
                     f"[Documento {i} - Propiedad - Similitud: {similarity:.2f}]\n"
@@ -430,6 +431,7 @@ class LLMService:
                     f"Habitaciones: {habitaciones}\n"
                     f"Baños: {banos}\n"
                     f"Área de terreno: {terreno} m²\n"
+                    + (f"Estado: {estado}\n" if estado else "")
                 )
             elif 'noticias' in collection_name.lower():
                 # Información de noticia
@@ -778,12 +780,14 @@ CONTEXTO DISPONIBLE:"""
                     titulo = field_values.get('title') or field_values.get('titulo', 'Sin título')
                     distrito = field_values.get('district_name') or field_values.get('distrito', 'Sin distrito')
                     precio = field_values.get('price') or field_values.get('precio', 'N/A')
-                    moneda = field_values.get('currency_id', '')
-                    tipo = field_values.get('property_type_id') or field_values.get('tipo_propiedad', 'Sin tipo')
+                    moneda = field_values.get('currency_name') or field_values.get('currency_id', '')
+                    tipo = field_values.get('property_type_name') or field_values.get('property_type_id') or field_values.get('tipo_propiedad', 'Sin tipo')
                     habitaciones = field_values.get('bedrooms', 'N/A')
                     banos = field_values.get('bathrooms', 'N/A')
                     area = field_values.get('built_area') or field_values.get('area_construida', 'N/A')
                     descripcion = field_values.get('description') or field_values.get('descripcion', '')
+                    operacion = field_values.get('operation_type_name') or field_values.get('operation_type_id', '')
+                    estado = field_values.get('property_status_name') or field_values.get('property_condition_name', '')
 
                     partes.append(
                         f"[Propiedad {i}]\n"
@@ -795,6 +799,8 @@ CONTEXTO DISPONIBLE:"""
                         f"Área construida: {area} m²\n"
                         f"Habitaciones: {habitaciones}\n"
                         f"Baños: {banos}\n"
+                        + (f"Operación: {operacion}\n" if operacion else "")
+                        + (f"Estado: {estado}\n" if estado else "")
                     )
             return "\n\n".join(partes)
 
