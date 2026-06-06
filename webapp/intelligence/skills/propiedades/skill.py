@@ -180,16 +180,23 @@ class BusquedaPropiedadesSkill(BaseSkill):
             )
 
             if modo == 'sin_parametros':
-                # Intentar obtener conteo de propiedades disponibles
+                # Mostrar conteo de propiedades activas/disponibles
                 try:
                     from propifai.models import PropifaiProperty
-                    total_props = PropifaiProperty.objects.count()
+                    total = PropifaiProperty.objects.count()
+                    disponibles = PropifaiProperty.objects.filter(
+                        property_status_id__in=[1, 2]  # Disponible, En venta
+                    ).count()
+                    mensaje = (
+                        f"Actualmente hay {disponibles} propiedades disponibles en el sistema "
+                        f"(de {total} registradas). "
+                        "Por favor indica qué tipo de propiedad buscas, "
+                        "en qué distrito, o qué características debe tener para mostrarte las mejores opciones."
+                    )
                     return SkillResult.ok(
                         data=[],
-                        message=f"Hay {total_props} propiedades disponibles en la base de datos. "
-                                "Por favor indica qué tipo de propiedad buscas, "
-                                "en qué distrito, o qué características debe tener para mostrarte las mejores opciones.",
-                        metadata={'modo': modo, 'total_properties': total_props},
+                        message=mensaje,
+                        metadata={'modo': modo, 'total': total, 'disponibles': disponibles},
                         skill_name=self.name
                     )
                 except Exception:
