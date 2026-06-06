@@ -1561,13 +1561,6 @@ class MatchesDashboardView(TemplateView):
         api_filters = {}
         if requirement_id:
             api_filters['requirement_id'] = requirement_id
-        if assigned_to:
-            req_ids_for_assigned = [
-                str(rid) for rid, r in req_map.items()
-                if r.get('assigned_to_name', '').lower() == assigned_to.lower()
-            ]
-            if req_ids_for_assigned:
-                api_filters['requirement_id__in'] = ','.join(req_ids_for_assigned[:50])
         if view_mode == 'day' and filter_date:
             api_filters['created_at__date'] = filter_date
         elif view_mode == 'week' and filter_date:
@@ -1593,6 +1586,17 @@ class MatchesDashboardView(TemplateView):
         # ── Procesar datos ──
         matches = matches_data.get('results', []) if matches_data else []
         total_count = matches_data.get('count', 0) if matches_data else 0
+
+        # Enriquecer cada match con datos del requirement
+        # y filtrar por asignado (server-side ya que la API no soporta filtro por assigned_to)
+        if assigned_to:
+            filtered = []
+            for m in matches:
+                req_info = req_map.get(m.get('requirement'))
+                if req_info and req_info.get('assigned_to_name', '').lower() == assigned_to.lower():
+                    filtered.append(m)
+            matches = filtered
+            total_count = len(matches)
 
         # Enriquecer cada match con datos del requirement
         for m in matches:
