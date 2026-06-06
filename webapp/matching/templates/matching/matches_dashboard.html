@@ -309,11 +309,13 @@ function renderMatchPipeline(data, container) {
         var mainRama = ramas[0];
         var scoreVal = mainRama.score || 0;
         var scoreClass = scoreVal >= 80 ? 'completed' : (scoreVal >= 50 ? 'pending' : 'na');
+        var mainDate = mainRama.computed_at ? mainRama.computed_at.substring(0, 16) : '';
         html += '<div class="pipeline-node ' + scoreClass + '" style="min-width:80px;">';
         html += '  <div class="pipeline-marker">🏠</div>';
         html += '  <div class="pipeline-title">' + (mainRama.propiedad_code || 'PROP') + '</div>';
         html += '  <div class="pipeline-date">' + (mainRama.propiedad_district || '') + '</div>';
         html += '  <div class="pipeline-score">' + scoreVal + '%</div>';
+        if (mainDate) html += '  <div style="font-size:7px;color:var(--text-muted);">' + mainDate + '</div>';
         html += '</div>';
 
         // connector 🏠 Prop1 → 💯
@@ -342,11 +344,13 @@ function renderMatchPipeline(data, container) {
             html += '<div class="branch-row is-fork">';
 
             // 🏠 Propiedad N
+            var branchDate = rama.computed_at ? rama.computed_at.substring(0, 16) : '';
             html += '<div class="pipeline-node ' + (scoreVal >= 80 ? 'completed' : 'pending') + '" style="min-width:80px;">';
             html += '  <div class="pipeline-marker">🏠</div>';
             html += '  <div class="pipeline-title">' + (rama.propiedad_code || 'PROP') + '</div>';
             html += '  <div class="pipeline-date">' + (rama.propiedad_district || '') + '</div>';
             html += '  <div class="pipeline-score">' + scoreVal + '%</div>';
+            if (branchDate) html += '  <div style="font-size:7px;color:var(--text-muted);">' + branchDate + '</div>';
             html += '</div>';
 
             // connector 🏠 → 💯
