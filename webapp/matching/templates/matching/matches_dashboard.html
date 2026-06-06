@@ -153,6 +153,7 @@
                     <tr>
                         <th>ID</th>
                         <th>Requerimiento</th>
+                        <th>Asignado</th>
                         <th>Propiedad</th>
                         <th>Distrito</th>
                         <th>Precio</th>
@@ -165,8 +166,16 @@
                     <tr>
                         <td style="font-size:11px;color:var(--text-muted);">#{{ m.id }}</td>
                         <td>
-                            <span style="color:var(--accent-blue);font-weight:600;font-size:13px;">
-                                #{{ m.requirement }}
+                            <div style="color:var(--accent-blue);font-weight:600;font-size:13px;">
+                                {% if m._req_code %}{{ m._req_code }}{% else %}#{{ m.requirement }}{% endif %}
+                            </div>
+                            <div style="font-size:10px;color:var(--text-muted);">
+                                {{ m._req_operation|default:'' }} {{ m._req_property_type|default:'' }}
+                            </div>
+                        </td>
+                        <td>
+                            <span style="font-size:12px;color:var(--text-primary);">
+                                {{ m._req_assigned|default:'---' }}
                             </span>
                         </td>
                         <td>
@@ -198,6 +207,7 @@
                             {{ m.computed_at|slice:':16'|default:'---' }}
                         </td>
                     </tr>
+                    {% endwith %}
                     {% endfor %}
                 </tbody>
             </table>

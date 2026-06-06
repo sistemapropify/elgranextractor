@@ -1562,9 +1562,30 @@ class MatchesDashboardView(TemplateView):
 
         matches_data = client.get_matches(page=int(page), page_size=50, **api_filters)
 
+        # ── Obtener requirements para tener asignado y c�digo ──
+        reqs_data = client.get_requirements(page=1, page_size=500)
+        req_map = {}
+        if reqs_data:
+            for r in reqs_data.get('results', []):
+                req_map[r['id']] = r
+
         # ── Procesar datos ──
         matches = matches_data.get('results', []) if matches_data else []
         total_count = matches_data.get('count', 0) if matches_data else 0
+
+        # Enriquecer cada match con datos del requirement
+        for m in matches:
+            req_info = req_map.get(m.get('requirement'))
+            if req_info:
+                m['_req_code'] = req_info.get('code', '')
+                m['_req_assigned'] = req_info.get('assigned_to_name', '')
+                m['_req_operation'] = req_info.get('operation_type_name', '')
+                m['_req_property_type'] = req_info.get('property_type_name', '')
+            else:
+                m['_req_code'] = ''
+                m['_req_assigned'] = ''
+                m['_req_operation'] = ''
+                m['_req_property_type'] = ''
 
         context['total_matches'] = total_count
         context['view_mode'] = view_mode
