@@ -96,23 +96,285 @@
     .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
     .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
     .empty-state p { font-size: 14px; margin: 0; }
+
+    /* ===== PIPELINE HORIZONTAL NODES (idéntico a pipeline_propuestas.html) ===== */
+    .pipeline-timeline {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 0;
+        padding: 8px 4px;
+        width: 100%;
+        overflow-x: auto;
+    }
+    .pipeline-node {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 4px 8px;
+        min-width: 72px;
+        text-align: center;
+        flex-shrink: 0;
+        transition: var(--transition);
+    }
+    .pipeline-node.completed { border-color: var(--accent-green); box-shadow: 0 0 4px rgba(63,185,80,0.1); }
+    .pipeline-node.pending { border-color: var(--accent-orange); opacity: 0.7; }
+    .pipeline-node.na { border-color: var(--text-muted); opacity: 0.4; }
+    .pipeline-marker { font-size: 14px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--bg-secondary); border: 2px solid var(--border-color); flex-shrink: 0; }
+    .pipeline-node.completed .pipeline-marker { border-color: var(--accent-green); }
+    .pipeline-title { font-size: 8px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.2px; white-space: nowrap; }
+    .pipeline-node.completed .pipeline-title { color: var(--accent-green); }
+    .pipeline-date { font-size: 9px; color: var(--text-primary); font-weight: 500; white-space: nowrap; }
+    .pipeline-score { font-size: 8px; color: var(--accent-blue); font-weight: 600; }
+    .pipeline-connector {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1px;
+        min-width: 24px;
+        flex-shrink: 0;
+        position: relative;
+    }
+    .connector-line { width: 100%; height: 2px; background: var(--border-color); position: relative; }
+    .pipeline-node.completed + .pipeline-connector .connector-line { background: var(--accent-green); opacity: 0.35; }
+    .lapso-badge {
+        background: var(--bg-secondary); border: 1px solid var(--accent-blue); color: var(--accent-blue);
+        padding: 0 5px; border-radius: 7px; font-size: 8px; font-weight: 600; white-space: nowrap; line-height: 1.6;
+    }
+
+    .pipeline-expand-row { display: none; }
+    .pipeline-expand-row.visible { display: table-row; }
+    .pipeline-expand-row td { padding: 6px 12px 10px 12px; background: rgba(13,17,23,0.5); }
+    .pipeline-toggle {
+        display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px;
+        border-radius: 6px; border: 1px solid var(--border-color); background: transparent;
+        color: var(--text-secondary); cursor: pointer; transition: var(--transition); font-size: 12px;
+    }
+    .pipeline-toggle:hover { border-color: var(--accent-blue); color: var(--accent-blue); background: rgba(88,166,255,0.1); }
+    .pipeline-toggle.active { background: var(--accent-blue); border-color: var(--accent-blue); color: #fff; }
+    .pipeline-loading { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; color: var(--text-muted); font-size: 12px; }
+    .pipeline-spinner { width: 16px; height: 16px; border: 2px solid var(--border-color); border-top-color: var(--accent-blue); border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .pipeline-error { padding: 8px; color: var(--accent-red); font-size: 11px; text-align: center; }
+
+    /* ===== TARJETAS DE RAMAS ===== */
+    .branch-cards {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 4px 0;
+    }
+    .branch-row {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 0;
+        position: relative;
+    }
+    .branch-row.is-fork {
+        margin-left: 40px;
+    }
+    .branch-row.is-fork::before {
+        content: '';
+        position: absolute;
+        left: -20px;
+        top: -8px;
+        width: 20px;
+        height: calc(50% + 8px);
+        border-left: 2px solid var(--border-color);
+        border-bottom: 2px solid var(--border-color);
+        border-radius: 0 0 0 6px;
+    }
+
+    .pipe-card {
+        display: flex;
+        flex-direction: column;
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 8px 10px;
+        min-width: 140px;
+        max-width: 180px;
+        flex-shrink: 0;
+    }
+    .pipe-card.card-prop {
+        border-left: 3px solid var(--accent-blue);
+    }
+    .pipe-card.card-score-high { border-left: 3px solid var(--accent-green); }
+    .pipe-card.card-score-medium { border-left: 3px solid var(--accent-orange); }
+    .pipe-card.card-score-low { border-left: 3px solid var(--accent-red); }
+
+    .pipe-card .card-icon { font-size: 14px; margin-bottom: 2px; }
+    .pipe-card .card-code { font-size: 12px; font-weight: 700; color: var(--accent-blue); }
+    .pipe-card .card-title { font-size: 9px; color: var(--text-primary); line-height: 1.2; margin: 2px 0; }
+    .pipe-card .card-price { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+    .pipe-card .card-date { font-size: 9px; color: var(--text-muted); }
+    .pipe-card .card-score { font-size: 14px; font-weight: 700; color: var(--accent-green); margin-top: 2px; }
+    .pipe-card .card-district { font-size: 9px; color: var(--text-secondary); }
+
+    .branch-connector-v {
+        width: 2px;
+        height: 8px;
+        background: var(--border-color);
+        margin-left: 40px;
+    }
 </style>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-// Poblar datalist de asignados
-(function() {
-    var data = {{ assigned_list_json|safe }};
-    var datalist = document.getElementById('assignedList');
-    if (datalist && data) {
-        data.forEach(function(name) {
-            var opt = document.createElement('option');
-            opt.value = name;
-            datalist.appendChild(opt);
-        });
+var pipelineCache = {};
+
+function togglePipeline(groupId, requirementId) {
+    var row = document.getElementById('pipe-row-' + groupId);
+    var btn = document.getElementById('pipe-btn-' + groupId);
+    var content = document.getElementById('pipe-content-' + groupId);
+
+    if (row.classList.contains('visible')) {
+        row.classList.remove('visible');
+        btn.classList.remove('active');
+        return;
     }
-})();
+
+    row.classList.add('visible');
+    btn.classList.add('active');
+
+    if (pipelineCache[requirementId]) {
+        renderMatchPipeline(pipelineCache[requirementId], content);
+        return;
+    }
+
+    content.innerHTML = '<div class="pipeline-loading"><div class="pipeline-spinner"></div><span>Cargando pipeline...</span></div>';
+
+    fetch('/matching/api/matching/' + requirementId + '/pipeline-matches/')
+        .then(function(r) {
+            if (!r.ok) throw new Error('Error al obtener pipeline');
+            return r.json();
+        })
+        .then(function(data) {
+            pipelineCache[requirementId] = data;
+            renderMatchPipeline(data, content);
+        })
+        .catch(function(err) {
+            content.innerHTML = '<div class="pipeline-error">⚠️ ' + err.message + '</div>';
+        });
+}
+
+function renderMatchPipeline(data, container) {
+    if (data.error) {
+        container.innerHTML = '<div class="pipeline-error">⚠️ ' + data.error + '</div>';
+        return;
+    }
+
+    var ramas = data.ramas || [];
+    var html = '';
+
+    // ===== PIPELINE PRINCIPAL: 📝 → 🏠 Prop Principal → 💯 Score =====
+    html += '<div class="pipeline-timeline" style="margin-bottom:0;">';
+
+    // 📝 Requerimiento
+    var etapaReq = data.etapa_requerimiento || {};
+    var nClass = 'pipeline-node completed';
+    html += '<div class="' + nClass + '">';
+    html += '  <div class="pipeline-marker">📝</div>';
+    html += '  <div class="pipeline-title">' + (data.requerimiento_code || '#Req') + '</div>';
+    html += '  <div class="pipeline-date">' + (etapaReq.fecha_display || '—') + '</div>';
+    html += '</div>';
+
+    if (ramas.length > 0) {
+        // connector 📝 → 🏠 Prop1
+        html += '<div class="pipeline-connector">';
+        html += '  <div class="connector-line"></div>';
+        html += '</div>';
+
+        // 🏠 Propiedad Principal (mejor score)
+        var mainRama = ramas[0];
+        var scoreVal = mainRama.score || 0;
+        var scoreClass = scoreVal >= 80 ? 'completed' : (scoreVal >= 50 ? 'pending' : 'na');
+        html += '<div class="pipeline-node ' + scoreClass + '" style="min-width:80px;">';
+        html += '  <div class="pipeline-marker">🏠</div>';
+        html += '  <div class="pipeline-title">' + (mainRama.propiedad_code || 'PROP') + '</div>';
+        html += '  <div class="pipeline-date">' + (mainRama.propiedad_district || '') + '</div>';
+        html += '  <div class="pipeline-score">' + scoreVal + '%</div>';
+        html += '</div>';
+
+        // connector 🏠 Prop1 → 💯
+        html += '<div class="pipeline-connector">';
+        html += '  <div class="connector-line"></div>';
+        html += '</div>';
+
+        // 💯 Score node
+        html += '<div class="pipeline-node ' + scoreClass + '" style="min-width:80px;">';
+        html += '  <div class="pipeline-marker">💯</div>';
+        html += '  <div class="pipeline-title">Score</div>';
+        html += '  <div class="pipeline-score" style="font-size:12px;">' + scoreVal + '%</div>';
+        html += '</div>';
+    }
+
+    html += '</div>'; // end pipeline-timeline principal
+
+    // ===== RAMAS: Propiedades 2, 3... (bifurcadas desde el req) =====
+    if (ramas.length > 1) {
+        html += '<div class="branch-cards">';
+
+        for (var i = 1; i < ramas.length; i++) {
+            var rama = ramas[i];
+            var scoreVal = rama.score || 0;
+
+            html += '<div class="branch-row is-fork">';
+
+            // 🏠 Propiedad N
+            html += '<div class="pipeline-node ' + (scoreVal >= 80 ? 'completed' : 'pending') + '" style="min-width:80px;">';
+            html += '  <div class="pipeline-marker">🏠</div>';
+            html += '  <div class="pipeline-title">' + (rama.propiedad_code || 'PROP') + '</div>';
+            html += '  <div class="pipeline-date">' + (rama.propiedad_district || '') + '</div>';
+            html += '  <div class="pipeline-score">' + scoreVal + '%</div>';
+            html += '</div>';
+
+            // connector 🏠 → 💯
+            html += '<div class="pipeline-connector">';
+            html += '  <div class="connector-line"></div>';
+            html += '</div>';
+
+            // 💯 Score N
+            html += '<div class="pipeline-node ' + (scoreVal >= 80 ? 'completed' : 'pending') + '" style="min-width:80px;">';
+            html += '  <div class="pipeline-marker">💯</div>';
+            html += '  <div class="pipeline-title">Score</div>';
+            html += '  <div class="pipeline-score" style="font-size:12px;">' + scoreVal + '%</div>';
+            html += '</div>';
+
+            html += '</div>'; // end branch-row
+        }
+
+        html += '</div>'; // end branch-cards
+    }
+
+    if (ramas.length === 0) {
+        html += '<div style="padding: 8px; text-align: center; color: var(--text-muted); font-size: 12px;">📭 Sin matches</div>';
+    }
+
+    container.innerHTML = html;
+
+    // Posicionar ramas desde el 🏠 Prop1
+    var mainTimeline = container.querySelector('.pipeline-timeline');
+    var branchCards = container.querySelector('.branch-cards');
+    if (mainTimeline && branchCards) {
+        var propNodes = mainTimeline.querySelectorAll('.pipeline-node');
+        if (propNodes.length >= 2) {
+            var propNode = propNodes[1]; // 🏠 Prop1 (índice 1: 📝 idx0, 🏠 idx1)
+            var offsetLeft = propNode.offsetLeft;
+            var branchRows = branchCards.querySelectorAll('.branch-row');
+            branchRows.forEach(function(row) {
+                row.style.marginLeft = offsetLeft + 'px';
+            });
+        }
+    }
+}
 </script>
 {% endblock %}
 
@@ -134,7 +396,11 @@
             <div class="stat-label">Total Requirement-Matches</div>
         </div>
         <div class="stat-card">
-            <div class="stat-number green">{{ current_page }}</div>
+            <div class="stat-number green">{{ total_groups }}</div>
+            <div class="stat-label">Requerimientos Únicos</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number orange">{{ current_page }}</div>
             <div class="stat-label">Pagina Actual</div>
         </div>
         <div class="stat-card">
@@ -163,70 +429,76 @@
     <div class="table-card">
         <div class="table-header">
             <h4><i class="bi bi-list"></i> Matches de Propify</h4>
-            <span style="font-size:12px;color:var(--text-secondary);">{{ total_matches }} registros - Pagina {{ current_page }}/{{ total_pages }}</span>
+            <span style="font-size:12px;color:var(--text-secondary);">{{ total_matches }} registros · {{ total_groups }} reqs únicos · Pagina {{ current_page }}/{{ total_pages }}</span>
         </div>
 
-        {% if matches %}
+        {% if grouped_matches %}
         <div style="overflow-x:auto;">
             <table>
                 <thead>
                     <tr>
-                        <th>ID</th>
+                        <th style="width:36px;"></th>
                         <th>Requerimiento</th>
                         <th>Asignado</th>
-                        <th>Propiedad</th>
-                        <th>Distrito</th>
-                        <th>Precio</th>
-                        <th>Score</th>
+                        <th>Propiedades</th>
+                        <th>Mejor Score</th>
                         <th>Computado</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for m in matches %}
+                    {% for group in grouped_matches %}
+                    {% with req_id=group.requirement_id|default:0 %}
                     <tr>
-                        <td style="font-size:11px;color:var(--text-muted);">#{{ m.id }}</td>
+                        <td style="text-align:center;">
+                            <button class="pipeline-toggle" id="pipe-btn-{{ forloop.counter }}" onclick="togglePipeline({{ forloop.counter }}, {{ req_id }})" title="Ver pipeline multi-rama">📊</button>
+                        </td>
                         <td>
                             <div style="color:var(--accent-blue);font-weight:600;font-size:13px;">
-                                {% if m.req_code %}{{ m.req_code }}{% else %}#{{ m.requirement }}{% endif %}
+                                {{ group.req_code|default:'#' }}{{ group.requirement_id }}
                             </div>
                             <div style="font-size:10px;color:var(--text-muted);">
-                                {{ m.req_operation|default:'' }} {{ m.req_property_type|default:'' }}
+                                {{ group.req_operation|default:'' }} {{ group.req_property_type|default:'' }}
                             </div>
                         </td>
                         <td>
                             <span style="font-size:12px;color:var(--text-primary);">
-                                {{ m.req_assigned|default:'---' }}
+                                {{ group.req_assigned|default:'---' }}
                             </span>
                         </td>
                         <td>
-                            <div style="font-size:12px;font-weight:600;color:var(--accent-blue);">{{ m.property_code }}</div>
-                            <div style="font-size:10px;color:var(--text-secondary);">{{ m.property_title|truncatechars:45 }}</div>
-                        </td>
-                        <td style="font-size:12px;color:var(--text-primary);">
-                            {{ m.property_district_name|default:'---' }}
-                        </td>
-                        <td style="font-weight:600;font-size:12px;">
-                            {% if m.property_price %}
-                                {% if m.property_currency_name == 'Dolares' %}${% else %}S/.{% endif %}
-                                {{ m.property_price|floatformat:0|intcomma }}
-                            {% else %}---{% endif %}
-                        </td>
-                        <td>
-                            {% with score=m.score|default:'0'|floatformat:0 %}
-                            {% with score_num=score|add:0 %}
-                            <span class="score-badge
-                                {% if score_num >= 80 %}score-high
-                                {% elif score_num >= 50 %}score-medium
-                                {% else %}score-low{% endif %}">
-                                {{ score_num }}%
-                            </span>
+                            {% with first=group.first_match %}
+                            {% if first %}
+                            <div style="font-size:12px;font-weight:600;color:var(--accent-blue);">{{ first.property_code }}</div>
+                            <div style="font-size:10px;color:var(--text-secondary);">{{ first.property_title|truncatechars:35 }}</div>
+                            {% endif %}
                             {% endwith %}
+                            <div style="font-size:10px;color:var(--text-muted);margin-top:2px;">
+                                + {{ group.total_matches|add:-1 }} más
+                            </div>
+                        </td>
+                        <td>
+                            {% with score=group.best_score|floatformat:0 %}
+                            <span class="score-badge
+                                {% if score >= '80' %}score-high
+                                {% elif score >= '50' %}score-medium
+                                {% else %}score-low{% endif %}">
+                                {{ score }}%
+                            </span>
                             {% endwith %}
                         </td>
                         <td style="font-size:11px;color:var(--text-secondary);white-space:nowrap;">
-                            {{ m.computed_at|slice:':16'|default:'---' }}
+                            {% with first=group.first_match %}
+                            {{ first.computed_at|slice:':16'|default:'---' }}
+                            {% endwith %}
                         </td>
                     </tr>
+                    <!-- Pipeline expand row -->
+                    <tr class="pipeline-expand-row" id="pipe-row-{{ forloop.counter }}">
+                        <td colspan="6">
+                            <div id="pipe-content-{{ forloop.counter }}"></div>
+                        </td>
+                    </tr>
+                    {% endwith %}
                     {% endfor %}
                 </tbody>
             </table>

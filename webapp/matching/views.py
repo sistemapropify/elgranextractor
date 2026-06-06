@@ -209,7 +209,88 @@ class MatchingViewSet(viewsets.ViewSet):
                 {'error': f'Error al obtener pipeline con ramas: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-    
+
+    @action(detail=True, methods=['GET'])
+    def pipeline_matches(self, request, pk=None):
+        """
+        GET /api/matching/{requerimiento_id}/pipeline-matches/
+
+        Retorna los matches de un requerimiento para mostrar en pipeline horizontal,
+        con el requerimiento como nodo principal y cada match como una rama.
+        Estructura idéntica al pipeline de propuestas pero para matches.
+
+        Adaptado de pipeline_ramas().
+        """
+        try:
+            from .propify_api import get_propify_client
+            client = get_propify_client()
+
+            # Obtener datos del requerimiento
+            req_data = client.get_requirement_detail(pk)
+            if not req_data:
+                return Response({'error': 'Requerimiento no encontrado'}, status=404)
+
+            # Obtener matches de este requerimiento
+            matches_data = client.get_matches(page=1, page_size=50, requirement_id=pk)
+            matches = matches_data.get('results', []) if matches_data else []
+
+            # Ordenar por score descendente
+            matches.sort(key=lambda m: float(m.get('score', 0) or 0), reverse=True)
+
+            # Enriquecer cada match con datos del requerimiento
+            ramas = []
+            for m in matches:
+                ramas.append({
+                    'match_id': m.get('id'),
+                    'propiedad_code': m.get('property_code', ''),
+                    'propiedad_title': m.get('property_title', ''),
+                    'propiedad_district': m.get('property_district_name', ''),
+                    'propiedad_price': m.get('property_price'),
+                    'propiedad_currency_name': m.get('property_currency_name', ''),
+                    'score': float(m.get('score', 0) or 0),
+                    'computed_at': m.get('computed_at', ''),
+                })
+
+            # Construir etapa_requerimiento (formato pipeline)
+            from datetime import datetime
+            try:
+                fecha_req_str = req_data.get('created_at', '')
+                if fecha_req_str:
+                    fecha_dt = datetime.fromisoformat(fecha_req_str.replace('Z', '+00:00'))
+                    fecha_display = fecha_dt.strftime('%d/%m')
+                else:
+                    fecha_display = '—'
+            except Exception:
+                fecha_display = '—'
+
+            etapa_requerimiento = {
+                'tipo': 'requerimiento',
+                'label': req_data.get('code', f'#{pk}'),
+                'icono': '📝',
+                'fecha_display': fecha_display,
+                'estado': 'ok',
+            }
+
+            data = {
+                'requerimiento_id': pk,
+                'requerimiento_code': req_data.get('code', f'#{pk}'),
+                'requerimiento_asignado': req_data.get('assigned_to_name', ''),
+                'requerimiento_operacion': req_data.get('operation_type_name', ''),
+                'requerimiento_tipo': req_data.get('property_type_name', ''),
+                'etapa_requerimiento': etapa_requerimiento,
+                'ramas': ramas,
+                'total_ramas': len(ramas),
+            }
+
+            return Response(data)
+
+        except Exception as e:
+            logger.error(f"Error al obtener pipeline matches para req #{pk}: {e}")
+            return Response(
+                {'error': f'Error al obtener matches: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
     @action(detail=True, methods=['GET'])
     def guardados(self, request, pk=None):
         """
@@ -1614,15 +1695,47 @@ class MatchesDashboardView(TemplateView):
                 m['req_operation'] = ''
                 m['req_property_type'] = ''
 
+        # ── Agrupar matches por requirement_id ──
+        # Cada requerimiento aparece UNA sola vez con todas sus propiedades
+        req_groups = {}
+        for m in matches:
+            req_id = m.get('requirement')
+            if req_id not in req_groups:
+                req_groups[req_id] = {
+                    'requirement_id': req_id,
+                    'req_code': m.get('req_code', ''),
+                    'req_assigned': m.get('req_assigned', ''),
+                    'req_operation': m.get('req_operation', ''),
+                    'req_property_type': m.get('req_property_type', ''),
+                    'matches': [],
+                    'total_matches': 0,
+                    'best_score': 0.0,
+                    'first_match': m,
+                }
+            req_groups[req_id]['matches'].append(m)
+            req_groups[req_id]['total_matches'] = len(req_groups[req_id]['matches'])
+            score = float(m.get('score', 0) or 0)
+            if score > req_groups[req_id]['best_score']:
+                req_groups[req_id]['best_score'] = score
+                req_groups[req_id]['first_match'] = m
+
+        grouped_matches = sorted(
+            req_groups.values(),
+            key=lambda g: g['requirement_id'] or 0,
+            reverse=True
+        )
+        total_groups = len(grouped_matches)
+
         context['total_matches'] = total_count
+        context['total_groups'] = total_groups
         context['view_mode'] = view_mode
         context['filter_date'] = filter_date
         context['requirement_id'] = requirement_id
         context['assigned_to'] = assigned_to
         context['assigned_list_json'] = json.dumps(unique_assigned)
-        context['matches'] = matches
+        context['grouped_matches'] = grouped_matches
         context['current_page'] = int(page)
-        context['total_pages'] = -(-total_count // 50) if total_count else 0  # ceil division
+        context['total_pages'] = -(-total_count // 50) if total_count else 0
         context['has_next'] = matches_data.get('next') is not None if matches_data else False
         context['has_prev'] = matches_data.get('previous') is not None if matches_data else False
 
