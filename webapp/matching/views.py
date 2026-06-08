@@ -2061,16 +2061,20 @@ class PropiedadesMatchesDashboardView(TemplateView):
         try:
             from django.db import connections
             with connections['propifai'].cursor() as cursor:
-                cursor.execute("SELECT property_id, file FROM property_media WHERE media_type='image' ORDER BY property_id, [order]")
+                cursor.execute("SELECT [property_id], [file] FROM [property_media] WHERE media_type='image' ORDER BY [property_id], [order]")
                 for row in cursor.fetchall():
                     pid_img = row[0]
                     if pid_img not in prop_images:  # solo primera imagen
                         f = row[1]
                         if f:
-                            if f.startswith('/'): f = f[1:]
-                            prop_images[pid_img] = f"{MEDIA_BASE}/{f}"
-        except Exception:
-            pass
+                            # Si ya es URL completa, usarla directamente
+                            if f.startswith('http'):
+                                prop_images[pid_img] = f
+                            else:
+                                if f.startswith('/'): f = f[1:]
+                                prop_images[pid_img] = f"{MEDIA_BASE}/{f}"
+        except Exception as e:
+            logger.warning(f"Error al obtener imgs: {e}")
 
         # ── Filtrar solo propiedades Disponibles ──
         available_props = [p for p in all_props if p.get('property_status_name') == 'Disponible']
