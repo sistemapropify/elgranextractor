@@ -2053,7 +2053,7 @@ class PropiedadesMatchesDashboardView(TemplateView):
         # ── Filtrar solo Disponibles ──
         available_props = [p for p in all_props if p.get('property_status_name') == 'Disponible']
 
-        # ── Obtener nombres de distritos desde BD ──
+        # ── Obtener nombres de distritos desde BD (38 registros) ──
         district_names = {}
         try:
             from django.db import connections
@@ -2100,24 +2100,19 @@ class PropiedadesMatchesDashboardView(TemplateView):
                 (float(m.get('score', 0) or 0) for m in prop_matches),
                 default=0.0
             )
-            # Distrito: intentar desde full-detail, si es None usar district_id de la lista
-            district_val = detail.get('district') if detail else None
-            if isinstance(district_val, dict):
-                district_name = district_val.get('name', '') or ''
-            elif district_val and isinstance(district_val, str):
-                district_name = district_val
+            # Distrito: full-detail devuelve district como ID numerico
+            district_id = detail.get('district') if detail else p.get('district')
+            if isinstance(district_id, dict):
+                district_name = district_id.get('name', '') or ''
+            elif isinstance(district_id, (int, str)):
+                district_name = district_names.get(int(district_id), str(district_id)) if district_id else ''
             else:
-                # Fallback: usar district_id de la lista de propiedades
-                p_district = p.get('district')
-                if p_district and isinstance(p_district, dict):
-                    district_name = p_district.get('name', '') or ''
-                elif p_district and isinstance(p_district, (int, str)):
-                    district_name = district_names.get(int(p_district), str(p_district))
-                else:
-                    district_name = ''
-            # Precio y moneda
-            prop_price = detail.get('price') if detail and detail.get('price') else p.get('price')
-            currency_code = detail.get('currency_code', '') if detail else p.get('currency_code', '')
+                district_name = ''
+            # Responsable desde full-detail
+            responsible_name = detail.get('responsible_name', '') if detail else ''
+            # Precio y moneda desde full-detail
+            prop_price = detail.get('price') if detail else None
+            currency_code = detail.get('currency_code', '') if detail else ''
             currency_symbol = '$' if currency_code and currency_code.upper() == 'USD' else 'S/'
 
             prop_list.append({
@@ -2125,6 +2120,7 @@ class PropiedadesMatchesDashboardView(TemplateView):
                 'property_code': p.get('code', ''),
                 'property_title': p.get('title', ''),
                 'property_district_name': district_name,
+                'property_responsible': responsible_name,
                 'property_price': prop_price,
                 'property_price_display': f"{currency_symbol} {float(prop_price):,.0f}" if prop_price else '---',
                 'property_currency_name': currency_code,
