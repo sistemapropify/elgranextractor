@@ -55,4 +55,10 @@ urlpatterns = [
 
     # Matches de Propify (CRM)
     path('matches/', views.MatchesDashboardView.as_view(), name='matches-dashboard'),
+
+    # Matches por Propiedad (Property-Centric CRM)
+    path('matches-por-propiedad/', views.PropiedadesMatchesDashboardView.as_view(), name='matches-por-propiedad'),
+    path('api/matching/<int:pk>/pipeline-requerimientos/',
+         views.MatchingViewSet.as_view({'get': 'pipeline_requerimientos'}),
+         name='matching-pipeline-requerimientos'),
 ]

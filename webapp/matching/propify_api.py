@@ -156,6 +156,36 @@ class PropifyApiClient:
         """GET /api/crm/properties/{id}/"""
         return self._request("GET", f"/api/crm/properties/{property_id}/")
 
+    def get_properties(
+        self, page: int = 1, page_size: int = 50, **filters
+    ) -> Optional[Dict[str, Any]]:
+        """
+        GET /api/crm/properties/
+        Retorna lista paginada de propiedades.
+        """
+        params = {"page": page, "page_size": page_size}
+        params.update(filters)
+        return self._request("GET", "/api/crm/properties/", params=params)
+
+    def get_properties_list(
+        self, page: int = 1, page_size: int = 50, **filters
+    ) -> Optional[Dict[str, Any]]:
+        """
+        GET /api/properties/properties/
+        Retorna lista paginada de propiedades del portfolio (116 total).
+        Diferente de get_properties() que usa /api/crm/properties/.
+        """
+        params = {"page": page, "page_size": page_size}
+        params.update(filters)
+        return self._request("GET", "/api/properties/properties/", params=params)
+
+    def get_property_full_detail(self, property_id: int) -> Optional[Dict[str, Any]]:
+        """
+        GET /api/properties/properties/{id}/full-detail/
+        Retorna detalle completo de propiedad + requirement_matches.
+        """
+        return self._request("GET", f"/api/properties/properties/{property_id}/full-detail/")
+
 
 # Instancia singleton para reutilizar
 _client: Optional[PropifyApiClient] = None

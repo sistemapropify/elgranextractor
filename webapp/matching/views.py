@@ -24,6 +24,40 @@ from .serializers import (
     PropuestaWhatsAppCreateSerializer,
     PropuestaWhatsAppStatusSerializer,
 )
+
+# Cache en memoria para todos los matches (evita refetch en cada pipeline click)
+_all_matches_cache = None
+_all_matches_cache_client_id = None
+
+
+def _get_cached_all_matches(client):
+    """
+    Obtiene todos los matches de Propify API, con caché en memoria.
+    La API no soporta filtrar por property_id, así que obtenemos todo
+    y filtramos en Python. El caché se invalida si cambia el cliente.
+    """
+    global _all_matches_cache, _all_matches_cache_client_id
+    client_id = id(client)
+    if _all_matches_cache is not None and _all_matches_cache_client_id == client_id:
+        return _all_matches_cache
+
+    all_matches = []
+    page_num = 1
+    page_size = 500
+    while True:
+        page_data = client.get_matches(page=page_num, page_size=page_size)
+        if not page_data or not page_data.get('results'):
+            break
+        all_matches.extend(page_data['results'])
+        if not page_data.get('next'):
+            break
+        page_num += 1
+
+    _all_matches_cache = all_matches
+    _all_matches_cache_client_id = client_id
+    return all_matches
+
+
 from .engine import ejecutar_matching_requerimiento, guardar_resultados_matching
 from .models import PropuestaWhatsApp
 from .pipeline_requerimiento import obtener_pipeline_requerimiento, obtener_pipeline_con_ramas
@@ -337,6 +371,152 @@ class MatchingViewSet(viewsets.ViewSet):
             logger.error(f"Error al obtener pipeline matches para req #{pk}: {e}")
             return Response(
                 {'error': f'Error al obtener matches: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=True, methods=['GET'])
+    def pipeline_requerimientos(self, request, pk=None):
+        """
+        GET /api/matching/{property_id}/pipeline-requerimientos/
+
+        Retorna el pipeline property→requirements.
+        La propiedad es el nodo principal, cada requirement es una rama.
+        Inverso lógico de pipeline_matches().
+
+        NOTA: La API Propify NO soporta filtrar por propiedad en el endpoint
+        requirement-matches. Solo soporta requirement_id. Por eso se obtienen
+        todos los matches y se filtran localmente, con caché para performance.
+        """
+        try:
+            from .propify_api import get_propify_client
+            client = get_propify_client()
+
+            # Validar que pk sea un entero positivo
+            try:
+                pk = int(pk)
+            except (TypeError, ValueError):
+                return Response({
+                    'property_id': pk,
+                    'property_code': '',
+                    'property_title': '',
+                    'property_district': '',
+                    'property_price': None,
+                    'property_currency_name': '',
+                    'property_created_at': '',
+                    'property_responsable': '',
+                    'etapa_propiedad': {
+                        'tipo': 'propiedad',
+                        'label': f'#{pk}',
+                        'icono': '🏠',
+                        'fecha_display': '—',
+                        'estado': 'ok',
+                    },
+                    'ramas': [],
+                    'total_ramas': 0,
+                })
+
+            # Obtener datos de la propiedad
+            prop_data = client.get_property_detail(pk)
+            if not prop_data:
+                return Response({
+                    'property_id': pk,
+                    'property_code': '',
+                    'property_title': '',
+                    'property_district': '',
+                    'property_price': None,
+                    'property_currency_name': '',
+                    'property_created_at': '',
+                    'property_responsable': '',
+                    'etapa_propiedad': {
+                        'tipo': 'propiedad',
+                        'label': f'#{pk}',
+                        'icono': '🏠',
+                        'fecha_display': '—',
+                        'estado': 'ok',
+                    },
+                    'ramas': [],
+                    'total_ramas': 0,
+                })
+
+            # Obtener todos los matches y filtrar por property_id en Python
+            # La API Propify NO soporta filter por property_id, solo por requirement_id.
+            # Cacheamos para no repetir llamadas en cada pipeline click.
+            all_matches = _get_cached_all_matches(client)
+            matches = [m for m in all_matches if m.get('property') == pk]
+
+            # Ordenar por score descendente
+            matches.sort(key=lambda m: float(m.get('score', 0) or 0), reverse=True)
+
+            # Cache de requerimientos para no repetir llamadas
+            req_cache = {}
+
+            def _get_req_info(req_id):
+                if not req_id:
+                    return {}
+                if req_id not in req_cache:
+                    try:
+                        req_cache[req_id] = client.get_requirement_detail(req_id) or {}
+                    except Exception:
+                        req_cache[req_id] = {}
+                return req_cache[req_id]
+
+            ramas = []
+            for m in matches:
+                req_id = m.get('requirement')
+                req_info = _get_req_info(req_id)
+
+                ramas.append({
+                    'match_id': m.get('id'),
+                    'requirement_id': req_id,
+                    'requirement_code': req_info.get('code', f'#{req_id}') if req_info else '',
+                    'requirement_assigned': req_info.get('assigned_to_name', ''),
+                    'requirement_operation': req_info.get('operation_type_name', ''),
+                    'requirement_property_type': req_info.get('property_type_name', ''),
+                    'requirement_created_at': req_info.get('created_at', ''),
+                    'score': float(m.get('score', 0) or 0),
+                    'computed_at': m.get('computed_at', ''),
+                })
+
+            # Construir etapa_propiedad
+            from datetime import datetime
+            prop_created_at = prop_data.get('created_at', '')
+            try:
+                if prop_created_at:
+                    fecha_dt = datetime.fromisoformat(prop_created_at.replace('Z', '+00:00'))
+                    fecha_display = fecha_dt.strftime('%d/%m')
+                else:
+                    fecha_display = '—'
+            except Exception:
+                fecha_display = '—'
+
+            etapa_propiedad = {
+                'tipo': 'propiedad',
+                'label': prop_data.get('code', f'#{pk}'),
+                'icono': '🏠',
+                'fecha_display': fecha_display,
+                'estado': 'ok',
+            }
+
+            data = {
+                'property_id': pk,
+                'property_code': prop_data.get('code', ''),
+                'property_title': prop_data.get('title', ''),
+                'property_district': prop_data.get('district_name', ''),
+                'property_price': prop_data.get('price'),
+                'property_currency_name': prop_data.get('currency_name', ''),
+                'property_created_at': prop_created_at,
+                'property_responsable': prop_data.get('created_by_name', ''),
+                'etapa_propiedad': etapa_propiedad,
+                'ramas': ramas,
+                'total_ramas': len(ramas),
+            }
+
+            return Response(data)
+
+        except Exception as e:
+            logger.error(f"Error al obtener pipeline requerimientos para prop #{pk}: {e}")
+            return Response(
+                {'error': f'Error al obtener requerimientos: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -1787,5 +1967,171 @@ class MatchesDashboardView(TemplateView):
         context['total_pages'] = -(-total_count // 50) if total_count else 0
         context['has_next'] = matches_data.get('next') is not None if matches_data else False
         context['has_prev'] = matches_data.get('previous') is not None if matches_data else False
+
+        return context
+
+
+class PropiedadesMatchesDashboardView(TemplateView):
+    """
+    Dashboard de Matches por Propiedad (Property-Centric).
+    Inverso de MatchesDashboardView.
+    Consume la API externa de Propify (api.propify.pe) para mostrar
+    los matches agrupados por propiedad en vez de por requerimiento.
+    Cada fila = una propiedad, con sus requerimientos matchados como sub-items.
+    """
+    template_name = 'matching/matches_por_propiedad.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from django.utils import timezone
+        from datetime import timedelta
+        import json
+
+        today = timezone.now().date()
+
+        # ── Par�metros de filtro ──
+        view_mode = self.request.GET.get('view', 'all')
+        filter_date = self.request.GET.get('date', '')
+        property_code = self.request.GET.get('property_code', '')
+        assigned_to = self.request.GET.get('assigned_to', '')
+        page = self.request.GET.get('page', 1)
+
+        # ── Cliente API Propify ──
+        from .propify_api import get_propify_client
+        client = get_propify_client()
+
+        # ── Obtener requirements para autocomplete y filtros ──
+        req_map = {}
+        page_req = 1
+        while True:
+            reqs_data = client.get_requirements(page=page_req, page_size=200)
+            if not reqs_data or not reqs_data.get('results'):
+                break
+            for r in reqs_data['results']:
+                req_map[r['id']] = r
+            if not reqs_data.get('next'):
+                break
+            page_req += 1
+
+        # ── Lista de asignados únicos para autocomplete ──
+        unique_assigned = sorted(set(
+            r.get('assigned_to_name', '') for r in req_map.values()
+            if r.get('assigned_to_name')
+        ), key=str.lower)
+
+        # ── Obtener propiedades desde /api/properties/properties/ ──
+        # (116 propiedades total, fuente de verdad)
+        all_props = []
+        page_props = 1
+        page_size_props = 200
+        while True:
+            props_data = client.get_properties_list(page=page_props, page_size=page_size_props)
+            if not props_data or not props_data.get('results'):
+                break
+            all_props.extend(props_data['results'])
+            if not props_data.get('next'):
+                break
+            page_props += 1
+        total_props = len(all_props)
+
+        # ── Obtener todos los matches para cruzar scores ──
+        all_matches = _get_cached_all_matches(client)
+        total_match_count = len(all_matches)
+
+        # Enriquecer matches con datos de requerimiento
+        for m in all_matches:
+            req_info = req_map.get(m.get('requirement'))
+            if req_info:
+                m['req_code'] = req_info.get('code', '')
+                m['req_assigned'] = req_info.get('assigned_to_name', '')
+                m['req_operation'] = req_info.get('operation_type_name', '')
+                m['req_property_type'] = req_info.get('property_type_name', '')
+
+        # Construir índice: property_id → lista de matches
+        match_index = {}
+        for m in all_matches:
+            pid = m.get('property')
+            if pid not in match_index:
+                match_index[pid] = []
+            match_index[pid].append(m)
+
+        # ── Filtrar solo propiedades Disponibles ──
+        available_props = [p for p in all_props if p.get('property_status_name') == 'Disponible']
+
+        # ── Construir lista de propiedades con sus matches ──
+        prop_list = []
+        for p in available_props:
+            pid = p.get('id')
+            prop_matches = match_index.get(pid, [])
+            best_score = max(
+                (float(m.get('score', 0) or 0) for m in prop_matches),
+                default=0.0
+            )
+            prop_list.append({
+                'property_id': pid,
+                'property_code': p.get('code', ''),
+                'property_title': p.get('title', ''),
+                'property_district_name': p.get('district_name', ''),
+                'property_price': p.get('price'),
+                'property_currency_name': p.get('currency_code', ''),
+                'requirements': prop_matches,
+                'total_requirements': len(prop_matches),
+                'best_score': best_score,
+                'first_match': prop_matches[0] if prop_matches else None,
+            })
+
+        # Ordenar por best_score descendente (las que tienen match primero)
+        prop_list.sort(key=lambda g: g['best_score'], reverse=True)
+        total_unique_props = len(prop_list)
+
+        # ── Paginación por PROPIEDADES (50 por página) ──
+        page = int(page)
+        props_per_page = 50
+        total_pages = -(-total_unique_props // props_per_page) if total_unique_props else 0
+        start_idx = (page - 1) * props_per_page
+        end_idx = start_idx + props_per_page
+        grouped_propiedades = prop_list[start_idx:end_idx]
+
+        has_next = page < total_pages
+        has_prev = page > 1
+
+        # ── Datos de pipeline embebidos ──
+        pipeline_data = {}
+        for g in prop_list:
+            pid = g['property_id']
+            reqs = []
+            for m in g.get('requirements', []):
+                reqs.append({
+                    'requirement_id': m.get('requirement'),
+                    'requirement_code': m.get('req_code', ''),
+                    'requirement_assigned': m.get('req_assigned', ''),
+                    'requirement_operation': m.get('req_operation', ''),
+                    'requirement_property_type': m.get('req_property_type', ''),
+                    'score': float(m.get('score', 0) or 0),
+                    'computed_at': m.get('computed_at', ''),
+                })
+            reqs.sort(key=lambda r: r['score'], reverse=True)
+            pipeline_data[str(pid)] = {
+                'property_code': g.get('property_code', ''),
+                'property_title': g.get('property_title', ''),
+                'property_district': g.get('property_district_name', ''),
+                'property_created_at': '',
+                'ramas': reqs,
+                'total_ramas': len(reqs),
+            }
+
+        context['total_matches'] = total_match_count
+        context['total_groups'] = total_unique_props
+        context['view_mode'] = view_mode
+        context['filter_date'] = filter_date
+        context['property_code'] = property_code
+        context['assigned_to'] = assigned_to
+        context['assigned_list_json'] = json.dumps(unique_assigned)
+        context['grouped_propiedades'] = grouped_propiedades
+        context['pipeline_data_json'] = json.dumps(pipeline_data)
+        context['current_page'] = page
+        context['total_pages'] = total_pages
+        context['has_next'] = has_next
+        context['has_prev'] = has_prev
 
         return context

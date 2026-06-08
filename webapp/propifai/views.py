@@ -39,7 +39,13 @@ class ListaPropiedadesPropifyView(ListView):
             queryset = queryset.filter(tipo_propiedad__icontains=tipo_propiedad)
 
         if departamento:
-            queryset = queryset.filter(department__icontains=departamento)
+            # El campo department no existe en la tabla property real.
+            # Se filtra por district_id si el valor es numérico
+            try:
+                depto_id = int(departamento)
+                queryset = queryset.filter(district_id=depto_id)
+            except ValueError:
+                pass
 
         if precio_min:
             try:
@@ -74,47 +80,56 @@ class ListaPropiedadesPropifyView(ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
-        # Obtener valores únicos para los filtros
-        context['departamentos'] = PropifaiProperty.objects.values_list('department', flat=True).distinct().order_by('department')
+        # Obtener valores únicos para filtro de distritos
+        # Nota: la tabla property no tiene campo department, usamos district_id
+        context['departamentos'] = PropifaiProperty.objects.values_list('district_id', flat=True).distinct().order_by('district_id')
         
+        # Obtener specs para todas las propiedades
+        specs_map = {}
+        try:
+            from django.db import connections
+            with connections['propifai'].cursor() as cursor:
+                cursor.execute("SELECT property_id, bedrooms, bathrooms, built_area, land_area FROM property_specs")
+                for row in cursor.fetchall():
+                    specs_map[row[0]] = row
+        except Exception:
+            pass
+
         # Agregar información adicional para cada propiedad
         propiedades_con_info = []
         for propiedad in context['propiedades']:
-            # Obtener nombres mapeados de ubicación
-            departamento_nombre = propiedad.departamento_nombre if hasattr(propiedad, 'departamento_nombre') else propiedad.department
-            provincia_nombre = propiedad.provincia_nombre if hasattr(propiedad, 'provincia_nombre') else propiedad.province
-            distrito_nombre = propiedad.distrito_nombre if hasattr(propiedad, 'distrito_nombre') else propiedad.district
-            ubicacion_completa = propiedad.ubicacion_completa if hasattr(propiedad, 'ubicacion_completa') else f"{distrito_nombre}, {provincia_nombre}, {departamento_nombre}"
+            # Obtener specs
+            specs = specs_map.get(propiedad.id, (None, None, None, None, None))
+            _, bedrooms_val, bathrooms_val, built_area_val, land_area_val = specs
             
             propiedades_con_info.append({
                 'id': propiedad.id,
                 'code': propiedad.code,
                 'title': propiedad.title,
                 'description': propiedad.description,
-                'tipo': 'Propiedad',  # Valor por defecto
-                'tipo_propiedad': 'Propiedad',  # Para filtros
+                'tipo': 'Propiedad',
+                'tipo_propiedad': 'Propiedad',
                 'precio': float(propiedad.price) if propiedad.price else None,
                 'precio_usd': float(propiedad.price) if propiedad.price else None,
-                'departamento': propiedad.department,  # Índice original
-                'departamento_nombre': departamento_nombre,  # Nombre mapeado
-                'provincia': propiedad.province,  # Índice original
-                'provincia_nombre': provincia_nombre,  # Nombre mapeado
-                'distrito': propiedad.district,  # Índice original
-                'distrito_nombre': distrito_nombre,  # Nombre mapeado
-                'ubicacion_completa': ubicacion_completa,
-                'bedrooms': propiedad.bedrooms,
-                'bathrooms': propiedad.bathrooms,
-                'built_area': float(propiedad.built_area) if propiedad.built_area else None,
-                'land_area': float(propiedad.land_area) if propiedad.land_area else None,
-                'imagen_url': propiedad.imagen_url,
-                'availability_status': propiedad.availability_status,
-                'is_draft': propiedad.is_draft,
-                'is_active': propiedad.is_active,
+                'departamento': '',
+                'departamento_nombre': '',
+                'provincia': '',
+                'provincia_nombre': '',
+                'distrito': propiedad.district_id,
+                'distrito_nombre': '',
+                'ubicacion_completa': propiedad.display_address or '',
+                'bedrooms': bedrooms_val,
+                'bathrooms': bathrooms_val,
+                'built_area': float(built_area_val) if built_area_val else None,
+                'land_area': float(land_area_val) if land_area_val else None,
+                'imagen_url': None,
+                'availability_status': None,
+                'is_draft': not propiedad.is_visible if hasattr(propiedad, 'is_visible') else False,
+                'is_active': propiedad.is_visible if hasattr(propiedad, 'is_visible') else True,
                 'created_at': propiedad.created_at,
                 'updated_at': propiedad.updated_at,
-                # Campos adicionales para compatibilidad
-                'area': float(propiedad.built_area) if propiedad.built_area else float(propiedad.land_area) if propiedad.land_area else None,
-                'titulo': f"{propiedad.title or 'Propiedad'} en {departamento_nombre or propiedad.department or ''}",
+                'area': float(built_area_val) if built_area_val else float(land_area_val) if land_area_val else None,
+                'titulo': propiedad.title or 'Propiedad',
                 'codigo': propiedad.code,
                 'descripcion': propiedad.description,
             })
