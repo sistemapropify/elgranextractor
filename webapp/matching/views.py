@@ -2053,12 +2053,17 @@ class PropiedadesMatchesDashboardView(TemplateView):
         # ── Filtrar solo Disponibles ──
         available_props = [p for p in all_props if p.get('property_status_name') == 'Disponible']
 
-        # ── Obtener nombres de distritos desde BD (38 registros) ──
+        # ── Obtener distritos desde BD: property.district_id → district.name ──
         district_names = {}
         try:
             from django.db import connections
             with connections['propifai'].cursor() as cursor:
-                cursor.execute("SELECT id, name FROM district")
+                cursor.execute("""
+                    SELECT p.id, d.name
+                    FROM [property] p
+                    LEFT JOIN district d ON p.district_id = d.id
+                    WHERE d.name IS NOT NULL
+                """)
                 for row in cursor.fetchall():
                     district_names[row[0]] = row[1]
         except Exception:
@@ -2100,14 +2105,14 @@ class PropiedadesMatchesDashboardView(TemplateView):
                 (float(m.get('score', 0) or 0) for m in prop_matches),
                 default=0.0
             )
-            # Distrito: full-detail devuelve district como ID numerico
-            district_id = detail.get('district') if detail else p.get('district')
+            # Distrito: 1) desde full-detail, 2) desde BD por property_id
+            district_id = detail.get('district') if detail else None
             if isinstance(district_id, dict):
                 district_name = district_id.get('name', '') or ''
-            elif isinstance(district_id, (int, str)):
-                district_name = district_names.get(int(district_id), str(district_id)) if district_id else ''
+            elif isinstance(district_id, (int, str)) and district_id:
+                district_name = district_names.get(int(district_id), str(district_id))
             else:
-                district_name = ''
+                district_name = district_names.get(pid, '')
             # Responsable desde full-detail
             responsible_name = detail.get('responsible_name', '') if detail else ''
             # Precio y moneda desde full-detail
