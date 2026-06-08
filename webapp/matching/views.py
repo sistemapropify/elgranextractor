@@ -2055,6 +2055,23 @@ class PropiedadesMatchesDashboardView(TemplateView):
                 match_index[pid] = []
             match_index[pid].append(m)
 
+        # ── Obtener imágenes desde property_media (BD dbpropify_be) ──
+        MEDIA_BASE = "https://propifymedia01.blob.core.windows.net/media"
+        prop_images = {}
+        try:
+            from django.db import connections
+            with connections['propifai'].cursor() as cursor:
+                cursor.execute("SELECT property_id, file FROM property_media WHERE media_type='image' ORDER BY property_id, [order]")
+                for row in cursor.fetchall():
+                    pid_img = row[0]
+                    if pid_img not in prop_images:  # solo primera imagen
+                        f = row[1]
+                        if f:
+                            if f.startswith('/'): f = f[1:]
+                            prop_images[pid_img] = f"{MEDIA_BASE}/{f}"
+        except Exception:
+            pass
+
         # ── Filtrar solo propiedades Disponibles ──
         available_props = [p for p in all_props if p.get('property_status_name') == 'Disponible']
 
@@ -2074,6 +2091,7 @@ class PropiedadesMatchesDashboardView(TemplateView):
                 'property_district_name': p.get('district_name', ''),
                 'property_price': p.get('price'),
                 'property_currency_name': p.get('currency_code', ''),
+                'property_image_url': prop_images.get(pid, ''),
                 'requirements': prop_matches,
                 'total_requirements': len(prop_matches),
                 'best_score': best_score,
