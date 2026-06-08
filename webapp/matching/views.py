@@ -2053,6 +2053,17 @@ class PropiedadesMatchesDashboardView(TemplateView):
         # ── Filtrar solo Disponibles ──
         available_props = [p for p in all_props if p.get('property_status_name') == 'Disponible']
 
+        # ── Obtener nombres de distritos desde BD ──
+        district_names = {}
+        try:
+            from django.db import connections
+            with connections['propifai'].cursor() as cursor:
+                cursor.execute("SELECT id, name FROM district")
+                for row in cursor.fetchall():
+                    district_names[row[0]] = row[1]
+        except Exception:
+            pass
+
         # Obtener full-detail SOLO para propiedades de la página actual (máximo 50)
         page = int(page)
         start_idx = (page - 1) * 50
@@ -2089,14 +2100,23 @@ class PropiedadesMatchesDashboardView(TemplateView):
                 (float(m.get('score', 0) or 0) for m in prop_matches),
                 default=0.0
             )
-            # Distrito desde full-detail
-            district_val = detail.get('district', '') if detail else ''
+            # Distrito: intentar desde full-detail, si es None usar district_id de la lista
+            district_val = detail.get('district') if detail else None
             if isinstance(district_val, dict):
                 district_name = district_val.get('name', '') or ''
+            elif district_val and isinstance(district_val, str):
+                district_name = district_val
             else:
-                district_name = str(district_val) if district_val else p.get('district', '')
-            # Precio y moneda desde full-detail
-            prop_price = detail.get('price') if detail else p.get('price')
+                # Fallback: usar district_id de la lista de propiedades
+                p_district = p.get('district')
+                if p_district and isinstance(p_district, dict):
+                    district_name = p_district.get('name', '') or ''
+                elif p_district and isinstance(p_district, (int, str)):
+                    district_name = district_names.get(int(p_district), str(p_district))
+                else:
+                    district_name = ''
+            # Precio y moneda
+            prop_price = detail.get('price') if detail and detail.get('price') else p.get('price')
             currency_code = detail.get('currency_code', '') if detail else p.get('currency_code', '')
             currency_symbol = '$' if currency_code and currency_code.upper() == 'USD' else 'S/'
 
