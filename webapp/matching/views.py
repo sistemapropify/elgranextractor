@@ -2019,26 +2019,22 @@ class PropiedadesMatchesDashboardView(TemplateView):
             if r.get('assigned_to_name')
         ), key=str.lower)
 
-        # ── Obtener propiedades desde /api/properties/properties/ ──
-        # (116 propiedades total, fuente de verdad)
+        # ── Obtener IDs de propiedades desde /api/properties/properties/ ──
         all_props = []
         page_props = 1
-        page_size_props = 200
         while True:
-            props_data = client.get_properties_list(page=page_props, page_size=page_size_props)
+            props_data = client.get_properties_list(page=page_props, page_size=200)
             if not props_data or not props_data.get('results'):
                 break
             all_props.extend(props_data['results'])
             if not props_data.get('next'):
                 break
             page_props += 1
-        total_props = len(all_props)
 
-        # ── Obtener todos los matches para cruzar scores ──
+        # ── Obtener todos los matches ──
         all_matches = _get_cached_all_matches(client)
         total_match_count = len(all_matches)
 
-        # Enriquecer matches con datos de requerimiento
         for m in all_matches:
             req_info = req_map.get(m.get('requirement'))
             if req_info:
@@ -2047,7 +2043,6 @@ class PropiedadesMatchesDashboardView(TemplateView):
                 m['req_operation'] = req_info.get('operation_type_name', '')
                 m['req_property_type'] = req_info.get('property_type_name', '')
 
-        # Construir índice: property_id → lista de matches
         match_index = {}
         for m in all_matches:
             pid = m.get('property')
@@ -2055,46 +2050,64 @@ class PropiedadesMatchesDashboardView(TemplateView):
                 match_index[pid] = []
             match_index[pid].append(m)
 
-        # ── Obtener imágenes desde property_media (BD dbpropify_be) ──
-        MEDIA_BASE = "https://propifymedia01.blob.core.windows.net/media"
-        prop_images = {}
-        try:
-            from django.db import connections
-            with connections['propifai'].cursor() as cursor:
-                cursor.execute("SELECT [property_id], [file] FROM [property_media] WHERE media_type='image' ORDER BY [property_id], [order]")
-                for row in cursor.fetchall():
-                    pid_img = row[0]
-                    if pid_img not in prop_images:  # solo primera imagen
-                        f = row[1]
-                        if f:
-                            # Si ya es URL completa, usarla directamente
-                            if f.startswith('http'):
-                                prop_images[pid_img] = f
-                            else:
-                                if f.startswith('/'): f = f[1:]
-                                prop_images[pid_img] = f"{MEDIA_BASE}/{f}"
-        except Exception as e:
-            logger.warning(f"Error al obtener imgs: {e}")
-
-        # ── Filtrar solo propiedades Disponibles ──
+        # ── Filtrar solo Disponibles ──
         available_props = [p for p in all_props if p.get('property_status_name') == 'Disponible']
 
-        # ── Construir lista de propiedades con sus matches ──
+        # Obtener full-detail SOLO para propiedades de la página actual (máximo 50)
+        page = int(page)
+        start_idx = (page - 1) * 50
+        end_idx = start_idx + 50
+        page_props = available_props[start_idx:end_idx]
+
+        full_detail_cache = {}
+        MEDIA_BASE = "https://propifymedia01.blob.core.windows.net/media"
+        prop_images = {}
+
+        for prop in page_props:
+            pid = prop.get('id')
+            try:
+                detail = client.get_property_full_detail(pid)
+                if detail:
+                    full_detail_cache[pid] = detail
+                    # Extraer primera imagen del full-detail
+                    media_list = detail.get('media', [])
+                    for m_item in media_list:
+                        if m_item.get('media_type') == 'image' and pid not in prop_images:
+                            img_url = m_item.get('file', '')
+                            if img_url:
+                                prop_images[pid] = img_url
+            except Exception:
+                pass
+
+        # ── Construir lista ──
         prop_list = []
         for p in available_props:
             pid = p.get('id')
+            detail = full_detail_cache.get(pid, {})
             prop_matches = match_index.get(pid, [])
             best_score = max(
                 (float(m.get('score', 0) or 0) for m in prop_matches),
                 default=0.0
             )
+            # Distrito desde full-detail
+            district_val = detail.get('district', '') if detail else ''
+            if isinstance(district_val, dict):
+                district_name = district_val.get('name', '') or ''
+            else:
+                district_name = str(district_val) if district_val else p.get('district', '')
+            # Precio y moneda desde full-detail
+            prop_price = detail.get('price') if detail else p.get('price')
+            currency_code = detail.get('currency_code', '') if detail else p.get('currency_code', '')
+            currency_symbol = '$' if currency_code and currency_code.upper() == 'USD' else 'S/'
+
             prop_list.append({
                 'property_id': pid,
                 'property_code': p.get('code', ''),
                 'property_title': p.get('title', ''),
-                'property_district_name': p.get('district_name', ''),
-                'property_price': p.get('price'),
-                'property_currency_name': p.get('currency_code', ''),
+                'property_district_name': district_name,
+                'property_price': prop_price,
+                'property_price_display': f"{currency_symbol} {float(prop_price):,.0f}" if prop_price else '---',
+                'property_currency_name': currency_code,
                 'property_image_url': prop_images.get(pid, ''),
                 'requirements': prop_matches,
                 'total_requirements': len(prop_matches),
@@ -2102,27 +2115,24 @@ class PropiedadesMatchesDashboardView(TemplateView):
                 'first_match': prop_matches[0] if prop_matches else None,
             })
 
-        # Ordenar por best_score descendente (las que tienen match primero)
+        # Ordenar por best_score descendente
         prop_list.sort(key=lambda g: g['best_score'], reverse=True)
-        total_unique_props = len(prop_list)
 
-        # ── Paginación por PROPIEDADES (50 por página) ──
-        page = int(page)
+        # Total de propiedades únicas (para paginación correcta)
+        total_unique_props = len(available_props)
         props_per_page = 50
         total_pages = -(-total_unique_props // props_per_page) if total_unique_props else 0
-        start_idx = (page - 1) * props_per_page
-        end_idx = start_idx + props_per_page
-        grouped_propiedades = prop_list[start_idx:end_idx]
+
+        grouped_propiedades = prop_list  # ya son solo las de la página actual
 
         has_next = page < total_pages
         has_prev = page > 1
 
-        # ── Datos de pipeline embebidos ──
+        # ── Datos de pipeline embebidos (TODAS las propiedades, no solo página actual) ──
         pipeline_data = {}
-        for g in prop_list:
-            pid = g['property_id']
+        for pid, reqs_list in match_index.items():
             reqs = []
-            for m in g.get('requirements', []):
+            for m in reqs_list:
                 reqs.append({
                     'requirement_id': m.get('requirement'),
                     'requirement_code': m.get('req_code', ''),
@@ -2134,9 +2144,9 @@ class PropiedadesMatchesDashboardView(TemplateView):
                 })
             reqs.sort(key=lambda r: r['score'], reverse=True)
             pipeline_data[str(pid)] = {
-                'property_code': g.get('property_code', ''),
-                'property_title': g.get('property_title', ''),
-                'property_district': g.get('property_district_name', ''),
+                'property_code': '',
+                'property_title': '',
+                'property_district': '',
                 'property_created_at': '',
                 'ramas': reqs,
                 'total_ramas': len(reqs),

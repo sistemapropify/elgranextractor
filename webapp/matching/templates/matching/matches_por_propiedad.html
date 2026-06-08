@@ -505,14 +505,7 @@ function renderPropertyPipeline(data, container) {
                             </span>
                         </td>
                         <td style="font-size:12px;color:var(--text-primary);font-weight:600;white-space:nowrap;">
-                            {% with first=group.first_match %}
-                            {% if first.property_price %}
-                                {% if first.property_currency_name == 'USD' %}${% else %}S/{% endif %}
-                                {{ first.property_price|floatformat:0|intcomma }}
-                            {% else %}
-                                ---
-                            {% endif %}
-                            {% endwith %}
+                            {{ group.property_price_display|default:'---' }}
                         </td>
                         <td>
                             {% with first=group.first_match %}
