@@ -498,6 +498,11 @@ function renderPropertyPipeline(data, container) {
                             <div style="font-size:10px;color:var(--text-muted);">
                                 {{ group.property_title|truncatechars:40 }}
                             </div>
+                            {% if group.property_responsible %}
+                            <div style="font-size:9px;color:var(--accent-orange);margin-top:2px;">
+                                👤 {{ group.property_responsible }}
+                            </div>
+                            {% endif %}
                         </td>
                         <td>
                             <span style="font-size:12px;color:var(--text-primary);">
