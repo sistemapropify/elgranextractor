@@ -152,6 +152,10 @@ class PropifyApiClient:
             params={"requirement": requirement_id},
         )
 
+    def get_property_detail(self, property_id: int) -> Optional[Dict[str, Any]]:
+        """GET /api/crm/properties/{id}/"""
+        return self._request("GET", f"/api/crm/properties/{property_id}/")
+
 
 # Instancia singleton para reutilizar
 _client: Optional[PropifyApiClient] = None

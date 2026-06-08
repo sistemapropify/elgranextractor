@@ -245,27 +245,30 @@ class MatchingViewSet(viewsets.ViewSet):
                 prop_created_at = ''
                 prop_image_url = ''
 
-                # Obtener datos adicionales de la propiedad desde la BD local
+                # Obtener datos adicionales de la propiedad desde API Propify
                 prop_responsable = ''
-                if prop_code:
+                prop_id = m.get('property')
+                if prop_id:
                     try:
-                        from propifai.models import PropifaiProperty
-                        prop = PropifaiProperty.objects.filter(code=prop_code).first()
-                        if prop:
-                            if prop.created_at:
-                                prop_created_at = prop.created_at.strftime('%Y-%m-%d')
-                            # Responsable de la propiedad (created_by_id / responsible_id)
-                            responsable_id = prop.created_by_id or prop.responsible_id
-                            if responsable_id:
-                                try:
-                                    from propifai.models import User as PropifaiUser
-                                    user = PropifaiUser.objects.get(id=responsable_id)
-                                    prop_responsable = f"{user.first_name} {user.last_name}".strip()
-                                except Exception:
-                                    pass
-                            # Construir URL de imagen
-                            base_url = "https://propifymedia01.blob.core.windows.net/media"
-                            prop_image_url = f"{base_url}/{prop_code}.jpg"
+                        prop_data = client.get_property_detail(prop_id)
+                        if prop_data:
+                            created = prop_data.get('created_at', '')
+                            if created:
+                                prop_created_at = created[:10]
+                            resp_name = prop_data.get('created_by_name') or prop_data.get('responsible_name') or ''
+                            if resp_name:
+                                prop_responsable = resp_name
+                            first_img = None
+                            imgs = prop_data.get('images') or prop_data.get('property_images') or []
+                            if imgs:
+                                first_img = imgs[0]
+                                if isinstance(first_img, dict):
+                                    prop_image_url = first_img.get('url', '') or first_img.get('image', '')
+                                else:
+                                    prop_image_url = str(first_img)
+                            if not prop_image_url and prop_code:
+                                base_url = "https://propifymedia01.blob.core.windows.net/media"
+                                prop_image_url = f"{base_url}/{prop_code}.jpg"
                     except Exception:
                         pass
 
