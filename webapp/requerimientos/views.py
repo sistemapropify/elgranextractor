@@ -251,6 +251,7 @@ class ToggleVerificadoView(View):
         return JsonResponse({'ok': True, 'verificado': req.verificado})
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class EditarRequerimientoView(View):
     """Vista para editar un requerimiento vía POST (AJAX)."""
     CAMPOS_EDITABLES = [
