@@ -186,42 +186,74 @@ def _crear_requerimiento_en_bd(
     fecha_msg, hora_msg, extractor_log, tipo_original,
     datos_extraidos, telefono_final,
 ):
-    """Crea un Requerimiento en BD con todos los campos extraídos.
+    """Crea o actualiza un Requerimiento en BD con todos los campos extraídos.
+    Retorna True si se creó nuevo, False si se actualizó uno existente.
     Separada como función para poder ejecutarla con timeout."""
     from requerimientos.models import Requerimiento
-    from django.db import IntegrityError
-    # Usar los imports del módulo si ya están disponibles
+    from django.db import IntegrityError, transaction
     
     def _truncar_local(valor, max_len):
         if valor and len(str(valor)) > max_len:
             return str(valor)[:max_len]
         return valor
 
-    Requerimiento.objects.create(
-        requerimiento=texto_original,
-        texto_hash=texto_hash,
-        fuente=_truncar_local(nombre_grupo, 60),
-        agente=_truncar_local(nombre_agente, 120),
-        fecha=fecha_msg,
-        hora=hora_msg,
-        extractor_log=extractor_log,
-        tipo_original=tipo_original,
-        condicion=_truncar_local(datos_extraidos.get('condicion'), 20) or 'no_especificado',
-        tipo_propiedad=_truncar_local(datos_extraidos.get('tipo_propiedad'), 20) or 'no_especificado',
-        distritos=_truncar_local(datos_extraidos.get('distritos'), 300),
-        presupuesto_monto=datos_extraidos.get('presupuesto_monto'),
-        presupuesto_moneda=_truncar_local(datos_extraidos.get('presupuesto_moneda'), 20) or 'no_especificado',
-        presupuesto_forma_pago=_truncar_local(datos_extraidos.get('presupuesto_forma_pago'), 20) or 'no_especificado',
-        habitaciones=datos_extraidos.get('habitaciones'),
-        banos=datos_extraidos.get('banos'),
-        cochera=_truncar_local(datos_extraidos.get('cochera'), 12) or 'indiferente',
-        ascensor=_truncar_local(datos_extraidos.get('ascensor'), 12) or 'indiferente',
-        amueblado=_truncar_local(datos_extraidos.get('amueblado'), 12) or 'indiferente',
-        area_m2=datos_extraidos.get('area_m2'),
-        piso_preferencia=_truncar_local(datos_extraidos.get('piso_preferencia'), 60),
-        caracteristicas_extra=_truncar_local(datos_extraidos.get('caracteristicas_extra'), 300),
-        agente_telefono=_truncar_local(telefono_final, 20),
-    )
+    try:
+        with transaction.atomic():
+            Requerimiento.objects.create(
+                requerimiento=texto_original,
+                texto_hash=texto_hash,
+                fuente=_truncar_local(nombre_grupo, 60),
+                agente=_truncar_local(nombre_agente, 120),
+                fecha=fecha_msg,
+                hora=hora_msg,
+                extractor_log=extractor_log,
+                tipo_original=tipo_original,
+                condicion=_truncar_local(datos_extraidos.get('condicion'), 20) or 'no_especificado',
+                tipo_propiedad=_truncar_local(datos_extraidos.get('tipo_propiedad'), 20) or 'no_especificado',
+                distritos=_truncar_local(datos_extraidos.get('distritos'), 300),
+                presupuesto_monto=datos_extraidos.get('presupuesto_monto'),
+                presupuesto_moneda=_truncar_local(datos_extraidos.get('presupuesto_moneda'), 20) or 'no_especificado',
+                presupuesto_forma_pago=_truncar_local(datos_extraidos.get('presupuesto_forma_pago'), 20) or 'no_especificado',
+                habitaciones=datos_extraidos.get('habitaciones'),
+                banos=datos_extraidos.get('banos'),
+                cochera=_truncar_local(datos_extraidos.get('cochera'), 12) or 'indiferente',
+                ascensor=_truncar_local(datos_extraidos.get('ascensor'), 12) or 'indiferente',
+                amueblado=_truncar_local(datos_extraidos.get('amueblado'), 12) or 'indiferente',
+                area_m2=datos_extraidos.get('area_m2'),
+                piso_preferencia=_truncar_local(datos_extraidos.get('piso_preferencia'), 60),
+                caracteristicas_extra=_truncar_local(datos_extraidos.get('caracteristicas_extra'), 300),
+                agente_telefono=_truncar_local(telefono_final, 20),
+            )
+        return True  # Creado nuevo
+    except IntegrityError:
+        # Ya existe -> ACTUALIZAR con nuevos datos de DeepSeek
+        Requerimiento.objects.filter(
+            texto_hash=texto_hash,
+            fecha=fecha_msg,
+            hora=hora_msg,
+            fuente=_truncar_local(nombre_grupo, 60),
+        ).update(
+            requerimiento=texto_original,
+            agente=_truncar_local(nombre_agente, 120),
+            extractor_log=extractor_log,
+            tipo_original=tipo_original,
+            condicion=_truncar_local(datos_extraidos.get('condicion'), 20) or 'no_especificado',
+            tipo_propiedad=_truncar_local(datos_extraidos.get('tipo_propiedad'), 20) or 'no_especificado',
+            distritos=_truncar_local(datos_extraidos.get('distritos'), 300),
+            presupuesto_monto=datos_extraidos.get('presupuesto_monto'),
+            presupuesto_moneda=_truncar_local(datos_extraidos.get('presupuesto_moneda'), 20) or 'no_especificado',
+            presupuesto_forma_pago=_truncar_local(datos_extraidos.get('presupuesto_forma_pago'), 20) or 'no_especificado',
+            habitaciones=datos_extraidos.get('habitaciones'),
+            banos=datos_extraidos.get('banos'),
+            cochera=_truncar_local(datos_extraidos.get('cochera'), 12) or 'indiferente',
+            ascensor=_truncar_local(datos_extraidos.get('ascensor'), 12) or 'indiferente',
+            amueblado=_truncar_local(datos_extraidos.get('amueblado'), 12) or 'indiferente',
+            area_m2=datos_extraidos.get('area_m2'),
+            piso_preferencia=_truncar_local(datos_extraidos.get('piso_preferencia'), 60),
+            caracteristicas_extra=_truncar_local(datos_extraidos.get('caracteristicas_extra'), 300),
+            agente_telefono=_truncar_local(telefono_final, 20),
+        )
+        return False  # Actualizado existente
 
 
 @shared_task
