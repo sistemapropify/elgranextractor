@@ -11,6 +11,9 @@ urlpatterns = [
     # Editar requerimiento (AJAX)
     path('editar/', views.EditarRequerimientoView.as_view(), name='editar'),
     
+    # Eliminar requerimiento (AJAX)
+    path('eliminar/', views.EliminarRequerimientoView.as_view(), name='eliminar'),
+    
     # Detalle de requerimiento
     path('detalle/<int:pk>/', views.DetalleRequerimientoView.as_view(), name='detalle'),
     

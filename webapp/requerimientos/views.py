@@ -322,6 +322,25 @@ class EditarRequerimientoView(View):
         })
 
 
+@method_decorator(csrf_exempt, name='dispatch')
+class EliminarRequerimientoView(View):
+    """Elimina un requerimiento via POST (AJAX)."""
+    def post(self, request, *args, **kwargs):
+        try:
+            data = json.loads(request.body)
+        except (json.JSONDecodeError, TypeError):
+            return JsonResponse({'error': 'JSON invalido'}, status=400)
+
+        pk = data.get('pk')
+        if not pk:
+            return JsonResponse({'error': 'Falta pk'}, status=400)
+
+        req = get_object_or_404(Requerimiento, pk=pk)
+        req.delete()
+
+        return JsonResponse({'ok': True, 'pk': pk})
+
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
