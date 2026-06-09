@@ -163,6 +163,24 @@ class ExtractorLogDetailView(DetailView):
         context['total_requerimientos'] = paginator.count
         context['paginator'] = paginator
 
+        # Obtener LogEntries (terminal de logs) para mostrar en el detalle
+        from whatsapp_extractor.models import LogEntry
+        entries_qs = LogEntry.objects.filter(
+            extractor_log=log
+        ).order_by('id')
+
+        # Paginación de logs: 200 entradas por página
+        pagina_logs = self.request.GET.get('pagina_logs', 1)
+        paginator_logs = Paginator(entries_qs, 200)
+        try:
+            page_logs = paginator_logs.page(pagina_logs)
+        except Exception:
+            page_logs = paginator_logs.page(1)
+
+        context['log_entries'] = page_logs
+        context['total_log_entries'] = paginator_logs.count
+        context['paginator_logs'] = paginator_logs
+
         return context
 
 

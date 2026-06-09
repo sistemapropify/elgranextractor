@@ -412,5 +412,51 @@
     </div>
     {% endif %}
 
+    <!-- Terminal de logs -->
+    <div class="we-card">
+        <div class="we-card-header">
+            <h3 class="we-card-title">📟 Terminal de extracción ({{ total_log_entries }} entradas)</h3>
+            <div>
+                <span class="we-badge we-badge-info">INFO</span>
+                <span class="we-badge we-badge-warning">WARNING</span>
+                <span class="we-badge we-badge-red" style="background:rgba(218,54,51,0.15);color:#da3633;border:1px solid rgba(218,54,51,0.3);">ERROR</span>
+                <span class="we-badge we-badge-gray">DEBUG</span>
+            </div>
+        </div>
+        <div class="we-card-body" style="padding:0;">
+            <div style="background:#0d1117;padding:16px;font-family:'Cascadia Code','Fira Code','Consolas',monospace;font-size:12px;line-height:1.6;max-height:500px;overflow-y:auto;border-radius:0 0 8px 8px;">
+                {% for entry in log_entries %}
+                <div style="display:flex;gap:8px;padding:2px 0;{% if entry.nivel == 'WARNING' %}background:rgba(187,128,9,0.08);{% elif entry.nivel == 'ERROR' %}background:rgba(218,54,51,0.08);{% endif %}">
+                    <span style="color:#8b949e;flex-shrink:0;width:70px;">{{ entry.timestamp|date:"H:i:s" }}</span>
+                    <span style="flex-shrink:0;width:72px;font-weight:600;{% if entry.nivel == 'INFO' %}color:#58a6ff{% elif entry.nivel == 'WARNING' %}color:#bb8009{% elif entry.nivel == 'ERROR' %}color:#da3633{% else %}color:#8b949e{% endif %}">{{ entry.nivel }}</span>
+                    <span style="color:#c9d1d9;word-break:break-word;">{{ entry.mensaje }}</span>
+                </div>
+                {% empty %}
+                <div style="color:#8b949e;text-align:center;padding:20px;">
+                    No hay entradas de log para esta ejecución.
+                </div>
+                {% endfor %}
+            </div>
+            {% if paginator_logs.num_pages > 1 %}
+            <div class="we-pagination" style="padding:8px 16px;border-top:1px solid var(--we-border);">
+                <span class="step-links">
+                    {% if log_entries.has_previous %}
+                    <a href="?pagina_logs=1">&laquo;</a>
+                    <a href="?pagina_logs={{ log_entries.previous_page_number }}">‹</a>
+                    {% endif %}
+                    <span class="current" style="color:var(--we-text-secondary);font-size:12px;">
+                        Página {{ log_entries.number }} de {{ paginator_logs.num_pages }}
+                        ({{ total_log_entries }} entradas)
+                    </span>
+                    {% if log_entries.has_next %}
+                    <a href="?pagina_logs={{ log_entries.next_page_number }}">›</a>
+                    <a href="?pagina_logs={{ paginator_logs.num_pages }}">&raquo;</a>
+                    {% endif %}
+                </span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
 </div>
 {% endblock %}
