@@ -341,6 +341,9 @@ def procesar_archivo_extraccion(archivo_id: int, extractor_log_id: Optional[int]
                 'extractor_log_id': extractor_log.id,
             }
 
+        # Contador de errores de inserción (IntegrityError) para el resumen final
+        errores_insercion = 0
+
         for idx, msg in enumerate(mensajes, start=1):
             # 4. Verificar estado de pausa/detención antes de procesar cada mensaje
             # Recargar el log desde BD para obtener el estado actual
@@ -684,11 +687,12 @@ def procesar_archivo_extraccion(archivo_id: int, extractor_log_id: Optional[int]
                     )
                     continue
                 except IntegrityError:
-                    logger.info(f'Mensaje duplicado (IntegrityError BD): {texto_original[:50]}')
+                    logger.warning(f'Mensaje duplicado (IntegrityError BD): {texto_original[:50]}')
                     extractor_log.requerimientos_duplicados += 1
+                    errores_insercion += 1
                     LogEntry.objects.create(
                         extractor_log=extractor_log,
-                        nivel='DEBUG',
+                        nivel='WARNING',
                         mensaje=f'Mensaje #{idx}: IntegrityError (duplicado BD), omitido',
                         detalles={'mensaje_idx': idx, 'paso': 'bd_insert_duplicado'},
                     )
@@ -696,8 +700,15 @@ def procesar_archivo_extraccion(archivo_id: int, extractor_log_id: Optional[int]
 
             except IntegrityError:
                 # IntegrityError del create() si no pasó por el bloque try anidado
-                logger.info(f'Mensaje duplicado (IntegrityError BD, outer): {texto_original[:50]}')
+                logger.warning(f'Mensaje duplicado (IntegrityError BD, outer): {texto_original[:50]}')
                 extractor_log.requerimientos_duplicados += 1
+                errores_insercion += 1
+                LogEntry.objects.create(
+                    extractor_log=extractor_log,
+                    nivel='WARNING',
+                    mensaje=f'Mensaje #{idx}: IntegrityError (duplicado BD, outer), omitido',
+                    detalles={'mensaje_idx': idx, 'paso': 'bd_insert_duplicado_outer'},
+                )
                 continue
             except Exception as e:
                 logger.error(f'Error procesando mensaje {idx}: {e}', exc_info=True)
@@ -733,7 +744,8 @@ def procesar_archivo_extraccion(archivo_id: int, extractor_log_id: Optional[int]
                 f'✅ Procesamiento completado: '
                 f'{extractor_log.mensajes_validos} nuevos, '
                 f'{total_duplicados} duplicados '
-                f'({duplicados_en_txt} en TXT, {extractor_log.requerimientos_duplicados} en BD) '
+                f'({duplicados_en_txt} en TXT, {extractor_log.requerimientos_duplicados} en BD), '
+                f'{errores_insercion} errores de inserción '
                 f'de {total_mensajes_original} mensajes totales'
             ),
             detalles={
@@ -744,6 +756,7 @@ def procesar_archivo_extraccion(archivo_id: int, extractor_log_id: Optional[int]
                 'duplicados': total_duplicados,
                 'duplicados_en_txt': duplicados_en_txt,
                 'duplicados_en_bd': extractor_log.requerimientos_duplicados,
+                'errores_insercion': errores_insercion,
             }
         )
 
