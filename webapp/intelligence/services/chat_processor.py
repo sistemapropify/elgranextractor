@@ -385,18 +385,44 @@ class ChatProcessor:
                 system_prompt=system_prompt,
             )
 
+            # Cuando DeepSeek no responde o falla, forzar busqueda semantica
+            # con el mensaje del usuario como semantic_query
             if not success or response_data is None:
                 log.warning(
                     f"Orquestador DeepSeek no disponible: {message}",
                     trace_id=timer.trace_id,
                 )
+                cls._log_orchestration_error(ctx, 'DeepSeek no disponible, forzando busqueda semantica')
                 return OrchestrationDecision(
                     skill='busqueda_propiedades',
-                    params={},
+                    params={'semantic_query': ctx.message},
                 )
 
             respuesta_raw = response_data.get('content', '')
             decision = parse_orchestration_response(respuesta_raw)
+
+            # Cuando DeepSeek responde directamente sin usar skill, pero el mensaje
+            # parece consultar sobre propiedades, forzar skill con busqueda semantica
+            if decision.respuesta_directa:
+                msg_lower = ctx.message.lower()
+                palabras_clave = ['propiedad', 'departamento', 'casa', 'terreno', 'local',
+                                  'alquiler', 'venta', 'comprar', 'precio', 'coworking',
+                                  'colegio', 'oficina', 'suite', 'penthouse', 'lote',
+                                  'tengo', 'busco', 'necesito', 'quiero']
+                if any(p in msg_lower for p in palabras_clave):
+                    log.warning(
+                        f"DeepSeek respondio directamente sobre propiedades. Forzando skill.",
+                        extra={'mensaje': ctx.message[:100], 'respuesta': decision.respuesta_directa[:200]},
+                        trace_id=timer.trace_id,
+                    )
+                    cls._log_orchestration_error(
+                        ctx,
+                        f'DeepSeek respondio directamente en vez de usar skill. Msg: {ctx.message[:100]}'
+                    )
+                    return OrchestrationDecision(
+                        skill='busqueda_propiedades',
+                        params={'semantic_query': ctx.message},
+                    )
 
             log.info(
                 "Orquestación completada",
@@ -408,6 +434,22 @@ class ChatProcessor:
             )
 
             return decision
+
+    @classmethod
+    def _log_orchestration_error(cls, ctx: ChatContext, mensaje: str):
+        """Registra un error de orquestacion en la tabla de errores del sistema."""
+        try:
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "INSERT INTO intelligence_skill_execution "
+                    "(skill_name, status, error_message, params, executed_at, user_id) "
+                    "VALUES (%s, %s, %s, %s, NOW(), %s)",
+                    ['chat_web_orquestador', 'error', mensaje[:500],
+                     '{}', str(ctx.user.id) if ctx.user else None]
+                )
+        except Exception:
+            pass  # No romper el flujo si falla el log
 
     # ── EJECUCIÓN DE SKILL ─────────────────────────────────────────────
 
