@@ -349,12 +349,20 @@ def procesar_archivo_extraccion(archivo_id: int, extractor_log_id: Optional[int]
             # Recargar el log desde BD para obtener el estado actual
             log_refreshed = ExtractorLog.objects.get(pk=extractor_log.pk)
             
-            # Actualizar progreso en BD cada 10 mensajes para que el frontend lo vea
-            if idx % 10 == 0:
+            # Actualizar progreso en BD cada 3 mensajes para que el frontend lo vea
+            # Usar los contadores REALES (extractor_log in-memory), NO log_refreshed,
+            # porque log_refreshed tiene valores obsoletos de la BD que NO reflejan
+            # los incrementos hechos durante este ciclo de procesamiento.
+            if idx % 3 == 0:
                 extractor_log.mensajes_extraidos_total = total_mensajes
-                extractor_log.mensajes_validos = log_refreshed.mensajes_validos
-                extractor_log.requerimientos_duplicados = log_refreshed.requerimientos_duplicados
-                extractor_log.save(update_fields=['mensajes_extraidos_total', 'mensajes_validos', 'requerimientos_duplicados'])
+                # Guardar errores_insercion en requerimientos_basura_filtrados (campo sin uso real)
+                extractor_log.requerimientos_basura_filtrados = errores_insercion
+                extractor_log.save(update_fields=[
+                    'mensajes_extraidos_total',
+                    'mensajes_validos',
+                    'requerimientos_duplicados',
+                    'requerimientos_basura_filtrados',
+                ])
             if log_refreshed.estado == 'paused':
                 LogEntry.objects.create(
                     extractor_log=extractor_log,
