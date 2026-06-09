@@ -364,6 +364,10 @@ Responde SOLO con un JSON válido con esta estructura:
                     }
 
                 # Coincidencia parcial usando Jaccard
+                # NOTA: threshold alto porque los requerimientos comparten mucho
+                # vocabulario común (tipo_operacion, distritos, presupuesto,
+                # "cliente busca", "community tops", etc.) y Jaccard produce
+                # falsos positivos con thresholds bajos.
                 palabras_nuevas = set(texto_normalizado.split())
                 palabras_existentes = set(req_texto.split())
                 if len(palabras_nuevas) > 3 and len(palabras_existentes) > 3:
@@ -371,9 +375,9 @@ Responde SOLO con un JSON válido con esta estructura:
                     union = palabras_nuevas | palabras_existentes
                     jaccard = len(interseccion) / len(union) if union else 0
 
-                    # Si hay alta similitud Y mismo agente, umbral más bajo (70%)
+                    # Mismo agente + altísima similitud: umbral 90%
                     if (agente_normalizado and req_agente and
-                        agente_normalizado == req_agente and jaccard >= 0.70):
+                        agente_normalizado == req_agente and jaccard >= 0.90):
                         return {
                             'is_duplicate': True,
                             'match_score': round(jaccard * 100),
@@ -382,8 +386,8 @@ Responde SOLO con un JSON válido con esta estructura:
                             'error': None,
                         }
 
-                    # Si solo hay alta similitud textual, umbral normal (85%)
-                    if jaccard >= 0.85:
+                    # Sin mismo agente: solo con similitud casi exacta (95%)
+                    if jaccard >= 0.95:
                         return {
                             'is_duplicate': True,
                             'match_score': round(jaccard * 100),

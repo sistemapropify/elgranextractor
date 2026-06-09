@@ -1,6 +1,11 @@
 """
 ContextManager — Servicio centralizado de contexto activo de búsqueda.
 
+⚠️ DEPRECATED desde refactor v2 (arquitectura_chat_inteligente_v2.md).
+⚠️ DeepSeek ahora resuelve el contexto conversacional directamente en el
+⚠️ prompt de orquestación. Este archivo se mantiene solo para compatibilidad
+⚠️ con vistas legacy y tests. No usar en código nuevo.
+
 Unifica la lectura/escritura del contexto conversacional para el pipeline
 de skills de Propifai. Elimina la duplicación entre SkillExecution.parameters
 y conversation.metadata['contexto_activo_busqueda'].

@@ -2,13 +2,18 @@
 ResolverContextoSkill — Skill intermedia que resuelve referencias ambiguas
 en mensajes conversacionales usando el historial y contexto activo de sesión.
 
-Propósito:
+⚠️ DEPRECATED desde refactor v2 (arquitectura_chat_inteligente_v2.md).
+⚠️ DeepSeek ahora resuelve el contexto conversacional directamente en el
+⚠️ prompt de orquestación. Este archivo se mantiene solo para compatibilidad
+⚠️ con código legacy. No usar en código nuevo.
+
+Propósito (legacy):
     Antes de llamar a busqueda_propiedades, esta skill enriquece los parámetros
     del mensaje actual con el contexto de turnos anteriores. Resuelve expresiones
     como "el mismo distrito", "y de 3 habitaciones", "y en cayma", "y vendidas"
     sin necesidad de que el usuario repita todos los filtros.
 
-Ubicación: webapp/intelligence/skills/resolver_contexto.py
+Ubicación: webapp/intelligence/skills/resolver_contexto.py (DEPRECATED)
 Pipeline:  Ejecutar ANTES de busqueda_propiedades via execute_skill_pipeline()
 """
 

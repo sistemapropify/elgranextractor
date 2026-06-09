@@ -448,10 +448,15 @@ def procesar_archivo_extraccion(archivo_id: int, extractor_log_id: Optional[int]
                     detalles={'mensaje_idx': idx, 'paso': 'dedup'},
                 )
                 try:
+                    # Pasar texto ORIGINAL (msg['texto'], no texto_limpio) para que
+                    # el hash SHA256 usado en dedup coincida con el texto_hash
+                    # almacenado en BD (que se calcula desde texto_original en línea 607).
+                    # texto_limpio tiene emojis eliminados, lo que causaba mismatch de hash.
+                    texto_dedup = msg.get('texto', '') or texto_limpio
                     is_duplicate, matching_id = _ejecutar_con_timeout(
                         DeduplicadorIA.verificar_duplicado_simple,
                         15,  # 15 segundos máximo para dedup
-                        texto_limpio,
+                        texto_dedup,
                         agente=msg.get('autor', ''),
                     )
                 except TimeoutError:

@@ -134,10 +134,11 @@ class BusquedaPropiedadesSkill(BaseSkill):
 
     name = "busqueda_propiedades"
     description = (
-        "Busca propiedades en la base de datos usando filtros exactos "
-        "(distrito, tipo, precio, operación) y búsqueda semántica "
-        "(descripciones, ambientes, características). Ideal para cuando el "
-        "usuario pregunta por propiedades disponibles con características específicas."
+        "Busca propiedades usando búsqueda semántica (embeddings) combinada "
+        "con filtros exactos (distrito, tipo, precio). Detecta automáticamente "
+        "la intención del usuario: si describe características o propósito, "
+        "usa los embeddings; si da valores concretos, aplica filtros exactos. "
+        "Soporta cualquier consulta en lenguaje natural."
     )
     category = "busqueda"
     access_level = 1
@@ -146,42 +147,42 @@ class BusquedaPropiedadesSkill(BaseSkill):
     parameters_schema = {
         'distrito': {
             'type': 'string',
-            'description': 'Nombre del distrito. Ej: Cayma, Yanahuara, Cercado',
+            'description': 'Filtro exacto por distrito. Ej: Cayma, Yanahuara, Cercado, Cerro Colorado',
             'required': False,
         },
         'tipo_propiedad': {
             'type': 'string',
-            'description': 'Tipo de propiedad: Departamento, Casa, Terreno, Local Comercial, Oficina',
+            'description': 'Filtro exacto por tipo. Ej: Departamento, Casa, Terreno, Local Comercial, Oficina',
             'required': False,
         },
         'operacion': {
             'type': 'string',
-            'description': 'Tipo de operación: venta, alquiler',
+            'description': 'Filtro exacto por operación: venta, alquiler',
             'required': False,
         },
         'precio_min': {
             'type': 'number',
-            'description': 'Precio mínimo en la moneda detectada',
+            'description': 'Filtro exacto: precio mínimo',
             'required': False,
         },
         'precio_max': {
             'type': 'number',
-            'description': 'Precio máximo en la moneda detectada',
+            'description': 'Filtro exacto: precio máximo',
             'required': False,
         },
         'habitaciones': {
             'type': 'integer',
-            'description': 'Número mínimo de habitaciones',
+            'description': 'Filtro exacto: número mínimo de habitaciones',
             'required': False,
         },
         'area_min': {
             'type': 'number',
-            'description': 'Área mínima en m²',
+            'description': 'Filtro exacto: área mínima en m²',
             'required': False,
         },
         'semantic_query': {
             'type': 'string',
-            'description': 'Parte semántica/subjetiva del mensaje. Ej: ambientes amplios y luminosos',
+            'description': 'BÚSQUEDA SEMÁNTICA: cualquier texto en lenguaje natural que describa el PROPÓSITO, USO, CARACTERÍSTICAS, UBICACIÓN o cualquier aspecto de la propiedad. El sistema busca por SIGNIFICADO usando embeddings, no por palabras exactas. Ejemplos: "para poner un colegio", "donde acepten perros", "cerca de un colegio", "para negocio", "ambientes amplios y luminosos", "para construir", "frente a parque", "esquinero", "cerca de universidad", "para taller mecánico", "para consultorio médico", "zona tranquila", "para familia grande", "con vista", "para oficina", "todo incluido". USA SIEMPRE este parámetro cuando el usuario describa lo que busca en lenguaje natural, aunque también mencione distritos o tipos específicos (se pueden COMBINAR con los filtros exactos de arriba).',
             'required': False,
         },
         'top_k': {
@@ -191,7 +192,7 @@ class BusquedaPropiedadesSkill(BaseSkill):
         },
         'condicion': {
             'type': 'string',
-            'description': 'Estado/condición de la propiedad: Disponible, Vendida, Reservada. Si no se especifica, NO se filtra por estado.',
+            'description': 'Filtro exacto por estado: Disponible, Vendida, Reservada',
             'required': False,
         },
         'colecciones': {
@@ -229,131 +230,174 @@ class BusquedaPropiedadesSkill(BaseSkill):
         context: Optional[Dict[str, Any]] = None
     ) -> SkillResult:
         """
-        Ejecuta la búsqueda híbrida de propiedades.
+        Búsqueda híbrida inteligente de propiedades.
+
+        FLUJO:
+        1. Si NO hay parámetros → mostrar conteo general
+        2. Si hay semantic_query → búsqueda por EMBEDDINGS (FAISS) primero
+        3. Si hay filtros exactos → aplicar sobre resultados semánticos o BD
+        4. Siempre ordenar por relevancia (semántica si aplica)
 
         Args:
-            params: Parámetros de búsqueda (ver parameters_schema)
-            context: Contexto opcional con user_level, profile, etc.
+            params: Parámetros de búsqueda
+            context: Contexto opcional
 
         Returns:
-            SkillResult con los resultados de la búsqueda
+            SkillResult con resultados
         """
         try:
-            # ── Paso 1: Determinar modo de búsqueda ──
-            modo = self._determinar_modo(params)
-            logger.info(
-                f"Ejecutando busqueda_propiedades (modo: {modo}) "
-                f"con params: {self._sanitize_params(params)}"
+            # ── Extraer parámetros ──
+            semantic_query = (params.get('semantic_query') or '').strip()
+            tiene_semantica = bool(semantic_query)
+            tiene_filtros_exactos = any(
+                params.get(k) is not None and params.get(k) != ''
+                for k in ('distrito', 'tipo_propiedad', 'operacion',
+                          'precio_min', 'precio_max', 'habitaciones', 'area_min',
+                          'condicion')
             )
 
-            if modo == 'sin_parametros':
-                # Mostrar conteo de propiedades activas/disponibles
+            # ── Sin parámetros: conteo general ──
+            if not tiene_semantica and not tiene_filtros_exactos:
                 try:
                     from propifai.models import PropifaiProperty
                     total = PropifaiProperty.objects.count()
                     disponibles = PropifaiProperty.objects.filter(
-                        property_status_id__in=[1, 2]  # Disponible, En venta
+                        property_status_id__in=[1, 2]
                     ).count()
                     mensaje = (
-                        f"Actualmente hay {disponibles} propiedades disponibles en el sistema "
+                        f"Actualmente hay {disponibles} propiedades disponibles "
                         f"(de {total} registradas). "
-                        "Por favor indica qué tipo de propiedad buscas, "
-                        "en qué distrito, o qué características debe tener para mostrarte las mejores opciones."
+                        "¿Qué tipo de propiedad buscas o en qué distrito?"
                     )
                     return SkillResult.ok(
                         data=[],
                         message=mensaje,
-                        metadata={'modo': modo, 'total': total, 'disponibles': disponibles},
+                        metadata={'total': total, 'disponibles': disponibles},
                         skill_name=self.name
                     )
                 except Exception:
                     return SkillResult.ok(
                         data=[],
-                        message="No se especificaron criterios de búsqueda. "
-                                "Por favor indica qué tipo de propiedad buscas, "
-                                "en qué distrito, o qué características debe tener.",
-                        metadata={'modo': modo},
+                        message="Indica qué tipo de propiedad buscas.",
+                        metadata={},
                         skill_name=self.name
                     )
 
-            # ── Paso 2: Filtrado SQL sobre field_values ──
-            if hasattr(context, 'permissions'):
-                user_level = context.metadata.get('user_level', 1) if hasattr(context, 'metadata') else 1
-            else:
-                user_level = (context or {}).get('user_level', 1)
+            # ── Obtener colecciones ──
+            user_level = self._get_user_level(context)
             colecciones = self._obtener_colecciones(params.get('colecciones'), user_level)
-
             if not colecciones:
                 return SkillResult.ok(
                     data=[],
                     message="No hay colecciones de propiedades disponibles.",
-                    metadata={
-                        'modo': modo,
-                        'total_encontrados': 0,
-                        'total_retornados': 0,
-                        'filtros_aplicados': self._extract_filters(params),
-                    },
+                    metadata={'filtros_aplicados': self._extract_filters(params)},
                     skill_name=self.name
                 )
 
-            documentos = self._filtrar_por_sql(params, colecciones)
-            total_sql = len(documentos)
-
-            if total_sql == 0:
-                return SkillResult.ok(
-                    data=[],
-                    message="No se encontraron propiedades con los filtros especificados.",
-                    metadata={
-                        'modo': modo,
-                        'total_encontrados': 0,
-                        'total_retornados': 0,
-                        'filtros_aplicados': self._extract_filters(params),
-                    },
-                    skill_name=self.name
+            # ── RUTA A: Búsqueda semántica (embeddings) ──
+            if tiene_semantica:
+                top_k = params.get('top_k') or 50
+                rag_results = RAGService.search_dynamic(
+                    query=semantic_query,
+                    collection_names=[c.name for c in colecciones],
+                    top_k=top_k,
                 )
 
-            # ── Paso 3: Re-ranking semántico ──
-            if modo in ('hibrido', 'solo_semantico'):
-                documentos = self._reranking_semantico(
-                    documentos, params.get('semantic_query', '')
-                )
+                if not rag_results:
+                    return SkillResult.ok(
+                        data=[],
+                        message=f"No se encontraron propiedades que coincidan con: {semantic_query}",
+                        metadata={'semantic_query': semantic_query},
+                        skill_name=self.name
+                    )
 
-            # ── Paso 4: Construir resultado ──
-            top_k = params.get('top_k', 0)
-            if top_k and top_k > 0:
-                documentos_retornados = documentos[:top_k]
+                # Convertir resultados RAG a documentos con score
+                from ...models import IntelligenceDocument
+                doc_ids = []
+                score_map = {}
+                for r in rag_results:
+                    doc_id = r.get('document_id')
+                    if doc_id:
+                        doc_ids.append(doc_id)
+                        score_map[str(doc_id)] = r.get('score', r.get('similarity', 0.5))
+
+                docs_con_score = []
+                if doc_ids:
+                    docs_qs = IntelligenceDocument.objects.filter(
+                        id__in=doc_ids,
+                        collection__in=colecciones,
+                    ).select_related('collection')
+                    for doc in docs_qs:
+                        docs_con_score.append((doc, score_map.get(str(doc.id), 0.5)))
+
+                # Ordenar por score semántico
+                docs_con_score.sort(key=lambda x: x[1], reverse=True)
+
+                # Aplicar filtros exactos SOBRE resultados semánticos
+                if tiene_filtros_exactos:
+                    docs_con_score = self._aplicar_filtros_exactos(docs_con_score, params)
+
+                if not docs_con_score:
+                    return SkillResult.ok(
+                        data=[],
+                        message="No se encontraron propiedades con esos criterios.",
+                        metadata={
+                            'semantic_query': semantic_query,
+                            'filtros_aplicados': self._extract_filters(params),
+                        },
+                        skill_name=self.name
+                    )
+
+                documentos = docs_con_score
+
+            # ── RUTA B: Solo filtros exactos (sin semántica) ──
             else:
-                documentos_retornados = documentos
+                documentos = self._filtrar_por_sql(params, colecciones)
+                if not documentos:
+                    return SkillResult.ok(
+                        data=[],
+                        message="No se encontraron propiedades con los filtros especificados.",
+                        metadata={'filtros_aplicados': self._extract_filters(params)},
+                        skill_name=self.name
+                    )
+
+            # ── Construir resultado ──
+            top_k_limit = params.get('top_k', 0)
+            if top_k_limit and top_k_limit > 0:
+                documentos = documentos[:top_k_limit]
 
             resultados = []
-            for doc, score in documentos_retornados:
+            for doc, score in documentos:
                 field_values = self._build_field_values_to_display(doc)
                 resultados.append({
                     'document_id': str(doc.id),
                     'collection_name': doc.collection.name,
                     'source_id': doc.source_id,
-                    'similarity': score,
+                    'similarity': round(score, 4),
                     'field_values': field_values,
                     'created_at': doc.created_at.isoformat() if doc.created_at else None,
                 })
 
-            mensaje = (
-                f"Se encontraron {total_sql} propiedades"
-                f"{f', mostrando {len(resultados)}' if top_k and top_k < total_sql else ''}"
-                f"{' en ' + params.get('distrito', '') if params.get('distrito') else ''}"
-                f"{' de tipo ' + params.get('tipo_propiedad', '') if params.get('tipo_propiedad') else ''}"
-                f"."
-            )
+            if tiene_semantica:
+                mensaje = (
+                    f"Se encontraron {len(documentos)} propiedades relacionadas con: {semantic_query}"
+                )
+            else:
+                mensaje = f"Se encontraron {len(documentos)} propiedades"
+                if params.get('distrito'):
+                    mensaje += f" en {params['distrito']}"
+                if params.get('tipo_propiedad'):
+                    mensaje += f" de tipo {params['tipo_propiedad']}"
+                mensaje += "."
 
             return SkillResult.ok(
                 data=resultados,
                 message=mensaje,
                 metadata={
-                    'modo': modo,
-                    'total_encontrados_sql': total_sql,
-                    'total_retornados': len(resultados),
-                    'filtros_aplicados': self._extract_filters(params),
-                    'semantic_query': params.get('semantic_query'),
+                    'total_encontrados': len(resultados),
+                    'semantic_query': semantic_query if tiene_semantica else None,
+                    'filtros_exactos': self._extract_filters(params) if tiene_filtros_exactos else None,
+                    'busqueda_semantica': tiene_semantica,
                 },
                 skill_name=self.name
             )
@@ -361,37 +405,9 @@ class BusquedaPropiedadesSkill(BaseSkill):
         except Exception as e:
             logger.error(f"Error en busqueda_propiedades: {e}", exc_info=True)
             return SkillResult.error(
-                message=f"Error interno al buscar propiedades: {str(e)}",
+                message=f"Error al buscar propiedades: {str(e)}",
                 skill_name=self.name
             )
-
-    # ── Paso 1: Determinar modo ───────────────────────────────────────────
-
-    def _determinar_modo(self, params: Dict[str, Any]) -> str:
-        """
-        Determina el modo de búsqueda según los parámetros recibidos.
-
-        Returns:
-            'solo_sql' | 'solo_semantico' | 'hibrido' | 'sin_parametros'
-        """
-        tiene_filtros = any(
-            params.get(k) is not None and params.get(k) != ''
-            for k in ('distrito', 'tipo_propiedad', 'operacion',
-                      'precio_min', 'precio_max', 'habitaciones', 'area_min')
-        )
-        tiene_semantica = bool(
-            params.get('semantic_query') and
-            params['semantic_query'].strip()
-        )
-
-        if tiene_filtros and tiene_semantica:
-            return 'hibrido'
-        elif tiene_filtros:
-            return 'solo_sql'
-        elif tiene_semantica:
-            return 'solo_semantico'
-        else:
-            return 'sin_parametros'
 
     # ── Paso 2: Filtrado SQL ──────────────────────────────────────────────
 
@@ -588,6 +604,130 @@ class BusquedaPropiedadesSkill(BaseSkill):
             return documentos
 
     # ── Helpers ───────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _get_user_level(context) -> int:
+        """Extrae el nivel de usuario del contexto."""
+        if context is None:
+            return 1
+        if hasattr(context, 'metadata') and context.metadata:
+            return context.metadata.get('user_level', 1)
+        if isinstance(context, dict):
+            return context.get('user_level', 1)
+        return 1
+
+    def _aplicar_filtros_exactos(
+        self,
+        documentos: List[Tuple[IntelligenceDocument, float]],
+        params: Dict[str, Any],
+    ) -> List[Tuple[IntelligenceDocument, float]]:
+        """
+        Aplica filtros exactos sobre documentos ya obtenidos por búsqueda semántica.
+        Filtra en Python (no en SQL) porque los documentos ya están en memoria.
+        """
+        if not documentos:
+            return []
+
+        resultado = []
+        for doc, score in documentos:
+            fv = doc.field_values or {}
+            if not self._doc_cumple_filtros(fv, params):
+                continue
+            resultado.append((doc, score))
+
+        return resultado
+
+    def _doc_cumple_filtros(
+        self,
+        field_values: Dict[str, Any],
+        params: Dict[str, Any],
+    ) -> bool:
+        """Verifica si un documento (field_values) cumple todos los filtros exactos."""
+        # Distrito
+        distrito = params.get('distrito')
+        if distrito:
+            coincide = False
+            for campo in FIELD_MAP['distrito']:
+                val = field_values.get(campo)
+                if val and str(val).lower() == distrito.lower():
+                    coincide = True
+                    break
+            if not coincide:
+                return False
+
+        # Tipo propiedad
+        tipo = params.get('tipo_propiedad')
+        if tipo:
+            tipo_norm = self._normalizar_tipo(tipo)
+            coincide = False
+            for campo in FIELD_MAP['tipo_propiedad']:
+                val = field_values.get(campo)
+                if val and str(val).lower() == tipo_norm.lower():
+                    coincide = True
+                    break
+            if not coincide:
+                return False
+
+        # Operación
+        operacion = params.get('operacion')
+        if operacion:
+            op_norm = self._normalizar_operacion(operacion)
+            if op_norm:
+                coincide = False
+                for campo in FIELD_MAP['operacion']:
+                    val = field_values.get(campo)
+                    if val and str(val).lower() == op_norm.lower():
+                        coincide = True
+                        break
+                if not coincide:
+                    return False
+
+        # Precio mínimo
+        precio_min = params.get('precio_min')
+        if precio_min is not None:
+            coincide = False
+            for campo in FIELD_MAP['precio']:
+                val = field_values.get(campo)
+                if val is not None:
+                    try:
+                        if float(val) >= float(precio_min):
+                            coincide = True
+                            break
+                    except (ValueError, TypeError):
+                        pass
+            if not coincide:
+                return False
+
+        # Precio máximo
+        precio_max = params.get('precio_max')
+        if precio_max is not None:
+            coincide = False
+            for campo in FIELD_MAP['precio']:
+                val = field_values.get(campo)
+                if val is not None:
+                    try:
+                        if float(val) <= float(precio_max):
+                            coincide = True
+                            break
+                    except (ValueError, TypeError):
+                        pass
+            if not coincide:
+                return False
+
+        # Condición
+        condicion = params.get('condicion')
+        if condicion:
+            valor_busqueda = STATUS_MAP.get(condicion.lower().strip(), condicion)
+            coincide = False
+            for campo in FIELD_MAP['condicion']:
+                val = field_values.get(campo)
+                if val and str(val).lower() == valor_busqueda.lower():
+                    coincide = True
+                    break
+            if not coincide:
+                return False
+
+        return True
 
     def _normalizar_tipo(self, tipo: str) -> str:
         """Normaliza el tipo de propiedad."""

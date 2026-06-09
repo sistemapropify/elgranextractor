@@ -11,7 +11,13 @@ from .prompts import (
     format_memory_context,
     format_rag_context,
     build_full_prompt,
+    build_orchestration_prompt,
+    parse_orchestration_response,
+    format_skills_for_prompt,
+    format_conversation_history,
+    OrchestrationDecision,
     DEFAULT_SYSTEM_PROMPT,
+    ORCHESTRATION_SYSTEM_PROMPT,
 )
 from .metrics import MetricsService, StructuredLogger, log
 from .intent_classifier import IntentClassifier, IntentType, IntentResult
@@ -38,7 +44,13 @@ __all__ = [
     'format_memory_context',
     'format_rag_context',
     'build_full_prompt',
+    'build_orchestration_prompt',
+    'parse_orchestration_response',
+    'format_skills_for_prompt',
+    'format_conversation_history',
+    'OrchestrationDecision',
     'DEFAULT_SYSTEM_PROMPT',
+    'ORCHESTRATION_SYSTEM_PROMPT',
     'MetricsService',
     'StructuredLogger',
     'log',

@@ -40,7 +40,6 @@ class IntelligenceConfig(AppConfig):
             from .skills.matching import MatchingOfertaDemandaSkill
             from .skills.busqueda_exacta import BusquedaExactaSkill
             from .skills.clasificar_intencion_whatsapp import ClasificarIntencionWhatsAppSkill
-            from .skills.resolver_contexto import ResolverContextoSkill
             from .skills.examples.math_skills import (
                 SumaSkill, RestaSkill, MultiplicacionSkill,
                 DivisionSkill, PotenciaSkill, RaizCuadradaSkill,
@@ -58,7 +57,9 @@ class IntelligenceConfig(AppConfig):
             registry.register(MatchingOfertaDemandaSkill)
             registry.register(BusquedaExactaSkill)
             registry.register(ClasificarIntencionWhatsAppSkill)
-            registry.register(ResolverContextoSkill)
+            # NOTA: ResolverContextoSkill eliminado en refactor v2.
+            # DeepSeek ahora resuelve el contexto conversacional directamente
+            # como parte del prompt de orquestación. Ver services/chat_processor.py
             registry.register(SumaSkill)
             registry.register(RestaSkill)
             registry.register(MultiplicacionSkill)

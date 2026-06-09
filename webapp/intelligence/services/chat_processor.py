@@ -1,27 +1,35 @@
 """
-Procesador de mensajes de chat (ChatProcessor).
+ChatProcessor v2 — DeepSeek como agente orquestador.
 
-Contiene TODA la lógica de negocio que antes estaba duplicada en
-chat_web_api y chat_web_stream de views.py.
+ARQUITECTURA (refactor v2):
+- DeepSeek ve la CONVERSACIÓN COMPLETA como contexto
+- DeepSeek decide QUÉ skill ejecutar y CON QUÉ parámetros
+- DeepSeek determina si es una nueva consulta o seguimiento
+- NO más resolver_contexto, context_manager, intent_classifier
+- NO más reglas duras de routing, pipelines condicionales
 
-NO depende de Django REST Framework. Recibe objetos Python y devuelve
-dataclasses. Esto permite reutilizarlo desde:
-- Views de DRF (chat_web_api, chat_web_stream)
-- Management commands
-- MCP servers
-- Celery tasks
+Flujo:
+1. Construir prompt de orquestación: skills + historial + mensaje
+2. DeepSeek responde con JSON: {"skill": "...", "params": {...}, "respuesta_directa": "..."}
+3. Si eligió skill → ejecutar vía SkillOrchestrator
+4. Construir prompt de respuesta: historial + skill result + consulta
+5. DeepSeek genera respuesta natural
+6. Guardar en conversación + post-process (memoria episódica)
+
+Compatibilidad:
+- Mantiene la misma interfaz pública (ChatProcessor.process_message, ChatResult, ChatContext)
+- Views existentes no requieren cambios (solo importan estos mismos símbolos)
 """
+
 import json
-import re
 import uuid
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Generator
 from django.utils import timezone
 
 from ..models import (
     User, AppConfig, Conversation,
-    IntelligenceCollection, ConversationFlow,
-    ConversationFlowState, UserIntelligenceProfile,
+    IntelligenceCollection,
 )
 from .memory import MemoryService
 from .episodic_memory import EpisodicMemoryService
@@ -29,24 +37,23 @@ from .rag import RAGService
 from .llm import LLMService
 from .prompts import (
     PromptManager,
+    build_orchestration_prompt,
+    parse_orchestration_response,
+    OrchestrationDecision,
     format_episodic_context,
     format_memory_context,
     format_rag_context,
     build_full_prompt,
 )
-from .intent_classifier import IntentClassifier, IntentType
 from .metrics import MetricsService, log
-from .context_manager import ContextManager, ActiveContext
-from ..skills.base import SkillResult
 from ..skills import create_skill_system
-from ..skills.orchestrator import ExecutionContext, SkillPipelineStep
-from ..skills.registry import SkillRegistry
+from ..skills.orchestrator import ExecutionContext
 
-# Skill system singleton para el pipeline de chat
+# Skill system singleton
 SKILL_SYSTEM = create_skill_system(enable_cache=True, auto_discover_examples=True)
 
 
-# ── Dataclasses de resultado (sin dependencia DRF) ─────────────────────────
+# ── Dataclasses de resultado ─────────────────────────────────────────
 
 @dataclass
 class ChatResult:
@@ -76,11 +83,9 @@ class ChatContext:
     temperature: float = 0.1
     skill_name: Optional[str] = None
     skill_params: Dict[str, Any] = field(default_factory=dict)
+    # Campos de compatibilidad con vistas legacy (no usados en v2)
     flow_name: Optional[str] = None
     flow_params: Dict[str, Any] = field(default_factory=dict)
-    skill_pipeline: Optional[List[Dict[str, Any]]] = None
-    skill_pipeline_mode: str = 'sequential'
-    skill_pipeline_abort_on_error: bool = True
 
 
 @dataclass
@@ -90,23 +95,44 @@ class StreamChunk:
     data: Dict[str, Any]
 
 
-# ── ChatProcessor ──────────────────────────────────────────────────────────
+# ── Prompt de respuesta final ────────────────────────────────────────
+
+RESPONSE_SYSTEM_PROMPT = """Eres un asistente inmobiliario experto en Arequipa, Perú.
+
+HISTORIAL DE CONVERSACIÓN:
+{historial}
+
+CONSULTA DEL USUARIO:
+"{mensaje}"
+
+RESULTADOS DEL SISTEMA:
+{resultados_skill}
+
+INSTRUCCIONES:
+1. Genera una respuesta NATURAL y CONVERSACIONAL en español.
+2. USA EL HISTORIAL completo para mantener coherencia con la conversación.
+3. PRESENTA los datos de los resultados del sistema de forma organizada y amigable.
+4. Si el usuario preguntó por propiedades, incluye: tipo, distrito, precio, área, características relevantes.
+5. Si no hay resultados, indícalo amablemente y sugiere refinar la búsqueda.
+6. NO inventes propiedades ni datos que no estén en los resultados del sistema.
+7. Usa un tono profesional pero cercano, como un asesor inmobiliario de confianza.
+8. NO devuelvas JSON ni datos técnicos. Solo texto legible.
+9. Responde en español."""
+
+
+# ── ChatProcessor ────────────────────────────────────────────────────
 
 class ChatProcessor:
     """
-    Procesa mensajes de chat con todo el pipeline de inteligencia.
+    Procesador de mensajes v2 con DeepSeek como agente orquestador.
 
-    Flujo completo:
-    1. Clasificar intención del mensaje
-    2. Obtener memoria del usuario (si aplica)
-    3. Obtener contexto RAG (si aplica)
-    4. Obtener episodios relevantes (si aplica)
-    5. Construir prompt con todo el contexto
-    6. Llamar a DeepSeek
-    7. Guardar respuesta en conversación
-    8. Guardar episodio en memoria episódica
-    9. Extraer hechos relevantes
+    Flujo:
+    1. Orquestación: DeepSeek decide qué skill ejecutar
+    2. Ejecución: sistema ejecuta la skill elegida
+    3. Respuesta: DeepSeek genera respuesta natural con los resultados
     """
+
+    # ── Método principal (no streaming) ─────────────────────────────────
 
     @classmethod
     def process_message(cls, ctx: ChatContext) -> ChatResult:
@@ -125,100 +151,46 @@ class ChatProcessor:
             app_id=ctx.app_id,
         ) as timer:
             try:
-                # Guardar mensaje del usuario en la conversación
+                # Guardar mensaje del usuario
                 cls._save_user_message(ctx.conversation, ctx.message)
 
-                # 1. Clasificar intención
-                intent = IntentClassifier.classify(ctx.message)
-                log.info(
-                    f"Intención detectada: {intent.intent.value} "
-                    f"(confianza: {intent.confidence:.2f})",
-                    intent=intent.intent.value,
-                    confidence=intent.confidence,
-                    trace_id=timer.trace_id,
-                )
+                # ── PASO 1: ORQUESTACIÓN ──
+                # DeepSeek decide qué skill ejecutar (o responde directamente)
+                decision = cls._orquestar(ctx)
 
-                # Si se pidió ejecutar un pipeline de skills explícito, ir por el motor de skills
-                if ctx.skill_pipeline:
-                    return cls._process_skill_pipeline_request(ctx, timer.trace_id)
-
-                # Si hay un flujo de conversación activo o se solicitó uno, procesarlo primero
-                if ctx.flow_name or cls._conversation_has_active_flow(ctx.conversation):
-                    flow_result = cls._process_flow_request(ctx, timer.trace_id)
-                    if flow_result:
-                        return flow_result
-
-                # Si se pidió ejecutar una skill explícita, ir por el motor de skills
-                if ctx.skill_name:
-                    return cls._process_skill_request(ctx, timer.trace_id)
-
-                # Intentar inferir si la consulta debe disparar una skill automáticamente
-                inferred_skill_result = cls._infer_skill_request(
-                    ctx, intent, timer.trace_id
-                )
-                if inferred_skill_result:
-                    return inferred_skill_result
-
-                # 2-4. Obtener contextos (según intención)
-                memory_context = cls._get_memory_context(
-                    ctx, intent, timer.trace_id
-                )
-                rag_context = cls._get_rag_context(
-                    ctx, intent, timer.trace_id
-                )
-                episodic_context = cls._get_episodic_context(
-                    ctx, intent, timer.trace_id
-                )
-
-                # 5. Construir prompt
-                full_prompt = cls._build_prompt(
-                    ctx=ctx,
-                    memory_context=memory_context,
-                    rag_context=rag_context,
-                    episodic_context=episodic_context,
-                )
-
-                # 6. Llamar a DeepSeek
-                system_prompt = PromptManager.get_deepseek_system_prompt(
-                    ctx.app_id
-                )
-                success, api_message, api_response = (
-                    LLMService._call_deepseek_api(
-                        messages=[{"role": "user", "content": full_prompt}],
-                        system_prompt=system_prompt,
-                    )
-                )
-
-                if success:
-                    if isinstance(api_response, dict):
-                        response_text = api_response.get(
-                            'content',
-                            'Lo siento, no pude generar una respuesta.'
-                        )
-                    else:
-                        log.warning(
-                            f"api_response inesperado: type={type(api_response)}"
-                        )
-                        response_text = 'Lo siento, no pude generar una respuesta.'
+                if decision.respuesta_directa:
+                    # DeepSeek puede responder sin datos del sistema
+                    response_text = decision.respuesta_directa
+                    resultados = None
+                    skill_ejecutada = None
                 else:
-                    response_text = f"Error al generar respuesta: {api_message}"
+                    # ── PASO 2: EJECUCIÓN DE SKILL ──
+                    skill_ejecutada = decision.skill
+                    resultados = cls._ejecutar_skill(
+                        skill_name=decision.skill,
+                        params=decision.params,
+                        ctx=ctx,
+                        trace_id=timer.trace_id,
+                    )
 
-                # 7. Guardar respuesta en conversación
-                message_id = cls._save_response(
-                    ctx.conversation, response_text
-                )
+                    # ── PASO 3: RESPUESTA NATURAL ──
+                    response_text = cls._generar_respuesta(
+                        ctx=ctx,
+                        resultados=resultados,
+                        skill_name=decision.skill,
+                        trace_id=timer.trace_id,
+                    )
 
-                # 8-9. Guardar episodio y extraer hechos
+                # Guardar respuesta en conversación
+                message_id = cls._save_response(ctx.conversation, response_text)
+
+                # Post-process (memoria episódica, hechos)
                 cls._save_post_process(
                     ctx=ctx,
                     response_text=response_text,
-                    memory_context=memory_context,
-                    rag_context=rag_context,
-                    intent=intent,
                     trace_id=timer.trace_id,
                 )
 
-                # Construir resultado
                 result = ChatResult(
                     success=True,
                     response_text=response_text,
@@ -226,24 +198,21 @@ class ChatProcessor:
                     message_id=message_id,
                     metadata={
                         'response': response_text,
-                        'rag_context_used': bool(rag_context),
-                        'retrieved_documents_count': len(rag_context)
-                        if rag_context else 0,
+                        'skill_executed': skill_ejecutada,
+                        'had_skill_results': bool(resultados),
                     },
                     context_summary={
-                        'memory_used': len(memory_context)
-                        if memory_context else 0,
-                        'rag_used': len(rag_context) if rag_context else 0,
-                        'collections_used': ctx.collections
-                        if ctx.collections else [],
-                        'intent': intent.intent.value,
-                        'intent_confidence': intent.confidence,
+                        'orchestration_mode': 'deepseek_v2',
+                        'skill_name': skill_ejecutada or 'direct_response',
+                        'skill_success': resultados.get('success', True)
+                        if resultados else True,
                     },
                     timestamp=timezone.now().isoformat(),
                 )
 
                 log.info(
-                    "Mensaje procesado exitosamente",
+                    "Mensaje procesado v2",
+                    skill=skill_ejecutada,
                     latency_ms=f"{timer.latency_ms:.1f}",
                     trace_id=timer.trace_id,
                 )
@@ -253,33 +222,26 @@ class ChatProcessor:
                 import traceback
                 error_details = traceback.format_exc()
                 log.error(
-                    f"Error en ChatProcessor: {str(e)}",
+                    f"Error en ChatProcessor v2: {str(e)}",
                     exc_info=True,
                     trace_id=timer.trace_id,
                 )
                 return ChatResult(
                     success=False,
                     response_text=f"Error al procesar mensaje: {str(e)}",
-                    conversation_id=str(ctx.conversation.id)
-                    if ctx.conversation else '',
+                    conversation_id=str(ctx.conversation.id) if ctx.conversation else '',
                     message_id='',
                     error=str(e),
                     metadata={'error': str(e), 'traceback': error_details},
                     timestamp=timezone.now().isoformat(),
                 )
 
+    # ── Streaming ──────────────────────────────────────────────────────
+
     @classmethod
-    def process_message_stream(
-        cls, ctx: ChatContext
-    ):
+    def process_message_stream(cls, ctx: ChatContext) -> Generator[StreamChunk, None, None]:
         """
         Procesa un mensaje en streaming.
-
-        Es un generador que produce StreamChunk con:
-        - 'metadata': información inicial
-        - 'chunk': fragmento de respuesta
-        - 'complete': respuesta completa
-        - 'error': error ocurrido
 
         Args:
             ctx: ChatContext con todos los parámetros.
@@ -293,167 +255,64 @@ class ChatProcessor:
             app_id=ctx.app_id,
         ) as timer:
             try:
-                # 1. Clasificar intención
-                intent = IntentClassifier.classify(ctx.message)
-                log.info(
-                    f"Intención detectada (stream): {intent.intent.value}",
-                    intent=intent.intent.value,
-                    trace_id=timer.trace_id,
-                )
-
-                # Guardar mensaje del usuario en la conversación
+                # Guardar mensaje del usuario
                 cls._save_user_message(ctx.conversation, ctx.message)
 
-                # 2-4. Obtener contextos
-                inferred_skill_result = cls._infer_skill_request(
-                    ctx, intent, timer.trace_id
-                )
-                if inferred_skill_result:
-                    yield StreamChunk('metadata', {
-                        'conversation_id': str(ctx.conversation.id),
-                        'context_summary': {
-                            'skill_name': inferred_skill_result.metadata.get('skill_name'),
-                            'skill_success': True,
-                            'intent': intent.intent.value,
-                        },
-                        'trace_id': timer.trace_id,
-                    })
-                    yield StreamChunk('chunk', {
-                        'content': inferred_skill_result.response_text
-                    })
-                    yield StreamChunk('complete', {
-                        'message_id': inferred_skill_result.message_id,
-                        'full_response': inferred_skill_result.response_text,
-                        'timestamp': inferred_skill_result.timestamp,
-                    })
-                    return
-
-                if ctx.skill_pipeline:
-                    yield StreamChunk('metadata', {
-                        'conversation_id': str(ctx.conversation.id),
-                        'context_summary': {
-                            'pipeline_mode': ctx.skill_pipeline_mode,
-                            'skill_count': len(ctx.skill_pipeline),
-                            'memory_used': 0,
-                            'rag_used': 0,
-                            'collections_used': [],
-                            'intent': 'skill_pipeline',
-                        },
-                        'trace_id': timer.trace_id,
-                    })
-
-                    skill_result = cls._process_skill_pipeline_request(ctx, timer.trace_id)
-                    if not skill_result.success:
-                        yield StreamChunk('error', {
-                            'error': skill_result.error or 'Error ejecutando pipeline de skills'
-                        })
-                        return
-
-                    yield StreamChunk('chunk', {
-                        'content': skill_result.response_text
-                    })
-                    yield StreamChunk('complete', {
-                        'message_id': skill_result.message_id,
-                        'full_response': skill_result.response_text,
-                        'timestamp': skill_result.timestamp,
-                    })
-                    return
-
-                if ctx.flow_name or cls._conversation_has_active_flow(ctx.conversation):
-                    flow_result = cls._process_flow_request(ctx, timer.trace_id)
-                    if flow_result:
-                        yield StreamChunk('metadata', {
-                            'conversation_id': str(ctx.conversation.id),
-                            'context_summary': {
-                                'flow_name': flow_result.metadata.get('flow_name'),
-                                'current_state': flow_result.metadata.get('flow_state'),
-                                'intent': 'conversation_flow',
-                            },
-                            'trace_id': timer.trace_id,
-                        })
-                        yield StreamChunk('chunk', {'content': flow_result.response_text})
-                        yield StreamChunk('complete', {
-                            'message_id': flow_result.message_id,
-                            'full_response': flow_result.response_text,
-                            'timestamp': flow_result.timestamp,
-                        })
-                        return
-
-                if ctx.skill_name:
-                    # Emitir metadata antes de ejecutar la skill
-                    yield StreamChunk('metadata', {
-                        'conversation_id': str(ctx.conversation.id),
-                        'context_summary': {
-                            'skill_name': ctx.skill_name,
-                            'memory_used': 0,
-                            'rag_used': 0,
-                            'collections_used': [],
-                            'intent': 'skill_execution',
-                        },
-                        'trace_id': timer.trace_id,
-                    })
-
-                    skill_result = cls._process_skill_request(ctx, timer.trace_id)
-                    if not skill_result.success:
-                        yield StreamChunk('error', {
-                            'error': skill_result.error or 'Error ejecutando skill'
-                        })
-                        return
-
-                    yield StreamChunk('chunk', {
-                        'content': skill_result.response_text
-                    })
-                    yield StreamChunk('complete', {
-                        'message_id': skill_result.message_id,
-                        'full_response': skill_result.response_text,
-                        'timestamp': skill_result.timestamp,
-                    })
-                    return
-
-                memory_context = cls._get_memory_context(
-                    ctx, intent, timer.trace_id
-                )
-                rag_context = cls._get_rag_context(
-                    ctx, intent, timer.trace_id
-                )
-                episodic_context = cls._get_episodic_context(
-                    ctx, intent, timer.trace_id
-                )
-
-                # Yield metadata inicial
+                # PASO 1: Orquestación
                 yield StreamChunk('metadata', {
                     'conversation_id': str(ctx.conversation.id),
                     'context_summary': {
-                        'memory_used': len(memory_context)
-                        if memory_context else 0,
-                        'rag_used': len(rag_context) if rag_context else 0,
-                        'collections_used': ctx.collections
-                        if ctx.collections else [],
-                        'intent': intent.intent.value,
+                        'orchestration_mode': 'deepseek_v2',
+                        'intent': 'orchestrating',
                     },
                     'trace_id': timer.trace_id,
                 })
 
-                # 5. Construir prompt
-                full_prompt = cls._build_prompt(
+                decision = cls._orquestar(ctx)
+
+                if decision.respuesta_directa:
+                    # Respuesta directa sin skill
+                    response_text = decision.respuesta_directa
+                    message_id = cls._save_response(ctx.conversation, response_text)
+                    cls._save_post_process(ctx, response_text, timer.trace_id)
+
+                    yield StreamChunk('chunk', {'content': response_text})
+                    yield StreamChunk('complete', {
+                        'message_id': message_id,
+                        'full_response': response_text,
+                        'timestamp': timezone.now().isoformat(),
+                    })
+                    return
+
+                # PASO 2: Ejecución de skill
+                resultados = cls._ejecutar_skill(
+                    skill_name=decision.skill,
+                    params=decision.params,
                     ctx=ctx,
-                    memory_context=memory_context,
-                    rag_context=rag_context,
-                    episodic_context=episodic_context,
+                    trace_id=timer.trace_id,
                 )
 
-                # 6. Streaming de DeepSeek
+                if not resultados.get('success', False):
+                    yield StreamChunk('error', {
+                        'error': resultados.get('error', 'Error ejecutando skill')
+                    })
+                    return
+
+                # PASO 3: Streaming de respuesta natural
                 full_response = ""
                 try:
+                    prompt_respuesta = cls._construir_prompt_respuesta(
+                        ctx=ctx,
+                        resultados=resultados,
+                        skill_name=decision.skill,
+                    )
+
                     for chunk in LLMService.generate_streaming_response(
-                        query=full_prompt,
+                        query=prompt_respuesta,
                         context={
                             'user': {
                                 'id': str(ctx.user.id),
-                                'name': ctx.user.metadata.get('name')
-                                if ctx.user.metadata
-                                else (ctx.user.phone or ctx.user.email
-                                      or 'Usuario'),
+                                'name': cls._get_user_name(ctx.user),
                                 'level': cls._get_user_level(ctx.user),
                             },
                             'conversation_id': str(ctx.conversation.id),
@@ -462,14 +321,11 @@ class ChatProcessor:
                         max_tokens=ctx.max_tokens,
                         temperature=ctx.temperature,
                     ):
-                        chunk_data = chunk if isinstance(chunk, dict) \
-                            else json.loads(chunk)
+                        chunk_data = chunk if isinstance(chunk, dict) else json.loads(chunk)
 
                         if chunk_data.get('type') == 'error':
                             yield StreamChunk('error', {
-                                'error': chunk_data.get(
-                                    'error', 'Error desconocido'
-                                ),
+                                'error': chunk_data.get('error', 'Error en streaming'),
                             })
                             return
 
@@ -479,20 +335,8 @@ class ChatProcessor:
                             yield StreamChunk('chunk', {'content': content})
 
                         elif chunk_data.get('type') == 'complete':
-                            # 7. Guardar respuesta
-                            message_id = cls._save_response(
-                                ctx.conversation, full_response
-                            )
-
-                            # 8-9. Post-process
-                            cls._save_post_process(
-                                ctx=ctx,
-                                response_text=full_response,
-                                memory_context=memory_context,
-                                rag_context=rag_context,
-                                intent=intent,
-                                trace_id=timer.trace_id,
-                            )
+                            message_id = cls._save_response(ctx.conversation, full_response)
+                            cls._save_post_process(ctx, full_response, timer.trace_id)
 
                             yield StreamChunk('complete', {
                                 'message_id': message_id,
@@ -502,37 +346,369 @@ class ChatProcessor:
                             return
 
                 except Exception as e:
-                    log.error(
-                        f"Error en stream: {str(e)}",
-                        exc_info=True,
-                        trace_id=timer.trace_id,
-                    )
+                    log.error(f"Error en stream de respuesta: {e}", exc_info=True)
                     yield StreamChunk('error', {
-                        'error': f'Error en el stream: {str(e)}',
+                        'error': f'Error en streaming: {str(e)}',
                     })
 
             except Exception as e:
-                log.error(
-                    f"Error en process_message_stream: {str(e)}",
-                    exc_info=True,
+                log.error(f"Error en process_message_stream: {e}", exc_info=True)
+                yield StreamChunk('error', {'error': str(e)})
+
+    # ── ORQUESTACIÓN ─────────────────────────────────────────────────
+
+    @classmethod
+    def _orquestar(cls, ctx: ChatContext) -> OrchestrationDecision:
+        """
+        PASO 1: DeepSeek analiza el mensaje + historial y decide qué hacer.
+
+        Returns:
+            OrchestrationDecision con skill a ejecutar o respuesta directa.
+        """
+        with MetricsService.timer(
+            'chat.orchestrate',
+            user_id=str(ctx.user.id),
+        ) as timer:
+            registry = SKILL_SYSTEM.registry if hasattr(SKILL_SYSTEM, 'registry') else None
+
+            prompt = build_orchestration_prompt(
+                mensaje=ctx.message,
+                conversation=ctx.conversation,
+                registry=registry,
+                app_id=ctx.app_id,
+            )
+
+            system_prompt = PromptManager.get_deepseek_system_prompt(ctx.app_id)
+
+            success, message, response_data = LLMService._call_deepseek_api(
+                messages=[{"role": "user", "content": prompt}],
+                system_prompt=system_prompt,
+            )
+
+            if not success or response_data is None:
+                log.warning(
+                    f"Orquestador DeepSeek no disponible: {message}",
                     trace_id=timer.trace_id,
                 )
-                yield StreamChunk('error', {
-                    'error': str(e),
-                })
+                return OrchestrationDecision(
+                    skill='busqueda_propiedades',
+                    params={},
+                )
 
-    # ── Métodos auxiliares ─────────────────────────────────────────────────
+            respuesta_raw = response_data.get('content', '')
+            decision = parse_orchestration_response(respuesta_raw)
+
+            log.info(
+                "Orquestación completada",
+                skill=decision.skill,
+                tiene_params=bool(decision.params),
+                respuesta_directa=bool(decision.respuesta_directa),
+                latency_ms=f"{timer.latency_ms:.1f}",
+                trace_id=timer.trace_id,
+            )
+
+            return decision
+
+    # ── EJECUCIÓN DE SKILL ─────────────────────────────────────────────
+
+    @classmethod
+    def _ejecutar_skill(
+        cls,
+        skill_name: Optional[str],
+        params: Dict[str, Any],
+        ctx: ChatContext,
+        trace_id: str,
+    ) -> Dict[str, Any]:
+        """
+        PASO 2: Ejecuta la skill que DeepSeek eligió.
+
+        Args:
+            skill_name: Nombre de la skill a ejecutar (None si es respuesta directa).
+            params: Parámetros para la skill.
+            ctx: ChatContext completo.
+            trace_id: ID de trazabilidad.
+
+        Returns:
+            Dict con resultado de la skill.
+        """
+        if not skill_name:
+            return {'success': True, 'data': None, 'message': 'Sin skill necesaria'}
+
+        execution_context = ExecutionContext(
+            user_id=str(ctx.user.id),
+            session_id=ctx.conversation.session_id if ctx.conversation else '',
+            conversation_id=str(ctx.conversation.id),
+            permissions=(ctx.user.role.capabilities.keys()
+                         if ctx.user.role and ctx.user.role.capabilities else []),
+            environment='production',
+            metadata={
+                'app_id': ctx.app_id,
+                'message': ctx.message,
+            },
+        )
+
+        with MetricsService.timer(
+            'chat.execute_skill',
+            skill_name=skill_name,
+            user_id=str(ctx.user.id),
+            trace_id=trace_id,
+        ) as timer:
+            try:
+                skill_result = SKILL_SYSTEM.execute_skill(
+                    skill_name=skill_name,
+                    parameters=params,
+                    context=execution_context,
+                )
+
+                log.info(
+                    f"Skill ejecutada: {skill_name}",
+                    success=skill_result.success,
+                    latency_ms=f"{timer.latency_ms:.1f}",
+                    trace_id=trace_id,
+                )
+
+                return {
+                    'success': skill_result.success,
+                    'data': skill_result.data,
+                    'message': skill_result.message,
+                    'error': skill_result.error_message,
+                    'metadata': skill_result.metadata,
+                    'skill_name': skill_name,
+                    'params': params,
+                }
+
+            except Exception as e:
+                log.error(
+                    f"Error ejecutando skill {skill_name}: {e}",
+                    exc_info=True,
+                    trace_id=trace_id,
+                )
+                return {
+                    'success': False,
+                    'data': None,
+                    'message': '',
+                    'error': str(e),
+                    'metadata': {},
+                    'skill_name': skill_name,
+                    'params': params,
+                }
+
+    # ── RESPUESTA NATURAL ──────────────────────────────────────────────
+
+    @classmethod
+    def _generar_respuesta(
+        cls,
+        ctx: ChatContext,
+        resultados: Dict[str, Any],
+        skill_name: Optional[str],
+        trace_id: str,
+    ) -> str:
+        """
+        PASO 3: DeepSeek genera respuesta natural con los resultados de la skill.
+
+        Args:
+            ctx: ChatContext completo.
+            resultados: Resultados de la skill ejecutada.
+            skill_name: Nombre de la skill ejecutada.
+            trace_id: ID de trazabilidad.
+
+        Returns:
+            Texto de respuesta natural.
+        """
+        if not resultados.get('success'):
+            return resultados.get('error', 'Lo siento, no pude completar la búsqueda.')
+
+        prompt = cls._construir_prompt_respuesta(ctx, resultados, skill_name)
+
+        system_prompt = PromptManager.get_deepseek_system_prompt(ctx.app_id)
+
+        success, message, response_data = LLMService._call_deepseek_api(
+            messages=[{"role": "user", "content": prompt}],
+            system_prompt=system_prompt,
+        )
+
+        if success and isinstance(response_data, dict):
+            return response_data.get(
+                'content',
+                resultados.get('message', 'Búsqueda completada.')
+            )
+
+        log.warning(
+            "DeepSeek falló al generar respuesta natural, usando mensaje de skill",
+            trace_id=trace_id,
+        )
+        return resultados.get('message', 'Búsqueda completada.')
+
+    @classmethod
+    def _construir_prompt_respuesta(
+        cls,
+        ctx: ChatContext,
+        resultados: Dict[str, Any],
+        skill_name: Optional[str],
+    ) -> str:
+        """
+        Construye el prompt para la respuesta natural con los resultados de la skill.
+        """
+        historial = cls._get_historial_mensajes(ctx.conversation)
+        historial_str = "\n".join(historial) if historial else "(sin historial previo)"
+
+        # Formatear resultados de skill para el prompt
+        resultados_str = cls._formatear_resultados_skill(resultados, skill_name)
+
+        return RESPONSE_SYSTEM_PROMPT.format(
+            historial=historial_str,
+            mensaje=ctx.message,
+            resultados_skill=resultados_str,
+        )
+
+    @classmethod
+    def _formatear_resultados_skill(
+        cls,
+        resultados: Dict[str, Any],
+        skill_name: Optional[str],
+    ) -> str:
+        """
+        Convierte los resultados de una skill en texto legible para el prompt.
+        """
+        if not resultados:
+            return "  (sin resultados)"
+
+        skill = skill_name or 'desconocida'
+        success = resultados.get('success', False)
+        data = resultados.get('data')
+        message = resultados.get('message', '')
+        params = resultados.get('params', {})
+        error = resultados.get('error', '')
+
+        lines = [f"  Skill ejecutada: {skill}"]
+        lines.append(f"  Éxito: {'Sí' if success else 'No'}")
+        lines.append(f"  Parámetros usados: {json.dumps(params, ensure_ascii=False)}")
+
+        if not success:
+            lines.append(f"  Error: {error}")
+            return "\n".join(lines)
+
+        if message:
+            lines.append(f"  Mensaje: {message}")
+
+        if data is None:
+            lines.append("  Datos: (sin datos)")
+        elif isinstance(data, str):
+            lines.append(f"  Datos: {data}")
+        elif isinstance(data, list):
+            lines.append(f"  Total de resultados: {len(data)}")
+            for i, item in enumerate(data[:20], 1):  # Máximo 20 items
+                item_str = cls._formatear_item_resultado(item)
+                lines.append(f"  [{i}] {item_str}")
+            if len(data) > 20:
+                lines.append(f"  ... y {len(data) - 20} resultados más")
+        elif isinstance(data, dict):
+            for key, value in data.items():
+                if isinstance(value, list):
+                    lines.append(f"  {key}: {len(value)} resultados")
+                    for j, item in enumerate(value[:10], 1):
+                        item_str = cls._formatear_item_resultado(item)
+                        lines.append(f"    [{j}] {item_str}")
+                    if len(value) > 10:
+                        lines.append(f"    ... y {len(value) - 10} más")
+                else:
+                    lines.append(f"  {key}: {value}")
+        else:
+            lines.append(f"  Datos: {str(data)}")
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def _formatear_item_resultado(item: Any) -> str:
+        """Formatea un item individual de resultado."""
+        if not item:
+            return "Sin datos"
+
+        if isinstance(item, str):
+            return item[:300]
+
+        if isinstance(item, dict):
+            field_values = item.get('field_values', item)
+            if not isinstance(field_values, dict):
+                return str(item)[:300]
+
+            partes = []
+            titulo = (
+                field_values.get('title')
+                or field_values.get('titulo')
+                or field_values.get('name')
+                or field_values.get('nombre')
+            )
+            if titulo:
+                partes.append(str(titulo))
+
+            precio = (
+                field_values.get('price')
+                or field_values.get('precio')
+                or field_values.get('sale_price')
+            )
+            if precio:
+                moneda = field_values.get('currency_name', field_values.get('moneda', ''))
+                partes.append(f"Precio: {precio} {moneda}".strip())
+
+            distrito = (
+                field_values.get('district_name')
+                or field_values.get('district')
+                or field_values.get('distrito')
+            )
+            if distrito:
+                partes.append(f"Distrito: {distrito}")
+
+            tipo = (
+                field_values.get('property_type_name')
+                or field_values.get('tipo_propiedad')
+                or field_values.get('property_type')
+            )
+            if tipo:
+                partes.append(f"Tipo: {tipo}")
+
+            area = (
+                field_values.get('built_area')
+                or field_values.get('area_construida')
+                or field_values.get('total_area')
+                or field_values.get('land_area')
+            )
+            if area:
+                partes.append(f"Área: {area} m²")
+
+            habitaciones = (
+                field_values.get('bedrooms')
+                or field_values.get('habitaciones')
+            )
+            if habitaciones:
+                partes.append(f"Hab: {habitaciones}")
+
+            return " | ".join(partes) if partes else json.dumps(item, ensure_ascii=False)[:300]
+
+        return str(item)[:300]
+
+    # ── UTILIDADES ─────────────────────────────────────────────────────
 
     @classmethod
     def _get_user_level(cls, user: User) -> int:
-        """Calcula el nivel del usuario basado en su perfil de inteligencia."""
+        """Obtiene el nivel de inteligencia del usuario."""
         try:
+            from ..models import UserIntelligenceProfile
             profile = UserIntelligenceProfile.objects.get(user=user)
             return profile.level
-        except UserIntelligenceProfile.DoesNotExist:
+        except Exception:
             if user.role:
                 return user.role.default_level
             return 1
+
+    @classmethod
+    def _get_user_name(cls, user: User) -> str:
+        """Obtiene el nombre legible del usuario."""
+        if user.metadata and isinstance(user.metadata, dict):
+            name = user.metadata.get('name')
+            if name:
+                return name
+        return user.phone or user.email or 'Usuario'
 
     @classmethod
     def _get_or_create_app(cls, app_id: str) -> AppConfig:
@@ -561,26 +737,15 @@ class ChatProcessor:
         conversation_id: Optional[str] = None,
         streaming: bool = False,
     ) -> Conversation:
-        """
-        Obtiene o crea una conversación para el usuario.
-
-        Estrategia:
-        1. Si se proporciona conversation_id, buscar por ID.
-        2. Si no, buscar la última conversación activa del mismo usuario+app.
-        3. Si no existe ninguna, crear una nueva.
-        """
+        """Obtiene o crea una conversación para el usuario."""
         conversation = None
 
-        # 1. Buscar por conversation_id explícito
         if conversation_id:
             try:
-                conversation = Conversation.objects.get(
-                    id=conversation_id, user=user
-                )
+                conversation = Conversation.objects.get(id=conversation_id, user=user)
             except Conversation.DoesNotExist:
                 conversation = None
 
-        # 2. Si no hay ID explícito, buscar la última conversación activa
         if not conversation:
             try:
                 app = cls._get_or_create_app(app_id)
@@ -592,7 +757,6 @@ class ChatProcessor:
             except Exception:
                 conversation = None
 
-        # 3. Si no existe ninguna, crear una nueva
         if not conversation:
             app = cls._get_or_create_app(app_id)
             session_id = f'chat_{uuid.uuid4().hex[:16]}'
@@ -608,1298 +772,25 @@ class ChatProcessor:
         return conversation
 
     @classmethod
-    def _get_memory_context(
-        cls,
-        ctx: ChatContext,
-        intent: Any,
-        trace_id: str,
-    ) -> Optional[List[Dict]]:
-        """Obtiene contexto de memoria si aplica."""
-        if not ctx.use_memory or intent.skip_memory:
-            return None
-
-        with MetricsService.timer(
-            'chat.memory',
-            user_id=str(ctx.user.id),
-            trace_id=trace_id,
-        ) as timer:
-            try:
-                memory_service = MemoryService(user_id=str(ctx.user.id))
-                context = memory_service.get_relevant_context(
-                    query=ctx.message, limit=5
-                )
-                log.debug(
-                    f"Memoria obtenida: {len(context)} items",
-                    memory_count=len(context),
-                    latency_ms=f"{timer.latency_ms:.1f}",
-                )
-                return context
-            except Exception as e:
-                log.error(
-                    f"Error obteniendo memoria: {str(e)}",
-                    exc_info=True,
-                )
-                return None
-
-    @classmethod
-    def _get_rag_context(
-        cls,
-        ctx: ChatContext,
-        intent: Any,
-        trace_id: str,
-    ) -> Optional[List[Dict]]:
-        """Obtiene contexto RAG si aplica."""
-        if not ctx.use_rag or intent.skip_rag:
-            return None
-
-        with MetricsService.timer(
-            'chat.rag',
-            user_id=str(ctx.user.id),
-            trace_id=trace_id,
-        ) as timer:
-            try:
-                collections = ctx.collections
-                if not collections:
-                    user_level = cls._get_user_level(ctx.user)
-                    accessible = IntelligenceCollection.objects.filter(
-                        min_level__lte=user_level,
-                        is_active=True,
-                    ).values_list('name', flat=True)
-                    collections = list(accessible)
-
-                if collections:
-                    rag_results = RAGService.search_dynamic(
-                        query=ctx.message,
-                        collection_names=collections,
-                        top_k=5,
-                    )
-                    log.debug(
-                        f"RAG obtenido: {len(rag_results)} resultados",
-                        collections=collections,
-                        latency_ms=f"{timer.latency_ms:.1f}",
-                    )
-                    return rag_results
-                return None
-            except Exception as e:
-                log.error(
-                    f"Error obteniendo RAG: {str(e)}",
-                    exc_info=True,
-                )
-                return None
-
-    @classmethod
-    def _get_episodic_context(
-        cls,
-        ctx: ChatContext,
-        intent: Any,
-        trace_id: str,
-    ) -> Optional[List[Dict]]:
-        """Obtiene episodios relevantes si aplica."""
-        if not ctx.use_memory or intent.skip_episodic:
-            return None
-
-        with MetricsService.timer(
-            'chat.episodic',
-            user_id=str(ctx.user.id),
-            trace_id=trace_id,
-        ) as timer:
-            try:
-                episodes = EpisodicMemoryService.get_relevant_episodes_static(
-                    user_id=str(ctx.user.id),
-                    query=ctx.message,
-                    limit=3,
-                )
-                log.debug(
-                    f"Episodios obtenidos: {len(episodes)}",
-                    latency_ms=f"{timer.latency_ms:.1f}",
-                )
-                return episodes
-            except Exception as e:
-                log.error(
-                    f"Error obteniendo episodios: {str(e)}",
-                    exc_info=True,
-                )
-                return None
-
-    @classmethod
-    def _build_prompt(
-        cls,
-        ctx: ChatContext,
-        memory_context: Optional[List[Dict]] = None,
-        rag_context: Optional[List[Dict]] = None,
-        episodic_context: Optional[List[Dict]] = None,
-    ) -> str:
-        """Construye el prompt completo con todos los contextos."""
-        # Obtener system prompt desde BD (configurable)
-        system_instruction = PromptManager.get_system_prompt(ctx.app_id)
-
-        # Formatear cada sección
-        episodic_str = format_episodic_context(episodic_context)
-        memory_str = format_memory_context(memory_context)
-        rag_str = format_rag_context(rag_context)
-
-        # Construir prompt completo
-        return build_full_prompt(
-            message=ctx.message,
-            system_instruction=system_instruction,
-            episodic_context=episodic_str,
-            memory_context=memory_str,
-            rag_context=rag_str,
-        )
-
-    @classmethod
-    def _render_skill_response(cls, result: SkillResult) -> str:
-        """Renderiza un resultado de skill a texto legible."""
-        if result.data is None:
-            return 'Skill ejecutada correctamente.'
-
-        if isinstance(result.data, str):
-            return result.data
-
-        if isinstance(result.data, dict):
-            if len(result.data) == 1:
-                key, value = next(iter(result.data.items()))
-                return f"{key}: {value}"
-            try:
-                return json.dumps(result.data, ensure_ascii=False, indent=2)
-            except TypeError:
-                return str(result.data)
-
-        return str(result.data)
-
-    @classmethod
-    def _infer_skill_request(cls, ctx: ChatContext, intent: Any, trace_id: str) -> Optional[ChatResult]:
-        """Intenta inferir y ejecutar una skill a partir de la intención del mensaje.
-
-        Refactor B5: Eliminado el fallback al sistema antiguo de skills.
-        Ahora solo usa SkillRegistry.find_best_skill() con contexto activo.
-
-        Flujo:
-        1. Obtener contexto activo vía ContextManager
-        2. Buscar skill en SkillRegistry (con detección de seguimiento B4)
-        3. Si es busqueda_propiedades/resolver_contexto → pipeline
-        4. Si no, retorna None para RAG puro
-        """
-        if ctx.skill_name:
-            return None
-
-        # ── 1. Obtener contexto activo para mejorar routing ──
-        contexto_activo = ContextManager.get_active_context(ctx.conversation)
-        active_context_dict = contexto_activo.to_dict() if not contexto_activo.is_empty() else None
-
-        # ── 2. Buscar skill en SkillRegistry ──
-        user_level = cls._get_user_level(ctx.user)
-        registry = SkillRegistry()
-        best_skill = registry.find_best_skill(
-            ctx.message,
-            user_level=user_level,
-            active_context=active_context_dict,
-        )
-
-        if best_skill:
-            log.info(
-                "Skill detectada por SkillRegistry",
-                skill_name=best_skill.name,
-                trace_id=trace_id,
-            )
-
-            # ── Si es busqueda_propiedades o resolver_contexto, redirigir al pipeline ──
-            if best_skill.name in ('busqueda_propiedades', 'resolver_contexto'):
-                skill_busqueda = registry.get_by_name('busqueda_propiedades')
-                schema_params = (
-                    skill_busqueda.parameters_schema
-                    if skill_busqueda else best_skill.parameters_schema
-                )
-                params = LLMService.extract_skill_params(
-                    ctx.message, schema_params
-                )
-                ctx.skill_name = 'busqueda_propiedades'
-                ctx.skill_params = params or {}
-                log.info(
-                    "[_infer_skill_request] Ejecutando pipeline de skills para "
-                    f"{best_skill.name}. Parámetros extraídos: "
-                    f"{params}. Mensaje: {ctx.message[:100]}",
-                    trace_id=trace_id,
-                )
-                return cls._process_skill_request(ctx, trace_id)
-
-            # ── Otras skills: usar RAG ──
-            collection_names = ctx.collections if ctx.collections else None
-            success, message, response_data = LLMService.generate_rag_response(
-                query=ctx.message,
-                conversation_history=None,
-                user_access_level=user_level,
-                collection_names=collection_names,
-                include_sources=True,
-            )
-
-            if success:
-                response_text = response_data.get('response', message)
-                message_id = cls._save_response(ctx.conversation, response_text)
-
-                return ChatResult(
-                    success=True,
-                    response_text=response_text,
-                    conversation_id=str(ctx.conversation.id),
-                    message_id=message_id,
-                    metadata={
-                        'response': response_text,
-                        'skill_used': response_data.get('skill_used'),
-                        'rag_context_used': response_data.get('rag_context_used', False),
-                        'retrieved_documents_count': response_data.get('retrieved_documents_count', 0),
-                    },
-                    context_summary={
-                        'memory_used': 0,
-                        'rag_used': 0,
-                        'collections_used': ctx.collections or [],
-                        'intent': intent.intent.value,
-                        'intent_confidence': intent.confidence,
-                        'skill_name': best_skill.name,
-                    },
-                    timestamp=timezone.now().isoformat(),
-                )
-
-        # ── Sin skill detectada → RAG puro ──
-        return None
-
-    # ── NOTA: _find_skill_candidate y _find_math_skill_candidate fueron eliminadas ──
-    # Refactor B6/B7: El sistema antiguo de detección de skills ha sido reemplazado
-    # por SkillRegistry.find_best_skill() con detección de seguimiento (B4).
-    # La función _find_skill_candidate aún se usa en views.py:896 (intent_evaluation_dashboard)
-    # como referencia para comparación, pero ya no es parte del flujo principal.
-
-    @classmethod
-    def _build_params_for_inferred_skill(
-        cls,
-        ctx: ChatContext,
-        candidate_skill: Dict[str, Any],
-    ) -> Optional[Dict[str, Any]]:
-        """Construye parámetros para la skill inferida."""
-        name = candidate_skill.get('name', '').lower()
-        params = cls._extract_numbers_from_message(ctx.message)
-
-        if name in ['multiplicacion', 'suma', 'resta', 'division']:
-            if len(params) < 2:
-                return None
-            return {'a': params[0], 'b': params[1]}
-
-        if name == 'potencia':
-            if len(params) < 2:
-                return None
-            return {'base': params[0], 'exponente': params[1]}
-
-        if name == 'raiz_cuadrada':
-            if len(params) < 1:
-                return None
-            return {'numero': params[0]}
-
-        if name == 'estadisticas_basicas':
-            if not params:
-                return None
-            return {'numeros': params}
-
-        return None
-
-    @classmethod
-    def _extract_numbers_from_message(cls, message: str) -> List[float]:
-        """Extrae números del mensaje de usuario como floats."""
-        matches = re.findall(r'[-+]?[0-9]*\.?[0-9]+', message.replace(',', '.'))
-        numbers = []
-        for match in matches:
-            try:
-                numbers.append(float(match))
-            except ValueError:
-                continue
-        return numbers
-
-    @classmethod
-    def _build_skill_params_for_price_query(
-        cls,
-        ctx: ChatContext,
-        intent: Any,
-    ) -> Optional[Dict[str, Any]]:
-        """Construye parámetros de skill para consultas de precios."""
-        registros = cls._fetch_price_records(ctx, intent)
-        if not registros:
-            return None
-
-        zonas = intent.extracted_params.get('zonas', []) or []
-        tipos = intent.extracted_params.get('tipos_propiedad', []) or []
-
-        zona = zonas[0] if zonas else cls._infer_value_from_records(
-            registros, ['zona', 'zone', 'district', 'district_name']
-        )
-        tipo_propiedad = tipos[0] if tipos else cls._infer_value_from_records(
-            registros,
-            ['tipo_propiedad', 'property_type', 'type', 'categoria', 'category'],
-        )
-
-        if not zona or not tipo_propiedad:
-            return None
-
-        return {
-            'zona': str(zona),
-            'tipo_propiedad': str(tipo_propiedad),
-            'registros': registros,
-        }
-
-    @classmethod
-    def _fetch_price_records(cls, ctx: ChatContext, intent: Any) -> List[Dict[str, Any]]:
-        """Obtiene registros de propiedades relevantes para una consulta de precios."""
-        collections = ctx.collections
-        if not collections:
-            user_level = cls._get_user_level(ctx.user)
-            collections = list(
-                IntelligenceCollection.objects.filter(
-                    min_level__lte=user_level,
-                    is_active=True,
-                ).values_list('name', flat=True)
-            )
-
-        if not collections:
-            return []
-
+    def _get_historial_mensajes(cls, conversation, max_mensajes: int = 6) -> List[str]:
+        """Extrae los últimos mensajes de la conversación."""
         try:
-            rag_results = RAGService.search_dynamic(
-                query=ctx.message,
-                collection_names=collections,
-                top_k=20,
-            )
-        except Exception as e:
-            log.error(
-                f"Error obteniendo registros de precios desde RAG: {e}",
-                exc_info=True,
-            )
+            messages = conversation.messages or []
+        except Exception:
             return []
 
-        registros = []
-        for result in rag_results:
-            field_values = result.get('field_values', {}) or {}
-            precio = cls._normalize_price_value(
-                field_values.get('price')
-                or field_values.get('precio')
-                or field_values.get('monto')
-                or field_values.get('value')
-            )
-            if precio is None:
-                continue
-
-            zona = (
-                field_values.get('district_name')
-                or field_values.get('district')
-                or field_values.get('distrito')
-                or field_values.get('zona')
-                or field_values.get('zone')
-                or ''
-            )
-            tipo_propiedad = (
-                field_values.get('property_type_name')
-                or field_values.get('property_type_id')
-                or field_values.get('tipo_propiedad')
-                or field_values.get('property_type')
-                or field_values.get('type')
-                or field_values.get('categoria')
-                or field_values.get('category')
-                or ''
-            )
-
-            registro = {
-                'zona': zona,
-                'tipo_propiedad': tipo_propiedad,
-                'precio': precio,
-            }
-            registro.update(field_values)
-            registros.append(registro)
-
-        return registros
-
-    @classmethod
-    def _infer_value_from_records(
-        cls,
-        registros: List[Dict[str, Any]],
-        keys: List[str],
-    ) -> Optional[str]:
-        """Infiera un valor relevante a partir de registros de búsqueda."""
-        for registro in registros:
-            for key in keys:
-                value = registro.get(key)
-                if value:
-                    return value
-        return None
-
-    @classmethod
-    def _normalize_price_value(cls, value: Any) -> Optional[float]:
-        """Convierte un valor de precio a float si es posible."""
-        if value is None:
-            return None
-
-        if isinstance(value, (int, float)):
-            return float(value)
-
-        if isinstance(value, str):
-            normalized = value.lower()
-            normalized = normalized.replace('s/.', '')
-            normalized = normalized.replace('soles', '')
-            normalized = normalized.replace('usd', '')
-            normalized = normalized.replace('$', '')
-            normalized = normalized.replace(',', '')
-            normalized = normalized.strip()
-            normalized = re.sub(r'[^0-9\.\-]', '', normalized)
-            try:
-                return float(normalized)
-            except ValueError:
-                return None
-
-        return None
-
-    @classmethod
-    def _get_contexto_activo(cls, conversation: Conversation) -> Dict[str, Any]:
-        """
-        Extrae el contexto activo de búsqueda usando ContextManager.
-
-        Refactor A2: Delega a ContextManager.get_active_context() para unificar
-        la fuente de verdad del contexto conversacional.
-
-        Returns:
-            Dict con los filtros activos (distrito, tipo_propiedad, etc.)
-            o dict vacío si no hay ejecución previa.
-        """
-        contexto = ContextManager.get_active_context(conversation)
-        if contexto and not contexto.is_empty():
-            log.info(f"[_get_contexto_activo] Contexto vía ContextManager: {contexto}")
-            return contexto.to_dict()
-        return {}
-
-    @classmethod
-    def _get_historial_mensajes(cls, conversation: Conversation, max_mensajes: int = 6) -> List[str]:
-        """
-        Extrae los últimos mensajes de la conversación formateados como
-        lista de strings para pasar a resolver_contexto.
-
-        Args:
-            conversation: La conversación actual
-            max_mensajes: Máximo de mensajes a incluir
-
-        Returns:
-            Lista de strings como "usuario: mensaje" o "asistente: mensaje"
-        """
-        mensajes = conversation.messages or []
         historial = []
-        for msg in mensajes[-max_mensajes:]:
+        for msg in messages[-max_mensajes:]:
             role = msg.get('role', 'unknown')
             content = msg.get('content', '')
             if content:
                 historial.append(f"{role}: {content}")
         return historial
 
-    @classmethod
-    def _guardar_contexto_activo(cls, conversation: Conversation, contexto: Dict[str, Any]) -> None:
-        """
-        Guarda el contexto activo de búsqueda usando ContextManager.
-
-        Refactor A3: Delega a ContextManager.save_active_context() para unificar
-        la escritura del contexto conversacional.
-        """
-        if not contexto:
-            return
-        ContextManager.save_raw_context(conversation, contexto)
+    # ── PERSISTENCIA ───────────────────────────────────────────────────
 
     @classmethod
-    def _process_skill_request(cls, ctx: ChatContext, trace_id: str) -> ChatResult:
-        """Ejecuta una skill y convierte el resultado a ChatResult.
-
-        Si la skill es 'busqueda_propiedades', ejecuta automáticamente un pipeline
-        [resolver_contexto → busqueda_propiedades] para resolver referencias
-        ambiguas del contexto conversacional.
-        """
-        execution_context = ExecutionContext(
-            user_id=str(ctx.user.id),
-            session_id=ctx.conversation.session_id,
-            conversation_id=str(ctx.conversation.id),
-            permissions=(ctx.user.role.capabilities.keys()
-                         if ctx.user.role and ctx.user.role.capabilities else []),
-            environment='production',
-            metadata={
-                'app_id': ctx.app_id,
-                'message': ctx.message,
-            },
-        )
-
-        if ctx.skill_pipeline:
-            return cls._process_skill_pipeline_request(ctx, trace_id)
-
-        # ── Pipeline automático para busqueda_propiedades ────────────────────
-        # Refactor C: Pipeline condicional según contexto activo.
-        #
-        # Si HAY contexto activo (turnos previos):
-        #   Pipeline: [resolver_contexto → busqueda_propiedades]
-        #   resolver_contexto hereda distrito/tipo del turno anterior.
-        #
-        # Si NO HAY contexto activo (primer mensaje):
-        #   Ejecución directa: busqueda_propiedades sin resolver_contexto.
-        #   Más rápido y evita llamadas innecesarias a DeepSeek.
-        if ctx.skill_name == 'busqueda_propiedades':
-            contexto_activo = ContextManager.get_active_context(ctx.conversation)
-            tiene_contexto = not contexto_activo.is_empty()
-
-            # ── Variables compartidas por ambas rutas ──
-            pipeline_result = None
-            resultado_busqueda_raw = []
-            contexto_resuelto = {}
-
-            if tiene_contexto:
-                # ── Ruta con contexto: pipeline completo ──
-                historial = cls._get_historial_mensajes(ctx.conversation)
-
-                # --- FIX: Resolver contexto PRIMERO, luego buscar con parámetros fusionados ---
-                # 1. Ejecutar resolver_contexto para obtener parámetros resueltos
-                skill_resolver = SKILL_SYSTEM.registry.get_by_name('resolver_contexto')
-                if skill_resolver:
-                    resultado_resolucion = skill_resolver.execute({
-                        'mensaje_actual': ctx.message,
-                        'contexto_activo': contexto_activo.to_dict(),
-                        'historial_mensajes': historial,
-                    }, execution_context)
-                    if resultado_resolucion.success:
-                        # Extraer params resueltos del resolver_contexto
-                        datos_resueltos = resultado_resolucion.data or {}
-                        if isinstance(datos_resueltos, dict):
-                            params_resueltos = datos_resueltos.get('params_resueltos', {}) or {}
-                        else:
-                            params_resueltos = {}
-                    else:
-                        params_resueltos = {}
-                else:
-                    params_resueltos = {}
-
-                # 2. Fusionar contexto activo + params del mensaje actual + params resueltos
-                #
-                # LÓGICA DE HERENCIA INTELIGENTE:
-                # - Si el usuario menciona un distrito NUEVO (búsqueda nueva), NO heredar
-                #   filtros no relacionados del contexto anterior (condicion, precio, etc.)
-                # - Si el usuario solo agrega filtros (condicion, tipo), heredar distrito
-                #   y otros filtros del contexto anterior (es seguimiento)
-                #
-                # Determinar si es búsqueda nueva o seguimiento:
-                skill_params = ctx.skill_params or {}
-                es_busqueda_nueva = bool(
-                    skill_params.get('distrito') or skill_params.get('tipo_propiedad')
-                ) and not bool(
-                    # Solo si el mensaje NO contiene solo palabras de seguimiento
-                    any(w in ctx.message.lower() for w in ['y ', 'las ', 'los ', 'tambien', 'también'])
-                )
-
-                if es_busqueda_nueva:
-                    # Búsqueda nueva: solo usar params del mensaje + lo que resuelva el LLM
-                    params_fusionados = {}
-                    params_fusionados.update(skill_params)
-                    params_fusionados.update(params_resueltos)
-                    log.info(
-                        f"[_process_skill_request] Búsqueda NUEVA detectada "
-                        f"(distrito/tipo explícito). NO se heredan filtros del "
-                        f"contexto anterior. Fusionado: {params_fusionados}"
-                    )
-                else:
-                    # Seguimiento: heredar contexto activo y fusionar con nuevos params
-                    params_fusionados = {}
-                    params_fusionados.update(contexto_activo.to_dict())  # Base: contexto activo
-                    params_fusionados.update(skill_params)               # Nuevos del mensaje
-                    params_fusionados.update(params_resueltos)           # Resueltos por resolver_contexto
-                    log.info(
-                        f"[_process_skill_request] Seguimiento detectado. "
-                        f"Fusionado con contexto activo: {params_fusionados}"
-                    )
-
-                log.info(
-                    f"[_process_skill_request] Parámetros fusionados: "
-                    f"activo={contexto_activo.to_dict()} | "
-                    f"skill_params={ctx.skill_params} | "
-                    f"resueltos={params_resueltos} | "
-                    f"fusionados={params_fusionados}"
-                )
-
-                # 3. Guardar contexto fusionado para PRÓXIMOS turnos
-                nuevo_contexto = ActiveContext.from_dict(params_fusionados)
-                contexto_fusionado = contexto_activo.merge(nuevo_contexto)
-                ContextManager.save_active_context(ctx.conversation, contexto_fusionado)
-
-                # 4. Ejecutar búsqueda con parámetros fusionados (NO con ctx.skill_params solos)
-                skill_busqueda = SKILL_SYSTEM.registry.get_by_name('busqueda_propiedades')
-                if skill_busqueda:
-                    skill_result_busqueda = SKILL_SYSTEM.execute_skill(
-                        skill_name='busqueda_propiedades',
-                        parameters=params_fusionados,
-                        context=execution_context,
-                    )
-                    pipeline_result = skill_result_busqueda
-                    resultado_busqueda_raw = skill_result_busqueda.data if skill_result_busqueda.success else []
-                else:
-                    pipeline_result = type('obj', (object,), {'success': False})()
-                    resultado_busqueda_raw = []
-            else:
-                # ── Ruta directa: sin resolver_contexto ──
-                log.info(
-                    "[_process_skill_request] Ejecución directa de busqueda_propiedades "
-                    "(sin contexto activo)",
-                )
-                skill = SKILL_SYSTEM.registry.get_by_name('busqueda_propiedades')
-                if skill:
-                    skill_result = SKILL_SYSTEM.execute_skill(
-                        skill_name='busqueda_propiedades',
-                        parameters=ctx.skill_params or {},
-                        context=execution_context,
-                    )
-                    pipeline_result = skill_result
-                    resultado_busqueda_raw = skill_result.data if skill_result.success else []
-                else:
-                    pipeline_result = type('obj', (object,), {'success': False})()
-                    resultado_busqueda_raw = []
-
-                # Guardar contexto del primer mensaje
-                if ctx.skill_params:
-                    nuevo_contexto = ActiveContext.from_dict(ctx.skill_params)
-                    ContextManager.save_active_context(ctx.conversation, nuevo_contexto)
-                    log.info(
-                        f"[_process_skill_request] Contexto guardado (primer mensaje): "
-                        f"{nuevo_contexto.to_dict()}"
-                    )
-
-            # ── Formatear respuesta con DeepSeek (compartido por ambas rutas) ──
-            # Refactor C3: Extracción de propiedades unificada para ambos casos.
-            if pipeline_result and pipeline_result.success:
-                try:
-                    propiedades_encontradas = []
-                    datos_busqueda = []
-
-                    if isinstance(resultado_busqueda_raw, list):
-                        datos_busqueda = resultado_busqueda_raw
-                        mensaje_skill = f"Se encontraron {len(resultado_busqueda_raw)} propiedades"
-                    elif isinstance(resultado_busqueda_raw, dict):
-                        datos_busqueda = resultado_busqueda_raw.get('data', [])
-                        mensaje_skill = resultado_busqueda_raw.get('message', '')
-                    else:
-                        datos_busqueda = []
-                        mensaje_skill = ''
-
-                    if isinstance(datos_busqueda, list):
-                        for item in datos_busqueda:
-                            field_values = item.get('field_values', {}) or {}
-                            titulo = (
-                                field_values.get('title')
-                                or field_values.get('titulo')
-                                or field_values.get('name')
-                                or field_values.get('nombre')
-                                or 'Sin título'
-                            )
-                            distrito = (
-                                field_values.get('district_name')
-                                or field_values.get('district')
-                                or field_values.get('distrito')
-                                or ''
-                            )
-                            precio = (
-                                field_values.get('price')
-                                or field_values.get('precio')
-                                or field_values.get('sale_price')
-                                or field_values.get('precio_venta')
-                                or ''
-                            )
-                            tipo = (
-                                field_values.get('property_type_name')
-                                or field_values.get('property_type_id')
-                                or field_values.get('tipo_propiedad')
-                                or field_values.get('property_type')
-                                or ''
-                            )
-                            descripcion = (
-                                field_values.get('description')
-                                or field_values.get('descripcion')
-                                or field_values.get('content')
-                                or ''
-                            )
-                            area = (
-                                field_values.get('built_area')
-                                or field_values.get('area_construida')
-                                or field_values.get('area')
-                                or field_values.get('total_area')
-                                or field_values.get('land_area')
-                                or ''
-                            )
-                            habitaciones = (
-                                field_values.get('bedrooms')
-                                or field_values.get('habitaciones')
-                                or field_values.get('dormitorios')
-                                or ''
-                            )
-                            operacion = (
-                                field_values.get('operation_type_name')
-                                or field_values.get('operation_type_id')
-                                or field_values.get('operation_type')
-                                or field_values.get('operacion')
-                                or field_values.get('tipo_operacion')
-                                or ''
-                            )
-                            moneda = (
-                                field_values.get('currency_name')
-                                or field_values.get('currency_id')
-                                or field_values.get('currency')
-                                or field_values.get('moneda')
-                                or ''
-                            )
-                            direccion = (
-                                field_values.get('map_address')
-                                or field_values.get('display_address')
-                                or field_values.get('address')
-                                or field_values.get('direccion')
-                                or ''
-                            )
-                            estado = (
-                                field_values.get('property_status_name')
-                                or field_values.get('property_condition_name')
-                                or field_values.get('condicion')
-                                or ''
-                            )
-
-                            partes = []
-                            if titulo and titulo != 'Sin título':
-                                partes.append(f"• {titulo}")
-                            else:
-                                partes.append(f"• Propiedad")
-                            if tipo:
-                                partes.append(f"Tipo: {tipo}")
-                            if distrito:
-                                partes.append(f"Distrito: {distrito}")
-                            if precio:
-                                moneda_str = f" {moneda}" if moneda else ""
-                                partes.append(f"Precio: {precio}{moneda_str}")
-                            if area:
-                                partes.append(f"Área: {area} m²")
-                            if habitaciones:
-                                partes.append(f"Habitaciones: {habitaciones}")
-                            if operacion:
-                                partes.append(f"Operación: {operacion}")
-                            if direccion:
-                                partes.append(f"Dirección: {direccion}")
-                            if estado:
-                                partes.append(f"Estado: {estado}")
-                            if descripcion:
-                                desc_truncada = descripcion if len(descripcion) <= 200 else descripcion[:200] + '...'
-                                partes.append(f"Descripción: {desc_truncada}")
-
-                            propiedades_encontradas.append(" | ".join(partes))
-
-                    # ── Construir historial de la conversación para contexto ──
-                    historial_previo = cls._get_historial_mensajes(ctx.conversation)
-                    historial_texto = ""
-                    if historial_previo:
-                        historial_texto = "=== HISTORIAL DE LA CONVERSACIÓN ===\n" + \
-                            "\n".join(historial_previo) + "\n\n"
-
-                    # ── Construir contexto activo para el prompt ──
-                    contexto_activo_str = ""
-                    try:
-                        ctx_activo = ContextManager.get_active_context(ctx.conversation)
-                        if not ctx_activo.is_empty():
-                            filtros_str = ", ".join(
-                                f"{k}={v}" for k, v in ctx_activo.to_dict().items()
-                            )
-                            contexto_activo_str = f"Contexto de búsqueda activo: {filtros_str}\n\n"
-                    except Exception:
-                        pass
-
-                    if propiedades_encontradas:
-                        lista_propiedades_texto = "\n".join(propiedades_encontradas)
-                        prompt_formateo = (
-                            "El sistema de búsqueda encontró las siguientes propiedades "
-                            "que coinciden con la consulta del usuario.\n\n"
-                            f"{historial_texto}"
-                            f"{contexto_activo_str}"
-                            f"Consulta del usuario: \"{ctx.message}\"\n\n"
-                            "=== PROPIEDADES ENCONTRADAS ===\n"
-                            f"{lista_propiedades_texto}\n\n"
-                            "=== INSTRUCCIONES ===\n"
-                            "- Responde al usuario de forma NATURAL y CONVERSACIONAL en español.\n"
-                            "- USA EL HISTORIAL DE LA CONVERSACIÓN para mantener coherencia.\n"
-                            "- Si el usuario hace una pregunta de seguimiento (ej: 'cuáles son las vendidas'), "
-                            "USA EL CONTEXTO de filtros anteriores para responder.\n"
-                            "- PRESENTA las propiedades listadas arriba de forma organizada.\n"
-                            "- Para cada propiedad incluye: tipo, distrito, precio, área y otras características relevantes.\n"
-                            "- USA ÚNICAMENTE las propiedades de esta lista. NO inventes propiedades que no estén aquí.\n"
-                            "- Si la lista está vacía, indícalo amablemente y sugiere refinar la búsqueda.\n"
-                            "- NO devuelvas JSON ni datos técnicos. Solo texto legible para el usuario.\n"
-                            "- Usa un tono profesional pero cercano, como un asesor inmobiliario."
-                        )
-                    else:
-                        prompt_formateo = (
-                            "El usuario ha hecho una búsqueda de propiedades inmobiliarias.\n\n"
-                            f"{historial_texto}"
-                            f"{contexto_activo_str}"
-                            f"Consulta del usuario: \"{ctx.message}\"\n\n"
-                            "La búsqueda no encontró propiedades que coincidan con los criterios.\n\n"
-                            "INSTRUCCIONES:\n"
-                            "- Responde al usuario de forma NATURAL y CONVERSACIONAL en español.\n"
-                            "- USA EL HISTORIAL DE LA CONVERSACIÓN para entender el contexto.\n"
-                            "- Si el usuario estaba viendo propiedades en un distrito y ahora pregunta por algo "
-                            "relacionado (ej: 'cuáles son las vendidas'), USA EL CONTEXTO del distrito anterior.\n"
-                            "- Indica amablemente que no se encontraron propiedades con esos criterios.\n"
-                            "- Sugiere al usuario refinar su búsqueda (cambiar distrito, tipo de propiedad, etc.).\n"
-                            "- NO inventes propiedades que no existen.\n"
-                            "- Usa un tono profesional pero cercano, como un asesor inmobiliario."
-                        )
-                    system_prompt = PromptManager.get_deepseek_system_prompt(ctx.app_id)
-                    success, api_message, api_response = LLMService._call_deepseek_api(
-                        messages=[{"role": "user", "content": prompt_formateo}],
-                        system_prompt=system_prompt,
-                    )
-                    if success and isinstance(api_response, dict):
-                        response_text = api_response.get(
-                            'content',
-                            mensaje_skill or 'Búsqueda completada.'
-                        )
-                    else:
-                        log.warning(
-                            "DeepSeek falló al formatear respuesta de skill, "
-                            "usando mensaje de la skill como fallback",
-                            trace_id=trace_id,
-                        )
-                        response_text = mensaje_skill or 'Búsqueda completada.'
-                except Exception as e:
-                    log.error(
-                        f"Error al formatear respuesta con DeepSeek: {e}",
-                        exc_info=True,
-                        trace_id=trace_id,
-                    )
-                    response_text = mensaje_skill or 'Búsqueda completada.'
-            else:
-                # Si pipeline_result es SkillResult (ejecución directa sin contexto),
-                # usar renderizador de skill; si es SkillPipelineResult, usar pipeline
-                if hasattr(pipeline_result, 'steps'):
-                    response_text = cls._render_pipeline_response(pipeline_result)
-                else:
-                    response_text = cls._render_skill_response(pipeline_result)
-
-            if pipeline_result.success:
-                message_id = cls._save_response(ctx.conversation, response_text)
-                cls._save_post_process(
-                    ctx=ctx,
-                    response_text=response_text,
-                    memory_context=None,
-                    rag_context=None,
-                    intent=None,
-                    trace_id=trace_id,
-                )
-                return ChatResult(
-                    success=True,
-                    response_text=response_text,
-                    conversation_id=str(ctx.conversation.id),
-                    message_id=message_id,
-                    metadata={
-                        'skill_name': ctx.skill_name,
-                        'skill_params': ctx.skill_params,
-                        'pipeline_result': getattr(pipeline_result, 'data', None),
-                        'pipeline_steps': getattr(pipeline_result, 'steps', None),
-                        'contexto_resuelto': contexto_resuelto if pipeline_result.success else {},
-                    },
-                    context_summary={
-                        'skill_name': ctx.skill_name,
-                        'skill_success': True,
-                        'pipeline': 'resolver_contexto → busqueda_propiedades' if hasattr(pipeline_result, 'steps') else ctx.skill_name,
-                    },
-                    timestamp=timezone.now().isoformat(),
-                )
-
-            return ChatResult(
-                success=False,
-                response_text=response_text,
-                conversation_id=str(ctx.conversation.id),
-                message_id='',
-                metadata={
-                    'skill_name': ctx.skill_name,
-                    'skill_params': ctx.skill_params,
-                    'pipeline_error': getattr(pipeline_result, 'error_message', 'Error desconocido'),
-                    'pipeline_steps': getattr(pipeline_result, 'steps', None),
-                },
-                context_summary={
-                    'skill_name': ctx.skill_name,
-                    'skill_success': False,
-                    'pipeline': 'resolver_contexto → busqueda_propiedades' if hasattr(pipeline_result, 'steps') else ctx.skill_name,
-                },
-                error=getattr(pipeline_result, 'error_message', 'Error desconocido'),
-                timestamp=timezone.now().isoformat(),
-            )
-
-        # ── Ejecución directa para cualquier otra skill ──────────────────────
-        skill_result = SKILL_SYSTEM.execute_skill(
-            ctx.skill_name,
-            ctx.skill_params or {},
-            execution_context,
-        )
-
-        response_text = cls._render_skill_response(skill_result)
-
-        if skill_result.success:
-            message_id = cls._save_response(ctx.conversation, response_text)
-            cls._save_post_process(
-                ctx=ctx,
-                response_text=response_text,
-                memory_context=None,
-                rag_context=None,
-                intent=None,
-                trace_id=trace_id,
-            )
-            return ChatResult(
-                success=True,
-                response_text=response_text,
-                conversation_id=str(ctx.conversation.id),
-                message_id=message_id,
-                metadata={
-                    'skill_name': ctx.skill_name,
-                    'skill_params': ctx.skill_params,
-                    'skill_result': skill_result.data,
-                },
-                context_summary={
-                    'skill_name': ctx.skill_name,
-                    'skill_success': True,
-                },
-                timestamp=timezone.now().isoformat(),
-            )
-
-        return ChatResult(
-            success=False,
-            response_text=response_text,
-            conversation_id=str(ctx.conversation.id),
-            message_id='',
-            metadata={
-                'skill_name': ctx.skill_name,
-                'skill_params': ctx.skill_params,
-                'skill_error': skill_result.error_message,
-            },
-            context_summary={
-                'skill_name': ctx.skill_name,
-                'skill_success': False,
-            },
-            error=skill_result.error_message,
-            timestamp=timezone.now().isoformat(),
-        )
-
-    @classmethod
-    def _render_pipeline_response(cls, pipeline_result: Any) -> str:
-        """Renderiza un resultado de pipeline de skills a texto legible."""
-        if not pipeline_result.steps:
-            return 'Pipeline de skills ejecutado correctamente.'
-
-        rendered_steps = []
-        for step in pipeline_result.steps:
-            name = step.get('name')
-            if step.get('success'):
-                rendered_steps.append(
-                    f"{name}: {json.dumps(step.get('result_data'), ensure_ascii=False)}"
-                )
-            else:
-                rendered_steps.append(
-                    f"{name} failed: {step.get('error_message')}"
-                )
-
-        return '\n'.join(rendered_steps)
-
-    @classmethod
-    def _process_skill_pipeline_request(cls, ctx: ChatContext, trace_id: str) -> ChatResult:
-        """Ejecuta un pipeline de skills y convierte el resultado a ChatResult."""
-        execution_context = ExecutionContext(
-            user_id=str(ctx.user.id),
-            session_id=ctx.conversation.session_id,
-            permissions=(ctx.user.role.capabilities.keys()
-                         if ctx.user.role and ctx.user.role.capabilities else []),
-            environment='production',
-            metadata={
-                'app_id': ctx.app_id,
-                'message': ctx.message,
-            },
-        )
-
-        pipeline_result = SKILL_SYSTEM.execute_skill_pipeline(
-            ctx.skill_pipeline,
-            execution_context,
-            mode=ctx.skill_pipeline_mode,
-            stop_on_error=ctx.skill_pipeline_abort_on_error,
-        )
-
-        response_text = cls._render_pipeline_response(pipeline_result)
-
-        if pipeline_result.success:
-            message_id = cls._save_response(ctx.conversation, response_text)
-            cls._save_post_process(
-                ctx=ctx,
-                response_text=response_text,
-                memory_context=None,
-                rag_context=None,
-                intent=None,
-                trace_id=trace_id,
-            )
-            return ChatResult(
-                success=True,
-                response_text=response_text,
-                conversation_id=str(ctx.conversation.id),
-                message_id=message_id,
-                metadata={
-                    'skill_pipeline': ctx.skill_pipeline,
-                    'skill_pipeline_mode': ctx.skill_pipeline_mode,
-                    'pipeline_result': pipeline_result.data,
-                    'pipeline_steps': pipeline_result.steps,
-                },
-                context_summary={
-                    'pipeline_mode': ctx.skill_pipeline_mode,
-                    'skill_success': True,
-                },
-                timestamp=timezone.now().isoformat(),
-            )
-
-        return ChatResult(
-            success=False,
-            response_text=response_text,
-            conversation_id=str(ctx.conversation.id),
-            message_id='',
-            metadata={
-                'skill_pipeline': ctx.skill_pipeline,
-                'skill_pipeline_mode': ctx.skill_pipeline_mode,
-                'pipeline_error': pipeline_result.error_message,
-                'pipeline_steps': pipeline_result.steps,
-            },
-            context_summary={
-                'pipeline_mode': ctx.skill_pipeline_mode,
-                'skill_success': False,
-            },
-            error=pipeline_result.error_message,
-            timestamp=timezone.now().isoformat(),
-        )
-
-    @classmethod
-    def _conversation_has_active_flow(cls, conversation: Conversation) -> bool:
-        return (
-            hasattr(conversation, 'flow_state')
-            and conversation.flow_state is not None
-            and not conversation.flow_state.is_completed
-        )
-
-    @classmethod
-    def _resolve_flow_for_context(cls, ctx: ChatContext) -> Optional[ConversationFlow]:
-        if cls._conversation_has_active_flow(ctx.conversation):
-            return ctx.conversation.flow_state.flow
-
-        if ctx.flow_name:
-            return ConversationFlow.objects.filter(
-                name=ctx.flow_name,
-                is_active=True,
-            ).first()
-
-        return None
-
-    @classmethod
-    def _get_or_create_flow_state(
-        cls,
-        conversation: Conversation,
-        flow: ConversationFlow,
-    ) -> Tuple[ConversationFlowState, bool]:
-        created = False
-        try:
-            flow_state = conversation.flow_state
-        except ConversationFlowState.DoesNotExist:
-            flow_state = ConversationFlowState.objects.create(
-                conversation=conversation,
-                flow=flow,
-                current_state=flow.initial_state,
-                state_history=[flow.initial_state],
-            )
-            created = True
-            return flow_state, created
-
-        if flow_state.flow != flow:
-            if flow_state.is_completed:
-                flow_state.delete()
-                flow_state = ConversationFlowState.objects.create(
-                    conversation=conversation,
-                    flow=flow,
-                    current_state=flow.initial_state,
-                    state_history=[flow.initial_state],
-                )
-                created = True
-            return flow_state, created
-
-        return flow_state, created
-
-    @classmethod
-    def _process_flow_request(cls, ctx: ChatContext, trace_id: str) -> Optional[ChatResult]:
-        flow = cls._resolve_flow_for_context(ctx)
-        if not flow:
-            return None
-
-        flow_state, created = cls._get_or_create_flow_state(
-            ctx.conversation,
-            flow,
-        )
-
-        if created:
-            response_text, buttons = cls._render_flow_state(flow, flow_state)
-        else:
-            response_text, buttons = cls._advance_flow_state(
-                ctx, flow, flow_state
-            )
-
-        if response_text is None:
-            return None
-
-        message_id = cls._save_response(
-            ctx.conversation,
-            response_text,
-        )
-
-        cls._save_post_process(
-            ctx=ctx,
-            response_text=response_text,
-            memory_context=None,
-            rag_context=None,
-            intent=None,
-            trace_id=trace_id,
-        )
-
-        metadata = {
-            'flow_name': flow.name,
-            'flow_state': flow_state.current_state,
-            'flow_completed': flow_state.is_completed,
-        }
-        if buttons:
-            metadata['buttons'] = buttons
-
-        return ChatResult(
-            success=True,
-            response_text=response_text,
-            conversation_id=str(ctx.conversation.id),
-            message_id=message_id,
-            metadata=metadata,
-            context_summary={
-                'flow': flow.name,
-                'flow_state': flow_state.current_state,
-                'flow_completed': flow_state.is_completed,
-            },
-            timestamp=timezone.now().isoformat(),
-        )
-
-    @classmethod
-    def _render_flow_state(
-        cls,
-        flow: ConversationFlow,
-        flow_state: ConversationFlowState,
-    ) -> Tuple[str, List[Dict[str, Any]]]:
-        node = flow.states.get(flow_state.current_state, {})
-        if not isinstance(node, dict):
-            return (
-                'El flujo está mal configurado. Contacta al equipo de soporte.',
-                [],
-            )
-        return node.get('message', ''), node.get('buttons', [])
-
-    @classmethod
-    def _advance_flow_state(
-        cls,
-        ctx: ChatContext,
-        flow: ConversationFlow,
-        flow_state: ConversationFlowState,
-    ) -> Tuple[str, List[Dict[str, Any]]]:
-        node = flow.states.get(flow_state.current_state)
-        if not isinstance(node, dict):
-            return (
-                'El estado del flujo no es válido. Contacta al equipo de soporte.',
-                [],
-            )
-
-        if node.get('complete'):
-            flow_state.is_completed = True
-            flow_state.completed_at = timezone.now()
-            flow_state.save(update_fields=['is_completed', 'completed_at'])
-            return node.get('message', 'Flujo completado.'), node.get('buttons', [])
-
-        if node.get('buttons'):
-            button = cls._match_flow_button(ctx.message, node['buttons'])
-            if button:
-                next_state = button.get('next_state')
-                if next_state:
-                    return cls._transition_flow_state(
-                        flow, flow_state, next_state
-                    )
-            return node.get('message', ''), node.get('buttons', [])
-
-        if node.get('collect_data'):
-            collect_fields = node.get('collect_data', [])
-            missing_fields = [
-                field for field in collect_fields
-                if field not in flow_state.collected_data
-            ]
-            if missing_fields:
-                flow_state.collected_data[missing_fields[0]] = ctx.message
-                flow_state.save(update_fields=['collected_data'])
-                if len(missing_fields) > 1:
-                    return node.get('message', ''), node.get('buttons', [])
-                if node.get('next_state'):
-                    return cls._transition_flow_state(
-                        flow, flow_state, node.get('next_state')
-                    )
-                return node.get('message', ''), node.get('buttons', [])
-
-        if node.get('next_state'):
-            return cls._transition_flow_state(
-                flow, flow_state, node.get('next_state')
-            )
-
-        return node.get('message', ''), node.get('buttons', [])
-
-    @classmethod
-    def _transition_flow_state(
-        cls,
-        flow: ConversationFlow,
-        flow_state: ConversationFlowState,
-        next_state: str,
-    ) -> Tuple[str, List[Dict[str, Any]]]:
-        next_node = flow.states.get(next_state)
-        if not isinstance(next_node, dict):
-            flow_state.is_completed = True
-            flow_state.completed_at = timezone.now()
-            flow_state.save(update_fields=['is_completed', 'completed_at'])
-            return (
-                'Flujo terminado o estado no encontrado. Contacta al equipo de soporte.',
-                [],
-            )
-
-        flow_state.current_state = next_state
-        if flow_state.state_history is None:
-            flow_state.state_history = []
-        flow_state.state_history.append(next_state)
-        if next_node.get('complete'):
-            flow_state.is_completed = True
-            flow_state.completed_at = timezone.now()
-        flow_state.save()
-
-        return next_node.get('message', ''), next_node.get('buttons', [])
-
-    @classmethod
-    def _match_flow_button(
-        cls,
-        user_message: str,
-        buttons: List[Dict[str, Any]],
-    ) -> Optional[Dict[str, Any]]:
-        normalized = user_message.strip().lower()
-        for button in buttons:
-            if normalized == str(button.get('text', '')).strip().lower():
-                return button
-            if normalized == str(button.get('value', '')).strip().lower():
-                return button
-        return None
-
-    @classmethod
-    def _save_response(
-        cls,
-        conversation: Conversation,
-        response_text: str,
-    ) -> str:
+    def _save_response(cls, conversation: Conversation, response_text: str) -> str:
         """Guarda la respuesta del asistente en la conversación."""
         message = {
             'role': 'assistant',
@@ -1908,7 +799,7 @@ class ChatProcessor:
             'id': str(uuid.uuid4()),
         }
 
-        messages = conversation.messages
+        messages = conversation.messages or []
         messages.append(message)
 
         # Limitar a 50 mensajes
@@ -1938,7 +829,7 @@ class ChatProcessor:
         if metadata:
             msg['metadata'] = metadata
 
-        messages = conversation.messages
+        messages = conversation.messages or []
         messages.append(msg)
 
         if len(messages) > 50:
@@ -1955,73 +846,45 @@ class ChatProcessor:
         cls,
         ctx: ChatContext,
         response_text: str,
-        memory_context: Optional[List[Dict]] = None,
-        rag_context: Optional[List[Dict]] = None,
-        intent: Any = None,
         trace_id: str = '',
     ):
-        """
-        Post-procesamiento después de generar respuesta:
-        - Guardar episodio en memoria episódica
-        - Extraer y guardar hechos
-        """
+        """Post-procesamiento: memoria episódica y extracción de hechos."""
         if not ctx.use_memory:
             return
 
-        # Guardar episodio
+        # Guardar episodio en memoria episódica
         try:
             enriched_context = {
                 'collections_used': ctx.collections if ctx.collections else [],
                 'user_level': cls._get_user_level(ctx.user),
                 'use_rag': ctx.use_rag,
                 'use_memory': ctx.use_memory,
-                'intent': intent.intent.value if intent else None,
+                'orchestration_mode': 'deepseek_v2',
                 'trace_id': trace_id,
             }
 
-            episode_data = EpisodicMemoryService.save_episode(
+            EpisodicMemoryService.save_episode(
                 user_id=str(ctx.user.id),
                 conversation_id=str(ctx.conversation.id),
                 user_message=ctx.message,
                 assistant_response=response_text,
-                rag_context_used=rag_context if rag_context else None,
-                memory_context_used=memory_context if memory_context else None,
+                rag_context_used=None,
+                memory_context_used=None,
                 context=enriched_context,
             )
-
-            if episode_data:
-                log.info(
-                    f"Episodio guardado: tipo={episode_data.get('episode_type')}, "
-                    f"intent={episode_data.get('intent_detected')}, "
-                    f"importancia={episode_data.get('importance_score'):.2f}",
-                    trace_id=trace_id,
-                )
         except Exception as e:
-            log.error(
-                f"Error guardando episodio: {str(e)}",
-                exc_info=True,
-            )
+            log.error(f"Error guardando episodio: {e}", exc_info=True)
 
         # Extraer hechos
         try:
-            extracted_facts = MemoryService.extract_and_save_facts(
+            MemoryService.extract_and_save_facts(
                 user_id=ctx.user.id,
                 message=ctx.message,
                 response=response_text,
             )
-            if extracted_facts:
-                log.info(
-                    f"Extraídos {len(extracted_facts)} hechos: "
-                    f"{[f['relation'] for f in extracted_facts]}",
-                    trace_id=trace_id,
-                )
         except Exception as e:
-            log.error(
-                f"Error extrayendo hechos: {str(e)}",
-                exc_info=True,
-            )
+            log.error(f"Error extrayendo hechos: {e}", exc_info=True)
 
 
-# ── Atajo para importar ────────────────────────────────────────────────────
-# Para mantener compatibilidad con imports existentes
+# ── Atajo para importar ──────────────────────────────────────────────
 chat_processor = ChatProcessor()

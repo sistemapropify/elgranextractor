@@ -7,9 +7,22 @@ modificarlos desde un dashboard sin necesidad de hacer deploy.
 
 Cada app (chat-web, dashboard-admin, etc.) puede tener su propio
 system prompt configurable.
+
+Orquestación v2:
+- ORCHESTRATION_SYSTEM_PROMPT: prompt del orquestador DeepSeek con skills como tools.
+- format_skills_for_prompt(): convierte skills registradas en definiciones tipo tool.
+- format_conversation_history(): formatea historial de conversación.
+- build_orchestration_prompt(): construye el prompt completo.
+- parse_orchestration_response(): parsea la respuesta JSON de DeepSeek.
 """
-from typing import Optional, Dict, Any
+import json
+import re
+import logging
+from dataclasses import dataclass, field
+from typing import Optional, Dict, Any, List, Tuple
 from ..models import AppConfig
+
+logger = logging.getLogger(__name__)
 
 
 # ── Prompt por defecto (solo se usa si no hay config en BD) ────────────────
@@ -466,3 +479,218 @@ def build_full_prompt(
     parts.append(SECTION_ASSISTANT_RESPONSE)
 
     return "\n".join(parts)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ORQUESTACIÓN V2 — DeepSeek como agente con skills como tools
+# ═══════════════════════════════════════════════════════════════════════════════
+
+ORCHESTRATION_SYSTEM_PROMPT = """Eres un agente inmobiliario inteligente especializado en el mercado de Arequipa, Perú.
+
+SKILLS DISPONIBLES (lee la descripción de CADA parámetro para saber cuándo usarlos):
+{skills_list}
+
+HISTORIAL DE CONVERSACIÓN:
+{historial}
+
+MENSAJE DEL USUARIO:
+{mensaje}
+
+INSTRUCCIONES:
+1. Tú decides qué skill ejecutar y con qué parámetros según la intención del usuario.
+2. Si puedes responder directamente (saludos, agradecimientos), hazlo sin ejecutar skill.
+3. Para busqueda_propiedades: los parámetros están descritos arriba. Úsalos según tu criterio.
+   - Si el usuario describe PROPÓSITO o CARACTERÍSTICAS en lenguaje natural, usa semantic_query.
+   - Si da valores CONCRETOS (distrito, tipo, precio), usa los filtros exactos.
+   - Puedes COMBINAR ambos si corresponde.
+   - Sin parámetros = conteo general.
+4. Usa el historial para mantener coherencia en conversaciones de seguimiento.
+5. NUNCA inventes datos. Siempre ejecuta una skill para obtener información real.
+
+RESPONDE SOLO CON ESTE JSON:
+{{"skill": "nombre_de_skill" | null, "params": {{parametros}}, "respuesta_directa": "texto" | null}}"""
+
+
+@dataclass
+class OrchestrationDecision:
+    """Decisión estructurada del orquestador DeepSeek."""
+    skill: Optional[str] = None
+    params: Dict[str, Any] = field(default_factory=dict)
+    respuesta_directa: Optional[str] = None
+
+
+def format_skills_for_prompt(registry) -> str:
+    """
+    Convierte las skills registradas en una lista legible para el prompt.
+
+    Args:
+        registry: SkillRegistry con las skills registradas.
+
+    Returns:
+        String formateado con nombre, descripción y parámetros de cada skill.
+    """
+    try:
+        skills = registry.list_all()
+    except Exception:
+        return "  (no hay skills disponibles)"
+
+    if not skills:
+        return "  (no hay skills disponibles)"
+
+    lines = []
+    for skill in skills:
+        name = skill.get('name', 'desconocida')
+        description = skill.get('description', '')
+        params = skill.get('parameters_schema', skill.get('parameters', {}))
+
+        lines.append(f"  {len(lines)+1}. {name}: {description}")
+
+        if params and isinstance(params, dict):
+            param_lines = []
+            for param_name, param_info in params.items():
+                if isinstance(param_info, dict):
+                    param_type = param_info.get('type', 'string')
+                    required = param_info.get('required', False)
+                    desc = param_info.get('description', '')
+                    req_tag = " (requerido)" if required else " (opcional)"
+                    param_lines.append(f"       - {param_name}: {param_type}{req_tag}")
+                    if desc:
+                        param_lines.append(f"         {desc}")
+                else:
+                    param_lines.append(f"       - {param_name}: {param_info}")
+            if param_lines:
+                lines.append("     Parámetros:")
+                lines.extend(param_lines)
+
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def format_conversation_history(conversation, max_mensajes: int = 10) -> str:
+    """
+    Formatea el historial de la conversación para el prompt.
+
+    Args:
+        conversation: Instancia de Conversation con messages.
+        max_mensajes: Máximo de mensajes a incluir.
+
+    Returns:
+        String formateado del historial o "(sin historial previo)".
+    """
+    try:
+        messages = conversation.messages or []
+    except Exception:
+        return "  (sin historial previo)"
+
+    if not messages:
+        return "  (sin historial previo)"
+
+    history_lines = []
+    for msg in messages[-max_mensajes:]:
+        role = msg.get('role', 'unknown')
+        content = msg.get('content', '')
+        if content:
+            # Truncar contenido muy largo
+            if len(content) > 500:
+                content = content[:500] + '...'
+            history_lines.append(f"  {role}: {content}")
+
+    return "\n".join(history_lines) if history_lines else "  (sin historial previo)"
+
+
+def build_orchestration_prompt(
+    mensaje: str,
+    conversation,
+    registry,
+    app_id: str = 'chat-web',
+) -> str:
+    """
+    Construye el prompt completo para el orquestador DeepSeek.
+
+    Args:
+        mensaje: Mensaje actual del usuario.
+        conversation: Instancia de Conversation para extraer historial.
+        registry: SkillRegistry con skills registradas.
+        app_id: ID de la app para obtener prompt personalizado.
+
+    Returns:
+        Prompt completo listo para enviar a DeepSeek.
+    """
+    skills_str = format_skills_for_prompt(registry)
+    historial_str = format_conversation_history(conversation)
+
+    # Obtener prompt base (personalizable desde BD)
+    try:
+        app_config = AppConfig.objects.get(id=app_id, is_active=True)
+        config = app_config.config or {}
+        base_prompt = config.get('orchestration_prompt', ORCHESTRATION_SYSTEM_PROMPT)
+    except AppConfig.DoesNotExist:
+        base_prompt = ORCHESTRATION_SYSTEM_PROMPT
+
+    return base_prompt.format(
+        skills_list=skills_str,
+        historial=historial_str,
+        mensaje=mensaje,
+    )
+
+
+def parse_orchestration_response(response_text: str) -> OrchestrationDecision:
+    """
+    Parsea la respuesta JSON del orquestador DeepSeek.
+
+    Args:
+        response_text: Texto de respuesta de DeepSeek (debe ser JSON).
+
+    Returns:
+        OrchestrationDecision con skill, params y/o respuesta_directa.
+    """
+    if not response_text or not response_text.strip():
+        return OrchestrationDecision(
+            respuesta_directa="Lo siento, no pude procesar tu solicitud."
+        )
+
+    texto = response_text.strip()
+
+    # Limpiar posibles backticks de markdown
+    if texto.startswith('```'):
+        texto = texto.split('```')[1]
+        if texto.startswith('json'):
+            texto = texto[4:]
+    texto = texto.strip()
+
+    try:
+        data = json.loads(texto)
+    except json.JSONDecodeError:
+        # Intentar extraer JSON con regex
+        match = re.search(r'\{[^{}]*\}', texto, re.DOTALL)
+        if match:
+            try:
+                data = json.loads(match.group())
+            except json.JSONDecodeError:
+                logger.warning(
+                    f"No se pudo parsear respuesta del orquestador: {texto[:200]}"
+                )
+                return OrchestrationDecision(
+                    respuesta_directa=texto  # Usar texto crudo como respuesta
+                )
+        else:
+            logger.warning(
+                f"No se encontró JSON en respuesta del orquestador: {texto[:200]}"
+            )
+            return OrchestrationDecision(
+                respuesta_directa=texto
+            )
+
+    skill = data.get('skill')
+    params = data.get('params', {}) or {}
+    respuesta_directa = data.get('respuesta_directa')
+
+    # Limpiar params nulos
+    params = {k: v for k, v in params.items() if v is not None}
+
+    return OrchestrationDecision(
+        skill=skill if skill else None,
+        params=params,
+        respuesta_directa=respuesta_directa,
+    )
