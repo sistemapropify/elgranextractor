@@ -3356,7 +3356,8 @@ document.querySelectorAll('.filter-form select').forEach(select => {
 // ── Eliminar requerimiento ────────────────────
 function eliminarRequerimiento(pk) {
     if (!confirm('¿Eliminar este requerimiento permanentemente?')) return;
-    fetch('{% url "requerimientos:eliminar" %}', {
+    var url = '/requerimientos/eliminar/';
+    fetch(url, {
         method: 'POST',
         headers: {
             'X-CSRFToken': '{{ csrf_token }}',
@@ -3364,18 +3365,22 @@ function eliminarRequerimiento(pk) {
         },
         body: JSON.stringify({pk: pk})
     })
-    .then(r => r.json())
-    .then(resp => {
+    .then(function(r) {
+        if (!r.ok) {
+            throw new Error('HTTP ' + r.status + ': ' + r.statusText);
+        }
+        return r.json();
+    })
+    .then(function(resp) {
         if (resp.ok) {
-            const row = document.querySelector('tr[data-pk="' + pk + '"]');
+            var row = document.querySelector('tr[data-pk="' + pk + '"]');
             if (row) row.remove();
         } else {
-            alert('Error al eliminar: ' + (resp.error || 'desconocido'));
+            alert('Error: ' + (resp.error || 'desconocido'));
         }
     })
-    .catch(err => {
-        console.error('Error eliminando:', err);
-        alert('Error de conexion al eliminar');
+    .catch(function(err) {
+        alert('Error de conexion: ' + err.message);
     });
 }
 </script>
