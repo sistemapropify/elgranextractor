@@ -304,12 +304,46 @@ class BusquedaPropiedadesSkill(BaseSkill):
                 )
 
                 if not rag_results:
-                    return SkillResult.ok(
-                        data=[],
-                        message=f"No se encontraron propiedades que coincidan con: {semantic_query}",
-                        metadata={'semantic_query': semantic_query},
-                        skill_name=self.name
-                    )
+                    # FALLBACK: si la busqueda semantica no encuentra nada,
+                    # buscar por texto literal en content/field_values
+                    logger.info(f"RAG sin resultados para: {semantic_query}. Busqueda textual...")
+                    terms = [t.strip() for t in semantic_query.split() if len(t.strip()) > 3]
+                    docs_con_score = []
+                    if terms:
+                        text_q = Q()
+                        for term in terms:
+                            text_q |= Q(content__icontains=term)
+                        text_results = list(IntelligenceDocument.objects.filter(
+                            text_q, collection__in=colecciones
+                        ).select_related('collection')[:top_k])
+                        docs_con_score = [(doc, 0.5) for doc in text_results]
+                        if docs_con_score:
+                            logger.info(f"Busqueda textual: {len(docs_con_score)} resultados")
+                            if tiene_filtros_exactos:
+                                docs_con_score = self._aplicar_filtros_exactos(docs_con_score, params)
+                            if docs_con_score:
+                                documentos = docs_con_score
+                            else:
+                                return SkillResult.ok(
+                                    data=[],
+                                    message=f"No se encontraron propiedades que coincidan con: {semantic_query}",
+                                    metadata={'semantic_query': semantic_query},
+                                    skill_name=self.name
+                                )
+                        else:
+                            return SkillResult.ok(
+                                data=[],
+                                message=f"No se encontraron propiedades que coincidan con: {semantic_query}",
+                                metadata={'semantic_query': semantic_query},
+                                skill_name=self.name
+                            )
+                    else:
+                        return SkillResult.ok(
+                            data=[],
+                            message=f"No se encontraron propiedades que coincidan con: {semantic_query}",
+                            metadata={'semantic_query': semantic_query},
+                            skill_name=self.name
+                        )
 
                 # Convertir resultados RAG a documentos con score
                 from ...models import IntelligenceDocument
