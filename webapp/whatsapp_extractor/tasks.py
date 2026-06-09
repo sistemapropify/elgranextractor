@@ -326,29 +326,55 @@ def procesar_archivo_extraccion(archivo_id: int, extractor_log_id: Optional[int]
         # --- FILTRO DE DUPLICADOS DENTRO DEL MISMO ARCHIVO TXT ---
         # Antes de procesar, detectamos mensajes repetidos dentro del mismo archivo
         # para no llamar a DeepSeek ni a la BD innecesariamente.
-        mensajes_unicos = set()
+        # NOTA: Usamos (texto_normalizado + autor) como clave para no filtrar
+        # mensajes con mismo texto pero DIFERENTE autor (ej: Multimedia omitido).
+        mensajes_vistos = set()
         mensajes_filtrados = []
         duplicados_en_txt = 0
+        mensajes_duplicados_info = []  # Para mostrar en el log que se filtro
         for msg in mensajes:
             texto_normalizado = ' '.join(msg.get('texto', '').lower().split())
-            if texto_normalizado in mensajes_unicos:
+            autor = msg.get('autor', '').strip().lower()
+            clave_unica = (texto_normalizado, autor)
+            if clave_unica in mensajes_vistos:
                 duplicados_en_txt += 1
+                if len(mensajes_duplicados_info) < 5:  # Solo guardar los primeros 5
+                    mensajes_duplicados_info.append({
+                        'texto': texto_normalizado[:60],
+                        'autor': autor,
+                        'fecha': msg.get('fecha', ''),
+                        'hora': msg.get('hora', ''),
+                    })
                 continue
-            mensajes_unicos.add(texto_normalizado)
+            mensajes_vistos.add(clave_unica)
             mensajes_filtrados.append(msg)
 
         mensajes = mensajes_filtrados
         total_mensajes_original = extractor_log.mensajes_extraidos_total
         total_mensajes = len(mensajes)
 
+        nivel_log = 'WARNING' if duplicados_en_txt > 0 else 'INFO'
+        msg_log = (
+            f'⚠️ Archivo parseado: {total_mensajes_original} mensajes totales, '
+            f'{duplicados_en_txt} filtrados como duplicados internos '
+            f'(mismo texto + mismo autor), '
+            f'{total_mensajes} únicos a procesar'
+        )
+        if duplicados_en_txt > 0 and mensajes_duplicados_info:
+            msg_log += ' | Ej: ' + ', '.join(
+                f'"{m["texto"]}" ({m["autor"]} {m["fecha"] or ""} {m["hora"] or ""})'
+                for m in mensajes_duplicados_info
+            )
+
         LogEntry.objects.create(
             extractor_log=extractor_log,
-            nivel='INFO',
-            mensaje=f'Archivo parseado: {total_mensajes_original} mensajes totales, {duplicados_en_txt} duplicados dentro del archivo, {total_mensajes} únicos a procesar',
+            nivel=nivel_log,
+            mensaje=msg_log,
             detalles={
                 'total_mensajes': total_mensajes_original,
                 'duplicados_en_txt': duplicados_en_txt,
                 'mensajes_unicos': total_mensajes,
+                'mensajes_duplicados_info': mensajes_duplicados_info,
             },
         )
 
