@@ -222,6 +222,78 @@ class BusquedaPropiedadesSkill(BaseSkill):
         )
         return has_filter
 
+    # ── Analizador de intención ──────────────────────────────────────────
+
+    # Lista de distritos conocidos de Arequipa para detección en mensajes
+    DISTRITOS_AREQUIPA = [
+        'alto selva alegre', 'arequipa', 'camaná', 'camana', 'cayma',
+        'cerro colorado', 'cerrocolorado', 'characato',
+        'jacobo hunter', 'jose luis bustamante', 'bustamante', 'rivero',
+        'mariano melgar', 'miraflores', 'mollebaya',
+        'paucarpata', 'sachaca', 'samuel pastor',
+        'socabaya', 'tiabaya', 'uchumayo', 'yanahuara',
+        'cercado', 'la joya', 'sabandia', 'yura',
+    ]
+
+    def _analizar_intencion(self, mensaje: str) -> Dict[str, Any]:
+        """
+        Analiza el mensaje del usuario y extrae filtros estructurados
+        sin depender de DeepSeek orquestador.
+
+        Detecta:
+        - Distritos mencionados
+        - Tipos de propiedad (casa, departamento, terreno, local)
+        - Operaciones (venta, alquiler)
+        - Condiciones (disponible, vendida)
+        - Intención de conteo (cuantas, cuantas hay)
+        - Intención de ordenamiento (mas caro, mas grande)
+
+        Args:
+            mensaje: Mensaje completo del usuario
+
+        Returns:
+            Dict con filtros detectados
+        """
+        if not mensaje:
+            return {}
+
+        mensaje_lower = mensaje.lower().strip()
+        filtros = {}
+
+        # Detectar distritos
+        for distrito in self.DISTRITOS_AREQUIPA:
+            if distrito in mensaje_lower:
+                # Normalizar: capitalizar primera letra
+                filtros['distrito'] = distrito.title()
+                break
+
+        # Detectar tipos de propiedad
+        for tipo_normalizado, variantes in [
+            ('Casa', ['casa', 'casas', 'vivienda', 'viviendas']),
+            ('Departamento', ['departamento', 'departamentos', 'depa', 'depas', 'dpto', 'flat']),
+            ('Terreno', ['terreno', 'terrenos', 'lote', 'lotes']),
+            ('Local Comercial', ['local', 'locales', 'local comercial']),
+            ('Oficina', ['oficina', 'oficinas']),
+        ]:
+            if any(v in mensaje_lower for v in variantes):
+                filtros['tipo_propiedad'] = tipo_normalizado
+                break
+
+        # Detectar operación
+        if any(p in mensaje_lower for p in ['alquiler', 'alquilo', 'alquilar', 'renta']):
+            filtros['operacion'] = 'Alquiler'
+        elif any(p in mensaje_lower for p in ['venta', 'vendo', 'vende', 'compro', 'compra']):
+            filtros['operacion'] = 'Venta'
+
+        # Detectar condición
+        if any(p in mensaje_lower for p in ['disponible', 'disponibles']):
+            filtros['condicion'] = 'Disponible'
+        elif any(p in mensaje_lower for p in ['vendida', 'vendido', 'vendidas']):
+            filtros['condicion'] = 'Vendida'
+
+        logger.debug(f"_analizar_intencion detecto: {filtros} del mensaje: {mensaje[:100]}")
+        return filtros
+
     # ── Ejecución principal ───────────────────────────────────────────────
 
     def execute(
@@ -233,10 +305,11 @@ class BusquedaPropiedadesSkill(BaseSkill):
         Búsqueda híbrida inteligente de propiedades.
 
         FLUJO:
-        1. Si NO hay parámetros → mostrar conteo general
-        2. Si hay semantic_query → búsqueda por EMBEDDINGS (FAISS) primero
-        3. Si hay filtros exactos → aplicar sobre resultados semánticos o BD
-        4. Siempre ordenar por relevancia (semántica si aplica)
+        1. Analizar el mensaje del usuario para extraer filtros automáticamente
+        2. Si NO hay parámetros → mostrar conteo general
+        3. Si hay semantic_query → búsqueda por EMBEDDINGS (FAISS) primero
+        4. Si hay filtros exactos → aplicar sobre resultados semánticos o BD
+        5. Siempre ordenar por relevancia (semántica si aplica)
 
         Args:
             params: Parámetros de búsqueda
@@ -248,6 +321,17 @@ class BusquedaPropiedadesSkill(BaseSkill):
         try:
             # ── Extraer parámetros ──
             semantic_query = (params.get('semantic_query') or '').strip()
+            
+            # ANALIZAR el mensaje para extraer filtros automáticamente
+            # Esto funciona aunque DeepSeek no haya extraído los filtros
+            filtros_auto = self._analizar_intencion(semantic_query)
+            
+            # Combinar filtros automáticos con los que DeepSeek haya extraído
+            # Los filtros explícitos de DeepSeek tienen prioridad
+            for key, value in filtros_auto.items():
+                if key not in params or not params.get(key):
+                    params[key] = value
+            
             tiene_semantica = bool(semantic_query)
             tiene_filtros_exactos = any(
                 params.get(k) is not None and params.get(k) != ''
@@ -294,106 +378,42 @@ class BusquedaPropiedadesSkill(BaseSkill):
                     skill_name=self.name
                 )
 
-            # ── RUTA A: Búsqueda semántica (embeddings) ──
-            if tiene_semantica:
-                top_k = params.get('top_k') or 50
-                rag_results = RAGService.search_dynamic(
-                    query=semantic_query,
-                    collection_names=[c.name for c in colecciones],
-                    top_k=top_k,
-                )
+            # ── FLUJO ÚNICO: Filtro SQL duro + re-ranking semántico ──
+            #
+            # 1. SIEMPRE aplicar filtros SQL duros primero (a nivel BD)
+            # 2. SI hay semantic_query → re-rank semántico sobre resultados filtrados
+            # 3. Si NO → ordenar por defecto
 
-                if not rag_results:
-                    # FALLBACK: si la busqueda semantica no encuentra nada,
-                    # buscar por texto literal en content/field_values
-                    logger.info(f"RAG sin resultados para: {semantic_query}. Busqueda textual...")
-                    terms = [t.strip() for t in semantic_query.split() if len(t.strip()) > 3]
-                    docs_con_score = []
-                    if terms:
-                        text_q = Q()
-                        for term in terms:
-                            text_q |= Q(content__icontains=term)
-                        text_results = list(IntelligenceDocument.objects.filter(
-                            text_q, collection__in=colecciones
-                        ).select_related('collection')[:top_k])
-                        docs_con_score = [(doc, 0.5) for doc in text_results]
-                        if docs_con_score:
-                            logger.info(f"Busqueda textual: {len(docs_con_score)} resultados")
-                            if tiene_filtros_exactos:
-                                docs_con_score = self._aplicar_filtros_exactos(docs_con_score, params)
-                            if docs_con_score:
-                                documentos = docs_con_score
-                            else:
-                                return SkillResult.ok(
-                                    data=[],
-                                    message=f"No se encontraron propiedades que coincidan con: {semantic_query}",
-                                    metadata={'semantic_query': semantic_query},
-                                    skill_name=self.name
-                                )
-                        else:
-                            return SkillResult.ok(
-                                data=[],
-                                message=f"No se encontraron propiedades que coincidan con: {semantic_query}",
-                                metadata={'semantic_query': semantic_query},
-                                skill_name=self.name
-                            )
-                    else:
-                        return SkillResult.ok(
-                            data=[],
-                            message=f"No se encontraron propiedades que coincidan con: {semantic_query}",
-                            metadata={'semantic_query': semantic_query},
-                            skill_name=self.name
-                        )
-
-                # Convertir resultados RAG a documentos con score
-                from ...models import IntelligenceDocument
-                doc_ids = []
-                score_map = {}
-                for r in rag_results:
-                    doc_id = r.get('document_id')
-                    if doc_id:
-                        doc_ids.append(doc_id)
-                        score_map[str(doc_id)] = r.get('score', r.get('similarity', 0.5))
-
-                docs_con_score = []
-                if doc_ids:
-                    docs_qs = IntelligenceDocument.objects.filter(
-                        id__in=doc_ids,
-                        collection__in=colecciones,
-                    ).select_related('collection')
-                    for doc in docs_qs:
-                        docs_con_score.append((doc, score_map.get(str(doc.id), 0.5)))
-
-                # Ordenar por score semántico
-                docs_con_score.sort(key=lambda x: x[1], reverse=True)
-
-                # Aplicar filtros exactos SOBRE resultados semánticos
-                if tiene_filtros_exactos:
-                    docs_con_score = self._aplicar_filtros_exactos(docs_con_score, params)
-
-                if not docs_con_score:
-                    return SkillResult.ok(
-                        data=[],
-                        message="No se encontraron propiedades con esos criterios.",
-                        metadata={
-                            'semantic_query': semantic_query,
-                            'filtros_aplicados': self._extract_filters(params),
-                        },
-                        skill_name=self.name
-                    )
-
-                documentos = docs_con_score
-
-            # ── RUTA B: Solo filtros exactos (sin semántica) ──
-            else:
+            # Paso 1: Obtener documentos con filtros SQL (si hay)
+            if tiene_filtros_exactos:
                 documentos = self._filtrar_por_sql(params, colecciones)
                 if not documentos:
+                    mensaje = "No se encontraron propiedades"
+                    if params.get('distrito'):
+                        mensaje += f" en {params['distrito']}"
+                    if params.get('tipo_propiedad'):
+                        mensaje += f" de tipo {params['tipo_propiedad']}"
+                    mensaje += "."
                     return SkillResult.ok(
-                        data=[],
-                        message="No se encontraron propiedades con los filtros especificados.",
+                        data=[], message=mensaje,
                         metadata={'filtros_aplicados': self._extract_filters(params)},
                         skill_name=self.name
                     )
+            else:
+                # Sin filtros: todos los documentos con embedding
+                documentos = [(doc, 0.5) for doc in
+                    IntelligenceDocument.objects.filter(
+                        collection__in=colecciones, embedding__isnull=False
+                    ).select_related('collection')]
+
+            # Paso 2: Re-ranking semántico (si hay semantic_query)
+            if tiene_semantica and documentos:
+                documentos = self._reranking_semantico(documentos, semantic_query)
+
+            # Paso 3: Limitar resultados
+            top_k = params.get('top_k') or 50
+            if len(documentos) > top_k:
+                documentos = documentos[:top_k]
 
             # ── Construir resultado ──
             top_k_limit = params.get('top_k', 0)

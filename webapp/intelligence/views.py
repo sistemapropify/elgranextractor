@@ -1688,11 +1688,19 @@ def chat_web_api(request):
                 'timestamp': result.timestamp
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+        # Detectar si la respuesta contiene HTML generado (formatear_propiedades)
+        response_text = result.response_text or ''
+        html_content = None
+        if response_text.startswith('__HTML__') and response_text.endswith('__HTML__'):
+            html_content = response_text[8:-8]  # Quitar marcadores
+            response_text = ''  # El HTML se envía aparte
+
         return Response({
             'success': True,
             'conversation_id': result.conversation_id,
             'message_id': result.message_id,
-            'response': result.response_text,
+            'response': response_text,
+            'html': html_content,
             'metadata': result.metadata,
             'context_summary': result.context_summary,
             'timestamp': result.timestamp

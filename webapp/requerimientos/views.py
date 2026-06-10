@@ -11,6 +11,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from datetime import timedelta, datetime
 import json
+import hashlib
 
 logger = logging.getLogger(__name__)
 from .models import (
@@ -1583,6 +1584,14 @@ class ClonarRequerimientoView(View):
                             pass
                 else:
                     setattr(nuevo_req, campo, valor)
+
+        # ── Generar texto_hash único para evitar violación de unique_together ──
+        # Si no se genera, el clon queda con texto_hash='' y al clonar un clon
+        # colisiona con el primer clon que también tiene texto_hash='' (unique_together con fecha, hora, fuente).
+        texto_base = nuevo_req.requerimiento or ''
+        nuevo_req.texto_hash = hashlib.sha256(
+            f"{texto_base}_clone_{timezone.now().timestamp()}".encode('utf-8')
+        ).hexdigest()
 
         # ── Sincronizar ZonaCalle con los tags del campo 'zona' ──
         if 'zona' in data and data['zona']:

@@ -111,13 +111,21 @@ RESULTADOS DEL SISTEMA:
 INSTRUCCIONES:
 1. Genera una respuesta NATURAL y CONVERSACIONAL en español.
 2. USA EL HISTORIAL completo para mantener coherencia con la conversación.
-3. PRESENTA los datos de los resultados del sistema de forma organizada y amigable.
-4. Si el usuario preguntó por propiedades, incluye: tipo, distrito, precio, área, características relevantes.
-5. Si no hay resultados, indícalo amablemente y sugiere refinar la búsqueda.
-6. NO inventes propiedades ni datos que no estén en los resultados del sistema.
-7. Usa un tono profesional pero cercano, como un asesor inmobiliario de confianza.
-8. NO devuelvas JSON ni datos técnicos. Solo texto legible.
-9. Responde en español."""
+3. Los RESULTADOS DEL SISTEMA son la ÚNICA fuente de datos reales.
+   Si la sección RESULTADOS DEL SISTEMA contiene propiedades, DEBES listarlas.
+   NUNCA digas "no encontré" o "no hay datos" si los resultados contienen propiedades.
+4. PRESENTA los datos de los resultados del sistema de forma organizada y amigable.
+   Incluye: título, precio, distrito, tipo de propiedad, área y características relevantes.
+5. Si el usuario preguntó por propiedades, incluye: tipo, distrito, precio, área, características.
+6. Si hay un mensaje de la skill (como "Se encontraron X propiedades"), ÚSALO como base.
+7. Si la skill ejecutada NO es de búsqueda de propiedades (matching, ACM, etc.),
+   PRESENTA los resultados según corresponda al tipo de skill.
+8. Si NO HAY RESULTADOS en la sección RESULTADOS DEL SISTEMA, indícalo amablemente
+   y sugiere refinar la búsqueda.
+9. NO inventes propiedades ni datos que no estén en los resultados del sistema.
+10. Usa un tono profesional pero cercano, como un asesor inmobiliario de confianza.
+11. NO devuelvas JSON ni datos técnicos. Solo texto legible.
+12. Responde en español."""
 
 
 # ── ChatProcessor ────────────────────────────────────────────────────
@@ -155,11 +163,9 @@ class ChatProcessor:
                 cls._save_user_message(ctx.conversation, ctx.message)
 
                 # ── PASO 1: ORQUESTACIÓN ──
-                # DeepSeek decide qué skill ejecutar (o responde directamente)
                 decision = cls._orquestar(ctx)
 
                 if decision.respuesta_directa:
-                    # DeepSeek puede responder sin datos del sistema
                     response_text = decision.respuesta_directa
                     resultados = None
                     skill_ejecutada = None
@@ -173,6 +179,24 @@ class ChatProcessor:
                         trace_id=timer.trace_id,
                     )
 
+                    # Guardar resultados de busqueda_propiedades en la conversacion
+                    # para que este disponible en consultas de seguimiento ("en carrusel")
+                    if (resultados and resultados.get('success')
+                        and decision.skill == 'busqueda_propiedades'
+                        and resultados.get('data')):
+                        try:
+                            # Almacenar en metadata de la conversacion
+                            meta = ctx.conversation.metadata or {}
+                            meta['ultima_busqueda'] = {
+                                'resultados': resultados['data'][:50],  # max 50
+                                'total': len(resultados['data']),
+                                'params': decision.params,
+                            }
+                            ctx.conversation.metadata = meta
+                            ctx.conversation.save(update_fields=['metadata'])
+                        except Exception as e:
+                            log.warning(f"No se pudo guardar ultima busqueda: {e}")
+
                     # ── PASO 3: RESPUESTA NATURAL ──
                     response_text = cls._generar_respuesta(
                         ctx=ctx,
@@ -181,8 +205,11 @@ class ChatProcessor:
                         trace_id=timer.trace_id,
                     )
 
-                # Guardar respuesta en conversación
-                message_id = cls._save_response(ctx.conversation, response_text)
+                # Guardar respuesta en conversación (sin HTML, solo texto)
+                texto_guardar = response_text
+                if texto_guardar.startswith('__HTML__') and texto_guardar.endswith('__HTML__'):
+                    texto_guardar = '🖼️ Resultados mostrados en formato visual.'
+                message_id = cls._save_response(ctx.conversation, texto_guardar)
 
                 # Post-process (memoria episódica, hechos)
                 cls._save_post_process(
@@ -298,6 +325,29 @@ class ChatProcessor:
                     })
                     return
 
+                # Detectar si el skill genero HTML (formatear_propiedades)
+                data = resultados.get('data')
+                html_content = None
+                if isinstance(data, dict) and data.get('html'):
+                    html_content = data['html']
+                    total = data.get('total', 0)
+                    formato = data.get('formato', '')
+                    
+                    yield StreamChunk('chunk', {'content': f'📊 {total} propiedades en formato {formato}'})
+                    yield StreamChunk('html', {'content': html_content})
+                    
+                    texto_guardar = '🖼️ Resultados mostrados en formato visual.'
+                    message_id = cls._save_response(ctx.conversation, texto_guardar)
+                    cls._save_post_process(ctx, texto_guardar, timer.trace_id)
+                    
+                    yield StreamChunk('complete', {
+                        'message_id': message_id,
+                        'full_response': texto_guardar,
+                        'html': html_content,
+                        'timestamp': timezone.now().isoformat(),
+                    })
+                    return
+
                 # PASO 3: Streaming de respuesta natural
                 full_response = ""
                 try:
@@ -360,80 +410,21 @@ class ChatProcessor:
     @classmethod
     def _orquestar(cls, ctx: ChatContext) -> OrchestrationDecision:
         """
-        PASO 1: DeepSeek analiza el mensaje + historial y decide qué hacer.
-
-        Returns:
-            OrchestrationDecision con skill a ejecutar o respuesta directa.
+        PASO 1 simplificado: siempre ejecuta busqueda_propiedades.
+        DeepSeek NO se usa para decidir qué hacer (evita fallos por API key, timeouts, etc.).
+        DeepSeek solo se usa en PASO 3 para generar respuesta natural a partir de datos reales.
+        
+        El skill analiza internamente el mensaje y extrae filtros automaticamente
+        (distritos, tipos, condiciones) via _analizar_intencion().
         """
-        with MetricsService.timer(
-            'chat.orchestrate',
-            user_id=str(ctx.user.id),
-        ) as timer:
-            registry = SKILL_SYSTEM.registry if hasattr(SKILL_SYSTEM, 'registry') else None
-
-            prompt = build_orchestration_prompt(
-                mensaje=ctx.message,
-                conversation=ctx.conversation,
-                registry=registry,
-                app_id=ctx.app_id,
-            )
-
-            system_prompt = PromptManager.get_deepseek_system_prompt(ctx.app_id)
-
-            success, message, response_data = LLMService._call_deepseek_api(
-                messages=[{"role": "user", "content": prompt}],
-                system_prompt=system_prompt,
-            )
-
-            # Cuando DeepSeek no responde o falla, forzar busqueda semantica
-            # con el mensaje del usuario como semantic_query
-            if not success or response_data is None:
-                log.warning(
-                    f"Orquestador DeepSeek no disponible: {message}",
-                    trace_id=timer.trace_id,
-                )
-                cls._log_orchestration_error(ctx, 'DeepSeek no disponible, forzando busqueda semantica')
-                return OrchestrationDecision(
-                    skill='busqueda_propiedades',
-                    params={'semantic_query': ctx.message},
-                )
-
-            respuesta_raw = response_data.get('content', '')
-            decision = parse_orchestration_response(respuesta_raw)
-
-            # Cuando DeepSeek responde directamente sin usar skill, pero el mensaje
-            # parece consultar sobre propiedades, forzar skill con busqueda semantica
-            if decision.respuesta_directa:
-                msg_lower = ctx.message.lower()
-                palabras_clave = ['propiedad', 'departamento', 'casa', 'terreno', 'local',
-                                  'alquiler', 'venta', 'comprar', 'precio', 'coworking',
-                                  'colegio', 'oficina', 'suite', 'penthouse', 'lote',
-                                  'tengo', 'busco', 'necesito', 'quiero']
-                if any(p in msg_lower for p in palabras_clave):
-                    log.warning(
-                        f"DeepSeek respondio directamente sobre propiedades. Forzando skill.",
-                        extra={'mensaje': ctx.message[:100], 'respuesta': decision.respuesta_directa[:200]},
-                        trace_id=timer.trace_id,
-                    )
-                    cls._log_orchestration_error(
-                        ctx,
-                        f'DeepSeek respondio directamente en vez de usar skill. Msg: {ctx.message[:100]}'
-                    )
-                    return OrchestrationDecision(
-                        skill='busqueda_propiedades',
-                        params={'semantic_query': ctx.message},
-                    )
-
-            log.info(
-                "Orquestación completada",
-                skill=decision.skill,
-                tiene_params=bool(decision.params),
-                respuesta_directa=bool(decision.respuesta_directa),
-                latency_ms=f"{timer.latency_ms:.1f}",
-                trace_id=timer.trace_id,
-            )
-
-            return decision
+        log.info(
+            "Orquestacion directa: busqueda_propiedades con mensaje completo.",
+            mensaje=ctx.message[:100],
+        )
+        return OrchestrationDecision(
+            skill='busqueda_propiedades',
+            params={'semantic_query': ctx.message},
+        )
 
     @classmethod
     def _log_orchestration_error(cls, ctx: ChatContext, mensaje: str):
@@ -509,7 +500,7 @@ class ChatProcessor:
                     trace_id=trace_id,
                 )
 
-                return {
+                resultado = {
                     'success': skill_result.success,
                     'data': skill_result.data,
                     'message': skill_result.message,
@@ -518,6 +509,47 @@ class ChatProcessor:
                     'skill_name': skill_name,
                     'params': params,
                 }
+
+                # PIPELINE: Si busqueda_propiedades tuvo exito con datos
+                # y el usuario pidio o DeepSeek definio un formato,
+                # ejecutar formatear_propiedades en secuencia
+                if (skill_result.success
+                    and skill_name == 'busqueda_propiedades'
+                    and skill_result.data
+                    and isinstance(skill_result.data, list)
+                    and len(skill_result.data) > 0):
+                    
+                    formato = params.get('formato') or 'lista'
+                    log.info(
+                        f"Pipeline: formateando {len(skill_result.data)} propiedades en {formato}",
+                        trace_id=trace_id,
+                    )
+                    
+                    try:
+                        fmt_result = SKILL_SYSTEM.execute_skill(
+                            skill_name='formatear_propiedades',
+                            parameters={
+                                'propiedades': skill_result.data,
+                                'formato': formato,
+                            },
+                            context=execution_context,
+                        )
+                        
+                        if fmt_result.success and fmt_result.data:
+                            resultado['data'] = fmt_result.data
+                            resultado['message'] = fmt_result.message
+                            resultado['skill_name'] = 'busqueda_propiedades + formatear_propiedades'
+                            log.info(
+                                f"Pipeline completado: propiedades formateadas en {formato}",
+                                trace_id=trace_id,
+                            )
+                    except Exception as fmt_e:
+                        log.warning(
+                            f"Pipeline: error formateando propiedades: {fmt_e}",
+                            trace_id=trace_id,
+                        )
+
+                return resultado
 
             except Exception as e:
                 log.error(
@@ -546,7 +578,11 @@ class ChatProcessor:
         trace_id: str,
     ) -> str:
         """
-        PASO 3: DeepSeek genera respuesta natural con los resultados de la skill.
+        PASO 3: Genera respuesta natural.
+
+        Si el skill ejecutado fue formatear_propiedades y devolvió HTML,
+        se retorna el HTML directamente (con marcador) sin pasar por DeepSeek.
+        En cualquier otro caso, DeepSeek genera respuesta natural con los datos.
 
         Args:
             ctx: ChatContext completo.
@@ -555,11 +591,24 @@ class ChatProcessor:
             trace_id: ID de trazabilidad.
 
         Returns:
-            Texto de respuesta natural.
+            Texto de respuesta (puede contener HTML).
         """
         if not resultados.get('success'):
             return resultados.get('error', 'Lo siento, no pude completar la búsqueda.')
 
+        # Si el skill generó HTML (formatear_propiedades), retornarlo directamente
+        data = resultados.get('data')
+        if isinstance(data, dict) and data.get('html'):
+            html = data['html']
+            total = data.get('total', 0)
+            formato = data.get('formato', 'desconocido')
+            log.info(
+                f"Respuesta con HTML generado: {total} propiedades en formato {formato}",
+                trace_id=trace_id,
+            )
+            return f"__HTML__{html}__HTML__"
+
+        # Para otros skills, usar DeepSeek para generar respuesta natural
         prompt = cls._construir_prompt_respuesta(ctx, resultados, skill_name)
 
         system_prompt = PromptManager.get_deepseek_system_prompt(ctx.app_id)
@@ -633,19 +682,31 @@ class ChatProcessor:
         if message:
             lines.append(f"  Mensaje: {message}")
 
-        if data is None:
+        # Si el resultado contiene HTML (skill formatear_propiedades),
+        # pasar el HTML directamente para que el template lo renderice
+        html_content = None
+        if isinstance(data, dict) and data.get('html'):
+            html_content = data['html']
+            formato = data.get('formato', 'desconocido')
+            total = data.get('total', 0)
+            lines.append(f"  HTML_GENERADO: formato={formato}, total={total}")
+            lines.append(f"  HTML_CONTENT:{html_content}")
+
+        elif data is None:
             lines.append("  Datos: (sin datos)")
         elif isinstance(data, str):
             lines.append(f"  Datos: {data}")
         elif isinstance(data, list):
             lines.append(f"  Total de resultados: {len(data)}")
-            for i, item in enumerate(data[:20], 1):  # Máximo 20 items
+            for i, item in enumerate(data[:20], 1):
                 item_str = cls._formatear_item_resultado(item)
                 lines.append(f"  [{i}] {item_str}")
             if len(data) > 20:
                 lines.append(f"  ... y {len(data) - 20} resultados más")
         elif isinstance(data, dict):
             for key, value in data.items():
+                if key == 'html':
+                    continue  # Ya procesado arriba
                 if isinstance(value, list):
                     lines.append(f"  {key}: {len(value)} resultados")
                     for j, item in enumerate(value[:10], 1):
