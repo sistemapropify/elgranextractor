@@ -1530,7 +1530,8 @@
                                 <div class="event-title">
                                     <span style="font-size:11px;color:var(--text-muted);font-weight:400;margin-right:4px;">{{ req.hora_display }}</span>
                                     <span style="color:var(--accent-blue);font-weight:700;">BUSCO</span>
-                                    <span style="margin-left:2px;">{{ req.tipo_display|capfirst }}{% if req.fuente %} <span class="fuente-badge" style="font-size:8px;padding:1px 6px;margin-left:4px;"><span class="badge-dot"></span>{{ req.fuente|truncatechars:15 }}</span>{% endif %}</span>
+                                    <span style="margin-left:2px;">{{ req.tipo_display|capfirst }}</span>
+                                    {% if req.fuente %}<span class="fuente-badge {% if 'EXITO' in req.fuente %}exito{% elif 'RED' in req.fuente %}red{% elif 'UNIDAS' in req.fuente %}unidas{% else %}propify{% endif %}" style="font-size:8px;padding:1px 6px;margin-left:4px;"><span class="badge-dot"></span>{{ req.fuente|truncatechars:18 }}</span>{% endif %}
                                     {% if req.presupuesto_display %}
                                         <span style="margin-left:4px;color:var(--accent-green);font-weight:600;">{{ req.presupuesto_display }}</span>
                                     {% endif %}
