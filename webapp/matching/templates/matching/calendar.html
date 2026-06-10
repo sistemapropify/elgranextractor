@@ -1158,6 +1158,15 @@
                 <div id="agenteSuggestions" style="display:none;position:absolute;top:100%;left:0;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:6px;max-height:120px;overflow-y:auto;z-index:1000;width:100%;box-sizing:border-box;"></div>
                 <button id="btnResetAgente" onclick="resetAgenteFilter()" style="display:none;background:transparent;border:1px solid var(--border-color);border-radius:4px;color:var(--text-secondary);font-size:10px;padding:1px 6px;cursor:pointer;width:auto;flex-shrink:0;">✕</button>
             </div>
+            <div class="filter-bar" style="display:flex;align-items:center;gap:6px;padding:0;margin:0;">
+                <span class="filter-label">📢 Grupo:</span>
+                <select id="selectFuenteFilter" class="filter-fuente-select" onchange="onFuenteFilterChange(this)">
+                    <option value="">📋 Todos</option>
+                    {% for f in fuentes_disponibles %}
+                    <option value="{{ f.nombre }}">{{ f.nombre }} ({{ f.total }})</option>
+                    {% endfor %}
+                </select>
+            </div>
         </div>
         <div class="nav-bar" style="flex:1;margin-bottom:0;">
             <div class="nav-controls">
