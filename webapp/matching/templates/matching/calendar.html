@@ -1762,7 +1762,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                                         const fuenteCls = getFuenteClass(req.fuente || '');
                     const fuenteHtml = req.fuente ? `<span class="fuente-badge ${fuenteCls}" style="font-size:8px;padding:1px 6px;margin-right:2px;"><span class="badge-dot"></span>${req.fuente.substring(0,15)}</span>` : '';
-                    bodyHtml += `<div class="week-req-item" onclick="openMatchModal('${req.id})" style="position:relative;" data-tipo-key="${req.tipo_propiedad_key}" data-distritos="${distritosStr}" data-porcentaje-match="${req.porcentaje_match}" data-agente="${agenteStr}" data-fuente="${req.fuente || '}">
+                    bodyHtml += `<div class="week-req-item" onclick="openMatchModal(${req.id})" style="position:relative;" data-tipo-key="${req.tipo_propiedad_key}" data-distritos="${distritosStr}" data-porcentaje-match="${req.porcentaje_match}" data-agente="${agenteStr}" data-fuente="${req.fuente || ''}">
                         ${verifiedStarHtml}
                         ${whatsappBadgeHtml}
                         <span class="req-hour">${req.hora_display}</span>
