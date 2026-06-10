@@ -1195,7 +1195,7 @@ class MatchingCalendarView(TemplateView):
                 fecha__lte=ultimo_dia
             ).exclude(
                 condicion__in=condicion_excluir
-            ).values('id', 'fecha', 'agente', 'tipo_propiedad')
+            ).values('id', 'fecha', 'agente', 'tipo_propiedad', 'fuente')
             
             reqs_del_mes_list = []
             for r in reqs_del_mes_qs:
@@ -1207,6 +1207,7 @@ class MatchingCalendarView(TemplateView):
                     'agente': agente_limpio,
                     'tipo_propiedad': r['tipo_propiedad'] or '',
                     'has_match': r['id'] in req_ids_con_match,
+                    'fuente': r['fuente'] or '',
                 })
             
             context['month_days'] = month_days
@@ -1287,6 +1288,7 @@ class MatchingCalendarView(TemplateView):
                         'matches': matches_del_req,  # NUEVO: lista completa de hasta 3 matches
                         'verificado': r.verificado,
                         'whatsapp_enviado': r.id in reqs_con_whatsapp,
+                        'fuente': r.fuente or '',
                     })
                 dias_semana.append({
                     'date_iso': d.isoformat(),
@@ -1440,6 +1442,7 @@ class MatchingCalendarView(TemplateView):
                     'mejor_propiedad_moneda_id': info.get('mejor_propiedad_moneda_id'),
                     'verificado': r.verificado,
                     'whatsapp_enviado': r.id in reqs_con_whatsapp,
+                    'fuente': r.fuente or '',
                 })
             
             context['reqs_dia'] = reqs_serializados
@@ -1456,6 +1459,26 @@ class MatchingCalendarView(TemplateView):
             # Navegación
             context['prev_date'] = target_date - timedelta(days=1)
             context['next_date'] = target_date + timedelta(days=1)
+        
+        # ── Fuentes (grupos WhatsApp) disponibles para filtro ──
+        fuentes_qs = (
+            Requerimiento.objects.exclude(condicion__in=condicion_excluir)
+            .exclude(fuente='')
+            .values('fuente')
+            .annotate(total=models.Count('id'))
+            .order_by('-total')
+        )
+        fuentes_disponibles = []
+        for f in fuentes_qs:
+            # Limpiar saltos de línea y espacios
+            nombre_limpio = (f['fuente'] or '').replace('\n', ' ').replace('\r', ' ').strip()
+            if nombre_limpio:
+                fuentes_disponibles.append({
+                    'nombre': nombre_limpio,
+                    'total': f['total'],
+                })
+        context['fuentes_disponibles'] = fuentes_disponibles
+        context['fuentes_disponibles_json'] = json.dumps(fuentes_disponibles)
         
         # Estadísticas generales
         context['total_requerimientos'] = Requerimiento.objects.count()

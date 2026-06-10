@@ -1042,6 +1042,77 @@
         transform: scale(1.1);
     }
 </style>
+
+    .fuente-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 9px;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+        white-space: nowrap;
+        flex-shrink: 0;
+        line-height: 1.5;
+    }
+    .fuente-badge .badge-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+    .fuente-badge.propify {
+        background: rgba(26, 127, 55, 0.25);
+        color: #3fb950;
+        border: 1px solid rgba(26, 127, 55, 0.4);
+    }
+    .fuente-badge.propify .badge-dot { background: #3fb950; }
+    .fuente-badge.exito {
+        background: rgba(88, 166, 255, 0.2);
+        color: #58a6ff;
+        border: 1px solid rgba(88, 166, 255, 0.35);
+    }
+    .fuente-badge.exito .badge-dot { background: #58a6ff; }
+    .fuente-badge.red {
+        background: rgba(188, 140, 255, 0.2);
+        color: #bc8cff;
+        border: 1px solid rgba(188, 140, 255, 0.35);
+    }
+    .fuente-badge.red .badge-dot { background: #bc8cff; }
+    .fuente-badge.unidas {
+        background: rgba(210, 153, 34, 0.2);
+        color: #d29922;
+        border: 1px solid rgba(210, 153, 34, 0.35);
+    }
+    .fuente-badge.unidas .badge-dot { background: #d29922; }
+    .fuente-badge.otro {
+        background: rgba(139, 148, 158, 0.2);
+        color: #8b949e;
+        border: 1px solid rgba(139, 148, 158, 0.35);
+    }
+    .fuente-badge.otro .badge-dot { background: #8b949e; }
+    .fuente-badge.header-fuente {
+        font-size: 10px;
+        padding: 3px 10px;
+        margin-bottom: 4px;
+    }
+    .filter-fuente-select {
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        color: var(--text-primary);
+        padding: 2px 6px;
+        font-size: 12px;
+        cursor: pointer;
+        flex: 1;
+        min-width: 0;
+        max-width: 180px;
+    }
+    .filter-fuente-select option {
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+    }
 {% endblock %}
 
 {% block content %}
@@ -1093,6 +1164,7 @@
                     <input type="hidden" name="agente" id="navFilterAgente" value="">
                     <input type="hidden" name="tipo" id="navFilterTipo" value="">
                     <input type="hidden" name="sin_match" id="navFilterSinMatch" value="">
+                    <input type="hidden" name="fuente" id="navFilterFuente" value="">
                     <select name="year" class="nav-select" onchange="this.form.submit()" style="background:var(--bg-tertiary);border:1px solid var(--border-color);color:var(--text-primary);padding:6px 10px;border-radius:6px;font-size:13px;cursor:pointer;">
                         {% for y in years_disponibles %}
                         <option value="{{ y }}" {% if y == current_year %}selected{% endif %}>{{ y }}</option>
@@ -1306,6 +1378,77 @@
     }
     </style>
 
+    .fuente-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 9px;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+        white-space: nowrap;
+        flex-shrink: 0;
+        line-height: 1.5;
+    }
+    .fuente-badge .badge-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+    .fuente-badge.propify {
+        background: rgba(26, 127, 55, 0.25);
+        color: #3fb950;
+        border: 1px solid rgba(26, 127, 55, 0.4);
+    }
+    .fuente-badge.propify .badge-dot { background: #3fb950; }
+    .fuente-badge.exito {
+        background: rgba(88, 166, 255, 0.2);
+        color: #58a6ff;
+        border: 1px solid rgba(88, 166, 255, 0.35);
+    }
+    .fuente-badge.exito .badge-dot { background: #58a6ff; }
+    .fuente-badge.red {
+        background: rgba(188, 140, 255, 0.2);
+        color: #bc8cff;
+        border: 1px solid rgba(188, 140, 255, 0.35);
+    }
+    .fuente-badge.red .badge-dot { background: #bc8cff; }
+    .fuente-badge.unidas {
+        background: rgba(210, 153, 34, 0.2);
+        color: #d29922;
+        border: 1px solid rgba(210, 153, 34, 0.35);
+    }
+    .fuente-badge.unidas .badge-dot { background: #d29922; }
+    .fuente-badge.otro {
+        background: rgba(139, 148, 158, 0.2);
+        color: #8b949e;
+        border: 1px solid rgba(139, 148, 158, 0.35);
+    }
+    .fuente-badge.otro .badge-dot { background: #8b949e; }
+    .fuente-badge.header-fuente {
+        font-size: 10px;
+        padding: 3px 10px;
+        margin-bottom: 4px;
+    }
+    .filter-fuente-select {
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        color: var(--text-primary);
+        padding: 2px 6px;
+        font-size: 12px;
+        cursor: pointer;
+        flex: 1;
+        min-width: 0;
+        max-width: 180px;
+    }
+    .filter-fuente-select option {
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+    }
+
     {% elif view_mode == 'month' %}
     <!-- ===== MONTH VIEW ===== -->
     <div class="calendar-grid" id="calendarGrid">
@@ -1384,7 +1527,7 @@
                                 <div class="event-title">
                                     <span style="font-size:11px;color:var(--text-muted);font-weight:400;margin-right:4px;">{{ req.hora_display }}</span>
                                     <span style="color:var(--accent-blue);font-weight:700;">BUSCO</span>
-                                    <span style="margin-left:2px;">{{ req.tipo_display|capfirst }}</span>
+                                    <span style="margin-left:2px;">{{ req.tipo_display|capfirst }}{% if req.fuente %} <span class="fuente-badge" style="font-size:8px;padding:1px 6px;margin-left:4px;"><span class="badge-dot"></span>{{ req.fuente|truncatechars:15 }}</span>{% endif %}</span>
                                     {% if req.presupuesto_display %}
                                         <span style="margin-left:4px;color:var(--accent-green);font-weight:600;">{{ req.presupuesto_display }}</span>
                                     {% endif %}
@@ -1504,6 +1647,16 @@ function getMatchBadgeClass(pct) {
     return 'none';
 }
 
+function getFuenteClass(fuente) {
+    if (!fuente) return 'otro';
+    var f = fuente.toLowerCase();
+    if (f.indexOf('propify') >= 0 || f.indexOf('propifai') >= 0) return 'propify';
+    if (f.indexOf('exito') >= 0) return 'exito';
+    if (f.indexOf('red') >= 0 || f.indexOf('arequipa') >= 0) return 'red';
+    if (f.indexOf('unidas') >= 0) return 'unidas';
+    return 'otro';
+}
+
 function getMatchBadgeText(pct) {
     if (pct >= 90) return Math.round(pct) + '%';
     if (pct >= 50) return Math.round(pct) + '%';
@@ -1604,12 +1757,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     } else {
                         matchesBadgesHtml = `<span class="match-badge none" style="display:block;text-align:center;">—</span>`;
                     }
-                    bodyHtml += `<div class="week-req-item" onclick="openMatchModal(${req.id})" style="position:relative;" data-tipo-key="${req.tipo_propiedad_key}" data-distritos="${distritosStr}" data-porcentaje-match="${req.porcentaje_match}" data-agente="${agenteStr}">
+                                        const fuenteCls = getFuenteClass(req.fuente || '');
+                    const fuenteHtml = req.fuente ? `<span class="fuente-badge ${fuenteCls}" style="font-size:8px;padding:1px 6px;margin-right:2px;"><span class="badge-dot"></span>${req.fuente.substring(0,15)}</span>` : '';
+                    bodyHtml += `<div class="week-req-item" onclick="openMatchModal('${req.id})" style="position:relative;" data-tipo-key="${req.tipo_propiedad_key}" data-distritos="${distritosStr}" data-porcentaje-match="${req.porcentaje_match}" data-agente="${agenteStr}" data-fuente="${req.fuente || '}">
                         ${verifiedStarHtml}
                         ${whatsappBadgeHtml}
                         <span class="req-hour">${req.hora_display}</span>
                         <span class="req-title">
-                            <span style="color:#58a6ff;font-weight:700;">BUSCO</span>
+                            ${fuenteHtml}<span style="color:#58a6ff;font-weight:700;">BUSCO</span>
                             <span style="margin-left:2px;">${req.tipo_propiedad}</span>
                             ${presupuestoHtml}
                             ${distritosHtml}
@@ -1652,6 +1807,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const sinMatchParam = urlParams.get('sin_match');
     if (sinMatchParam === '1') {
         document.getElementById('switchSinMatch').checked = true;
+    }
+    
+    const fuenteParam = urlParams.get('fuente');
+    if (fuenteParam) {
+        const selectFuente = document.getElementById('selectFuenteFilter');
+        if (selectFuente) selectFuente.value = fuenteParam;
+        selectedFuente = fuenteParam;
     }
     
     // Sincronizar hidden inputs con valores actuales
@@ -1702,6 +1864,7 @@ let showOnlyWithMatch = false;
 })();
 
 // ===== FILTRO DE AGENTE =====
+let selectedFuente = '';
 let selectedAgente = '';
 (function() {
     const urlParams = new URLSearchParams(window.location.search);
@@ -1716,6 +1879,7 @@ let agentesDisponibles = {{ agentes_json|safe }};
 function updateFilterURL() {
     document.getElementById('navFilterAgente').value = selectedAgente;
     document.getElementById('navFilterTipo').value = selectedTipo;
+    document.getElementById('navFilterFuente').value = selectedFuente;
     document.getElementById('navFilterSinMatch').value = showOnlyWithMatch ? '1' : '';
     
     const url = new URL(window.location);
@@ -1723,6 +1887,8 @@ function updateFilterURL() {
     else url.searchParams.delete('agente');
     if (selectedTipo) url.searchParams.set('tipo', selectedTipo);
     else url.searchParams.delete('tipo');
+    if (selectedFuente) url.searchParams.set('fuente', selectedFuente);
+    else url.searchParams.delete('fuente');
     if (showOnlyWithMatch) url.searchParams.set('sin_match', '1');
     else url.searchParams.delete('sin_match');
     window.history.replaceState({}, '', url);
@@ -1775,6 +1941,12 @@ function resetAgenteFilter() {
     applyFilters();
 }
 
+function onFuenteFilterChange(select) {
+    selectedFuente = select.value;
+    updateFilterURL();
+    applyFilters();
+}
+
 function onTipoFilterChange(select) {
     selectedTipo = select.value;
     updateFilterURL();
@@ -1814,6 +1986,12 @@ function applyFilters() {
                     visible = false;
                 }
             }
+            if (visible && selectedFuente) {
+                var fuente = (item.dataset.fuente || '');
+                if (fuente !== selectedFuente) {
+                    visible = false;
+                }
+            }
             item.style.display = visible ? '' : 'none';
         });
     }
@@ -1835,6 +2013,12 @@ function applyFilters() {
             if (visible && selectedAgente) {
                 var agente = (card.dataset.agente || '').toLowerCase();
                 if (agente.indexOf(selectedAgente.toLowerCase()) < 0) {
+                    visible = false;
+                }
+            }
+            if (visible && selectedFuente) {
+                var fuente = (card.dataset.fuente || '');
+                if (fuente !== selectedFuente) {
                     visible = false;
                 }
             }
@@ -1865,6 +2049,7 @@ function applyFilters() {
             if (selectedAgente && req.agente.toLowerCase().indexOf(selectedAgente.toLowerCase()) < 0) return false;
             // Filtro solo con match
             if (showOnlyWithMatch && !req.has_match) return false;
+            if (selectedFuente && req.fuente !== selectedFuente) return false;
             return true;
         });
 
