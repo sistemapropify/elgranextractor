@@ -238,6 +238,7 @@ Responde SOLO con un JSON válido con esta estructura:
         texto_mensaje: str,
         agente: str = '',
         extractor_log_id: Optional[int] = None,
+        fuente: str = '',
     ) -> Tuple[bool, Optional[int]]:
         """
         Versión simplificada que solo retorna si es duplicado y el ID.
@@ -258,19 +259,26 @@ Responde SOLO con un JSON válido con esta estructura:
                               se excluyen los requerimientos de este log
                               para evitar falsos duplicados durante el
                               procesamiento en vivo del mismo archivo.
+            fuente: Nombre del grupo WhatsApp de origen. Si se proporciona,
+                    solo se comparará contra requerimientos de la MISMA fuente,
+                    evitando falsos duplicados entre diferentes grupos.
 
         Returns:
             Tuple (is_duplicate, matching_id)
         """
         # Usar deduplicación local rápida
-        resultado = cls._verificar_duplicado_local(texto_mensaje, agente=agente, extractor_log_id=extractor_log_id)
+        resultado = cls._verificar_duplicado_local(
+            texto_mensaje, agente=agente,
+            extractor_log_id=extractor_log_id,
+            fuente=fuente,
+        )
         return (
             resultado.get('is_duplicate', False),
             resultado.get('matching_id'),
         )
 
     @classmethod
-    def _verificar_duplicado_local(cls, texto_mensaje: str, agente: str = '', extractor_log_id: Optional[int] = None) -> Dict:
+    def _verificar_duplicado_local(cls, texto_mensaje: str, agente: str = '', extractor_log_id: Optional[int] = None, fuente: str = '') -> Dict:
         """
         Deduplicación LOCAL rápida usando hash de texto normalizado
         y nombre del agente (autor).
@@ -282,10 +290,15 @@ Responde SOLO con un JSON válido con esta estructura:
         3. Coeficiente Jaccard (detección de mensajes muy similares)
         4. Nombre del agente/autor (mismo texto + mismo autor = duplicado)
 
+        Los duplicados solo se detectan DENTRO DE LA MISMA FUENTE (grupo WhatsApp).
+        Si no se especifica fuente, se compara contra todo el histórico.
+
         Args:
             texto_mensaje: Texto del mensaje nuevo.
             agente: Nombre del autor/agente que publicó el mensaje.
             extractor_log_id: No se usa (se compara contra todo el histórico siempre).
+            fuente: Nombre del grupo WhatsApp. Si se proporciona, solo se compara
+                    contra requerimientos de la misma fuente.
 
         Returns:
             Dict con is_duplicate, matching_id, match_score, reason.
@@ -306,8 +319,12 @@ Responde SOLO con un JSON válido con esta estructura:
 
             # 2. Búsqueda DIRECTA por texto_hash en BD (más rápida y exacta)
             #    Esto replica el mismo criterio del índice único de SQL Server
+            #    Solo dentro de la MISMA fuente (grupo WhatsApp) si se especificó
+            filtros_hash = {'texto_hash': hash_nuevo}
+            if fuente:
+                filtros_hash['fuente'] = fuente
             duplicado_por_hash = Requerimiento.objects.filter(
-                texto_hash=hash_nuevo
+                **filtros_hash
             ).values('id', 'agente').first()
             if duplicado_por_hash:
                 req_agente = (duplicado_por_hash['agente'] or '').strip().lower()
@@ -327,11 +344,16 @@ Responde SOLO con un JSON válido con esta estructura:
                     'error': None,
                 }
 
-            # 3. Obtener historial COMPLETO (sin filtro de fecha) para Jaccard
-            #    Buscar en TODOS los requerimientos para detectar duplicados
-            #    incluso si tienen fecha=None (mensajes sin timestamp válido)
+            # 3. Obtener historial para Jaccard, filtrado por fuente si se especificó
+            #    Si hay fuente, solo compara dentro del MISMO grupo WhatsApp
+            #    Si no hay fuente, busca en TODOS los requerimientos
+            filtros_historial = {
+                'requerimiento__isnull': False,
+            }
+            if fuente:
+                filtros_historial['fuente'] = fuente
             historial = list(Requerimiento.objects.filter(
-                requerimiento__isnull=False
+                **filtros_historial
             ).exclude(
                 requerimiento=''
             ).values('id', 'requerimiento', 'agente').order_by('-id')[:cls.ULTIMOS_REQUERIMIENTOS])

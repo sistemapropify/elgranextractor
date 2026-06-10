@@ -527,6 +527,7 @@ def procesar_archivo_extraccion(archivo_id: int, extractor_log_id: Optional[int]
                         15,  # 15 segundos máximo para dedup
                         texto_dedup,
                         agente=msg.get('autor', ''),
+                        fuente=nombre_grupo,  # Solo comparar dentro del mismo grupo WhatsApp
                     )
                 except TimeoutError:
                     logger.warning(f'Timeout en deduplicación del mensaje {idx}, se omite')

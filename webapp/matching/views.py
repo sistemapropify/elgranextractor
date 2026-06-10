@@ -1570,10 +1570,15 @@ class PropuestasDashboardView(TemplateView):
         week_ago = today - timedelta(days=7)
         month_ago = today - timedelta(days=30)
 
-        # ── Helper: obtener counts por status ──
+        # ── Helper: obtener counts por status (lógica de embudo) ──
+        # Una propuesta "enviada" es toda propuesta que se envió.
+        # Luego puede pasar a "respondida" (subconjunto), y dentro de esas
+        # a "aceptada" o "rechazada". "pendientes" son las aún sin respuesta.
+        # Siempre debe cumplirse: enviadas >= respondidas >= aceptadas+rechazadas
         def _contar(queryset):
+            total = queryset.count()
             return {
-                'enviadas': queryset.filter(status=PropuestaWhatsApp.Status.ENVIADA).count(),
+                'enviadas': total,  # Todas las propuestas enviadas en el período
                 'respondidas': queryset.filter(
                     Q(status=PropuestaWhatsApp.Status.RESPONDIDA) |
                     Q(status=PropuestaWhatsApp.Status.INTERESADO) |
@@ -1621,29 +1626,83 @@ class PropuestasDashboardView(TemplateView):
         stats_mes['total'] = qs_mes.count()
         stats_mes = _calc_tasas(stats_mes, stats_mes['total'])
 
-        # ── Datos para charts ──
-        props_por_dia = (
+        # ── Datos para charts (embudo: enviadas = total) ──
+        # Enviadas: TODAS las propuestas (contadas por fecha de envío)
+        enviadas_por_dia_qs = (
             PropuestaWhatsApp.objects
             .filter(enviado_en__date__gte=month_ago)
             .annotate(dia=TruncDate('enviado_en'))
-            .values('dia', 'status')
+            .values('dia')
+            .annotate(total=Count('id'))
+            .order_by('dia')
+        )
+        # Aceptadas: subconjunto aceptado (contadas por fecha de envío)
+        aceptadas_por_dia_qs = (
+            PropuestaWhatsApp.objects
+            .filter(
+                enviado_en__date__gte=month_ago,
+                status__in=[
+                    PropuestaWhatsApp.Status.INTERESADO,
+                    PropuestaWhatsApp.Status.VISITA_AGENDADA,
+                    PropuestaWhatsApp.Status.CERRADA,
+                ]
+            )
+            .annotate(dia=TruncDate('enviado_en'))
+            .values('dia')
+            .annotate(total=Count('id'))
+            .order_by('dia')
+        )
+        # Rechazadas: subconjunto rechazado (contadas por fecha de envío)
+        rechazadas_por_dia_qs = (
+            PropuestaWhatsApp.objects
+            .filter(
+                enviado_en__date__gte=month_ago,
+                status__in=[
+                    PropuestaWhatsApp.Status.RECHAZADO,
+                    PropuestaWhatsApp.Status.NO_INTERESADO,
+                ]
+            )
+            .annotate(dia=TruncDate('enviado_en'))
+            .values('dia')
             .annotate(total=Count('id'))
             .order_by('dia')
         )
 
-        charts = self._generar_charts(props_por_dia, today, week_ago, month_ago)
+        charts = self._generar_charts_v2(
+            enviadas_por_dia_qs,
+            aceptadas_por_dia_qs,
+            rechazadas_por_dia_qs,
+            today, week_ago, month_ago
+        )
         context['stats_hoy'] = stats_hoy
         context['stats_semana'] = stats_semana
         context['stats_mes'] = stats_mes
         context['charts'] = charts
 
         # ── Últimas 20 propuestas ──
-        ultimas = PropuestaWhatsApp.objects.select_related('requerimiento').order_by('-enviado_en')[:20]
+        ultimas = list(PropuestaWhatsApp.objects.select_related('requerimiento').order_by('-enviado_en')[:20])
+
+        # ── Enriquecer con agente_id para link a /agentes/{id}/propuestas/ ──
+        from agentes.models import Agente
+        nombres_agentes = list({p.agente_nombre for p in ultimas if p.agente_nombre})
+        agentes_map = {}
+        if nombres_agentes:
+            agentes_qs = Agente.objects.filter(nombre_completo__in=nombres_agentes)
+            agentes_map = {a.nombre_completo: a.pk for a in agentes_qs}
+        for p in ultimas:
+            p.agente_id = agentes_map.get(p.agente_nombre)
+
         context['ultimas_propuestas'] = ultimas
         return context
 
-    def _generar_charts(self, props_por_dia, today, week_ago, month_ago):
-        """Genera gráficos matplotlib y retorna dict con base64."""
+    def _generar_charts_v2(self, enviadas_qs, aceptadas_qs, rechazadas_qs, today, week_ago, month_ago):
+        """Genera gráficos matplotlib con lógica de embudo.
+        
+        Args:
+            enviadas_qs: QuerySet con {'dia': date, 'total': int} — TODAS las propuestas
+            aceptadas_qs: QuerySet con {'dia': date, 'total': int} — solo aceptadas
+            rechazadas_qs: QuerySet con {'dia': date, 'total': int} — solo rechazadas
+        """
         from collections import defaultdict
         try:
             import matplotlib
@@ -1653,23 +1712,18 @@ class PropuestasDashboardView(TemplateView):
         except ImportError:
             return {'error': 'matplotlib no disponible'}
         
+        # Convertir querysets a dicts {dia: total}
         enviadas_por_dia = defaultdict(int)
+        for item in enviadas_qs:
+            enviadas_por_dia[item['dia']] += item['total']
+        
         aceptadas_por_dia = defaultdict(int)
+        for item in aceptadas_qs:
+            aceptadas_por_dia[item['dia']] += item['total']
+        
         rechazadas_por_dia = defaultdict(int)
-
-        for item in props_por_dia:
-            dia = item['dia']
-            status = item['status']
-            total = item['total']
-            if status == PropuestaWhatsApp.Status.ENVIADA:
-                enviadas_por_dia[dia] += total
-            elif status in (PropuestaWhatsApp.Status.INTERESADO,
-                            PropuestaWhatsApp.Status.VISITA_AGENDADA,
-                            PropuestaWhatsApp.Status.CERRADA):
-                aceptadas_por_dia[dia] += total
-            elif status in (PropuestaWhatsApp.Status.RECHAZADO,
-                            PropuestaWhatsApp.Status.NO_INTERESADO):
-                rechazadas_por_dia[dia] += total
+        for item in rechazadas_qs:
+            rechazadas_por_dia[item['dia']] += item['total']
 
         plt.style.use('dark_background')
         COLOR_BG = '#0d1117'
@@ -1712,11 +1766,12 @@ class PropuestasDashboardView(TemplateView):
         fig, ax = plt.subplots(figsize=(7, 3.5))
         ax.set_facecolor(COLOR_BG)
         fig.patch.set_facecolor(COLOR_BG)
-        ax.plot(dias_labels, sem_env, color=COLOR_AZUL, marker='o', linewidth=2, label='Enviadas')
+        ax.plot(dias_labels, sem_env, color=COLOR_AZUL, marker='o', linewidth=2, label='Enviadas (total)')
         ax.plot(dias_labels, sem_acep, color=COLOR_VERDE, marker='s', linewidth=2, label='Aceptadas')
         ax.plot(dias_labels, sem_rech, color=COLOR_ROJO, marker='x', linewidth=2, label='Rechazadas')
         ax.set_title('Evolución Semanal (Acumulado)', color=COLOR_TEXTO, fontsize=13, fontweight='bold')
         ax.set_ylabel('Propuestas', color=COLOR_TEXTO)
+        ax.yaxis.set_major_locator(plt.MaxNLocator(integer=True))
         ax.tick_params(colors=COLOR_TEXTO, labelsize=9)
         ax.legend(loc='upper left', facecolor='#161b22', edgecolor='#30363d', labelcolor=COLOR_TEXTO)
         ax.grid(True, alpha=0.15, color='#8b949e')
@@ -1741,11 +1796,12 @@ class PropuestasDashboardView(TemplateView):
         fig, ax = plt.subplots(figsize=(7, 3.5))
         ax.set_facecolor(COLOR_BG)
         fig.patch.set_facecolor(COLOR_BG)
-        ax.plot(intervalos, env_agrup, color=COLOR_AZUL, marker='o', linewidth=2, label='Enviadas')
+        ax.plot(intervalos, env_agrup, color=COLOR_AZUL, marker='o', linewidth=2, label='Enviadas (total)')
         ax.plot(intervalos, acep_agrup, color=COLOR_VERDE, marker='s', linewidth=2, label='Aceptadas')
         ax.plot(intervalos, rech_agrup, color=COLOR_ROJO, marker='x', linewidth=2, label='Rechazadas')
         ax.set_title('Evolución Mensual (Acumulado)', color=COLOR_TEXTO, fontsize=13, fontweight='bold')
         ax.set_ylabel('Propuestas', color=COLOR_TEXTO)
+        ax.yaxis.set_major_locator(plt.MaxNLocator(integer=True))
         ax.tick_params(colors=COLOR_TEXTO, labelsize=8)
         ax.legend(loc='upper left', facecolor='#161b22', edgecolor='#30363d', labelcolor=COLOR_TEXTO)
         ax.grid(True, alpha=0.15, color='#8b949e')
@@ -1753,19 +1809,20 @@ class PropuestasDashboardView(TemplateView):
         plt.tight_layout()
         charts['evolucion_mensual'] = fig_to_b64(fig)
 
-        # ── Chart 3: Barras semanales ──
+        # ── Chart 3: Barras semanales (valores por día, NO acumulados) ──
         fig, ax = plt.subplots(figsize=(7, 3.5))
         ax.set_facecolor(COLOR_BG)
         fig.patch.set_facecolor(COLOR_BG)
         x = np.arange(len(dias_labels))
         width = 0.25
-        ax.bar(x - width, sem_env, width, color=COLOR_AZUL, label='Enviadas', alpha=0.9)
-        ax.bar(x, sem_acep, width, color=COLOR_VERDE, label='Aceptadas', alpha=0.9)
-        ax.bar(x + width, sem_rech, width, color=COLOR_ROJO, label='Rechazadas', alpha=0.9)
+        ax.bar(x - width, sem_env_raw, width, color=COLOR_AZUL, label='Enviadas', alpha=0.9)
+        ax.bar(x, sem_acep_raw, width, color=COLOR_VERDE, label='Aceptadas', alpha=0.9)
+        ax.bar(x + width, sem_rech_raw, width, color=COLOR_ROJO, label='Rechazadas', alpha=0.9)
         ax.set_title('Propuestas por Día (Semana)', color=COLOR_TEXTO, fontsize=13, fontweight='bold')
         ax.set_xticks(x)
         ax.set_xticklabels(dias_labels, fontsize=8)
         ax.set_ylabel('Cantidad', color=COLOR_TEXTO)
+        ax.yaxis.set_major_locator(plt.MaxNLocator(integer=True))
         ax.tick_params(colors=COLOR_TEXTO, labelsize=9)
         ax.legend(loc='upper left', facecolor='#161b22', edgecolor='#30363d', labelcolor=COLOR_TEXTO)
         ax.grid(True, alpha=0.15, color='#8b949e', axis='y')

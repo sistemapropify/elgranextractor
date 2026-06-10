@@ -290,78 +290,75 @@
             <h4><i class="fas fa-list"></i> Propuestas enviadas</h4>
         </div>
 
-        {% if propuestas %}
+        {% if requerimiento_list %}
         <div style="overflow-x:auto;">
             <table>
                 <thead>
                     <tr>
                         <th style="width:36px;"></th>
-                        <th>Fecha</th>
-                        <th>Requerimiento</th>
-                        <th>Propiedad</th>
-                        <th>Precio</th>
-                        <th>Agente</th>
-                        <th>Status</th>
-                        <th style="text-align:center;">Acción</th>
+                        <th style="width:30%;">Requerimiento</th>
+                        <th>Propiedades</th>
+                        <th style="text-align:center;width:60px;">Acción</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for p in propuestas %}
+                    {% for grupo in requerimiento_list %}
+                    {% with req=grupo.info props=grupo.propuestas %}
+                    {% with primera_prop=props|first %}
                     <tr>
                         <td style="text-align:center;">
-                            <button class="pipeline-toggle" id="pipe-btn-{{ p.id }}" onclick="togglePipeline({{ p.id }}, {{ p.requerimiento_id }})" title="Ver pipeline multi-rama">📊</button>
-                        </td>
-                        <td style="white-space:nowrap;font-size:12px;color:var(--text-secondary);">
-                            {{ p.enviado_en|date:'d/m/Y H:i' }}
+                            <button class="pipeline-toggle" id="pipe-btn-{{ primera_prop.id }}" onclick="togglePipeline({{ primera_prop.id }}, {{ req.id }})" title="Ver pipeline multi-rama">📊</button>
                         </td>
                         <td style="max-width:350px;">
                             <div style="font-size:11px;color:var(--accent-blue);margin-bottom:2px;">
-                                <a href="{% url 'matching:dashboard' %}?requerimiento_id={{ p.requerimiento_id }}" style="color:var(--accent-blue);text-decoration:none;">#{{ p.requerimiento_id }}</a>
+                                <a href="{% url 'matching:dashboard' %}?requerimiento_id={{ req.id }}" style="color:var(--accent-blue);text-decoration:none;">#{{ req.id }}</a>
                             </div>
                             <div style="font-size:12px;color:var(--text-primary);line-height:1.4;word-break:break-word;white-space:pre-wrap;">
-                                {{ p.requerimiento.requerimiento }}
+                                {{ req.texto }}
+                            </div>
+                            <div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">
+                                {{ req.tipo_propiedad }} · {% if req.presupuesto_monto %}S/. {{ req.presupuesto_monto|floatformat:0|intcomma }}{% else %}—{% endif %}
                             </div>
                         </td>
                         <td>
-                            {% if p.propiedad_code %}
-                            <div class="prop-code">{{ p.propiedad_code }}</div>
-                            {% endif %}
-                            {% if p.propiedad_title %}
-                            <div class="prop-title">{{ p.propiedad_title|truncatechars:40 }}</div>
-                            {% endif %}
-                        </td>
-                        <td style="font-weight:600;">
-                            {% if p.propiedad_price %}
-                                {% if p.propiedad_currency_id == 1 %}${% else %}S/.{% endif %}
-                                {{ p.propiedad_price|floatformat:0|intcomma }}
-                            {% else %}—{% endif %}
-                        </td>
-                        <td>
-                            <div class="agente-info">
-                                {% if p.agente_nombre %}<div>{{ p.agente_nombre }}</div>{% endif %}
-                                {% if p.agente_telefono %}<div style="font-size:11px;color:var(--text-muted);">{{ p.agente_telefono }}</div>{% endif %}
+                            {% for p in props %}
+                            <div style="display:flex;align-items:center;gap:8px;padding:4px 0;{% if not forloop.last %}border-bottom:1px solid rgba(48,54,61,0.2);margin-bottom:4px;{% endif %}">
+                                <div style="flex:1;">
+                                    {% if p.propiedad_code %}
+                                    <div class="prop-code">{{ p.propiedad_code }}</div>
+                                    {% endif %}
+                                    {% if p.propiedad_title %}
+                                    <div class="prop-title">{{ p.propiedad_title|truncatechars:35 }}</div>
+                                    {% endif %}
+                                </div>
+                                <div style="font-weight:600;font-size:12px;white-space:nowrap;min-width:70px;text-align:right;">
+                                    {% if p.propiedad_price %}
+                                        {% if p.propiedad_currency_id == 1 %}${% else %}S/.{% endif %}
+                                        {{ p.propiedad_price|floatformat:0|intcomma }}
+                                    {% else %}—{% endif %}
+                                </div>
+                                <div>
+                                    <span class="status-badge status-{{ p.status }}" style="font-size:10px;white-space:nowrap;">
+                                        {{ p.get_status_display }}
+                                    </span>
+                                </div>
                             </div>
-                        </td>
-                        <td>
-                            <span class="status-badge status-{{ p.status }}">
-                                {{ p.get_status_display }}
-                            </span>
+                            {% empty %}
+                            <div style="color:var(--text-muted);font-size:12px;">Sin propuestas</div>
+                            {% endfor %}
                         </td>
                         <td style="text-align:center;">
-                            <select class="status-select" data-propuesta-id="{{ p.id }}" onchange="actualizarStatus(this)">
-                                <option value="">Cambiar...</option>
-                                {% for s, label in p.Status.choices %}
-                                <option value="{{ s }}" {% if p.status == s %}disabled style="display:none;"{% endif %}>{{ label }}</option>
-                                {% endfor %}
-                            </select>
+                            <a href="{% url 'matching:dashboard' %}?requerimiento_id={{ req.id }}" class="action-btn" title="Ver en dashboard">📋</a>
                         </td>
                     </tr>
                     <!-- Pipeline expand row (multi-rama del requerimiento completo) -->
-                    <tr class="pipeline-expand-row" id="pipe-row-{{ p.id }}">
-                        <td colspan="8">
-                            <div id="pipe-content-{{ p.id }}"></div>
+                    <tr class="pipeline-expand-row" id="pipe-row-{{ primera_prop.id }}">
+                        <td colspan="4">
+                            <div id="pipe-content-{{ primera_prop.id }}"></div>
                         </td>
                     </tr>
+                    {% endwith %}
+                    {% endwith %}
                     {% endfor %}
                 </tbody>
             </table>
