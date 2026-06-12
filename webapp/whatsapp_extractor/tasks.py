@@ -278,6 +278,11 @@ def procesar_archivo_extraccion(archivo_id: int, extractor_log_id: Optional[int]
 
         # 2. Extraer nombre del grupo WhatsApp desde el archivo
         nombre_grupo = _extraer_nombre_grupo(archivo)
+        # Pre-truncar nombre_grupo para usarlo de forma consistente en toda la pipeline
+        # (hash check, dedup check, insert en BD). Usar str() para None → ''
+        # y truncar a 60 chars SIN agregar '...' para que coincida con _truncar_local().
+        nombre_grupo_orig = nombre_grupo
+        nombre_grupo = (nombre_grupo or '')[:60]
 
         # 3. Iniciar o reutilizar log
         if extractor_log_id:
@@ -683,12 +688,14 @@ def procesar_archivo_extraccion(archivo_id: int, extractor_log_id: Optional[int]
 
                 # --- Verificar duplicado por texto_hash ANTES de insertar (con timeout) ---
                 try:
+                    # nombre_grupo ya viene pre-truncado a 60 chars (o '' si None)
+                    # para que coincida exactamente con lo que se almacena en BD
                     duplicado_bd = _ejecutar_con_timeout(
                         lambda: Requerimiento.objects.filter(
                             texto_hash=texto_hash,
                             fecha=fecha_msg,
                             hora=hora_msg,
-                            fuente=_truncar(nombre_grupo, 60),
+                            fuente=nombre_grupo,
                         ).exists(),
                         15,  # 15s timeout para la consulta
                     )
