@@ -1044,6 +1044,107 @@
 </style>
 
 <style>
+    /* ===== MODAL REQUERIMIENTO DETALLE (sin match) ===== */
+    .modal-req-detail {
+        width: 100%;
+        max-width: 600px;
+        padding: 0;
+    }
+    .modal-req-detail .req-detail-section {
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .modal-req-detail .req-detail-section:last-child {
+        border-bottom: none;
+    }
+    .modal-req-detail .req-detail-label {
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--text-muted);
+        margin-bottom: 4px;
+    }
+    .modal-req-detail .req-detail-value {
+        font-size: 13px;
+        color: var(--text-primary);
+        font-weight: 500;
+    }
+    .modal-req-detail .req-detail-value.whatsapp-group {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    .modal-req-detail .req-detail-value.whatsapp-group.exito {
+        background: rgba(88, 166, 255, 0.2);
+        color: #58a6ff;
+        border: 1px solid rgba(88, 166, 255, 0.35);
+    }
+    .modal-req-detail .req-detail-value.whatsapp-group.propify {
+        background: rgba(26, 127, 55, 0.25);
+        color: #3fb950;
+        border: 1px solid rgba(26, 127, 55, 0.4);
+    }
+    .modal-req-detail .req-detail-value.whatsapp-group.red {
+        background: rgba(188, 140, 255, 0.2);
+        color: #bc8cff;
+        border: 1px solid rgba(188, 140, 255, 0.35);
+    }
+    .modal-req-detail .req-detail-value.whatsapp-group.otro {
+        background: rgba(139, 148, 158, 0.2);
+        color: #8b949e;
+        border: 1px solid rgba(139, 148, 158, 0.35);
+    }
+    .req-detail-original-text {
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 12px 14px;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--text-primary);
+        white-space: pre-wrap;
+        word-break: break-word;
+        max-height: 250px;
+        overflow-y: auto;
+        font-family: inherit;
+    }
+    .req-detail-verified-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    .req-detail-verified-badge.verified {
+        background: rgba(63, 185, 80, 0.2);
+        color: var(--accent-green);
+        border: 1px solid rgba(63, 185, 80, 0.4);
+    }
+    .req-detail-verified-badge.not-verified {
+        background: rgba(139, 148, 158, 0.15);
+        color: var(--text-muted);
+        border: 1px solid var(--border-color);
+    }
+    .req-detail-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+    @media (max-width: 500px) {
+        .req-detail-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<style>
     .fuente-badge {
         display: inline-flex;
         align-items: center;
@@ -1518,7 +1619,7 @@
                 <div class="day-hour-content" id="hour-{{ hora_slot|time:'H' }}">
                     {% for req in reqs_dia %}
                         {% if req.hora_display|slice:":2" == hora_slot|time:"H" %}
-                        <div class="day-event-card" onclick="openMatchModal({{ req.id }})" data-tipo-key="{{ req.tipo_propiedad_key }}" data-distritos="{{ req.distritos_list|join:',' }}" data-porcentaje-match="{{ req.porcentaje_match|default:'0' }}" data-agente="{{ req.agente|default:'' }}">
+                        <div class="day-event-card" onclick="openMatchModal({{ req.id }}, this)" data-tipo-key="{{ req.tipo_propiedad_key }}" data-distritos="{{ req.distritos_list|join:',' }}" data-porcentaje-match="{{ req.porcentaje_match|default:'0' }}" data-agente="{{ req.agente|default:'' }}" data-fuente="{{ req.fuente|default:'' }}" data-verificado="{% if req.verificado %}true{% else %}false{% endif %}" data-hora="{{ req.hora_display|default:'' }}" data-fecha="{{ req.fecha_display|default:'' }}" data-requerimiento-text="{{ req.requerimiento_text|default:''|escapejs }}">
                             {% if req.verificado %}
                             <div class="verified-star">
                                 <svg viewBox="0 0 24 24" fill="#00ff88">
@@ -1772,7 +1873,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                                         const fuenteCls = getFuenteClass(req.fuente || '');
                     const fuenteHtml = req.fuente ? `<span class="fuente-badge ${fuenteCls}" style="font-size:8px;padding:1px 6px;margin-right:2px;"><span class="badge-dot"></span>${req.fuente.substring(0,15)}</span>` : '';
-                    bodyHtml += `<div class="week-req-item" onclick="openMatchModal(${req.id})" style="position:relative;" data-tipo-key="${req.tipo_propiedad_key}" data-distritos="${distritosStr}" data-porcentaje-match="${req.porcentaje_match}" data-agente="${agenteStr}" data-fuente="${req.fuente || ''}">
+                    var reqText = (req.requerimiento_text || '').replace(/'/g, "\\'");
+                    bodyHtml += `<div class="week-req-item" onclick="openMatchModal(${req.id}, this)" style="position:relative;" data-tipo-key="${req.tipo_propiedad_key}" data-distritos="${distritosStr}" data-porcentaje-match="${req.porcentaje_match}" data-agente="${agenteStr}" data-fuente="${req.fuente || ''}" data-verificado="${req.verificado ? 'true' : 'false'}" data-hora="${req.hora_display || ''}" data-fecha="${req.fecha_display || ''}" data-requerimiento-text="${reqText}">
                         ${verifiedStarHtml}
                         ${whatsappBadgeHtml}
                         <span class="req-hour">${req.hora_display}</span>
@@ -2037,18 +2139,22 @@ function applyFilters() {
             }
             card.style.display = visible ? '' : 'none';
         });
-        // Ocultar filas de hora sin eventos visibles
+        // Mostrar/ocultar filas de hora según filtros.
+        // Las horas SIN eventos (vacías) SIEMPRE deben mostrarse.
         document.querySelectorAll('.day-hour-row').forEach(function(row) {
             const hourContent = row.querySelector('.day-hour-content');
             if (hourContent) {
-                const hasVisible = Array.from(hourContent.querySelectorAll('.day-event-card')).some(function(card) {
+                const cards = hourContent.querySelectorAll('.day-event-card');
+                // Si no hay tarjetas en esta hora, siempre visible
+                if (cards.length === 0) {
+                    row.style.display = '';
+                    return;
+                }
+                // Si hay tarjetas, ver si alguna es visible
+                const hasVisible = Array.from(cards).some(function(card) {
                     return card.style.display !== 'none';
                 });
-                if (!hasVisible) {
-                    row.style.display = 'none';
-                } else {
-                    row.style.display = '';
-                }
+                row.style.display = hasVisible ? '' : 'none';
             }
         });
     }
@@ -2105,15 +2211,28 @@ const API_BASE = '/matching/api/matching';
 
 function closeMatchModal() {
     document.getElementById('modalMatchOverlay').classList.remove('active');
+    // Resetear className del body para que no herede estilos del modal de detalle
+    var body = document.getElementById('modalMatchBody');
+    body.className = 'modal-match-body';
 }
 
-function openMatchModal(requerimientoId) {
+function openMatchModal(requerimientoId, cardElement) {
     const overlay = document.getElementById('modalMatchOverlay');
     const body = document.getElementById('modalMatchBody');
     const title = document.getElementById('modalMatchTitle');
     const btnDashboard = document.getElementById('modalBtnDashboard');
 
-    // Show loading
+    // Si se pasó el elemento de la tarjeta, verificar si tiene 0% match
+    if (cardElement) {
+        const pctMatch = parseFloat(cardElement.dataset.porcentajeMatch || '0');
+        if (pctMatch <= 0) {
+            // No hay match → mostrar modal con detalle del requerimiento original
+            abrirModalReqDetalle(requerimientoId, cardElement, overlay, body, title, btnDashboard);
+            return;
+        }
+    }
+
+    // Hay match → comportamiento existente: cargar matching desde API
     overlay.classList.add('active');
     body.innerHTML = `<div class="modal-loading">
         <div class="spinner"></div>
@@ -2121,9 +2240,9 @@ function openMatchModal(requerimientoId) {
     </div>`;
     title.textContent = `MATCH Matching #${requerimientoId}`;
     btnDashboard.href = `/matching/dashboard/?requerimiento_id=${requerimientoId}`;
+    btnDashboard.style.display = '';
 
     // Usar resultados GUARDADOS (MatchResult) para que los porcentajes coincidan
-    // exactamente con lo que muestran las tarjetas del calendario.
     fetch(`${API_BASE}/${requerimientoId}/guardados/`)
         .then(function(res) {
             if (!res.ok) throw new Error('Error al obtener resultados guardados');
@@ -2138,6 +2257,81 @@ function openMatchModal(requerimientoId) {
                 <p>Error: ${err.message}</p>
             </div>`;
         });
+}
+
+/**
+ * Abre el modal mostrando los detalles del requerimiento original
+ * (cuando no tiene match / 0% de coincidencia)
+ */
+function abrirModalReqDetalle(requerimientoId, cardElement, overlay, body, title, btnDashboard) {
+    overlay.classList.add('active');
+    title.textContent = `📋 Requerimiento #${requerimientoId}`;
+    btnDashboard.style.display = 'none';
+
+    // Extraer datos de los data-attributes de la tarjeta
+    var reqText = cardElement.dataset.requerimientoText || '';
+    var fuente = cardElement.dataset.fuente || '';
+    var agente = cardElement.dataset.agente || '';
+    var hora = cardElement.dataset.hora || '--:--';
+    var fecha = cardElement.dataset.fecha || '';
+    var verificado = cardElement.dataset.verificado === 'true';
+
+    // Determinar clase CSS para el badge de fuente
+    var fuenteCls = 'otro';
+    var f = fuente.toLowerCase();
+    if (f.indexOf('exito') >= 0) fuenteCls = 'exito';
+    else if (f.indexOf('propify') >= 0 || f.indexOf('propifai') >= 0) fuenteCls = 'propify';
+    else if (f.indexOf('red') >= 0 || f.indexOf('arequipa') >= 0) fuenteCls = 'red';
+
+    var fuenteHtml = fuente
+        ? `<span class="req-detail-value whatsapp-group ${fuenteCls}">📢 ${fuente}</span>`
+        : `<span class="req-detail-value" style="color:var(--text-muted);">—</span>`;
+
+    var verifiedHtml = verificado
+        ? `<span class="req-detail-verified-badge verified">✅ Verificado</span>`
+        : `<span class="req-detail-verified-badge not-verified">⏳ Sin verificar</span>`;
+
+    // Si no hay texto, mostrar placeholder
+    if (!reqText) {
+        reqText = '⚠️ No se pudo recuperar el texto original del requerimiento.';
+    }
+
+    body.className = 'modal-match-body';
+    body.innerHTML = `
+        <div class="modal-req-detail" style="grid-column:1/-1;margin:0 auto;">
+            <!-- HEADER: metadatos del requerimiento (fuente, agente, fecha, hora, estado) -->
+            <div class="req-detail-section">
+                <div class="req-detail-grid" style="grid-template-columns:1fr 1fr 1fr 1fr auto;">
+                    <div>
+                        <div class="req-detail-label">📢 Grupo / Fuente</div>
+                        ${fuenteHtml}
+                    </div>
+                    <div>
+                        <div class="req-detail-label">👤 Agente</div>
+                        <div class="req-detail-value">${agente || '<span style="color:var(--text-muted);">—</span>'}</div>
+                    </div>
+                    <div>
+                        <div class="req-detail-label">📅 Fecha</div>
+                        <div class="req-detail-value">${fecha || '<span style="color:var(--text-muted);">—</span>'}</div>
+                    </div>
+                    <div>
+                        <div class="req-detail-label">🕐 Hora</div>
+                        <div class="req-detail-value">${hora || '<span style="color:var(--text-muted);">—</span>'}</div>
+                    </div>
+                    <div>
+                        <div class="req-detail-label">🔍 Estado</div>
+                        ${verifiedHtml}
+                    </div>
+                </div>
+            </div>
+
+            <!-- CUERPO: texto original del requerimiento -->
+            <div class="req-detail-section">
+                <div class="req-detail-label">📝 Mensaje original</div>
+                <div class="req-detail-original-text">${reqText}</div>
+            </div>
+        </div>
+    `;
 }
 
 // ===== MAPA DE DISTRITOS (de mapeo_ubicaciones.py) =====

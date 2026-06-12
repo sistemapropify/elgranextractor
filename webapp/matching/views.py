@@ -1269,6 +1269,7 @@ class MatchingCalendarView(TemplateView):
                         except Exception:
                             pass
                     matches_del_req = info.get('matches', []) if info else []
+                    fecha_display = r.fecha.strftime('%d/%m/%Y') if r.fecha else ''
                     reqs_serializados.append({
                         'id': r.id,
                         'hora': r.hora.isoformat() if r.hora else None,
@@ -1290,6 +1291,8 @@ class MatchingCalendarView(TemplateView):
                         'verificado': r.verificado,
                         'whatsapp_enviado': r.id in reqs_con_whatsapp,
                         'fuente': r.fuente or '',
+                        'requerimiento_text': r.requerimiento or '',
+                        'fecha_display': fecha_display,
                     })
                 dias_semana.append({
                     'date_iso': d.isoformat(),
@@ -1424,6 +1427,8 @@ class MatchingCalendarView(TemplateView):
                             agente_id = agente_obj.id
                     except Exception:
                         pass
+                # Formatear fecha para display
+                fecha_display = r.fecha.strftime('%d/%m/%Y') if r.fecha else ''
                 reqs_serializados.append({
                     'id': r.id,
                     'hora': r.hora.isoformat() if r.hora else None,
@@ -1444,6 +1449,8 @@ class MatchingCalendarView(TemplateView):
                     'verificado': r.verificado,
                     'whatsapp_enviado': r.id in reqs_con_whatsapp,
                     'fuente': r.fuente or '',
+                    'requerimiento_text': r.requerimiento or '',
+                    'fecha_display': fecha_display,
                 })
             
             context['reqs_dia'] = reqs_serializados
