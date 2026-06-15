@@ -338,13 +338,14 @@ def buscar_comparables(request):
                     continue
                 
                 # Obtener nombres mapeados de ubicación
-                departamento_id = str(prop.department) if prop.department else ''
-                provincia_id = str(prop.province) if prop.province else ''
-                distrito_id = str(prop.district) if prop.district else ''
-                
-                departamento_nombre = DEPARTAMENTOS.get(departamento_id, departamento_id)
-                provincia_nombre = PROVINCIAS.get(provincia_id, provincia_id)
-                distrito_nombre = DISTRITOS.get(distrito_id, distrito_id)
+                # Nota: PropifaiProperty tiene district_id en lugar de district/department/province
+                distrito_id = str(prop.district_id) if prop.district_id else ''
+                departamento_nombre = ''
+                provincia_nombre = ''
+                distrito_nombre = DISTRITOS.get(distrito_id, '')
+                # Usar display_address si está disponible como ubicación completa
+                if not distrito_nombre and prop.display_address:
+                    distrito_nombre = prop.display_address
                 
                 # Calcular precio por m² aproximado para Propifai
                 precio_m2 = None
