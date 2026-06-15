@@ -8,13 +8,13 @@ let marcadoresComparables = new Map(); // id -> {marker, data, seleccionado}
 let propiedadesSeleccionadas = new Map(); // id -> data
 let propiedadesEncontradas = []; // Todas las propiedades encontradas en la búsqueda
 
-// URLs de iconos - usar iconos más distintivos para diferenciar fuentes
-const ICONO_PRINCIPAL = 'https://maps.google.com/mapfiles/ms/icons/yellow-dot.png';
+// URLs de iconos PNG personalizados por fuente
+const ICONO_PROPIFFY = '/static/requerimientos/data/Pin-propify.png';
+const ICONO_REMAX = '/static/requerimientos/data/pin-remax.png';
+const ICONO_ADONDEVIVIR = '/static/requerimientos/data/adondevivir-pin.png';
 const ICONO_COMPARABLE = 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png';
+// Icono seleccionado: rojo con número
 const ICONO_SELECCIONADO = 'https://maps.google.com/mapfiles/ms/icons/red-dot.png';
-// Para Propifai usar iconos diferentes: morado y rosa para mejor contraste
-const ICONO_PROPIFAI = 'https://maps.google.com/mapfiles/ms/icons/purple-dot.png';
-const ICONO_PROPIFAI_SELECCIONADO = 'https://maps.google.com/mapfiles/ms/icons/pink-dot.png';
 
 // Inicializar eventos del formulario y controles (independiente de Google Maps)
 function inicializarEventos() {
@@ -337,24 +337,27 @@ async function buscarComparables() {
 
 // Crear marcador para propiedad comparable
 function crearMarcadorComparable(propiedad) {
-    // Determinar icono según la fuente
+    // Determinar icono según la fuente/portal
     let iconoUrl = ICONO_COMPARABLE;
-    let iconoSeleccionadoUrl = ICONO_SELECCIONADO;
     let esPropifai = propiedad.es_propify || propiedad.fuente === 'propifai';
+    const portal = (propiedad.portal || '').toLowerCase();
     
     if (esPropifai) {
-        iconoUrl = ICONO_PROPIFAI;
-        iconoSeleccionadoUrl = ICONO_PROPIFAI_SELECCIONADO;
+        iconoUrl = ICONO_PROPIFFY;
+    } else if (portal === 'remax') {
+        iconoUrl = ICONO_REMAX;
+    } else if (portal === 'adondevivir') {
+        iconoUrl = ICONO_ADONDEVIVIR;
     }
+    // Si no coincide con ningún portal conocido, usa ICONO_COMPARABLE (blue-dot)
     
-    // Tamaño diferente para Propifai (más grande para destacar)
-    const tamanoIcono = esPropifai ? 36 : 32;
+    // Tamaño del icono
+    const tamanoIcono = 32;
     
     // Calcular precio por m² para mostrar en la etiqueta del marcador
     const precioM2 = propiedad.precio_m2_final || propiedad.precio_m2;
     let labelText = '';
     if (precioM2 && precioM2 > 0) {
-        // Mostrar precio/m² en dólares, ej: "$850/m²"
         labelText = '$' + Math.round(precioM2).toString() + '/m²';
     } else {
         labelText = esPropifai ? 'P' : '?';
@@ -372,7 +375,6 @@ function crearMarcadorComparable(propiedad) {
         map: acmMap,
         title: '',
         icon: markerIcon,
-        // Mostrar precio por m² en dólares como etiqueta del marcador (debajo del icono)
         label: {
             text: labelText,
             color: "#dc3545",
@@ -392,10 +394,10 @@ function crearMarcadorComparable(propiedad) {
         data: propiedad,
         seleccionado: false,
         iconoUrl,
-        iconoSeleccionadoUrl,
+        iconoSeleccionadoUrl: ICONO_SELECCIONADO,
         esPropifai,
         tamanoIcono,
-        labelText: labelText,  // Guardar texto de la etiqueta para restaurarlo al deseleccionar
+        labelText: labelText,
     });
 }
 

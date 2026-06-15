@@ -319,6 +319,7 @@ def buscar_comparables(request):
                     'precio_m2_final': precio_m2_info.get('precio_m2_final'),
                     'distancia_metros': round(distancia, 2),
                     'fuente': 'local',
+                    'portal': (prop.portal or '').lower(),
                     'es_propify': False,
                     'codigo': prop.id_propiedad or str(prop.id),
                     'titulo': prop.descripcion[:100] if prop.descripcion else '',
