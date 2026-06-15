@@ -327,8 +327,8 @@ def buscar_comparables(request):
                 
             else:
                 # Propiedad de Propifai
-                prop_lat = prop.latitude
-                prop_lng = prop.longitude
+                prop_lat = float(prop.latitude) if prop.latitude else None
+                prop_lng = float(prop.longitude) if prop.longitude else None
                 if prop_lat is None or prop_lng is None:
                     continue
                     
