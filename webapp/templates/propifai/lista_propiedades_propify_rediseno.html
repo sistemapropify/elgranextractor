@@ -1,659 +1,1356 @@
-{% extends 'base.html' %}
-{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Propiedades Propify - Catálogo</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
 
-{% block title %}Propiedades Propify - Catálogo Mejorado{% endblock %}
-
-{% block extra_css %}
-<style>
-    :root {
-        --color-primary: #047d7d;
-        --color-secondary: #5ab0ae;
-        --color-accent: #2ea44f;
-        --navbar-height: 60px;
-    }
-
-    .portal-container {
-        display: flex;
-        flex-direction: column;
-        height: calc(100vh - var(--navbar-height));
-        overflow: hidden;
-        background: #fff;
-    }
-
-    .filters-bar {
-        background: #fff;
-        border-bottom: 1px solid rgba(4, 125, 125, 0.1);
-        padding: 0.75rem 1rem;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
-        z-index: 100;
-        flex-shrink: 0;
-    }
-
-    .filters-bar form {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.75rem;
-        align-items: flex-end;
-    }
-
-    .filter-group {
-        display: flex;
-        flex-direction: column;
-        min-width: 150px;
-    }
-
-    .filter-group label {
-        font-size: 0.75rem;
-        font-weight: 600;
-        color: #4a5a5a;
-        margin-bottom: 0.25rem;
-    }
-
-    .filter-group .form-control,
-    .filter-group .form-select {
-        padding: 0.375rem 0.5rem;
-        font-size: 0.85rem;
-        border-color: rgba(4, 125, 125, 0.2);
-        border-radius: 4px;
-        height: 32px;
-    }
-
-    .filter-actions {
-        display: flex;
-        gap: 0.5rem;
-        margin-left: auto;
-    }
-
-    .main-content {
-        display: flex;
-        flex: 1;
-        overflow: hidden;
-    }
-
-    .map-section {
-        flex: 0 0 50%;
-        display: flex;
-        flex-direction: column;
-        border-right: 1px solid rgba(4, 125, 125, 0.1);
-        background: #f8fafa;
-    }
-
-    .map-header {
-        padding: 0.75rem 1rem;
-        background: #fff;
-        border-bottom: 1px solid rgba(4, 125, 125, 0.1);
-        font-weight: 600;
-        color: var(--color-primary);
-        font-size: 0.9rem;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-
-    .map-container {
-        flex: 1;
-        position: relative;
-        min-height: 0;
-    }
-
-    #propertyMap {
-        width: 100%;
-        height: 100%;
-        min-height: 300px;
-    }
-
-    .properties-section {
-        flex: 0 0 50%;
-        display: flex;
-        flex-direction: column;
-        background: #fff;
-    }
-
-    .properties-header {
-        padding: 0.75rem 1rem;
-        background: #fff;
-        border-bottom: 1px solid rgba(4, 125, 125, 0.1);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-
-    .properties-title {
-        font-weight: 600;
-        color: var(--color-primary);
-        font-size: 0.9rem;
-        margin: 0;
-    }
-
-    .properties-count {
-        font-size: 0.8rem;
-        color: #6c757d;
-        background: rgba(4, 125, 125, 0.08);
-        padding: 0.25rem 0.5rem;
-        border-radius: 12px;
-    }
-
-    .properties-container {
-        flex: 1;
-        overflow-y: auto;
-        padding: 0.75rem;
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-    }
-
-    .property-card {
-        background: #fff;
-        border-radius: 6px;
-        border: 1px solid rgba(4, 125, 125, 0.1);
-        padding: 0.75rem;
-        display: flex;
-        gap: 0.75rem;
-        transition: all 0.15s ease;
-        cursor: pointer;
-        position: relative;
-    }
-
-    .property-card:hover {
-        border-color: rgba(4, 125, 125, 0.3);
-        box-shadow: 0 2px 6px rgba(4, 125, 125, 0.1);
-        transform: translateY(-1px);
-    }
-
-    .property-card.active {
-        background-color: rgba(243, 253, 253, 0.95);
-        border-color: var(--color-primary);
-    }
-
-    .property-image-container {
-        flex-shrink: 0;
-        width: 80px;
-        height: 80px;
-        border-radius: 4px;
-        overflow: hidden;
-        background: #f0f4f4;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border: 1px solid rgba(4, 125, 125, 0.08);
-    }
-
-    .property-image {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-    }
-
-    .property-image-placeholder {
-        width: 100%;
-        height: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #8a9a9a;
-        font-size: 1.25rem;
-    }
-
-    .property-content {
-        flex: 1;
-        min-width: 0;
-        display: flex;
-        flex-direction: column;
-    }
-
-    .property-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        margin-bottom: 0.25rem;
-    }
-
-    .property-type {
-        font-size: 0.75rem;
-        font-weight: 600;
-        color: var(--color-primary);
-        background: rgba(4, 125, 125, 0.08);
-        padding: 0.125rem 0.375rem;
-        border-radius: 3px;
-    }
-
-    .property-price {
-        font-size: 0.9rem;
-        font-weight: 700;
-        color: var(--color-primary);
-        text-align: right;
-    }
-
-    .property-description {
-        font-size: 0.8rem;
-        color: #3b5454;
-        line-height: 1.2;
-        margin-bottom: 0.375rem;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .property-location {
-        font-size: 0.75rem;
-        color: #6c757d;
-        display: flex;
-        align-items: center;
-        gap: 0.25rem;
-        margin-bottom: 0.375rem;
-    }
-
-    .property-features {
-        display: flex;
-        gap: 0.75rem;
-        flex-wrap: wrap;
-        margin-bottom: 0.375rem;
-    }
-
-    .feature-item {
-        display: flex;
-        align-items: center;
-        gap: 0.25rem;
-        font-size: 0.7rem;
-        color: #5a6c6c;
-    }
-
-    .property-footer {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-top: auto;
-        padding-top: 0.375rem;
-        border-top: 1px solid rgba(4, 125, 125, 0.05);
-    }
-
-    .property-source {
-        font-size: 0.7rem;
-        color: #8a9a9a;
-    }
-
-    .property-actions {
-        display: flex;
-        gap: 0.25rem;
-    }
-
-    .property-actions .btn {
-        padding: 0.25rem 0.5rem;
-        font-size: 0.75rem;
-        border-radius: 4px;
-    }
-
-    .pagination-container {
-        padding: 0.75rem 1rem;
-        border-top: 1px solid rgba(4, 125, 125, 0.1);
-        background: #fff;
-        flex-shrink: 0;
-    }
-
-    .empty-state {
-        padding: 2rem 1rem;
-        text-align: center;
-        color: #6c757d;
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-    }
-
-    @media (max-width: 768px) {
-        .main-content {
+        body {
+            background-color: #0d1117;
+            color: #c9d1d9;
+            line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
             flex-direction: column;
         }
 
-        .map-section,
-        .properties-section {
-            flex: 0 0 100%;
+        :root {
+            --header-height: 56px;
+            --sidebar-width: 250px;
+        }
+
+        .app-header {
+            height: var(--header-height);
+            background: #161b22;
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+        }
+
+        .sidebar-toggle {
+            width: 36px;
+            height: 36px;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            background: #0d1117;
+            color: #58a6ff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            margin-right: 12px;
+            transition: all 0.2s;
+        }
+
+        .sidebar-toggle:hover {
+            background: #58a6ff;
+            color: #0d1117;
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .logo-placeholder {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #58a6ff, #1f6feb);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        .app-sidebar {
+            width: var(--sidebar-width);
+            background: #161b22;
+            border-right: 1px solid #30363d;
+            position: fixed;
+            top: var(--header-height);
+            left: 0;
+            bottom: 0;
+            overflow-y: auto;
+            z-index: 999;
+            transition: transform 0.3s ease;
+        }
+
+        .app-sidebar.collapsed {
+            transform: translateX(-100%);
+        }
+
+        .sidebar-menu {
+            list-style: none;
+            padding: 8px 0;
+            margin: 0;
+        }
+
+        .sidebar-menu li {
+            margin: 0;
+        }
+
+        .sidebar-menu li a {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 20px;
+            color: #8b949e;
+            text-decoration: none;
+            font-size: 14px;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+        }
+
+        .sidebar-menu li a:hover {
+            background: #1c2128;
+            color: #58a6ff;
+        }
+
+        .sidebar-menu li a.active {
+            background: #1c2128;
+            color: #58a6ff;
+            border-left-color: #58a6ff;
+            font-weight: 600;
+        }
+
+        .sidebar-menu li a i {
+            width: 20px;
+            text-align: center;
+            font-size: 16px;
+        }
+
+        .sidebar-menu li.has-submenu > a {
+            cursor: pointer;
+        }
+
+        .sidebar-menu li.has-submenu > a .bi-chevron-down {
+            transition: transform 0.2s;
+            font-size: 12px;
+        }
+
+        .sidebar-menu li.has-submenu.open > a .bi-chevron-down {
+            transform: rotate(180deg);
+        }
+
+        .submenu {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: none;
+            background: #0d1117;
+        }
+
+        .has-submenu.open .submenu {
+            display: block;
+        }
+
+        .submenu li a {
+            padding-left: 50px;
+            font-size: 13px;
+        }
+
+        .app-content {
+            margin-top: var(--header-height);
+            margin-left: var(--sidebar-width);
+            padding: 24px;
+            min-height: calc(100vh - var(--header-height));
+            transition: margin-left 0.3s ease;
+        }
+
+        .app-content.expanded {
+            margin-left: 0;
+        }
+
+        @media (max-width: 768px) {
+            .app-sidebar {
+                transform: translateX(-100%);
+            }
+            .app-sidebar.mobile-open {
+                transform: translateX(0);
+            }
+            .app-content {
+                margin-left: 0;
+            }
+            .main-content {
+                flex-direction: column;
+            }
+            .map-section,
+            .properties-section {
+                flex: 0 0 100%;
+                min-height: 300px;
+            }
+            .header-section {
+                flex-direction: column;
+                gap: 10px;
+                align-items: flex-start;
+            }
+            .filter-actions {
+                margin-left: 0;
+                width: 100%;
+            }
+            .filter-actions .btn {
+                flex: 1;
+            }
+        }
+
+        .app-sidebar::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .app-sidebar::-webkit-scrollbar-track {
+            background: #161b22;
+        }
+
+        .app-sidebar::-webkit-scrollbar-thumb {
+            background: #30363d;
+            border-radius: 3px;
+        }
+
+        .portal-container {
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - var(--header-height) - 48px);
+            overflow: hidden;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+        }
+
+        .header-section {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px;
+            border-bottom: 1px solid #30363d;
+            background: #161b22;
+            flex-shrink: 0;
+        }
+
+        .header-section h1 {
+            color: #58a6ff;
+            font-size: 22px;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background-color: #238636;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #2ea043;
+        }
+
+        .btn-secondary {
+            background-color: #30363d;
+            color: #c9d1d9;
+        }
+
+        .btn-secondary:hover {
+            background-color: #3c444d;
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        .filters-bar {
+            background: #161b22;
+            border-bottom: 1px solid #30363d;
+            padding: 12px 24px;
+            flex-shrink: 0;
+        }
+
+        .filters-bar form {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: flex-end;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            min-width: 140px;
+        }
+
+        .filter-group label {
+            font-size: 12px;
+            font-weight: 500;
+            color: #8b949e;
+            margin-bottom: 4px;
+        }
+
+        .filter-group .form-control,
+        .filter-group .form-select {
+            padding: 8px 10px;
+            font-size: 13px;
+            background-color: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            color: #c9d1d9;
+            height: 36px;
+        }
+
+        .filter-group .form-control:focus,
+        .filter-group .form-select:focus {
+            border-color: #58a6ff;
+            outline: none;
+        }
+
+        .filter-actions {
+            display: flex;
+            gap: 8px;
+            margin-left: auto;
+        }
+
+        .main-content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .map-section {
+            flex: 0 0 50%;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #30363d;
+            background: #0d1117;
+        }
+
+        .map-header {
+            padding: 10px 16px;
+            background: #161b22;
+            border-bottom: 1px solid #30363d;
+            font-weight: 600;
+            color: #58a6ff;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .map-container {
+            flex: 1;
+            position: relative;
+            min-height: 0;
+        }
+
+        #propertyMap {
+            width: 100%;
+            height: 100%;
             min-height: 300px;
         }
-    }
-</style>
-{% endblock %}
 
-{% block content %}
-{{ todas_las_propiedades|json_script:"todas-propiedades-data" }}
-<div class="portal-container">
-    <!-- Barra de filtros superior -->
-    <div class="filters-bar">
-        <form method="get" id="filter-form">
-            <div class="filter-group">
-                <label for="filter-type">Tipo</label>
-                <select class="form-select" id="filter-type" name="tipo_propiedad">
-                    <option value="">Todos</option>
-                    {% for tipo in tipos_propiedad %}
-                        <option value="{{ tipo }}">{{ tipo }}</option>
-                    {% endfor %}
-                </select>
-            </div>
+        .properties-section {
+            flex: 0 0 50%;
+            display: flex;
+            flex-direction: column;
+            background: #0d1117;
+        }
 
-            <div class="filter-group">
-                <label for="filter-departamento">Departamento</label>
-                <select class="form-select" id="filter-departamento" name="departamento">
-                    <option value="">Todos</option>
-                    {% for depto in departamentos %}
-                        <option value="{{ depto }}">{{ depto }}</option>
-                    {% endfor %}
-                </select>
-            </div>
+        .properties-header {
+            padding: 10px 16px;
+            background: #161b22;
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
 
-            <div class="filter-group">
-                <label for="filter-precio-min">Precio Mín</label>
-                <input type="number" class="form-control" id="filter-precio-min" name="precio_min" placeholder="0" min="0" step="1000">
-            </div>
+        .properties-title {
+            font-weight: 600;
+            color: #c9d1d9;
+            font-size: 14px;
+            margin: 0;
+        }
 
-            <div class="filter-group">
-                <label for="filter-precio-max">Precio Máx</label>
-                <input type="number" class="form-control" id="filter-precio-max" name="precio_max" placeholder="Sin límite" min="0" step="1000">
-            </div>
+        .properties-count {
+            font-size: 12px;
+            color: #8b949e;
+            background: #21262d;
+            padding: 3px 10px;
+            border-radius: 12px;
+        }
 
-            <div class="filter-actions">
-                <button type="submit" class="btn btn-primary btn-sm">
-                    <i class="fas fa-filter"></i> Filtrar
-                </button>
-                <a href="{% url 'propifai:lista_propiedades_propify' %}" class="btn btn-outline-secondary btn-sm">
-                    <i class="fas fa-times"></i> Limpiar
-                </a>
-            </div>
-        </form>
-    </div>
+        .properties-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
 
-    <!-- Contenido principal: Mapa + Propiedades -->
-    <div class="main-content">
-        <!-- Mapa a la izquierda -->
-        <div class="map-section">
-            <div class="map-header">
-                <i class="fas fa-map"></i> Mapa de Propiedades Propify
-            </div>
-            <div class="map-container">
-                <div id="propertyMap"></div>
-            </div>
+        .properties-container::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .properties-container::-webkit-scrollbar-track {
+            background: #0d1117;
+        }
+
+        .properties-container::-webkit-scrollbar-thumb {
+            background: #21262d;
+            border-radius: 4px;
+        }
+
+        .property-card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 12px;
+            display: flex;
+            gap: 12px;
+            transition: all 0.15s ease;
+            cursor: pointer;
+        }
+
+        .property-card:hover {
+            border-color: #58a6ff;
+            background-color: #1c2128;
+        }
+
+        .property-card.active {
+            border-color: #58a6ff;
+            background: #21262d;
+        }
+
+        .property-image-container {
+            flex-shrink: 0;
+            width: 80px;
+            height: 80px;
+            border-radius: 6px;
+            overflow: hidden;
+            background: #21262d;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #30363d;
+        }
+
+        .property-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .property-image-placeholder {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #8b949e;
+            font-size: 24px;
+        }
+
+        .property-content {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .property-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 4px;
+        }
+
+        .property-type {
+            font-size: 11px;
+            font-weight: 600;
+            color: #58a6ff;
+            background: rgba(88, 166, 255, 0.1);
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+
+        .property-price {
+            font-size: 15px;
+            font-weight: 700;
+            color: #3fb950;
+            text-align: right;
+        }
+
+        .property-description {
+            font-size: 12px;
+            color: #8b949e;
+            line-height: 1.3;
+            margin-bottom: 6px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .property-location {
+            font-size: 11px;
+            color: #8b949e;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin-bottom: 6px;
+        }
+
+        .property-status-badge {
+            margin: 6px 0 4px;
+        }
+        .property-status-badge .badge {
+            font-size: 11px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: 500;
+            letter-spacing: 0.3px;
+        }
+
+        .property-features {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 6px;
+        }
+
+        .feature-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+            color: #8b949e;
+        }
+
+        .property-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: auto;
+            padding-top: 6px;
+            border-top: 1px solid #30363d;
+        }
+
+        .property-source {
+            font-size: 11px;
+            color: #8b949e;
+        }
+
+        .pagination-container {
+            padding: 12px 16px;
+            border-top: 1px solid #30363d;
+            background: #161b22;
+            flex-shrink: 0;
+        }
+
+        .pagination-container .pagination {
+            margin: 0;
+            gap: 4px;
+        }
+
+        .pagination-container .page-link {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            color: #c9d1d9;
+            padding: 6px 12px;
+            font-size: 13px;
+            border-radius: 6px !important;
+        }
+
+        .pagination-container .page-link:hover {
+            background: #21262d;
+            border-color: #58a6ff;
+            color: #58a6ff;
+        }
+
+        .pagination-container .page-item.active .page-link {
+            background: #238636;
+            border-color: #238636;
+            color: white;
+        }
+
+        .pagination-container .page-item.disabled .page-link {
+            opacity: 0.5;
+        }
+
+        .empty-state {
+            padding: 40px 20px;
+            text-align: center;
+            color: #8b949e;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .empty-state i {
+            font-size: 48px;
+            margin-bottom: 16px;
+            color: #21262d;
+        }
+
+        .empty-state h4 {
+            color: #c9d1d9;
+            font-size: 18px;
+            margin-bottom: 8px;
+        }
+
+        .empty-state p {
+            color: #8b949e;
+            font-size: 14px;
+        }
+
+        .footer {
+            text-align: center;
+            color: #8b949e;
+            font-size: 14px;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #30363d;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="app-header">
+        <button class="sidebar-toggle" id="sidebarToggle">
+            <i class="bi bi-list"></i>
+        </button>
+        <div class="logo-container">
+            <a href="/" class="d-flex align-items-center text-decoration-none">
+                <div class="logo-placeholder">P</div>
+            </a>
         </div>
-
-        <!-- Propiedades a la derecha -->
-        <div class="properties-section">
-            <div class="properties-header">
-                <h3 class="properties-title">Propiedades Propify</h3>
-                <span class="properties-count">{{ propiedades|length }} propiedades</span>
-            </div>
-
-            <div class="properties-container" id="propertiesContainer">
-                {% if propiedades %}
-                    {% for propiedad in propiedades %}
-                    <div class="property-card" data-property-id="{{ propiedad.id }}" data-lat="{{ propiedad.latitud|default:'' }}" data-lng="{{ propiedad.longitud|default:'' }}">
-                        <!-- Imagen -->
-                        <div class="property-image-container">
-                            {% if propiedad.imagen_url %}
-                                <img src="{{ propiedad.imagen_url }}" alt="{{ propiedad.tipo }}" class="property-image" onerror="handleImageError(this)">
-                            {% else %}
-                                <div class="property-image-placeholder">
-                                    <i class="fas fa-home"></i>
-                                </div>
-                            {% endif %}
-                        </div>
-
-                        <!-- Contenido -->
-                        <div class="property-content">
-                            <div class="property-header">
-                                <span class="property-type">
-                                    {{ propiedad.tipo|default:"Propiedad" }}
-                                    <span class="badge bg-success text-white ms-1" style="font-size: 0.6rem; padding: 0.1rem 0.3rem;">Propify</span>
-                                </span>
-                                <div class="property-price">
-                                    {% if propiedad.precio %}
-                                        ${{ propiedad.precio|floatformat:0 }}
-                                    {% else %}
-                                        Consultar
-                                    {% endif %}
-                                </div>
-                            </div>
-
-                            <div class="property-description">
-                                {% if propiedad.codigo %}
-                                    <div class="mb-1"><strong>Código:</strong> {{ propiedad.codigo }}</div>
-                                {% endif %}
-                                {% if propiedad.direccion %}
-                                    <div class="mb-1"><strong>Dirección:</strong> {{ propiedad.direccion|truncatechars:60 }}</div>
-                                {% endif %}
-                                {% if propiedad.descripcion %}
-                                    <div>{{ propiedad.descripcion|truncatechars:80 }}</div>
-                                {% else %}
-                                    Propiedad de Propify
-                                {% endif %}
-                            </div>
-
-                            <div class="property-location">
-                                <i class="fas fa-map-marker-alt"></i>
-                                <span>
-                                    {% if propiedad.ubicacion_completa %}
-                                        {{ propiedad.ubicacion_completa }}
-                                    {% elif propiedad.departamento_nombre or propiedad.provincia_nombre %}
-                                        {{ propiedad.departamento_nombre|default:"" }}{% if propiedad.provincia_nombre %}, {{ propiedad.provincia_nombre }}{% endif %}
-                                    {% elif propiedad.departamento or propiedad.provincia %}
-                                        {{ propiedad.departamento|default:"" }}{% if propiedad.provincia %}, {{ propiedad.provincia }}{% endif %}
-                                    {% else %}
-                                        Ubicación no especificada
-                                    {% endif %}
-                                </span>
-                            </div>
-
-                            <div class="property-features">
-                                {% if propiedad.area %}
-                                <div class="feature-item">
-                                    <i class="fas fa-ruler-combined"></i>
-                                    <span>{{ propiedad.area|floatformat:0 }} m²</span>
-                                </div>
-                                {% endif %}
-
-                                {% if propiedad.habitaciones %}
-                                <div class="feature-item">
-                                    <i class="fas fa-bed"></i>
-                                    <span>{{ propiedad.habitaciones }} hab.</span>
-                                </div>
-                                {% endif %}
-
-                                {% if propiedad.banos %}
-                                <div class="feature-item">
-                                    <i class="fas fa-bath"></i>
-                                    <span>{{ propiedad.banos }} baños</span>
-                                </div>
-                                {% endif %}
-                            </div>
-
-                            <div class="property-footer">
-                                <div class="property-source">
-                                    <span class="text-success">Propify DB</span>
-                                </div>
-                                <div class="property-actions">
-                                    <span class="text-muted small">Código: {{ propiedad.codigo|default:"N/A" }}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    {% endfor %}
-                {% else %}
-                    <div class="empty-state">
-                        <i class="fas fa-home"></i>
-                        <h4>No hay propiedades Propify disponibles</h4>
-                        <p>No se encontraron propiedades en la base de datos Propify</p>
-                    </div>
-                {% endif %}
-            </div>
-
-            <!-- Paginación -->
-            {% if is_paginated %}
-            <div class="pagination-container">
-                <nav aria-label="Paginación de propiedades">
-                    <ul class="pagination">
-                        {% if page_obj.has_previous %}
-                        <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
-                                <i class="fas fa-chevron-left"></i>
-                            </a>
-                        </li>
-                        {% endif %}
-
-                        {% for num in page_obj.paginator.page_range %}
-                            {% if page_obj.number == num %}
-                            <li class="page-item active">
-                                <span class="page-link">{{ num }}</span>
-                            </li>
-                            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
-                            <li class="page-item">
-                                <a class="page-link" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a>
-                            </li>
-                            {% endif %}
-                        {% endfor %}
-
-                        {% if page_obj.has_next %}
-                        <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
-                                <i class="fas fa-chevron-right"></i>
-                            </a>
-                        </li>
-                        {% endif %}
-                    </ul>
-                </nav>
-            </div>
+        <div class="ms-auto d-flex align-items-center">
+            {% if request.current_user %}
+                <span class="text-success me-2 small d-none d-md-inline" style="color: #3fb950 !important;">
+                    <i class="bi bi-person-circle"></i>
+                    {{ request.current_user.username }}
+                </span>
+                <a href="{% url 'intelligence:logout' %}?next={{ request.path }}" class="btn btn-secondary btn-sm">
+                    <i class="bi bi-box-arrow-right"></i> Cerrar sesión
+                </a>
+            {% else %}
+                <span class="small" style="color: #8b949e;">
+                    <i class="bi bi-person-circle"></i> Invitado
+                </span>
+            {% endif %}
+            {% if user.is_staff %}
+            <a href="/admin/" class="btn btn-secondary btn-sm ms-2" target="_blank">
+                <i class="bi bi-gear"></i> Admin
+            </a>
             {% endif %}
         </div>
-    </div>
-</div>
-{% endblock %}
+    </header>
 
-{% block extra_js %}
-<!-- Google Maps API -->
-<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBrL1QF7vTl9zF8FmCUumfRpFJcaYokO7Q&libraries=places&callback=initMap" async defer></script>
+    <!-- Sidebar -->
+    <nav class="app-sidebar" id="appSidebar">
+        <ul class="sidebar-menu">
+            <li>
+                <a href="/" class="{% if request.path == '/' %}active{% endif %}">
+                    <i class="bi bi-speedometer2"></i>
+                    <span>Dashboard</span>
+                </a>
+            </li>
+            <li>
+                <a href="/fuentes-web/" class="{% if '/fuentes-web/' in request.path %}active{% endif %}">
+                    <i class="bi bi-globe"></i>
+                    <span>Fuentes Web</span>
+                </a>
+            </li>
+            <li>
+                <a href="/capturas/" class="{% if '/capturas/' in request.path %}active{% endif %}">
+                    <i class="bi bi-camera"></i>
+                    <span>Capturas</span>
+                </a>
+            </li>
+            <li>
+                <a href="/ingestas/" class="{% if '/ingestas/' in request.path %}active{% endif %}">
+                    <i class="bi bi-database"></i>
+                    <span>Ingestas</span>
+                </a>
+            </li>
+            <li>
+                <a href="/ingestas/propiedades/" class="{% if '/ingestas/propiedades/' in request.path %}active{% endif %}">
+                    <i class="bi bi-house-door"></i>
+                    <span>Propiedades</span>
+                </a>
+            </li>
+            <li class="has-submenu {% if '/prospects/' in request.path %}active{% endif %}">
+                <a href="#">
+                    <i class="bi bi-binoculars-fill"></i>
+                    <span>Prospección</span>
+                    <i class="bi bi-chevron-down ms-auto"></i>
+                </a>
+                <ul class="submenu">
+                    <li>
+                        <a href="/prospects/capture/" class="{% if '/prospects/capture/' in request.path %}active{% endif %}">
+                            <i class="bi bi-camera-fill"></i>
+                            <span>Captura</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/prospects/" class="{% if '/prospects/' in request.path and '/capture/' not in request.path %}active{% endif %}">
+                            <i class="bi bi-list-ul"></i>
+                            <span>Lista de Prospectos</span>
+                        </a>
+                    </li>
+                </ul>
+            </li>
+            <li class="has-submenu open active">
+                <a href="#">
+                    <i class="bi bi-house-door-fill"></i>
+                    <span>Propiedades Propify</span>
+                    <i class="bi bi-chevron-down ms-auto"></i>
+                </a>
+                <ul class="submenu">
+                    <li>
+                        <a href="/propifai/dashboard/calidad/" class="{% if '/propifai/dashboard/calidad/' in request.path %}active{% endif %}">
+                            <i class="bi bi-bar-chart-line"></i>
+                            <span>Análisis de Cartera</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/propifai/propiedades/" class="active">
+                            <i class="bi bi-list-ul"></i>
+                            <span>Lista de Propiedades</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/propifai/dashboard/visitas/" class="{% if '/propifai/dashboard/visitas/' in request.path %}active{% endif %}">
+                            <i class="bi bi-calendar-check"></i>
+                            <span>Dashboard de Visitas</span>
+                        </a>
+                    </li>
+                </ul>
+            </li>
+            <li>
+                <a href="/requerimientos/lista/" class="{% if '/requerimientos/' in request.path %}active{% endif %}">
+                    <i class="bi bi-clipboard-check"></i>
+                    <span>Requerimientos</span>
+                </a>
+            </li>
+            <li class="has-submenu {% if '/matching/' in request.path %}active{% endif %}">
+                <a href="#">
+                    <i class="bi bi-lightning-charge-fill"></i>
+                    <span>Matching</span>
+                    <i class="bi bi-chevron-down ms-auto"></i>
+                </a>
+                <ul class="submenu">
+                    <li>
+                        <a href="/matching/masivo/" class="{% if '/matching/masivo/' in request.path %}active{% endif %}">
+                            <i class="bi bi-list-ul"></i>
+                            <span>Masivo</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/matching/calendar/" class="{% if '/matching/calendar/' in request.path %}active{% endif %}">
+                            <i class="bi bi-calendar3"></i>
+                            <span>Calendario</span>
+                        </a>
+                    </li>
+                    <li class="has-submenu {% if '/matching/propuestas/' in request.path %}active{% endif %}">
+                        <a href="#">
+                            <i class="bi bi-whatsapp"></i>
+                            <span>Propuestas</span>
+                            <i class="bi bi-chevron-down ms-auto"></i>
+                        </a>
+                        <ul class="submenu" style="padding-left:20px;">
+                            <li>
+                                <a href="/matching/propuestas/dashboard/" class="{% if '/matching/propuestas/dashboard/' in request.path %}active{% endif %}">
+                                    <i class="bi bi-speedometer2"></i>
+                                    <span>Dashboard</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+                </ul>
+            </li>
+            <li>
+                <a href="/acm/analisis/" class="{% if '/acm/' in request.path %}active{% endif %}">
+                    <i class="bi bi-graph-up"></i>
+                    <span>Análisis Comparativo (ACM)</span>
+                </a>
+            </li>
+            <li class="has-submenu {% if '/intelligence/' in request.path %}active{% endif %}">
+                <a href="#">
+                    <i class="bi bi-cpu"></i>
+                    <span>Intelligence Layer</span>
+                    <i class="bi bi-chevron-down ms-auto"></i>
+                </a>
+                <ul class="submenu">
+                    <li>
+                        <a href="/intelligence/dashboard/" class="{% if request.path == '/intelligence/' or request.path == '/intelligence/dashboard/' %}active{% endif %}">
+                            <i class="bi bi-speedometer2"></i>
+                            <span>Dashboard IA</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/skills/dashboard/" class="{% if '/intelligence/skills/' in request.path %}active{% endif %}">
+                            <i class="bi bi-lightning-charge-fill"></i>
+                            <span>Skills</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/collections/" class="{% if '/intelligence/collections/' in request.path %}active{% endif %}">
+                            <i class="bi bi-collection"></i>
+                            <span>Colecciones RAG</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/intent-evaluation/" class="{% if '/intelligence/intent-evaluation/' in request.path %}active{% endif %}">
+                            <i class="bi bi-bullseye"></i>
+                            <span>Evaluación de Intenciones</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/chat-web/" class="{% if '/intelligence/chat-web/' in request.path %}active{% endif %}">
+                            <i class="bi bi-chat-dots"></i>
+                            <span>Chat Asistente</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/chat-workflows/manage/" class="{% if '/intelligence/chat-workflows/' in request.path %}active{% endif %}">
+                            <i class="bi bi-arrow-repeat"></i>
+                            <span>Flujos Conversacionales</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/episodic-memory/" class="{% if '/intelligence/episodic-memory/' in request.path %}active{% endif %}">
+                            <i class="bi bi-memory"></i>
+                            <span>Memoria Episódica</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/profiles/" class="{% if '/intelligence/profiles/' in request.path %}active{% endif %}">
+                            <i class="bi bi-person-badge"></i>
+                            <span>Perfiles de IA</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/users/" class="{% if '/intelligence/users/' in request.path %}active{% endif %}">
+                            <i class="bi bi-people"></i>
+                            <span>Usuarios</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/roles/" class="{% if '/intelligence/roles/' in request.path %}active{% endif %}">
+                            <i class="bi bi-shield-lock"></i>
+                            <span>Roles</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/simulator/" class="{% if '/intelligence/simulator/' in request.path %}active{% endif %}">
+                            <i class="bi bi-robot"></i>
+                            <span>Simulador</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/stats/" class="{% if '/intelligence/stats/' in request.path %}active{% endif %}">
+                            <i class="bi bi-bar-chart-line"></i>
+                            <span>Estadísticas</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/logs/" class="{% if '/intelligence/logs/' in request.path %}active{% endif %}">
+                            <i class="bi bi-journal-text"></i>
+                            <span>Logs de Actividad</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/config/" class="{% if '/intelligence/config/' in request.path %}active{% endif %}">
+                            <i class="bi bi-gear"></i>
+                            <span>Configuraciones</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/errors/" class="{% if '/intelligence/errors/' in request.path %}active{% endif %}">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            <span>Errores</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/tests/" class="{% if '/intelligence/tests/' in request.path %}active{% endif %}">
+                            <i class="bi bi-flask"></i>
+                            <span>Tests</span>
+                        </a>
+                    </li>
+                </ul>
+            </li>
+            <li class="has-submenu {% if '/meta-ads/' in request.path %}active{% endif %}">
+                <a href="#">
+                    <i class="bi bi-megaphone-fill"></i>
+                    <span>Meta Ads</span>
+                    <i class="bi bi-chevron-down ms-auto"></i>
+                </a>
+                <ul class="submenu">
+                    <li>
+                        <a href="/meta-ads/dashboard/exacto/" class="{% if '/meta-ads/dashboard/' in request.path %}active{% endif %}">
+                            <i class="bi bi-speedometer"></i>
+                            <span>Dashboard Principal</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/meta-ads/analisis/historico/" class="{% if '/meta-ads/analisis/historico/' in request.path %}active{% endif %}">
+                            <i class="bi bi-bar-chart-line"></i>
+                            <span>Análisis Histórico</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/meta-ads/campañas/" class="{% if '/meta-ads/campañas/' in request.path and '/dashboard/' not in request.path %}active{% endif %}">
+                            <i class="bi bi-list-ul"></i>
+                            <span>Lista de Campañas</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/meta-ads/sincronizar/" class="{% if '/meta-ads/sincronizar/' in request.path %}active{% endif %}">
+                            <i class="bi bi-arrow-repeat"></i>
+                            <span>Sincronizar Datos</span>
+                        </a>
+                    </li>
+                </ul>
+            </li>
+            <li>
+                <a href="/analisis-crm/" class="{% if '/analisis-crm/' in request.path %}active{% endif %}">
+                    <i class="bi bi-people-fill"></i>
+                    <span>Leads CRM</span>
+                </a>
+            </li>
+            <li>
+                <a href="/eventos/" class="{% if '/eventos/' in request.path %}active{% endif %}">
+                    <i class="bi bi-calendar-event"></i>
+                    <span>Análisis de Eventos</span>
+                </a>
+            </li>
+            <li>
+                <a href="#">
+                    <i class="bi bi-search"></i>
+                    <span>Descubrimiento</span>
+                </a>
+            </li>
+            <li>
+                <a href="#">
+                    <i class="bi bi-gear"></i>
+                    <span>Configuración</span>
+                </a>
+            </li>
+            <li>
+                <a href="#">
+                    <i class="bi bi-question-circle"></i>
+                    <span>Ayuda</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
 
-<script>
-    let map;
-    let markers = [];
-    let infoWindow;
-    
-    // Obtener datos de todas las propiedades del JSON
-    const todasPropiedadesData = JSON.parse(document.getElementById('todas-propiedades-data').textContent);
-    console.log('Total propiedades en JSON:', todasPropiedadesData.length);
-    
-    // Filtrar solo propiedades con coordenadas válidas
-    const propiedadesConCoordenadas = todasPropiedadesData.filter(prop => {
-        const tieneCoords = prop.lat !== null && prop.lng !== null && !isNaN(prop.lat) && !isNaN(prop.lng);
-        if (!tieneCoords) {
-            console.log('Propiedad sin coordenadas válidas:', prop.id, 'lat:', prop.lat, 'lng:', prop.lng);
-        }
-        return tieneCoords;
-    });
-    
-    console.log('Propiedades con coordenadas válidas:', propiedadesConCoordenadas.length);
+    <!-- Contenido principal -->
+    <main class="app-content" id="appContent">
+        {{ todas_las_propiedades|json_script:"todas-propiedades-data" }}
 
-    // Inicializar mapa
-    function initMap() {
-        const defaultCenter = { lat: -16.4090, lng: -71.5375 }; // Arequipa, Perú
-        map = new google.maps.Map(document.getElementById('propertyMap'), {
-            center: defaultCenter,
-            zoom: 13,
-            styles: [
-                {
-                    featureType: "poi",
-                    elementType: "labels",
-                    stylers: [{ visibility: "off" }]
-                }
-            ]
-        });
+        <div class="portal-container">
+            <!-- Header -->
+            <div class="header-section">
+                <h1>
+                    <i class="bi bi-house-door-fill"></i>
+                    Propiedades Propify
+                </h1>
+                <div class="header-actions">
+                    <a href="{% url 'propifai:dashboard_calidad_cartera' %}" class="btn btn-secondary">
+                        <i class="bi bi-bar-chart-line"></i> Dashboard
+                    </a>
+                </div>
+            </div>
 
-        infoWindow = new google.maps.InfoWindow();
+            <!-- Filtros -->
+            <div class="filters-bar">
+                <form method="get" id="filter-form">
+                    <div class="filter-group">
+                        <label for="filter-type">Tipo</label>
+                        <select class="form-select" id="filter-type" name="tipo_propiedad">
+                            <option value="">Todos</option>
+                            {% for tipo in tipos_propiedad %}
+                                {% if tipo %}
+                                <option value="{{ tipo }}">{{ tipo }}</option>
+                                {% endif %}
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="filter-departamento">Departamento</label>
+                        <select class="form-select" id="filter-departamento" name="departamento">
+                            <option value="">Todos</option>
+                            {% for depto in departamentos %}
+                                <option value="{{ depto }}">{{ depto }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="filter-precio-min">Precio Mín</label>
+                        <input type="number" class="form-control" id="filter-precio-min" name="precio_min" placeholder="0" min="0" step="1000">
+                    </div>
+                    <div class="filter-group">
+                        <label for="filter-precio-max">Precio Máx</label>
+                        <input type="number" class="form-control" id="filter-precio-max" name="precio_max" placeholder="Sin límite" min="0" step="1000">
+                    </div>
+                    <div class="filter-group">
+                        <label for="filter-estado">Estado</label>
+                        <select class="form-select" id="filter-estado" name="estado">
+                            <option value="">Todos</option>
+                            {% for estado in estados_propiedad %}
+                                <option value="{{ estado.id }}" {% if estado_actual == estado.id|stringformat:'s' %}selected{% endif %}>{{ estado.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="filter-actions">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-funnel"></i> Filtrar
+                        </button>
+                        <a href="{% url 'propifai:lista_propiedades_propify' %}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> Limpiar
+                        </a>
+                    </div>
+                </form>
+            </div>
 
-        // Agregar marcadores para TODAS las propiedades con coordenadas válidas
-        propiedadesConCoordenadas.forEach(propiedad => {
-            addMarker(
-                propiedad.lat,
-                propiedad.lng,
-                propiedad.tipo || 'Propiedad',
-                propiedad.titulo || 'Propiedad Propify',
-                propiedad.precio || 'Consultar',
-                propiedad.id || 0
-            );
-        });
+            <!-- Mapa + Propiedades -->
+            <div class="main-content">
+                <div class="map-section">
+                    <div class="map-header">
+                        <i class="bi bi-map"></i> Mapa de Propiedades Propify
+                    </div>
+                    <div class="map-container">
+                        <div id="propertyMap"></div>
+                    </div>
+                </div>
 
-        // Ajustar vista para mostrar todos los marcadores
-        if (markers.length > 0) {
-            const bounds = new google.maps.LatLngBounds();
-            markers.forEach(marker => bounds.extend(marker.getPosition()));
-            map.fitBounds(bounds);
-        } else {
-            // Si no hay marcadores, mantener vista por defecto
-            map.setZoom(13);
-        }
-    }
+                <div class="properties-section">
+                    <div class="properties-header">
+                        <h3 class="properties-title">Propiedades Propify</h3>
+                        <span class="properties-count">{{ propiedades|length }} propiedades</span>
+                    </div>
 
-    function addMarker(lat, lng, type, description, price, propertyId) {
-        // Icono personalizado de Propify
-        const iconUrl = '/static/requerimientos/data/Pin-propify.png';
+                    <div class="properties-container" id="propertiesContainer">
+                        {% if propiedades %}
+                            {% for propiedad in propiedades %}
+                            <div class="property-card" data-property-id="{{ propiedad.id }}" data-lat="{{ propiedad.latitud|default:'' }}" data-lng="{{ propiedad.longitud|default:'' }}">
+                                <div class="property-image-container">
+                                    {% if propiedad.imagen_url %}
+                                        <img src="{{ propiedad.imagen_url }}" alt="{{ propiedad.tipo }}" class="property-image" onerror="handleImageError(this)">
+                                    {% else %}
+                                        <div class="property-image-placeholder">
+                                            <i class="bi bi-house"></i>
+                                        </div>
+                                    {% endif %}
+                                </div>
 
-        const marker = new google.maps.Marker({
-            position: { lat: lat, lng: lng },
-            map: map,
-            title: description,
-            icon: {
-                url: iconUrl,
-                scaledSize: new google.maps.Size(40, 40),
-                anchor: new google.maps.Point(20, 40) // Punto de anclaje en la parte inferior central
+                                <div class="property-content">
+                                    <div class="property-header">
+                                        <span class="property-type">
+                                            {{ propiedad.tipo|default:"Propiedad" }}
+                                        </span>
+                                        <div class="property-price">
+                                            {% if propiedad.precio %}
+                                                ${{ propiedad.precio|floatformat:0 }}
+                                            {% else %}
+                                                Consultar
+                                            {% endif %}
+                                        </div>
+                                    </div>
+
+                                    {% if propiedad.estado_nombre %}
+                                    <div class="property-status-badge">
+                                        <span class="badge
+                                            {% if propiedad.estado_nombre == 'Disponible' %}bg-success
+                                            {% elif propiedad.estado_nombre == 'Vendida' %}bg-danger
+                                            {% elif propiedad.estado_nombre == 'Reservada' %}bg-warning text-dark
+                                            {% elif propiedad.estado_nombre == 'Draft' %}bg-secondary
+                                            {% elif propiedad.estado_nombre == 'Pausada' %}bg-secondary
+                                            {% elif propiedad.estado_nombre == 'No disponible' %}bg-dark
+                                            {% else %}bg-info
+                                            {% endif %}">
+                                            {{ propiedad.estado_nombre }}
+                                        </span>
+                                    </div>
+                                    {% endif %}
+
+                                    <div class="property-description">
+                                        {% if propiedad.codigo %}
+                                            <div class="mb-1"><strong>Código:</strong> {{ propiedad.codigo }}</div>
+                                        {% endif %}
+                                        {% if propiedad.direccion %}
+                                            <div class="mb-1"><strong>Dirección:</strong> {{ propiedad.direccion|truncatechars:60 }}</div>
+                                        {% endif %}
+                                        {% if propiedad.descripcion %}
+                                            <div>{{ propiedad.descripcion|truncatechars:80 }}</div>
+                                        {% else %}
+                                            Propiedad de Propify
+                                        {% endif %}
+                                    </div>
+
+                                    <div class="property-location">
+                                        <i class="bi bi-geo-alt"></i>
+                                        <span>
+                                            {% if propiedad.ubicacion_completa %}
+                                                {{ propiedad.ubicacion_completa }}
+                                            {% elif propiedad.departamento_nombre or propiedad.provincia_nombre %}
+                                                {{ propiedad.departamento_nombre|default:"" }}{% if propiedad.provincia_nombre %}, {{ propiedad.provincia_nombre }}{% endif %}
+                                            {% elif propiedad.departamento or propiedad.provincia %}
+                                                {{ propiedad.departamento|default:"" }}{% if propiedad.provincia %}, {{ propiedad.provincia }}{% endif %}
+                                            {% else %}
+                                                Ubicación no especificada
+                                            {% endif %}
+                                        </span>
+                                    </div>
+
+                                    <div class="property-features">
+                                        {% if propiedad.area %}
+                                        <div class="feature-item">
+                                            <i class="bi bi-rulers"></i>
+                                            <span>{{ propiedad.area|floatformat:0 }} m²</span>
+                                        </div>
+                                        {% endif %}
+                                        {% if propiedad.bedrooms %}
+                                        <div class="feature-item">
+                                            <i class="bi bi-door-open"></i>
+                                            <span>{{ propiedad.bedrooms }} hab.</span>
+                                        </div>
+                                        {% endif %}
+                                        {% if propiedad.bathrooms %}
+                                        <div class="feature-item">
+                                            <i class="bi bi-droplet"></i>
+                                            <span>{{ propiedad.bathrooms }} baños</span>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+
+                                    <div class="property-footer">
+                                        <div class="property-source">
+                                            <span style="color: #3fb950;">Propify DB</span>
+                                        </div>
+                                        <div class="property-actions">
+                                            <span class="small" style="color: #8b949e;">Código: {{ propiedad.codigo|default:"N/A" }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="empty-state">
+                                <i class="bi bi-house"></i>
+                                <h4>No hay propiedades Propify disponibles</h4>
+                                <p>No se encontraron propiedades en la base de datos Propify</p>
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    {% if is_paginated %}
+                    <div class="pagination-container">
+                        <nav aria-label="Paginación de propiedades">
+                            <ul class="pagination justify-content-center">
+                                {% if page_obj.has_previous %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                        <i class="bi bi-chevron-left"></i>
+                                    </a>
+                                </li>
+                                {% endif %}
+                                {% for num in page_obj.paginator.page_range %}
+                                    {% if page_obj.number == num %}
+                                    <li class="page-item active">
+                                        <span class="page-link">{{ num }}</span>
+                                    </li>
+                                    {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a>
+                                    </li>
+                                    {% endif %}
+                                {% endfor %}
+                                {% if page_obj.has_next %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                        <i class="bi bi-chevron-right"></i>
+                                    </a>
+                                </li>
+                                {% endif %}
+                            </ul>
+                        </nav>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.getElementById('sidebarToggle')?.addEventListener('click', function() {
+            var sidebar = document.getElementById('appSidebar');
+            var content = document.getElementById('appContent');
+            sidebar.classList.toggle('mobile-open');
+            if (window.innerWidth > 768) {
+                sidebar.classList.toggle('collapsed');
+                content.classList.toggle('expanded');
             }
         });
 
-        const contentString = `
-            <div class="map-info-window">
-                <h6>${type}</h6>
-                <p class="mb-1">${description}</p>
-                <p class="mb-1"><strong>${price}</strong></p>
-                <p class="mb-1"><small>Fuente: Propify DB</small></p>
-                <button class="btn btn-sm btn-primary mt-1" onclick="focusPropertyCard('${propertyId}')">
-                    Ver detalles
-                </button>
-            </div>
-        `;
+        document.querySelectorAll('.has-submenu > a').forEach(function(link) {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                this.parentElement.classList.toggle('open');
+            });
+        });
+    </script>
 
-        marker.addListener('click', () => {
-            infoWindow.setContent(contentString);
-            infoWindow.open(map, marker);
+    <!-- Google Maps API -->
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBrL1QF7vTl9zF8FmCUumfRpFJcaYokO7Q&libraries=places&callback=initMap" async defer></script>
+
+    <script>
+        let map;
+        let markers = [];
+        let infoWindow;
+
+        const todasPropiedadesData = JSON.parse(document.getElementById('todas-propiedades-data').textContent);
+
+        const propiedadesConCoordenadas = todasPropiedadesData.filter(prop => {
+            return prop.lat !== null && prop.lng !== null && !isNaN(prop.lat) && !isNaN(prop.lng);
         });
 
-        markers.push(marker);
-    }
+        function initMap() {
+            const defaultCenter = { lat: -16.4090, lng: -71.5375 };
+            map = new google.maps.Map(document.getElementById('propertyMap'), {
+                center: defaultCenter,
+                zoom: 13,
+                styles: [
+                    { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] }
+                ]
+            });
 
-    // Enfocar tarjeta de propiedad
-    function focusPropertyCard(propertyId) {
-        const card = document.querySelector(`[data-property-id="${propertyId}"]`);
-        if (card) {
-            card.scrollIntoView({ behavior: 'smooth', 'block': 'center' });
-            card.classList.add('active');
-            setTimeout(() => card.classList.remove('active'), 2000);
+            infoWindow = new google.maps.InfoWindow();
+
+            propiedadesConCoordenadas.forEach(propiedad => {
+                addMarker(
+                    propiedad.lat,
+                    propiedad.lng,
+                    propiedad.tipo || 'Propiedad',
+                    propiedad.titulo || 'Propiedad Propify',
+                    propiedad.precio || 'Consultar',
+                    propiedad.id || 0
+                );
+            });
+
+            if (markers.length > 0) {
+                const bounds = new google.maps.LatLngBounds();
+                markers.forEach(marker => bounds.extend(marker.getPosition()));
+                map.fitBounds(bounds);
+            }
         }
-    }
 
-    // Manejar error de imagen
-    function handleImageError(img) {
-        img.onerror = null;
-        const placeholder = document.createElement('div');
-        placeholder.className = 'property-image-placeholder';
-        placeholder.innerHTML = '<i class="fas fa-home"></i>';
-        img.parentNode.replaceChild(placeholder, img);
-    }
+        function addMarker(lat, lng, type, description, price, propertyId) {
+            const iconUrl = '/static/requerimientos/data/Pin-propify.png';
 
-    // Inicializar filtros desde URL
-    document.addEventListener('DOMContentLoaded', function() {
-        const urlParams = new URLSearchParams(window.location.search);
-        document.getElementById('filter-type').value = urlParams.get('tipo_propiedad') || '';
-        document.getElementById('filter-departamento').value = urlParams.get('departamento') || '';
-        document.getElementById('filter-precio-min').value = urlParams.get('precio_min') || '';
-        document.getElementById('filter-precio-max').value = urlParams.get('precio_max') || '';
-        document.getElementById('filter-habitaciones').value = urlParams.get('habitaciones') || '';
-        document.getElementById('filter-banios').value = urlParams.get('banios') || '';
-    });
-</script>
-{% endblock %}
+            const marker = new google.maps.Marker({
+                position: { lat: lat, lng: lng },
+                map: map,
+                title: description,
+                icon: {
+                    url: iconUrl,
+                    scaledSize: new google.maps.Size(40, 40),
+                    anchor: new google.maps.Point(20, 40)
+                }
+            });
+
+            const contentString = `
+                <div class="map-info-window">
+                    <h6>${type}</h6>
+                    <p class="mb-1">${description}</p>
+                    <p class="mb-1"><strong>${price}</strong></p>
+                    <p class="mb-1"><small>Fuente: Propify DB</small></p>
+                    <button class="btn btn-sm btn-primary mt-1" onclick="focusPropertyCard('${propertyId}')">
+                        Ver detalles
+                    </button>
+                </div>
+            `;
+
+            marker.addListener('click', () => {
+                infoWindow.setContent(contentString);
+                infoWindow.open(map, marker);
+            });
+
+            markers.push(marker);
+        }
+
+        function focusPropertyCard(propertyId) {
+            const card = document.querySelector(`[data-property-id="${propertyId}"]`);
+            if (card) {
+                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                card.classList.add('active');
+                setTimeout(() => card.classList.remove('active'), 2000);
+            }
+        }
+
+        function handleImageError(img) {
+            img.onerror = null;
+            const placeholder = document.createElement('div');
+            placeholder.className = 'property-image-placeholder';
+            placeholder.innerHTML = '<i class="bi bi-house"></i>';
+            img.parentNode.replaceChild(placeholder, img);
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            document.getElementById('filter-type').value = urlParams.get('tipo_propiedad') || '';
+            document.getElementById('filter-departamento').value = urlParams.get('departamento') || '';
+            document.getElementById('filter-precio-min').value = urlParams.get('precio_min') || '';
+            document.getElementById('filter-precio-max').value = urlParams.get('precio_max') || '';
+            document.getElementById('filter-estado').value = urlParams.get('estado') || '';
+        });
+    </script>
+</body>
+</html>

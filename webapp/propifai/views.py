@@ -33,10 +33,14 @@ class ListaPropiedadesPropifyView(ListView):
         precio_max = self.request.GET.get('precio_max')
         habitaciones = self.request.GET.get('habitaciones')
         banos = self.request.GET.get('banos')
+        estado = self.request.GET.get('estado')
 
         # Aplicar filtros si existen
         if tipo_propiedad:
-            queryset = queryset.filter(tipo_propiedad__icontains=tipo_propiedad)
+            try:
+                queryset = queryset.filter(property_type_id=int(tipo_propiedad))
+            except (ValueError, TypeError):
+                pass
 
         if departamento:
             # El campo department no existe en la tabla property real.
@@ -75,7 +79,16 @@ class ListaPropiedadesPropifyView(ListView):
             except ValueError:
                 pass
 
-        return queryset
+        # Filtro por estado (property_status_id)
+        if estado:
+            try:
+                estado_id = int(estado)
+                queryset = queryset.filter(property_status_id=estado_id)
+            except (ValueError, TypeError):
+                pass
+
+        # Ordenar: última propiedad publicada primero (más reciente arriba)
+        return queryset.order_by('-created_at')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -83,6 +96,21 @@ class ListaPropiedadesPropifyView(ListView):
         # Obtener valores únicos para filtro de distritos
         # Nota: la tabla property no tiene campo department, usamos district_id
         context['departamentos'] = PropifaiProperty.objects.values_list('district_id', flat=True).distinct().order_by('district_id')
+        
+        # Obtener estados de propiedad desde la tabla property_status
+        estado_map = {}
+        try:
+            from django.db import connections
+            with connections['propifai'].cursor() as cursor:
+                cursor.execute("SELECT id, name FROM property_status WHERE is_active = 1 ORDER BY id")
+                for row in cursor.fetchall():
+                    estado_map[row[0]] = row[1]
+        except Exception:
+            pass
+        
+        # Pasar lista de estados para el filtro
+        context['estados_propiedad'] = [{'id': k, 'name': v} for k, v in estado_map.items()]
+        context['estado_actual'] = self.request.GET.get('estado', '')
         
         # Obtener specs para todas las propiedades
         specs_map = {}
@@ -101,6 +129,9 @@ class ListaPropiedadesPropifyView(ListView):
             # Obtener specs
             specs = specs_map.get(propiedad.id, (None, None, None, None, None))
             _, bedrooms_val, bathrooms_val, built_area_val, land_area_val = specs
+            
+            # Obtener nombre del estado
+            estado_nombre = estado_map.get(propiedad.property_status_id, '')
             
             propiedades_con_info.append({
                 'id': propiedad.id,
@@ -122,8 +153,10 @@ class ListaPropiedadesPropifyView(ListView):
                 'bathrooms': bathrooms_val,
                 'built_area': float(built_area_val) if built_area_val else None,
                 'land_area': float(land_area_val) if land_area_val else None,
-                'imagen_url': None,
+                'imagen_url': propiedad.imagen_url,
                 'availability_status': None,
+                'estado_id': propiedad.property_status_id,
+                'estado_nombre': estado_nombre,
                 'is_draft': not propiedad.is_visible if hasattr(propiedad, 'is_visible') else False,
                 'is_active': propiedad.is_visible if hasattr(propiedad, 'is_visible') else True,
                 'created_at': propiedad.created_at,
@@ -135,6 +168,26 @@ class ListaPropiedadesPropifyView(ListView):
             })
         
         context['propiedades'] = propiedades_con_info
+
+        # Propiedades serializadas para el mapa (usando los mismos filtros que el listado)
+        todas = []
+        propiedades_filtradas = self.get_queryset()
+        for p in propiedades_filtradas.values('id', 'title', 'price', 'latitude', 'longitude', 'property_type_id', 'code'):
+            todas.append({
+                'id': p['id'],
+                'lat': float(p['latitude']) if p['latitude'] else None,
+                'lng': float(p['longitude']) if p['longitude'] else None,
+                'tipo': 'Propiedad',
+                'titulo': p['title'] or 'Propiedad Propify',
+                'precio': float(p['price']) if p['price'] else None,
+                'codigo': p['code'],
+            })
+        context['todas_las_propiedades'] = todas
+
+        # Tipos de propiedad para el filtro (usamos property_type_id)
+        tipos_ids = PropifaiProperty.objects.values_list('property_type_id', flat=True).distinct().order_by('property_type_id')
+        tipos_ids = [t for t in tipos_ids if t is not None]
+        context['tipos_propiedad'] = tipos_ids
         
         return context
 
