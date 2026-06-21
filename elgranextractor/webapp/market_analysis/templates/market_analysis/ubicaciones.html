@@ -1,0 +1,1039 @@
+{% extends 'propifai_base.html' %}
+{% load static %}
+
+{% block title %}Gestor de Ubicaciones Geográficas{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --bg-primary: #0d1117;
+        --bg-secondary: #161b22;
+        --bg-tertiary: #21262d;
+        --border-color: #30363d;
+        --text-primary: #c9d1d9;
+        --text-secondary: #8b949e;
+        --accent-blue: #58a6ff;
+        --accent-green: #3fb950;
+        --accent-orange: #d29922;
+        --accent-red: #f85149;
+        --accent-purple: #bc8cff;
+    }
+
+    body { background-color: var(--bg-primary); color: var(--text-primary); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif; }
+
+    .page-header {
+        padding: 24px 0 16px;
+        border-bottom: 1px solid var(--border-color);
+        margin-bottom: 24px;
+    }
+    .page-header h1 { color: var(--accent-blue); font-size: 24px; font-weight: 600; margin: 0; }
+    .page-header p { color: var(--text-secondary); margin: 4px 0 0; font-size: 14px; }
+
+    .cascada-container {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr 1fr;
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+    @media (max-width: 1100px) {
+        .cascada-container { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 600px) {
+        .cascada-container { grid-template-columns: 1fr; }
+    }
+
+    .cascada-card {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 16px;
+    }
+    .cascada-card h3 {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin: 0 0 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .cascada-card h3 .badge-count {
+        background: var(--bg-tertiary);
+        color: var(--text-secondary);
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 10px;
+    }
+
+    .cascada-select {
+        width: 100%;
+        padding: 8px 12px;
+        background: var(--bg-primary);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        color: var(--text-primary);
+        font-size: 14px;
+        margin-bottom: 12px;
+        cursor: pointer;
+    }
+    .cascada-select:focus { outline: none; border-color: var(--accent-blue); }
+
+    .items-list {
+        max-height: 300px;
+        overflow-y: auto;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+    }
+    .items-list::-webkit-scrollbar { width: 6px; }
+    .items-list::-webkit-scrollbar-track { background: transparent; }
+    .items-list::-webkit-scrollbar-thumb { background: var(--bg-tertiary); border-radius: 3px; }
+
+    .item-entry {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--border-color);
+        font-size: 13px;
+        transition: background 0.15s;
+    }
+    .item-entry:last-child { border-bottom: none; }
+    .item-entry:hover { background: var(--bg-tertiary); }
+    .item-entry .item-nombre { flex: 1; }
+    .item-entry .item-codigo {
+        font-size: 11px;
+        color: var(--text-secondary);
+        margin: 0 8px;
+    }
+    .item-entry .item-actions {
+        display: flex;
+        gap: 4px;
+        opacity: 0.3;
+        transition: opacity 0.15s;
+    }
+    .item-entry:hover .item-actions { opacity: 1; }
+
+    .btn-icon {
+        background: none;
+        border: none;
+        color: var(--text-secondary);
+        cursor: pointer;
+        padding: 2px 6px;
+        font-size: 13px;
+        border-radius: 4px;
+        transition: all 0.15s;
+    }
+    .btn-icon:hover { background: var(--bg-tertiary); }
+    .btn-icon.edit:hover { color: var(--accent-blue); }
+    .btn-icon.delete:hover { color: var(--accent-red); }
+
+    .btn-add {
+        width: 100%;
+        padding: 8px;
+        background: var(--bg-tertiary);
+        border: 1px dashed var(--border-color);
+        border-radius: 6px;
+        color: var(--accent-blue);
+        font-size: 13px;
+        cursor: pointer;
+        transition: all 0.15s;
+        margin-top: 8px;
+    }
+    .btn-add:hover {
+        background: rgba(88, 166, 255, 0.1);
+        border-color: var(--accent-blue);
+    }
+
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.6);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+    }
+    .modal-overlay.active { display: flex; }
+
+    .modal-content-ubic {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 24px;
+        width: 90%;
+        max-width: 480px;
+        box-shadow: 0 16px 48px rgba(0,0,0,0.4);
+    }
+    .modal-content-ubic h2 {
+        color: var(--text-primary);
+        font-size: 18px;
+        font-weight: 600;
+        margin: 0 0 4px;
+    }
+    .modal-content-ubic .modal-subtitle {
+        color: var(--text-secondary);
+        font-size: 13px;
+        margin-bottom: 20px;
+    }
+
+    .form-group-ubic {
+        margin-bottom: 16px;
+    }
+    .form-group-ubic label {
+        display: block;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        margin-bottom: 6px;
+    }
+    .form-group-ubic input, .form-group-ubic select {
+        width: 100%;
+        padding: 8px 12px;
+        background: var(--bg-primary);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        color: var(--text-primary);
+        font-size: 14px;
+    }
+    .form-group-ubic input:focus, .form-group-ubic select:focus {
+        outline: none;
+        border-color: var(--accent-blue);
+    }
+
+    .modal-actions {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+        margin-top: 20px;
+    }
+    .modal-actions button {
+        padding: 8px 20px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        border: 1px solid var(--border-color);
+        transition: all 0.15s;
+    }
+    .btn-cancel {
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+    }
+    .btn-cancel:hover { background: var(--border-color); }
+    .btn-save {
+        background: #238636;
+        color: #fff;
+        border-color: #2ea043 !important;
+    }
+    .btn-save:hover { background: #2ea043; }
+    .btn-danger {
+        background: #da3633;
+        color: #fff;
+        border-color: #f85149 !important;
+    }
+    .btn-danger:hover { background: #f85149; }
+
+    .toast-notification {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        padding: 12px 20px;
+        border-radius: 8px;
+        font-size: 14px;
+        z-index: 2000;
+        opacity: 0;
+        transform: translateY(20px);
+        transition: all 0.3s;
+        pointer-events: none;
+    }
+    .toast-notification.show {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    .toast-success { background: #238636; color: #fff; }
+    .toast-error { background: #da3633; color: #fff; }
+
+    .empty-state-ubic {
+        text-align: center;
+        padding: 24px 16px;
+        color: var(--text-secondary);
+        font-size: 13px;
+    }
+    .empty-state-ubic i { font-size: 24px; margin-bottom: 8px; display: block; }
+
+    .selected-item {
+        background: rgba(88, 166, 255, 0.1);
+        border: 1px solid var(--accent-blue) !important;
+        border-radius: 4px;
+    }
+
+    .loading-spinner {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        border: 2px solid var(--border-color);
+        border-top-color: var(--accent-blue);
+        border-radius: 50%;
+        animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-geo-alt-fill" style="margin-right: 8px;"></i> Gestor de Ubicaciones Geográficas</h1>
+    <p>Administra departamentos, provincias, distritos y zonas/urbanizaciones en cascada. Los cambios se reflejan en cascada (borrar un departamento elimina todos sus hijos).</p>
+</div>
+
+<!-- Selectores en cascada -->
+<div class="cascada-container">
+    <div class="cascada-card" id="card-departamento">
+        <h3><i class="bi bi-building"></i> Departamentos <span class="badge-count" id="count-departamento">0</span></h3>
+        <select class="cascada-select" id="select-departamento">
+            <option value="">— Seleccionar departamento —</option>
+        </select>
+        <ul class="items-list" id="list-departamento"></ul>
+        <button class="btn-add" onclick="abrirModal('crear', 'departamento')">
+            <i class="bi bi-plus-circle"></i> Nuevo departamento
+        </button>
+    </div>
+
+    <div class="cascada-card" id="card-provincia">
+        <h3><i class="bi bi-map"></i> Provincias <span class="badge-count" id="count-provincia">0</span></h3>
+        <select class="cascada-select" id="select-provincia" disabled>
+            <option value="">— Primero selecciona un departamento —</option>
+        </select>
+        <ul class="items-list" id="list-provincia"></ul>
+        <button class="btn-add" id="btn-add-provincia" onclick="abrirModal('crear', 'provincia')" style="display:none;">
+            <i class="bi bi-plus-circle"></i> Nueva provincia
+        </button>
+    </div>
+
+    <div class="cascada-card" id="card-distrito">
+        <h3><i class="bi bi-geo"></i> Distritos <span class="badge-count" id="count-distrito">0</span></h3>
+        <select class="cascada-select" id="select-distrito" disabled>
+            <option value="">— Primero selecciona una provincia —</option>
+        </select>
+        <ul class="items-list" id="list-distrito"></ul>
+        <button class="btn-add" id="btn-add-distrito" onclick="abrirModal('crear', 'distrito')" style="display:none;">
+            <i class="bi bi-plus-circle"></i> Nuevo distrito
+        </button>
+    </div>
+
+    <div class="cascada-card" id="card-zona">
+        <h3><i class="bi bi-pin-map"></i> Zonas / Urbanizaciones <span class="badge-count" id="count-zona">0</span></h3>
+        <select class="cascada-select" id="select-zona" disabled>
+            <option value="">— Primero selecciona un distrito —</option>
+        </select>
+        <ul class="items-list" id="list-zona"></ul>
+        <button class="btn-add" id="btn-add-zona" onclick="abrirModal('crear', 'zona_urbanizacion')" style="display:none;">
+            <i class="bi bi-plus-circle"></i> Nueva zona/urbanización
+        </button>
+    </div>
+</div>
+
+<!-- Modal CRUD -->
+<div class="modal-overlay" id="modalUbicacion">
+    <div class="modal-content-ubic">
+        <h2 id="modalTitle">Nueva ubicación</h2>
+        <div class="modal-subtitle" id="modalSubtitle">Complete los datos para crear una nueva ubicación.</div>
+
+        <div class="form-group-ubic">
+            <label for="modalNombre">Nombre</label>
+            <input type="text" id="modalNombre" placeholder="Ej: Arequipa, Cayma, ..." maxlength="200">
+        </div>
+
+        <div class="form-group-ubic" id="modalCodigoGroup">
+            <label for="modalCodigo">Código (opcional, ej: UBIGEO)</label>
+            <input type="text" id="modalCodigo" placeholder="Ej: 040101" maxlength="20">
+        </div>
+
+        <div class="form-group-ubic" id="modalParentGroup">
+            <label id="modalParentLabel">Departamento padre</label>
+            <select id="modalParent"></select>
+        </div>
+
+        <div class="modal-actions">
+            <button class="btn-cancel" onclick="cerrarModal()">Cancelar</button>
+            <button class="btn-save" id="modalSaveBtn" onclick="guardarUbicacion()">Guardar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de confirmación para eliminar -->
+<div class="modal-overlay" id="modalConfirmar">
+    <div class="modal-content-ubic">
+        <h2 style="color: var(--accent-red);"><i class="bi bi-exclamation-triangle"></i> Confirmar eliminación</h2>
+        <div class="modal-subtitle" id="confirmMensaje">¿Estás seguro de eliminar esta ubicación?</div>
+        <div style="background: rgba(248, 81, 73, 0.1); border: 1px solid rgba(248, 81, 73, 0.3); border-radius: 6px; padding: 12px; font-size: 13px; color: var(--accent-orange);">
+            <i class="bi bi-info-circle"></i> Se eliminarán también todos los elementos hijos en cascada.
+        </div>
+        <div class="modal-actions">
+            <button class="btn-cancel" onclick="cerrarModalConfirmar()">Cancelar</button>
+            <button class="btn-danger" id="confirmDeleteBtn" onclick="ejecutarEliminar()">Eliminar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div class="toast-notification" id="toast"></div>
+
+<script>
+// =========================================================================
+// Estado global
+// =========================================================================
+var state = {
+    departamentoSeleccionado: null,
+    provinciaSeleccionada: null,
+    distritoSeleccionado: null,
+    zonaSeleccionada: null,
+    modo: 'crear',
+    editandoId: null,
+    nivelEditando: null,
+    eliminarId: null,
+};
+
+// =========================================================================
+// Toast
+// =========================================================================
+function mostrarToast(mensaje, tipo) {
+    var t = document.getElementById('toast');
+    t.textContent = mensaje;
+    t.className = 'toast-notification toast-' + tipo + ' show';
+    setTimeout(function() { t.classList.remove('show'); }, 3000);
+}
+
+// =========================================================================
+// Cargar departamentos
+// =========================================================================
+function cargarDepartamentos() {
+    var sel = document.getElementById('select-departamento');
+    var lista = document.getElementById('list-departamento');
+    var selectedVal = sel.value;
+
+    sel.innerHTML = '<option value="">— Seleccionar departamento —</option>';
+    lista.innerHTML = '<div class="loading-spinner" style="margin:12px auto;display:block;"></div>';
+
+    fetch('/market-analysis/api/ubicaciones/departamentos/')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            lista.innerHTML = '';
+            var items = data.data || [];
+            document.getElementById('count-departamento').textContent = items.length;
+
+            if (items.length === 0) {
+                lista.innerHTML = '<div class="empty-state-ubic"><i class="bi bi-building"></i>No hay departamentos registrados</div>';
+                return;
+            }
+
+            items.forEach(function(d) {
+                var opt = document.createElement('option');
+                opt.value = d.id;
+                opt.textContent = d.nombre + (d.codigo ? ' (' + d.codigo + ')' : '');
+                sel.appendChild(opt);
+
+                var li = document.createElement('li');
+                li.className = 'item-entry';
+                li.dataset.id = d.id;
+                li.innerHTML =
+                    '<span class="item-nombre">' + d.nombre + '</span>' +
+                    '<span class="item-codigo">' + (d.codigo || '') + '</span>' +
+                    '<span class="item-actions">' +
+                        '<button class="btn-icon edit" onclick="event.stopPropagation();abrirModal(\'editar\',\'departamento\',' + d.id +')" title="Editar"><i class="bi bi-pencil"></i></button>' +
+                        '<button class="btn-icon delete" onclick="event.stopPropagation();confirmarEliminar(' + d.id + ',\'' + d.nombre.replace(/'/g, "\\'") + '\',\'departamento\')" title="Eliminar"><i class="bi bi-trash"></i></button>' +
+                    '</span>';
+                li.addEventListener('click', function() { seleccionarDepartamento(d.id); });
+                lista.appendChild(li);
+            });
+
+            if (selectedVal && selectedVal !== '') {
+                sel.value = selectedVal;
+            }
+        })
+        .catch(function(err) {
+            lista.innerHTML = '<div class="empty-state-ubic"><i class="bi bi-exclamation-circle"></i>Error al cargar</div>';
+            console.error(err);
+        });
+}
+
+// =========================================================================
+// Seleccionar departamento → cargar provincias
+// =========================================================================
+function seleccionarDepartamento(id) {
+    state.departamentoSeleccionado = id;
+    state.provinciaSeleccionada = null;
+    state.distritoSeleccionado = null;
+    state.zonaSeleccionada = null;
+
+    document.getElementById('select-departamento').value = id;
+    document.getElementById('select-provincia').disabled = false;
+    document.getElementById('select-provincia').innerHTML = '<option value="">— Cargando provincias... —</option>';
+    document.getElementById('select-distrito').disabled = true;
+    document.getElementById('select-distrito').innerHTML = '<option value="">— Primero selecciona una provincia —</option>';
+    document.getElementById('select-zona').disabled = true;
+    document.getElementById('select-zona').innerHTML = '<option value="">— Primero selecciona un distrito —</option>';
+    document.getElementById('btn-add-provincia').style.display = 'none';
+    document.getElementById('btn-add-distrito').style.display = 'none';
+    document.getElementById('btn-add-zona').style.display = 'none';
+
+    document.querySelectorAll('#list-departamento .item-entry').forEach(function(el) {
+        el.classList.toggle('selected-item', parseInt(el.dataset.id) === id);
+    });
+
+    fetch('/market-analysis/api/ubicaciones/hijos/' + id + '/')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var sel = document.getElementById('select-provincia');
+            var lista = document.getElementById('list-provincia');
+            sel.innerHTML = '<option value="">— Seleccionar provincia —</option>';
+            lista.innerHTML = '';
+            var items = data.data || [];
+            document.getElementById('count-provincia').textContent = items.length;
+
+            if (items.length === 0) {
+                lista.innerHTML = '<div class="empty-state-ubic"><i class="bi bi-map"></i>Sin provincias</div>';
+            } else {
+                items.forEach(function(p) {
+                    var opt = document.createElement('option');
+                    opt.value = p.id;
+                    opt.textContent = p.nombre + (p.codigo ? ' (' + p.codigo + ')' : '');
+                    sel.appendChild(opt);
+
+                    var li = document.createElement('li');
+                    li.className = 'item-entry';
+                    li.dataset.id = p.id;
+                    li.innerHTML =
+                        '<span class="item-nombre">' + p.nombre + '</span>' +
+                        '<span class="item-codigo">' + (p.codigo || '') + '</span>' +
+                        '<span class="item-actions">' +
+                            '<button class="btn-icon edit" onclick="event.stopPropagation();abrirModal(\'editar\',\'provincia\',' + p.id +')" title="Editar"><i class="bi bi-pencil"></i></button>' +
+                            '<button class="btn-icon delete" onclick="event.stopPropagation();confirmarEliminar(' + p.id + ',\'' + p.nombre.replace(/'/g, "\\'") + '\',\'provincia\')" title="Eliminar"><i class="bi bi-trash"></i></button>' +
+                        '</span>';
+                    li.addEventListener('click', function() { seleccionarProvincia(p.id); });
+                    lista.appendChild(li);
+                });
+            }
+
+            document.getElementById('btn-add-provincia').style.display = 'block';
+        })
+        .catch(function(err) { console.error(err); });
+}
+
+// =========================================================================
+// Seleccionar provincia → cargar distritos
+// =========================================================================
+function seleccionarProvincia(id) {
+    state.provinciaSeleccionada = id;
+    state.distritoSeleccionado = null;
+    state.zonaSeleccionada = null;
+
+    document.getElementById('select-provincia').value = id;
+    document.getElementById('select-distrito').disabled = false;
+    document.getElementById('select-distrito').innerHTML = '<option value="">— Cargando distritos... —</option>';
+    document.getElementById('select-zona').disabled = true;
+    document.getElementById('select-zona').innerHTML = '<option value="">— Primero selecciona un distrito —</option>';
+    document.getElementById('btn-add-distrito').style.display = 'none';
+    document.getElementById('btn-add-zona').style.display = 'none';
+
+    document.querySelectorAll('#list-provincia .item-entry').forEach(function(el) {
+        el.classList.toggle('selected-item', parseInt(el.dataset.id) === id);
+    });
+
+    fetch('/market-analysis/api/ubicaciones/hijos/' + id + '/')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var sel = document.getElementById('select-distrito');
+            var lista = document.getElementById('list-distrito');
+            sel.innerHTML = '<option value="">— Seleccionar distrito —</option>';
+            lista.innerHTML = '';
+            var items = data.data || [];
+            document.getElementById('count-distrito').textContent = items.length;
+
+            if (items.length === 0) {
+                lista.innerHTML = '<div class="empty-state-ubic"><i class="bi bi-geo"></i>Sin distritos</div>';
+            } else {
+                items.forEach(function(d) {
+                    var opt = document.createElement('option');
+                    opt.value = d.id;
+                    opt.textContent = d.nombre + (d.codigo ? ' (' + d.codigo + ')' : '');
+                    sel.appendChild(opt);
+
+                    var li = document.createElement('li');
+                    li.className = 'item-entry';
+                    li.dataset.id = d.id;
+                    li.innerHTML =
+                        '<span class="item-nombre">' + d.nombre + '</span>' +
+                        '<span class="item-codigo">' + (d.codigo || '') + '</span>' +
+                        '<span class="item-actions">' +
+                            '<button class="btn-icon edit" onclick="event.stopPropagation();abrirModal(\'editar\',\'distrito\',' + d.id +')" title="Editar"><i class="bi bi-pencil"></i></button>' +
+                            '<button class="btn-icon delete" onclick="event.stopPropagation();confirmarEliminar(' + d.id + ',\'' + d.nombre.replace(/'/g, "\\'") + '\',\'distrito\')" title="Eliminar"><i class="bi bi-trash"></i></button>' +
+                        '</span>';
+                    li.addEventListener('click', function() { seleccionarDistrito(d.id); });
+                    lista.appendChild(li);
+                });
+            }
+
+            document.getElementById('btn-add-distrito').style.display = 'block';
+        })
+        .catch(function(err) { console.error(err); });
+}
+
+// =========================================================================
+// Seleccionar distrito
+// =========================================================================
+function seleccionarDistrito(id) {
+    state.distritoSeleccionado = id;
+    state.zonaSeleccionada = null;
+
+    document.getElementById('select-distrito').value = id;
+    document.getElementById('select-zona').disabled = false;
+    document.getElementById('select-zona').innerHTML = '<option value="">— Cargando zonas... —</option>';
+    document.getElementById('btn-add-zona').style.display = 'none';
+
+    document.querySelectorAll('#list-distrito .item-entry').forEach(function(el) {
+        el.classList.toggle('selected-item', parseInt(el.dataset.id) === id);
+    });
+
+    fetch('/market-analysis/api/ubicaciones/hijos/' + id + '/')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var sel = document.getElementById('select-zona');
+            var lista = document.getElementById('list-zona');
+            sel.innerHTML = '<option value="">— Seleccionar zona/urbanización —</option>';
+            lista.innerHTML = '';
+            var items = data.data || [];
+            document.getElementById('count-zona').textContent = items.length;
+
+            if (items.length === 0) {
+                lista.innerHTML = '<div class="empty-state-ubic"><i class="bi bi-pin-map"></i>Sin zonas/urbanizaciones</div>';
+            } else {
+                items.forEach(function(z) {
+                    var opt = document.createElement('option');
+                    opt.value = z.id;
+                    opt.textContent = z.nombre + (z.codigo ? ' (' + z.codigo + ')' : '');
+                    sel.appendChild(opt);
+
+                    var li = document.createElement('li');
+                    li.className = 'item-entry';
+                    li.dataset.id = z.id;
+                    li.innerHTML =
+                        '<span class="item-nombre">' + z.nombre + '</span>' +
+                        '<span class="item-codigo">' + (z.codigo || '') + '</span>' +
+                        '<span class="item-actions">' +
+                            '<button class="btn-icon edit" onclick="event.stopPropagation();abrirModal(\'editar\',\'zona_urbanizacion\',' + z.id +')" title="Editar"><i class="bi bi-pencil"></i></button>' +
+                            '<button class="btn-icon delete" onclick="event.stopPropagation();confirmarEliminar(' + z.id + ',\'' + z.nombre.replace(/'/g, "\\'") + '\',\'zona_urbanizacion\')" title="Eliminar"><i class="bi bi-trash"></i></button>' +
+                        '</span>';
+                    li.addEventListener('click', function() { seleccionarZona(z.id); });
+                    lista.appendChild(li);
+                });
+            }
+
+            document.getElementById('btn-add-zona').style.display = 'block';
+        })
+        .catch(function(err) { console.error(err); });
+}
+
+// =========================================================================
+// Seleccionar zona/urbanización
+// =========================================================================
+function seleccionarZona(id) {
+    state.zonaSeleccionada = id;
+    document.getElementById('select-zona').value = id;
+    document.querySelectorAll('#list-zona .item-entry').forEach(function(el) {
+        el.classList.toggle('selected-item', parseInt(el.dataset.id) === id);
+    });
+}
+
+// =========================================================================
+// Eventos de selects
+// =========================================================================
+document.getElementById('select-departamento').addEventListener('change', function() {
+    if (this.value) seleccionarDepartamento(parseInt(this.value));
+    else {
+        state.departamentoSeleccionado = null;
+        state.provinciaSeleccionada = null;
+        state.distritoSeleccionado = null;
+        state.zonaSeleccionada = null;
+        document.getElementById('select-provincia').disabled = true;
+        document.getElementById('select-provincia').innerHTML = '<option value="">— Primero selecciona un departamento —</option>';
+        document.getElementById('select-distrito').disabled = true;
+        document.getElementById('select-distrito').innerHTML = '<option value="">— Primero selecciona una provincia —</option>';
+        document.getElementById('select-zona').disabled = true;
+        document.getElementById('select-zona').innerHTML = '<option value="">— Primero selecciona un distrito —</option>';
+        document.getElementById('btn-add-provincia').style.display = 'none';
+        document.getElementById('btn-add-distrito').style.display = 'none';
+        document.getElementById('btn-add-zona').style.display = 'none';
+        document.querySelectorAll('#list-departamento .item-entry').forEach(function(el) { el.classList.remove('selected-item'); });
+        document.getElementById('list-provincia').innerHTML = '';
+        document.getElementById('list-distrito').innerHTML = '';
+        document.getElementById('list-zona').innerHTML = '';
+        document.getElementById('count-provincia').textContent = '0';
+        document.getElementById('count-distrito').textContent = '0';
+        document.getElementById('count-zona').textContent = '0';
+    }
+});
+
+document.getElementById('select-provincia').addEventListener('change', function() {
+    if (this.value) seleccionarProvincia(parseInt(this.value));
+    else {
+        state.provinciaSeleccionada = null;
+        state.distritoSeleccionado = null;
+        state.zonaSeleccionada = null;
+        document.getElementById('select-distrito').disabled = true;
+        document.getElementById('select-distrito').innerHTML = '<option value="">— Primero selecciona una provincia —</option>';
+        document.getElementById('select-zona').disabled = true;
+        document.getElementById('select-zona').innerHTML = '<option value="">— Primero selecciona un distrito —</option>';
+        document.getElementById('btn-add-distrito').style.display = 'none';
+        document.getElementById('btn-add-zona').style.display = 'none';
+        document.querySelectorAll('#list-provincia .item-entry').forEach(function(el) { el.classList.remove('selected-item'); });
+        document.getElementById('list-distrito').innerHTML = '';
+        document.getElementById('list-zona').innerHTML = '';
+        document.getElementById('count-distrito').textContent = '0';
+        document.getElementById('count-zona').textContent = '0';
+    }
+});
+
+document.getElementById('select-distrito').addEventListener('change', function() {
+    if (this.value) seleccionarDistrito(parseInt(this.value));
+    else {
+        state.distritoSeleccionado = null;
+        state.zonaSeleccionada = null;
+        document.getElementById('select-zona').disabled = true;
+        document.getElementById('select-zona').innerHTML = '<option value="">— Primero selecciona un distrito —</option>';
+        document.getElementById('btn-add-zona').style.display = 'none';
+        document.querySelectorAll('#list-distrito .item-entry').forEach(function(el) { el.classList.remove('selected-item'); });
+        document.getElementById('list-zona').innerHTML = '';
+        document.getElementById('count-zona').textContent = '0';
+    }
+});
+
+document.getElementById('select-zona').addEventListener('change', function() {
+    if (this.value) seleccionarZona(parseInt(this.value));
+    else {
+        state.zonaSeleccionada = null;
+        document.querySelectorAll('#list-zona .item-entry').forEach(function(el) { el.classList.remove('selected-item'); });
+    }
+});
+
+// =========================================================================
+// Modal CRUD
+// =========================================================================
+function abrirModal(modo, nivel, id) {
+    state.modo = modo;
+    state.nivelEditando = nivel;
+    state.editandoId = id || null;
+
+    var title = document.getElementById('modalTitle');
+    var subtitle = document.getElementById('modalSubtitle');
+    var nombreInput = document.getElementById('modalNombre');
+    var codigoInput = document.getElementById('modalCodigo');
+    var parentGroup = document.getElementById('modalParentGroup');
+    var parentSelect = document.getElementById('modalParent');
+    var saveBtn = document.getElementById('modalSaveBtn');
+
+    nombreInput.value = '';
+    codigoInput.value = '';
+
+    if (modo === 'crear') {
+        title.textContent = 'Nuevo ' + nivel;
+        subtitle.textContent = 'Completa los datos para crear un nuevo ' + nivel + '.';
+        saveBtn.textContent = 'Crear';
+
+        // Actualizar placeholder según el nivel
+        var placeholders = {
+            'departamento': 'Ej: Arequipa, Lima, Cusco...',
+            'provincia': 'Ej: Arequipa, Caylloma, Islay...',
+            'distrito': 'Ej: Cayma, Yanahuara, Cercado...',
+            'zona_urbanizacion': 'Ej: Umacollo, San Lázaro, La Pampilla...'
+        };
+        nombreInput.placeholder = placeholders[nivel] || 'Ej: Arequipa, Cayma, ...';
+
+        if (nivel === 'departamento') {
+            parentGroup.style.display = 'none';
+        } else if (nivel === 'provincia') {
+            parentGroup.style.display = 'block';
+            document.getElementById('modalParentLabel').textContent = 'Departamento padre';
+            llenarSelectParent('departamento', state.departamentoSeleccionado);
+        } else if (nivel === 'distrito') {
+            parentGroup.style.display = 'block';
+            document.getElementById('modalParentLabel').textContent = 'Provincia padre';
+            llenarSelectParent('provincia', state.provinciaSeleccionada);
+        } else if (nivel === 'zona_urbanizacion') {
+            parentGroup.style.display = 'block';
+            document.getElementById('modalParentLabel').textContent = 'Distrito padre';
+            llenarSelectParent('distrito', state.distritoSeleccionado);
+        }
+    } else {
+        // Editar
+        title.textContent = 'Editar ' + nivel;
+        subtitle.textContent = 'Modifica los datos del ' + nivel + '.';
+        saveBtn.textContent = 'Guardar cambios';
+        parentGroup.style.display = 'none';
+
+        // Cargar datos actuales desde el DOM
+        var listaId = 'list-' + nivel;
+        var items = document.querySelectorAll('#' + listaId + ' .item-entry');
+        items.forEach(function(li) {
+            if (parseInt(li.dataset.id) === id) {
+                var nombre = li.querySelector('.item-nombre').textContent;
+                var codigo = li.querySelector('.item-codigo').textContent;
+                nombreInput.value = nombre;
+                codigoInput.value = codigo;
+            }
+        });
+    }
+
+    document.getElementById('modalUbicacion').classList.add('active');
+    setTimeout(function() { nombreInput.focus(); }, 100);
+}
+
+function cerrarModal() {
+    document.getElementById('modalUbicacion').classList.remove('active');
+}
+
+function llenarSelectParent(nivel, selectedId) {
+    var sel = document.getElementById('modalParent');
+    sel.innerHTML = '<option value="">— Cargando... —</option>';
+
+    if (nivel === 'departamento') {
+        fetch('/market-analysis/api/ubicaciones/departamentos/')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                sel.innerHTML = '<option value="">— Seleccionar departamento —</option>';
+                (data.data || []).forEach(function(d) {
+                    var opt = document.createElement('option');
+                    opt.value = d.id;
+                    opt.textContent = d.nombre;
+                    if (selectedId && parseInt(selectedId) === d.id) opt.selected = true;
+                    sel.appendChild(opt);
+                });
+            });
+    } else if (nivel === 'provincia') {
+        if (!state.departamentoSeleccionado) {
+            sel.innerHTML = '<option value="">— Primero selecciona un departamento —</option>';
+            return;
+        }
+        fetch('/market-analysis/api/ubicaciones/hijos/' + state.departamentoSeleccionado + '/')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                sel.innerHTML = '<option value="">— Seleccionar provincia —</option>';
+                (data.data || []).forEach(function(p) {
+                    var opt = document.createElement('option');
+                    opt.value = p.id;
+                    opt.textContent = p.nombre;
+                    if (selectedId && parseInt(selectedId) === p.id) opt.selected = true;
+                    sel.appendChild(opt);
+                });
+            });
+    } else if (nivel === 'distrito') {
+        if (!state.provinciaSeleccionada) {
+            sel.innerHTML = '<option value="">— Primero selecciona una provincia —</option>';
+            return;
+        }
+        fetch('/market-analysis/api/ubicaciones/hijos/' + state.provinciaSeleccionada + '/')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                sel.innerHTML = '<option value="">— Seleccionar distrito —</option>';
+                (data.data || []).forEach(function(d) {
+                    var opt = document.createElement('option');
+                    opt.value = d.id;
+                    opt.textContent = d.nombre;
+                    if (selectedId && parseInt(selectedId) === d.id) opt.selected = true;
+                    sel.appendChild(opt);
+                });
+            });
+    }
+}
+
+// =========================================================================
+// Guardar ubicación (crear o editar)
+// =========================================================================
+function guardarUbicacion() {
+    var nombre = document.getElementById('modalNombre').value.trim();
+    var codigo = document.getElementById('modalCodigo').value.trim();
+    var saveBtn = document.getElementById('modalSaveBtn');
+
+    if (!nombre) {
+        mostrarToast('El nombre es obligatorio', 'error');
+        return;
+    }
+
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Guardando...';
+
+    if (state.modo === 'crear') {
+        var nivel = state.nivelEditando;
+        var parentId = null;
+
+        if (nivel === 'provincia') {
+            parentId = state.departamentoSeleccionado;
+            if (!parentId) {
+                mostrarToast('Debes seleccionar un departamento padre', 'error');
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Crear';
+                return;
+            }
+        } else if (nivel === 'distrito') {
+            parentId = state.provinciaSeleccionada;
+            if (!parentId) {
+                mostrarToast('Debes seleccionar una provincia padre', 'error');
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Crear';
+                return;
+            }
+        } else if (nivel === 'zona_urbanizacion') {
+            parentId = state.distritoSeleccionado;
+            if (!parentId) {
+                mostrarToast('Debes seleccionar un distrito padre', 'error');
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Crear';
+                return;
+            }
+        }
+
+        fetch('/market-analysis/api/ubicaciones/crear/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+            body: JSON.stringify({ nombre: nombre, nivel: nivel, parent_id: parentId, codigo: codigo }),
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.ok) {
+                var nombreNivel = nivel === 'zona_urbanizacion' ? 'Zona/Urbanización' : nivel.charAt(0).toUpperCase() + nivel.slice(1);
+                mostrarToast(nombreNivel + ' "' + nombre + '" creado correctamente', 'success');
+                cerrarModal();
+                recargarNivel(nivel);
+            } else {
+                mostrarToast(data.error || 'Error al crear', 'error');
+            }
+        })
+        .catch(function(err) {
+            mostrarToast('Error de conexión', 'error');
+            console.error(err);
+        })
+        .finally(function() {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Crear';
+        });
+    } else {
+        // Editar
+        fetch('/market-analysis/api/ubicaciones/editar/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+            body: JSON.stringify({ id: state.editandoId, nombre: nombre, codigo: codigo }),
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.ok) {
+                mostrarToast('Ubicación actualizada correctamente', 'success');
+                cerrarModal();
+                recargarNivel(state.nivelEditando);
+            } else {
+                mostrarToast(data.error || 'Error al editar', 'error');
+            }
+        })
+        .catch(function(err) {
+            mostrarToast('Error de conexión', 'error');
+            console.error(err);
+        })
+        .finally(function() {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Guardar cambios';
+        });
+    }
+}
+
+// =========================================================================
+// Eliminar ubicación
+// =========================================================================
+function confirmarEliminar(id, nombre, nivel) {
+    state.eliminarId = id;
+    document.getElementById('confirmMensaje').textContent =
+        '¿Estás seguro de eliminar ' + nivel + ' "' + nombre + '"?';
+    document.getElementById('modalConfirmar').classList.add('active');
+}
+
+function cerrarModalConfirmar() {
+    document.getElementById('modalConfirmar').classList.remove('active');
+    state.eliminarId = null;
+}
+
+function ejecutarEliminar() {
+    var id = state.eliminarId;
+    if (!id) return;
+
+    document.getElementById('confirmDeleteBtn').disabled = true;
+    document.getElementById('confirmDeleteBtn').textContent = 'Eliminando...';
+
+    fetch('/market-analysis/api/ubicaciones/eliminar/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+        body: JSON.stringify({ id: id }),
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.ok) {
+            mostrarToast(data.mensaje, 'success');
+            cerrarModalConfirmar();
+            // Recargar todo desde departamentos
+            cargarDepartamentos();
+            document.getElementById('select-provincia').disabled = true;
+            document.getElementById('select-provincia').innerHTML = '<option value="">— Primero selecciona un departamento —</option>';
+            document.getElementById('select-distrito').disabled = true;
+            document.getElementById('select-distrito').innerHTML = '<option value="">— Primero selecciona una provincia —</option>';
+            document.getElementById('list-provincia').innerHTML = '';
+            document.getElementById('list-distrito').innerHTML = '';
+            document.getElementById('list-zona').innerHTML = '';
+            document.getElementById('count-provincia').textContent = '0';
+            document.getElementById('count-distrito').textContent = '0';
+            document.getElementById('count-zona').textContent = '0';
+            document.getElementById('btn-add-provincia').style.display = 'none';
+            document.getElementById('btn-add-distrito').style.display = 'none';
+            document.getElementById('btn-add-zona').style.display = 'none';
+        } else {
+            mostrarToast(data.error || 'Error al eliminar', 'error');
+        }
+    })
+    .catch(function(err) {
+        mostrarToast('Error de conexión', 'error');
+        console.error(err);
+    })
+    .finally(function() {
+        document.getElementById('confirmDeleteBtn').disabled = false;
+        document.getElementById('confirmDeleteBtn').textContent = 'Eliminar';
+    });
+}
+
+// =========================================================================
+// Recargar nivel después de crear/editar
+// =========================================================================
+function recargarNivel(nivel) {
+    if (nivel === 'departamento') {
+        cargarDepartamentos();
+    } else if (nivel === 'provincia') {
+        if (state.departamentoSeleccionado) {
+            seleccionarDepartamento(state.departamentoSeleccionado);
+        }
+    } else if (nivel === 'distrito') {
+        if (state.provinciaSeleccionada) {
+            seleccionarProvincia(state.provinciaSeleccionada);
+        }
+    } else if (nivel === 'zona_urbanizacion') {
+        if (state.distritoSeleccionado) {
+            seleccionarDistrito(state.distritoSeleccionado);
+        }
+    }
+}
+
+// =========================================================================
+// Inicializar
+// =========================================================================
+document.addEventListener('DOMContentLoaded', function() {
+    cargarDepartamentos();
+});
+</script>
+{% endblock %}

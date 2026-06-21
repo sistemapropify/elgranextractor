@@ -1,0 +1,2565 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Meta tags para prevenir caché en desarrollo -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Dashboard de Leads CRM</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --header-height: 60px;
+            --sidebar-width: 250px;
+            --primary-color: #10b981;          /* Verde esmeralda brillante */
+            --secondary-color: #059669;        /* Verde esmeralda medio */
+            --accent-color: #34d399;           /* Verde esmeralda claro */
+            --light-teal: #a7f3d0;             /* Verde muy claro */
+            --very-light-teal: #d1fae5;        /* Verde super claro */
+            --sidebar-bg: #059669;             /* Verde medio para sidebar */
+            --header-bg: #ffffff;              /* Blanco para header */
+            --content-bg: rgba(16, 185, 129, 0.08); /* Color base con transparencia */
+            --card-bg: #ffffff;                /* Blanco para cards */
+            --text-dark: #065f46;              /* Verde oscuro para texto */
+            --text-light: #ffffff;             /* Blanco para texto claro */
+        }
+        
+        body {
+            background-color: var(--content-bg);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+            color: var(--text-dark);
+        }
+        
+        /* Header delgado */
+        .app-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: var(--header-height);
+            background-color: var(--header-bg);
+            box-shadow: 0 2px 10px rgba(3, 94, 94, 0.1);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            border-bottom: 1px solid var(--very-light-teal);
+        }
+        
+        .logo-container {
+            display: flex;
+            align-items: center;
+            height: 100%;
+        }
+        
+        .logo {
+            height: 40px;
+            width: auto;
+            margin-right: 10px;
+        }
+        
+        .logo-text {
+            font-weight: 700;
+            font-size: 1.5rem;
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+        
+        .logo-text:hover {
+            color: var(--secondary-color);
+        }
+        
+        /* Barra lateral delgada */
+        .app-sidebar {
+            position: fixed;
+            top: var(--header-height);
+            left: 0;
+            width: var(--sidebar-width);
+            height: calc(100vh - var(--header-height));
+            background-color: var(--sidebar-bg);
+            color: var(--text-light);
+            overflow-y: auto;
+            transition: transform 0.3s ease;
+            z-index: 999;
+            border-right: 1px solid var(--light-teal);
+        }
+        
+        .sidebar-menu {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .sidebar-menu li {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .sidebar-menu a {
+            display: flex;
+            align-items: center;
+            padding: 15px 20px;
+            color: rgba(255, 255, 255, 0.9);
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+        
+        .sidebar-menu a:hover {
+            background-color: rgba(255, 255, 255, 0.15);
+            color: white;
+        }
+        
+        .sidebar-menu a.active {
+            background-color: rgba(255, 255, 255, 0.2);
+            color: white;
+            border-left: 4px solid var(--accent-color);
+        }
+        
+        .sidebar-menu i {
+            margin-right: 10px;
+            font-size: 1.2rem;
+            width: 24px;
+            text-align: center;
+        }
+        
+        /* Contenido principal */
+        .app-content {
+            margin-left: var(--sidebar-width);
+            margin-top: var(--header-height);
+            padding: 20px;
+            min-height: calc(100vh - var(--header-height));
+            transition: margin-left 0.3s ease;
+            background-color: var(--content-bg);
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .app-sidebar {
+                transform: translateX(-100%);
+            }
+            
+            .app-content {
+                margin-left: 0;
+            }
+            
+            .sidebar-toggle {
+                display: block;
+            }
+            
+            .sidebar-open .app-sidebar {
+                transform: translateX(0);
+            }
+            
+            .sidebar-open .app-content {
+                margin-left: var(--sidebar-width);
+            }
+        }
+        
+        /* Botón para mostrar/ocultar sidebar en móviles */
+        .sidebar-toggle {
+            display: none;
+            background: none;
+            border: none;
+            color: var(--primary-color);
+            font-size: 1.5rem;
+            margin-right: 15px;
+            cursor: pointer;
+        }
+        
+        /* Estilos adicionales para contenido */
+        .card {
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(3, 94, 94, 0.1);
+            margin-bottom: 1.5rem;
+            background-color: var(--card-bg);
+            border: 1px solid var(--very-light-teal);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            border: none;
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(135deg, var(--accent-color) 0%, var(--primary-color) 100%);
+        }
+        
+        .btn-outline-secondary {
+            border-color: var(--light-teal);
+            color: var(--primary-color);
+        }
+        
+        .btn-outline-info {
+            border-color: var(--light-teal);
+            color: var(--primary-color);
+        }
+        
+        .stat-card {
+            text-align: center;
+            padding: 1.5rem;
+            background-color: var(--card-bg);
+        }
+        
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+        
+        .footer {
+            margin-top: 3rem;
+            padding: 1.5rem 0;
+            background-color: var(--sidebar-bg);
+            color: var(--text-light);
+            text-align: center;
+            border-top: 1px solid var(--light-teal);
+        }
+        
+        /* Espacio para el logo placeholder */
+        .logo-placeholder {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+        
+        /* Estilos para enlaces */
+        a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+        
+        a:hover {
+            color: var(--secondary-color);
+        }
+        
+        /* Estilos para formularios */
+        .form-control {
+            border: 1px solid var(--light-teal);
+        }
+        
+        .form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.25rem rgba(4, 125, 125, 0.25);
+        }
+        
+        /* Estilos para alertas */
+        .alert-info {
+            background-color: rgba(4, 125, 125, 0.1);
+            border-color: var(--light-teal);
+            color: var(--text-dark);
+        }
+        
+        /* Estilos para bordes y separadores */
+        hr {
+            border-color: var(--very-light-teal);
+        }
+    </style>
+    
+</head>
+<body>
+    <!-- Header delgado -->
+    <header class="app-header">
+        <button class="sidebar-toggle" id="sidebarToggle">
+            <i class="bi bi-list"></i>
+        </button>
+        
+        <div class="logo-container">
+            <div class="logo-placeholder">
+                <i class="bi bi-binoculars-fill"></i>
+            </div>
+            <a href="/" class="logo-text ms-2">El Gran Extractor</a>
+        </div>
+        
+        <div class="ms-auto d-flex align-items-center">
+            <a href="/admin/" class="btn btn-outline-secondary btn-sm me-2" target="_blank">
+                <i class="bi bi-gear"></i> Admin
+            </a>
+            <a href="/api/" class="btn btn-outline-info btn-sm" target="_blank">
+                <i class="bi bi-code-slash"></i> API
+            </a>
+        </div>
+    </header>
+    
+    <!-- Barra lateral delgada -->
+    <nav class="app-sidebar" id="appSidebar">
+        <ul class="sidebar-menu">
+            <li>
+                <a href="/" class="">
+                    <i class="bi bi-speedometer2"></i>
+                    <span>Dashboard</span>
+                </a>
+            </li>
+            <li>
+                <a href="/fuentes-web/" class="">
+                    <i class="bi bi-globe"></i>
+                    <span>Fuentes Web</span>
+                </a>
+            </li>
+            <li>
+                <a href="/capturas/" class="">
+                    <i class="bi bi-camera"></i>
+                    <span>Capturas</span>
+                </a>
+            </li>
+            <li>
+                <a href="/ingestas/" class="">
+                    <i class="bi bi-database"></i>
+                    <span>Ingestas</span>
+                </a>
+            </li>
+            <li>
+                <a href="/ingestas/propiedades/" class="">
+                    <i class="bi bi-house-door"></i>
+                    <span>Propiedades</span>
+                </a>
+            </li>
+            <li>
+                <a href="/propifai/propiedades/" class="">
+                    <i class="bi bi-house-door-fill"></i>
+                    <span>Propiedades Propify</span>
+                </a>
+            </li>
+            <li>
+                <a href="/requerimientos/lista/" class="">
+                    <i class="bi bi-clipboard-check"></i>
+                    <span>Requerimientos</span>
+                </a>
+            </li>
+            <li>
+                <a href="/matching/masivo/" class="">
+                    <i class="bi bi-lightning-charge-fill"></i>
+                    <span>Matching Masivo</span>
+                </a>
+            </li>
+            <li>
+                <a href="/cuadrantizacion/mapa/" class="">
+                    <i class="bi bi-map"></i>
+                    <span>Cuadrantización</span>
+                </a>
+            </li>
+            <li>
+                <a href="/acm/analisis/" class="">
+                    <i class="bi bi-graph-up"></i>
+                    <span>Análisis Comparativo (ACM)</span>
+                </a>
+            </li>
+            <li>
+                <a href="/market-analysis/dashboard/" class="">
+                    <i class="bi bi-speedometer"></i>
+                    <span>Dashboard Mercado</span>
+                </a>
+            </li>
+            <li>
+                <a href="/market-analysis/heatmap/" class="">
+                    <i class="bi bi-thermometer-high"></i>
+                    <span>Heatmap Mercado</span>
+                </a>
+            </li>
+            <li>
+                <a href="/analisis-crm/" class="active">
+                    <i class="bi bi-people-fill"></i>
+                    <span>Leads CRM</span>
+                </a>
+            </li>
+            <li>
+                <a href="#">
+                    <i class="bi bi-search"></i>
+                    <span>Descubrimiento</span>
+                </a>
+            </li>
+            <li>
+                <a href="#">
+                    <i class="bi bi-gear"></i>
+                    <span>Configuración</span>
+                </a>
+            </li>
+            <li>
+                <a href="#">
+                    <i class="bi bi-question-circle"></i>
+                    <span>Ayuda</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+    
+    <!-- Contenido principal -->
+    <main class="app-content" id="appContent">
+        
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="mb-4">Dashboard de Leads CRM</h1>
+            <p class="lead">Análisis de leads del CRM Propifai (solo lectura)</p>
+        </div>
+    </div>
+
+    <!-- Estadísticas rápidas -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Total Leads</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">459</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-people-fill fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Leads Activos</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">459</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-check-circle-fill fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Últimos 7 días</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">154</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-calendar-week-fill fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Sin Email</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">459</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-envelope-x-fill fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla de leads recientes -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">Leads Recientes (últimos 100)</h6>
+                    <a href="/analisis-crm/leads/" class="btn btn-sm btn-outline-primary">
+                        Ver todos <i class="bi bi-arrow-right"></i>
+                    </a>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover" id="dataTable" width="100%" cellspacing="0">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Nombre</th>
+                                    <th>Teléfono</th>
+                                    <th>Email</th>
+                                    <th>Fecha Entrada</th>
+                                    <th>Estado</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                
+                                <tr>
+                                    <td>472</td>
+                                    <td>Juan Carlos Gonzales</td>
+                                    <td>+51983840417</td>
+                                    <td>-</td>
+                                    <td>23/03/2026 13:24</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/472/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>471</td>
+                                    <td>Patricia Chávez</td>
+                                    <td>+51958121134</td>
+                                    <td>-</td>
+                                    <td>23/03/2026 13:00</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/471/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>391</td>
+                                    <td>Propify Inmobiliaria</td>
+                                    <td>+51983184646</td>
+                                    <td>-</td>
+                                    <td>23/03/2026 12:30</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/391/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>311</td>
+                                    <td>Propify Inmobiliaria</td>
+                                    <td>+51983184646</td>
+                                    <td>-</td>
+                                    <td>23/03/2026 12:30</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/311/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>392</td>
+                                    <td>Rosa Angela Raa Chuquicondor</td>
+                                    <td>+51962221537</td>
+                                    <td>-</td>
+                                    <td>23/03/2026 12:11</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/392/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>312</td>
+                                    <td>Rosa Angela Raa Chuquicondor</td>
+                                    <td>+51962221537</td>
+                                    <td>-</td>
+                                    <td>23/03/2026 12:11</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/312/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>393</td>
+                                    <td>Ximena Heredia</td>
+                                    <td>+51957631049</td>
+                                    <td>-</td>
+                                    <td>23/03/2026 11:38</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/393/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>313</td>
+                                    <td>Ximena Heredia</td>
+                                    <td>+51957631049</td>
+                                    <td>-</td>
+                                    <td>23/03/2026 11:38</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/313/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>394</td>
+                                    <td>Valery Gonzales</td>
+                                    <td>+51977925934</td>
+                                    <td>-</td>
+                                    <td>23/03/2026 11:38</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/394/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>314</td>
+                                    <td>Valery Gonzales</td>
+                                    <td>+51977925934</td>
+                                    <td>-</td>
+                                    <td>23/03/2026 11:38</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/314/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>395</td>
+                                    <td>👸👣👑INGOBERNABLE♥️👅</td>
+                                    <td>+51927883537</td>
+                                    <td>-</td>
+                                    <td>23/03/2026 09:48</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/395/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>315</td>
+                                    <td>👸👣👑INGOBERNABLE♥️👅</td>
+                                    <td>+51927883537</td>
+                                    <td>-</td>
+                                    <td>23/03/2026 09:48</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/315/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>396</td>
+                                    <td>JL</td>
+                                    <td>+51958536719</td>
+                                    <td>-</td>
+                                    <td>23/03/2026 07:57</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/396/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>316</td>
+                                    <td>JL</td>
+                                    <td>+51958536719</td>
+                                    <td>-</td>
+                                    <td>23/03/2026 07:57</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/316/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>397</td>
+                                    <td>Rocio</td>
+                                    <td>+51959374566</td>
+                                    <td>-</td>
+                                    <td>22/03/2026 22:29</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/397/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>317</td>
+                                    <td>Rocio</td>
+                                    <td>+51959374566</td>
+                                    <td>-</td>
+                                    <td>22/03/2026 22:29</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/317/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>398</td>
+                                    <td>Rosario Caceres</td>
+                                    <td>+51940394285</td>
+                                    <td>-</td>
+                                    <td>22/03/2026 21:33</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/398/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>318</td>
+                                    <td>Rosario Caceres</td>
+                                    <td>+51940394285</td>
+                                    <td>-</td>
+                                    <td>22/03/2026 21:33</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/318/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>399</td>
+                                    <td>cccoatas</td>
+                                    <td>+51959405253</td>
+                                    <td>-</td>
+                                    <td>22/03/2026 20:33</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/399/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>319</td>
+                                    <td>cccoatas</td>
+                                    <td>+51959405253</td>
+                                    <td>-</td>
+                                    <td>22/03/2026 20:33</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/319/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>400</td>
+                                    <td>❤️👩‍🏫👩‍❤️‍👩☘️🏠❤️</td>
+                                    <td>+51943166287</td>
+                                    <td>-</td>
+                                    <td>22/03/2026 18:09</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/400/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>320</td>
+                                    <td>❤️👩‍🏫👩‍❤️‍👩☘️🏠❤️</td>
+                                    <td>+51943166287</td>
+                                    <td>-</td>
+                                    <td>22/03/2026 18:09</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/320/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>401</td>
+                                    <td>ROXANA JUANA AVALOS VILDO</td>
+                                    <td>+51980828881</td>
+                                    <td>-</td>
+                                    <td>22/03/2026 18:05</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/401/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>321</td>
+                                    <td>ROXANA JUANA AVALOS VILDO</td>
+                                    <td>+51980828881</td>
+                                    <td>-</td>
+                                    <td>22/03/2026 18:05</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/321/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>402</td>
+                                    <td>...</td>
+                                    <td>+51930766040</td>
+                                    <td>-</td>
+                                    <td>22/03/2026 17:44</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/402/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>322</td>
+                                    <td>...</td>
+                                    <td>+51930766040</td>
+                                    <td>-</td>
+                                    <td>22/03/2026 17:44</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/322/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>403</td>
+                                    <td>cubajuanluis046</td>
+                                    <td>+51958310381</td>
+                                    <td>-</td>
+                                    <td>22/03/2026 16:48</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/403/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>323</td>
+                                    <td>cubajuanluis046</td>
+                                    <td>+51958310381</td>
+                                    <td>-</td>
+                                    <td>22/03/2026 16:48</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/323/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>404</td>
+                                    <td>ccami :)</td>
+                                    <td>+51928441408</td>
+                                    <td>-</td>
+                                    <td>22/03/2026 16:47</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/404/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>324</td>
+                                    <td>ccami :)</td>
+                                    <td>+51928441408</td>
+                                    <td>-</td>
+                                    <td>22/03/2026 16:47</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/324/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>405</td>
+                                    <td>catuntajarateofilo</td>
+                                    <td>+51903327789</td>
+                                    <td>-</td>
+                                    <td>22/03/2026 13:45</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/405/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>325</td>
+                                    <td>catuntajarateofilo</td>
+                                    <td>+51903327789</td>
+                                    <td>-</td>
+                                    <td>22/03/2026 13:45</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/325/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>406</td>
+                                    <td>Abelardo Paredes Nuñez</td>
+                                    <td>+51940815441</td>
+                                    <td>-</td>
+                                    <td>22/03/2026 12:08</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/406/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>326</td>
+                                    <td>Abelardo Paredes Nuñez</td>
+                                    <td>+51940815441</td>
+                                    <td>-</td>
+                                    <td>22/03/2026 12:08</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/326/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>407</td>
+                                    <td>somos extraños de nuevo🌎</td>
+                                    <td>+51994882483</td>
+                                    <td>-</td>
+                                    <td>22/03/2026 07:56</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/407/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>327</td>
+                                    <td>somos extraños de nuevo🌎</td>
+                                    <td>+51994882483</td>
+                                    <td>-</td>
+                                    <td>22/03/2026 07:56</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/327/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>408</td>
+                                    <td>Gustavo Godoy</td>
+                                    <td>+51938449187</td>
+                                    <td>-</td>
+                                    <td>22/03/2026 00:46</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/408/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>328</td>
+                                    <td>Gustavo Godoy</td>
+                                    <td>+51938449187</td>
+                                    <td>-</td>
+                                    <td>22/03/2026 00:46</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/328/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>409</td>
+                                    <td>Claudia</td>
+                                    <td>+51987305598</td>
+                                    <td>-</td>
+                                    <td>21/03/2026 22:57</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/409/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>329</td>
+                                    <td>Claudia</td>
+                                    <td>+51987305598</td>
+                                    <td>-</td>
+                                    <td>21/03/2026 22:57</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/329/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>410</td>
+                                    <td>cruzcoaquira4</td>
+                                    <td>+51920566544</td>
+                                    <td>-</td>
+                                    <td>21/03/2026 22:29</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/410/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>330</td>
+                                    <td>cruzcoaquira4</td>
+                                    <td>+51920566544</td>
+                                    <td>-</td>
+                                    <td>21/03/2026 22:29</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/330/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>411</td>
+                                    <td>Alic0</td>
+                                    <td>+51949270560</td>
+                                    <td>-</td>
+                                    <td>21/03/2026 18:10</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/411/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>331</td>
+                                    <td>Alic0</td>
+                                    <td>+51949270560</td>
+                                    <td>-</td>
+                                    <td>21/03/2026 18:10</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/331/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>412</td>
+                                    <td>LJoya💎</td>
+                                    <td>+51942508236</td>
+                                    <td>-</td>
+                                    <td>21/03/2026 17:11</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/412/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>332</td>
+                                    <td>LJoya💎</td>
+                                    <td>+51942508236</td>
+                                    <td>-</td>
+                                    <td>21/03/2026 17:11</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/332/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>413</td>
+                                    <td>Luis Miranda</td>
+                                    <td>+51903095444</td>
+                                    <td>-</td>
+                                    <td>21/03/2026 12:42</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/413/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>333</td>
+                                    <td>Luis Miranda</td>
+                                    <td>+51903095444</td>
+                                    <td>-</td>
+                                    <td>21/03/2026 12:42</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/333/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>414</td>
+                                    <td>~ Yle ~ 🌷🪷🪴</td>
+                                    <td>+51941134431</td>
+                                    <td>-</td>
+                                    <td>21/03/2026 11:21</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/414/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>334</td>
+                                    <td>~ Yle ~ 🌷🪷🪴</td>
+                                    <td>+51941134431</td>
+                                    <td>-</td>
+                                    <td>21/03/2026 11:21</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/334/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>415</td>
+                                    <td>Korina</td>
+                                    <td>+51942003996</td>
+                                    <td>-</td>
+                                    <td>21/03/2026 09:51</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/415/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>335</td>
+                                    <td>Korina</td>
+                                    <td>+51942003996</td>
+                                    <td>-</td>
+                                    <td>21/03/2026 09:51</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/335/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>416</td>
+                                    <td>Jeffry Kham</td>
+                                    <td>+51940729959</td>
+                                    <td>-</td>
+                                    <td>21/03/2026 06:37</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/416/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>336</td>
+                                    <td>Jeffry Kham</td>
+                                    <td>+51940729959</td>
+                                    <td>-</td>
+                                    <td>21/03/2026 06:37</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/336/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>417</td>
+                                    <td>FIO7</td>
+                                    <td>+51931220753</td>
+                                    <td>-</td>
+                                    <td>21/03/2026 03:19</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/417/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>337</td>
+                                    <td>FIO7</td>
+                                    <td>+51931220753</td>
+                                    <td>-</td>
+                                    <td>21/03/2026 03:19</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/337/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>418</td>
+                                    <td>Norka</td>
+                                    <td>+51959605760</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 22:46</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/418/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>338</td>
+                                    <td>Norka</td>
+                                    <td>+51959605760</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 22:46</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/338/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>419</td>
+                                    <td>rositaccahuanacaballero</td>
+                                    <td>+51993381992</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 22:39</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/419/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>339</td>
+                                    <td>rositaccahuanacaballero</td>
+                                    <td>+51993381992</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 22:39</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/339/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>420</td>
+                                    <td>wilylayme9</td>
+                                    <td>+51994832443</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 22:28</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/420/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>340</td>
+                                    <td>wilylayme9</td>
+                                    <td>+51994832443</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 22:28</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/340/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>421</td>
+                                    <td>x. m. m</td>
+                                    <td>+51974755561</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 18:44</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/421/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>341</td>
+                                    <td>x. m. m</td>
+                                    <td>+51974755561</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 18:44</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/341/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>422</td>
+                                    <td>Rodolfo Pablo Escobedo Ba</td>
+                                    <td>+51959928195</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 18:07</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/422/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>342</td>
+                                    <td>Rodolfo Pablo Escobedo Ba</td>
+                                    <td>+51959928195</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 18:07</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/342/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>423</td>
+                                    <td>Alejo Gallo</td>
+                                    <td>+51926900347</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 16:43</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/423/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>343</td>
+                                    <td>Alejo Gallo</td>
+                                    <td>+51926900347</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 16:43</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/343/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>424</td>
+                                    <td>Elena Gonzalez Zuñiga</td>
+                                    <td>+51959290039</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 16:24</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/424/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>344</td>
+                                    <td>Elena Gonzalez Zuñiga</td>
+                                    <td>+51959290039</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 16:24</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/344/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>425</td>
+                                    <td>Vicky</td>
+                                    <td>+51986723703</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 16:06</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/425/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>345</td>
+                                    <td>Vicky</td>
+                                    <td>+51986723703</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 16:06</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/345/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>426</td>
+                                    <td>Mariela Mendoza</td>
+                                    <td>+51959306703</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 15:56</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/426/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>346</td>
+                                    <td>Mariela Mendoza</td>
+                                    <td>+51959306703</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 15:56</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/346/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>427</td>
+                                    <td>Surtimax</td>
+                                    <td>+51992501886</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 15:13</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/427/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>347</td>
+                                    <td>Surtimax</td>
+                                    <td>+51992501886</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 15:13</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/347/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>428</td>
+                                    <td>Chiito</td>
+                                    <td>+51956335761</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 14:02</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/428/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>348</td>
+                                    <td>Chiito</td>
+                                    <td>+51956335761</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 14:02</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/348/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>429</td>
+                                    <td>Maria Elena</td>
+                                    <td>+51959860476</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 13:56</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/429/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>349</td>
+                                    <td>Maria Elena</td>
+                                    <td>+51959860476</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 13:56</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/349/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>430</td>
+                                    <td>Pao</td>
+                                    <td>+51959247701</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 13:40</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/430/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>350</td>
+                                    <td>Pao</td>
+                                    <td>+51959247701</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 13:40</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/350/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>431</td>
+                                    <td>Alexander</td>
+                                    <td>+51950552461</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 13:30</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/431/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>351</td>
+                                    <td>Alexander</td>
+                                    <td>+51950552461</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 13:30</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/351/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>432</td>
+                                    <td>Alexander</td>
+                                    <td>+51950552461</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 13:22</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/432/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>352</td>
+                                    <td>Alexander</td>
+                                    <td>+51950552461</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 13:22</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/352/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>433</td>
+                                    <td>Alexander</td>
+                                    <td>+51950552461</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 13:22</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/433/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>353</td>
+                                    <td>Alexander</td>
+                                    <td>+51950552461</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 13:22</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/353/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>434</td>
+                                    <td>Alexander</td>
+                                    <td>+51950552461</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 13:20</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/434/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>354</td>
+                                    <td>Alexander</td>
+                                    <td>+51950552461</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 13:20</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/354/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>435</td>
+                                    <td>Alexander</td>
+                                    <td>+51950552461</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 13:20</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/435/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>355</td>
+                                    <td>Alexander</td>
+                                    <td>+51950552461</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 13:20</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/355/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>436</td>
+                                    <td>caro</td>
+                                    <td>+51951488121</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 13:11</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/436/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>356</td>
+                                    <td>caro</td>
+                                    <td>+51951488121</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 13:11</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/356/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>437</td>
+                                    <td>Valery Gonzales</td>
+                                    <td>+51977925934</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 12:40</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/437/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>357</td>
+                                    <td>Valery Gonzales</td>
+                                    <td>+51977925934</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 12:40</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/357/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>438</td>
+                                    <td>Gloria Pinto 🌺</td>
+                                    <td>+51986867177</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 11:38</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/438/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>358</td>
+                                    <td>Gloria Pinto 🌺</td>
+                                    <td>+51986867177</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 11:38</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/358/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>439</td>
+                                    <td>944633393</td>
+                                    <td>+51944633393</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 09:04</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/439/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>359</td>
+                                    <td>944633393</td>
+                                    <td>+51944633393</td>
+                                    <td>-</td>
+                                    <td>20/03/2026 09:04</td>
+                                    <td>
+                                        
+                                        <span class="badge bg-success">Activo</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/analisis-crm/leads/359/" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Distribución por estado y canal -->
+    <div class="row">
+        <div class="col-lg-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Leads por Estado</h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Estado ID</th>
+                                    <th>Cantidad</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                
+                                <tr>
+                                    <td>1</td>
+                                    <td>258</td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>3</td>
+                                    <td>96</td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>4</td>
+                                    <td>59</td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>2</td>
+                                    <td>15</td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>12</td>
+                                    <td>9</td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>11</td>
+                                    <td>6</td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>6</td>
+                                    <td>6</td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>5</td>
+                                    <td>5</td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>7</td>
+                                    <td>3</td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>10</td>
+                                    <td>2</td>
+                                </tr>
+                                
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Leads por Canal</h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Canal ID</th>
+                                    <th>Cantidad</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                
+                                <tr>
+                                    <td>1</td>
+                                    <td>459</td>
+                                </tr>
+                                
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráfico de evolución de leads por día del mes -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Evolución de Leads por Día (Mes Actual)</h6>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container" style="position: relative; height:400px; width:100%">
+                        <canvas id="leadsEvolutionChart"></canvas>
+                    </div>
+                    <p class="text-muted mt-3 mb-0">
+                        <i class="bi bi-info-circle"></i> Muestra la cantidad de leads registrados por día usando el campo <code>date_entry</code>.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Enlaces a otras vistas -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Otras vistas de análisis</h5>
+                    <p class="card-text">Explora más detalles sobre los leads.</p>
+                    <a href="/analisis-crm/leads/" class="btn btn-primary mx-2">
+                        <i class="bi bi-list-ul"></i> Lista completa
+                    </a>
+                    <a href="/analisis-crm/analytics/" class="btn btn-success mx-2">
+                        <i class="bi bi-bar-chart-line"></i> Análisis detallado
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+    </main>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Toggle sidebar en móviles
+        document.addEventListener('DOMContentLoaded', function() {
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            const appSidebar = document.getElementById('appSidebar');
+            const appContent = document.getElementById('appContent');
+            
+            if (sidebarToggle) {
+                sidebarToggle.addEventListener('click', function() {
+                    document.body.classList.toggle('sidebar-open');
+                });
+            }
+            
+            // Cerrar sidebar al hacer clic fuera en móviles
+            appContent.addEventListener('click', function() {
+                if (window.innerWidth <= 768 && document.body.classList.contains('sidebar-open')) {
+                    document.body.classList.remove('sidebar-open');
+                }
+            });
+            
+            // Actualizar clase activa en menú
+            const currentPath = window.location.pathname;
+            const menuItems = document.querySelectorAll('.sidebar-menu a');
+            
+            menuItems.forEach(item => {
+                if (item.getAttribute('href') === currentPath) {
+                    item.classList.add('active');
+                }
+            });
+        });
+    </script>
+    
+    
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script id="days-data" type="application/json">""</script>
+<script id="counts-data" type="application/json">""</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const ctx = document.getElementById('leadsEvolutionChart').getContext('2d');
+    
+    // Obtener datos desde los elementos script
+    const days = JSON.parse(document.getElementById('days-data').textContent);
+    const counts = JSON.parse(document.getElementById('counts-data').textContent);
+    
+    // Colores
+    const primaryColor = '#10b981';  // Verde esmeralda del tema
+    const hoverColor = '#059669';
+    const gridColor = 'rgba(0, 0, 0, 0.05)';
+    
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: days,
+            datasets: [{
+                label: 'Leads por día',
+                data: counts,
+                backgroundColor: primaryColor,
+                borderColor: hoverColor,
+                borderWidth: 1,
+                borderRadius: 4,
+                hoverBackgroundColor: hoverColor,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `Leads: ${context.raw}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: {
+                        color: gridColor,
+                    },
+                    title: {
+                        display: true,
+                        text: 'Día del mes'
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: gridColor,
+                    },
+                    title: {
+                        display: true,
+                        text: 'Cantidad de leads'
+                    },
+                    ticks: {
+                        stepSize: 1,
+                        precision: 0
+                    }
+                }
+            }
+        }
+    });
+});
+</script>
+
+</body>
+</html>

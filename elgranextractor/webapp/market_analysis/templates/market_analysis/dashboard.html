@@ -1,0 +1,463 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ title }} - El Gran Extractor{% endblock %}
+
+{% block extra_css %}
+<style>
+    .dashboard-container {
+        min-height: calc(100vh - 120px);
+    }
+    
+    .dashboard-card {
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+        border: none;
+        height: 100%;
+    }
+    
+    .dashboard-card .card-header {
+        background-color: #10b981;
+        color: white;
+        border-bottom: none;
+        border-radius: 8px 8px 0 0 !important;
+    }
+    
+    .kpi-card {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-left: 4px solid #10b981;
+        padding: 20px;
+        border-radius: 8px;
+        height: 100%;
+    }
+    
+    .kpi-value {
+        font-size: 2.5rem;
+        font-weight: 800;
+        color: #065f46;
+        line-height: 1;
+    }
+    
+    .kpi-label {
+        font-size: 0.9rem;
+        color: #6c757d;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-top: 5px;
+    }
+    
+    .kpi-subvalue {
+        font-size: 0.9rem;
+        color: #6c757d;
+    }
+    
+    .progress-card {
+        background-color: white;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 15px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    .progress-label {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 5px;
+    }
+    
+    .progress-label span:first-child {
+        font-weight: 600;
+        color: #212529;
+    }
+    
+    .progress-label span:last-child {
+        color: #6c757d;
+        font-size: 0.9rem;
+    }
+    
+    .chart-container {
+        position: relative;
+        height: 300px;
+        width: 100%;
+    }
+    
+    .quality-badge {
+        display: inline-block;
+        padding: 3px 10px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+    
+    .quality-excellent {
+        background-color: #d1fae5;
+        color: #065f46;
+    }
+    
+    .quality-good {
+        background-color: #fef3c7;
+        color: #92400e;
+    }
+    
+    .quality-fair {
+        background-color: #fde68a;
+        color: #92400e;
+    }
+    
+    .quality-poor {
+        background-color: #fecaca;
+        color: #991b1b;
+    }
+    
+    .source-tabs .nav-link {
+        color: #6c757d;
+        font-weight: 500;
+    }
+    
+    .source-tabs .nav-link.active {
+        color: #10b981;
+        border-bottom: 3px solid #10b981;
+        background-color: transparent;
+    }
+    
+    .trend-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 0.9rem;
+    }
+    
+    .trend-up {
+        color: #10b981;
+    }
+    
+    .trend-down {
+        color: #ef4444;
+    }
+    
+    .trend-neutral {
+        color: #6c757d;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <div class="container-fluid py-3">
+        <!-- Header -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h1 class="h3 mb-0">
+                            <i class="bi bi-speedometer2 me-2"></i>{{ title }}
+                        </h1>
+                        <p class="text-muted mb-0">
+                            Análisis de calidad y completitud de los datos inmobiliarios
+                        </p>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-outline-primary" id="btnRefreshDashboard">
+                            <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
+                        </button>
+                        <button class="btn btn-primary" id="btnExportReport">
+                            <i class="bi bi-download me-1"></i>Exportar Reporte
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPIs principales -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-3">
+                <div class="kpi-card">
+                    <div class="kpi-value" id="kpiTotalProperties">0</div>
+                    <div class="kpi-label">Total Propiedades</div>
+                    <div class="kpi-subvalue mt-2">
+                        <div class="d-flex justify-content-between">
+                            <span>Locales:</span>
+                            <span id="kpiLocalCount">0</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span>Propifai:</span>
+                            <span id="kpiPropifaiCount">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-3">
+                <div class="kpi-card">
+                    <div class="kpi-value" id="kpiCompleteData">0%</div>
+                    <div class="kpi-label">Datos Completos</div>
+                    <div class="kpi-subvalue mt-2">
+                        <span id="kpiCompleteCount">0</span> de <span id="kpiTotalCount">0</span> propiedades
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-3">
+                <div class="kpi-card">
+                    <div class="kpi-value" id="kpiProblematic">0</div>
+                    <div class="kpi-label">Propiedades Problemáticas</div>
+                    <div class="kpi-subvalue mt-2">
+                        <div class="d-flex justify-content-between">
+                            <span>Sin coordenadas/precio:</span>
+                            <span id="kpiProblematicCount">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-3">
+                <div class="kpi-card">
+                    <div class="kpi-value" id="kpiAvgQuality">0%</div>
+                    <div class="kpi-label">Calidad Promedio</div>
+                    <div class="kpi-subvalue mt-2">
+                        <span class="quality-badge quality-fair" id="kpiQualityBadge">Pendiente</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3">
+            <!-- Panel izquierdo: Métricas de calidad -->
+            <div class="col-lg-8">
+                <!-- Tabs para fuentes de datos -->
+                <div class="dashboard-card card mb-3">
+                    <div class="card-header py-2">
+                        <ul class="nav nav-tabs card-header-tabs source-tabs" id="sourceTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="local-tab" data-bs-toggle="tab" data-bs-target="#local" type="button">
+                                    <i class="bi bi-database me-1"></i>Propiedades Locales
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="propifai-tab" data-bs-toggle="tab" data-bs-target="#propifai" type="button">
+                                    <i class="bi bi-cloud me-1"></i>Propiedades Propifai
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="comparison-tab" data-bs-toggle="tab" data-bs-target="#comparison" type="button">
+                                    <i class="bi bi-bar-chart me-1"></i>Comparación
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="card-body">
+                        <div class="tab-content" id="sourceTabContent">
+                            <!-- Tab Local -->
+                            <div class="tab-pane fade show active" id="local" role="tabpanel">
+                                <h5 class="mb-3">Métricas de Calidad - Propiedades Locales</h5>
+                                
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="progress-card">
+                                            <div class="progress-label">
+                                                <span>Coordenadas</span>
+                                                <span id="localCoordsPct">0%</span>
+                                            </div>
+                                            <div class="progress" style="height: 8px;">
+                                                <div class="progress-bar bg-success" id="localCoordsBar" style="width: 0%"></div>
+                                            </div>
+                                            <div class="small text-muted mt-1">
+                                                <span id="localCoordsCount">0</span> de <span id="localCoordsTotal">0</span> propiedades
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="progress-card">
+                                            <div class="progress-label">
+                                                <span>Precio</span>
+                                                <span id="localPricePct">0%</span>
+                                            </div>
+                                            <div class="progress" style="height: 8px;">
+                                                <div class="progress-bar bg-info" id="localPriceBar" style="width: 0%"></div>
+                                            </div>
+                                            <div class="small text-muted mt-1">
+                                                <span id="localPriceCount">0</span> de <span id="localPriceTotal">0</span> propiedades
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-md-6">
+                                        <div class="progress-card">
+                                            <div class="progress-label">
+                                                <span>Área</span>
+                                                <span id="localAreaPct">0%</span>
+                                            </div>
+                                            <div class="progress" style="height: 8px;">
+                                                <div class="progress-bar bg-warning" id="localAreaBar" style="width: 0%"></div>
+                                            </div>
+                                            <div class="small text-muted mt-1">
+                                                <span id="localAreaCount">0</span> de <span id="localAreaTotal">0</span> propiedades
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="progress-card">
+                                            <div class="progress-label">
+                                                <span>Tipo de Propiedad</span>
+                                                <span id="localTypePct">0%</span>
+                                            </div>
+                                            <div class="progress" style="height: 8px;">
+                                                <div class="progress-bar bg-primary" id="localTypeBar" style="width: 0%"></div>
+                                            </div>
+                                            <div class="small text-muted mt-1">
+                                                <span id="localTypeCount">0</span> de <span id="localTypeTotal">0</span> propiedades
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-4">
+                                    <h6>Distribución por Tipo de Propiedad</h6>
+                                    <div class="chart-container">
+                                        <canvas id="localTypeChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Tab Propifai -->
+                            <div class="tab-pane fade" id="propifai" role="tabpanel">
+                                <h5 class="mb-3">Métricas de Calidad - Propiedades Propifai</h5>
+                                
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="progress-card">
+                                            <div class="progress-label">
+                                                <span>Coordenadas</span>
+                                                <span id="propifaiCoordsPct">0%</span>
+                                            </div>
+                                            <div class="progress" style="height: 8px;">
+                                                <div class="progress-bar bg-success" id="propifaiCoordsBar" style="width: 0%"></div>
+                                            </div>
+                                            <div class="small text-muted mt-1">
+                                                <span id="propifaiCoordsCount">0</span> de <span id="propifaiCoordsTotal">0</span> propiedades
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="progress-card">
+                                            <div class="progress-label">
+                                                <span>Precio</span>
+                                                <span id="propifaiPricePct">0%</span>
+                                            </div>
+                                            <div class="progress" style="height: 8px;">
+                                                <div class="progress-bar bg-info" id="propifaiPriceBar" style="width: 0%"></div>
+                                            </div>
+                                            <div class="small text-muted mt-1">
+                                                <span id="propifaiPriceCount">0</span> de <span id="propifaiPriceTotal">0</span> propiedades
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-md-6">
+                                        <div class="progress-card">
+                                            <div class="progress-label">
+                                                <span>Área</span>
+                                                <span id="propifaiAreaPct">0%</span>
+                                            </div>
+                                            <div class="progress" style="height: 8px;">
+                                                <div class="progress-bar bg-warning" id="propifaiAreaBar" style="width: 0%"></div>
+                                            </div>
+                                            <div class="small text-muted mt-1">
+                                                <span id="propifaiAreaCount">0</span> de <span id="propifaiAreaTotal">0</span> propiedades
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="progress-card">
+                                            <div class="progress-label">
+                                                <span>Tipo de Propiedad</span>
+                                                <span id="propifaiTypePct">0%</span>
+                                            </div>
+                                            <div class="progress" style="height: 8px;">
+                                                <div class="progress-bar bg-primary" id="propifaiTypeBar" style="width: 0%"></div>
+                                            </div>
+                                            <div class="small text-muted mt-1">
+                                                <span id="propifaiTypeCount">0</span> de <span id="propifaiTypeTotal">0</span> propiedades
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-4">
+                                    <h6>Distribución por Tipo de Propiedad</h6>
+                                    <div class="chart-container">
+                                        <canvas id="propifaiTypeChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Tab Comparación -->
+                            <div class="tab-pane fade" id="comparison" role="tabpanel">
+                                <h5 class="mb-3">Comparación entre Fuentes</h5>
+                                
+                                <div class="row">
+                                    <div class="col-md-12">
+                                        <div class="chart-container">
+                                            <canvas id="comparisonChart"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row mt-4">
+                                    <div class="col-md-12">
+                                        <h6>Tendencias de Ingesta (Últimos 6 meses)</h6>
+                                        <div class="chart-container">
+                                            <canvas id="trendChart"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Panel derecho: Resumen y acciones -->
+            <div class="col-lg-4">
+                <div class="dashboard-card card mb-3">
+                    <div class="card-header py-2">
+                        <h5 class="mb-0">
+                            <i class="bi bi-clipboard-data me-2"></i>Resumen de Calidad
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-4">
+                            <h6>Calificación General</h6>
+                            <div class="d-flex align-items-center mb-3">
+                                <div class="me-3">
+                                    <div class="display-4 fw-bold text-success" id="overallScore">0</div>
+                                </div>
+                                <div>
+                                    <div class="quality-badge quality-excellent mb-1" id="overallBadge">Excelente</div>
+                                    <div class="small text-muted" id="overallDescription">Basado en 4 métricas clave</div>
+                                </div>
+                            </div>
+                            
+                            <div class="progress" style="height: 10px;">
+                                <div class="progress-bar bg-success" id="overallProgress" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <h6>Recomendaciones</h6>
+                            <div class="list-group list-group-flush" id="recommendationsList">
+                                <div class="list-group-item px-0 py-2 border-0">
+                                    <div class="d-flex align-items-center">
+                                        <i class="bi bi-check-circle-fill text-success me-2"></i>
+                                        <div class="small">Cargando recomendaciones...</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Scripts específicos del dashboard -->
+<script src="{% static 'market_analysis/js/dashboard.js' %}"></script>
+
+{% endblock %}

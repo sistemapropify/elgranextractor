@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if role %}Editar Rol{% else %}Crear Nuevo Rol{% endif %} - Propifai Intelligence Layer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #0d1117;
+            color: #c9d1d9;
+            line-height: 1.6;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #30363d;
+        }
+        
+        .header h1 {
+            color: #58a6ff;
+            font-size: 28px;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary {
+            background-color: #238636;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background-color: #2ea043;
+        }
+        
+        .btn-secondary {
+            background-color: #21262d;
+            color: #c9d1d9;
+            border: 1px solid #30363d;
+        }
+        
+        .btn-secondary:hover {
+            background-color: #30363d;
+        }
+        
+        .form-container {
+            background-color: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .form-group {
+            margin-bottom: 25px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #8b949e;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        
+        .form-control {
+            width: 100%;
+            padding: 12px 15px;
+            background-color: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            color: #c9d1d9;
+            font-size: 15px;
+        }
+        
+        .form-control:focus {
+            outline: none;
+            border-color: #58a6ff;
+        }
+        
+        textarea.form-control {
+            min-height: 100px;
+            resize: vertical;
+        }
+        
+        .checkbox-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-top: 10px;
+        }
+        
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .checkbox-item input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: #238636;
+        }
+        
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 15px;
+            background-color: #21262d;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .checkbox-label:hover {
+            background-color: #30363d;
+            border-color: #58a6ff;
+        }
+        
+        .checkbox-label.selected {
+            background-color: rgba(35, 134, 54, 0.2);
+            border-color: #238636;
+            color: #56d364;
+        }
+        
+        .level-badge {
+            padding: 4px 8px;
+            background-color: #238636;
+            color: white;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .level-badge.level-1 { background-color: #0d4429; }
+        .level-badge.level-2 { background-color: #196c2e; }
+        .level-badge.level-3 { background-color: #238636; }
+        .level-badge.level-4 { background-color: #2ea043; }
+        .level-badge.level-5 { background-color: #3fb950; }
+        
+        .form-actions {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #30363d;
+        }
+        
+        .messages {
+            margin-bottom: 20px;
+        }
+        
+        .alert {
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+        }
+        
+        .alert-success {
+            background-color: rgba(35, 134, 54, 0.2);
+            border: 1px solid #238636;
+            color: #56d364;
+        }
+        
+        .alert-error {
+            background-color: rgba(218, 54, 51, 0.2);
+            border: 1px solid #da3633;
+            color: #f85149;
+        }
+        
+        .alert-info {
+            background-color: rgba(56, 139, 253, 0.2);
+            border: 1px solid #388bfd;
+            color: #79c0ff;
+        }
+        
+        .help-text {
+            color: #8b949e;
+            font-size: 13px;
+            margin-top: 5px;
+        }
+        
+        .level-description {
+            background-color: #21262d;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        
+        .level-description h4 {
+            color: #58a6ff;
+            margin-bottom: 10px;
+        }
+        
+        .level-description ul {
+            list-style-type: none;
+            padding-left: 0;
+        }
+        
+        .level-description li {
+            margin-bottom: 8px;
+            padding-left: 20px;
+            position: relative;
+        }
+        
+        .level-description li:before {
+            content: "•";
+            color: #238636;
+            position: absolute;
+            left: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>{% if role %}✏️ Editar Rol{% else %}➕ Crear Nuevo Rol{% endif %}</h1>
+            <a href="{% url 'intelligence:role_list' %}" class="btn btn-secondary">← Volver a la lista</a>
+        </div>
+        
+        <!-- Mensajes -->
+        <div class="messages">
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        </div>
+        
+        <!-- Formulario -->
+        <form method="post" class="form-container">
+            {% csrf_token %}
+            
+            <div class="form-group">
+                <label for="name">Nombre del rol *</label>
+                <input type="text" id="name" name="name" class="form-control" 
+                       placeholder="Ej: Administrador, Usuario Básico, Analista..." 
+                       value="{{ role.name|default:'' }}" required>
+                <div class="help-text">Nombre descriptivo para identificar el rol en el sistema.</div>
+            </div>
+            
+            <div class="form-group">
+                <label for="description">Descripción</label>
+                <textarea id="description" name="description" class="form-control" 
+                          placeholder="Describe las capacidades y permisos de este rol...">{{ role.description|default:'' }}</textarea>
+                <div class="help-text">Opcional. Breve descripción del propósito y capacidades del rol.</div>
+            </div>
+            
+            <div class="form-group">
+                <label>Niveles permitidos *</label>
+                <div class="help-text">Selecciona uno o más niveles de acceso que este rol puede tener.</div>
+                
+                <div class="checkbox-group">
+                    {% for value, label in level_choices %}
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="level_{{ value }}" name="allowed_levels" 
+                                   value="{{ value }}" 
+                                   {% if role and value in role.allowed_levels %}checked{% endif %}>
+                            <label for="level_{{ value }}" class="checkbox-label {% if role and value in role.allowed_levels %}selected{% endif %}">
+                                <span class="level-badge level-{{ value }}">Nivel {{ value }}</span>
+                                <span>{{ label }}</span>
+                            </label>
+                        </div>
+                    {% endfor %}
+                </div>
+                
+                <div class="help-text">Puedes seleccionar múltiples niveles. Los usuarios con este rol tendrán acceso a todas las capacidades de los niveles seleccionados.</div>
+            </div>
+            
+            <div class="level-description">
+                <h4>📚 Descripción de los niveles</h4>
+                <ul>
+                    <li><strong>Nivel 1 - Memoria pura:</strong> Acceso básico a conversaciones y memoria de sesión.</li>
+                    <li><strong>Nivel 2 - Memoria + Conocimiento:</strong> Incluye acceso a la base de conocimiento RAG.</li>
+                    <li><strong>Nivel 3 - Memoria + Conocimiento + Métricas:</strong> Acceso a métricas y análisis básicos.</li>
+                    <li><strong>Nivel 4 - Acceso completo + Analytics:</strong> Acceso a todas las funcionalidades excepto administración.</li>
+                    <li><strong>Nivel 5 - Administrador total:</strong> Control completo del sistema, incluyendo configuración y gestión de usuarios.</li>
+                </ul>
+            </div>
+            
+            <div class="form-actions">
+                <a href="{% url 'intelligence:role_list' %}" class="btn btn-secondary">Cancelar</a>
+                <button type="submit" class="btn btn-primary">
+                    {% if role %}💾 Guardar Cambios{% else %}✅ Crear Rol{% endif %}
+                </button>
+            </div>
+        </form>
+        
+        <div style="text-align: center; color: #8b949e; font-size: 14px; margin-top: 30px;">
+            <p>Propifai Intelligence Layer • Dashboard de Configuración • {% if role %}Editando rol "{{ role.name }}"{% else %}Creando nuevo rol{% endif %}</p>
+        </div>
+    </div>
+    
+    <script>
+        // Mejorar la experiencia de los checkboxes
+        document.querySelectorAll('.checkbox-label').forEach(label => {
+            label.addEventListener('click', function(e) {
+                if (e.target.tagName === 'INPUT') return;
+                
+                const checkbox = this.previousElementSibling;
+                checkbox.checked = !checkbox.checked;
+                
+                if (checkbox.checked) {
+                    this.classList.add('selected');
+                } else {
+                    this.classList.remove('selected');
+                }
+            });
+        });
+        
+        // Validación del formulario
+        document.querySelector('form').addEventListener('submit', function(e) {
+            const name = document.getElementById('name').value.trim();
+            const checkboxes = document.querySelectorAll('input[name="allowed_levels"]:checked');
+            
+            if (!name) {
+                e.preventDefault();
+                alert('Por favor, ingresa un nombre para el rol.');
+                return;
+            }
+            
+            if (checkboxes.length === 0) {
+                e.preventDefault();
+                alert('Por favor, selecciona al menos un nivel permitido.');
+                return;
+            }
+        });
+    </script>
+</body>
+</html>

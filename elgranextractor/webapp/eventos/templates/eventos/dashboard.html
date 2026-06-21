@@ -1,0 +1,932 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Dashboard de Eventos - El Gran Extractor{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">
+                    <i class="bi bi-calendar-event me-2"></i>Dashboard de Eventos
+                </h1>
+                <div class="d-flex gap-2">
+                    <a href="?dia={{ hoy }}" class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-calendar-day"></i> Hoy
+                    </a>
+                    <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#filtrosModal">
+                        <i class="bi bi-funnel"></i> Filtros
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estadísticas -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Total Eventos</h6>
+                            <h3 class="mb-0">{{ total_eventos|intcomma }}</h3>
+                        </div>
+                        <div class="bg-primary bg-opacity-10 p-3 rounded-circle">
+                            <i class="bi bi-calendar-check text-primary fs-4"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Eventos Hoy</h6>
+                            <h3 class="mb-0">{{ eventos_hoy|intcomma }}</h3>
+                        </div>
+                        <div class="bg-success bg-opacity-10 p-3 rounded-circle">
+                            <i class="bi bi-calendar-day text-success fs-4"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Eventos Semana</h6>
+                            <h3 class="mb-0">{{ eventos_semana|intcomma }}</h3>
+                        </div>
+                        <div class="bg-info bg-opacity-10 p-3 rounded-circle">
+                            <i class="bi bi-calendar-week text-info fs-4"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Página Actual</h6>
+                            <h3 class="mb-0">{{ page_obj.number }}/{{ page_obj.paginator.num_pages }}</h3>
+                        </div>
+                        <div class="bg-warning bg-opacity-10 p-3 rounded-circle">
+                            <i class="bi bi-file-text text-warning fs-4"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros activos -->
+    {% if filtros %}
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="alert alert-info py-2">
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-funnel me-2"></i>
+                    <span class="me-3">Filtros activos:</span>
+                    {% for key, value in filtros.items %}
+                    <span class="badge bg-primary me-2">
+                        {% if key == 'dia' %}Día: {{ value }}
+                        {% elif key == 'propiedad' %}Propiedad ID: {{ value }}
+                        {% elif key == 'tipo' %}Tipo ID: {{ value }}
+                        {% elif key == 'agente' %}Agente ID: {{ value }}
+                        {% else %}{{ key }}: {{ value }}{% endif %}
+                        <a href="?{% for k, v in filtros.items %}{% if k != key %}{{ k }}={{ v }}&{% endif %}{% endfor %}" class="text-white ms-1">
+                            <i class="bi bi-x"></i>
+                        </a>
+                    </span>
+                    {% endfor %}
+                    <a href="?" class="ms-auto btn btn-sm btn-outline-info">Limpiar todos</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Gráfico de evolución semanal -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-graph-up me-2"></i>Evolución Semanal de Eventos
+                    </h5>
+                    <div class="d-flex align-items-center">
+                        <small class="text-muted me-3">Mostrar tipos:</small>
+                        <div class="form-check form-check-inline" id="graficoFiltrosContainer">
+                            {% for tipo in evolucion_semanal.tipos_evento %}
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input tipo-checkbox"
+                                       type="checkbox"
+                                       id="tipo_{{ tipo.id }}"
+                                       value="{{ tipo.id }}"
+                                       checked
+                                       data-color="{{ tipo.color }}"
+                                       data-name="{{ tipo.name }}">
+                                <label class="form-check-label" for="tipo_{{ tipo.id }}">
+                                    <span class="badge" style="background-color: {{ tipo.color }}; color: white; padding: 2px 8px;">
+                                        {{ tipo.name }} ({{ tipo.total_semana }})
+                                    </span>
+                                </label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <button class="btn btn-sm btn-outline-secondary ms-2" id="toggleAllTipos">
+                            <i class="bi bi-eye"></i> Mostrar/Ocultar Todos
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container" style="position: relative; height: 300px;">
+                        <canvas id="evolucionSemanalChart"></canvas>
+                    </div>
+                    <div class="mt-3 text-center text-muted small">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Gráfico muestra la cantidad de eventos por tipo durante los últimos 7 días
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Matriz Agente x Semana -->
+    <style>
+/* Estilos para el mapa de calor tipo semáforo */
+.matriz-bajo {
+    background-color: #ff6b6b !important; /* Rojo */
+    color: white !important;
+}
+.matriz-medio {
+    background-color: #ffd93d !important; /* Amarillo */
+    color: #333 !important;
+}
+.matriz-alto {
+    background-color: #6bcf7f !important; /* Verde */
+    color: white !important;
+}
+/* Asegurar que las celdas tengan un padding adecuado */
+#matrizAgenteSemana td {
+    transition: background-color 0.3s ease;
+}
+</style>
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-table me-2"></i>Matriz Agente x Semana
+                    </h5>
+                    <div class="d-flex align-items-center">
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="checkbox" id="mostrarPorcentajes">
+                            <label class="form-check-label" for="mostrarPorcentajes">
+                                Mostrar porcentajes
+                            </label>
+                        </div>
+                        <div class="ms-3">
+                            <select class="form-select form-select-sm" id="filtroTipoEvento" style="width: 200px;">
+                                <option value="todos">Todos los tipos de evento</option>
+                                {% for tipo in matriz_agente_semana.tipos_evento %}
+                                <option value="{{ tipo.id }}">{{ tipo.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover mb-0" id="matrizAgenteSemana">
+                            <thead class="table-light">
+                                <tr>
+                                    <th rowspan="2" class="align-middle">Agente</th>
+                                    <th colspan="{{ matriz_agente_semana.semanas_labels|length }}" class="text-center">
+                                        Semanas (últimas {{ matriz_agente_semana.semanas_labels|length }} semanas)
+                                    </th>
+                                    <th rowspan="2" class="align-middle">Total</th>
+                                </tr>
+                                <tr>
+                                    {% for label in matriz_agente_semana.semanas_labels %}
+                                    <th class="text-center small">{{ label }}</th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for agente in matriz_agente_semana.agentes %}
+                                <tr data-agente-id="{{ agente.id }}">
+                                    <td class="fw-medium">{{ agente.nombre_completo }}</td>
+                                    {% for semana in matriz_agente_semana.semanas_iso %}
+                                    <td class="text-center" data-semana="{{ semana }}" data-agente-id="{{ agente.id }}">
+                                        <div class="matriz-celda">
+                                            <!-- Los valores se llenarán con JavaScript -->
+                                            <span class="matriz-valor">-</span>
+                                            <small class="matriz-porcentaje text-muted d-none">-</small>
+                                        </div>
+                                    </td>
+                                    {% endfor %}
+                                    <td class="text-center fw-bold">
+                                        <span class="total-agente" data-agente-id="{{ agente.id }}">0</span>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="{{ matriz_agente_semana.semanas_labels|length|add:2 }}" class="text-center py-4 text-muted">
+                                        No hay datos de agentes para mostrar.
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot>
+                                <tr class="table-light">
+                                    <td class="fw-medium">Total Semana</td>
+                                    {% for semana in matriz_agente_semana.semanas_iso %}
+                                    <td class="text-center fw-bold">
+                                        <span class="total-semana" data-semana="{{ semana }}">0</span>
+                                    </td>
+                                    {% endfor %}
+                                    <td class="text-center fw-bold">
+                                        <span id="total-general">0</span>
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    <div class="mt-3 text-center text-muted small">
+                        <i class="bi bi-info-circle me-1"></i>
+                        La matriz muestra la cantidad total de eventos por agente por semana. Seleccione un tipo de evento para ver solo ese tipo.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla de eventos -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Código</th>
+                                    <th>Título</th>
+                                    <th>Fecha</th>
+                                    <th>Hora Inicio</th>
+                                    <th>Hora Fin</th>
+                                    <th>Interesado</th>
+                                    <th>Propiedad</th>
+                                    <th>Coordenadas</th>
+                                    <th>Tipo</th>
+                                    <th>Agente</th>
+                                    <th>Estado</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in eventos_con_propiedad %}
+                                <tr>
+                                    <td><span class="badge bg-secondary">#{{ item.evento.id }}</span></td>
+                                    <td><code>{{ item.evento.code }}</code></td>
+                                    <td>
+                                        <strong>{{ item.evento.titulo|truncatechars:30 }}</strong>
+                                        {% if item.evento.detalle %}
+                                        <br><small class="text-muted">{{ item.evento.detalle|truncatechars:50 }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ item.evento.fecha_evento|date:"d/m/Y" }}</td>
+                                    <td>{{ item.evento.hora_inicio|time:"H:i" }}</td>
+                                    <td>{{ item.evento.hora_fin|time:"H:i" }}</td>
+                                    <td>{{ item.evento.interesado|truncatechars:20 }}</td>
+                                    <td>
+                                        {% if item.evento.property_id %}
+                                        <div class="d-flex flex-column">
+                                            <span class="badge bg-info mb-1">#{{ item.evento.property_id }}</span>
+                                            {% if item.propiedad_info and item.propiedad_info.title %}
+                                            <small class="text-muted" style="font-size: 0.8rem;">
+                                                <i class="bi bi-building"></i> {{ item.propiedad_info.title }}
+                                            </small>
+                                            {% endif %}
+                                        </div>
+                                        {% else %}
+                                        <span class="text-muted">—</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if item.propiedad_info and item.propiedad_info.has_coordinates %}
+                                        <button class="btn btn-sm btn-outline-success"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#mapModal"
+                                                data-latitude="{{ item.propiedad_info.latitude }}"
+                                                data-longitude="{{ item.propiedad_info.longitude }}"
+                                                data-title="{{ item.propiedad_info.title|default:'Propiedad' }}">
+                                            <i class="bi bi-geo-alt"></i> Ver Mapa
+                                        </button>
+                                        {% elif item.propiedad_info %}
+                                        <span class="text-muted" title="Sin coordenadas">
+                                            <i class="bi bi-geo-alt"></i> N/A
+                                        </span>
+                                        {% else %}
+                                        <span class="text-muted">—</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if item.evento.event_type %}
+                                        <span class="badge" style="background-color: {{ item.evento.event_type.color }}; color: white;">
+                                            {{ item.evento.event_type.name }}
+                                        </span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if item.agente_nombre %}
+                                        <span class="badge bg-dark">{{ item.agente_nombre }}</span>
+                                        {% elif item.evento.assigned_agent_id %}
+                                        <span class="badge bg-secondary">Agente #{{ item.evento.assigned_agent_id }}</span>
+                                        {% else %}
+                                        <span class="text-muted">—</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if item.evento.status == 'completed' %}
+                                        <span class="badge bg-success">Completado</span>
+                                        {% elif item.evento.status == 'pending' %}
+                                        <span class="badge bg-warning">Pendiente</span>
+                                        {% elif item.evento.status == 'cancelled' %}
+                                        <span class="badge bg-danger">Cancelado</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">{{ item.evento.status }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{% url 'eventos:detalle_evento' item.evento.id %}" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="12" class="text-center py-4">
+                                        <i class="bi bi-calendar-x fs-1 text-muted"></i>
+                                        <p class="mt-2">No se encontraron eventos con los filtros aplicados.</p>
+                                        <a href="?" class="btn btn-sm btn-outline-primary">Ver todos los eventos</a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <!-- Paginación -->
+                {% if page_obj.paginator.num_pages > 1 %}
+                <div class="card-footer border-0 bg-light">
+                    <nav aria-label="Paginación de eventos">
+                        <ul class="pagination justify-content-center mb-0">
+                            {% if page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in filtros.items %}&{{ key }}={{ value }}{% endfor %}">
+                                    <i class="bi bi-chevron-left"></i>
+                                </a>
+                            </li>
+                            {% endif %}
+                            
+                            {% for num in page_obj.paginator.page_range %}
+                                {% if page_obj.number == num %}
+                                <li class="page-item active">
+                                    <span class="page-link">{{ num }}</span>
+                                </li>
+                                {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ num }}{% for key, value in filtros.items %}&{{ key }}={{ value }}{% endfor %}">{{ num }}</a>
+                                </li>
+                                {% endif %}
+                            {% endfor %}
+                            
+                            {% if page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in filtros.items %}&{{ key }}={{ value }}{% endfor %}">
+                                    <i class="bi bi-chevron-right"></i>
+                                </a>
+                            </li>
+                            {% endif %}
+                        </ul>
+                        <p class="text-center text-muted small mt-2">
+                            Mostrando {{ page_obj.start_index }}–{{ page_obj.end_index }} de {{ page_obj.paginator.count }} eventos
+                        </p>
+                    </nav>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Google Maps -->
+<div class="modal fade" id="mapModal" tabindex="-1" aria-labelledby="mapModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="mapModalLabel">
+                    <i class="bi bi-geo-alt me-2"></i>Ubicación de la Propiedad
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <div id="map" style="height: 400px; width: 100%; border-radius: 8px;"></div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-body">
+                                <h6 class="card-title">Información de la Propiedad</h6>
+                                <div class="mb-3">
+                                    <small class="text-muted">Título:</small>
+                                    <p id="propTitle" class="mb-1 fw-bold">Cargando...</p>
+                                </div>
+                                <div class="mb-3">
+                                    <small class="text-muted">Coordenadas:</small>
+                                    <p id="propCoords" class="mb-1">Cargando...</p>
+                                </div>
+                                <div class="mb-3">
+                                    <small class="text-muted">Latitud:</small>
+                                    <p id="propLat" class="mb-1">—</p>
+                                </div>
+                                <div class="mb-3">
+                                    <small class="text-muted">Longitud:</small>
+                                    <p id="propLng" class="mb-1">—</p>
+                                </div>
+                                <div class="mt-3">
+                                    <a href="#" id="propLink" class="btn btn-sm btn-outline-primary w-100" target="_blank">
+                                        <i class="bi bi-arrow-up-right-square"></i> Ver en Google Maps
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de filtros -->
+<div class="modal fade" id="filtrosModal" tabindex="-1" aria-labelledby="filtrosModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="filtrosModalLabel">
+                    <i class="bi bi-funnel me-2"></i>Filtrar Eventos
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="get" action="">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="dia" class="form-label">Día específico</label>
+                        <input type="date" class="form-control" id="dia" name="dia" value="{{ filtros.dia|default:'' }}">
+                        <div class="form-text">Selecciona una fecha para filtrar eventos de ese día.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="propiedad" class="form-label">ID de Propiedad</label>
+                        <input type="number" class="form-control" id="propiedad" name="propiedad" value="{{ filtros.propiedad|default:'' }}" placeholder="Ej: 12345">
+                    </div>
+                    <div class="mb-3">
+                        <label for="tipo" class="form-label">Tipo de Evento</label>
+                        <select class="form-select" id="tipo" name="tipo">
+                            <option value="">Todos los tipos</option>
+                            {% for tipo in tipos_evento %}
+                            <option value="{{ tipo.id }}" {% if filtros.tipo == tipo.id|stringformat:"i" %}selected{% endif %}>
+                                {{ tipo.name }} ({{ tipo.color }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="agente" class="form-label">ID de Agente Asignado</label>
+                        <input type="number" class="form-control" id="agente" name="agente" value="{{ filtros.agente|default:'' }}" placeholder="Ej: 101">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-filter"></i> Aplicar Filtros
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Auto-enfocar el campo de fecha al abrir el modal
+    document.getElementById('filtrosModal').addEventListener('shown.bs.modal', function () {
+        document.getElementById('dia').focus();
+    });
+    
+    // Botón para limpiar filtros
+    document.querySelectorAll('.clear-filter').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            window.location.href = this.getAttribute('href');
+        });
+    });
+    
+    // Variables globales para el mapa (Leaflet)
+    let map = null;
+    let marker = null;
+    
+    // Inicializar el mapa cuando se abre el modal
+    document.getElementById('mapModal').addEventListener('shown.bs.modal', function (event) {
+        const button = event.relatedTarget;
+        const latitude = parseFloat(button.getAttribute('data-latitude'));
+        const longitude = parseFloat(button.getAttribute('data-longitude'));
+        const title = button.getAttribute('data-title') || 'Propiedad';
+        
+        // Actualizar información en el panel lateral
+        document.getElementById('propTitle').textContent = title;
+        document.getElementById('propCoords').textContent = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+        document.getElementById('propLat').textContent = latitude.toFixed(6);
+        document.getElementById('propLng').textContent = longitude.toFixed(6);
+        
+        // Actualizar enlace a Google Maps
+        const googleMapsUrl = `https://www.google.com/maps?q=${latitude},${longitude}`;
+        document.getElementById('propLink').href = googleMapsUrl;
+        
+        // Cargar Leaflet CSS si no está cargado
+        if (!document.querySelector('link[href*="leaflet"]')) {
+            const leafletCSS = document.createElement('link');
+            leafletCSS.rel = 'stylesheet';
+            leafletCSS.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+            leafletCSS.integrity = 'sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=';
+            leafletCSS.crossOrigin = '';
+            document.head.appendChild(leafletCSS);
+        }
+        
+        // Cargar Leaflet JS si no está cargado
+        if (typeof L === 'undefined') {
+            const leafletJS = document.createElement('script');
+            leafletJS.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+            leafletJS.integrity = 'sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=';
+            leafletJS.crossOrigin = '';
+            leafletJS.onload = function() {
+                initializeMap(latitude, longitude, title);
+            };
+            document.head.appendChild(leafletJS);
+        } else {
+            initializeMap(latitude, longitude, title);
+        }
+    });
+    
+    // Función para inicializar el mapa Leaflet
+    function initializeMap(latitude, longitude, title) {
+        const mapElement = document.getElementById('map');
+        
+        // Limpiar el mapa anterior si existe
+        if (map) {
+            map.remove();
+            map = null;
+            marker = null;
+        }
+        
+        // Inicializar nuevo mapa
+        map = L.map('map').setView([latitude, longitude], 15);
+        
+        // Añadir capa de OpenStreetMap
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            maxZoom: 19
+        }).addTo(map);
+        
+        // Añadir marcador
+        marker = L.marker([latitude, longitude]).addTo(map)
+            .bindPopup(`<b>${title}</b><br>Lat: ${latitude.toFixed(6)}<br>Lng: ${longitude.toFixed(6)}`)
+            .openPopup();
+        
+        // Añadir círculo para mejor visibilidad
+        L.circle([latitude, longitude], {
+            color: 'blue',
+            fillColor: '#3388ff',
+            fillOpacity: 0.2,
+            radius: 100
+        }).addTo(map);
+    }
+    
+    // Limpiar el mapa cuando se cierra el modal
+    document.getElementById('mapModal').addEventListener('hidden.bs.modal', function () {
+        if (map) {
+            map.remove();
+            map = null;
+            marker = null;
+        }
+    });
+</script>
+
+{{ evolucion_semanal|json_script:"evolucionData" }}
+{{ matriz_agente_semana|json_script:"matrizData" }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Datos del gráfico desde Django
+    const evolucionData = JSON.parse(document.getElementById('evolucionData').textContent);
+    
+    // Inicializar gráfico
+    const ctx = document.getElementById('evolucionSemanalChart').getContext('2d');
+    let chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: evolucionData.labels,
+            datasets: evolucionData.datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Cantidad de Eventos'
+                    },
+                    ticks: {
+                        stepSize: 1
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Días de la Semana'
+                    }
+                }
+            },
+            interaction: {
+                intersect: false,
+                mode: 'nearest'
+            }
+        }
+    });
+    
+    // Control de checkboxes para mostrar/ocultar líneas
+    const checkboxes = document.querySelectorAll('.tipo-checkbox');
+    const toggleAllBtn = document.getElementById('toggleAllTipos');
+    
+    // Función para actualizar visibilidad de datasets
+    function updateChartVisibility() {
+        checkboxes.forEach((checkbox, index) => {
+            const datasetIndex = Array.from(checkboxes).findIndex(cb => cb.value === checkbox.value);
+            if (datasetIndex !== -1 && chart.data.datasets[datasetIndex]) {
+                chart.data.datasets[datasetIndex].hidden = !checkbox.checked;
+            }
+        });
+        chart.update();
+    }
+    
+    // Event listeners para checkboxes
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', updateChartVisibility);
+    });
+    
+    // Botón para mostrar/ocultar todos
+    let allVisible = true;
+    toggleAllBtn.addEventListener('click', function() {
+        allVisible = !allVisible;
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = allVisible;
+        });
+        updateChartVisibility();
+        this.innerHTML = allVisible ?
+            '<i class="bi bi-eye-slash"></i> Ocultar Todos' :
+            '<i class="bi bi-eye"></i> Mostrar Todos';
+    });
+    
+    // Inicializar estado del botón
+    toggleAllBtn.innerHTML = allVisible ?
+        '<i class="bi bi-eye-slash"></i> Ocultar Todos' :
+        '<i class="bi bi-eye"></i> Mostrar Todos';
+});
+
+// ==============================================
+// Código para la Matriz Agente x Semana x Tipo
+// ==============================================
+
+
+// Cargar datos de la matriz desde JSON
+const matrizData = JSON.parse(document.getElementById('matrizData').textContent);
+
+// Variables globales
+let tipoEventoSeleccionado = 'todos';
+let mostrarPorcentajes = false;  // Por defecto sin porcentajes
+
+// Función para calcular el valor máximo en la matriz para el tipo seleccionado
+function calcularMaximoValor(tipoId) {
+    let maxVal = 0;
+    if (tipoId === 'todos') {
+        // Sumar todos los tipos por celda y encontrar el máximo
+        matrizData.agentes.forEach(agente => {
+            matrizData.semanas_iso.forEach(semana => {
+                let total = 0;
+                if (matrizData.matriz[agente.id]?.[semana]) {
+                    Object.values(matrizData.matriz[agente.id][semana]).forEach(val => total += val);
+                }
+                if (total > maxVal) maxVal = total;
+            });
+        });
+    } else {
+        // Solo el tipo específico
+        matrizData.agentes.forEach(agente => {
+            matrizData.semanas_iso.forEach(semana => {
+                const val = matrizData.matriz[agente.id]?.[semana]?.[tipoId] || 0;
+                if (val > maxVal) maxVal = val;
+            });
+        });
+    }
+    return maxVal;
+}
+
+// Función para actualizar una celda de la matriz
+function actualizarCelda(agenteId, semanaIso, tipoId, maxVal) {
+    const celda = document.querySelector(`td[data-agente-id="${agenteId}"][data-semana="${semanaIso}"]`);
+    if (!celda) return;
+    
+    const valorSpan = celda.querySelector('.matriz-valor');
+    const porcentajeSpan = celda.querySelector('.matriz-porcentaje');
+    
+    // Obtener cantidad y porcentaje
+    const cantidad = matrizData.matriz[agenteId]?.[semanaIso]?.[tipoId] || 0;
+    const porcentaje = matrizData.porcentajes[agenteId]?.[semanaIso]?.[tipoId] || 0;
+    
+    // Actualizar visualización
+    if (tipoEventoSeleccionado === 'todos') {
+        // Sumar todos los tipos para este agente y semana
+        let totalCantidad = 0;
+        let totalPorcentaje = 0;
+        
+        if (matrizData.matriz[agenteId]?.[semanaIso]) {
+            Object.values(matrizData.matriz[agenteId][semanaIso]).forEach(val => totalCantidad += val);
+        }
+        if (matrizData.porcentajes[agenteId]?.[semanaIso]) {
+            Object.values(matrizData.porcentajes[agenteId][semanaIso]).forEach(val => totalPorcentaje += val);
+        }
+        
+        valorSpan.textContent = totalCantidad || '-';
+        porcentajeSpan.textContent = totalPorcentaje ? `${totalPorcentaje.toFixed(1)}%` : '-';
+    } else {
+        // Mostrar solo el tipo seleccionado
+        valorSpan.textContent = cantidad || '-';
+        porcentajeSpan.textContent = porcentaje ? `${porcentaje}%` : '-';
+    }
+    
+    // Mostrar/ocultar porcentaje según configuración
+    porcentajeSpan.style.display = mostrarPorcentajes ? 'inline' : 'none';
+    
+    // Determinar el valor a evaluar (depende de si estamos viendo todos los tipos o uno específico)
+    let valorEvaluar = 0;
+    if (tipoEventoSeleccionado === 'todos') {
+        valorEvaluar = totalCantidad;
+    } else {
+        valorEvaluar = cantidad;
+    }
+    
+    // Remover todas las clases de color anteriores
+    celda.classList.remove('table-light', 'table-success', 'matriz-bajo', 'matriz-medio', 'matriz-alto');
+    
+    // Aplicar color según el valor (escala semáforo)
+    if (valorEvaluar === 0) {
+        celda.classList.add('table-light');  // Gris para cero
+    } else if (maxVal === 0) {
+        celda.classList.add('table-light');  // No debería ocurrir si valorEvaluar > 0
+    } else {
+        // Calcular proporción respecto al máximo
+        const proporcion = valorEvaluar / maxVal;
+        if (proporcion <= 0.33) {
+            celda.classList.add('matriz-bajo');      // Rojo
+        } else if (proporcion <= 0.66) {
+            celda.classList.add('matriz-medio');     // Amarillo
+        } else {
+            celda.classList.add('matriz-alto');      // Verde
+        }
+    }
+}
+
+// Función para actualizar totales
+function actualizarTotales() {
+    // Totales por agente
+    Object.keys(matrizData.totales_agente).forEach(agenteId => {
+        const totalElement = document.querySelector(`.total-agente[data-agente-id="${agenteId}"]`);
+        if (totalElement) {
+            if (tipoEventoSeleccionado === 'todos') {
+                totalElement.textContent = matrizData.totales_agente[agenteId] || 0;
+            } else {
+                // Calcular total solo para el tipo seleccionado
+                let total = 0;
+                matrizData.semanas_iso.forEach(semana => {
+                    total += matrizData.matriz[agenteId]?.[semana]?.[tipoEventoSeleccionado] || 0;
+                });
+                totalElement.textContent = total;
+            }
+        }
+    });
+    
+    // Totales por semana
+    matrizData.semanas_iso.forEach(semana => {
+        const totalElement = document.querySelector(`.total-semana[data-semana="${semana}"]`);
+        if (totalElement) {
+            if (tipoEventoSeleccionado === 'todos') {
+                totalElement.textContent = matrizData.totales_semana[semana] || 0;
+            } else {
+                // Calcular total solo para el tipo seleccionado
+                let total = 0;
+                matrizData.agentes.forEach(agente => {
+                    total += matrizData.matriz[agente.id]?.[semana]?.[tipoEventoSeleccionado] || 0;
+                });
+                totalElement.textContent = total;
+            }
+        }
+    });
+    
+    // Total general
+    const totalGeneralElement = document.getElementById('total-general');
+    if (totalGeneralElement) {
+        if (tipoEventoSeleccionado === 'todos') {
+            const totalGeneral = Object.values(matrizData.totales_agente).reduce((a, b) => a + b, 0);
+            totalGeneralElement.textContent = totalGeneral;
+        } else {
+            let totalGeneral = 0;
+            matrizData.agentes.forEach(agente => {
+                matrizData.semanas_iso.forEach(semana => {
+                    totalGeneral += matrizData.matriz[agente.id]?.[semana]?.[tipoEventoSeleccionado] || 0;
+                });
+            });
+            totalGeneralElement.textContent = totalGeneral;
+        }
+    }
+}
+
+// Función para actualizar toda la matriz
+function actualizarMatriz() {
+    // Calcular el valor máximo para el tipo seleccionado
+    const maxVal = calcularMaximoValor(tipoEventoSeleccionado);
+    
+    // Actualizar cada celda
+    matrizData.agentes.forEach(agente => {
+        matrizData.semanas_iso.forEach(semana => {
+            actualizarCelda(agente.id, semana, tipoEventoSeleccionado, maxVal);
+        });
+    });
+    
+    // Actualizar totales
+    actualizarTotales();
+}
+
+// Inicializar matriz cuando el DOM esté listo
+document.addEventListener('DOMContentLoaded', function() {
+    // Configurar eventos
+    const filtroTipoEvento = document.getElementById('filtroTipoEvento');
+    const mostrarPorcentajesCheckbox = document.getElementById('mostrarPorcentajes');
+    
+    if (filtroTipoEvento) {
+        filtroTipoEvento.addEventListener('change', function() {
+            tipoEventoSeleccionado = this.value;
+            actualizarMatriz();
+        });
+    }
+    
+    if (mostrarPorcentajesCheckbox) {
+        mostrarPorcentajesCheckbox.addEventListener('change', function() {
+            mostrarPorcentajes = this.checked;
+            actualizarMatriz();
+        });
+    }
+    
+    // Inicializar matriz
+    actualizarMatriz();
+});
+</script>
+{% endblock %}

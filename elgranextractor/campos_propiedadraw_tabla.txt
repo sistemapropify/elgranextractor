@@ -1,0 +1,49 @@
+CAMPOS DEL MODELO PropiedadRaw
+================================
+
+| No. | Nombre del Campo          | Tipo de Dato       | Nullable | Descripción |
+|-----|---------------------------|--------------------|----------|-------------|
+| 1   | id                        | BigAutoField       | No       | ID principal autoincremental |
+| 2   | fuente_excel              | CharField(100)     | No       | Fuente del archivo Excel |
+| 3   | fecha_ingesta             | DateTimeField      | Sí (blank) | Fecha de ingesta automática |
+| 4   | tipo_propiedad            | CharField(20)      | Sí       | Tipo: Terreno, Casa, Departamento, Oficina, Otros |
+| 5   | precio_usd                | DecimalField       | Sí       | Precio en USD (max_digits=15, decimal_places=2) |
+| 6   | descripcion               | TextField          | Sí       | Descripción de la propiedad |
+| 7   | portal                    | CharField(50)      | Sí       | Portal de origen (Remax, etc.) |
+| 8   | url_propiedad             | URLField(500)      | Sí       | URL de la propiedad en el portal |
+| 9   | coordenadas               | CharField(100)     | Sí       | Coordenadas en formato "latitud, longitud" |
+| 10  | departamento              | CharField(100)     | Sí       | Departamento |
+| 11  | provincia                 | CharField(100)     | Sí       | Provincia |
+| 12  | distrito                  | CharField(100)     | Sí       | Distrito |
+| 13  | area_terreno              | DecimalField       | Sí       | Área de terreno en m² |
+| 14  | area_construida           | DecimalField       | Sí       | Área construida en m² |
+| 15  | numero_pisos              | IntegerField       | Sí       | Número de pisos |
+| 16  | numero_habitaciones       | IntegerField       | Sí       | Número de habitaciones |
+| 17  | numero_banos              | IntegerField       | Sí       | Número de baños |
+| 18  | numero_cocheras           | IntegerField       | Sí       | Número de cocheras |
+| 19  | agente_inmobiliario       | CharField(200)     | Sí       | Nombre del agente inmobiliario |
+| 20  | imagenes_propiedad        | TextField          | Sí       | URLs de imágenes separadas por comas |
+| 21  | id_propiedad              | CharField(50)      | Sí       | ID interno de la propiedad en el sistema |
+| 22  | identificador_externo     | CharField(100)     | Sí       | ID de la propiedad en la base de datos original de la fuente (NUEVO) |
+| 23  | fecha_publicacion         | DateField          | Sí       | Fecha de publicación en el portal |
+| 24  | antiguedad                | CharField(50)      | Sí       | Antigüedad de la propiedad |
+| 25  | servicio_agua             | CharField(50)      | Sí       | Servicio de agua |
+| 26  | energia_electrica         | CharField(50)      | Sí       | Energía eléctrica |
+| 27  | servicio_drenaje          | CharField(50)      | Sí       | Servicio de drenaje |
+| 28  | servicio_gas              | CharField(50)      | Sí       | Servicio de gas |
+| 29  | email_agente              | EmailField(100)    | Sí       | Email del agente |
+| 30  | telefono_agente           | CharField(20)      | Sí       | Teléfono del agente |
+| 31  | oficina_remax             | CharField(200)     | Sí       | Oficina Remax (si aplica) |
+| 32  | estado_propiedad          | CharField(20)      | Sí       | Estado: en_publicacion, vendido, reservado, retirado |
+| 33  | fecha_venta               | DateField          | Sí       | Fecha en que se vendió la propiedad |
+| 34  | precio_final_venta        | DecimalField       | Sí       | Precio final al que se vendió la propiedad (USD) |
+| 35  | atributos_extras          | JSONField          | Sí       | Campos dinámicos adicionales en formato JSON |
+
+CAMPO DE RELACIÓN:
+- valoraciones: Relación ManyToOne con el modelo PropiedadValoracion
+
+NOTAS:
+- "Nullable" = Sí significa que el campo puede ser NULL en la base de datos
+- "blank" = Sí significa que el campo puede estar vacío en formularios Django
+- Los campos con db_column personalizado se almacenan con nombres diferentes en la BD
+- El campo identificador_externo es nuevo y se agregó para almacenar IDs de bases de datos originales

@@ -1,0 +1,3 @@
+ERROR 2026-05-02 13:10:43,853 schema_discovery: Error detectando foreign keys en 'properties': not all arguments converted during string formatting
+Monkey patch aplicado a django.template.context.__copy__
+Total FK: 0

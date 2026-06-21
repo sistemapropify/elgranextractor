@@ -1,0 +1,369 @@
+{% extends 'base.html' %}
+
+{% block title %}Resultados de Ingesta{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ===== STAT CARDS CON GRADIENTE ===== */
+    .stat-card {
+        border-radius: 14px;
+        padding: 24px 20px;
+        color: white;
+        text-align: center;
+        margin-bottom: 20px;
+        position: relative;
+        overflow: hidden;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        border: none;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    }
+    .stat-card::after {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -50%;
+        width: 100%;
+        height: 100%;
+        background: rgba(255,255,255,0.05);
+        border-radius: 50%;
+        transition: all 0.5s ease;
+    }
+    .stat-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+    }
+    .stat-card:hover::after {
+        transform: scale(1.5);
+    }
+    .stat-card.bg-primary {
+        background: linear-gradient(135deg, #047d7d, #036666) !important;
+    }
+    .stat-card.bg-success {
+        background: linear-gradient(135deg, #28a745, #1e7e34) !important;
+    }
+    .stat-card.bg-danger {
+        background: linear-gradient(135deg, #dc3545, #bd2130) !important;
+    }
+    .stat-card.bg-warning {
+        background: linear-gradient(135deg, #ffc107, #d39e00) !important;
+    }
+    .stat-card.bg-info {
+        background: linear-gradient(135deg, #17a2b8, #138496) !important;
+    }
+    .stat-value {
+        font-size: 2.5rem;
+        font-weight: 800;
+        line-height: 1.1;
+        position: relative;
+        z-index: 1;
+    }
+    .stat-label {
+        font-size: 0.9rem;
+        opacity: 0.9;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        position: relative;
+        z-index: 1;
+        margin-top: 4px;
+    }
+
+    /* ===== LISTA DE RESULTADOS ===== */
+    .list-group-item {
+        border-left: 5px solid transparent;
+        transition: all 0.2s ease;
+        padding: 0.75rem 1rem;
+    }
+    .list-group-item:hover {
+        background-color: #f8f9fa;
+        padding-left: 1.25rem;
+    }
+    .list-group-item-success {
+        border-left-color: #28a745;
+        background-color: #f0fff4;
+    }
+    .list-group-item-warning {
+        border-left-color: #ffc107;
+        background-color: #fffdf0;
+    }
+    .list-group-item-danger {
+        border-left-color: #dc3545;
+        background-color: #fff5f5;
+    }
+
+    /* ===== TARJETAS DE ACCIÓN ===== */
+    .action-card {
+        border-radius: 12px;
+        overflow: hidden;
+        transition: all 0.3s ease;
+    }
+    .action-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+    }
+
+    /* ===== ALERTAS MEJORADAS ===== */
+    .alert {
+        border-radius: 10px;
+        border-left-width: 4px;
+    }
+    .alert-success {
+        border-left-color: #28a745;
+    }
+    .alert-warning {
+        border-left-color: #ffc107;
+    }
+    .alert-danger {
+        border-left-color: #dc3545;
+    }
+    .alert-info {
+        border-left-color: #17a2b8;
+    }
+
+    /* ===== ENCABEZADOS DE TARJETA ===== */
+    .card-header.bg-success.text-white {
+        background: linear-gradient(135deg, #28a745, #1e7e34) !important;
+        border-bottom: none;
+        padding: 1rem 1.25rem;
+    }
+    .card-header.bg-dark.text-white {
+        background: linear-gradient(135deg, #343a40, #23272b) !important;
+        border-bottom: none;
+        padding: 1rem 1.25rem;
+    }
+    .card-header.bg-info.text-white {
+        background: linear-gradient(135deg, #17a2b8, #138496) !important;
+        border-bottom: none;
+        padding: 1rem 1.25rem;
+    }
+    .card-header.bg-secondary.text-white {
+        background: linear-gradient(135deg, #6c757d, #545b62) !important;
+        border-bottom: none;
+        padding: 1rem 1.25rem;
+    }
+    .card-header.bg-warning.text-dark {
+        background: linear-gradient(135deg, #ffc107, #d39e00) !important;
+        border-bottom: none;
+        padding: 1rem 1.25rem;
+    }
+
+    /* ===== FOOTER DE TARJETA ===== */
+    .card-footer {
+        background: #f8f9fa;
+        border-top: 1px solid #e9ecef;
+        padding: 0.75rem 1.25rem;
+    }
+
+    /* ===== ANIMACIÓN DE ENTRADA ===== */
+    .card {
+        animation: fadeInUp 0.5s ease forwards;
+        opacity: 0;
+    }
+    .card:nth-child(1) { animation-delay: 0s; }
+    .card:nth-child(2) { animation-delay: 0.1s; }
+    .card:nth-child(3) { animation-delay: 0.2s; }
+    .card:nth-child(4) { animation-delay: 0.3s; }
+
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h4 class="mb-0">
+                        <i class="bi bi-check-circle"></i> Resultados de la Ingesta
+                    </h4>
+                </div>
+                <div class="card-body">
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+
+                    <div class="alert alert-info">
+                        <h5><i class="bi bi-info-circle"></i> Resumen del Procesamiento</h5>
+                        <p class="mb-0">
+                            La ingesta del archivo Excel se ha completado. A continuación se muestran las estadísticas
+                            y los campos dinámicos creados en esta sesión.
+                        </p>
+                    </div>
+
+                    <div class="row mb-4">
+                        <div class="col-md-4">
+                            <div class="stat-card bg-primary">
+                                <div class="stat-value">{{ filas_procesadas }}</div>
+                                <div class="stat-label">Filas Procesadas</div>
+                                <small>Total de registros importados</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="stat-card bg-success">
+                                <div class="stat-value">{{ campos_creados }}</div>
+                                <div class="stat-label">Campos Creados</div>
+                                <small>Nuevos campos dinámicos</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="stat-card bg-danger">
+                                <div class="stat-value">{{ errores }}</div>
+                                <div class="stat-label">Errores</div>
+                                <small>Filas con problemas</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="card">
+                                <div class="card-header bg-dark text-white">
+                                    <h5 class="mb-0">
+                                        <i class="bi bi-list-check"></i> Campos Dinámicos Creados Recientemente
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    {% if campos_nuevos %}
+                                    <div class="list-group">
+                                        {% for campo in campos_nuevos %}
+                                        <div class="list-group-item list-group-item-success">
+                                            <div class="d-flex w-100 justify-content-between">
+                                                <h6 class="mb-1">
+                                                    <i class="bi bi-database"></i> {{ campo.nombre_campo_bd }}
+                                                </h6>
+                                                <small class="text-muted">{{ campo.creado_en|date:"d/m/Y H:i" }}</small>
+                                            </div>
+                                            <p class="mb-1">
+                                                <strong>Título:</strong> {{ campo.titulo_display }} |
+                                                <strong>Tipo:</strong> <span class="badge bg-info">{{ campo.tipo_dato }}</span>
+                                            </p>
+                                            <small class="text-muted">
+                                                Creado por: {{ campo.creado_por.username|default:"Sistema" }}
+                                            </small>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                    {% else %}
+                                    <div class="alert alert-warning">
+                                        <i class="bi bi-exclamation-triangle"></i>
+                                        No se crearon campos dinámicos en esta sesión.
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-header bg-info text-white">
+                                    <h5 class="mb-0">
+                                        <i class="bi bi-lightning"></i> Acciones Rápidas
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="d-grid gap-2">
+                                        <a href="{% url 'ingestas:subir_excel' %}" class="btn btn-primary">
+                                            <i class="bi bi-upload"></i> Subir Otro Archivo
+                                        </a>
+                                        <a href="{% url 'ingestas:validar_mapeo' %}" class="btn btn-warning">
+                                            <i class="bi bi-gear"></i> Volver a Validar Mapeo
+                                        </a>
+                                        <a href="/admin/ingestas/propiedadraw/" class="btn btn-success" target="_blank">
+                                            <i class="bi bi-table"></i> Ver Propiedades en Admin
+                                        </a>
+                                        <a href="/admin/ingestas/campodinamico/" class="btn btn-info" target="_blank">
+                                            <i class="bi bi-database"></i> Gestionar Campos Dinámicos
+                                        </a>
+                                        <button class="btn btn-outline-danger" onclick="limpiarSesion()">
+                                            <i class="bi bi-trash"></i> Limpiar Sesión
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card mt-3">
+                                <div class="card-header bg-secondary text-white">
+                                    <h5 class="mb-0">
+                                        <i class="bi bi-graph-up"></i> Próximos Pasos
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <ul class="list-unstyled">
+                                        <li class="mb-2">
+                                            <i class="bi bi-check-circle text-success"></i>
+                                            <strong>Revisar datos:</strong> Verifica que los datos se hayan importado correctamente.
+                                        </li>
+                                        <li class="mb-2">
+                                            <i class="bi bi-check-circle text-success"></i>
+                                            <strong>Configurar mapeos:</strong> Guarda los mapeos para futuras importaciones.
+                                        </li>
+                                        <li class="mb-2">
+                                            <i class="bi bi-check-circle text-success"></i>
+                                            <strong>Exportar resultados:</strong> Genera reportes de las propiedades importadas.
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card mt-4">
+                        <div class="card-header bg-warning text-dark">
+                            <h5 class="mb-0">
+                                <i class="bi bi-clock-history"></i> Historial de Migraciones Pendientes
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted">
+                                Las migraciones pendientes se ejecutan automáticamente al crear campos.
+                                Puedes revisar el estado en el panel de administración.
+                            </p>
+                            <a href="/admin/ingestas/migracionpendiente/" class="btn btn-sm btn-outline-dark" target="_blank">
+                                <i class="bi bi-eye"></i> Ver Migraciones Pendientes
+                            </a>
+                        </div>
+                    </div>
+
+                    {% if debug %}
+                    <div class="card mt-4">
+                        <div class="card-header bg-secondary text-white">
+                            <h5 class="mb-0"><i class="fas fa-bug"></i> Información de Depuración</h5>
+                        </div>
+                        <div class="card-body">
+                            <pre class="bg-light p-3"><code>{{ debug }}</code></pre>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                </div>
+                <div class="card-footer text-muted text-center">
+                    <small>
+                        Sistema de Ingesta Inmobiliaria |
+                        <a href="{% url 'ingestas:subir_excel' %}">Nueva importación</a> |
+                        <a href="/admin/">Panel de Administración</a>
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function limpiarSesion() {
+        if (confirm('¿Estás seguro de limpiar la sesión de ingesta? Esto eliminará los archivos temporales.')) {
+            window.location.href = "{% url 'ingestas:limpiar_sesion' %}";
+        }
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,1781 @@
+{% extends "propifai_base.html" %}
+{% load static %}
+
+{% block title %}Portal Inmobiliario - Catálogo de Propiedades{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ===== TEMA OSCURO GITHUB ===== */
+    :root {
+        --bg-primary: #0d1117;
+        --bg-card: #161b22;
+        --bg-hover: #1c2128;
+        --bg-header: #21262d;
+        --border-color: #30363d;
+        --text-primary: #c9d1d9;
+        --text-secondary: #8b949e;
+        --accent-blue: #58a6ff;
+        --accent-green: #3fb950;
+        --accent-red: #f85149;
+        --accent-orange: #d29922;
+        --accent-purple: #8957e5;
+        --radius: 8px;
+    }
+
+    /* Contenedor principal - ocupa todo el espacio disponible */
+    .portal-container {
+        display: flex;
+        flex-direction: column;
+        height: calc(100vh - var(--header-height, 60px) - 48px); /* header + padding content-area */
+        overflow: hidden;
+        background: var(--bg-primary);
+        margin: -24px; /* anula el padding de .content-area */
+    }
+
+    /* ===== BARRA DE FILTROS COMPACTA ===== */
+    .filters-bar {
+        background: var(--bg-card);
+        border-bottom: 1px solid var(--border-color);
+        padding: 0.25rem 0.6rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+        z-index: 100;
+        flex-shrink: 0;
+    }
+
+    .filters-bar form {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+    }
+
+    /* Fila 1: Distritos ocupa todo el ancho */
+    .filter-row-distritos {
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+        width: 100%;
+    }
+
+    .filter-row-distritos label {
+        font-size: 0.6rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.2px;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    .distrito-checkboxes {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 2px;
+        flex: 1;
+        min-width: 0;
+    }
+
+    .distrito-checkbox-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 1px;
+        font-size: 0.6rem;
+        color: var(--text-primary);
+        cursor: pointer;
+        padding: 0px 4px;
+        border-radius: 3px;
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        transition: all 0.15s;
+        white-space: nowrap;
+        line-height: 1.3;
+    }
+
+    .distrito-checkbox-label:hover {
+        border-color: var(--accent-blue);
+        background: var(--bg-hover);
+    }
+
+    .distrito-checkbox-label input[type="checkbox"] {
+        accent-color: var(--accent-blue);
+        margin: 0;
+        width: 10px;
+        height: 10px;
+    }
+
+    /* Fila 2: Tipo + acciones */
+    .filter-row-acciones {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+
+    .filter-row-acciones .filter-group {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 0.3rem;
+        min-width: auto;
+    }
+
+    .filter-row-acciones .filter-group label {
+        font-size: 0.6rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.2px;
+        margin-bottom: 0;
+        white-space: nowrap;
+    }
+
+    .filter-row-acciones .filter-group .form-select {
+        padding: 0.15rem 0.3rem;
+        font-size: 0.7rem;
+        background-color: var(--bg-primary);
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        color: var(--text-primary);
+        height: 22px;
+        width: auto;
+        min-width: 100px;
+    }
+
+    .filter-row-acciones .filter-group .form-select:focus {
+        outline: none;
+        border-color: var(--accent-blue);
+        box-shadow: 0 0 0 2px rgba(88,166,255,0.15);
+    }
+
+    .filter-actions {
+        display: flex;
+        gap: 0.25rem;
+        margin-left: auto;
+        align-items: center;
+    }
+
+    .filter-actions .btn {
+        padding: 2px 6px;
+        font-size: 0.65rem;
+        height: 22px;
+        line-height: 1;
+    }
+
+    /* ===== BOTONES ===== */
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 14px;
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        text-decoration: none;
+        transition: all 0.2s ease;
+        background-color: var(--bg-card);
+        color: var(--text-primary);
+    }
+    .btn:hover {
+        background-color: var(--bg-hover);
+        border-color: var(--text-secondary);
+    }
+    .btn-primary {
+        background-color: #238636;
+        border-color: rgba(35,134,54,0.3);
+        color: #fff;
+    }
+    .btn-primary:hover {
+        background-color: #2ea043;
+    }
+    .btn-success {
+        background-color: #238636;
+        border-color: rgba(35,134,54,0.3);
+        color: #fff;
+    }
+    .btn-success:hover {
+        background-color: #2ea043;
+    }
+    .btn-outline-secondary {
+        background: transparent;
+        border-color: var(--border-color);
+        color: var(--text-secondary);
+    }
+    .btn-outline-secondary:hover {
+        background: var(--bg-hover);
+        color: var(--text-primary);
+    }
+    .btn-sm {
+        padding: 4px 10px;
+        font-size: 12px;
+    }
+    .btn-lg {
+        padding: 10px 20px;
+        font-size: 15px;
+    }
+
+    /* Contenido principal: Mapa + Propiedades lado a lado */
+    .portal-body {
+        display: flex;
+        flex: 1;
+        overflow: hidden;
+        min-height: 0;
+    }
+
+    /* Mapa a la izquierda (50%) */
+    .map-section {
+        flex: 0 0 50%;
+        width: 50%;
+        display: flex;
+        flex-direction: column;
+        border-right: 1px solid var(--border-color);
+        background: var(--bg-primary);
+        min-height: 0;
+    }
+
+    .map-header {
+        padding: 0.4rem 0.75rem;
+        background: var(--bg-card);
+        border-bottom: 1px solid var(--border-color);
+        font-weight: 600;
+        color: var(--accent-blue);
+        font-size: 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        flex-shrink: 0;
+    }
+
+    .map-container {
+        flex: 1;
+        position: relative;
+        min-height: 0;
+    }
+
+    #propertyMap {
+        width: 100%;
+        height: 100%;
+        min-height: 300px;
+    }
+
+    /* Propiedades a la derecha (50%) - SIEMPRE 50% */
+    .properties-section {
+        flex: 0 0 50%;
+        width: 50%;
+        display: flex;
+        flex-direction: column;
+        background: var(--bg-primary);
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .properties-header {
+        padding: 0.4rem 0.75rem;
+        background: var(--bg-card);
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: nowrap;
+        gap: 4px;
+        flex-shrink: 0;
+    }
+
+    .properties-title {
+        font-weight: 600;
+        color: var(--accent-blue);
+        font-size: 0.75rem;
+        margin: 0;
+    }
+
+    .properties-count {
+        font-size: 0.65rem;
+        color: var(--text-secondary);
+        background: rgba(88,166,255,0.08);
+        padding: 0.15rem 0.4rem;
+        border-radius: 10px;
+        white-space: nowrap;
+    }
+
+    .btn-clear-selection {
+        font-size: 0.6rem;
+        padding: 0.1rem 0.4rem;
+        height: auto;
+        line-height: 1.4;
+        color: var(--accent-red);
+        border-color: rgba(248,81,73,0.3);
+        background: transparent;
+        cursor: pointer;
+        border-radius: 4px;
+        border: 1px solid var(--border-color);
+        transition: all 0.15s;
+        white-space: nowrap;
+    }
+    .btn-clear-selection:hover {
+        background: rgba(248,81,73,0.1);
+        border-color: var(--accent-red);
+    }
+
+    /* Badge numerado en tarjetas seleccionadas */
+    .card-number-badge {
+        position: absolute;
+        top: -8px;
+        left: -8px;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        font-weight: bold;
+        font-family: Arial, sans-serif;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        z-index: 10;
+        border: 2px solid;
+        transition: transform 0.15s;
+    }
+    .card-number-badge:hover {
+        transform: scale(1.1);
+    }
+
+    /* Botón remover tarjeta */
+    .btn-remove-card {
+        position: absolute;
+        top: -8px;
+        right: -8px;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        color: white;
+        border: 2px solid;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: bold;
+        cursor: pointer;
+        z-index: 10;
+        line-height: 1;
+        padding: 0;
+        transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .btn-remove-card:hover {
+        transform: scale(1.15);
+        box-shadow: 0 2px 8px rgba(248,81,73,0.4);
+    }
+
+    /* Tarjeta seleccionada con número */
+    .selected-card {
+        position: relative;
+        border-color: var(--accent-blue);
+        box-shadow: 0 0 12px rgba(88,166,255,0.3);
+    }
+    .selected-card:hover {
+        border-color: var(--accent-blue);
+        box-shadow: 0 0 16px rgba(88,166,255,0.4);
+    }
+
+    /* Contenedor de tarjetas con scroll */
+    .properties-container {
+        flex: 1;
+        overflow-y: auto;
+        padding: 0.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+        min-height: 0;
+    }
+
+    /* Scrollbar personalizada */
+    .properties-container::-webkit-scrollbar {
+        width: 8px;
+    }
+    .properties-container::-webkit-scrollbar-track {
+        background: var(--bg-primary);
+    }
+    .properties-container::-webkit-scrollbar-thumb {
+        background: var(--border-color);
+        border-radius: 4px;
+    }
+    .properties-container::-webkit-scrollbar-thumb:hover {
+        background: var(--text-secondary);
+    }
+
+    /* Tarjetas de propiedades compactas */
+    .property-card {
+        background: var(--bg-card);
+        border-radius: 8px;
+        border: 1px solid var(--border-color);
+        padding: 0.75rem;
+        display: flex;
+        gap: 0.75rem;
+        transition: all 0.15s ease;
+        cursor: pointer;
+        position: relative;
+    }
+
+    .property-card:hover {
+        border-color: var(--accent-blue);
+        box-shadow: 0 2px 8px rgba(88,166,255,0.1);
+        transform: translateY(-1px);
+    }
+
+    .property-card.active {
+        background-color: var(--bg-hover);
+        border-color: var(--accent-blue);
+    }
+
+    /* Imagen de la propiedad */
+    .property-image-container {
+        flex-shrink: 0;
+        width: 80px;
+        height: 80px;
+        border-radius: 6px;
+        overflow: hidden;
+        background: var(--bg-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--border-color);
+    }
+
+    .property-image {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .property-image-placeholder {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-secondary);
+        font-size: 1.25rem;
+    }
+
+    /* Contenido de la tarjeta */
+    .property-content {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .property-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 0.25rem;
+    }
+
+    .property-type {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--accent-blue);
+        background: rgba(88,166,255,0.08);
+        padding: 0.125rem 0.375rem;
+        border-radius: 4px;
+    }
+
+    .property-price {
+        font-size: 0.9rem;
+        font-weight: 700;
+        color: var(--accent-green);
+        text-align: right;
+    }
+
+    .property-description {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+        line-height: 1.2;
+        margin-bottom: 0.375rem;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .property-location {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        margin-bottom: 0.375rem;
+    }
+
+    .property-location i {
+        color: var(--accent-blue);
+        font-size: 0.7rem;
+    }
+
+    .property-features {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        margin-bottom: 0.375rem;
+    }
+
+    .feature-item {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        font-size: 0.7rem;
+        color: var(--text-secondary);
+    }
+
+    .feature-item i {
+        color: var(--accent-blue);
+        font-size: 0.75rem;
+    }
+
+    .property-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: auto;
+        padding-top: 0.375rem;
+        border-top: 1px solid var(--border-color);
+    }
+
+    .property-source {
+        font-size: 0.7rem;
+        color: var(--text-secondary);
+    }
+
+    .property-actions {
+        display: flex;
+        gap: 0.25rem;
+    }
+
+    .property-actions .btn {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+        border-radius: 4px;
+        transition: all 0.2s ease;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.25rem;
+    }
+    
+    .property-actions .btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+    
+    .property-actions .btn-details {
+        background-color: var(--accent-blue);
+        color: white;
+        border: 1px solid var(--accent-blue);
+    }
+    
+    .property-actions .btn-details:hover {
+        background-color: #79c0ff;
+        border-color: #79c0ff;
+    }
+    
+    .property-actions .btn-edit {
+        background-color: var(--accent-orange);
+        color: white;
+        border: 1px solid var(--accent-orange);
+    }
+    
+    .property-actions .btn-edit:hover {
+        background-color: #e3b341;
+        border-color: #e3b341;
+    }
+    
+    .property-actions .btn-external {
+        background-color: transparent;
+        color: var(--accent-blue);
+        border: 1px solid var(--accent-blue);
+    }
+    
+    .property-actions .btn-external:hover {
+        background-color: var(--accent-blue);
+        color: white;
+    }
+
+    /* Paginación */
+    .pagination-container {
+        padding: 0.75rem 1rem;
+        border-top: 1px solid var(--border-color);
+        background: var(--bg-card);
+        flex-shrink: 0;
+    }
+
+    .pagination {
+        margin: 0;
+        justify-content: center;
+        display: flex;
+        gap: 4px;
+        list-style: none;
+        padding: 0;
+    }
+
+    .page-link {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.8rem;
+        color: var(--accent-blue);
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        background: var(--bg-primary);
+        text-decoration: none;
+        transition: all 0.15s;
+    }
+    .page-link:hover {
+        background: var(--bg-hover);
+        border-color: var(--accent-blue);
+    }
+
+    .page-item.active .page-link {
+        background-color: var(--accent-blue);
+        border-color: var(--accent-blue);
+        color: #fff;
+    }
+    .page-item.disabled .page-link {
+        color: var(--text-secondary);
+        opacity: 0.5;
+        pointer-events: none;
+    }
+
+    /* Estados vacíos */
+    .empty-state {
+        padding: 2rem 1rem;
+        text-align: center;
+        color: var(--text-secondary);
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .empty-state i {
+        font-size: 2.5rem;
+        margin-bottom: 1rem;
+        color: var(--border-color);
+    }
+
+    /* Alertas */
+    .alert {
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        border: 1px solid transparent;
+    }
+    .alert-success {
+        background-color: rgba(35,134,54,0.1);
+        border-color: rgba(35,134,54,0.3);
+        color: var(--accent-green);
+    }
+    .alert-dismissible {
+        position: relative;
+    }
+    .btn-close {
+        position: absolute;
+        top: 4px;
+        right: 8px;
+        background: none;
+        border: none;
+        color: var(--text-secondary);
+        cursor: pointer;
+        font-size: 1rem;
+    }
+
+    /* Badges */
+    .badge {
+        display: inline-block;
+        padding: 0.1rem 0.3rem;
+        font-size: 0.6rem;
+        font-weight: 600;
+        border-radius: 4px;
+    }
+    .bg-warning {
+        background-color: rgba(210,153,34,0.2);
+        color: var(--accent-orange);
+    }
+    .bg-success {
+        background-color: rgba(35,134,54,0.2);
+        color: var(--accent-green);
+    }
+    .text-success { color: var(--accent-green); }
+    .text-info { color: var(--accent-blue); }
+    .text-muted { color: var(--text-secondary); }
+    .text-warning { color: var(--accent-orange); }
+    .text-primary { color: var(--accent-blue); }
+
+    /* Modal */
+    .modal-content {
+        background-color: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius);
+    }
+    .modal-header {
+        border-bottom: 1px solid var(--border-color);
+        padding: 16px 20px;
+    }
+    .modal-header .modal-title {
+        color: var(--text-primary);
+        font-size: 18px;
+        font-weight: 600;
+    }
+    .modal-header .btn-close {
+        color: var(--text-secondary);
+    }
+    .modal-body {
+        padding: 20px;
+    }
+    .modal-body .form-label {
+        font-weight: 600;
+        font-size: 0.9rem;
+        color: var(--text-secondary);
+    }
+    .modal-body .form-control:read-only {
+        background-color: var(--bg-primary);
+        cursor: not-allowed;
+    }
+    .modal-footer {
+        border-top: 1px solid var(--border-color);
+        padding: 12px 20px;
+    }
+    .modal-lg {
+        max-width: 900px;
+    }
+
+    /* Spinner */
+    .btn-spinner {
+        display: inline-block;
+        width: 1rem;
+        height: 1rem;
+        border: 2px solid rgba(255,255,255,0.3);
+        border-radius: 50%;
+        border-top-color: #fff;
+        animation: spin 1s ease-in-out infinite;
+        margin-right: 0.5rem;
+    }
+    
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    /* Responsive - mantener 50/50 hasta pantallas muy pequeñas */
+    @media (max-width: 768px) {
+        .portal-container {
+            margin: -16px; /* anula padding responsive del base */
+        }
+        .filters-bar form {
+            flex-direction: column;
+            align-items: stretch;
+        }
+        .filter-actions {
+            margin-left: 0;
+            width: 100%;
+        }
+        .portal-body {
+            flex-direction: column;
+        }
+        .map-section,
+        .properties-section {
+            flex: 0 0 100%;
+            width: 100%;
+            min-height: 300px;
+        }
+        .properties-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="portal-container">
+    <!-- Barra de filtros superior -->
+    <div class="filters-bar">
+        <form method="get" id="filter-form">
+            <!-- FILA 1: Distritos ocupa todo el ancho -->
+            <div class="filter-row-distritos">
+                <label>Distritos
+                    <a href="#" id="btn-deselect-all-districts" style="font-size: 0.6rem; color: var(--accent-blue); margin-left: 4px; text-decoration: none; font-weight: normal; text-transform: none;">deseleccionar todos</a>
+                </label>
+                <div class="distrito-checkboxes">
+                    {% for distrito in distritos_arequipa %}
+                        {% if distrito != 'Todos' %}
+                        <label class="distrito-checkbox-label">
+                            <input type="checkbox" class="distrito-checkbox" value="{{ distrito }}">
+                            {{ distrito }}
+                        </label>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- FILA 2: Tipo + Fuentes + acciones -->
+            <div class="filter-row-acciones">
+                <div class="filter-group">
+                    <label for="filter-type">Tipo</label>
+                    <select class="form-select" id="filter-type" name="tipo_propiedad">
+                        <option value="">Todos</option>
+                        {% for tipo in tipos_propiedad %}
+                            <option value="{{ tipo }}">{{ tipo }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="filter-group" style="flex-direction: row; align-items: center; gap: 12px;">
+                    <label style="margin-bottom: 0; white-space: nowrap;">Fuentes:</label>
+                    <label class="distrito-checkbox-label" style="font-size: 0.75rem;">
+                        <input type="checkbox" name="fuente_local" value="1" {% if fuente_local_checked %}checked{% endif %}>
+                        <span class="badge bg-info" style="font-size: 0.65rem;">Local</span>
+                    </label>
+                    <label class="distrito-checkbox-label" style="font-size: 0.75rem;">
+                        <input type="checkbox" name="fuente_externa" value="1" {% if fuente_externa_checked %}checked{% endif %}>
+                        <span class="badge bg-warning text-dark" style="font-size: 0.65rem;">Externa</span>
+                    </label>
+                    <label class="distrito-checkbox-label" style="font-size: 0.75rem;">
+                        <input type="checkbox" name="fuente_propify" value="1" {% if fuente_propify_checked %}checked{% endif %}>
+                        <span class="badge bg-success" style="font-size: 0.65rem;">Propify</span>
+                    </label>
+                </div>
+
+                <div class="filter-actions">
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="fas fa-filter"></i> Filtrar
+                    </button>
+                    <a href="{% url 'ingestas:lista_propiedades' %}" class="btn btn-outline-secondary btn-sm">
+                        <i class="fas fa-times"></i> Limpiar
+                    </a>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Contenido principal: Mapa (izquierda 50%) + Propiedades (derecha 50%) -->
+    <div class="portal-body">
+        <!-- Mapa a la izquierda -->
+        <div class="map-section">
+            <div class="map-header">
+                <i class="fas fa-map"></i> Mapa de Propiedades
+            </div>
+            <div class="map-container">
+                <div id="propertyMap"></div>
+            </div>
+        </div>
+
+        <!-- Propiedades filtradas a la derecha -->
+        <div class="properties-section">
+            <div class="properties-header">
+                <h3 class="properties-title">Propiedades seleccionadas</h3>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <button class="btn-clear-selection" id="btn-clear-selection" style="display: none;" onclick="limpiarSeleccion()">
+                        <i class="fas fa-times"></i> Limpiar
+                    </button>
+                    <span class="properties-count" id="filtered-count">0 propiedades</span>
+                </div>
+            </div>
+
+            <div class="properties-container" id="propertiesContainer">
+                <!-- Estado vacío inicial -->
+                <div class="empty-state" id="empty-state">
+                    <i class="fas fa-map-marked-alt" style="font-size: 2rem; color: var(--text-secondary); margin-bottom: 8px;"></i>
+                    <h5 style="color: var(--text-primary); margin-bottom: 4px; font-size: 0.9rem;">Haz clic en los marcadores del mapa</h5>
+                    <p style="color: var(--text-secondary); font-size: 0.75rem;">Activa distritos con los checkboxes y haz clic en los marcadores del mapa. Cada marcador que selecciones agregará una tarjeta numerada aquí.</p>
+                </div>
+                <div id="selected-property" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+{% load static %}
+
+{{ todas_propiedades_json|json_script:"todas-propiedades-data" }}
+
+<script>
+    // Datos de todas las propiedades (sin paginar) para el mapa
+    const todasPropiedadesJSON = JSON.parse(document.getElementById('todas-propiedades-data').textContent);
+    
+    // URLs de iconos
+    const ICONO_PROPIFFY = '{% static "requerimientos/data/Pin-propify.png" %}';
+    const ICONO_REMAX = '{% static "requerimientos/data/pin-remax.png" %}';
+    const ICONO_ADONDEVIVIR = '{% static "requerimientos/data/adondevivir-pin.png" %}';
+    const ICONO_LOCAL = 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png';
+
+    // Mapeo de índices numéricos de distrito a nombres reales
+    const DISTRITOS_LISTA = [
+        {% for distrito in distritos_arequipa %}
+            {% if distrito != 'Todos' %}
+                '{{ distrito }}'{% if not forloop.last %},{% endif %}
+            {% endif %}
+        {% endfor %}
+    ];
+    const MAPEO_DISTRITOS = {};
+    DISTRITOS_LISTA.forEach((nombre, idx) => {
+        MAPEO_DISTRITOS[(idx + 1).toString()] = nombre;
+    });
+
+    /**
+     * Obtiene el nombre real del distrito para una propiedad.
+     * Las propiedades Propifai tienen distrito_nombre (texto) y distrito (índice numérico).
+     * Las propiedades locales (PropiedadRaw) tienen solo distrito como índice numérico.
+     */
+    function obtenerNombreDistrito(p) {
+        if (p.distrito_nombre && p.distrito_nombre.toString().trim()) {
+            return p.distrito_nombre.toString().trim();
+        }
+        const distritoVal = (p.distrito || '').toString().trim();
+        if (distritoVal && MAPEO_DISTRITOS[distritoVal]) {
+            return MAPEO_DISTRITOS[distritoVal];
+        }
+        return distritoVal;
+    }
+    let map = null;
+    let markers = [];           // Todos los marcadores creados
+    let activeMarkers = [];     // Marcadores actualmente visibles en el mapa
+    let zonePolygons = [];
+    let zoneLabels = [];
+    let googleMapsLoaded = false;
+    let googleMapsLoading = false;
+    let mapInitialized = false;
+    const ZONAS_API = '/cuadrantizacion/zonas/';
+    
+    // Mapa: distrito -> array de propiedades con coordenadas
+    const propiedadesPorDistrito = {};
+    
+    // === SISTEMA DE SELECCIÓN ACUMULATIVA ===
+    const selectedMarkers = new Map(); // numero -> { marker, numero, propertyData }
+    
+    /**
+     * Manejador global para error de carga de imágenes en tarjetas seleccionadas.
+     * Reemplaza la imagen con un placeholder de icono.
+     */
+    window.handleImageError = function(imgEl) {
+        if (imgEl && imgEl.parentElement) {
+            imgEl.parentElement.innerHTML = '<div class="property-image-placeholder"><i class="fas fa-home"></i></div>';
+        }
+    };
+    
+    // Pre-calcular propiedades por distrito
+    todasPropiedadesJSON.forEach(p => {
+        const lat = parseFloat(p.lat);
+        const lng = parseFloat(p.lng);
+        if (isNaN(lat) || isNaN(lng)) return;
+        
+        // Obtener nombre real del distrito (mapea índices numéricos a nombres reales)
+        const distrito = obtenerNombreDistrito(p);
+        if (!distrito) return;
+        
+        if (!propiedadesPorDistrito[distrito]) {
+            propiedadesPorDistrito[distrito] = [];
+        }
+        propiedadesPorDistrito[distrito].push({ ...p, lat, lng });
+    });
+    
+    console.log('Propiedades por distrito:', Object.keys(propiedadesPorDistrito).length, 'distritos');
+    
+    /**
+     * Carga Google Maps API bajo demanda (lazy loading).
+     */
+    function cargarGoogleMaps() {
+        if (googleMapsLoaded) return Promise.resolve();
+        if (googleMapsLoading) {
+            return new Promise((resolve) => {
+                const check = setInterval(() => {
+                    if (googleMapsLoaded) {
+                        clearInterval(check);
+                        resolve();
+                    }
+                }, 100);
+            });
+        }
+        
+        googleMapsLoading = true;
+        
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&callback=Function.prototype';
+            script.async = true;
+            script.defer = true;
+            script.onload = () => {
+                googleMapsLoaded = true;
+                googleMapsLoading = false;
+                resolve();
+            };
+            script.onerror = () => {
+                googleMapsLoading = false;
+                reject(new Error('No se pudo cargar Google Maps'));
+            };
+            document.head.appendChild(script);
+        });
+    }
+
+    /**
+     * Inicializa el mapa vacío (sin marcadores).
+     * Se llama una sola vez al cargar la página.
+     */
+    function inicializarMapaVacio() {
+        if (mapInitialized) return;
+        
+        const mapContainer = document.getElementById('propertyMap');
+        if (!mapContainer) return;
+        
+        // Mostrar loading
+        mapContainer.innerHTML = '<div class="d-flex justify-content-center align-items-center h-100"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando mapa...</span></div><span class="ms-2">Cargando mapa...</span></div>';
+        
+        cargarGoogleMaps()
+            .then(() => {
+                mapContainer.innerHTML = '';
+                
+                const defaultCenter = { lat: -16.4090, lng: -71.5375 };
+                
+                map = new google.maps.Map(mapContainer, {
+                    center: defaultCenter,
+                    zoom: 12,
+                    mapTypeId: google.maps.MapTypeId.ROADMAP,
+                    styles: [
+                        {
+                            featureType: "poi",
+                            elementType: "labels",
+                            stylers: [{ visibility: "off" }]
+                        }
+                    ]
+                });
+                
+                mapInitialized = true;
+                
+                // Cargar zonas de cuadrantización
+                cargarZonasMapa();
+                
+                console.log('Mapa inicializado vacío. Esperando selección de distritos.');
+            })
+            .catch(error => {
+                console.error('Error al cargar Google Maps:', error);
+                mapContainer.innerHTML = '<div class="alert alert-danger m-3">Error al cargar el mapa. Verifica tu conexión a internet.</div>';
+            });
+    }
+
+    /**
+     * Genera el label de texto para mostrar debajo del marcador PNG.
+     * Muestra el nombre del distrito y el precio por metro cuadrado.
+     */
+    function crearLabelDistrito(distrito, precioM2) {
+        const texto = distrito + (precioM2 ? ` S/${precioM2}` : '');
+        return {
+            text: texto,
+            color: '#0d1117',
+            fontSize: '11px',
+            fontWeight: 'bold',
+            fontFamily: 'Arial, sans-serif'
+        };
+    }
+
+    /**
+     * Genera un icono SVG numerado para el marcador seleccionado.
+     * El número se muestra dentro de un círculo con color según la fuente.
+     */
+    function crearIconoNumerado(numero, esPropify, esExterno, esRemax, esAdondevivir) {
+        const size = 36;
+        let fillColor, strokeColor, textColor;
+        
+        if (esPropify) {
+            fillColor = '#238636';    // verde Propify
+            strokeColor = '#2ea043';
+            textColor = '#ffffff';
+        } else if (esRemax) {
+            fillColor = '#da3633';    // rojo Remax
+            strokeColor = '#f85149';
+            textColor = '#ffffff';
+        } else if (esAdondevivir) {
+            fillColor = '#1f6feb';    // azul Adondevivir
+            strokeColor = '#58a6ff';
+            textColor = '#ffffff';
+        } else if (esExterno) {
+            fillColor = '#d29922';    // naranja externo
+            strokeColor = '#e3b341';
+            textColor = '#ffffff';
+        } else {
+            fillColor = '#58a6ff';    // azul local
+            strokeColor = '#79c0ff';
+            textColor = '#ffffff';
+        }
+        
+        const svg = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+                <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 2}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="2"/>
+                <text x="${size/2}" y="${size/2}" text-anchor="middle" dominant-baseline="central"
+                      fill="${textColor}" font-size="14" font-weight="bold" font-family="Arial, sans-serif">
+                    ${numero}
+                </text>
+            </svg>
+        `;
+        
+        return {
+            url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+            scaledSize: new google.maps.Size(size, size),
+            anchor: new google.maps.Point(size/2, size/2)
+        };
+    }
+
+    /**
+     * Actualiza los marcadores en el mapa según los checkboxes de distrito seleccionados.
+     * Acumulativo: agrega marcadores de distritos seleccionados, remueve los no seleccionados.
+     */
+    function actualizarMarcadores() {
+        if (!map || !window.google) return;
+        
+        // Obtener distritos seleccionados
+        const checkboxes = document.querySelectorAll('.distrito-checkbox:checked');
+        const distritosSeleccionados = new Set();
+        checkboxes.forEach(cb => distritosSeleccionados.add(cb.value));
+        
+        console.log('Distritos seleccionados:', [...distritosSeleccionados]);
+        
+        // Remover marcadores que ya no corresponden
+        const markersToRemove = [];
+        activeMarkers.forEach(m => {
+            if (!distritosSeleccionados.has(m._distrito)) {
+                markersToRemove.push(m);
+            }
+        });
+        
+        // Primero, recolectar todos los números a remover
+        const numerosARemover = [];
+        markersToRemove.forEach(m => {
+            if (m._selectedNumero) {
+                numerosARemover.push(m._selectedNumero);
+            }
+        });
+        
+        // Remover marcadores del mapa
+        markersToRemove.forEach(m => {
+            m.setMap(null);
+            const idx = activeMarkers.indexOf(m);
+            if (idx > -1) activeMarkers.splice(idx, 1);
+        });
+        
+        // Remover tarjetas del DOM y restaurar iconos (sin renumerar aún)
+        numerosARemover.forEach(numero => {
+            const card = document.getElementById(`selected-card-${numero}`);
+            if (card) card.remove();
+            
+            const entry = selectedMarkers.get(numero);
+            if (entry && entry.marker) {
+                entry.marker._selectedNumero = null;
+                const p = entry.marker._propertyData;
+                const portal = (p.portal || '').toLowerCase();
+                let iconUrl;
+                if (p.es_propify) iconUrl = ICONO_PROPIFFY;
+                else if (portal === 'remax') iconUrl = ICONO_REMAX;
+                else if (portal === 'adondevivir') iconUrl = ICONO_ADONDEVIVIR;
+                else if (p.es_externo) iconUrl = ICONO_REMAX;
+                else iconUrl = ICONO_LOCAL;
+                const nombreDistrito = obtenerNombreDistrito(p);
+                let precioM2 = '';
+                if (p.precio_publicacion && p.area_construida && p.area_construida > 0) {
+                    const precioNum = parseFloat(p.precio_publicacion);
+                    if (!isNaN(precioNum)) {
+                        precioM2 = Math.round(precioNum / p.area_construida).toString();
+                    }
+                }
+                entry.marker.setIcon({ url: iconUrl, scaledSize: new google.maps.Size(32, 32) });
+                entry.marker.setLabel(crearLabelDistrito(nombreDistrito, precioM2));
+            }
+            selectedMarkers.delete(numero);
+        });
+        
+        // Renumerar todas las tarjetas restantes (una sola vez)
+        if (numerosARemover.length > 0) {
+            reordenarNumeracion();
+        }
+        
+        // Agregar marcadores de distritos recién seleccionados
+        const distritosActuales = new Set(activeMarkers.map(m => m._distrito));
+        
+        distritosSeleccionados.forEach(distrito => {
+            if (distritosActuales.has(distrito)) return; // Ya está en el mapa
+            if (!propiedadesPorDistrito[distrito]) return; // No hay propiedades para este distrito
+            
+            const propiedades = propiedadesPorDistrito[distrito];
+            console.log(`Agregando ${propiedades.length} marcadores para distrito: ${distrito}`);
+            
+            propiedades.forEach(p => {
+                // Determinar icono según portal
+                const portal = (p.portal || '').toLowerCase();
+                let iconUrl;
+                if (p.es_propify) iconUrl = ICONO_PROPIFFY;
+                else if (portal === 'remax') iconUrl = ICONO_REMAX;
+                else if (portal === 'adondevivir') iconUrl = ICONO_ADONDEVIVIR;
+                else if (p.es_externo) iconUrl = ICONO_REMAX;
+                else iconUrl = ICONO_LOCAL;
+                
+                // Obtener nombre real del distrito para esta propiedad
+                const nombreDistrito = obtenerNombreDistrito(p);
+                
+                // Calcular precio por metro cuadrado
+                let precioM2 = '';
+                if (p.precio_publicacion && p.area_construida && p.area_construida > 0) {
+                    const precioNum = parseFloat(p.precio_publicacion);
+                    if (!isNaN(precioNum)) {
+                        precioM2 = Math.round(precioNum / p.area_construida).toString();
+                    }
+                }
+                
+                // Crear marcador sin número inicialmente, con PNG + label de distrito debajo
+                const marker = new google.maps.Marker({
+                    position: { lat: p.lat, lng: p.lng },
+                    map: map,
+                    title: p.titulo || p.descripcion || '',
+                    icon: {
+                        url: iconUrl,
+                        scaledSize: new google.maps.Size(32, 32)
+                    },
+                    label: crearLabelDistrito(nombreDistrito, precioM2),
+                    _distrito: distrito,
+                    _propertyData: p,
+                    _selectedNumero: null  // Se asigna al hacer clic
+                });
+                
+                marker.addListener('click', () => {
+                    agregarPropiedadSeleccionada(marker);
+                });
+                
+                activeMarkers.push(marker);
+            });
+        });
+        
+        // Ajustar zoom para mostrar todos los marcadores activos
+        if (activeMarkers.length > 0) {
+            const bounds = new google.maps.LatLngBounds();
+            activeMarkers.forEach(m => bounds.extend(m.getPosition()));
+            map.fitBounds(bounds);
+            
+            google.maps.event.addListenerOnce(map, 'bounds_changed', () => {
+                if (map.getZoom() > 15) map.setZoom(15);
+            });
+        }
+        
+        console.log(`Total marcadores activos: ${activeMarkers.length}`);
+    }
+
+    /**
+     * Agrega una propiedad a la lista de seleccionadas (acumulativa).
+     * Si ya está seleccionada, hace scroll hasta su tarjeta.
+     */
+    function agregarPropiedadSeleccionada(marker) {
+        const p = marker._propertyData;
+        
+        // Si ya está seleccionada, hacer scroll a su tarjeta
+        if (marker._selectedNumero) {
+            const card = document.getElementById(`selected-card-${marker._selectedNumero}`);
+            if (card) {
+                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // Resaltar temporalmente
+                card.style.transition = 'box-shadow 0.3s';
+                card.style.boxShadow = '0 0 20px rgba(88,166,255,0.6)';
+                setTimeout(() => {
+                    card.style.boxShadow = '';
+                }, 1500);
+            }
+            return;
+        }
+        
+        // Asignar número secuencial basado en la cantidad actual + 1
+        // Esto asegura que siempre sea 1, 2, 3... incluso después de limpiar
+        const numero = selectedMarkers.size + 1;
+        
+        marker._selectedNumero = numero;
+        
+        // Actualizar icono del marcador con el número
+        const esPropify = p.es_propify;
+        const portal = (p.portal || '').toLowerCase();
+        const esRemax = portal === 'remax';
+        const esAdondevivir = portal === 'adondevivir';
+        const esExterno = p.es_externo || esRemax || esAdondevivir;
+        marker.setIcon(crearIconoNumerado(numero, esPropify, esExterno, esRemax, esAdondevivir));
+        
+        // Registrar en el mapa de seleccionados
+        selectedMarkers.set(numero, { marker, numero, propertyData: p });
+        
+        // Agregar tarjeta
+        agregarTarjetaPropiedad(p, numero);
+        
+        // Actualizar contador
+        actualizarContadorSeleccionadas();
+    }
+
+    /**
+     * Agrega una tarjeta de propiedad al panel derecho.
+     */
+    function agregarTarjetaPropiedad(p, numero) {
+        const container = document.getElementById('selected-property');
+        const emptyState = document.getElementById('empty-state');
+        
+        // Validar que los elementos existan
+        if (!container || !emptyState) {
+            console.error('agregarTarjetaPropiedad: no se encontraron contenedores en el DOM');
+            return;
+        }
+        
+        // Escapar caracteres HTML en valores de texto para evitar que rompan el DOM
+        // al insertarlos via insertAdjacentHTML
+        function escaparHTML(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&')
+                .replace(/\"/g, '"')
+                .replace(/\'/g, '&#x27;')
+                .replace(/</g, '<')
+                .replace(/>/g, '>');
+        }
+        
+        const precioVal = p.precio_usd || p.precio;
+        let precioStr = 'Consultar';
+        try {
+            const precioNum = Number(precioVal);
+            if (!isNaN(precioNum) && precioNum > 0) {
+                precioStr = '$' + precioNum.toLocaleString('es-PE', {minimumFractionDigits: 0});
+            }
+        } catch(e) {
+            precioStr = 'Consultar';
+        }
+        const distrito = escaparHTML(p.distrito_nombre || p.distrito || '');
+        const tipo = escaparHTML(p.tipo_propiedad || 'Propiedad');
+        const desc = escaparHTML(p.titulo || p.descripcion || 'Sin descripci\u00f3n');
+        const img = p.primera_imagen || p.imagen_principal || '';
+        const imgSrc = img.replace(/"/g, '%22').replace(/'/g, '%27');
+        let area = '';
+        try {
+            area = p.area_construida ? Number(p.area_construida).toFixed(0) + ' m\u00b2' : '';
+        } catch(e) { area = ''; }
+        const habs = escaparHTML(p.habitaciones || p.numero_habitaciones || '');
+        const banos = escaparHTML(p.banios || p.numero_banos || '');
+        const direccion = escaparHTML(p.direccion || '');
+        const url = p.url || '';
+        const urlAttr = url.replace(/"/g, '%22').replace(/'/g, '%27');
+        
+        // Determinar portal/fuente para mostrar logo
+        const portal = (p.portal || '').toLowerCase();
+        let badgeClass, badgeText, logoSrc;
+        if (p.es_propify) {
+            badgeClass = 'bg-success';
+            badgeText = 'Propify';
+            logoSrc = ICONO_PROPIFFY;
+        } else if (portal === 'remax') {
+            badgeClass = 'bg-danger';
+            badgeText = 'Remax';
+            logoSrc = ICONO_REMAX;
+        } else if (portal === 'adondevivir') {
+            badgeClass = 'bg-info';
+            badgeText = 'Adondevivir';
+            logoSrc = ICONO_ADONDEVIVIR;
+        } else if (p.es_externo) {
+            badgeClass = 'bg-warning text-dark';
+            badgeText = 'Externa';
+            logoSrc = ICONO_REMAX;
+        } else {
+            badgeClass = 'bg-info';
+            badgeText = 'Local';
+            logoSrc = ICONO_LOCAL;
+        }
+        
+        emptyState.style.display = 'none';
+        container.style.display = 'block';
+        
+        // Determinar colores del badge numerado según portal
+        let badgeBg, badgeBorder;
+        if (p.es_propify) {
+            badgeBg = '#238636'; badgeBorder = '#2ea043';
+        } else if (portal === 'remax') {
+            badgeBg = '#da3633'; badgeBorder = '#f85149';
+        } else if (portal === 'adondevivir') {
+            badgeBg = '#1f6feb'; badgeBorder = '#58a6ff';
+        } else if (p.es_externo) {
+            badgeBg = '#d29922'; badgeBorder = '#e3b341';
+        } else {
+            badgeBg = '#58a6ff'; badgeBorder = '#79c0ff';
+        }
+        
+        const cardHtml = `
+            <div class="property-card selected-card" id="selected-card-${numero}" data-numero="${numero}" style="border-color: var(--accent-blue); box-shadow: 0 0 12px rgba(88,166,255,0.3); position: relative;">
+                <!-- Número grande en la esquina superior izquierda -->
+                <div class="card-number-badge" style="
+                    position: absolute;
+                    top: -8px;
+                    left: -8px;
+                    width: 32px;
+                    height: 32px;
+                    border-radius: 50%;
+                    background: ${badgeBg};
+                    color: white;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 14px;
+                    font-weight: bold;
+                    font-family: Arial, sans-serif;
+                    border: 2px solid ${badgeBorder};
+                    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+                    z-index: 10;
+                ">${numero}</div>
+                <!-- Botón para remover -->
+                <button class="btn-remove-card" onclick="removerTarjetaPorNumero(${numero})" style="
+                    position: absolute;
+                    top: -8px;
+                    right: -8px;
+                    width: 24px;
+                    height: 24px;
+                    border-radius: 50%;
+                    background: #f85149;
+                    color: white;
+                    border: 2px solid #ff6b63;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 12px;
+                    font-weight: bold;
+                    cursor: pointer;
+                    z-index: 10;
+                    line-height: 1;
+                    padding: 0;
+                ">&times;</button>
+                <div class="property-image-container" style="width: 120px; height: 120px;">
+                    ${imgSrc ? `<img src="${imgSrc}" alt="${tipo}" class="property-image" onerror="window.handleImageError(this)">`
+                          : `<div class="property-image-placeholder"><i class="fas fa-home"></i></div>`}
+                </div>
+                <div class="property-content">
+                    <div class="property-header">
+                        <span class="property-type">
+                            ${tipo}
+                            <span class="badge ${badgeClass} ms-1" style="font-size: 0.6rem; padding: 0.1rem 0.3rem; display: inline-flex; align-items: center; gap: 3px;">
+                                ${logoSrc ? `<img src="${logoSrc}" style="width: 12px; height: 12px; border-radius: 50%; object-fit: cover;">` : ''}
+                                ${badgeText}
+                            </span>
+                        </span>
+                        <div class="property-price" style="font-size: 1.1rem;">${precioStr}</div>
+                    </div>
+                    <div class="property-description" style="-webkit-line-clamp: 3;">${desc}</div>
+                    <div class="property-location">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <span>${distrito}</span>
+                    </div>
+                    <div class="property-features">
+                        ${area ? `<div class="feature-item"><i class="fas fa-ruler-combined"></i><span>${area}</span></div>` : ''}
+                        ${habs ? `<div class="feature-item"><i class="fas fa-bed"></i><span>${habs} hab.</span></div>` : ''}
+                        ${banos ? `<div class="feature-item"><i class="fas fa-bath"></i><span>${banos} baños</span></div>` : ''}
+                        <div class="feature-item"><i class="fas fa-tag"></i><span>${badgeText}</span></div>
+                    </div>
+                    <div class="property-footer">
+                        <span class="property-source">${direccion}</span>
+                        <div class="property-actions">
+                            ${urlAttr ? `<a href="${urlAttr}" target="_blank" class="btn btn-external btn-sm"><i class="fas fa-external-link-alt"></i> Ver original</a>` : ''}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        try {
+            container.insertAdjacentHTML('beforeend', cardHtml);
+        } catch(e) {
+            console.error('Error al insertar tarjeta en el DOM:', e);
+            return;
+        }
+        
+        // Scroll a la nueva tarjeta
+        setTimeout(() => {
+            const newCard = document.getElementById(`selected-card-${numero}`);
+            if (newCard) {
+                newCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }, 100);
+    }
+
+    /**
+     * Reordena la numeración de todas las tarjetas/marcadores seleccionados
+     * para que queden 1, 2, 3... sin huecos.
+     */
+    function reordenarNumeracion() {
+        const cardsContainer = document.getElementById('selected-property');
+        const remainingCards = cardsContainer.querySelectorAll('.selected-card');
+        
+        if (remainingCards.length === 0) {
+            document.getElementById('empty-state').style.display = 'flex';
+            cardsContainer.style.display = 'none';
+            actualizarContadorSeleccionadas();
+            return;
+        }
+        
+        // Convertir el Map a array ordenado por número original
+        const entries = Array.from(selectedMarkers.entries()).sort((a, b) => a[0] - b[0]);
+        
+        // Limpiar el Map actual
+        selectedMarkers.clear();
+        
+        // Reconstruir con nueva numeración
+        entries.forEach(([, entry], index) => {
+            const nuevoNumero = index + 1;
+            const marker = entry.marker;
+            const p = marker._propertyData;
+            
+            // Actualizar marker
+            marker._selectedNumero = nuevoNumero;
+            const esPropify = p.es_propify;
+            const portal = (p.portal || '').toLowerCase();
+            const esRemax = portal === 'remax';
+            const esAdondevivir = portal === 'adondevivir';
+            const esExterno = p.es_externo || esRemax || esAdondevivir;
+            marker.setIcon(crearIconoNumerado(nuevoNumero, esPropify, esExterno, esRemax, esAdondevivir));
+            
+            // Actualizar tarjeta en el DOM
+            const oldCard = document.getElementById(`selected-card-${entry.numero}`);
+            if (oldCard) {
+                oldCard.id = `selected-card-${nuevoNumero}`;
+                oldCard.setAttribute('data-numero', nuevoNumero);
+                
+                // Actualizar el badge numérico
+                const badge = oldCard.querySelector('.card-number-badge');
+                if (badge) {
+                    badge.textContent = nuevoNumero;
+                    badge.style.background = p.es_propify ? '#238636' : p.es_externo ? '#d29922' : '#58a6ff';
+                    badge.style.borderColor = p.es_propify ? '#2ea043' : p.es_externo ? '#e3b341' : '#79c0ff';
+                }
+                
+                // Actualizar el onclick del botón remover
+                const removeBtn = oldCard.querySelector('.btn-remove-card');
+                if (removeBtn) {
+                    removeBtn.setAttribute('onclick', `removerTarjetaPorNumero(${nuevoNumero})`);
+                }
+            }
+            
+            // Guardar con nuevo número
+            selectedMarkers.set(nuevoNumero, { marker, numero: nuevoNumero, propertyData: p });
+        });
+        
+        actualizarContadorSeleccionadas();
+    }
+
+    /**
+     * Remueve una tarjeta por su número y actualiza el marcador correspondiente.
+     * Luego renumera todas las tarjetas restantes para que queden 1,2,3... sin huecos.
+     */
+    function removerTarjetaPorNumero(numero) {
+        // Remover tarjeta del DOM
+        const card = document.getElementById(`selected-card-${numero}`);
+        if (card) {
+            card.remove();
+        }
+        
+        // Restaurar icono del marcador a su estado original (sin número)
+        const entry = selectedMarkers.get(numero);
+        if (entry && entry.marker) {
+            entry.marker._selectedNumero = null;
+            const p = entry.marker._propertyData;
+            const portal = (p.portal || '').toLowerCase();
+            let iconUrl;
+            if (p.es_propify) {
+                iconUrl = ICONO_PROPIFFY;
+            } else if (portal === 'remax') {
+                iconUrl = ICONO_REMAX;
+            } else if (portal === 'adondevivir') {
+                iconUrl = ICONO_ADONDEVIVIR;
+            } else if (p.es_externo) {
+                iconUrl = ICONO_REMAX;
+            } else {
+                iconUrl = ICONO_LOCAL;
+            }
+            const nombreDistrito = obtenerNombreDistrito(p);
+            let precioM2 = '';
+            if (p.precio_publicacion && p.area_construida && p.area_construida > 0) {
+                const precioNum = parseFloat(p.precio_publicacion);
+                if (!isNaN(precioNum)) {
+                    precioM2 = Math.round(precioNum / p.area_construida).toString();
+                }
+            }
+            entry.marker.setIcon({ url: iconUrl, scaledSize: new google.maps.Size(32, 32) });
+            entry.marker.setLabel(crearLabelDistrito(nombreDistrito, precioM2));
+        }
+        
+        selectedMarkers.delete(numero);
+        
+        // Renumerar todas las tarjetas restantes
+        reordenarNumeracion();
+    }
+
+    /**
+     * Actualiza el contador de propiedades seleccionadas y el botón Limpiar.
+     */
+    function actualizarContadorSeleccionadas() {
+        const countSpan = document.getElementById('filtered-count');
+        const btnClear = document.getElementById('btn-clear-selection');
+        const total = selectedMarkers.size;
+        if (total === 0) {
+            countSpan.textContent = '0 propiedades';
+            if (btnClear) btnClear.style.display = 'none';
+        } else {
+            countSpan.textContent = `${total} propiedad${total !== 1 ? 'es' : ''} seleccionada${total !== 1 ? 's' : ''}`;
+            if (btnClear) btnClear.style.display = 'inline-flex';
+        }
+    }
+
+    /**
+     * Carga las zonas de cuadrantización en el mapa.
+     */
+    function cargarZonasMapa() {
+        if (!map || !window.google) return;
+        
+        fetch(ZONAS_API)
+            .then(response => response.json())
+            .then(data => {
+                zonePolygons.forEach(polygon => polygon.setMap(null));
+                zonePolygons = [];
+                zoneLabels.forEach(label => label.setMap(null));
+                zoneLabels = [];
+                
+                const zones = data.results || data;
+                
+                zones.forEach(zone => {
+                    if (zone.coordenadas && zone.coordenadas.length > 0) {
+                        const polygon = new google.maps.Polygon({
+                            paths: zone.coordenadas.map(coord => ({ lat: coord[0], lng: coord[1] })),
+                            strokeColor: zone.color_borde || '#1976D2',
+                            strokeOpacity: 0.8,
+                            strokeWeight: 2,
+                            fillColor: zone.color_fill || '#2196F3',
+                            fillOpacity: zone.opacidad || 0.2,
+                            editable: false,
+                            draggable: false
+                        });
+                        
+                        polygon.setMap(map);
+                        polygon.zoneData = zone;
+                        
+                        // Sin infoWindow al hacer clic en polígonos
+                        
+                        zonePolygons.push(polygon);
+                        
+                        const coords = zone.coordenadas;
+                        if (coords && coords.length > 0) {
+                            let latSum = 0, lngSum = 0;
+                            coords.forEach(c => { latSum += c[0]; lngSum += c[1]; });
+                            const center = { lat: latSum / coords.length, lng: lngSum / coords.length };
+                            
+                            const levelColors = {
+                                'pais': '#FF0000', 'departamento': '#FF6600',
+                                'provincia': '#FFCC00', 'distrito': '#33CC33',
+                                'zona': '#3366FF', 'subzona': '#9900CC'
+                            };
+                            const color = levelColors[zone.nivel] || '#000000';
+                            
+                            const label = new google.maps.Marker({
+                                position: center,
+                                map: map,
+                                icon: { path: google.maps.SymbolPath.CIRCLE, scale: 0, fillOpacity: 0, strokeOpacity: 0 },
+                                label: {
+                                    text: zone.nombre_zona || `Zona ${zone.id}`,
+                                    color: color,
+                                    fontSize: '12px',
+                                    fontWeight: 'bold',
+                                    className: 'zone-label'
+                                },
+                                zIndex: 1000
+                            });
+                            zoneLabels.push(label);
+                        }
+                    }
+                });
+                
+                console.log(`Cargadas ${zonePolygons.length} zonas de cuadrantización con ${zoneLabels.length} etiquetas`);
+            })
+            .catch(error => {
+                console.error('Error al cargar zonas:', error);
+            });
+    }
+
+    /**
+     * Limpia toda la selección: remueve todas las tarjetas y resetea los marcadores.
+     */
+    function limpiarSeleccion() {
+        // Remover todas las tarjetas del DOM
+        const cardsContainer = document.getElementById('selected-property');
+        cardsContainer.querySelectorAll('.selected-card').forEach(card => card.remove());
+        
+        // Restaurar iconos de todos los marcadores seleccionados
+        selectedMarkers.forEach((entry) => {
+            if (entry.marker) {
+                entry.marker._selectedNumero = null;
+                const p = entry.marker._propertyData;
+                const portal = (p.portal || '').toLowerCase();
+                let iconUrl;
+                if (p.es_propify) {
+                    iconUrl = ICONO_PROPIFFY;
+                } else if (portal === 'remax') {
+                    iconUrl = ICONO_REMAX;
+                } else if (portal === 'adondevivir') {
+                    iconUrl = ICONO_ADONDEVIVIR;
+                } else if (p.es_externo) {
+                    iconUrl = ICONO_REMAX;
+                } else {
+                    iconUrl = ICONO_LOCAL;
+                }
+                const nombreDistrito = obtenerNombreDistrito(p);
+                let precioM2 = '';
+                if (p.precio_publicacion && p.area_construida && p.area_construida > 0) {
+                    const precioNum = parseFloat(p.precio_publicacion);
+                    if (!isNaN(precioNum)) {
+                        precioM2 = Math.round(precioNum / p.area_construida).toString();
+                    }
+                }
+                entry.marker.setIcon({ url: iconUrl, scaledSize: new google.maps.Size(32, 32) });
+                entry.marker.setLabel(crearLabelDistrito(nombreDistrito, precioM2));
+            }
+        });
+        
+        selectedMarkers.clear();
+        
+        // Mostrar estado vacío
+        document.getElementById('empty-state').style.display = 'flex';
+        cardsContainer.style.display = 'none';
+        
+        actualizarContadorSeleccionadas();
+    }
+
+    // Inicializar todo al cargar la página
+    document.addEventListener('DOMContentLoaded', function() {
+        // Inicializar filtro tipo desde URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const tipoEl = document.getElementById('filter-type');
+        if (tipoEl) tipoEl.value = urlParams.get('tipo_propiedad') || '';
+        
+        // Inicializar el mapa vacío (siempre visible)
+        inicializarMapaVacio();
+        
+        // Escuchar cambios en los checkboxes de distrito
+        document.querySelectorAll('.distrito-checkbox').forEach(cb => {
+            cb.addEventListener('change', function() {
+                actualizarMarcadores();
+            });
+        });
+        
+        // Botón "Deseleccionar todos"
+        const btnDeselect = document.getElementById('btn-deselect-all-districts');
+        if (btnDeselect) {
+            btnDeselect.addEventListener('click', function(e) {
+                e.preventDefault();
+                document.querySelectorAll('.distrito-checkbox:checked').forEach(cb => {
+                    cb.checked = false;
+                });
+                actualizarMarcadores();
+            });
+        }
+    });
+
+</script>
+{% endblock %}

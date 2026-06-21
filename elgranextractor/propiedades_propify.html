@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acceso a Propiedades Propify</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            background: #f5f5f5;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #28a745;
+            border-bottom: 3px solid #28a745;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #333;
+            margin-top: 30px;
+        }
+        .card {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 15px 0;
+            border-left: 4px solid #28a745;
+        }
+        .card h3 {
+            margin-top: 0;
+            color: #28a745;
+        }
+        .btn {
+            display: inline-block;
+            background: #28a745;
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            margin: 10px 5px 10px 0;
+            transition: background 0.3s;
+        }
+        .btn:hover {
+            background: #218838;
+        }
+        .btn-secondary {
+            background: #6c757d;
+        }
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        .alert {
+            background: #e9f7ef;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .alert-warning {
+            background: #fff3cd;
+            border-color: #ffeaa7;
+            color: #856404;
+        }
+        ul {
+            padding-left: 20px;
+        }
+        li {
+            margin-bottom: 8px;
+        }
+        .url {
+            background: #f1f1f1;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-family: monospace;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Propiedades Propify - Página de Acceso</h1>
+        
+        <div class="alert">
+            <strong>¡Importante!</strong> Esta página proporciona enlaces directos a las propiedades de la base de datos Propify.
+            Hay 43 propiedades disponibles en la base de datos.
+        </div>
+        
+        <h2>Vistas Disponibles</h2>
+        
+        <div class="card">
+            <h3>1. Vista Directa (HTML Generado)</h3>
+            <p>Muestra todas las propiedades Propify en HTML simple generado directamente por Django.</p>
+            <p><strong>Ventajas:</strong> No requiere recarga del servidor, muestra todas las propiedades inmediatamente.</p>
+            <a href="/ingestas/propiedades-propify-directa/" class="btn">Abrir Vista Directa</a>
+            <div class="url">URL: http://127.0.0.1:8000/ingestas/propiedades-propify-directa/</div>
+        </div>
+        
+        <div class="card">
+            <h3>2. Vista Temporal Propify</h3>
+            <p>Vista que usa el sistema de templates de Django para mostrar propiedades Propify.</p>
+            <a href="/ingestas/propiedades-propify/" class="btn">Abrir Vista Temporal</a>
+            <div class="url">URL: http://127.0.0.1:8000/ingestas/propiedades-propify/</div>
+        </div>
+        
+        <div class="card">
+            <h3>3. Vista Principal con Filtro Propify</h3>
+            <p>La vista principal de propiedades con el filtro "Propify" activado.</p>
+            <p>Muestra propiedades Propify intercaladas con otras propiedades.</p>
+            <a href="/ingestas/propiedades/?fuente_propify=propify" class="btn">Abrir con Filtro Propify</a>
+            <div class="url">URL: http://127.0.0.1:8000/ingestas/propiedades/?fuente_propify=propify</div>
+        </div>
+        
+        <div class="card">
+            <h3>4. Vista Principal Completa</h3>
+            <p>Todas las propiedades (locales, externas y Propify) en la vista principal.</p>
+            <p>Las propiedades Propify aparecen con un badge verde "Propify".</p>
+            <a href="/ingestas/propiedades/" class="btn btn-secondary">Abrir Vista Principal</a>
+            <div class="url">URL: http://127.0.0.1:8000/ingestas/propiedades/</div>
+        </div>
+        
+        <h2>Información Técnica</h2>
+        <ul>
+            <li><strong>Base de datos Propify:</strong> SQL Server con tabla "properties"</li>
+            <li><strong>Propiedades encontradas:</strong> 43 propiedades</li>
+            <li><strong>Con coordenadas:</strong> 42 propiedades tienen coordenadas válidas</li>
+            <li><strong>Modelo Django:</strong> PropifaiProperty en <code>webapp/propifai/models.py</code></li>
+            <li><strong>Configuración:</strong> Base de datos de solo lectura (managed=False)</li>
+        </ul>
+        
+        <div class="alert alert-warning">
+            <strong>Nota sobre el servidor:</strong> El servidor está ejecutándose con <code>--noreload</code>, 
+            por lo que los cambios en archivos Python no se recargan automáticamente. 
+            La vista directa debería funcionar inmediatamente.
+        </div>
+        
+        <h2>Solución de Problemas</h2>
+        <p>Si no ves propiedades Propify:</p>
+        <ol>
+            <li>Prueba la <strong>Vista Directa</strong> primero (debería funcionar siempre)</li>
+            <li>Verifica que el servidor esté ejecutándose: <code>http://127.0.0.1:8000/</code></li>
+            <li>Ejecuta el script de verificación: <code>python verificar_propify_directo.py</code></li>
+            <li>Revisa los logs del servidor para errores</li>
+        </ol>
+        
+        <p style="margin-top: 30px; text-align: center; color: #666;">
+            Sistema de Gestión Inmobiliaria - Propiedades Propify<br>
+            Última actualización: 25/02/2026
+        </p>
+    </div>
+</body>
+</html>

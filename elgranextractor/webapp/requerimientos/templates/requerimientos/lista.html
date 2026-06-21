@@ -1,0 +1,3389 @@
+{% extends 'propifai_base.html' %}
+{% load static %}
+{% load requerimientos_extras %}
+
+{% block title %}Requerimientos - Propifai{% endblock %}
+
+{% block extra_head %}
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    
+    body {
+        background-color: #0d1117;
+        color: #c9d1d9;
+        line-height: 1.6;
+        padding: 20px;
+    }
+    
+    .req-container {
+        max-width: 1600px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+    
+    .req-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 30px;
+        padding-bottom: 20px;
+        border-bottom: 1px solid #30363d;
+    }
+    
+    .req-header h1 {
+        color: #58a6ff;
+        font-size: 28px;
+    }
+    
+    .req-header .header-subtitle {
+        color: #8b949e;
+        font-size: 14px;
+        margin-top: 4px;
+    }
+    
+    .req-header-actions {
+        display: flex;
+        gap: 15px;
+    }
+    
+    .btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        transition: all 0.2s;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .btn-primary {
+        background-color: #238636;
+        color: white;
+    }
+    
+    .btn-primary:hover {
+        background-color: #2ea043;
+    }
+    
+    .btn-secondary {
+        background-color: #30363d;
+        color: #c9d1d9;
+    }
+    
+    .btn-secondary:hover {
+        background-color: #3c444d;
+    }
+    
+    .btn-danger {
+        background-color: #da3633;
+        color: white;
+    }
+    
+    .btn-danger:hover {
+        background-color: #f85149;
+    }
+    
+    .btn-sm {
+        padding: 6px 12px;
+        font-size: 12px;
+    }
+    
+    .messages {
+        margin-bottom: 20px;
+    }
+    
+    .alert {
+        padding: 12px 16px;
+        border-radius: 6px;
+        margin-bottom: 10px;
+        border: 1px solid transparent;
+    }
+    
+    .alert-success {
+        background-color: rgba(35, 134, 54, 0.1);
+        border-color: rgba(35, 134, 54, 0.3);
+        color: #3fb950;
+    }
+    
+    .alert-error {
+        background-color: rgba(218, 54, 51, 0.1);
+        border-color: rgba(218, 54, 51, 0.3);
+        color: #f85149;
+    }
+    
+    .alert-info {
+        background-color: rgba(88, 166, 255, 0.1);
+        border-color: rgba(88, 166, 255, 0.3);
+        color: #58a6ff;
+    }
+    
+    /* ── Filtros ─────────────────────────── */
+    .filters-section {
+        background-color: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 30px;
+    }
+    
+    .filters-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid #30363d;
+        cursor: pointer;
+    }
+    
+    .filters-header h3 {
+        color: #c9d1d9;
+        font-size: 16px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .filters-header .toggle-icon {
+        color: #8b949e;
+        font-size: 12px;
+        transition: transform 0.2s;
+    }
+    
+    .filters-header .toggle-icon.collapsed {
+        transform: rotate(-90deg);
+    }
+    
+    .filter-form {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 14px;
+    }
+    
+    .filter-full-width {
+        grid-column: 1 / -1;
+    }
+    
+    .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    
+    .form-group label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #8b949e;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .form-control {
+        padding: 8px 10px;
+        background-color: #0d1117;
+        border: 1px solid #30363d;
+        border-radius: 6px;
+        color: #c9d1d9;
+        font-size: 13px;
+    }
+    
+    .form-control:focus {
+        outline: none;
+        border-color: #58a6ff;
+    }
+    
+    select.form-control option {
+        background-color: #161b22;
+        color: #c9d1d9;
+    }
+    
+    .filter-actions {
+        display: flex;
+        gap: 10px;
+        align-items: flex-end;
+    }
+    
+    .filter-actions .btn {
+        flex: 1;
+    }
+    
+    /* ── Stats Bar ────────────────────────── */
+    .stats-bar {
+        display: flex;
+        gap: 16px;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+    }
+    
+    .stat-pill {
+        background-color: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 20px;
+        padding: 8px 18px;
+        font-size: 13px;
+        color: #8b949e;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .stat-pill strong {
+        color: #c9d1d9;
+        font-size: 15px;
+    }
+    
+    .stat-pill .stat-green { color: #3fb950; }
+    .stat-pill .stat-blue { color: #58a6ff; }
+    .stat-pill .stat-orange { color: #d29922; }
+    .stat-pill .stat-purple { color: #8957e5; }
+    
+    /* ── Tabla ────────────────────────────── */
+    .req-table-wrapper {
+        background-color: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        overflow-x: auto;
+        overflow-y: auto;
+        max-height: calc(100vh * 0.33);
+        min-height: 250px;
+    }
+    
+    .req-table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 1400px;
+    }
+    
+    .req-table thead th {
+        padding: 12px 14px;
+        background-color: #21262d;
+        border-bottom: 1px solid #30363d;
+        font-weight: 600;
+        color: #8b949e;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        white-space: nowrap;
+        text-align: left;
+        position: sticky;
+        top: 0;
+        z-index: 3;
+    }
+    
+    .req-table tbody td {
+        padding: 10px 14px;
+        border-bottom: 1px solid #21262d;
+        font-size: 13px;
+        vertical-align: top;
+    }
+    
+    .req-table tbody tr:hover {
+        background-color: #1c2128;
+    }
+    
+    .req-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+    
+    /* Badges */
+    .badge {
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 10px;
+        font-size: 11px;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    
+    /* ── Verificado — Neón fosforescente ──── */
+    .badge-verificado {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 12px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        cursor: pointer;
+        transition: all 0.2s;
+        border: 1px solid transparent;
+    }
+    .badge-verificado.verificado-si {
+        color: #00ff41;
+        background-color: rgba(0, 255, 65, 0.1);
+        border-color: rgba(0, 255, 65, 0.3);
+        box-shadow: 0 0 8px rgba(0, 255, 65, 0.15), inset 0 0 8px rgba(0, 255, 65, 0.05);
+        text-shadow: 0 0 6px rgba(0, 255, 65, 0.5);
+    }
+    .badge-verificado.verificado-si:hover {
+        box-shadow: 0 0 14px rgba(0, 255, 65, 0.3), inset 0 0 10px rgba(0, 255, 65, 0.08);
+        border-color: rgba(0, 255, 65, 0.6);
+    }
+    .badge-verificado.verificado-no {
+        color: #ff1744;
+        background-color: rgba(255, 23, 68, 0.1);
+        border-color: rgba(255, 23, 68, 0.3);
+        box-shadow: 0 0 8px rgba(255, 23, 68, 0.15), inset 0 0 8px rgba(255, 23, 68, 0.05);
+        text-shadow: 0 0 6px rgba(255, 23, 68, 0.5);
+        animation: neon-pulse 1.5s ease-in-out infinite;
+    }
+    .badge-verificado.verificado-no:hover {
+        box-shadow: 0 0 14px rgba(255, 23, 68, 0.3), inset 0 0 10px rgba(255, 23, 68, 0.08);
+        border-color: rgba(255, 23, 68, 0.6);
+        animation: none;
+    }
+    @keyframes neon-pulse {
+        0%, 100% { opacity: 1; box-shadow: 0 0 8px rgba(255, 23, 68, 0.15); }
+        50% { opacity: 0.85; box-shadow: 0 0 16px rgba(255, 23, 68, 0.35); }
+    }
+    
+    .badge-green {
+        background-color: rgba(35, 134, 54, 0.2);
+        color: #3fb950;
+    }
+    
+    .badge-red {
+        background-color: rgba(218, 54, 51, 0.2);
+        color: #f85149;
+    }
+    
+    .badge-blue {
+        background-color: rgba(88, 166, 255, 0.15);
+        color: #58a6ff;
+    }
+    
+    .badge-orange {
+        background-color: rgba(210, 153, 34, 0.2);
+        color: #d29922;
+    }
+    
+    .badge-purple {
+        background-color: rgba(137, 87, 229, 0.2);
+        color: #8957e5;
+    }
+    
+    .badge-gray {
+        background-color: rgba(110, 118, 129, 0.2);
+        color: #8b949e;
+    }
+    
+    .badge-cyan {
+        background-color: rgba(56, 178, 172, 0.2);
+        color: #39b2ac;
+    }
+    
+    /* Agente name */
+    .agent-name {
+        font-weight: 600;
+        color: #58a6ff;
+    }
+    
+    .agent-phone {
+        color: #8b949e;
+        font-size: 12px;
+    }
+    
+    /* Fuente */
+    .fuente-label {
+        font-size: 12px;
+        color: #8b949e;
+    }
+    
+    /* Mensaje original (truncado) */
+    .msg-preview {
+        max-width: 160px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        font-size: 12px;
+        color: #8b949e;
+        line-height: 1.4;
+    }
+    
+    .msg-preview:hover {
+        -webkit-line-clamp: unset;
+        overflow: visible;
+        background-color: #1c2128;
+        padding: 4px;
+        border-radius: 4px;
+        position: relative;
+        z-index: 10;
+        max-width: 400px;
+    }
+    
+    /* Acciones — sticky a la derecha */
+    .actions-cell {
+        display: flex;
+        gap: 6px;
+        white-space: nowrap;
+    }
+    .req-table th:last-child,
+    .req-table td:last-child {
+        position: sticky;
+        right: 0;
+        background-color: #161b22;
+        z-index: 2;
+        min-width: 80px;
+    }
+    .req-table thead th:last-child {
+        background-color: #21262d;
+        z-index: 4;
+    }
+    .req-table tbody tr:hover td:last-child {
+        background-color: #1c2128;
+    }
+    
+    /* Presupuesto */
+    .presupuesto-val {
+        font-weight: 600;
+        color: #d29922;
+        white-space: nowrap;
+    }
+    
+    /* Fecha */
+    .fecha-cell {
+        white-space: nowrap;
+        font-size: 12px;
+        color: #8b949e;
+    }
+    
+    /* Características */
+    .caracts {
+        display: flex;
+        gap: 4px;
+        flex-wrap: wrap;
+    }
+    
+    .caracts .badge {
+        font-size: 10px;
+    }
+    
+    /* Acciones col */
+    .actions-cell {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+    
+    /* ── Paginación ────────────────────────── */
+    .pagination-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 20px;
+        padding: 16px 0;
+        border-top: 1px solid #30363d;
+        color: #8b949e;
+        font-size: 13px;
+    }
+    
+    .pagination-links {
+        display: flex;
+        gap: 6px;
+    }
+    
+    .pagination-links a,
+    .pagination-links span {
+        padding: 6px 12px;
+        border: 1px solid #30363d;
+        border-radius: 4px;
+        text-decoration: none;
+        color: #c9d1d9;
+        font-size: 13px;
+        transition: all 0.2s;
+    }
+    
+    .pagination-links a:hover {
+        background-color: #30363d;
+        border-color: #58a6ff;
+    }
+    
+    .pagination-links .current {
+        background-color: #238636;
+        border-color: #238636;
+        color: white;
+    }
+    
+    .pagination-links .disabled {
+        color: #484f58;
+        cursor: default;
+    }
+    
+    /* ── Empty State ────────────────────────── */
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #8b949e;
+    }
+    
+    .empty-state h3 {
+        font-size: 20px;
+        margin-bottom: 10px;
+        color: #c9d1d9;
+    }
+    
+    .empty-state p {
+        margin-bottom: 20px;
+    }
+    
+    /* ── Footer ─────────────────────────────── */
+    .req-footer {
+        text-align: center;
+        color: #8b949e;
+        font-size: 14px;
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 1px solid #30363d;
+    }
+    
+    /* ── Tooltip para expandir texto ────────── */
+    .expandable-text {
+        cursor: pointer;
+    }
+    
+    /* ── Responive para los filtros ─────────── */
+    @media (max-width: 768px) {
+        .req-header {
+            flex-direction: column;
+            gap: 16px;
+            align-items: flex-start;
+        }
+        .filter-form {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    /* ── Quality Score Badges ───────────────── */
+    .quality-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 36px;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: help;
+        gap: 3px;
+    }
+    .quality-excelente {
+        background-color: rgba(35, 134, 54, 0.2);
+        color: #3fb950;
+        border: 1px solid rgba(35, 134, 54, 0.4);
+    }
+    .quality-bueno {
+        background-color: rgba(88, 166, 255, 0.2);
+        color: #58a6ff;
+        border: 1px solid rgba(88, 166, 255, 0.4);
+    }
+    .quality-regular {
+        background-color: rgba(210, 153, 34, 0.2);
+        color: #d29922;
+        border: 1px solid rgba(210, 153, 34, 0.4);
+    }
+    .quality-malo {
+        background-color: rgba(248, 81, 73, 0.2);
+        color: #f85149;
+        border: 1px solid rgba(248, 81, 73, 0.4);
+    }
+
+    /* ── Tags para Zona / Calles ────────────── */
+    .tags-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+    .tag-item {
+        display: inline-block;
+        background-color: rgba(88, 166, 255, 0.12);
+        color: #58a6ff;
+        border: 1px solid rgba(88, 166, 255, 0.25);
+        border-radius: 4px;
+        padding: 2px 8px;
+        font-size: 11px;
+        font-weight: 500;
+        line-height: 1.5;
+        white-space: nowrap;
+    }
+    .tag-item:hover {
+        background-color: rgba(88, 166, 255, 0.2);
+        border-color: rgba(88, 166, 255, 0.4);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="req-container">
+    <!-- Header -->
+    <div class="req-header">
+        <div>
+            <h1>📋 Requerimientos</h1>
+            <div class="header-subtitle">CRM de demanda — Requerimientos de clientes buscando propiedades</div>
+        </div>
+        <div class="req-header-actions">
+            <a href="{% url 'home' %}" class="btn btn-secondary">← Dashboard</a>
+            <a href="{% url 'whatsapp_extractor:upload_extract_file' %}" class="btn btn-primary">📤 Subir Archivo</a>
+            <div class="column-toggle-wrapper" style="position:relative;display:inline-block;">
+                <button type="button" class="btn btn-secondary" id="btnToggleColumnas" title="Mostrar/ocultar columnas">
+                    ⚙️ Columnas
+                </button>
+                <div id="columnToggleMenu" class="column-toggle-menu" style="display:none;position:absolute;right:0;top:100%;z-index:1000;background:#161b22;border:1px solid #30363d;border-radius:6px;padding:8px;min-width:200px;max-height:400px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.4);margin-top:4px;">
+                    <div style="font-size:12px;color:#8b949e;padding:4px 8px 8px;border-bottom:1px solid #30363d;margin-bottom:4px;">
+                        Columnas visibles
+                    </div>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;hover:background:#21262d;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="0" checked> Verificado
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="1" checked> Agente / Fuente
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="2" checked> Fecha / Hora
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="3" checked> Condición
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="4" checked> Tipo
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="5" checked> Distritos
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="6" checked> Urbanización
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="7" checked> Zona / Calles
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="8" checked> Presupuesto
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="9" checked> Pago
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="10" checked> Habs
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="11" checked> Baños
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="12" checked> Área
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="13" checked> Caracts
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="14" checked> Tipo Orig.
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="15" checked> Calidad
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="16" checked> Mensaje Original
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:13px;cursor:pointer;border-radius:4px;"
+                           onmouseenter="this.style.background='#21262d'" onmouseleave="this.style.background='transparent'">
+                        <input type="checkbox" class="col-toggle" data-col="17" checked> Acciones
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Mensajes -->
+    <div class="messages">
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    </div>
+    
+    <!-- Stats Bar -->
+    <div class="stats-bar">
+        <div class="stat-pill">
+            📊 Total: <strong>{{ total_count }}</strong>
+        </div>
+        <div class="stat-pill">
+            📄 Página: <strong>{{ page_obj.number }}</strong> de <strong>{{ page_obj.paginator.num_pages }}</strong>
+        </div>
+        <div class="stat-pill">
+            ✅ Verificados: <strong class="stat-green">{{ verificados_count }}</strong>
+        </div>
+        <div class="stat-pill">
+            ❌ No verificados: <strong style="color:#ff1744;">{{ no_verificados_count }}</strong>
+        </div>
+        {% if current_filters %}
+        <div class="stat-pill">
+            🔍 <span class="stat-orange">{{ page_obj.paginator.count }} filtrado(s)</span>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- Filtros -->
+    <div class="filters-section">
+        <div class="filters-header" onclick="toggleFilters()">
+            <h3>🔍 Filtros y Búsqueda <span class="toggle-icon" id="filter-toggle">▼</span></h3>
+        </div>
+        <div id="filter-body">
+            <form method="get" class="filter-form">
+                <!-- Búsqueda general -->
+                <div class="form-group filter-full-width">
+                    <label for="q">Búsqueda General</label>
+                    <input type="text" id="q" name="q" class="form-control" 
+                           placeholder="Buscar en mensaje, agente, distrito, fuente..." 
+                           value="{{ q|default:'' }}">
+                </div>
+                
+                <!-- Fila 1: Filtros principales -->
+                <div class="form-group">
+                    <label for="fuente">Fuente</label>
+                    <select id="fuente" name="fuente" class="form-control">
+                        <option value="">Todas</option>
+                        {% for value, label in fuentes %}
+                            <option value="{{ value }}" {% if current_filters.fuente == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="condicion">Condición</label>
+                    <select id="condicion" name="condicion" class="form-control">
+                        <option value="">Todas</option>
+                        {% for value, label in condiciones %}
+                            <option value="{{ value }}" {% if current_filters.condicion == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="tipo_propiedad">Tipo Propiedad</label>
+                    <select id="tipo_propiedad" name="tipo_propiedad" class="form-control">
+                        <option value="">Todos</option>
+                        {% for value, label in tipos_propiedad %}
+                            <option value="{{ value }}" {% if current_filters.tipo_propiedad == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="distrito">Distrito</label>
+                    <input type="text" id="distrito" name="distrito" class="form-control" 
+                           placeholder="Ej: Cayma, Yanahuara..." 
+                           value="{{ current_filters.distrito|default:'' }}">
+                </div>
+                
+                <div class="form-group">
+                    <label for="agente">Agente</label>
+                    <input type="text" id="agente" name="agente" class="form-control" 
+                           placeholder="Nombre del agente..." 
+                           value="{{ current_filters.agente|default:'' }}">
+                </div>
+                
+                <div class="form-group">
+                    <label for="moneda">Moneda</label>
+                    <select id="moneda" name="moneda" class="form-control">
+                        <option value="">Todas</option>
+                        {% for value, label in monedas %}
+                            <option value="{{ value }}" {% if current_filters.moneda == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <!-- Fila 2: Filtros secundarios -->
+                <div class="form-group">
+                    <label for="forma_pago">Forma de Pago</label>
+                    <select id="forma_pago" name="forma_pago" class="form-control">
+                        <option value="">Todas</option>
+                        {% for value, label in formas_pago %}
+                            <option value="{{ value }}" {% if current_filters.forma_pago == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="tipo_original">Tipo Original</label>
+                    <select id="tipo_original" name="tipo_original" class="form-control">
+                        <option value="">Todos</option>
+                        {% for value, label in tipos_originales %}
+                            <option value="{{ value }}" {% if current_filters.tipo_original == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="cochera">Cochera</label>
+                    <select id="cochera" name="cochera" class="form-control">
+                        <option value="">Indiferente</option>
+                        {% for value, label in ternario_opts %}
+                            <option value="{{ value }}" {% if current_filters.cochera == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="ascensor">Ascensor</label>
+                    <select id="ascensor" name="ascensor" class="form-control">
+                        <option value="">Indiferente</option>
+                        {% for value, label in ternario_opts %}
+                            <option value="{{ value }}" {% if current_filters.ascensor == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="amueblado">Amueblado</label>
+                    <select id="amueblado" name="amueblado" class="form-control">
+                        <option value="">Indiferente</option>
+                        {% for value, label in ternario_opts %}
+                            <option value="{{ value }}" {% if current_filters.amueblado == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <!-- Fila 3: Rangos y fechas -->
+                <div class="form-group">
+                    <label for="presupuesto_min">Presupuesto Mín.</label>
+                    <input type="number" id="presupuesto_min" name="presupuesto_min" class="form-control" 
+                           placeholder="0" step="0.01" 
+                           value="{{ current_filters.presupuesto_min|default:'' }}">
+                </div>
+                
+                <div class="form-group">
+                    <label for="presupuesto_max">Presupuesto Máx.</label>
+                    <input type="number" id="presupuesto_max" name="presupuesto_max" class="form-control" 
+                           placeholder="999999" step="0.01" 
+                           value="{{ current_filters.presupuesto_max|default:'' }}">
+                </div>
+                
+                <div class="form-group">
+                    <label for="hab_min">Habitaciones (mín)</label>
+                    <input type="number" id="hab_min" name="hab_min" class="form-control" 
+                           placeholder="0" min="0" 
+                           value="{{ current_filters.hab_min|default:'' }}">
+                </div>
+                
+                <div class="form-group">
+                    <label for="area_min">Área m² (mín)</label>
+                    <input type="number" id="area_min" name="area_min" class="form-control" 
+                           placeholder="0" min="0" 
+                           value="{{ current_filters.area_min|default:'' }}">
+                </div>
+                
+                <div class="form-group">
+                    <label for="fecha_desde">Fecha Desde</label>
+                    <input type="date" id="fecha_desde" name="fecha_desde" class="form-control" 
+                           value="{{ current_filters.fecha_desde|default:'' }}">
+                </div>
+                
+                <div class="form-group">
+                    <label for="fecha_hasta">Fecha Hasta</label>
+                    <input type="date" id="fecha_hasta" name="fecha_hasta" class="form-control" 
+                           value="{{ current_filters.fecha_hasta|default:'' }}">
+                </div>
+                
+                <!-- Verificado Filter -->
+                <div class="form-group">
+                    <label for="verificado">Verificado</label>
+                    <select id="verificado" name="verificado" class="form-control">
+                        <option value="">Todos</option>
+                        <option value="si" {% if current_filters.verificado == 'si' %}selected{% endif %}>✅ Verificados</option>
+                        <option value="no" {% if current_filters.verificado == 'no' %}selected{% endif %}>❌ No verificados</option>
+                    </select>
+                </div>
+                
+                <!-- Quality Score Filter -->
+                <div class="form-group">
+                    <label for="quality_nivel">Calidad</label>
+                    <select id="quality_nivel" name="quality_nivel" class="form-control">
+                        <option value="">Todos</option>
+                        <option value="Excelente" {% if current_filters.quality_nivel == 'Excelente' %}selected{% endif %}>🟢 Excelente</option>
+                        <option value="Bueno" {% if current_filters.quality_nivel == 'Bueno' %}selected{% endif %}>🔵 Bueno</option>
+                        <option value="Regular" {% if current_filters.quality_nivel == 'Regular' %}selected{% endif %}>🟡 Regular</option>
+                        <option value="Malo" {% if current_filters.quality_nivel == 'Malo' %}selected{% endif %}>🔴 Malo</option>
+                    </select>
+                </div>
+                
+                <!-- Botones de acción -->
+                <div class="form-group filter-full-width filter-actions" style="margin-top:8px;">
+                    <button type="submit" class="btn btn-primary" id="btnAplicarFiltros">🔍 Aplicar Filtros</button>
+                    <a href="{% url 'requerimientos:lista' %}" class="btn btn-secondary" id="btnLimpiarFiltros">🗑️ Limpiar Filtros</a>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Tabla de Requerimientos -->
+    <div class="req-table-wrapper">
+        <table class="req-table">
+            <thead>
+                <tr>
+                    <th style="width:110px;">Verificado</th>
+                    <th>Agente / Fuente</th>
+                    <th>Fecha / Hora</th>
+                    <th>Condición</th>
+                    <th>Tipo</th>
+                    <th>Distritos</th>
+                    <th>Urbanización</th>
+                    <th>Zona / Calles</th>
+                    <th>Presupuesto</th>
+                    <th>Pago</th>
+                    <th>Habs</th>
+                    <th>Baños</th>
+                    <th>Área</th>
+                    <th>Caracts</th>
+                    <th>Tipo Orig.</th>
+                    <th style="width:80px;">Calidad</th>
+                    <th>Mensaje Original</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if requerimientos %}
+                    {% for r in requerimientos %}
+                    <tr>
+                        <!-- Verificado -->
+                        <td style="text-align:center;vertical-align:middle;">
+                            <span class="badge-verificado {% if r.verificado %}verificado-si{% else %}verificado-no{% endif %}"
+                                  onclick="toggleVerificado({{ r.pk }}, this)"
+                                  title="{% if r.verificado %}✓ Verificado — Haz clic para desmarcar{% else %}✗ No revisado — Haz clic para marcar como verificado{% endif %}">
+                                {% if r.verificado %}✓ VERIFICADO{% else %}✗ NO VERIF.{% endif %}
+                            </span>
+                        </td>
+                        
+                        <!-- Agente / Fuente -->
+                        <td>
+                            <div class="agent-name">{{ r.agente|truncatechars:25 }}</div>
+                            {% if r.agente_telefono %}
+                                <div class="agent-phone">📞 {{ r.agente_telefono }}</div>
+                            {% endif %}
+                            <div class="fuente-label">{{ r.fuente|truncatechars:20 }}</div>
+                        </td>
+                        
+                        <!-- Fecha / Hora -->
+                        <td>
+                            <div class="fecha-cell">
+                                {% if r.fecha %}{{ r.fecha|date:"d/m/Y" }}{% else %}—{% endif %}
+                            </div>
+                            {% if r.hora %}
+                                <div class="fecha-cell">{{ r.hora|time:"H:i" }}</div>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- Condición -->
+                        <td>
+                            {% if r.condicion == 'compra' %}
+                                <span class="badge badge-blue">Compra</span>
+                            {% elif r.condicion == 'alquiler' %}
+                                <span class="badge badge-orange">Alquiler</span>
+                            {% elif r.condicion == 'anticresis' %}
+                                <span class="badge badge-orange">Anticresis</span>
+                            {% elif r.condicion == 'ambos' %}
+                                <span class="badge badge-purple">Ambos</span>
+                            {% else %}
+                                <span class="badge badge-gray">{{ r.get_condicion_display }}</span>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- Tipo Propiedad -->
+                        <td>
+                            {% if r.tipo_propiedad == 'departamento' %}
+                                <span class="badge badge-blue">Dpto</span>
+                            {% elif r.tipo_propiedad == 'casa' %}
+                                <span class="badge badge-green">Casa</span>
+                            {% elif r.tipo_propiedad == 'terreno' %}
+                                <span class="badge badge-orange">Terreno</span>
+                            {% elif r.tipo_propiedad == 'local_comercial' %}
+                                <span class="badge badge-purple">Local</span>
+                            {% elif r.tipo_propiedad == 'oficina' %}
+                                <span class="badge badge-cyan">Oficina</span>
+                            {% else %}
+                                <span class="badge badge-gray">{{ r.get_tipo_propiedad_display|truncatechars:10 }}</span>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- Distritos (tags) -->
+                        <td>
+                            {% if r.distritos %}
+                                <div class="tags-container" style="gap:3px;">
+                                {% for d in r.distritos|split:',' %}
+                                    <span class="tag-item" style="font-size:11px;">{{ d|strip }}</span>
+                                {% endfor %}
+                                </div>
+                            {% else %}
+                                <span style="color:#484f58;font-size:12px;">—</span>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- Urbanización (tags) -->
+                        <td>
+                            {% if r.urbanizacion %}
+                                <div class="tags-container" style="gap:3px;">
+                                {% for u in r.urbanizacion|split:',' %}
+                                    <span class="tag-item" style="font-size:11px;">{{ u|strip }}</span>
+                                {% endfor %}
+                                </div>
+                            {% else %}
+                                <span style="color:#484f58;font-size:12px;">—</span>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- Zona / Calles / Edificio (tags) -->
+                        <td>
+                            {{ r.zona|render_tags }}
+                        </td>
+                        
+                        <!-- Presupuesto -->
+                        <td>
+                            {% if r.presupuesto_monto %}
+                                <span class="presupuesto-val">
+                                    {% if r.presupuesto_moneda == 'USD' %}${% else %}S/{% endif %}
+                                    {{ r.presupuesto_monto|floatformat:0 }}
+                                </span>
+                            {% else %}
+                                <span class="badge badge-gray">—</span>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- Forma de Pago -->
+                        <td>
+                            {% if r.presupuesto_forma_pago and r.presupuesto_forma_pago != 'no_especificado' %}
+                                <span class="badge badge-gray">{{ r.get_presupuesto_forma_pago_display|truncatechars:12 }}</span>
+                            {% else %}
+                                <span style="color:#484f58;">—</span>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- Habitaciones -->
+                        <td style="text-align:center;">
+                            {% if r.habitaciones %}
+                                <span class="badge badge-blue">{{ r.habitaciones }}</span>
+                            {% else %}
+                                <span style="color:#484f58;">—</span>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- Baños -->
+                        <td style="text-align:center;">
+                            {% if r.banos %}
+                                <span class="badge badge-blue">{{ r.banos }}</span>
+                            {% else %}
+                                <span style="color:#484f58;">—</span>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- Área -->
+                        <td style="text-align:center;">
+                            {% if r.area_m2 %}
+                                <span class="badge badge-cyan">{{ r.area_m2 }}m²</span>
+                            {% else %}
+                                <span style="color:#484f58;">—</span>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- Características extra -->
+                        <td>
+                            {% if r.caracteristicas_extra %}
+                                <div class="caracts">
+                                    {% if 'URGENTE' in r.caracteristicas_extra.upper %}
+                                        <span class="badge badge-red">URGENTE</span>
+                                    {% endif %}
+                                    {% if r.cochera == 'si' %}
+                                        <span class="badge badge-gray">🚗</span>
+                                    {% endif %}
+                                    {% if r.ascensor == 'si' %}
+                                        <span class="badge badge-gray">🛗</span>
+                                    {% endif %}
+                                    {% if r.amueblado == 'si' %}
+                                        <span class="badge badge-gray">🛋️</span>
+                                    {% endif %}
+                                </div>
+                            {% else %}
+                                <span style="color:#484f58;">—</span>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- Tipo Original -->
+                        <td>
+                            {% if r.tipo_original %}
+                                {% if 'BASURA' in r.tipo_original %}
+                                    <span class="badge badge-red">Basura</span>
+                                {% elif 'REQUERIMIENTO' in r.tipo_original %}
+                                    <span class="badge badge-green">Req.</span>
+                                {% elif 'PROPIEDAD' in r.tipo_original %}
+                                    <span class="badge badge-blue">Prop.</span>
+                                {% else %}
+                                    <span class="badge badge-gray">{{ r.tipo_original|truncatechars:10 }}</span>
+                                {% endif %}
+                            {% else %}
+                                <span style="color:#484f58;">—</span>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- Calidad -->
+                        <td style="text-align:center;vertical-align:middle;">
+                            {% with qs=r.quality_score_cached %}
+                            {% if qs and qs.score is not None %}
+                                {% with nivel=qs.nivel score=qs.score %}
+                                {% if nivel == 'Excelente' %}
+                                    <span class="quality-badge quality-excelente" title="Score: {{ score }}/100&#10;Completitud: {{ qs.dimensiones.completitud|floatformat:0 }}%&#10;Especificidad: {{ qs.dimensiones.especificidad|floatformat:0 }}%&#10;Presupuesto: {{ qs.dimensiones.presupuesto|floatformat:0 }}%&#10;Antigüedad: {{ qs.dimensiones.antiguedad|floatformat:0 }}%">🟢 {{ score|floatformat:0 }}</span>
+                                {% elif nivel == 'Bueno' %}
+                                    <span class="quality-badge quality-bueno" title="Score: {{ score }}/100&#10;Completitud: {{ qs.dimensiones.completitud|floatformat:0 }}%&#10;Especificidad: {{ qs.dimensiones.especificidad|floatformat:0 }}%&#10;Presupuesto: {{ qs.dimensiones.presupuesto|floatformat:0 }}%&#10;Antigüedad: {{ qs.dimensiones.antiguedad|floatformat:0 }}%">🔵 {{ score|floatformat:0 }}</span>
+                                {% elif nivel == 'Regular' %}
+                                    <span class="quality-badge quality-regular" title="Score: {{ score }}/100&#10;Completitud: {{ qs.dimensiones.completitud|floatformat:0 }}%&#10;Especificidad: {{ qs.dimensiones.especificidad|floatformat:0 }}%&#10;Presupuesto: {{ qs.dimensiones.presupuesto|floatformat:0 }}%&#10;Antigüedad: {{ qs.dimensiones.antiguedad|floatformat:0 }}%">🟡 {{ score|floatformat:0 }}</span>
+                                {% elif nivel == 'Malo' %}
+                                    <span class="quality-badge quality-malo" title="Score: {{ score }}/100&#10;Completitud: {{ qs.dimensiones.completitud|floatformat:0 }}%&#10;Especificidad: {{ qs.dimensiones.especificidad|floatformat:0 }}%&#10;Presupuesto: {{ qs.dimensiones.presupuesto|floatformat:0 }}%&#10;Antigüedad: {{ qs.dimensiones.antiguedad|floatformat:0 }}%">🔴 {{ score|floatformat:0 }}</span>
+                                {% else %}
+                                    <span style="color:#484f58;font-size:12px;">—</span>
+                                {% endif %}
+                                {% endwith %}
+                            {% else %}
+                                <span style="color:#484f58;font-size:12px;">—</span>
+                            {% endif %}
+                            {% endwith %}
+                        </td>
+                        
+                        <!-- Mensaje Original -->
+                        <td>
+                            {% if r.requerimiento %}
+                                <div class="msg-preview">{{ r.requerimiento|truncatechars:50 }}</div>
+                            {% else %}
+                                <span style="color:#484f58;">—</span>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- Acciones -->
+                        <td>
+                            <div class="actions-cell">
+                                <button type="button" class="btn btn-primary btn-sm ver-detalle-btn"
+                                        data-pk="{{ r.pk }}"
+                                        data-verificado="{% if r.verificado %}si{% else %}no{% endif %}"
+                                        data-agente="{{ r.agente|escape }}"
+                                        data-agente-telefono="{{ r.agente_telefono|escape }}"
+                                        data-fuente="{{ r.fuente|escape }}"
+                                        data-fecha="{% if r.fecha %}{{ r.fecha|date:'d/m/Y' }}{% endif %}"
+                                        data-hora="{% if r.hora %}{{ r.hora|time:'H:i' }}{% endif %}"
+                                        data-condicion="{{ r.condicion|escape }}"
+                                        data-tipo-propiedad="{{ r.tipo_propiedad|escape }}"
+                                        data-distritos="{{ r.distritos|escape }}"
+                                        data-urbanizacion="{{ r.urbanizacion|escape }}"
+                                        data-zona="{{ r.zona|escape }}"
+                                        data-presupuesto-monto="{% if r.presupuesto_monto %}{{ r.presupuesto_monto }}{% endif %}"
+                                        data-presupuesto-moneda="{{ r.presupuesto_moneda|escape }}"
+                                        data-forma-pago="{{ r.presupuesto_forma_pago|escape }}"
+                                        data-habitaciones="{% if r.habitaciones %}{{ r.habitaciones }}{% endif %}"
+                                        data-banos="{% if r.banos %}{{ r.banos }}{% endif %}"
+                                        data-cochera="{{ r.cochera|escape }}"
+                                        data-ascensor="{{ r.ascensor|escape }}"
+                                        data-amueblado="{{ r.amueblado|escape }}"
+                                        data-area-m2="{% if r.area_m2 %}{{ r.area_m2 }}{% endif %}"
+                                        data-piso-preferencia="{{ r.piso_preferencia|escape }}"
+                                        data-caracteristicas="{{ r.caracteristicas_extra|escape }}"
+                                        data-tipo-original="{{ r.tipo_original|escape }}"
+                                        data-mensaje="{{ r.requerimiento|escape }}"
+                                        data-creado="{{ r.creado_en|date:'d/m/Y H:i' }}"
+                                           data-actualizado="{{ r.actualizado_en|date:'d/m/Y H:i' }}">
+                                       <i class="bi bi-eye me-1"></i>Ver
+                                   </button>
+                                   <button type="button" class="btn btn-outline-danger btn-sm" style="margin-left:4px;"
+                                           onclick="eliminarRequerimiento({{ r.pk }})"
+                                           title="Eliminar requerimiento">
+                                       <i class="bi bi-trash"></i>
+                                   </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="18">
+                            <div class="empty-state">
+                                <h3>{% if current_filters %}No se encontraron requerimientos con esos filtros{% else %}No hay requerimientos registrados{% endif %}</h3>
+                                <p>{% if current_filters %}Intenta con otros filtros o <a href="{% url 'requerimientos:lista' %}" style="color:#58a6ff;">limpia los filtros</a>{% else %}Importa datos desde Excel para comenzar{% endif %}</p>
+                            </div>
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+    
+    <!-- Paginación -->
+    {% if page_obj.paginator.num_pages > 1 %}
+    <div class="pagination-bar">
+        <div>
+            Mostrando {{ page_obj.start_index }} - {{ page_obj.end_index }} de {{ page_obj.paginator.count }} requerimientos
+        </div>
+        <div class="pagination-links">
+            {% if page_obj.has_previous %}
+                <a href="?page=1{% for k,v in current_filters.items %}&{{ k }}={{ v }}{% endfor %}">««</a>
+                <a href="?page={{ page_obj.previous_page_number }}{% for k,v in current_filters.items %}&{{ k }}={{ v }}{% endfor %}">«</a>
+            {% else %}
+                <span class="disabled">««</span>
+                <span class="disabled">«</span>
+            {% endif %}
+            
+            {% for num in page_obj.paginator.page_range %}
+                {% if num == page_obj.number %}
+                    <span class="current">{{ num }}</span>
+                {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                    <a href="?page={{ num }}{% for k,v in current_filters.items %}&{{ k }}={{ v }}{% endfor %}">{{ num }}</a>
+                {% endif %}
+            {% endfor %}
+            
+            {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}{% for k,v in current_filters.items %}&{{ k }}={{ v }}{% endfor %}">»</a>
+                <a href="?page={{ page_obj.paginator.num_pages }}{% for k,v in current_filters.items %}&{{ k }}={{ v }}{% endfor %}">»»</a>
+            {% else %}
+                <span class="disabled">»</span>
+                <span class="disabled">»»</span>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+    
+    <div class="req-footer">
+        <p>Propifai • CRM de Demanda • Total: {{ total_count }} requerimiento(s)</p>
+    </div>
+</div>
+
+<!-- Modal de Detalle del Requerimiento -->
+<div class="modal fade" id="modalDetalleRequerimiento" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content" style="background-color: #161b22; border: 1px solid #30363d; color: #c9d1d9;">
+            <div class="modal-header" style="border-bottom: 1px solid #30363d; padding: 16px 20px;">
+                <h5 class="modal-title" style="color: #58a6ff; font-size: 18px; font-weight: 600;">
+                    <i class="bi bi-file-text me-2"></i>Detalle del Requerimiento
+                    <span id="modalReqId" class="badge" style="background-color: #30363d; color: #8b949e; font-size: 11px; margin-left: 8px; vertical-align: middle;">#<span id="modalReqPk">—</span></span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body" style="padding: 0;">
+                <div style="padding: 20px;">
+                    <div id="modalVerificado" style="margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+                        <span id="modalVerificadoBadge" class="badge field-view" style="font-size: 12px; padding: 4px 12px; border-radius: 6px;">—</span>
+                        <div class="field-edit" style="display: none;">
+                            <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-right: 8px;">Verificado</label>
+                            <select id="editVerificado" class="form-select form-select-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: auto; display: inline-block;">
+                                <option value="true">Sí</option>
+                                <option value="false">No</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+                        <!-- COLUMNA IZQUIERDA: Mensaje Original + timestamps -->
+                        <div>
+                            <div class="modal-field-group">
+                                <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; display: block; margin-bottom: 8px;">
+                                    <i class="bi bi-chat-dots me-1"></i>Mensaje Original
+                                </label>
+                                <div class="field-view" id="modalMensaje" style="background-color: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 12px 16px; color: #c9d1d9; font-size: 13px; line-height: 1.6; white-space: pre-wrap; max-height: 300px; overflow-y: auto;">—</div>
+                                <div class="field-edit" style="display: none;">
+                                    <textarea id="editMensaje" class="form-control edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 6px; padding: 12px 16px; font-size: 13px; line-height: 1.6; width: 100%; min-height: 200px; resize: vertical;" placeholder="Mensaje original completo..."></textarea>
+                                </div>
+                            </div>
+                            <div style="margin-top: 12px; display: flex; flex-direction: column; gap: 6px; font-size: 11px; color: #484f58; padding: 8px 12px; background-color: #0d1117; border: 1px solid #30363d; border-radius: 6px;">
+                                <span><span style="color:#8b949e;">Creado:</span> <span id="modalCreado">—</span></span>
+                                <span><span style="color:#8b949e;">Actualizado:</span> <span id="modalActualizado">—</span></span>
+                            </div>
+                        </div>
+                        <!-- COLUMNA CENTRAL: Datos de contacto y clasificación -->
+                        <div>
+                            <!-- Agente -->
+                            <div class="modal-field-group">
+                                <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Agente</label>
+                                <div class="field-view" id="modalAgente" style="color: #58a6ff; font-weight: 600; font-size: 14px;">—</div>
+                                <div class="field-view" id="modalAgenteTelefono" style="color: #8b949e; font-size: 12px;"></div>
+                                <!-- Estado de vinculación con tabla Agentes (visible siempre) -->
+                                <div id="agenteVinculadoStatus" style="margin-top: 6px; display: none;">
+                                    <span id="agenteStatusBadge" class="badge" style="font-size: 11px; padding: 3px 10px; border-radius: 4px;"></span>
+                                    <button type="button" id="btnRegistrarAgente" class="btn btn-sm" style="display: none; background-color: #238636; color: #fff; border: none; padding: 3px 10px; border-radius: 4px; font-size: 11px; margin-left: 4px;">
+                                        <i class="bi bi-plus-circle me-1"></i>Registrar agente
+                                    </button>
+                                </div>
+                                <!-- Inputs de agente SIEMPRE visibles (no dependen de modo edición) -->
+                                <div style="margin-top: 6px;">
+                                    <input type="text" id="editAgente" class="form-control form-control-sm" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 100%;" placeholder="Nombre del agente">
+                                    <input type="text" id="editAgenteTelefono" class="form-control form-control-sm" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 100%; margin-top: 4px;" placeholder="Teléfono (ej: 999888777)">
+                                </div>
+                            </div>
+                            <!-- Fuente -->
+                            <div class="modal-field-group" style="margin-top: 12px;">
+                                <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Fuente</label>
+                                <div class="field-view" id="modalFuente" style="color: #c9d1d9; font-size: 13px;">—</div>
+                                <div class="field-edit" style="display: none;">
+                                    <select id="editFuente" class="form-select form-select-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 100%;">
+                                        <option value="exito_inmobiliario">Whatsapp Éxito Inmobiliario</option>
+                                        <option value="inmobiliarias_unidas">Whatsapp Inmobiliarias Unidas</option>
+                                        <option value="red_inmobiliaria">WhatsApp Red Inmobiliaria Arequipa</option>
+                                        <option value="grupo_whatsapp_1">Grupo WhatsApp Inmobiliario 1</option>
+                                        <option value="grupo_whatsapp_2">Grupo WhatsApp Inmobiliario 2</option>
+                                        <option value="grupo_whatsapp_3">Grupo WhatsApp Inmobiliario 3</option>
+                                        <option value="otro">Otro</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <!-- Fecha / Hora (solo lectura) -->
+                            <div class="modal-field-group" style="margin-top: 12px;">
+                                <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Fecha / Hora</label>
+                                <div class="field-view" id="modalFecha" style="color: #c9d1d9; font-size: 13px;">—</div>
+                                <div class="field-edit" style="display: none; color: #c9d1d9; font-size: 13px;">
+                                    <span id="editFechaTexto" style="color: #c9d1d9;"></span>
+                                    <span style="color: #484f58; font-size: 11px; margin-left: 8px;"><i class="bi bi-lock me-1"></i>No editable</span>
+                                </div>
+                            </div>
+                            <!-- Condición -->
+                            <div class="modal-field-group" style="margin-top: 12px;">
+                                <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Condición</label>
+                                <div class="field-view" id="modalCondicion" style="font-size: 13px;">—</div>
+                                <div class="field-edit" style="display: none;">
+                                    <select id="editCondicion" class="form-select form-select-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 100%;">
+                                        <option value="compra">Compra</option>
+                                        <option value="alquiler">Alquiler</option>
+                                        <option value="anticresis">Anticresis</option>
+                                        <option value="ambos">Compra y Alquiler</option>
+                                        <option value="compartido">Compartido</option>
+                                        <option value="no_especificado">No Especificado</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <!-- Tipo de Propiedad -->
+                            <div class="modal-field-group" style="margin-top: 12px;">
+                                <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Tipo de Propiedad</label>
+                                <div class="field-view" id="modalTipoPropiedad" style="font-size: 13px;">—</div>
+                                <div class="field-edit" style="display: none;">
+                                    <select id="editTipoPropiedad" class="form-select form-select-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 100%;">
+                                        <option value="departamento">Departamento</option>
+                                        <option value="casa">Casa</option>
+                                        <option value="terreno">Terreno</option>
+                                        <option value="oficina">Oficina</option>
+                                        <option value="local_comercial">Local Comercial</option>
+                                        <option value="almacen">Almacén</option>
+                                        <option value="no_especificado">No Especificado</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <!-- Distritos (tags con autocomplete) -->
+                            <div class="modal-field-group" style="margin-top: 12px;">
+                                <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Distritos</label>
+                                <div class="field-view" id="modalDistritos" style="color: #c9d1d9; font-size: 13px;">—</div>
+                                <div class="field-edit" style="display: none;">
+                                    <div class="tag-input-container">
+                                        <div class="tag-input-wrapper" id="distritosTagWrapper" onclick="document.getElementById('distritosTagInput').focus()">
+                                            <div id="distritosTagsContainer" class="tags-container-inline"></div>
+                                            <input type="text" id="distritosTagInput" class="tag-input-field" placeholder="Escribe para buscar distritos..." data-nivel="distrito" data-target="distritosTagsContainer" data-hidden="editDistritos">
+                                        </div>
+                                        <div class="autocomplete-dropdown" id="distritosAutocomplete"></div>
+                                        <input type="hidden" id="editDistritos" value="">
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Urbanización / Zona (tags con autocomplete) -->
+                            <div class="modal-field-group" style="margin-top: 12px;">
+                                <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Urbanización / Zona</label>
+                                <div class="field-view" id="modalUrbanizacion" style="color: #c9d1d9; font-size: 13px;">—</div>
+                                <div class="field-edit" style="display: none;">
+                                    <div class="tag-input-container">
+                                        <div class="tag-input-wrapper" id="urbanizacionTagWrapper" onclick="document.getElementById('urbanizacionTagInput').focus()">
+                                            <div id="urbanizacionTagsContainer" class="tags-container-inline"></div>
+                                            <input type="text" id="urbanizacionTagInput" class="tag-input-field" placeholder="Escribe para buscar urbanizaciones..." data-nivel="zona_urbanizacion" data-target="urbanizacionTagsContainer" data-hidden="editUrbanizacion">
+                                        </div>
+                                        <div class="autocomplete-dropdown" id="urbanizacionAutocomplete"></div>
+                                        <input type="hidden" id="editUrbanizacion" value="">
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Zona / Calles / Edificio -->
+                            <div class="modal-field-group" style="margin-top: 12px;">
+                                <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Zona / Calles / Edificio</label>
+                                <div class="field-view" id="modalZona" style="color: #c9d1d9; font-size: 13px;">—</div>
+                                <div class="field-edit" style="display: none;">
+                                    <div class="tag-input-container">
+                                        <div class="tag-input-wrapper" id="zonaTagWrapper" onclick="document.getElementById('zonaTagInput').focus()">
+                                            <div id="zonaTagsContainer" class="tags-container" style="display:inline;"></div>
+                                            <input type="text" id="zonaTagInput" class="tag-input-field" data-nivel="zona_calle" placeholder="Escribe una zona o calle..." autocomplete="off">
+                                            <div id="zonaAutocomplete" class="autocomplete-dropdown"></div>
+                                        </div>
+                                        <input type="hidden" id="editZona" value="">
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Tipo Original -->
+                            <div class="modal-field-group" style="margin-top: 12px;">
+                                <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Tipo Original</label>
+                                <div class="field-view" id="modalTipoOriginal" style="font-size: 13px;">—</div>
+                                <div class="field-edit" style="display: none;">
+                                    <select id="editTipoOriginal" class="form-select form-select-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 100%;">
+                                        <option value="REQUERIMIENTO">Requerimiento</option>
+                                        <option value="REQUERIMIENTO COMPRA">Requerimiento Compra</option>
+                                        <option value="REQUERIMIENTO ALQUILER">Requerimiento Alquiler</option>
+                                        <option value="REQUERIMIENTO COMPRA, REQUERIMIENTO ALQUILER">Req. Compra + Alquiler</option>
+                                        <option value="REQUERIMIENTO ALQUILER, REQUERIMIENTO COMPRA">Req. Alquiler + Compra</option>
+                                        <option value="PROPIEDAD VENTA">Propiedad en Venta</option>
+                                        <option value="MIXTO">Mixto</option>
+                                        <option value="BASURA">Basura / Irrelevante</option>
+                                        <option value="OTRO">Otro</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- COLUMNA DERECHA: Presupuesto y especificaciones -->
+                        <div>
+                            <!-- Presupuesto -->
+                            <div class="modal-field-group">
+                                <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Presupuesto</label>
+                                <div class="field-view" id="modalPresupuesto" style="color: #d29922; font-weight: 600; font-size: 16px;">—</div>
+                                <div class="field-view" id="modalFormaPago" style="color: #8b949e; font-size: 12px;"></div>
+                                <div class="field-edit" style="display: none;">
+                                    <div style="display: flex; gap: 4px;">
+                                        <input type="number" id="editPresupuestoMonto" class="form-control form-control-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; flex: 1;" placeholder="Monto">
+                                        <select id="editPresupuestoMoneda" class="form-select form-select-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 90px;">
+                                            <option value="USD">USD $</option>
+                                            <option value="PEN">Soles S/</option>
+                                            <option value="no_especificado">—</option>
+                                        </select>
+                                    </div>
+                                    <select id="editFormaPago" class="form-select form-select-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 100%; margin-top: 4px;">
+                                        <option value="contado">Al Contado</option>
+                                        <option value="financiado">Financiado / Crédito</option>
+                                        <option value="no_especificado">No Especificado</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <!-- Habitaciones / Baños -->
+                            <div class="modal-field-group" style="margin-top: 12px;">
+                                <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Habitaciones / Baños</label>
+                                <div class="field-view" id="modalHabBanos" style="color: #c9d1d9; font-size: 13px;">—</div>
+                                <div class="field-edit" style="display: none;">
+                                    <div style="display: flex; gap: 4px;">
+                                        <input type="number" id="editHabitaciones" class="form-control form-control-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 50%;" placeholder="Habs" min="0">
+                                        <input type="number" id="editBanos" class="form-control form-control-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 50%;" placeholder="Baños" min="0">
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Área -->
+                            <div class="modal-field-group" style="margin-top: 12px;">
+                                <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Área (m²)</label>
+                                <div class="field-view" id="modalArea" style="color: #39b2ac; font-size: 13px;">—</div>
+                                <div class="field-edit" style="display: none;">
+                                    <input type="number" id="editArea" class="form-control form-control-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 100%;" placeholder="m²" min="0">
+                                </div>
+                            </div>
+                            <!-- Piso Preferencia -->
+                            <div class="modal-field-group" style="margin-top: 12px;">
+                                <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Piso Preferencia</label>
+                                <div class="field-view" id="modalPiso" style="color: #c9d1d9; font-size: 13px;">—</div>
+                                <div class="field-edit" style="display: none;">
+                                    <input type="text" id="editPiso" class="form-control form-control-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 100%;" placeholder="Ej: primer piso, piso 5+">
+                                </div>
+                            </div>
+                            <!-- Extras -->
+                            <div class="modal-field-group" style="margin-top: 12px;">
+                                <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Extras</label>
+                                <div class="field-view" id="modalExtras" style="font-size: 13px;">
+                                    <span id="modalCochera" class="badge" style="margin-right: 4px;"></span>
+                                    <span id="modalAscensor" class="badge" style="margin-right: 4px;"></span>
+                                    <span id="modalAmueblado" class="badge"></span>
+                                </div>
+                                <div class="field-edit" style="display: none;">
+                                    <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                                        <select id="editCochera" class="form-select form-select-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 2px 6px; font-size: 12px; flex: 1;">
+                                            <option value="si">🚗 Cochera: Sí</option>
+                                            <option value="no">🚗 Cochera: No</option>
+                                            <option value="indiferente">🚗 Cochera: Indiferente</option>
+                                        </select>
+                                        <select id="editAscensor" class="form-select form-select-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 2px 6px; font-size: 12px; flex: 1;">
+                                            <option value="si">🛗 Ascensor: Sí</option>
+                                            <option value="no">🛗 Ascensor: No</option>
+                                            <option value="indiferente">🛗 Ascensor: Indiferente</option>
+                                        </select>
+                                        <select id="editAmueblado" class="form-select form-select-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 2px 6px; font-size: 12px; flex: 1;">
+                                            <option value="si">🛋️ Amueblado: Sí</option>
+                                            <option value="no">🛋️ Amueblado: No</option>
+                                            <option value="indiferente">🛋️ Amueblado: Indiferente</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Características -->
+                            <div class="modal-field-group" style="margin-top: 12px;">
+                                <label style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Características</label>
+                                <div class="field-view" id="modalCaracteristicas" style="color: #c9d1d9; font-size: 13px;">—</div>
+                                <div class="field-edit" style="display: none;">
+                                    <input type="text" id="editCaracteristicas" class="form-control form-control-sm edit-input" style="background-color: #0d1117; border: 1px solid #30363d; color: #c9d1d9; border-radius: 4px; padding: 4px 8px; font-size: 13px; width: 100%;" placeholder="Ej: balcón, jardín, URGENTE">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" style="border-top: 1px solid #30363d; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <button type="button" class="btn" style="background-color: #30363d; color: #c9d1d9; border: none; padding: 8px 20px; border-radius: 6px; font-size: 13px;" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+                <div id="modalEditActions" style="display: none;">
+                    <button type="button" id="btnCancelarEdicion" class="btn" style="background-color: #30363d; color: #c9d1d9; border: none; padding: 8px 20px; border-radius: 6px; font-size: 13px; margin-right: 8px;">Cancelar</button>
+                    <button type="button" id="btnGuardarEdicion" class="btn" style="background-color: #238636; color: #ffffff; border: none; padding: 8px 20px; border-radius: 6px; font-size: 13px; font-weight: 600;">
+                        <i class="bi bi-check2 me-1"></i>Guardar
+                    </button>
+                </div>
+                <div id="modalViewActions">
+                    <button type="button" id="btnClonarRequerimiento" class="btn" style="background-color: #8957e5; color: #ffffff; border: none; padding: 8px 20px; border-radius: 6px; font-size: 13px; font-weight: 600; margin-right: 8px;">
+                        <i class="bi bi-copy me-1"></i>Clonar
+                    </button>
+                    <button type="button" id="btnEditarRequerimiento" class="btn" style="background-color: #1f6feb; color: #ffffff; border: none; padding: 8px 20px; border-radius: 6px; font-size: 13px; font-weight: 600;">
+                        <i class="bi bi-pencil me-1"></i>Editar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.modal-field-group label { display: block; margin-bottom: 4px; }
+.modal-field-group .badge { font-size: 11px; padding: 3px 8px; border-radius: 4px; }
+#modalMensaje::-webkit-scrollbar { width: 6px; }
+#modalMensaje::-webkit-scrollbar-track { background: #0d1117; }
+#modalMensaje::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+
+/* ── Badge de vinculación agente ──────────── */
+#agenteVinculadoStatus {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+#btnRegistrarAgente:hover {
+    background-color: #2ea043 !important;
+}
+
+/* ── Tags input con autocomplete ──────────── */
+.tag-input-wrapper {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 4px;
+    background-color: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    min-height: 32px;
+    cursor: text;
+    align-items: center;
+}
+.tag-input-wrapper:focus-within {
+    border-color: #58a6ff;
+}
+.tag-item-edit {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background-color: #1f6feb33;
+    border: 1px solid #1f6feb66;
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 12px;
+    color: #58a6ff;
+    white-space: nowrap;
+}
+.tag-item-edit .tag-remove {
+    cursor: pointer;
+    color: #f85149;
+    font-size: 14px;
+    line-height: 1;
+    margin-left: 2px;
+    font-weight: bold;
+}
+.tag-item-edit .tag-remove:hover {
+    color: #ff6b6b;
+}
+.tag-input-field {
+    border: none !important;
+    background: transparent !important;
+    color: #c9d1d9 !important;
+    font-size: 13px !important;
+    outline: none !important;
+    flex: 1;
+    min-width: 80px;
+    padding: 2px 4px !important;
+    box-shadow: none !important;
+}
+.tag-input-field::placeholder {
+    color: #484f58;
+}
+.autocomplete-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+    display: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+.autocomplete-dropdown.active {
+    display: block;
+}
+.autocomplete-item {
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #c9d1d9;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.autocomplete-item:hover,
+.autocomplete-item.highlighted {
+    background-color: #1f6feb33;
+}
+.autocomplete-item .item-type {
+    font-size: 10px;
+    color: #8b949e;
+    background: #21262d;
+    padding: 1px 6px;
+    border-radius: 3px;
+}
+.autocomplete-item .item-parent {
+    font-size: 11px;
+    color: #484f58;
+}
+.tag-input-container {
+    position: relative;
+}
+</style>
+
+<script>
+// ── AbortControllers para cancelar fetch en curso ──
+const abortControllers = {};
+
+function getAbortSignal(key) {
+    if (abortControllers[key]) {
+        abortControllers[key].abort();
+    }
+    abortControllers[key] = new AbortController();
+    return abortControllers[key].signal;
+}
+
+// ── Variables globales del modal ──────────────
+let modalRequerimientoActual = null;  // guarda el botón data actual
+let modalEditando = false;
+let modoClonacion = false;
+let datosClonacion = null;  // copia independiente de datos para clonación
+let modalDirty = false;     // indica si hay cambios sin guardar
+let modalSnapshot = '';     // snapshot de campos al abrir edición
+
+// ── Filtros en sessionStorage para evitar URLs enormes ──
+(function() {
+    const STORAGE_KEY = 'req_lista_filtros';
+
+    // Al cargar la página, restaurar filtros desde sessionStorage
+    // solo si la URL no tiene parámetros de filtro (carga limpia)
+    const urlParams = new URLSearchParams(window.location.search);
+    const hasFilterParams = Array.from(urlParams.entries()).some(function(e) {
+        return e[0] !== 'page' && e[0] !== 'f' && e[1];
+    });
+
+    if (!hasFilterParams) {
+        var saved = sessionStorage.getItem(STORAGE_KEY);
+        if (saved) {
+            try {
+                var filtros = JSON.parse(saved);
+                Object.keys(filtros).forEach(function(key) {
+                    var el = document.querySelector('[name="' + key + '"]');
+                    if (el) el.value = filtros[key];
+                });
+            } catch(e) {
+                // Si el JSON está corrupto, ignorar
+                sessionStorage.removeItem(STORAGE_KEY);
+            }
+        }
+    }
+
+    // Interceptar submit del form para guardar filtros en sessionStorage
+    // y redirigir con ?f=1 en lugar de todos los parámetros en la URL
+    var filterForm = document.querySelector('.filter-form');
+    if (filterForm) {
+        filterForm.addEventListener('submit', function(e) {
+            var filtros = {};
+            var formData = new FormData(filterForm);
+            formData.forEach(function(value, key) {
+                if (value) filtros[key] = value;
+            });
+            sessionStorage.setItem(STORAGE_KEY, JSON.stringify(filtros));
+            // Si hay más de 3 filtros activos, redirigir con ?f=1
+            // para evitar URL enorme. Si hay pocos, dejar URL normal.
+            var activeCount = Object.keys(filtros).length;
+            if (activeCount > 3) {
+                e.preventDefault();
+                // Guardar filtros en la sesión del servidor vía API
+                fetch('/requerimientos/api/guardar-filtros-sesion/', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(filtros)
+                }).then(function() {
+                    window.location.href = window.location.pathname + '?f=1';
+                }).catch(function() {
+                    // Si falla la API, igual redirigir (sessionStorage tiene copia)
+                    window.location.href = window.location.pathname + '?f=1';
+                });
+            }
+            // Si hay 3 o menos, el form se envía normalmente (URL corta)
+        });
+    }
+
+    // Al hacer clic en "Limpiar Filtros", borrar sessionStorage
+    var btnLimpiar = document.getElementById('btnLimpiarFiltros');
+    if (btnLimpiar) {
+        btnLimpiar.addEventListener('click', function() {
+            sessionStorage.removeItem(STORAGE_KEY);
+        });
+    }
+})();
+
+// ── AJAX filtering con debounce ──
+var debounceTimer = null;
+var abortControllerFiltros = null;
+
+function cargarTablaAJAX() {
+    // Cancelar petición anterior si existe
+    if (abortControllerFiltros) {
+        abortControllerFiltros.abort();
+    }
+    abortControllerFiltros = new AbortController();
+
+    // Mostrar indicador de carga
+    var wrapper = document.querySelector('.req-table-wrapper');
+    if (wrapper) {
+        wrapper.style.opacity = '0.5';
+        wrapper.style.transition = 'opacity 0.2s';
+    }
+
+    var filterForm = document.querySelector('.filter-form');
+    if (!filterForm) return;
+
+    var formData = new FormData(filterForm);
+    var params = new URLSearchParams(formData);
+    // Preservar página actual si existe
+    var urlParams = new URLSearchParams(window.location.search);
+    var page = urlParams.get('page');
+    if (page) params.set('page', page);
+
+    var url = window.location.pathname + '?' + params.toString();
+
+    // Actualizar URL sin recargar
+    history.replaceState(null, '', url);
+
+    fetch(url, {
+        signal: abortControllerFiltros.signal,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(function(resp) {
+        if (!resp.ok) throw new Error('Error ' + resp.status);
+        return resp.text();
+    })
+    .then(function(html) {
+        // Extraer solo el contenido de la tabla y paginación del HTML recibido
+        var parser = new DOMParser();
+        var doc = parser.parseFromString(html, 'text/html');
+        var newWrapper = doc.querySelector('.req-table-wrapper');
+        var newPagination = doc.querySelector('.pagination-bar');
+        var newStats = doc.querySelector('.stats-bar');
+
+        if (newWrapper && wrapper) {
+            wrapper.innerHTML = newWrapper.innerHTML;
+        }
+        if (newPagination) {
+            var oldPagination = document.querySelector('.pagination-bar');
+            if (oldPagination) {
+                oldPagination.outerHTML = newPagination.outerHTML;
+            }
+        }
+        if (newStats) {
+            var oldStats = document.querySelector('.stats-bar');
+            if (oldStats) {
+                oldStats.outerHTML = newStats.outerHTML;
+            }
+        }
+        if (wrapper) wrapper.style.opacity = '1';
+    })
+    .catch(function(err) {
+        if (err.name === 'AbortError') return;
+        if (wrapper) wrapper.style.opacity = '1';
+        console.error('Error al cargar tabla:', err);
+    });
+}
+
+function aplicarFiltrosConDebounce() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(cargarTablaAJAX, 300);
+}
+
+// Reemplazar submit tradicional con AJAX
+document.addEventListener('DOMContentLoaded', function() {
+    var filterForm = document.querySelector('.filter-form');
+    if (filterForm) {
+        filterForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            cargarTablaAJAX();
+        });
+    }
+
+    // Agregar event listeners con debounce a inputs de texto y selects
+    var inputs = filterForm ? filterForm.querySelectorAll('input, select') : [];
+    inputs.forEach(function(inp) {
+        // Para inputs de texto, escuchar input event con debounce
+        if (inp.tagName === 'INPUT' && inp.type !== 'hidden') {
+            inp.addEventListener('input', aplicarFiltrosConDebounce);
+        }
+        // Para selects, escuchar change event
+        if (inp.tagName === 'SELECT') {
+            inp.addEventListener('change', aplicarFiltrosConDebounce);
+        }
+    });
+});
+
+// ── Validación client-side del formulario de edición ──
+function validarFormularioEdicion() {
+    const errores = [];
+    
+    // Validar presupuesto monto (si tiene valor, debe ser numérico)
+    const presMonto = document.getElementById('editPresupuestoMonto');
+    if (presMonto && presMonto.value.trim()) {
+        const val = parseFloat(presMonto.value.trim());
+        if (isNaN(val) || val < 0) {
+            errores.push('El monto del presupuesto debe ser un número válido mayor o igual a 0.');
+            presMonto.style.borderColor = '#f85149';
+        } else {
+            presMonto.style.borderColor = '';
+        }
+    }
+    
+    // Validar área (si tiene valor, debe ser numérico)
+    const area = document.getElementById('editArea');
+    if (area && area.value.trim()) {
+        const val = parseFloat(area.value.trim());
+        if (isNaN(val) || val < 0) {
+            errores.push('El área debe ser un número válido mayor o igual a 0.');
+            area.style.borderColor = '#f85149';
+        } else {
+            area.style.borderColor = '';
+        }
+    }
+    
+    // Validar habitaciones (si tiene valor, debe ser entero)
+    const habs = document.getElementById('editHabitaciones');
+    if (habs && habs.value.trim()) {
+        const val = parseInt(habs.value.trim(), 10);
+        if (isNaN(val) || val < 0 || val > 50) {
+            errores.push('Las habitaciones deben ser un número entero entre 0 y 50.');
+            habs.style.borderColor = '#f85149';
+        } else {
+            habs.style.borderColor = '';
+        }
+    }
+    
+    // Validar baños (si tiene valor, debe ser entero)
+    const banos = document.getElementById('editBanos');
+    if (banos && banos.value.trim()) {
+        const val = parseInt(banos.value.trim(), 10);
+        if (isNaN(val) || val < 0 || val > 50) {
+            errores.push('Los baños deben ser un número entero entre 0 y 50.');
+            banos.style.borderColor = '#f85149';
+        } else {
+            banos.style.borderColor = '';
+        }
+    }
+    
+    // Validar teléfono (si tiene valor, formato mínimo)
+    const tel = document.getElementById('editAgenteTelefono');
+    if (tel && tel.value.trim()) {
+        const limpio = tel.value.trim().replace(/[\s\-\(\)]+/g, '');
+        if (limpio.length < 6) {
+            errores.push('El teléfono del agente debe tener al menos 6 dígitos.');
+            tel.style.borderColor = '#f85149';
+        } else {
+            tel.style.borderColor = '';
+        }
+    }
+    
+    return errores;
+}
+
+// ── Snapshot de campos de edición para detectar cambios ──
+function tomarSnapshotEdicion() {
+    const inputs = document.querySelectorAll('#modalDetalleRequerimiento .field-edit input, ' +
+        '#modalDetalleRequerimiento .field-edit select, ' +
+        '#modalDetalleRequerimiento .field-edit textarea');
+    let snapshot = '';
+    inputs.forEach(function(inp) {
+        snapshot += inp.id + '=' + inp.value + '|';
+    });
+    // Incluir tags containers
+    ['distritos', 'urbanizacion', 'zona'].forEach(function(prefix) {
+        const container = document.getElementById(prefix + 'TagsContainer');
+        if (container) {
+            snapshot += prefix + 'Tags=';
+            container.querySelectorAll('.tag-item-edit').forEach(function(t) {
+                snapshot += t.childNodes[0].textContent.trim() + ',';
+            });
+            snapshot += '|';
+        }
+    });
+    return snapshot;
+}
+
+// ── Verificar si hay cambios sin guardar ──
+function hayCambiosSinGuardar() {
+    if (!modalEditando) return false;
+    const nuevoSnapshot = tomarSnapshotEdicion();
+    return nuevoSnapshot !== modalSnapshot;
+}
+
+// ── Poblar campos de edición desde data ──────
+function poblarCamposEdicion(d) {
+    document.getElementById('editAgente').value = d.agente || '';
+    document.getElementById('editAgenteTelefono').value = d.agenteTelefono || '';
+    // Vincular evento input para búsqueda de agente (solo una vez)
+    var telInput = document.getElementById('editAgenteTelefono');
+    if (!telInput._listenerVinculado) {
+        telInput.addEventListener('input', iniciarBusquedaAgente);
+        telInput._listenerVinculado = true;
+    }
+    var nomInput = document.getElementById('editAgente');
+    if (!nomInput._listenerNombreVinculado) {
+        nomInput.addEventListener('input', iniciarBusquedaAgente);
+        nomInput._listenerNombreVinculado = true;
+    }
+    document.getElementById('editFuente').value = d.fuente || 'otro';
+    document.getElementById('editCondicion').value = d.condicion || 'no_especificado';
+    document.getElementById('editTipoPropiedad').value = d.tipoPropiedad || 'no_especificado';
+    // Inicializar tags de distritos, urbanización y zona
+    inicializarTags('distritos', d.distritos || '');
+    inicializarTags('urbanizacion', d.urbanizacion || '');
+    inicializarTags('zona', d.zona || '');
+    document.getElementById('editTipoOriginal').value = d.tipoOriginal || 'OTRO';
+    document.getElementById('editPresupuestoMonto').value = d.presupuestoMonto || '';
+    document.getElementById('editPresupuestoMoneda').value = d.presupuestoMoneda || 'no_especificado';
+    document.getElementById('editFormaPago').value = d.formaPago || 'no_especificado';
+    document.getElementById('editHabitaciones').value = d.habitaciones || '';
+    document.getElementById('editBanos').value = d.banos || '';
+    document.getElementById('editArea').value = d.areaM2 || '';
+    document.getElementById('editPiso').value = d.pisoPreferencia || '';
+    document.getElementById('editCochera').value = d.cochera || 'indiferente';
+    document.getElementById('editAscensor').value = d.ascensor || 'indiferente';
+    document.getElementById('editAmueblado').value = d.amueblado || 'indiferente';
+    document.getElementById('editCaracteristicas').value = d.caracteristicas || '';
+    document.getElementById('editMensaje').value = d.mensaje || '';
+    document.getElementById('editVerificado').value = d.verificado === 'si' ? 'true' : 'false';
+
+    // Sincronizar fecha/hora en modo edición (solo lectura)
+    var fechaStr = d.fecha || '—';
+    if (d.hora) fechaStr += ' ' + d.hora;
+    document.getElementById('editFechaTexto').textContent = fechaStr;
+
+    // Iniciar búsqueda de agente al abrir modal
+    iniciarBusquedaAgente();
+}
+
+// =========================================================================
+// Tags input con autocomplete para distritos y urbanizaciones
+// =========================================================================
+
+// ── Inicializar tags desde un string separado por comas ──
+function inicializarTags(prefix, valor) {
+    var container = document.getElementById(prefix + 'TagsContainer');
+    var hiddenInput = document.getElementById('edit' + prefix.charAt(0).toUpperCase() + prefix.slice(1));
+    container.innerHTML = '';
+    if (valor) {
+        var tags = valor.split(',').map(function(t) { return t.trim(); }).filter(function(t) { return t; });
+        tags.forEach(function(t) { agregarTag(prefix, t); });
+    }
+    actualizarHiddenTag(prefix);
+}
+
+// ── Agregar un tag visual ──
+function agregarTag(prefix, texto) {
+    var container = document.getElementById(prefix + 'TagsContainer');
+    var tag = document.createElement('span');
+    tag.className = 'tag-item-edit';
+    tag.innerHTML = texto + '<span class="tag-remove" onclick="eliminarTag(\'' + prefix + '\', this)">&times;</span>';
+    container.appendChild(tag);
+    actualizarHiddenTag(prefix);
+}
+
+// ── Eliminar un tag ──
+function eliminarTag(prefix, el) {
+    el.parentElement.remove();
+    actualizarHiddenTag(prefix);
+    document.getElementById(prefix + 'TagInput').focus();
+}
+
+// ── Actualizar el hidden input con los tags actuales ──
+function actualizarHiddenTag(prefix) {
+    var container = document.getElementById(prefix + 'TagsContainer');
+    var hiddenInput = document.getElementById('edit' + prefix.charAt(0).toUpperCase() + prefix.slice(1));
+    var tags = [];
+    container.querySelectorAll('.tag-item-edit').forEach(function(tag) {
+        // El texto es todo excepto el último hijo (el botón ×)
+        var texto = tag.childNodes[0].textContent.trim();
+        if (texto) tags.push(texto);
+    });
+    hiddenInput.value = tags.join(', ');
+}
+
+// ── Buscar sugerencias vía API ──
+var autocompleteTimeout = {};
+
+function buscarSugerencias(prefix) {
+    const input = document.getElementById(prefix + 'TagInput');
+    const dropdown = document.getElementById(prefix + 'Autocomplete');
+    const query = input.value.trim();
+    const nivel = input.dataset.nivel;
+
+    if (query.length < 1) {
+        dropdown.classList.remove('active');
+        dropdown.innerHTML = '';
+        return;
+    }
+
+    const signal = getAbortSignal('autocomplete_' + prefix);
+    let url;
+    if (nivel === 'zona_calle') {
+        url = '/requerimientos/api/zonas-calles/autocomplete/?q=' + encodeURIComponent(query);
+    } else {
+        url = '/market-analysis/api/ubicaciones/autocomplete/?q=' + encodeURIComponent(query) + '&nivel=' + nivel + '&limit=10';
+    }
+
+    fetch(url, { signal })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            dropdown.innerHTML = '';
+            const items = data.data || [];
+            if (items.length === 0) {
+                dropdown.innerHTML = '<div class="autocomplete-item" style="color:#484f58;cursor:default;">Sin resultados</div>';
+                dropdown.classList.add('active');
+                return;
+            }
+            items.forEach(function(item) {
+                const div = document.createElement('div');
+                div.className = 'autocomplete-item';
+                let nombreHtml = item.nombre;
+                if (item.parent_nombre) {
+                    nombreHtml += ' <span class="item-parent">(' + item.parent_nombre + ')</span>';
+                }
+                let tipoLabel;
+                if (nivel === 'zona_calle') {
+                    tipoLabel = 'Usado ' + (item.veces_usado || 1) + ' vez';
+                } else {
+                    tipoLabel = item.nivel === 'distrito' ? 'Distrito' : 'Urb/Zona';
+                }
+                div.innerHTML = nombreHtml + ' <span class="item-type">' + tipoLabel + '</span>';
+                div.addEventListener('click', function() {
+                    let existente = false;
+                    document.getElementById(prefix + 'TagsContainer').querySelectorAll('.tag-item-edit').forEach(function(t) {
+                        if (t.childNodes[0].textContent.trim().toLowerCase() === item.nombre.toLowerCase()) {
+                            existente = true;
+                        }
+                    });
+                    if (!existente) {
+                        agregarTag(prefix, item.nombre);
+                    }
+                    input.value = '';
+                    dropdown.classList.remove('active');
+                    dropdown.innerHTML = '';
+                    input.focus();
+                });
+                dropdown.appendChild(div);
+            });
+            dropdown.classList.add('active');
+        })
+        .catch(function(err) {
+            if (err.name === 'AbortError') return;
+            console.error('Error en autocomplete:', err);
+        });
+}
+
+// ── Configurar eventos de autocomplete para cada campo ──
+function configurarAutocomplete(prefix) {
+    var input = document.getElementById(prefix + 'TagInput');
+    var dropdown = document.getElementById(prefix + 'Autocomplete');
+    var selectedIndex = -1;
+
+    input.addEventListener('input', function() {
+        clearTimeout(autocompleteTimeout[prefix]);
+        selectedIndex = -1;
+        autocompleteTimeout[prefix] = setTimeout(function() {
+            buscarSugerencias(prefix);
+        }, 250);
+    });
+
+    input.addEventListener('keydown', function(e) {
+        var items = dropdown.querySelectorAll('.autocomplete-item');
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            if (selectedIndex >= 0 && items[selectedIndex]) {
+                items[selectedIndex].click();
+            } else {
+                // Si hay texto pero no hay selección, agregar como tag libre
+                var texto = input.value.trim();
+                if (texto) {
+                    // Verificar duplicado
+                    var existente = false;
+                    document.getElementById(prefix + 'TagsContainer').querySelectorAll('.tag-item-edit').forEach(function(t) {
+                        if (t.childNodes[0].textContent.trim().toLowerCase() === texto.toLowerCase()) {
+                            existente = true;
+                        }
+                    });
+                    if (!existente) {
+                        agregarTag(prefix, texto);
+                    }
+                    input.value = '';
+                    dropdown.classList.remove('active');
+                }
+            }
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
+            items.forEach(function(el, i) {
+                el.classList.toggle('highlighted', i === selectedIndex);
+            });
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            selectedIndex = Math.max(selectedIndex - 1, -1);
+            items.forEach(function(el, i) {
+                el.classList.toggle('highlighted', i === selectedIndex);
+            });
+        } else if (e.key === 'Escape') {
+            dropdown.classList.remove('active');
+            selectedIndex = -1;
+        } else if (e.key === 'Backspace' && input.value === '') {
+            // Eliminar último tag
+            var container = document.getElementById(prefix + 'TagsContainer');
+            var lastTag = container.querySelector('.tag-item-edit:last-child');
+            if (lastTag) lastTag.querySelector('.tag-remove').click();
+        }
+    });
+
+    input.addEventListener('blur', function() {
+        // Cerrar dropdown al perder foco (con delay para permitir clicks)
+        setTimeout(function() {
+            dropdown.classList.remove('active');
+        }, 200);
+    });
+}
+
+// ── Configurar autocomplete al cargar ──
+configurarAutocomplete('distritos');
+configurarAutocomplete('urbanizacion');
+configurarAutocomplete('zona');
+
+// ── Búsqueda de agente por teléfono ──────────
+let timeoutBuscarAgente = null;
+
+function iniciarBusquedaAgente() {
+    clearTimeout(timeoutBuscarAgente);
+    timeoutBuscarAgente = setTimeout(function() {
+        var telefono = document.getElementById('editAgenteTelefono').value.trim();
+        // Limpiar espacios del teléfono antes de buscar
+        // '+51 958 190 107' → '+51958190107'
+        var telefonoLimpio = telefono.replace(/[\s\-\(\)]+/g, '');
+        var nombre = document.getElementById('editAgente').value.trim();
+        buscarAgente(telefonoLimpio, nombre);
+    }, 500);
+}
+
+function buscarAgente(telefono, nombre) {
+    const statusDiv = document.getElementById('agenteVinculadoStatus');
+    const badge = document.getElementById('agenteStatusBadge');
+    const btnRegistrar = document.getElementById('btnRegistrarAgente');
+
+    // Si hay teléfono válido, buscar por teléfono
+    if (telefono && telefono.length >= 6) {
+        const signal = getAbortSignal('buscarAgente');
+        fetch('/requerimientos/api/buscar-agente/?telefono=' + encodeURIComponent(telefono), { signal })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                statusDiv.style.display = 'block';
+                if (data.encontrado) {
+                    document.getElementById('editAgente').value = data.nombre_completo;
+                    if (data.telefono) {
+                        document.getElementById('editAgenteTelefono').value = data.telefono;
+                    }
+                    badge.textContent = '✓ Vinculado a ' + data.nombre_completo;
+                    badge.style.backgroundColor = 'rgba(35, 134, 54, 0.2)';
+                    badge.style.color = '#3fb950';
+                    badge.style.border = '1px solid rgba(35, 134, 54, 0.3)';
+                    btnRegistrar.style.display = 'none';
+                } else {
+                    badge.textContent = '⚠ No registrado en agentes';
+                    badge.style.backgroundColor = 'rgba(210, 153, 34, 0.15)';
+                    badge.style.color = '#d29922';
+                    badge.style.border = '1px solid rgba(210, 153, 34, 0.3)';
+                    btnRegistrar.style.display = 'inline-block';
+                }
+            })
+            .catch(function(err) {
+                if (err.name === 'AbortError') return;
+                console.error('Error al buscar agente:', err);
+                statusDiv.style.display = 'none';
+            });
+    }
+    // Si no hay teléfono pero sí hay nombre, buscar por nombre
+    else if (nombre && nombre.length >= 3) {
+        const signal = getAbortSignal('buscarAgenteNombre');
+        fetch('/requerimientos/api/buscar-agente-por-nombre/?nombre=' + encodeURIComponent(nombre), { signal })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                statusDiv.style.display = 'block';
+                if (data.encontrado) {
+                    document.getElementById('editAgente').value = data.nombre_completo;
+                    if (data.telefono) {
+                        document.getElementById('editAgenteTelefono').value = data.telefono;
+                        badge.textContent = '✓ Vinculado a ' + data.nombre_completo + ' (con teléfono)';
+                    } else {
+                        badge.textContent = '✓ Vinculado a ' + data.nombre_completo;
+                    }
+                    badge.style.backgroundColor = 'rgba(35, 134, 54, 0.2)';
+                    badge.style.color = '#3fb950';
+                    badge.style.border = '1px solid rgba(35, 134, 54, 0.3)';
+                    btnRegistrar.style.display = 'none';
+                } else {
+                    badge.textContent = '⚠ Sin teléfono — registrar solo con nombre';
+                    badge.style.backgroundColor = 'rgba(210, 153, 34, 0.15)';
+                    badge.style.color = '#d29922';
+                    badge.style.border = '1px solid rgba(210, 153, 34, 0.3)';
+                    btnRegistrar.style.display = 'inline-block';
+                }
+            })
+            .catch(function(err) {
+                if (err.name === 'AbortError') return;
+                console.error('Error al buscar agente por nombre:', err);
+                statusDiv.style.display = 'none';
+            });
+    }
+    else {
+        statusDiv.style.display = 'none';
+    }
+}
+
+// ── Sincronizar inputs de edición desde elementos .field-view ──
+// Garantiza que los inputs tengan los mismos valores que se muestran en vista
+function sincronizarEditDesdeVista() {
+    // Helper: obtener texto limpio de un field-view
+    function viewText(id) {
+        var el = document.getElementById(id);
+        return el ? (el.textContent || '').trim() : '';
+    }
+
+    // Helper: obtener tags desde un field-view que contiene .tag-item
+    // IMPORTANTE: textContent concatena el texto de todos los hijos sin separador,
+    // por lo que "Cayma" + "Yanahuara" se convertiría en "CaymaYanahuara".
+    // Este helper extrae cada .tag-item individualmente y los une con coma.
+    function viewTags(id) {
+        var el = document.getElementById(id);
+        if (!el) return '';
+        var tagItems = el.querySelectorAll('.tag-item');
+        if (tagItems.length > 0) {
+            var tags = [];
+            tagItems.forEach(function(t) { tags.push(t.textContent.trim()); });
+            return tags.join(', ');
+        }
+        var txt = (el.textContent || '').trim();
+        return (txt && txt !== '—') ? txt : '';
+    }
+
+    // Agente — solo si el input está vacío (no sobreescribir lo que el usuario escribió)
+    var agenteInput = document.getElementById('editAgente');
+    if (agenteInput && !agenteInput.value.trim()) {
+        var agenteTxt = viewText('modalAgente');
+        if (agenteTxt && agenteTxt !== '—') agenteInput.value = agenteTxt;
+    }
+
+    // Teléfono — solo si el input está vacío
+    var telInput = document.getElementById('editAgenteTelefono');
+    if (telInput && !telInput.value.trim()) {
+        var telTxt = viewText('modalAgenteTelefono');
+        if (telTxt) telInput.value = telTxt.replace('📞 ', '');
+    }
+
+    // Fuente
+    var fuenteTxt = viewText('modalFuente');
+    if (fuenteTxt && fuenteTxt !== '—') document.getElementById('editFuente').value = fuenteTxt;
+
+    // Distritos — restaurar como tags (usar viewTags para separar correctamente)
+    var distTxt = viewTags('modalDistritos');
+    inicializarTags('distritos', (distTxt && distTxt !== '—') ? distTxt : '');
+
+    // Urbanización — restaurar como tags (usar viewTags para separar correctamente)
+    var urbTxt = viewTags('modalUrbanizacion');
+    inicializarTags('urbanizacion', (urbTxt && urbTxt !== '—') ? urbTxt : '');
+
+    // Zona — restaurar como tags (usar viewTags para separar correctamente)
+    var zonaTxt = viewTags('modalZona');
+    inicializarTags('zona', (zonaTxt && zonaTxt !== '—') ? zonaTxt : '');
+
+    // Presupuesto: "S/ 250,000" o "$ 500,000" → "250000" o "500000"
+    var presTxt = viewText('modalPresupuesto');
+    if (presTxt && presTxt !== '—') {
+        var match = presTxt.match(/[\d,.]+/);
+        if (match) document.getElementById('editPresupuestoMonto').value = match[0].replace(/,/g, '');
+    }
+
+    // Área: "150 m²" → "150"
+    var areaTxt = viewText('modalArea');
+    if (areaTxt && areaTxt !== '—') {
+        var aMatch = areaTxt.match(/^[\d,.]+/);
+        if (aMatch) document.getElementById('editArea').value = aMatch[0].replace(/,/g, '');
+    }
+
+    // Pisos / Hab / Baños: texto plano
+    var pisoTxt = viewText('modalPiso');
+    if (pisoTxt && pisoTxt !== '—') document.getElementById('editPiso').value = pisoTxt;
+
+    // Habitaciones y Baños: "3 hab. / 2 baños" → extraer
+    var habBanosTxt = viewText('modalHabBanos');
+    if (habBanosTxt && habBanosTxt !== '—') {
+        var habMatch = habBanosTxt.match(/(\d+)\s*hab/);
+        if (habMatch) document.getElementById('editHabitaciones').value = habMatch[1];
+        var banMatch = habBanosTxt.match(/(\d+)\s*baños/);
+        if (banMatch) document.getElementById('editBanos').value = banMatch[1];
+    }
+
+    // Características
+    var caracTxt = viewText('modalCaracteristicas');
+    if (caracTxt && caracTxt !== '—') document.getElementById('editCaracteristicas').value = caracTxt;
+
+    // Mensaje
+    var msgTxt = viewText('modalMensaje');
+    if (msgTxt && msgTxt !== '—') document.getElementById('editMensaje').value = msgTxt;
+
+    // Verificado
+    var verifTxt = viewText('modalVerificadoBadge');
+    document.getElementById('editVerificado').value = (verifTxt && verifTxt.includes('VERIFICADO')) ? 'true' : 'false';
+}
+
+// ── Alternar modo vista ↔ edición ────────────
+function toggleModoEdicion(activar) {
+    const views = document.querySelectorAll('#modalDetalleRequerimiento .field-view');
+    const edits = document.querySelectorAll('#modalDetalleRequerimiento .field-edit');
+    const viewActions = document.getElementById('modalViewActions');
+    const editActions = document.getElementById('modalEditActions');
+    
+    views.forEach(el => { el.style.display = activar ? 'none' : ''; });
+    edits.forEach(el => { el.style.display = activar ? '' : 'none'; });
+    viewActions.style.display = activar ? 'none' : '';
+    editActions.style.display = activar ? '' : 'none';
+    
+    modalEditando = activar;
+    
+    // Tomar snapshot al activar edición para dirty tracking
+    if (activar) {
+        modalSnapshot = tomarSnapshotEdicion();
+        modalDirty = false;
+    }
+}
+
+// ── Actualizar campos de vista desde data ────
+function actualizarVista(d) {
+    const verifBadge = document.getElementById('modalVerificadoBadge');
+    if (d.verificado === 'si') {
+        verifBadge.textContent = '✓ VERIFICADO';
+        verifBadge.style.backgroundColor = 'rgba(0, 255, 65, 0.1)';
+        verifBadge.style.color = '#00ff41';
+        verifBadge.style.border = '1px solid rgba(0, 255, 65, 0.3)';
+    } else {
+        verifBadge.textContent = '✗ NO VERIFICADO';
+        verifBadge.style.backgroundColor = 'rgba(255, 23, 68, 0.1)';
+        verifBadge.style.color = '#ff1744';
+        verifBadge.style.border = '1px solid rgba(255, 23, 68, 0.3)';
+    }
+    document.getElementById('modalAgente').textContent = d.agente || '—';
+    document.getElementById('modalAgenteTelefono').textContent = d.agenteTelefono ? '📞 ' + d.agenteTelefono : '';
+    document.getElementById('modalFuente').textContent = d.fuente || '—';
+    let fechaStr = d.fecha || '—';
+    if (d.hora) fechaStr += ' ' + d.hora;
+    document.getElementById('modalFecha').textContent = fechaStr;
+    
+    const condEl = document.getElementById('modalCondicion');
+    const condText = d.condicion || '—';
+    let condBadge = condText, condColor = '#8b949e';
+    if (condText === 'compra') { condBadge = 'Compra'; condColor = '#58a6ff'; }
+    else if (condText === 'alquiler') { condBadge = 'Alquiler'; condColor = '#d29922'; }
+    else if (condText === 'anticresis') { condBadge = 'Anticresis'; condColor = '#f0883e'; }
+    else if (condText === 'ambos') { condBadge = 'Compra y Alquiler'; condColor = '#8957e5'; }
+    else if (condText === 'compartido') { condBadge = 'Compartido'; condColor = '#3fb950'; }
+    condEl.innerHTML = '<span class="badge" style="background-color: ' + condColor + '22; color: ' + condColor + '; border: 1px solid ' + condColor + '44; padding: 3px 10px; border-radius: 4px; font-size: 12px;">' + condBadge + '</span>';
+    
+    const tipoEl = document.getElementById('modalTipoPropiedad');
+    const tipoText = d.tipoPropiedad || '—';
+    let tipoBadge = tipoText, tipoColor = '#8b949e';
+    if (tipoText === 'departamento') { tipoBadge = 'Departamento'; tipoColor = '#58a6ff'; }
+    else if (tipoText === 'casa') { tipoBadge = 'Casa'; tipoColor = '#3fb950'; }
+    else if (tipoText === 'terreno') { tipoBadge = 'Terreno'; tipoColor = '#d29922'; }
+    else if (tipoText === 'local_comercial') { tipoBadge = 'Local Comercial'; tipoColor = '#8957e5'; }
+    else if (tipoText === 'oficina') { tipoBadge = 'Oficina'; tipoColor = '#39b2ac'; }
+    tipoEl.innerHTML = '<span class="badge" style="background-color: ' + tipoColor + '22; color: ' + tipoColor + '; border: 1px solid ' + tipoColor + '44; padding: 3px 10px; border-radius: 4px; font-size: 12px;">' + tipoBadge + '</span>';
+    
+    // Distritos como tags
+    const distritosEl = document.getElementById('modalDistritos');
+    const distritosVal = d.distritos || '';
+    if (distritosVal) {
+        const tags = distritosVal.split(',').map(t => t.trim()).filter(t => t);
+        distritosEl.innerHTML = '<div class="tags-container">' + tags.map(t => '<span class="tag-item">' + t + '</span>').join(' ') + '</div>';
+    } else {
+        distritosEl.innerHTML = '<span style="color:#484f58;">—</span>';
+    }
+    // Urbanización como tags
+    const urbanizacionEl = document.getElementById('modalUrbanizacion');
+    const urbanizacionVal = d.urbanizacion || '';
+    if (urbanizacionVal) {
+        const tags = urbanizacionVal.split(',').map(t => t.trim()).filter(t => t);
+        urbanizacionEl.innerHTML = '<div class="tags-container">' + tags.map(t => '<span class="tag-item">' + t + '</span>').join(' ') + '</div>';
+    } else {
+        urbanizacionEl.innerHTML = '<span style="color:#484f58;">—</span>';
+    }
+    // Zona como tags
+    const zonaEl = document.getElementById('modalZona');
+    const zonaVal = d.zona || '';
+    if (zonaVal) {
+        const tags = zonaVal.split(',').map(t => t.trim()).filter(t => t);
+        zonaEl.innerHTML = '<div class="tags-container">' + tags.map(t => '<span class="tag-item">' + t + '</span>').join(' ') + '</div>';
+    } else {
+        zonaEl.innerHTML = '<span style="color:#484f58;">—</span>';
+    }
+    
+    const toEl = document.getElementById('modalTipoOriginal');
+    const toText = d.tipoOriginal || '—';
+    let toBadge = toText, toColor = '#8b949e';
+    if (toText.includes('BASURA')) { toBadge = 'Basura'; toColor = '#f85149'; }
+    else if (toText.includes('REQUERIMIENTO')) { toBadge = 'Requerimiento'; toColor = '#3fb950'; }
+    else if (toText.includes('PROPIEDAD')) { toBadge = 'Propiedad'; toColor = '#58a6ff'; }
+    toEl.innerHTML = '<span class="badge" style="background-color: ' + toColor + '22; color: ' + toColor + '; border: 1px solid ' + toColor + '44; padding: 3px 10px; border-radius: 4px; font-size: 12px;">' + toBadge + '</span>';
+    
+    const monto = d.presupuestoMonto;
+    const moneda = d.presupuestoMoneda;
+    if (monto) {
+        const simbolo = moneda === 'USD' ? '$' : 'S/';
+        const formatted = parseFloat(monto).toLocaleString('es-PE', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+        document.getElementById('modalPresupuesto').textContent = simbolo + ' ' + formatted;
+    } else {
+        document.getElementById('modalPresupuesto').textContent = '—';
+    }
+    const fpEl = document.getElementById('modalFormaPago');
+    const fpText = d.formaPago || '';
+    if (fpText && fpText !== 'no_especificado') {
+        fpEl.textContent = 'Forma de pago: ' + fpText.charAt(0).toUpperCase() + fpText.slice(1);
+    } else {
+        fpEl.textContent = '';
+    }
+    
+    const habs = d.habitaciones || '—';
+    const banos = d.banos || '—';
+    document.getElementById('modalHabBanos').textContent = habs + ' hab. / ' + banos + ' baños';
+    document.getElementById('modalArea').textContent = d.areaM2 ? d.areaM2 + ' m²' : '—';
+    document.getElementById('modalPiso').textContent = d.pisoPreferencia || '—';
+    
+    function renderExtraBadge(elId, value, label) {
+        const el = document.getElementById(elId);
+        if (value === 'si') {
+            el.textContent = label;
+            el.style.display = 'inline-block';
+            el.style.backgroundColor = 'rgba(35, 134, 54, 0.2)';
+            el.style.color = '#3fb950';
+            el.style.border = '1px solid rgba(35, 134, 54, 0.3)';
+        } else {
+            el.style.display = 'none';
+        }
+    }
+    renderExtraBadge('modalCochera', d.cochera, '🚗 Cochera');
+    renderExtraBadge('modalAscensor', d.ascensor, '🛗 Ascensor');
+    renderExtraBadge('modalAmueblado', d.amueblado, '🛋️ Amueblado');
+    
+    document.getElementById('modalCaracteristicas').textContent = d.caracteristicas || '—';
+    document.getElementById('modalMensaje').textContent = d.mensaje || '—';
+    document.getElementById('modalCreado').textContent = d.creado || '—';
+    document.getElementById('modalActualizado').textContent = d.actualizado || '—';
+}
+
+// ── Actualizar fila de la tabla después de guardar ──
+function actualizarFilaTabla(pk, d) {
+    // Encontrar la fila que contiene el botón con este pk
+    const btn = document.querySelector(`.ver-detalle-btn[data-pk="${pk}"]`);
+    if (!btn) return;
+    const tr = btn.closest('tr');
+    if (!tr) return;
+    const celdas = tr.querySelectorAll('td');
+    if (celdas.length < 17) return;
+
+    // Helper para crear tags HTML
+    function renderTags(valor) {
+        if (!valor) return '<span style="color:#484f58;font-size:12px;">—</span>';
+        var tags = valor.split(',').map(function(t) { return t.trim(); }).filter(function(t) { return t; });
+        if (tags.length === 0) return '<span style="color:#484f58;font-size:12px;">—</span>';
+        var html = '<div class="tags-container" style="gap:3px;">';
+        tags.forEach(function(t) { html += '<span class="tag-item" style="font-size:11px;">' + t + '</span>'; });
+        html += '</div>';
+        return html;
+    }
+
+    // Helper para badge de condición
+    function badgeCondicion(val) {
+        if (val === 'compra') return '<span class="badge badge-blue">Compra</span>';
+        if (val === 'alquiler') return '<span class="badge badge-orange">Alquiler</span>';
+        if (val === 'compartido') return '<span class="badge" style="background-color:#3fb95022;color:#3fb950;border:1px solid #3fb95044;padding:3px 10px;border-radius:4px;font-size:12px;">Compartido</span>';
+        if (val === 'anticresis') return '<span class="badge badge-orange">Anticresis</span>';
+        if (val === 'ambos') return '<span class="badge badge-purple">Ambos</span>';
+        return '<span class="badge badge-gray">' + (val || '—') + '</span>';
+    }
+
+    // Helper para badge de tipo propiedad
+    function badgeTipo(val) {
+        if (val === 'departamento') return '<span class="badge badge-blue">Dpto</span>';
+        if (val === 'casa') return '<span class="badge badge-green">Casa</span>';
+        if (val === 'terreno') return '<span class="badge badge-orange">Terreno</span>';
+        if (val === 'local_comercial') return '<span class="badge badge-purple">Local</span>';
+        if (val === 'oficina') return '<span class="badge badge-cyan">Oficina</span>';
+        return '<span class="badge badge-gray">' + (val || '—') + '</span>';
+    }
+
+    // Helper para badge de tipo original
+    function badgeTipoOriginal(val) {
+        if (!val) return '<span style="color:#484f58;">—</span>';
+        if (val.includes('BASURA')) return '<span class="badge badge-red">Basura</span>';
+        if (val.includes('REQUERIMIENTO')) return '<span class="badge badge-green">Req.</span>';
+        if (val.includes('PROPIEDAD')) return '<span class="badge badge-blue">Prop.</span>';
+        return '<span class="badge badge-gray">' + val.substring(0, 10) + '</span>';
+    }
+
+    // Helper para presupuesto
+    function renderPresupuesto(monto, moneda) {
+        if (!monto) return '<span class="badge badge-gray">—</span>';
+        var simb = moneda === 'USD' ? '$' : 'S/';
+        var num = parseFloat(monto).toLocaleString('es-PE', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+        return '<span class="presupuesto-val">' + simb + ' ' + num + '</span>';
+    }
+
+    // Helper para forma de pago
+    function renderFormaPago(val) {
+        if (!val || val === 'no_especificado') return '<span style="color:#484f58;">—</span>';
+        var labels = { 'contado': 'Contado', 'credito': 'Crédito', 'contado_credito': 'Contado/Crédito', 'true': 'Sí', 'false': 'No' };
+        return '<span class="badge badge-gray">' + (labels[val] || val.substring(0, 12)) + '</span>';
+    }
+
+    // Helper para badge numérico
+    function badgeNum(val, color, sufijo) {
+        if (!val) return '<span style="color:#484f58;">—</span>';
+        return '<span class="badge badge-' + color + '">' + val + (sufijo || '') + '</span>';
+    }
+
+    // Helper para características
+    function renderCaracts(val, cochera, ascensor, amueblado) {
+        if (!val && cochera !== 'si' && ascensor !== 'si' && amueblado !== 'si') {
+            return '<span style="color:#484f58;">—</span>';
+        }
+        var html = '<div class="caracts">';
+        if (val && val.toUpperCase().includes('URGENTE')) html += '<span class="badge badge-red">URGENTE</span>';
+        if (cochera === 'si') html += '<span class="badge badge-gray">🚗</span>';
+        if (ascensor === 'si') html += '<span class="badge badge-gray">🛗</span>';
+        if (amueblado === 'si') html += '<span class="badge badge-gray">🛋️</span>';
+        html += '</div>';
+        return html;
+    }
+
+    // Helper para mensaje (truncado)
+    function renderMensaje(val) {
+        if (!val) return '<span style="color:#484f58;">—</span>';
+        var txt = val.length > 50 ? val.substring(0, 50) + '...' : val;
+        return '<div class="msg-preview">' + txt + '</div>';
+    }
+
+    // Helper para agente/fuente
+    function renderAgenteFuente(agente, telefono, fuente) {
+        var html = '<div class="agent-name">' + (agente ? agente.substring(0, 25) : '') + '</div>';
+        if (telefono) html += '<div class="agent-phone">📞 ' + telefono + '</div>';
+        html += '<div class="fuente-label">' + (fuente ? fuente.substring(0, 20) : '') + '</div>';
+        return html;
+    }
+
+    // Helper para fecha
+    function renderFecha(fecha, hora) {
+        if (!fecha) return '<span style="color:#484f58;">—</span>';
+        var html = '<div class="fecha-cell">' + fecha + '</div>';
+        if (hora) html += '<div class="fecha-cell">' + hora + '</div>';
+        return html;
+    }
+
+    // Actualizar celdas por índice
+    // Índice 0: Verificado (se maneja aparte con el badge-verificado)
+    const verifSpan = tr.querySelector('.badge-verificado');
+    if (verifSpan) {
+        if (d.verificado === 'si') {
+            verifSpan.className = 'badge-verificado verificado-si';
+            verifSpan.textContent = '✓ VERIFICADO';
+            verifSpan.title = '✓ Verificado — Haz clic para desmarcar';
+        } else {
+            verifSpan.className = 'badge-verificado verificado-no';
+            verifSpan.textContent = '✗ NO VERIF.';
+            verifSpan.title = '✗ No revisado — Haz clic para marcar como verificado';
+        }
+    }
+
+    // Índice 1: Agente / Fuente
+    celdas[1].innerHTML = renderAgenteFuente(d.agente, d.agenteTelefono, d.fuente);
+
+    // Índice 3: Condición
+    celdas[3].innerHTML = badgeCondicion(d.condicion);
+
+    // Índice 4: Tipo Propiedad
+    celdas[4].innerHTML = badgeTipo(d.tipoPropiedad);
+
+    // Índice 5: Distritos (tags)
+    celdas[5].innerHTML = renderTags(d.distritos);
+
+    // Índice 6: Urbanización (tags)
+    celdas[6].innerHTML = renderTags(d.urbanizacion);
+
+    // Índice 7: Zona (tags)
+    celdas[7].innerHTML = renderTags(d.zona);
+
+    // Índice 8: Presupuesto
+    celdas[8].innerHTML = renderPresupuesto(d.presupuestoMonto, d.presupuestoMoneda);
+
+    // Índice 9: Forma de Pago
+    celdas[9].innerHTML = renderFormaPago(d.formaPago);
+
+    // Índice 10: Habitaciones
+    celdas[10].innerHTML = badgeNum(d.habitaciones, 'blue');
+
+    // Índice 11: Baños
+    celdas[11].innerHTML = badgeNum(d.banos, 'blue');
+
+    // Índice 12: Área
+    celdas[12].innerHTML = badgeNum(d.areaM2, 'cyan', 'm²');
+
+    // Índice 13: Características
+    celdas[13].innerHTML = renderCaracts(d.caracteristicas, d.cochera, d.ascensor, d.amueblado);
+
+    // Índice 14: Tipo Original
+    celdas[14].innerHTML = badgeTipoOriginal(d.tipoOriginal);
+
+    // Índice 15: Mensaje
+    celdas[15].innerHTML = renderMensaje(d.mensaje);
+
+    // Actualizar data-attributes del botón
+    Object.keys(d).forEach(function(key) {
+        btn.dataset[key] = d[key];
+    });
+}
+
+// ── Inicializar modal ─────────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+    const modal = document.getElementById('modalDetalleRequerimiento');
+    
+    // Al hacer clic en "Ver" — Usar DELEGACIÓN DE EVENTOS para que funcione con paginación
+    document.addEventListener('click', function(e) {
+        var btn = e.target.closest('.ver-detalle-btn');
+        if (!btn) return;
+        
+        const d = btn.dataset;
+        modalRequerimientoActual = d;
+        
+        // Limpiar estado de clonación al abrir un nuevo detalle
+        modoClonacion = false;
+        datosClonacion = null;
+        document.getElementById('btnGuardarEdicion').innerHTML = '<i class="bi bi-check2 me-1"></i>Guardar';
+        
+        // Reset a modo vista
+        toggleModoEdicion(false);
+        
+        // Poblar campos de edición
+        poblarCamposEdicion(d);
+        
+        // Actualizar vista
+        actualizarVista(d);
+        
+        document.getElementById('modalReqPk').textContent = d.pk;
+        
+        const bsModal = new bootstrap.Modal(modal);
+        bsModal.show();
+    });
+    
+    // ── Botón Editar ──────────────────────────
+    document.getElementById('btnEditarRequerimiento').addEventListener('click', function() {
+        if (!modalRequerimientoActual) return;
+        // Sincronizar inputs desde los elementos .field-view (que siempre muestran
+        // los datos correctos) antes de mostrar los inputs de edición.
+        // Esto garantiza que ningún campo aparezca vacío aunque el dataset
+        // esté desincronizado.
+        sincronizarEditDesdeVista();
+        toggleModoEdicion(true);
+    });
+    
+    // ── Botón Clonar ──────────────────────────
+    // Abre el modal en modo edición con los datos del requerimiento actual
+    // para que el usuario pueda modificarlos antes de guardar como nuevo.
+    document.getElementById('btnClonarRequerimiento').addEventListener('click', function() {
+        if (!modalRequerimientoActual) return;
+        
+        // Marcar modo clonación
+        modoClonacion = true;
+        
+        // Crear una copia INDEPENDIENTE de los datos del dataset actual
+        // para evitar cualquier referencia compartida con el botón original.
+        // Esto garantiza que modificar el clon NO afecte al original ni viceversa.
+        var src = modalRequerimientoActual;
+        datosClonacion = {
+            pk: src.pk,
+            agente: src.agente || '',
+            agenteTelefono: src.agenteTelefono || '',
+            fuente: src.fuente || '',
+            fecha: src.fecha || '',
+            hora: src.hora || '',
+            condicion: src.condicion || '',
+            tipoPropiedad: src.tipoPropiedad || '',
+            distritos: src.distritos || '',
+            urbanizacion: src.urbanizacion || '',
+            zona: src.zona || '',
+            tipoOriginal: src.tipoOriginal || '',
+            presupuestoMonto: src.presupuestoMonto || '',
+            presupuestoMoneda: src.presupuestoMoneda || '',
+            formaPago: src.formaPago || '',
+            habitaciones: src.habitaciones || '',
+            banos: src.banos || '',
+            cochera: src.cochera || '',
+            ascensor: src.ascensor || '',
+            amueblado: src.amueblado || '',
+            areaM2: src.areaM2 || '',
+            pisoPreferencia: src.pisoPreferencia || '',
+            caracteristicas: src.caracteristicas || '',
+            mensaje: src.mensaje || '',
+            verificado: src.verificado || 'no',
+        };
+        
+        // Cambiar texto del botón Guardar para indicar que es clonación
+        document.getElementById('btnGuardarEdicion').innerHTML = '<i class="bi bi-copy me-1"></i>Guardar como nuevo';
+        
+        // Sincronizar inputs desde los elementos .field-view
+        sincronizarEditDesdeVista();
+        
+        // Activar modo edición
+        toggleModoEdicion(true);
+    });
+    
+    // ── Botón Cancelar ────────────────────────
+    document.getElementById('btnCancelarEdicion').addEventListener('click', function() {
+        if (modoClonacion) {
+            modoClonacion = false;
+            datosClonacion = null;
+            document.getElementById('btnGuardarEdicion').innerHTML = '<i class="bi bi-check2 me-1"></i>Guardar';
+        }
+        toggleModoEdicion(false);
+    });
+    
+    // ── Botón Guardar ─────────────────────────
+    document.getElementById('btnGuardarEdicion').addEventListener('click', function() {
+        if (!modalRequerimientoActual) return;
+        
+        // Validar formulario antes de guardar
+        const errores = validarFormularioEdicion();
+        if (errores.length > 0) {
+            mostrarToastEdicion('error', 'Corrige los siguientes errores:\n• ' + errores.join('\n• '));
+            return;
+        }
+        
+        const pk = modalRequerimientoActual.pk;
+        const d = modalRequerimientoActual; // dataset original del botón
+        const data = { pk: parseInt(pk) };
+        
+        // Helper: recoger valor del input editado.
+        // Si el input existe, usamos su valor aunque esté vacío (el usuario lo borró).
+        // Si el input NO existe (null), caemos al dataset como fallback.
+        // El .field-view es el último recurso si dataset tampoco tiene valor.
+        function val(inputId, datasetKey, fallback, viewId, viewTransform) {
+            var el = document.getElementById(inputId);
+            if (el) {
+                // Input existe → respetar su valor (incluso vacío)
+                return el.value.trim();
+            }
+            
+            // Input no existe → usar dataset
+            var dsVal = d[datasetKey];
+            if (dsVal && dsVal !== '') return dsVal;
+            
+            // Último recurso: extraer del elemento .field-view mostrado
+            if (viewId) {
+                var viewEl = document.getElementById(viewId);
+                if (viewEl) {
+                    // Si el view tiene tags, extraerlos correctamente
+                    var tagItems = viewEl.querySelectorAll('.tag-item');
+                    if (tagItems.length > 0) {
+                        var tags = [];
+                        tagItems.forEach(function(t) { tags.push(t.textContent.trim()); });
+                        return tags.join(', ');
+                    }
+                    var txt = (viewEl.textContent || '').trim();
+                    if (txt && txt !== '—') {
+                        if (viewTransform) return viewTransform(txt);
+                        return txt;
+                    }
+                }
+            }
+            
+            return fallback;
+        }
+        
+        // Transformaciones para extraer valores de texto formateado
+        function extraerNumero(txt) {
+            var m = txt.match(/[\d,.]+/);
+            return m ? m[0].replace(/,/g, '') : '';
+        }
+        function limpiarTelefono(txt) {
+            return txt.replace('📞 ', '');
+        }
+        function extraerArea(txt) {
+            var m = txt.match(/^[\d,.]+/);
+            return m ? m[0].replace(/,/g, '') : '';
+        }
+        function extraerHabs(txt) {
+            var m = txt.match(/(\d+)\s*hab/);
+            return m ? m[1] : '';
+        }
+        function extraerBanos(txt) {
+            var m = txt.match(/(\d+)\s*baños/);
+            return m ? m[1] : '';
+        }
+        
+        // Recolectar todos los campos editables con triple fallback:
+        // input → dataset → .field-view
+        data.agente = val('editAgente', 'agente', '', 'modalAgente');
+        data.agente_telefono = val('editAgenteTelefono', 'agenteTelefono', '', 'modalAgenteTelefono', limpiarTelefono);
+        data.fuente = val('editFuente', 'fuente', 'otro', 'modalFuente');
+        data.condicion = val('editCondicion', 'condicion', 'no_especificado');
+        data.tipo_propiedad = val('editTipoPropiedad', 'tipoPropiedad', 'no_especificado');
+        data.distritos = val('editDistritos', 'distritos', '', 'modalDistritos');
+        data.urbanizacion = val('editUrbanizacion', 'urbanizacion', '', 'modalUrbanizacion');
+        data.zona = val('editZona', 'zona', '', 'modalZona');
+        data.tipo_original = val('editTipoOriginal', 'tipoOriginal', 'OTRO');
+        data.presupuesto_monto = val('editPresupuestoMonto', 'presupuestoMonto', '', 'modalPresupuesto', extraerNumero);
+        data.presupuesto_moneda = val('editPresupuestoMoneda', 'presupuestoMoneda', 'no_especificado');
+        data.presupuesto_forma_pago = val('editFormaPago', 'formaPago', 'no_especificado');
+        data.habitaciones = val('editHabitaciones', 'habitaciones', '', 'modalHabBanos', extraerHabs);
+        data.banos = val('editBanos', 'banos', '', 'modalHabBanos', extraerBanos);
+        data.area_m2 = val('editArea', 'areaM2', '', 'modalArea', extraerArea);
+        data.piso_preferencia = val('editPiso', 'pisoPreferencia', '', 'modalPiso');
+        data.cochera = val('editCochera', 'cochera', 'indiferente');
+        data.ascensor = val('editAscensor', 'ascensor', 'indiferente');
+        data.amueblado = val('editAmueblado', 'amueblado', 'indiferente');
+        data.caracteristicas_extra = val('editCaracteristicas', 'caracteristicas', '', 'modalCaracteristicas');
+        data.requerimiento = val('editMensaje', 'mensaje', '', 'modalMensaje');
+        data.verificado = document.getElementById('editVerificado').value === 'true';
+        
+        // ── Si es modo clonación, enviar a api/clonar/ ──
+        if (modoClonacion) {
+            // Usar la copia independiente (datosClonacion) como fuente de datos
+            // en lugar del dataset en vivo (d) para evitar contaminación cruzada.
+            var dClone = datosClonacion || d;
+            
+            // Recolectar campos usando dClone como fallback en lugar del dataset en vivo
+            function valClone(inputId, datasetKey, fallback, viewId, viewTransform) {
+                var el = document.getElementById(inputId);
+                if (el) {
+                    // Input existe → respetar su valor (incluso vacío)
+                    return el.value.trim();
+                }
+                
+                // Input no existe → usar dClone
+                var dsVal = dClone[datasetKey];
+                if (dsVal && dsVal !== '') return dsVal;
+                
+                if (viewId) {
+                    var viewEl = document.getElementById(viewId);
+                    if (viewEl) {
+                        var tagItems = viewEl.querySelectorAll('.tag-item');
+                        if (tagItems.length > 0) {
+                            var tags = [];
+                            tagItems.forEach(function(t) { tags.push(t.textContent.trim()); });
+                            return tags.join(', ');
+                        }
+                        var txt = (viewEl.textContent || '').trim();
+                        if (txt && txt !== '—') {
+                            if (viewTransform) return viewTransform(txt);
+                            return txt;
+                        }
+                    }
+                }
+                return fallback;
+            }
+            
+            var dataClone = {};
+            dataClone.agente = valClone('editAgente', 'agente', '', 'modalAgente');
+            dataClone.agente_telefono = valClone('editAgenteTelefono', 'agenteTelefono', '', 'modalAgenteTelefono', limpiarTelefono);
+            dataClone.fuente = valClone('editFuente', 'fuente', 'otro', 'modalFuente');
+            dataClone.condicion = valClone('editCondicion', 'condicion', 'no_especificado');
+            dataClone.tipo_propiedad = valClone('editTipoPropiedad', 'tipoPropiedad', 'no_especificado');
+            dataClone.distritos = valClone('editDistritos', 'distritos', '', 'modalDistritos');
+            dataClone.urbanizacion = valClone('editUrbanizacion', 'urbanizacion', '', 'modalUrbanizacion');
+            dataClone.zona = valClone('editZona', 'zona', '', 'modalZona');
+            dataClone.tipo_original = valClone('editTipoOriginal', 'tipoOriginal', 'OTRO');
+            dataClone.presupuesto_monto = valClone('editPresupuestoMonto', 'presupuestoMonto', '', 'modalPresupuesto', extraerNumero);
+            dataClone.presupuesto_moneda = valClone('editPresupuestoMoneda', 'presupuestoMoneda', 'no_especificado');
+            dataClone.presupuesto_forma_pago = valClone('editFormaPago', 'formaPago', 'no_especificado');
+            dataClone.habitaciones = valClone('editHabitaciones', 'habitaciones', '', 'modalHabBanos', extraerHabs);
+            dataClone.banos = valClone('editBanos', 'banos', '', 'modalHabBanos', extraerBanos);
+            dataClone.area_m2 = valClone('editArea', 'areaM2', '', 'modalArea', extraerArea);
+            dataClone.piso_preferencia = valClone('editPiso', 'pisoPreferencia', '', 'modalPiso');
+            dataClone.cochera = valClone('editCochera', 'cochera', 'indiferente');
+            dataClone.ascensor = valClone('editAscensor', 'ascensor', 'indiferente');
+            dataClone.amueblado = valClone('editAmueblado', 'amueblado', 'indiferente');
+            dataClone.caracteristicas_extra = valClone('editCaracteristicas', 'caracteristicas', '', 'modalCaracteristicas');
+            dataClone.requerimiento = valClone('editMensaje', 'mensaje', '', 'modalMensaje');
+            dataClone.verificado = document.getElementById('editVerificado').value === 'true';
+            dataClone.fecha = dClone.fecha || '';
+            dataClone.hora = dClone.hora || '';
+            
+            // Deshabilitar botón mientras guarda
+            const btnGuardar = document.getElementById('btnGuardarEdicion');
+            btnGuardar.disabled = true;
+            btnGuardar.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>Guardando como nuevo...';
+            
+            fetch('{% url "requerimientos:api_clonar" %}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(dataClone)
+            })
+            .then(r => r.json())
+            .then(resp => {
+                if (resp.ok) {
+                    // Cerrar modal
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('modalDetalleRequerimiento'));
+                    if (modal) modal.hide();
+                    
+                    // Mostrar toast de éxito
+                    mostrarToastEdicion('success', 'Requerimiento clonado correctamente');
+                    
+                    // Recargar la página para mostrar el nuevo registro
+                    setTimeout(function() { location.reload(); }, 800);
+                } else {
+                    mostrarToastEdicion('error', 'Error: ' + (resp.error || 'No se pudo clonar'));
+                }
+            })
+            .catch(err => {
+                console.error('Error al clonar:', err);
+                mostrarToastEdicion('error', 'Error de conexión al clonar');
+            })
+            .finally(() => {
+                btnGuardar.disabled = false;
+                btnGuardar.innerHTML = '<i class="bi bi-copy me-1"></i>Guardar como nuevo';
+                modoClonacion = false;
+                datosClonacion = null;
+            });
+            return;
+        }
+        
+        // ── Modo edición normal ──
+        // Deshabilitar botón mientras guarda
+        const btnGuardar = document.getElementById('btnGuardarEdicion');
+        btnGuardar.disabled = true;
+        btnGuardar.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>Guardando...';
+        
+        fetch('{% url "requerimientos:editar" %}', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data)
+        })
+        .then(r => r.json())
+        .then(resp => {
+            if (resp.ok) {
+                // Actualizar modalRequerimientoActual con nuevos valores
+                modalRequerimientoActual.agente = data.agente;
+                modalRequerimientoActual.agenteTelefono = data.agente_telefono;
+                modalRequerimientoActual.fuente = data.fuente;
+                modalRequerimientoActual.condicion = data.condicion;
+                modalRequerimientoActual.tipoPropiedad = data.tipo_propiedad;
+                modalRequerimientoActual.distritos = data.distritos;
+                modalRequerimientoActual.urbanizacion = data.urbanizacion;
+                modalRequerimientoActual.zona = data.zona;
+                modalRequerimientoActual.tipoOriginal = data.tipo_original;
+                modalRequerimientoActual.presupuestoMonto = data.presupuesto_monto;
+                modalRequerimientoActual.presupuestoMoneda = data.presupuesto_moneda;
+                modalRequerimientoActual.formaPago = data.presupuesto_forma_pago;
+                modalRequerimientoActual.habitaciones = data.habitaciones;
+                modalRequerimientoActual.banos = data.banos;
+                modalRequerimientoActual.areaM2 = data.area_m2;
+                modalRequerimientoActual.pisoPreferencia = data.piso_preferencia;
+                modalRequerimientoActual.cochera = data.cochera;
+                modalRequerimientoActual.ascensor = data.ascensor;
+                modalRequerimientoActual.amueblado = data.amueblado;
+                modalRequerimientoActual.caracteristicas = data.caracteristicas_extra;
+                modalRequerimientoActual.mensaje = data.requerimiento;
+                modalRequerimientoActual.verificado = data.verificado ? 'si' : 'no';
+                
+                // Actualizar la fila de la tabla (data-attributes del botón)
+                const btnOriginal = document.querySelector(`.ver-detalle-btn[data-pk="${pk}"]`);
+                if (btnOriginal) {
+                    Object.keys(modalRequerimientoActual).forEach(key => {
+                        btnOriginal.dataset[key] = modalRequerimientoActual[key];
+                    });
+                }
+                
+                // Actualizar la fila completa de la tabla
+                actualizarFilaTabla(pk, modalRequerimientoActual);
+                
+                // Actualizar vista del modal
+                actualizarVista(modalRequerimientoActual);
+                
+                // Volver a modo vista
+                toggleModoEdicion(false);
+                
+                // Mostrar toast de éxito
+                mostrarToastEdicion('success', 'Requerimiento actualizado correctamente');
+            } else {
+                mostrarToastEdicion('error', 'Error: ' + (resp.error || 'No se pudo guardar'));
+            }
+        })
+        .catch(err => {
+            console.error('Error al guardar:', err);
+            mostrarToastEdicion('error', 'Error de conexión al guardar');
+        })
+        .finally(() => {
+            btnGuardar.disabled = false;
+            btnGuardar.innerHTML = '<i class="bi bi-check2 me-1"></i>Guardar';
+        });
+    });
+
+    // ── Botón Registrar agente ─────────────────
+    document.getElementById('btnRegistrarAgente').addEventListener('click', function() {
+        var telefonoRaw = document.getElementById('editAgenteTelefono').value.trim();
+        // Limpiar espacios del teléfono antes de enviar
+        var telefono = telefonoRaw.replace(/[\s\-\(\)]+/g, '');
+        var nombreInput = document.getElementById('editAgente').value.trim();
+
+        // Si no hay ni nombre ni teléfono, no se puede registrar
+        if ((!telefono || telefono.length < 6) && (!nombreInput || nombreInput.length < 3)) {
+            alert('Escribe al menos el nombre del agente para registrarlo.');
+            document.getElementById('editAgente').focus();
+            return;
+        }
+
+        // Si hay teléfono pero no hay nombre, pedir nombre con prompt
+        if (telefono && telefono.length >= 6 && (!nombreInput || nombreInput === telefono)) {
+            nombreInput = prompt('Ingrese el nombre completo del agente para registrar en la base de datos:');
+            if (!nombreInput || nombreInput.trim() === '') {
+                return; // Usuario canceló o no escribió nada
+            }
+            nombreInput = nombreInput.trim();
+            document.getElementById('editAgente').value = nombreInput;
+        }
+        // Si no hay teléfono pero sí hay nombre, confirmar registro solo con nombre
+        else if ((!telefono || telefono.length < 6) && nombreInput && nombreInput.length >= 3) {
+            var confirmar = confirm('¿Registrar al agente "' + nombreInput + '" sin número de teléfono?');
+            if (!confirmar) {
+                return;
+            }
+        }
+
+        fetch('/requerimientos/api/crear-agente-rapido/', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ telefono: telefono, nombre_completo: nombreInput })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.ok) {
+                document.getElementById('editAgente').value = data.nombre_completo;
+                // Si el backend devolvió teléfono, autocompletar el input
+                if (data.telefono) {
+                    document.getElementById('editAgenteTelefono').value = data.telefono;
+                }
+                var telBuscar = data.telefono || telefono || '';
+                buscarAgente(telBuscar, data.nombre_completo);
+            } else {
+                console.error('Error al crear agente:', data.error);
+                alert('Error al registrar agente: ' + (data.error || 'Error desconocido'));
+            }
+        })
+        .catch(function(err) {
+            console.error('Error al crear agente:', err);
+        });
+    });
+
+    // ── Confirmar al cerrar modal si hay cambios sin guardar ──
+    modal.addEventListener('hidden.bs.modal', function() {
+        if (hayCambiosSinGuardar()) {
+            // Si el usuario guardó justo antes de cerrar, el snapshot se actualiza
+            // y hayCambiosSinGuardar() retorna false. Si hay cambios reales sin guardar,
+            // mostramos advertencia en consola (el modal ya se cerró).
+            console.warn('Modal cerrado con cambios sin guardar. Reapertura mostrará datos desactualizados.');
+        }
+        // Resetear estado de edición
+        if (modalEditando) {
+            toggleModoEdicion(false);
+        }
+        modoClonacion = false;
+        datosClonacion = null;
+        modalDirty = false;
+        modalSnapshot = '';
+        document.getElementById('btnGuardarEdicion').innerHTML = '<i class="bi bi-check2 me-1"></i>Guardar';
+    });
+});
+
+// ── Toast para feedback de edición ───────────
+function mostrarToastEdicion(tipo, mensaje) {
+    const toastContainer = document.getElementById('toastContainer');
+    if (!toastContainer) {
+        const container = document.createElement('div');
+        container.id = 'toastContainer';
+        container.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px;';
+        document.body.appendChild(container);
+    }
+    const bgColor = tipo === 'success' ? '#238636' : '#da3633';
+    const toast = document.createElement('div');
+    toast.style.cssText = 'background-color: ' + bgColor + '; color: #fff; padding: 12px 20px; border-radius: 6px; font-size: 13px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); animation: fadeIn 0.2s ease;';
+    toast.textContent = mensaje;
+    document.getElementById('toastContainer').appendChild(toast);
+    setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; setTimeout(() => toast.remove(), 300); }, 3000);
+}
+
+// ── Toggle verificado (AJAX) ─────────────────
+function toggleVerificado(pk, el) {
+    const nuevoEstado = el.classList.contains('verificado-no');
+    const formData = new FormData();
+    formData.append('pk', pk);
+    formData.append('verificado', nuevoEstado);
+    
+    fetch('{% url "requerimientos:toggle_verificado" %}', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ pk: pk, verificado: nuevoEstado })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            if (data.verificado) {
+                el.className = 'badge-verificado verificado-si';
+                el.textContent = '✓ VERIFICADO';
+                el.title = '✓ Verificado — Haz clic para desmarcar';
+            } else {
+                el.className = 'badge-verificado verificado-no';
+                el.textContent = '✗ NO VERIF.';
+                el.title = '✗ No revisado — Haz clic para marcar como verificado';
+            }
+        } else {
+            alert('Error: ' + (data.error || 'No se pudo actualizar'));
+        }
+    })
+    .catch(err => {
+        console.error('Error:', err);
+        alert('Error de conexión al toggle verificado');
+    });
+}
+
+
+// Toggle filters visibility
+function toggleFilters() {
+    const body = document.getElementById('filter-body');
+    const icon = document.getElementById('filter-toggle');
+    if (body.style.display === 'none') {
+        body.style.display = 'block';
+        icon.classList.remove('collapsed');
+    } else {
+        body.style.display = 'none';
+        icon.classList.add('collapsed');
+    }
+}
+
+// Auto-submit on select change for quick filtering (opt-in)
+document.querySelectorAll('.filter-form select').forEach(select => {
+    select.addEventListener('change', function() {
+        // Don't auto-submit, user must click "Aplicar Filtros"
+    });
+});
+
+// ── Toggle de columnas visibles ──────────────
+(function() {
+    const STORAGE_KEY = 'req_lista_columnas';
+    var menu = document.getElementById('columnToggleMenu');
+    var btn = document.getElementById('btnToggleColumnas');
+
+    // Cargar estado guardado
+    function cargarEstado() {
+        try {
+            var saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                var state = JSON.parse(saved);
+                document.querySelectorAll('.col-toggle').forEach(function(cb) {
+                    var col = cb.getAttribute('data-col');
+                    if (state[col] !== undefined) {
+                        cb.checked = state[col];
+                    }
+                });
+            }
+        } catch(e) {
+            // ignorar
+        }
+    }
+
+    // Guardar estado
+    function guardarEstado() {
+        var state = {};
+        document.querySelectorAll('.col-toggle').forEach(function(cb) {
+            state[cb.getAttribute('data-col')] = cb.checked;
+        });
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        } catch(e) {
+            // ignorar
+        }
+    }
+
+    // Aplicar visibilidad de columnas
+    function aplicarColumnas() {
+        var table = document.querySelector('.req-table');
+        if (!table) return;
+        var headerCells = table.querySelectorAll('thead th');
+        var rows = table.querySelectorAll('tbody tr');
+
+        document.querySelectorAll('.col-toggle').forEach(function(cb) {
+            var colIndex = parseInt(cb.getAttribute('data-col'), 10);
+            var visible = cb.checked;
+
+            // Ocultar/mostrar header
+            if (headerCells[colIndex]) {
+                headerCells[colIndex].style.display = visible ? '' : 'none';
+            }
+
+            // Ocultar/mostrar celdas en cada fila
+            rows.forEach(function(row) {
+                var cells = row.querySelectorAll('td');
+                if (cells[colIndex]) {
+                    cells[colIndex].style.display = visible ? '' : 'none';
+                }
+            });
+        });
+    }
+
+    // Toggle menú
+    if (btn && menu) {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+        });
+
+        // Cerrar menú al hacer clic fuera
+        document.addEventListener('click', function() {
+            menu.style.display = 'none';
+        });
+        menu.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+    }
+
+    // Event listeners en checkboxes
+    document.querySelectorAll('.col-toggle').forEach(function(cb) {
+        cb.addEventListener('change', function() {
+            guardarEstado();
+            aplicarColumnas();
+        });
+    });
+
+    // Inicializar
+    cargarEstado();
+    aplicarColumnas();
+
+    // Re-aplicar después de carga AJAX (usar MutationObserver)
+    var wrapper = document.querySelector('.req-table-wrapper');
+    if (wrapper) {
+        var observer = new MutationObserver(function() {
+            aplicarColumnas();
+        });
+        observer.observe(wrapper, { childList: true, subtree: true });
+    }
+})();
+
+// ── Eliminar requerimiento ────────────────────
+function eliminarRequerimiento(pk) {
+    if (!confirm('¿Eliminar este requerimiento permanentemente?')) return;
+    var url = '/requerimientos/eliminar/';
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({pk: pk})
+    })
+    .then(function(r) {
+        if (!r.ok) {
+            throw new Error('HTTP ' + r.status + ': ' + r.statusText);
+        }
+        return r.json();
+    })
+    .then(function(resp) {
+        if (resp.ok) {
+            var row = document.querySelector('tr[data-pk="' + pk + '"]');
+            if (row) row.remove();
+        } else {
+            alert('Error: ' + (resp.error || 'desconocido'));
+        }
+    })
+    .catch(function(err) {
+        alert('Error de conexion: ' + err.message);
+    });
+}
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+{% endblock %}

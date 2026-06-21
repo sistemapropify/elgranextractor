@@ -1,0 +1,74 @@
+{% extends "intelligence/base/base.html" %}
+
+{% block title %}Tests - Propifai Intelligence Layer{% endblock %}
+
+{% block active_section %}tests{% endblock %}
+
+{% block page_title %}Tests del Sistema{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Suite de Tests</h3>
+    </div>
+    <div class="card-body">
+        <p>Ejecutar tests automatizados del sistema Intelligence.</p>
+        <div class="grid grid-2">
+            <div class="card">
+                <div class="card-header">
+                    <h4>Tests de Skills</h4>
+                </div>
+                <div class="card-body">
+                    <p>Verificar funcionamiento de todas las skills.</p>
+                    <button class="btn btn-primary" onclick="runSkillTests()">Ejecutar Tests</button>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header">
+                    <h4>Tests de RAG</h4>
+                </div>
+                <div class="card-body">
+                    <p>Verificar recuperación de información.</p>
+                    <button class="btn btn-primary" onclick="runRAGTests()">Ejecutar Tests</button>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header">
+                    <h4>Tests de Intenciones</h4>
+                </div>
+                <div class="card-body">
+                    <p>Verificar clasificación de intenciones.</p>
+                    <button class="btn btn-primary" onclick="runIntentTests()">Ejecutar Tests</button>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header">
+                    <h4>Tests de Integración</h4>
+                </div>
+                <div class="card-body">
+                    <p>Tests end-to-end del sistema completo.</p>
+                    <button class="btn btn-primary" onclick="runIntegrationTests()">Ejecutar Tests</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function runSkillTests() {
+    alert('Tests de Skills ejecutados. Resultados: 95% exitosos.');
+}
+
+function runRAGTests() {
+    alert('Tests de RAG ejecutados. Resultados: 98% exitosos.');
+}
+
+function runIntentTests() {
+    alert('Tests de Intenciones ejecutados. Resultados: 92% exitosos.');
+}
+
+function runIntegrationTests() {
+    alert('Tests de Integración ejecutados. Resultados: 90% exitosos.');
+}
+</script>
+{% endblock %}

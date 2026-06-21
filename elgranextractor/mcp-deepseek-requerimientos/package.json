@@ -1,0 +1,27 @@
+{
+  "name": "deepseek-requerimientos",
+  "version": "0.1.0",
+  "description": "MCP server for intelligent text extraction from real estate requirements using DeepSeek API",
+  "type": "module",
+  "main": "build/index.js",
+  "bin": {
+    "deepseek-requerimientos": "./build/index.js"
+  },
+  "scripts": {
+    "build": "tsc && node -e \"import('fs').then(fs => fs.chmodSync('build/index.js', '755'))\"",
+    "dev": "tsc --watch",
+    "start": "node build/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.6.0",
+    "axios": "^1.7.9",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.6",
+    "typescript": "^5.7.3"
+  },
+  "keywords": ["mcp", "deepseek", "real-estate", "text-extraction"],
+  "author": "",
+  "license": "MIT"
+}

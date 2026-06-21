@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test JavaScript</title>
+</head>
+<body>
+    <div id="test-output"></div>
+    
+    <script>
+        // Simular el JSON que Django generaría
+        const propertiesData = [{"id": 1, "code": "PROP000001", "title": "", "address": "Caba\u00f1a maria, Arequipa", "property_type": "Propiedad", "district": "1", "zone": "Sin zona", "status": "paused", "status_code": "paused", "price": 330000.0, "agent_name": "Sin agente", "total_eventos": 0, "primera_visita": null, "ultima_visita": null, "tiene_lead": false, "tiene_propuesta": false, "dias_en_cartera": 82, "frecuencia_visitas": "N/A", "created_at": "2026-01-07T21:27:16.851383+00:00"}];
+        
+        document.getElementById('test-output').innerHTML = 
+            '<p>JSON cargado correctamente. Número de propiedades: ' + propertiesData.length + '</p>' +
+            '<p>Primera propiedad: ' + JSON.stringify(propertiesData[0]) + '</p>';
+        
+        console.log('Test: propertiesData loaded:', propertiesData);
+    </script>
+</body>
+</html>

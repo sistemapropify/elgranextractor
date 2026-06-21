@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ACM - Análisis Comparativo de Mercado | Propifai</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            background: #f0fdf4;
+            color: #1a1a2e;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .loading-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+            text-align: center;
+        }
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid #e5e7eb;
+            border-top-color: #10b981;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 16px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-title {
+            font-size: 18px;
+            color: #065f46;
+            margin-bottom: 8px;
+        }
+        .loading-sub {
+            font-size: 13px;
+            color: #6b7280;
+        }
+        .click-info {
+            margin-top: 20px;
+            font-size: 11px;
+            color: #9ca3af;
+        }
+        /* Contenido del PDF (oculto hasta que se genere) */
+        #pdf-content {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="loading-screen" id="loadingScreen">
+        <div class="spinner"></div>
+        <div class="loading-title">Generando análisis ACM...</div>
+        <div class="loading-sub">Preparando el documento comparativo de mercado</div>
+        <div class="click-info" id="clickInfo"></div>
+    </div>
+
+    <!-- Contenido del PDF -->
+    <div id="pdf-content">
+        <div id="pdf-acm-content" style="font-family:Arial,Helvetica,sans-serif;padding:40px;color:#1a1a2e;max-width:800px;margin:0 auto;">
+            <!-- Encabezado -->
+            <div style="text-align:center;margin-bottom:25px;padding-bottom:15px;border-bottom:3px solid #10b981;">
+                <h1 style="margin:0;font-size:24px;color:#10b981;font-weight:bold;">PROPIFAI</h1>
+                <p style="margin:4px 0 0 0;font-size:14px;color:#666;">Análisis Comparativo de Mercado (ACM)</p>
+                <p style="margin:2px 0 0 0;font-size:11px;color:#999;">Compartido desde Propifai</p>
+            </div>
+
+            <!-- Parámetros -->
+            <div style="margin-bottom:20px;padding:15px;background:#f0fdf4;border-radius:8px;border-left:4px solid #10b981;">
+                <h3 style="margin:0 0 10px 0;font-size:15px;color:#065f46;">Parámetros del Análisis</h3>
+                <table style="width:100%;font-size:13px;border-collapse:collapse;">
+                    <tr>
+                        <td style="padding:3px 10px;color:#555;width:50%;"><strong>Tipo:</strong> {{ acm_link.tipo_propiedad|capfirst }}</td>
+                        <td style="padding:3px 10px;color:#555;width:50%;"><strong>Área:</strong> {{ acm_link.area_m2|floatformat:0 }} m²{% if acm_link.es_terreno %} (terreno){% else %} (construcción){% endif %}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:3px 10px;color:#555;"><strong>Comparables:</strong> {{ acm_link.num_comparables }} propiedades</td>
+                        <td style="padding:3px 10px;color:#555;"><strong>Generado por:</strong> {{ acm_link.user.get_full_name|default:acm_link.user.username }}</td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- 3 Tarjetas de Valoración -->
+            <div style="margin-bottom:20px;">
+                <h3 style="margin:0 0 10px 0;font-size:15px;color:#065f46;">Valoración Estimada</h3>
+                <table style="width:100%;border-collapse:collapse;">
+                    <tr>
+                        <td style="width:33.33%;padding:6px;">
+                            <div style="background:#f8f9fa;border-radius:8px;padding:14px;text-align:center;border:1px solid #e5e7eb;">
+                                <div style="font-size:18px;font-weight:bold;color:#2563eb;">US$ {{ acm_link.precio_venta_sugerido|floatformat:2 }}</div>
+                                <div style="font-size:11px;color:#666;margin-top:4px;">Precio Venta Sugerido</div>
+                                <div style="font-size:10px;color:#10b981;">94.99% del comercial</div>
+                            </div>
+                        </td>
+                        <td style="width:33.33%;padding:6px;">
+                            <div style="background:#10b981;border-radius:8px;padding:16px;text-align:center;color:white;">
+                                <div style="font-size:11px;margin-bottom:4px;">ESTIMACIÓN PARA TU PROPIEDAD</div>
+                                <div style="font-size:22px;font-weight:bold;">US$ {{ acm_link.valor_comercial|floatformat:2 }}</div>
+                                <div style="font-size:11px;opacity:0.8;">Valor Comercial (100%)</div>
+                                <div style="font-size:11px;margin-top:4px;font-weight:bold;">Precio/m²: US$ {{ acm_link.precio_promedio_ponderado_m2|floatformat:2 }}</div>
+                            </div>
+                        </td>
+                        <td style="width:33.33%;padding:6px;">
+                            <div style="background:#f8f9fa;border-radius:8px;padding:14px;text-align:center;border:1px solid #e5e7eb;">
+                                <div style="font-size:18px;font-weight:bold;color:#2563eb;">US$ {{ acm_link.valor_realizacion|floatformat:2 }}</div>
+                                <div style="font-size:11px;color:#666;margin-top:4px;">Valor Realización Inmediata</div>
+                                <div style="font-size:10px;color:#10b981;">90.00% del comercial</div>
+                            </div>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- Tabla de propiedades comparables -->
+            <div style="margin-bottom:15px;">
+                <h3 style="margin:0 0 8px 0;font-size:15px;color:#065f46;">Propiedades Comparables</h3>
+                <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                    <thead>
+                        <tr style="background:#10b981;color:white;">
+                            <th style="padding:8px;border:1px solid #10b981;text-align:center;width:30px;">#</th>
+                            <th style="padding:8px;border:1px solid #10b981;text-align:left;">Tipo</th>
+                            <th style="padding:8px;border:1px solid #10b981;text-align:left;">Distrito</th>
+                            <th style="padding:8px;border:1px solid #10b981;text-align:right;">Precio</th>
+                            <th style="padding:8px;border:1px solid #10b981;text-align:right;">US$/m²</th>
+                            <th style="padding:8px;border:1px solid #10b981;text-align:right;">Distancia</th>
+                            <th style="padding:8px;border:1px solid #10b981;text-align:center;">Fuente</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-comparables">
+                        <!-- Se llena con JS -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Estadísticas -->
+            <div style="margin-top:15px;padding:15px;background:#f8f9fa;border-radius:8px;border:1px solid #e5e7eb;">
+                <h3 style="margin:0 0 8px 0;font-size:14px;color:#065f46;">Estadísticas de Precio por m²</h3>
+                <table style="width:100%;font-size:13px;border-collapse:collapse;">
+                    <tr>
+                        <td style="padding:3px 10px;color:#555;"><strong>Mínimo:</strong> US$ {{ acm_link.precio_min_m2|floatformat:2 }}/m²</td>
+                        <td style="padding:3px 10px;color:#555;"><strong>Máximo:</strong> US$ {{ acm_link.precio_max_m2|floatformat:2 }}/m²</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:3px 10px;color:#555;"><strong>Promedio simple:</strong> US$ {{ acm_link.precio_promedio_m2|floatformat:2 }}/m²</td>
+                        <td style="padding:3px 10px;color:#555;"><strong>Promedio ponderado:</strong> US$ {{ acm_link.precio_promedio_ponderado_m2|floatformat:2 }}/m²</td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- Footer -->
+            <div style="margin-top:30px;padding-top:15px;border-top:2px solid #10b981;text-align:center;font-size:11px;color:#999;">
+                <p style="margin:0;">Propifai — Inteligencia Inmobiliaria</p>
+                <p style="margin:2px 0 0 0;">Arequipa, Perú — Este informe es una estimación basada en datos comparables del mercado.</p>
+                <p style="margin:4px 0 0 0;">ID: {{ acm_link.short_id }} | {{ acm_link.created_at|date:"d/m/Y" }}</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Datos de las propiedades desde el backend
+        const propiedades = {{ acm_link.propiedades_json|safe }};
+        const acmLinkId = '{{ acm_link.id }}';
+
+        function formatearPrecio(precio) {
+            if (!precio) return 'US$ 0.00';
+            return 'US$ ' + parseFloat(precio).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        // Llenar tabla de propiedades
+        function llenarTabla() {
+            const tbody = document.getElementById('tabla-comparables');
+            if (!tbody) return;
+            
+            let html = '';
+            propiedades.forEach(function(p, i) {
+                const precioM2 = p.precio_m2_final || p.precio_m2;
+                const distancia = p.distancia_metros ? (parseFloat(p.distancia_metros).toFixed(0) + ' m') : '—';
+                const fuente = p.es_propify || p.fuente === 'propifai' ? 'Propifai' : 'Externo';
+                html += '<tr>' +
+                    '<td style="padding:6px 8px;border:1px solid #ddd;font-size:12px;text-align:center;">' + (i + 1) + '</td>' +
+                    '<td style="padding:6px 8px;border:1px solid #ddd;font-size:12px;">' + (p.tipo || '—') + '</td>' +
+                    '<td style="padding:6px 8px;border:1px solid #ddd;font-size:12px;">' + (p.distrito || '—') + '</td>' +
+                    '<td style="padding:6px 8px;border:1px solid #ddd;font-size:12px;text-align:right;">' + formatearPrecio(p.precio) + '</td>' +
+                    '<td style="padding:6px 8px;border:1px solid #ddd;font-size:12px;text-align:right;">' + (precioM2 ? 'US$ ' + parseFloat(precioM2).toFixed(2) : '—') + '</td>' +
+                    '<td style="padding:6px 8px;border:1px solid #ddd;font-size:12px;text-align:right;">' + distancia + '</td>' +
+                    '<td style="padding:6px 8px;border:1px solid #ddd;font-size:12px;text-align:center;">' + fuente + '</td>' +
+                    '</tr>';
+            });
+            tbody.innerHTML = html;
+        }
+
+        // Generar PDF automáticamente al cargar
+        function generarPDF() {
+            const loadingScreen = document.getElementById('loadingScreen');
+            const pdfContent = document.getElementById('pdf-content');
+            const clickInfo = document.getElementById('clickInfo');
+
+            // Mostrar info de click
+            clickInfo.textContent = '✓ Click registrado • Generando PDF...';
+
+            // Llenar tabla primero
+            llenarTabla();
+
+            // Mostrar contenido y ocultar loading
+            pdfContent.style.display = 'block';
+
+            const element = document.getElementById('pdf-acm-content');
+            const opt = {
+                margin:        [0.5, 0.5, 0.5, 0.5],
+                filename:     'ACM_Propifai_' + acmLinkId.substring(0, 8) + '.pdf',
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true, logging: false },
+                jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
+            };
+
+            html2pdf().set(opt).from(element).save().then(function() {
+                loadingScreen.innerHTML = `
+                    <div style="text-align:center;">
+                        <div style="font-size:48px;margin-bottom:16px;">✅</div>
+                        <div class="loading-title">PDF generado correctamente</div>
+                        <div class="loading-sub">El análisis ACM se ha descargado automáticamente</div>
+                        <div class="click-info" style="margin-top:16px;">
+                            <p>ID: ${acmLinkId.substring(0, 8)}</p>
+                            <p style="margin-top:8px;font-size:10px;color:#d1d5db;">Si la descarga no inició, 
+                            <a href="#" onclick="generarPDF()" style="color:#10b981;">haz clic aquí</a></p>
+                        </div>
+                    </div>
+                `;
+            }).catch(function(err) {
+                console.error('Error generando PDF:', err);
+                loadingScreen.innerHTML = `
+                    <div style="text-align:center;">
+                        <div style="font-size:48px;margin-bottom:16px;">❌</div>
+                        <div class="loading-title">Error al generar el PDF</div>
+                        <div class="loading-sub">${err.message}</div>
+                        <div class="click-info" style="margin-top:16px;">
+                            <a href="#" onclick="generarPDF()" style="color:#10b981;">Intentar de nuevo</a>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        // Iniciar cuando cargue el DOM
+        document.addEventListener('DOMContentLoaded', function() {
+            // Pequeña pausa para que se vea el loading
+            setTimeout(generarPDF, 800);
+        });
+    </script>
+</body>
+</html>

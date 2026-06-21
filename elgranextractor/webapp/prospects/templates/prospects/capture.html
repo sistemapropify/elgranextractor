@@ -1,0 +1,1047 @@
+{% extends "acm_base_moderno.html" %}
+{% load static %}
+
+{% block title %}
+  {% if mode == 'detail' %}Prospecto #{{ prospect.pk }}{% else %}Nueva Captura{% endif %}
+{% endblock %}
+
+{% block extra_css %}
+{{ block.super }}
+<style>
+  :root {
+    --bg-primary:   #0d1117;
+    --bg-secondary: #161b22;
+    --bg-card:      #1c2128;
+    --accent-blue:  #58a6ff;
+    --accent-green: #238636;
+    --accent-green-light: #3fb950;
+    --accent-purple:#8957e5;
+    --accent-orange:#f78166;
+    --accent-red:   #f85149;
+    --border:       #30363d;
+    --text-primary: #e6edf3;
+    --text-muted:   #7d8590;
+    --text-subtle:  #484f58;
+    --radius-sm:    6px;
+    --radius-md:    10px;
+    --radius-lg:    14px;
+  }
+
+  body { background: var(--bg-primary); color: var(--text-primary); }
+
+  /* ── Layout ── */
+  .prospect-wrapper {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 16px;
+  }
+
+  /* ── Header ── */
+  .page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    gap: 12px;
+  }
+  .page-header h1 {
+    font-size: clamp(16px, 4vw, 22px);
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .page-header .back-link {
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .page-header .back-link:hover { color: var(--accent-blue); }
+
+  /* ── Status badge ── */
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    border: 1px solid;
+  }
+  .status-borrador  { background: #484f5820; color: #7d8590;            border-color: #30363d; }
+  .status-pendiente { background: #f7816620; color: var(--accent-orange); border-color: #f7816640; }
+  .status-contactado{ background: #58a6ff20; color: var(--accent-blue);  border-color: #58a6ff40; }
+  .status-negociando{ background: #8957e520; color: var(--accent-purple); border-color: #8957e540; }
+  .status-captado   { background: #23863620; color: var(--accent-green-light); border-color: #23863640; }
+  .status-descartado{ background: #f8514920; color: var(--accent-red);   border-color: #f8514940; }
+
+  /* ── Two-column layout for tablet/desktop ── */
+  .capture-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  @media (min-width: 640px) {
+    .capture-grid {
+      grid-template-columns: 1fr 1fr;
+      align-items: start;
+    }
+    .full-width { grid-column: 1 / -1; }
+  }
+
+  /* ── Card ── */
+  .card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+  }
+  .card-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-bottom: 12px;
+  }
+
+  /* ── ZONA DE FOTO ── */
+  .photo-zone {
+    position: relative;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    min-height: 220px;
+    background: var(--bg-card);
+    border: 2px dashed var(--border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  .photo-zone:hover { border-color: var(--accent-blue); }
+  .photo-zone.has-photo { border-style: solid; border-color: var(--accent-blue); }
+  .photo-zone img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    border-radius: var(--radius-md);
+  }
+  .photo-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 32px 20px;
+    text-align: center;
+  }
+  .photo-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--bg-card);
+    border: 1.5px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .photo-icon svg { width: 24px; height: 24px; color: var(--accent-blue); }
+  .photo-placeholder p { font-size: 14px; color: var(--text-muted); margin: 0; }
+  .photo-placeholder small { font-size: 12px; color: var(--text-subtle); }
+
+  /* Botones sobre la foto */
+  .photo-actions {
+    display: none;
+    position: absolute;
+    bottom: 10px;
+    left: 0; right: 0;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 12px;
+    background: linear-gradient(to top, rgba(0,0,0,0.6), transparent);
+    padding-top: 20px;
+    padding-bottom: 12px;
+  }
+  .has-photo .photo-actions { display: flex; }
+  
+  /* Feedback visual para label clickeable */
+  .photo-zone:active { 
+    border-color: var(--accent-blue);
+    opacity: 0.9;
+  }
+
+  /* ── Botón cámara grande (para celular) ── */
+  .btn-camera {
+    background: var(--accent-blue);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-md);
+    padding: 14px 20px;
+    font-size: 15px;
+    font-weight: 600;
+    width: 100%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: opacity 0.2s;
+  }
+  .btn-camera:hover { opacity: 0.88; }
+  .btn-camera svg { width: 20px; height: 20px; }
+
+  /* ── Botón procesar con IA ── */
+  .btn-process {
+    background: #8957e5;
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-md);
+    padding: 12px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    width: 100%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: opacity 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .btn-process:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-process:not(:disabled):hover { opacity: 0.88; }
+  .btn-process svg { width: 18px; height: 18px; }
+
+  .btn-save {
+    background: var(--accent-green);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-md);
+    padding: 12px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    width: 100%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: opacity 0.2s;
+  }
+  .btn-save:hover { opacity: 0.88; }
+
+  .btn-outline {
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 10px 16px;
+    font-size: 13px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+  }
+  .btn-outline:hover { border-color: var(--accent-blue); color: var(--accent-blue); }
+
+  /* ── GPS Strip ── */
+  .gps-strip {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .gps-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: var(--text-subtle);
+  }
+  .gps-dot.active { background: var(--accent-green-light); }
+  .gps-text { font-size: 11px; color: var(--text-muted); flex: 1; }
+  .gps-coords { font-size: 11px; color: var(--accent-blue); font-weight: 500; font-family: monospace; }
+
+  /* ── OCR Result Block ── */
+  .ocr-block {
+    background: var(--bg-card);
+    border: 1px solid #8957e530;
+    border-radius: var(--radius-md);
+    padding: 12px;
+    display: none;
+  }
+  .ocr-block.visible { display: block; }
+  .ocr-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .ocr-badge {
+    background: #8957e520;
+    color: var(--accent-purple);
+    font-size: 10px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  .ocr-raw {
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.6;
+    white-space: pre-wrap;
+    max-height: 100px;
+    overflow-y: auto;
+    border-top: 1px solid var(--border);
+    padding-top: 8px;
+    margin-top: 8px;
+  }
+
+  /* ── Form fields ── */
+  .field-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .field-grid .full { grid-column: 1 / -1; }
+
+  .field-group { display: flex; flex-direction: column; gap: 4px; }
+  .field-group label {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+
+  /* Marcar campos que vienen de OCR */
+  .field-group.from-ocr label::after {
+    content: ' ✦';
+    color: var(--accent-purple);
+    font-size: 9px;
+  }
+
+  .field-group input,
+  .field-group select,
+  .field-group textarea {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    padding: 9px 12px;
+    font-size: 13px;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.2s;
+    -webkit-appearance: none;
+  }
+  .field-group input:focus,
+  .field-group select:focus,
+  .field-group textarea:focus {
+    border-color: var(--accent-blue);
+  }
+  .field-group input::placeholder,
+  .field-group textarea::placeholder {
+    color: var(--text-subtle);
+  }
+  .field-group select option { background: var(--bg-secondary); }
+
+  /* Campo prellenado por OCR */
+  .field-group input.ocr-filled,
+  .field-group select.ocr-filled {
+    border-color: #8957e550;
+    color: #c7b6f7;
+  }
+
+  /* ── Chips tipo de operación ── */
+  .chips-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .chip {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 12px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+  }
+  .chip:hover { border-color: var(--accent-blue); color: var(--accent-blue); }
+  .chip.selected-alquiler { background: #58a6ff15; border-color: var(--accent-blue); color: var(--accent-blue); font-weight: 500; }
+  .chip.selected-venta    { background: #3fb95015; border-color: var(--accent-green-light); color: var(--accent-green-light); font-weight: 500; }
+
+  /* ── GPS note ── */
+  .gps-note {
+    font-size: 11px;
+    color: var(--text-subtle);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 6px;
+  }
+
+  /* ── Spinner ── */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner {
+    width: 16px; height: 16px;
+    border: 2px solid #ffffff40;
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: none;
+  }
+  .loading .spinner { display: inline-block; }
+  .loading .btn-icon { display: none; }
+
+  /* ── Toast ── */
+  .toast-container {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+  }
+  .toast {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 10px 16px;
+    font-size: 13px;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: all;
+    white-space: nowrap;
+  }
+  .toast.show { opacity: 1; }
+  .toast.success { border-color: #23863640; }
+  .toast.error   { border-color: #f8514940; }
+  .toast-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .toast.success .toast-dot { background: var(--accent-green-light); }
+  .toast.error   .toast-dot { background: var(--accent-red); }
+
+
+  /* ── Aviso desktop: procesamiento no disponible ── */
+  .desktop-process-notice {
+    background: var(--bg-card);
+    border: 1px solid #f7816630;
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    color: var(--accent-orange);
+  }
+  .desktop-process-notice strong {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 2px;
+  }
+  .desktop-process-notice span {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  /* ── Capa CSS extra: ocultar botón en pantallas grandes como respaldo ── */
+  @media (min-width: 1024px) {
+    .btn-process { display: none !important; }
+    .desktop-process-notice { display: flex !important; }
+  }
+  @media (max-width: 1023px) {
+    .desktop-process-notice { display: none; }
+  }
+  /* ── Input file oculto pero funcional para móvil ── */
+  #photo-input {
+    /* Se usa inline style position:fixed;opacity:0;pointer-events:none */
+  }
+
+  /* ── Divider ── */
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 14px 0;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="prospect-wrapper">
+
+  {# ── HEADER ── #}
+  <div class="page-header">
+    <div>
+      <a href="{% url 'prospects:list' %}" class="back-link">
+        ← Mis prospectos
+      </a>
+      <h1>
+        {% if mode == 'detail' %}
+          Prospecto #{{ prospect.pk }}
+        {% else %}
+          Nueva captura
+        {% endif %}
+      </h1>
+    </div>
+    {% if mode == 'detail' %}
+      <span class="status-badge status-{{ prospect.status }}">
+        {{ prospect.get_status_display }}
+      </span>
+    {% endif %}
+  </div>
+
+  {# ── GRID PRINCIPAL ── #}
+  <div class="capture-grid">
+
+    {# ══ COLUMNA IZQUIERDA: Foto + GPS + OCR ══ #}
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+
+      {# --- Tarjeta foto --- #}
+      <div class="card">
+        <div class="card-title">Foto del anuncio</div>
+
+        {# Zona de foto: clic abre la cámara directamente #}
+        <div class="photo-zone" id="photo-zone"
+             onclick="openCamera()"
+             style="cursor:pointer;">
+
+          {% if mode == 'detail' and prospect.photo %}
+            <img id="photo-preview" src="{{ prospect.photo.url }}" alt="Foto del anuncio" style="width:100%;border-radius:10px;">
+          {% else %}
+            <div class="photo-placeholder" id="photo-placeholder">
+              <div class="photo-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
+                  <circle cx="12" cy="13" r="4"/>
+                </svg>
+              </div>
+              <p>Toca para tomar la foto</p>
+              <small>La cámara se abrirá directamente</small>
+              <small id="camera-attempt-text" style="display:none;color:var(--accent-orange);margin-top:8px;"></small>
+            </div>
+            <img id="photo-preview" src="" alt="" style="display:none; width:100%; border-radius:10px;">
+          {% endif %}
+
+          <div class="photo-actions">
+            <span class="btn-outline" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:var(--bg-card);color:var(--text);font-size:12px;cursor:pointer;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              Cambiar foto
+            </span>
+          </div>
+        </div>
+
+        <input type="file" id="photo-input"
+               accept="image/*"
+               capture="environment"
+               style="display:none;">
+
+        {# GPS strip #}
+        <div class="gps-strip" id="gps-strip">
+          <div class="gps-dot" id="gps-dot"></div>
+          <div class="gps-text" id="gps-text">
+            {% if mode == 'detail' and prospect.has_gps %}
+              GPS capturado
+            {% else %}
+              Obteniendo ubicación GPS...
+            {% endif %}
+          </div>
+          <div class="gps-coords" id="gps-coords">
+            {% if mode == 'detail' and prospect.has_gps %}
+              {{ prospect.latitude }}, {{ prospect.longitude }}
+            {% endif %}
+          </div>
+        </div>
+
+        <p class="gps-note">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          Solo se guardan las coordenadas. La dirección se completa manualmente.
+        </p>
+      </div>
+
+      {# --- Botón principal CAPTURAR (solo en nueva captura) --- #}
+      {% if mode != 'detail' %}
+      <button type="button" class="btn-camera" id="btn-capture-save"
+              onclick="captureAndSave()" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
+          <circle cx="12" cy="13" r="4"/>
+        </svg>
+        Guardar foto + GPS
+      </button>
+      {% endif %}
+
+      {# --- Botón PROCESAR CON IA --- #}
+      {# can_process = True solo si el request viene de móvil/tablet (detección server-side) #}
+      {% if mode == 'detail' %}
+
+      {% if can_process %}
+      {# ── MÓVIL / TABLET: botón activo ── #}
+      <button type="button" class="btn-process" id="btn-process"
+              onclick="processWithAI()"
+              {% if not prospect.photo %}disabled title="Sin foto"{% endif %}>
+        <span class="btn-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2a10 10 0 100 20A10 10 0 0012 2z" opacity=".2"/>
+            <path d="M12 6v6l4 2"/>
+            <path d="M5.1 17.8A10 10 0 1021.3 7"/>
+          </svg>
+          Extraer datos con IA (Qwen3-VL)
+        </span>
+        <div class="spinner"></div>
+      </button>
+      {% else %}
+      {# ── DESKTOP: aviso informativo, sin botón ── #}
+      <div class="desktop-process-notice">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <div>
+          <strong>Procesamiento con IA disponible solo en móvil o tablet</strong>
+          <span>Abre este prospecto desde tu celular para extraer los datos del anuncio.</span>
+        </div>
+      </div>
+      {% endif %}
+
+      {# OCR result block — se muestra después del procesamiento #}
+      <div class="ocr-block {% if prospect.ocr_raw_text %}visible{% endif %}" id="ocr-block">
+        <div class="ocr-header">
+          <span class="ocr-badge">
+            {% if prospect.ocr_processed_at %}
+              IA procesó · {{ prospect.ocr_processed_at|date:"d/m H:i" }}
+            {% else %}
+              Resultado IA
+            {% endif %}
+          </span>
+          <small style="color: var(--text-subtle); font-size: 10px;">✦ Campos marcados con morado</small>
+        </div>
+        {% if prospect.ocr_raw_text %}
+        <div class="ocr-raw">{{ prospect.ocr_raw_text }}</div>
+        {% else %}
+        <div class="ocr-raw" id="ocr-raw-output">—</div>
+        {% endif %}
+      </div>
+      {% endif %}
+
+    </div>
+
+    {# ══ COLUMNA DERECHA: Formulario de datos ══ #}
+    <div>
+      <form method="POST"
+            action="{% if mode == 'detail' %}{% url 'prospects:detail' prospect.pk %}{% else %}#{% endif %}"
+            id="prospect-form">
+        {% csrf_token %}
+
+        {# --- Datos del propietario --- #}
+        <div class="card" style="margin-bottom: 14px;">
+          <div class="card-title">Datos del propietario</div>
+          <div class="field-grid">
+
+            <div class="field-group full" id="fg-owner_name">
+              <label for="id_owner_name">Nombre propietario</label>
+              <input type="text" id="id_owner_name" name="owner_name"
+                     value="{{ form.owner_name.value|default:'' }}"
+                     placeholder="Nombre del propietario o agencia">
+            </div>
+
+            <div class="field-group full" id="fg-phone">
+              <label for="id_phone">Teléfono</label>
+              <input type="tel" id="id_phone" name="phone"
+                     value="{{ form.phone.value|default:'' }}"
+                     placeholder="959 234 871"
+                     inputmode="tel">
+            </div>
+
+          </div>
+        </div>
+
+        {# --- Tipo de propiedad --- #}
+        <div class="card" style="margin-bottom: 14px;">
+          <div class="card-title">Operación</div>
+
+          <div class="field-group" style="margin-bottom: 12px;">
+            <label>Tipo de operación</label>
+            <div class="chips-row" id="operation-chips">
+              <span class="chip {% if form.operation_type.value == 'alquiler' %}selected-alquiler{% endif %}"
+                    data-value="alquiler" onclick="selectChip('operation_type','alquiler')">
+                Alquiler
+              </span>
+              <span class="chip {% if form.operation_type.value == 'venta' %}selected-venta{% endif %}"
+                    data-value="venta" onclick="selectChip('operation_type','venta')">
+                Venta
+              </span>
+            </div>
+            <input type="hidden" id="id_operation_type" name="operation_type"
+                   value="{{ form.operation_type.value|default:'' }}">
+          </div>
+
+          <div class="field-group" id="fg-property_type">
+            <label for="id_property_type">Tipo de inmueble</label>
+            <select id="id_property_type" name="property_type">
+              <option value="">— Seleccionar —</option>
+              {% for val, label in form.instance.PROPERTY_TYPES %}
+                <option value="{{ val }}"
+                  {% if form.property_type.value == val %}selected{% endif %}>
+                  {{ label }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <hr class="divider">
+
+          <div class="field-grid">
+            <div class="field-group" id="fg-price">
+              <label for="id_price">Precio</label>
+              <input type="number" id="id_price" name="price"
+                     value="{{ form.price.value|default:'' }}"
+                     placeholder="0.00" step="0.01" min="0">
+            </div>
+            <div class="field-group" id="fg-currency">
+              <label for="id_currency">Moneda</label>
+              <select id="id_currency" name="currency">
+                <option value="USD" {% if form.currency.value == 'USD' %}selected{% endif %}>USD</option>
+                <option value="PEN" {% if form.currency.value == 'PEN' %}selected{% endif %}>PEN (Soles)</option>
+              </select>
+            </div>
+            <div class="field-group" id="fg-bedrooms">
+              <label for="id_bedrooms">Dormitorios</label>
+              <input type="number" id="id_bedrooms" name="bedrooms"
+                     value="{{ form.bedrooms.value|default:'' }}"
+                     placeholder="0" min="0" max="20">
+            </div>
+            <div class="field-group" id="fg-area_m2">
+              <label for="id_area_m2">Área m²</label>
+              <input type="number" id="id_area_m2" name="area_m2"
+                     value="{{ form.area_m2.value|default:'' }}"
+                     placeholder="0.00" step="0.01" min="0">
+            </div>
+          </div>
+        </div>
+
+        {# --- Ubicación --- #}
+        <div class="card" style="margin-bottom: 14px;">
+          <div class="card-title">Ubicación</div>
+          <div class="field-grid">
+
+            <div class="field-group full">
+              <label for="id_address">Dirección (Mz / Lote / Calle)</label>
+              <input type="text" id="id_address" name="address"
+                     value="{{ form.address.value|default:'' }}"
+                     placeholder="Mz. D Lote 12, Urb. La Encalada">
+            </div>
+
+            <div class="field-group full">
+              <label for="id_district">Distrito</label>
+              <input type="text" id="id_district" name="district"
+                     value="{{ form.district.value|default:'' }}"
+                     placeholder="Cayma, Yanahuara, Cerro Colorado...">
+            </div>
+
+            {# Coordenadas solo lectura — se capturan automáticamente #}
+            <div class="field-group full">
+              <label>Coordenadas GPS</label>
+              <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 9px 12px; font-size: 12px; color: var(--text-muted); font-family: monospace;" id="coords-display">
+                {% if mode == 'detail' and prospect.has_gps %}
+                  {{ prospect.latitude }}, {{ prospect.longitude }}
+                {% else %}
+                  — se captura al guardar —
+                {% endif %}
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        {# --- Estado y notas --- #}
+        <div class="card" style="margin-bottom: 14px;">
+          <div class="card-title">Seguimiento</div>
+          <div class="field-grid">
+
+            {% if mode == 'detail' %}
+            <div class="field-group full">
+              <label for="id_status">Estado</label>
+              <select id="id_status" name="status">
+                {% for val, label in form.instance.STATUS_CHOICES %}
+                  <option value="{{ val }}"
+                    {% if form.status.value == val %}selected{% endif %}>
+                    {{ label }}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+            {% endif %}
+
+            <div class="field-group full">
+              <label for="id_notes">Notas del agente</label>
+              <textarea id="id_notes" name="notes" rows="3"
+                        placeholder="Observaciones, referencias, detalles del anuncio...">{{ form.notes.value|default:'' }}</textarea>
+            </div>
+
+          </div>
+        </div>
+
+        {# --- Acciones --- #}
+        {% if mode == 'detail' %}
+          <button type="submit" class="btn-save">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+              <polyline points="17 21 17 13 7 13 7 21"/>
+              <polyline points="7 3 7 8 15 8"/>
+            </svg>
+            Guardar cambios
+          </button>
+        {% endif %}
+
+      </form>
+    </div>
+    {# fin columna derecha #}
+
+  </div>
+  {# fin capture-grid #}
+
+</div>
+
+{# ── TOAST ── #}
+<div class="toast-container" id="toast-container"></div>
+
+{# ── Inputs ocultos GPS #}
+<input type="hidden" id="lat-input" value="">
+<input type="hidden" id="lng-input" value="">
+
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+  const PROSPECT_ID  = {% if mode == 'detail' %}{{ prospect.pk }}{% else %}null{% endif %};
+  const PROCESS_URL  = {% if mode == 'detail' %}"{% url 'prospects:process' prospect.pk %}"{% else %}null{% endif %};
+  const CAPTURE_URL  = "{% url 'prospects:capture' %}";
+  const CSRF_TOKEN   = "{{ csrf_token }}";
+
+  // ── GPS ──────────────────────────────────────────────────────
+  let gpsLat = null, gpsLng = null;
+  var gpsTimeout = null;
+
+  function initGPS() {
+    if (!navigator.geolocation) {
+      setGPSStatus('GPS no disponible', false);
+      return;
+    }
+    
+    // Timeout de seguridad: si GPS no responde en 5s, continuar igual
+    gpsTimeout = setTimeout(function() {
+      setGPSStatus('GPS no disponible', false);
+      checkCaptureReady();
+    }, 5000);
+    
+    navigator.geolocation.getCurrentPosition(
+      function(pos) {
+        clearTimeout(gpsTimeout);
+        gpsLat = pos.coords.latitude.toFixed(7);
+        gpsLng = pos.coords.longitude.toFixed(7);
+        var latInput = document.getElementById('lat-input');
+        var lngInput = document.getElementById('lng-input');
+        if (latInput) latInput.value = gpsLat;
+        if (lngInput) lngInput.value = gpsLng;
+        var dot = document.getElementById('gps-dot');
+        if (dot) dot.classList.add('active');
+        var text = document.getElementById('gps-text');
+        if (text) text.textContent = 'GPS capturado';
+        var coords = document.getElementById('gps-coords');
+        if (coords) coords.textContent = gpsLat + ', ' + gpsLng;
+        var display = document.getElementById('coords-display');
+        if (display) display.textContent = gpsLat + ', ' + gpsLng;
+        checkCaptureReady();
+      },
+      function(err) {
+        clearTimeout(gpsTimeout);
+        setGPSStatus('GPS no disponible', false);
+        checkCaptureReady();
+      },
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  }
+
+  // ── CÁMARA: abrir input file ─────────────────────────────────
+  function openCamera() {
+    const input = document.getElementById('photo-input');
+    if (!input) return;
+    input.value = '';
+    input.click();
+  }
+
+  function setGPSStatus(text, ok) {
+    var el = document.getElementById('gps-text');
+    if (el) el.textContent = text;
+    if (ok) {
+      var dot = document.getElementById('gps-dot');
+      if (dot) dot.classList.add('active');
+    }
+  }
+
+  // ── FOTO: preview al seleccionar ──────────────────────────────
+  var photoSelected = false;
+  var photoInput = document.getElementById('photo-input');
+  
+  if (photoInput) {
+    photoInput.addEventListener('change', function(e) {
+      var file = e.target.files[0];
+      if (!file) return;
+      var preview = document.getElementById('photo-preview');
+      var placeholder = document.getElementById('photo-placeholder');
+      if (preview) {
+        preview.src = URL.createObjectURL(file);
+        preview.style.display = 'block';
+      }
+      if (placeholder) placeholder.style.display = 'none';
+      var zone = document.getElementById('photo-zone');
+      if (zone) zone.classList.add('has-photo');
+      photoSelected = true;
+      checkCaptureReady();
+    });
+  }
+
+  // ── Habilitar botón capturar cuando hay foto (GPS es opcional) ──
+  function checkCaptureReady() {
+    var btn = document.getElementById('btn-capture-save');
+    if (btn) btn.disabled = !photoSelected;
+  }
+
+  // ── GUARDAR FOTO + GPS (nueva captura) ───────────────────────
+  async function captureAndSave() {
+    const fileInput = document.getElementById('photo-input');
+    if (!fileInput.files[0]) { showToast('Primero toma una foto', 'error'); return; }
+
+    const btn = document.getElementById('btn-capture-save');
+    btn.disabled = true;
+    btn.textContent = 'Guardando...';
+
+    const fd = new FormData();
+    fd.append('photo', fileInput.files[0]);
+    fd.append('latitude', gpsLat || '');
+    fd.append('longitude', gpsLng || '');
+    fd.append('csrfmiddlewaretoken', CSRF_TOKEN);
+
+    try {
+      const res = await fetch(CAPTURE_URL, { method: 'POST', body: fd });
+      const data = await res.json();
+      if (data.ok) {
+        showToast('Prospecto guardado', 'success');
+        setTimeout(() => { window.location.href = data.redirect_url; }, 800);
+      } else {
+        showToast(data.error || 'Error al guardar', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Guardar foto + GPS';
+      }
+    } catch(e) {
+      showToast('Error de conexión', 'error');
+      btn.disabled = false;
+    }
+  }
+
+  // ── PROCESAR CON IA ──────────────────────────────────────────
+  async function processWithAI() {
+    if (!PROCESS_URL) return;
+    const btn = document.getElementById('btn-process');
+    btn.disabled = true;
+    btn.classList.add('loading');
+
+    try {
+      const res = await fetch(PROCESS_URL, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': CSRF_TOKEN, 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+
+      if (data.ok) {
+        fillExtractedFields(data.extracted);
+        showToast('Datos extraídos correctamente', 'success');
+      } else {
+        showToast(data.error || 'Error al procesar', 'error');
+      }
+    } catch(e) {
+      showToast('Error de conexión con la IA', 'error');
+    } finally {
+      btn.disabled = false;
+      btn.classList.remove('loading');
+    }
+  }
+
+  // ── Prellenar formulario con datos extraídos ──────────────────
+  function fillExtractedFields(extracted) {
+    const map = {
+      owner_name:     'id_owner_name',
+      phone:          'id_phone',
+      property_type:  'id_property_type',
+      price:          'id_price',
+      currency:       'id_currency',
+      bedrooms:       'id_bedrooms',
+      area_m2:        'id_area_m2',
+    };
+
+    for (const [key, elId] of Object.entries(map)) {
+      const val = extracted[key];
+      const el  = document.getElementById(elId);
+      if (el && val !== null && val !== undefined && val !== 'null') {
+        el.value = val;
+        el.classList.add('ocr-filled');
+        el.closest('.field-group')?.classList.add('from-ocr');
+      }
+    }
+
+    // Operación
+    if (extracted.operation_type) {
+      selectChip('operation_type', extracted.operation_type);
+    }
+
+    // Mostrar texto raw
+    const ocr = document.getElementById('ocr-block');
+    const raw  = document.getElementById('ocr-raw-output');
+    if (ocr) ocr.classList.add('visible');
+    if (raw && extracted.raw_text) raw.textContent = extracted.raw_text;
+  }
+
+  // ── Chips operación ──────────────────────────────────────────
+  function selectChip(field, value) {
+    document.getElementById(`id_${field}`).value = value;
+    document.querySelectorAll('#operation-chips .chip').forEach(c => {
+      c.className = 'chip';
+      if (c.dataset.value === value) c.classList.add(`selected-${value}`);
+    });
+  }
+
+  // ── Toast ────────────────────────────────────────────────────
+  function showToast(msg, type = 'success') {
+    const c = document.getElementById('toast-container');
+    const t = document.createElement('div');
+    t.className = `toast ${type}`;
+    t.innerHTML = `<div class="toast-dot"></div>${msg}`;
+    c.appendChild(t);
+    requestAnimationFrame(() => t.classList.add('show'));
+    setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, 3000);
+  }
+
+  // ── Init ─────────────────────────────────────────────────────
+  initGPS();
+  
+</script>
+{% endblock %}

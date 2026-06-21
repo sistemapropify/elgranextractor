@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block title %}Análisis Histórico - Meta Ads - Propifai{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Encabezado -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="h3 mb-0">
+                    <i class="fas fa-chart-bar text-info me-2"></i>
+                    Análisis Histórico Meta Ads
+                </h1>
+                <div>
+                    <a href="{% url 'meta_ads:meta_ads_dashboard' %}" class="btn btn-outline-secondary btn-sm">
+                        <i class="fas fa-arrow-left me-1"></i> Volver al Dashboard
+                    </a>
+                </div>
+            </div>
+            <p class="text-muted mb-0">
+                Análisis detallado de métricas históricas de campañas publicitarias (últimos 12 meses)
+            </p>
+        </div>
+    </div>
+
+    <!-- Gráfico de Gasto Mensual -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-bottom">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-line text-primary me-2"></i>
+                        Gasto Mensual (Últimos 12 meses)
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="monthlySpendChart" height="300"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla de KPIs Históricos -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-bottom">
+                    <h5 class="mb-0">
+                        <i class="fas fa-table text-success me-2"></i>
+                        KPIs por Mes
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Mes</th>
+                                    <th class="text-end">Gasto Total (S/)</th>
+                                    <th class="text-end">Clics</th>
+                                    <th class="text-end">Impresiones</th>
+                                    <th class="text-end">CPC Promedio</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for kpi in kpis_historicos %}
+                                <tr>
+                                    <td>{{ kpi.month_name }}</td>
+                                    <td class="text-end">S/ {{ kpi.total_spend|floatformat:2|intcomma }}</td>
+                                    <td class="text-end">{{ kpi.total_clicks|intcomma }}</td>
+                                    <td class="text-end">{{ kpi.total_impressions|intcomma }}</td>
+                                    <td class="text-end">
+                                        {% if kpi.cpc > 0 %}
+                                            S/ {{ kpi.cpc|floatformat:4 }}
+                                        {% else %}
+                                            —
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-center py-4">
+                                        <i class="fas fa-chart-bar fa-2x text-muted mb-3"></i>
+                                        <p class="text-muted mb-0">No hay datos históricos disponibles</p>
+                                        <small class="text-muted">
+                                            Ejecuta <code>python manage.py sync_meta_ads</code> para sincronizar datos
+                                        </small>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card-footer bg-white border-top">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Datos agregados por mes natural
+                            </small>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <small class="text-muted">
+                                Última actualización: {% now "d/m/Y H:i" %}
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Datos para el gráfico mensual
+    const monthlyData = JSON.parse('{{ spend_mensual|safe|escapejs }}');
+    
+    // Crear gráfico mensual
+    const monthlyCtx = document.getElementById('monthlySpendChart').getContext('2d');
+    const monthlySpendChart = new Chart(monthlyCtx, {
+        type: 'bar',
+        data: {
+            labels: monthlyData.labels,
+            datasets: [
+                {
+                    label: 'Gasto Mensual (S/)',
+                    data: monthlyData.spend,
+                    backgroundColor: 'rgba(54, 162, 235, 0.7)',
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    borderWidth: 1,
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'Clics Mensuales',
+                    data: monthlyData.clicks,
+                    backgroundColor: 'rgba(255, 159, 64, 0.5)',
+                    borderColor: 'rgba(255, 159, 64, 1)',
+                    borderWidth: 1,
+                    type: 'line',
+                    yAxisID: 'y1',
+                    tension: 0.3,
+                    fill: false
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        label: function(context) {
+                            if (context.datasetIndex === 0) {
+                                return `Gasto: S/ ${context.parsed.y.toFixed(2)}`;
+                            } else {
+                                return `Clics: ${context.parsed.y.toLocaleString()}`;
+                            }
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: {
+                        display: false
+                    }
+                },
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    title: {
+                        display: true,
+                        text: 'Gasto (S/)'
+                    },
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return 'S/ ' + value.toFixed(2);
+                        }
+                    }
+                },
+                y1: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    title: {
+                        display: true,
+                        text: 'Clics'
+                    },
+                    beginAtZero: true,
+                    grid: {
+                        drawOnChartArea: false
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return value.toLocaleString();
+                        }
+                    }
+                }
+            },
+            interaction: {
+                intersect: false,
+                mode: 'nearest'
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

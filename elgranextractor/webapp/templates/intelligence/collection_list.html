@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Colecciones RAG - Propifai Intelligence Layer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #0d1117;
+            color: #c9d1d9;
+            line-height: 1.6;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #30363d;
+        }
+        
+        .header h1 {
+            color: #58a6ff;
+            font-size: 28px;
+        }
+        
+        .header-actions {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background-color: #238636;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background-color: #2ea043;
+        }
+        
+        .btn-secondary {
+            background-color: #30363d;
+            color: #c9d1d9;
+        }
+        
+        .btn-secondary:hover {
+            background-color: #3c444d;
+        }
+        
+        .btn-danger {
+            background-color: #da3633;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background-color: #f85149;
+        }
+        
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+        
+        .messages {
+            margin-bottom: 20px;
+        }
+        
+        .alert {
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            border: 1px solid transparent;
+        }
+        
+        .alert-success {
+            background-color: rgba(35, 134, 54, 0.1);
+            border-color: rgba(35, 134, 54, 0.3);
+            color: #3fb950;
+        }
+        
+        .alert-error {
+            background-color: rgba(218, 54, 51, 0.1);
+            border-color: rgba(218, 54, 51, 0.3);
+            color: #f85149;
+        }
+        
+        .filters {
+            background-color: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .filter-form {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+        
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .form-group label {
+            font-size: 14px;
+            font-weight: 500;
+            color: #8b949e;
+        }
+        
+        .form-control {
+            padding: 10px 12px;
+            background-color: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            color: #c9d1d9;
+            font-size: 14px;
+        }
+        
+        .form-control:focus {
+            outline: none;
+            border-color: #58a6ff;
+        }
+        
+        .collections-table {
+            background-color: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .table-header {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr 1fr;
+            padding: 15px 20px;
+            background-color: #21262d;
+            border-bottom: 1px solid #30363d;
+            font-weight: 600;
+            color: #8b949e;
+            font-size: 14px;
+        }
+        
+        .table-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr 1fr;
+            padding: 15px 20px;
+            border-bottom: 1px solid #30363d;
+            align-items: center;
+        }
+        
+        .table-row:last-child {
+            border-bottom: none;
+        }
+        
+        .table-row:hover {
+            background-color: #1c2128;
+        }
+        
+        .collection-name {
+            font-weight: 500;
+            color: #58a6ff;
+        }
+        
+        .collection-description {
+            font-size: 13px;
+            color: #8b949e;
+            margin-top: 4px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .status-active {
+            background-color: rgba(35, 134, 54, 0.2);
+            color: #3fb950;
+        }
+        
+        .status-inactive {
+            background-color: rgba(110, 118, 129, 0.2);
+            color: #8b949e;
+        }
+        
+        .level-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            background-color: #21262d;
+            color: #c9d1d9;
+        }
+        
+        .level-1 { border-left: 3px solid #58a6ff; }
+        .level-2 { border-left: 3px solid #238636; }
+        .level-3 { border-left: 3px solid #d29922; }
+        .level-4 { border-left: 3px solid #da3633; }
+        .level-5 { border-left: 3px solid #8957e5; }
+        
+        .sync-info {
+            font-size: 12px;
+            color: #8b949e;
+        }
+        
+        .actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #8b949e;
+        }
+        
+        .empty-state h3 {
+            font-size: 20px;
+            margin-bottom: 10px;
+            color: #c9d1d9;
+        }
+        
+        .empty-state p {
+            margin-bottom: 20px;
+        }
+        
+        .footer {
+            text-align: center;
+            color: #8b949e;
+            font-size: 14px;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #30363d;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📚 Colecciones RAG</h1>
+            <div class="header-actions">
+                <a href="{% url 'intelligence:dashboard' %}" class="btn btn-secondary">← Dashboard</a>
+                <a href="{% url 'intelligence:collection_create' %}" class="btn btn-primary">➕ Nueva Colección</a>
+            </div>
+        </div>
+        
+        <!-- Mensajes -->
+        <div class="messages">
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        </div>
+        
+        <!-- Filtros -->
+        <div class="filters">
+            <form method="get" class="filter-form">
+                <div class="form-group">
+                    <label for="name">Nombre</label>
+                    <input type="text" id="name" name="name" class="form-control" 
+                           placeholder="Buscar por nombre..." 
+                           value="{{ current_filters.name|default:'' }}">
+                </div>
+                
+                <div class="form-group">
+                    <label for="status">Estado</label>
+                    <select id="status" name="status" class="form-control">
+                        <option value="">Todos</option>
+                        <option value="active" {% if current_filters.status == 'active' %}selected{% endif %}>Activas</option>
+                        <option value="inactive" {% if current_filters.status == 'inactive' %}selected{% endif %}>Inactivas</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="level">Nivel de acceso</label>
+                    <select id="level" name="level" class="form-control">
+                        <option value="">Todos</option>
+                        {% for value, label in level_choices %}
+                            <option value="{{ value }}" {% if current_filters.level == value|stringformat:"s" %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group" style="grid-column: span 2;">
+                    <label style="visibility: hidden;">Acciones</label>
+                    <div style="display: flex; gap: 10px;">
+                        <button type="submit" class="btn btn-primary" style="flex: 1;">🔍 Aplicar Filtros</button>
+                        <a href="{% url 'intelligence:collection_list' %}" class="btn btn-secondary" style="flex: 1;">🗑️ Limpiar Filtros</a>
+                    </div>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Tabla de colecciones -->
+        <div class="collections-table">
+            <div class="table-header">
+                <div>Nombre y Descripción</div>
+                <div>Estado</div>
+                <div>Nivel</div>
+                <div>Campos</div>
+                <div>Última Sincro</div>
+                <div>Registros</div>
+                <div>Acciones</div>
+            </div>
+            
+            {% if collections %}
+                {% for collection in collections %}
+                    <div class="table-row">
+                        <div>
+                            <div class="collection-name">{{ collection.name }}</div>
+                            <div class="collection-description">{{ collection.description|default:"Sin descripción"|truncatechars:100 }}</div>
+                        </div>
+                        
+                        <div>
+                            <span class="status-badge {% if collection.is_active %}status-active{% else %}status-inactive{% endif %}">
+                                {% if collection.is_active %}✅ Activa{% else %}⏸️ Inactiva{% endif %}
+                            </span>
+                        </div>
+                        
+                        <div>
+                            <span class="level-badge level-{{ collection.access_level }}">
+                                Nivel {{ collection.access_level }}
+                            </span>
+                        </div>
+                        
+                        <div>
+                            <span title="{{ collection.embedding_fields|join:', ' }}">
+                                {{ collection.embedding_fields|length }} campo(s)
+                            </span>
+                        </div>
+                        
+                        <div class="sync-info">
+                            {% if collection.last_sync_at %}
+                                {{ collection.last_sync_at|date:"d/m/Y H:i" }}
+                            {% else %}
+                                Nunca
+                            {% endif %}
+                        </div>
+                        
+                        <div>
+                            {{ collection.last_sync_count|default:0 }}
+                        </div>
+                        
+                        <div class="actions">
+                            <a href="{% url 'intelligence:collection_edit' collection.id %}" class="btn btn-secondary btn-sm">✏️ Editar</a>
+                            <a href="{% url 'intelligence:collection_sync' collection.id %}" class="btn btn-primary btn-sm">🔄 Sincronizar</a>
+                            <a href="{% url 'intelligence:collection_delete' collection.id %}" class="btn btn-danger btn-sm">🗑️ Eliminar</a>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="empty-state">
+                    <h3>No se encontraron colecciones</h3>
+                    <p>{% if current_filters.status or current_filters.level or current_filters.name %}Intenta con otros filtros{% else %}Crea tu primera colección para comenzar{% endif %}</p>
+                    {% if not current_filters.status and not current_filters.level and not current_filters.name %}
+                        <a href="{% url 'intelligence:collection_create' %}" class="btn btn-primary" style="margin-top: 15px;">Crear Primera Colección</a>
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+        
+        <div class="footer">
+            <p>Propifai Intelligence Layer • Dashboard de Colecciones RAG • Total: {{ collections|length }} colección(es)</p>
+        </div>
+    </div>
+</body>
+</html>

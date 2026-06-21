@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crear Colección RAG Dinámica - Propifai Intelligence Layer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #0d1117;
+            color: #c9d1d9;
+            line-height: 1.6;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #30363d;
+        }
+        
+        .header h1 {
+            color: #58a6ff;
+            font-size: 28px;
+        }
+        
+        .header-actions {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background-color: #238636;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background-color: #2ea043;
+        }
+        
+        .btn-secondary {
+            background-color: #30363d;
+            color: #c9d1d9;
+        }
+        
+        .btn-secondary:hover {
+            background-color: #3c444d;
+        }
+        
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+        
+        .messages {
+            margin-bottom: 20px;
+        }
+        
+        .alert {
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+        }
+        
+        .alert-success {
+            background-color: #238636;
+            color: white;
+            border: 1px solid #2ea043;
+        }
+        
+        .alert-error {
+            background-color: #da3633;
+            color: white;
+            border: 1px solid #f85149;
+        }
+        
+        .alert-info {
+            background-color: #1f6feb;
+            color: white;
+            border: 1px solid #388bfd;
+        }
+        
+        .form-container {
+            background-color: #161b22;
+            border-radius: 8px;
+            padding: 30px;
+            border: 1px solid #30363d;
+        }
+        
+        .form-section {
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #30363d;
+        }
+        
+        .form-section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+        
+        .form-section h2 {
+            color: #58a6ff;
+            font-size: 20px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #8b949e;
+            font-weight: 500;
+        }
+        
+        .form-control {
+            width: 100%;
+            padding: 10px 12px;
+            background-color: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            color: #c9d1d9;
+            font-size: 14px;
+        }
+        
+        .form-control:focus {
+            outline: none;
+            border-color: #58a6ff;
+            box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2);
+        }
+        
+        .form-check {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .form-check-input {
+            width: 18px;
+            height: 18px;
+            accent-color: #238636;
+        }
+        
+        .form-check-label {
+            color: #c9d1d9;
+            font-size: 14px;
+        }
+        
+        .dynamic-fields-section {
+            background-color: #0d1117;
+            border-radius: 6px;
+            padding: 20px;
+            border: 1px solid #30363d;
+            margin-top: 20px;
+        }
+        
+        .dynamic-fields-section.hidden {
+            display: none;
+        }
+        
+        .fields-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .field-card {
+            background-color: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 15px;
+        }
+        
+        .field-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #30363d;
+        }
+        
+        .field-name {
+            font-weight: 600;
+            color: #58a6ff;
+        }
+        
+        .field-type {
+            font-size: 12px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            background-color: #30363d;
+            color: #8b949e;
+        }
+        
+        .field-options {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .field-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .field-option label {
+            font-size: 13px;
+            color: #8b949e;
+            cursor: pointer;
+        }
+        
+        .text-field .field-type {
+            background-color: #0c2d6b;
+            color: #58a6ff;
+        }
+        
+        .numeric-field .field-type {
+            background-color: #1a7f37;
+            color: #7ee787;
+        }
+        
+        .date-field .field-type {
+            background-color: #8957e5;
+            color: #d2a8ff;
+        }
+        
+        .boolean-field .field-type {
+            background-color: #da3633;
+            color: #ffa198;
+        }
+        
+        .other-field .field-type {
+            background-color: #6e7681;
+            color: #b1bac4;
+        }
+        
+        .form-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 15px;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #30363d;
+        }
+        
+        .help-text {
+            font-size: 12px;
+            color: #8b949e;
+            margin-top: 5px;
+        }
+        
+        .select-multiple {
+            min-height: 120px;
+        }
+        
+        .select-multiple option {
+            padding: 8px 12px;
+        }
+        
+        .select-multiple option:checked {
+            background-color: #238636;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📚 Crear Nueva Colección RAG Dinámica</h1>
+            <div class="header-actions">
+                <a href="/intelligence/collections/" class="btn btn-secondary">← Volver a Colecciones</a>
+                <a href="/intelligence/" class="btn btn-secondary">🏠 Dashboard</a>
+            </div>
+        </div>
+        
+        <div class="messages">
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        </div>
+        
+        <form method="post" id="collection-form">
+            {% csrf_token %}
+            
+            <div class="form-container">
+                <!-- Sección 1: Información Básica -->
+                <div class="form-section">
+                    <h2>📋 Información Básica</h2>
+                    
+                    <div class="form-group">
+                        <label for="name">Nombre de la Colección *</label>
+                        <input type="text" id="name" name="name" class="form-control" required 
+                               placeholder="Ej: Propiedades Urbania 2024" maxlength="200">
+                        <div class="help-text">Nombre descriptivo para identificar la colección</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="description">Descripción</label>
+                        <textarea id="description" name="description" class="form-control" rows="3" 
+                                  placeholder="Describe el propósito y contenido de esta colección"></textarea>
+                        <div class="help-text">Opcional: información adicional sobre la colección</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="access_level">Nivel de Acceso *</label>
+                        <select id="access_level" name="access_level" class="form-control" required>
+                            <option value="">Seleccionar nivel de acceso</option>
+                            <option value="1">1 - Público</option>
+                            <option value="2">2 - Interno</option>
+                            <option value="3">3 - Administrador</option>
+                            <option value="4">4 - Superusuario</option>
+                        </select>
+                        <div class="help-text">Controla quién puede acceder a esta colección</div>
+                    </div>
+                    
+                    <div class="form-check">
+                        <input type="checkbox" id="is_active" name="is_active" class="form-check-input" checked>
+                        <label for="is_active" class="form-check-label">Colección activa</label>
+                        <div class="help-text">Si está desactivada, no estará disponible para búsquedas</div>
+                    </div>
+                </div>
+                
+                <!-- Sección 2: Configuración de Origen de Datos -->
+                <div class="form-section">
+                    <h2>🗃️ Configuración de Origen de Datos</h2>
+                    
+                    <div class="form-group">
+                        <label for="table_name">Tabla de Base de Datos *</label>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <select id="table_name" name="table_name" class="form-control" required>
+                                <option value="">Seleccionar tabla...</option>
+                            </select>
+                            <div style="display: flex; flex-direction: column; gap: 5px;">
+                                <button type="button" id="refreshTablesBtn" class="btn btn-secondary btn-sm">
+                                    🔄 Cargar Tablas
+                                </button>
+                                <button type="button" id="forceRefreshTablesBtn" class="btn btn-warning btn-sm" style="background-color: #9a6700; color: white;">
+                                    🔥 Forzar Recarga (sin caché)
+                                </button>
+                            </div>
+                        </div>
+                        <div class="help-text">Selecciona la tabla que contiene los datos para esta colección. Usa "Forzar Recarga" si no ves tus tablas.</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="schema_name">Esquema (Schema)</label>
+                        <input type="text" id="schema_name" name="schema_name" class="form-control" 
+                               placeholder="Ej: dbo (dejar vacío para default)" value="dbo">
+                        <div class="help-text">Nombre del esquema de la tabla (generalmente 'dbo' para SQL Server)</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <button type="button" id="analyzeTableBtn" class="btn btn-primary">
+                            🔍 Analizar Estructura de la Tabla
+                        </button>
+                        <div class="help-text">Analiza la estructura de la tabla seleccionada para detectar campos automáticamente</div>
+                    </div>
+                </div>
+                
+                <!-- Sección 3: Campos Detectados (dinámica) -->
+                <div id="fields-container" class="dynamic-fields-section hidden">
+                    <h2>📊 Campos Detectados</h2>
+                    <div class="help-text" style="margin-bottom: 15px;">
+                        Campos detectados en la tabla. Selecciona cómo se usarán cada uno.
+                    </div>
+                    
+                    <div id="fields-grid" class="fields-grid">
+                        <!-- Los campos se insertarán aquí dinámicamente -->
+                    </div>
+                    
+                    <div class="form-group" style="margin-top: 20px;">
+                        <h3>⚙️ Configuración de Campos Clave</h3>
+                        <div class="help-text" style="margin-bottom: 15px;">
+                            Selecciona los campos que se usarán para diferentes propósitos:
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="embedding_fields">Campos para Embedding (Búsqueda Semántica) *</label>
+                            <select id="embedding_fields" name="embedding_fields" class="form-control select-multiple" multiple required>
+                                <!-- Opciones se insertarán dinámicamente -->
+                            </select>
+                            <div class="help-text">Selecciona los campos cuyo contenido se usará para búsqueda semántica. Generalmente campos de texto descriptivo.</div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="display_fields">Campos para Visualización</label>
+                            <select id="display_fields" name="display_fields" class="form-control select-multiple" multiple>
+                                <!-- Opciones se insertarán dinámicamente -->
+                            </select>
+                            <div class="help-text">Selecciona los campos que se mostrarán en los resultados de búsqueda.</div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="filter_fields">Campos para Filtrado</label>
+                            <select id="filter_fields" name="filter_fields" class="form-control select-multiple" multiple>
+                                <!-- Opciones se insertarán dinámicamente -->
+                            </select>
+                            <div class="help-text">Selecciona los campos que se pueden usar para filtrar resultados.</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Sección 4: Acciones -->
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="window.history.back()">Cancelar</button>
+                    <button type="submit" id="submitBtn" class="btn btn-primary">Crear Colección</button>
+                </div>
+            </div>
+        </form>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const tableSelect = document.getElementById('table_name');
+            const refreshBtn = document.getElementById('refreshTablesBtn');
+            const forceRefreshBtn = document.getElementById('forceRefreshTablesBtn');
+            const analyzeBtn = document.getElementById('analyzeTableBtn');
+            const fieldsContainer = document.getElementById('fields-container');
+            const fieldsGrid = document.getElementById('fields-grid');
+            const embeddingSelect = document.getElementById('embedding_fields');
+            const displaySelect = document.getElementById('display_fields');
+            const filterSelect = document.getElementById('filter_fields');
+            const submitBtn = document.getElementById('submitBtn');
+            
+            let currentFields = [];
+            
+            // Cargar tablas al inicio
+            loadTables();
+            
+            // Evento para refrescar tablas
+            refreshBtn.addEventListener('click', () => loadTables());
+            
+            // Evento para forzar recarga (sin caché)
+            forceRefreshBtn.addEventListener('click', () => loadTables(true));
+            
+            // Evento para analizar tabla
+            analyzeBtn.addEventListener('click', function() {
+                const tableName = tableSelect.value;
+                const schema = document.getElementById('schema_name').value || 'dbo';
+                
+                if (!tableName) {
+                    alert('Por favor selecciona una tabla primero.');
+                    return;
+                }
+                
+                analyzeTable(tableName, schema);
+            });
+            
+            // Función para cargar tablas - VERSIÓN SIMPLIFICADA CON NUEVA ESTRUCTURA
+            function loadTables(forceRefresh = false) {
+                refreshBtn.disabled = true;
+                forceRefreshBtn.disabled = true;
+                refreshBtn.innerHTML = '🔄 Cargando...';
+                forceRefreshBtn.innerHTML = '🔥 Cargando...';
+                
+                // Usar la base de datos 'propifai' en lugar de 'default'
+                let url = '/api/v1/intelligence/rag/tables/?database=propifai';
+                if (forceRefresh) {
+                    url += '&nocache=true';
+                }
+                
+                console.log('[DEBUG DB] Cargando tablas de la base de datos propifai, URL:', url);
+                
+                fetch(url)
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log('[DEBUG MEJORADO] Respuesta completa:', data);
+                        
+                        if (data.success && data.tables && Array.isArray(data.tables)) {
+                            tableSelect.innerHTML = '<option value="">Seleccionar tabla...</option>';
+                            
+                            // Mostrar información en consola
+                            console.log(`[DEBUG MEJORADO] Se recibieron ${data.tables.length} tablas`);
+                            console.log(`[DEBUG MEJORADO] Schema: ${data.schema}, Database: ${data.database}`);
+                            
+                            // Procesar cada tabla (ahora son objetos con name y row_count)
+                            data.tables.forEach((table, index) => {
+                                // Mostrar estructura de la tabla
+                                console.log(`[DEBUG MEJORADO] Tabla ${index}:`, table);
+                                
+                                // Crear opción para el select
+                                const option = document.createElement('option');
+                                
+                                // Extraer nombre y conteo de filas
+                                let tableName = table.name || `tabla_${index}`;
+                                let rowCount = table.row_count !== undefined && table.row_count !== null ? table.row_count : 'N/A';
+                                
+                                option.value = tableName;
+                                option.textContent = `${tableName} (${rowCount} filas)`;
+                                option.setAttribute('data-index', index);
+                                tableSelect.appendChild(option);
+                            });
+                            
+                            console.log(`[DEBUG MEJORADO] Procesamiento completado. ${data.tables.length} tablas agregadas.`);
+                            
+                            // Si hay tablas, seleccionar la primera
+                            if (data.tables.length > 0) {
+                                console.log(`[DEBUG MEJORADO] Primera tabla seleccionada: ${tableSelect.options[1]?.textContent}`);
+                            }
+                        } else {
+                            console.error('[DEBUG MEJORADO] Error en estructura de datos:', data);
+                            alert(`Error al cargar tablas: ${data.error || 'Estructura de respuesta inválida'}`);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('[DEBUG MEJORADO] Error en fetch:', error);
+                        alert('Error de conexión al servidor. Revisa la consola para más detalles.');
+                    })
+                    .finally(() => {
+                        refreshBtn.disabled = false;
+                        forceRefreshBtn.disabled = false;
+                        refreshBtn.innerHTML = '🔄 Cargar Tablas';
+                        forceRefreshBtn.innerHTML = '🔥 Forzar Recarga (sin caché)';
+                    });
+            }
+            
+            // Función para analizar tabla - CON BASE DE DATOS CORRECTA
+            function analyzeTable(tableName, schema) {
+                analyzeBtn.disabled = true;
+                analyzeBtn.innerHTML = '🔍 Analizando...';
+                fieldsContainer.classList.add('hidden');
+                
+                console.log(`[DEBUG DB] Analizando tabla: ${tableName}, schema: ${schema}, database: propifai`);
+                
+                // Incluir el parámetro database=propifai
+                fetch(`/api/v1/intelligence/rag/tables/${tableName}/schema/?schema=${schema}&database=propifai`)
+                    .then(response => {
+                        console.log(`[DEBUG DB] Respuesta HTTP: ${response.status}, ${response.statusText}`);
+                        if (!response.ok) {
+                            throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        console.log('[DEBUG DB] Datos recibidos:', data);
+                        
+                        if (data.success) {
+                            // La API devuelve los campos en data.analysis.columns
+                            console.log('[DEBUG DB] analysis.columns:', data.analysis?.columns);
+                            
+                            if (data.analysis && data.analysis.columns && Array.isArray(data.analysis.columns)) {
+                                currentFields = data.analysis.columns.map(col => ({
+                                    name: col.name || col.column_name || 'sin_nombre',
+                                    type: col.type || col.data_type || 'desconocido',
+                                    is_nullable: col.is_nullable || false,
+                                    max_length: col.max_length || col.length || null
+                                }));
+                                
+                                console.log('[DEBUG DB] currentFields mapeados:', currentFields);
+                                renderFields(currentFields);
+                                populateSelectOptions();
+                                fieldsContainer.classList.remove('hidden');
+                                
+                                // Scroll a la sección de campos
+                                fieldsContainer.scrollIntoView({ behavior: 'smooth' });
+                            } else {
+                                console.error('[DEBUG DB] Estructura de columns inválida:', data.analysis);
+                                alert('Error: La tabla no tiene columnas o la estructura de datos es inválida.');
+                            }
+                        } else {
+                            console.error('[DEBUG DB] Error en respuesta:', data.error);
+                            alert('Error al analizar tabla: ' + (data.error || 'Error desconocido'));
+                        }
+                    })
+                    .catch(error => {
+                        console.error('[DEBUG DB] Error en fetch:', error);
+                        alert('Error de conexión al analizar tabla: ' + error.message);
+                    })
+                    .finally(() => {
+                        analyzeBtn.disabled = false;
+                        analyzeBtn.innerHTML = '🔍 Analizar Estructura de la Tabla';
+                    });
+            }
+            
+            // Función para renderizar campos
+            function renderFields(fields) {
+                fieldsGrid.innerHTML = '';
+                
+                fields.forEach(field => {
+                    const fieldCard = document.createElement('div');
+                    fieldCard.className = 'field-card';
+                    
+                    const fieldTypeClass = getFieldTypeClass(field.type);
+                    
+                    fieldCard.innerHTML = `
+                        <div class="field-header">
+                            <span class="field-name">${field.name}</span>
+                            <span class="field-type">${field.type}</span>
+                        </div>
+                        <div class="field-options">
+                            <div class="field-option">
+                                <input type="checkbox" id="embed_${field.name}" data-field="${field.name}">
+                                <label for="embed_${field.name}">Usar para embedding</label>
+                            </div>
+                            <div class="field-option">
+                                <input type="checkbox" id="display_${field.name}" data-field="${field.name}">
+                                <label for="display_${field.name}">Mostrar en resultados</label>
+                            </div>
+                            <div class="field-option">
+                                <input type="checkbox" id="filter_${field.name}" data-field="${field.name}">
+                                <label for="filter_${field.name}">Usar para filtrado</label>
+                            </div>
+                        </div>
+                    `;
+                    
+                    fieldsGrid.appendChild(fieldCard);
+                    
+                    // Agregar event listeners a los checkboxes
+                    const embedCheckbox = fieldCard.querySelector(`#embed_${field.name}`);
+                    const displayCheckbox = fieldCard.querySelector(`#display_${field.name}`);
+                    const filterCheckbox = fieldCard.querySelector(`#filter_${field.name}`);
+                    
+                    embedCheckbox.addEventListener('change', function() {
+                        updateSelectOptions();
+                    });
+                    
+                    displayCheckbox.addEventListener('change', function() {
+                        updateSelectOptions();
+                    });
+                    
+                    filterCheckbox.addEventListener('change', function() {
+                        updateSelectOptions();
+                    });
+                });
+            }
+            
+            // Función para obtener clase CSS según tipo de campo
+            function getFieldTypeClass(fieldType) {
+                if (fieldType.includes('char') || fieldType.includes('text') || fieldType.includes('varchar')) {
+                    return 'text-field';
+                } else if (fieldType.includes('int') || fieldType.includes('decimal') || fieldType.includes('numeric')) {
+                    return 'numeric-field';
+                } else if (fieldType.includes('date') || fieldType.includes('time') || fieldType.includes('datetime')) {
+                    return 'date-field';
+                } else if (fieldType.includes('bit') || fieldType.includes('bool')) {
+                    return 'boolean-field';
+                } else {
+                    return 'other-field';
+                }
+            }
+            
+            // Función para poblar opciones de selects
+            function populateSelectOptions() {
+                embeddingSelect.innerHTML = '';
+                displaySelect.innerHTML = '';
+                filterSelect.innerHTML = '';
+                
+                currentFields.forEach(field => {
+                    // Para embedding select
+                    const embedOption = document.createElement('option');
+                    embedOption.value = field.name;
+                    embedOption.textContent = `${field.name} (${field.type})`;
+                    embeddingSelect.appendChild(embedOption);
+                    
+                    // Para display select
+                    const displayOption = document.createElement('option');
+                    displayOption.value = field.name;
+                    displayOption.textContent = `${field.name} (${field.type})`;
+                    displaySelect.appendChild(displayOption);
+                    
+                    // Para filter select
+                    const filterOption = document.createElement('option');
+                    filterOption.value = field.name;
+                    filterOption.textContent = `${field.name} (${field.type})`;
+                    filterSelect.appendChild(filterOption);
+                });
+            }
+            
+            // Función para actualizar selects basado en checkboxes
+            function updateSelectOptions() {
+                const selectedEmbedFields = [];
+                const selectedDisplayFields = [];
+                const selectedFilterFields = [];
+                
+                // Recorrer todos los checkboxes
+                currentFields.forEach(field => {
+                    const embedCheckbox = document.querySelector(`#embed_${field.name}`);
+                    const displayCheckbox = document.querySelector(`#display_${field.name}`);
+                    const filterCheckbox = document.querySelector(`#filter_${field.name}`);
+                    
+                    if (embedCheckbox && embedCheckbox.checked) {
+                        selectedEmbedFields.push(field.name);
+                    }
+                    
+                    if (displayCheckbox && displayCheckbox.checked) {
+                        selectedDisplayFields.push(field.name);
+                    }
+                    
+                    if (filterCheckbox && filterCheckbox.checked) {
+                        selectedFilterFields.push(field.name);
+                    }
+                });
+                
+                // Actualizar selects
+                Array.from(embeddingSelect.options).forEach(option => {
+                    option.selected = selectedEmbedFields.includes(option.value);
+                });
+                
+                Array.from(displaySelect.options).forEach(option => {
+                    option.selected = selectedDisplayFields.includes(option.value);
+                });
+                
+                Array.from(filterSelect.options).forEach(option => {
+                    option.selected = selectedFilterFields.includes(option.value);
+                });
+            }
+            
+            // Manejar envío del formulario
+            document.getElementById('collection-form').addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                // Validar que se haya seleccionado al menos un campo para embedding
+                const selectedEmbedFields = Array.from(embeddingSelect.selectedOptions).map(opt => opt.value);
+                const selectedDisplayFields = Array.from(displaySelect.selectedOptions).map(opt => opt.value);
+                const selectedFilterFields = Array.from(filterSelect.selectedOptions).map(opt => opt.value);
+                
+                if (selectedEmbedFields.length === 0) {
+                    alert('Debes seleccionar al menos un campo para embedding (búsqueda semántica).');
+                    return;
+                }
+                
+                // Crear objeto con los datos del formulario
+                const formData = new FormData(this);
+                
+                // Agregar field_definitions como JSON
+                const fieldDefinitions = currentFields.map(field => ({
+                    name: field.name,
+                    type: field.type,
+                    is_nullable: field.is_nullable || false,
+                    max_length: field.max_length || null
+                }));
+                
+                // Agregar los campos seleccionados como arrays JSON
+                formData.append('embedding_fields', JSON.stringify(selectedEmbedFields));
+                formData.append('display_fields', JSON.stringify(selectedDisplayFields));
+                formData.append('filter_fields', JSON.stringify(selectedFilterFields));
+                formData.append('field_definitions', JSON.stringify(fieldDefinitions));
+                
+                console.log('[DEBUG] Campos para embedding:', selectedEmbedFields);
+                console.log('[DEBUG] Campos para display:', selectedDisplayFields);
+                console.log('[DEBUG] Campos para filter:', selectedFilterFields);
+                
+                // Enviar formulario
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = 'Creando...';
+                
+                fetch('/api/v1/intelligence/rag/collections/', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('[DEBUG] Respuesta del servidor:', data);
+                    if (data.success) {
+                        window.location.href = '/intelligence/collections/';
+                    } else {
+                        alert('Error al crear colección: ' + data.error);
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = 'Crear Colección';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error de conexión al crear colección.');
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = 'Crear Colección';
+                });
+            });
+        });
+    </script>
+</body>
+</html>

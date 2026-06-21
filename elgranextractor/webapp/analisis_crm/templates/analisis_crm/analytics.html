@@ -1,0 +1,169 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="mb-4">{{ title }}</h1>
+            <p class="lead">Análisis detallado de leads con métricas avanzadas</p>
+        </div>
+    </div>
+
+    <!-- Gráfico de leads por mes (placeholder) -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Leads por mes</h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>Mes</th>
+                                    <th>Cantidad de Leads</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in monthly_counts %}
+                                <tr>
+                                    <td>{{ item.month|date:"F Y" }}</td>
+                                    <td>{{ item.count }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="2">No hay datos mensuales.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="small text-muted">Estos datos se basan en la fecha de creación (created_at).</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Top creadores -->
+        <div class="col-lg-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Top 10 creadores de leads</h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>Usuario ID</th>
+                                    <th>Cantidad de Leads</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in top_creators %}
+                                <tr>
+                                    <td>{{ item.created_by_id|default:"Desconocido" }}</td>
+                                    <td>{{ item.count }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="2">No hay datos de creadores.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Métricas adicionales -->
+        <div class="col-lg-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Métricas rápidas</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-md-6 mb-3">
+                            <div class="card border-left-info shadow h-100 py-2">
+                                <div class="card-body">
+                                    <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                        Leads con notas</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                        {% comment %} Podríamos calcularlo, pero por ahora placeholder {% endcomment %}
+                                        -
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="card border-left-warning shadow h-100 py-2">
+                                <div class="card-body">
+                                    <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                        Leads sin teléfono</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                        {% comment %} Placeholder {% endcomment %}
+                                        -
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="card border-left-success shadow h-100 py-2">
+                                <div class="card-body">
+                                    <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                        Tasa de actividad</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                        {% comment %} Placeholder {% endcomment %}
+                                        -
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="card border-left-primary shadow h-100 py-2">
+                                <div class="card-body">
+                                    <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                        Leads hoy</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                        {% comment %} Placeholder {% endcomment %}
+                                        -
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="small text-muted">Estas métricas pueden expandirse con más cálculos.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Explicación -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-body">
+                    <h5 class="card-title">Sobre este análisis</h5>
+                    <p class="card-text">
+                        Esta página muestra análisis detallados de los leads almacenados en la base de datos <strong>propifai</strong>.
+                        Los datos son de solo lectura y se actualizan según la base de datos original.
+                    </p>
+                    <p class="card-text">
+                        Para agregar más gráficos o métricas, se puede integrar Chart.js, Plotly, o usar Django REST Framework
+                        para crear una API y visualizaciones interactivas.
+                    </p>
+                    <a href="{% url 'analisis_crm:dashboard' %}" class="btn btn-primary">
+                        <i class="bi bi-arrow-left"></i> Volver al Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

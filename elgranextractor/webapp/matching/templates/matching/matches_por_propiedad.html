@@ -1,0 +1,575 @@
+{% extends 'propifai_base.html' %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Matches por Propiedad - CRM{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --bg-primary: #0d1117;
+        --bg-secondary: #161b22;
+        --bg-tertiary: #21262d;
+        --border-color: #30363d;
+        --text-primary: #e6edf3;
+        --text-secondary: #8b949e;
+        --text-muted: #6e7681;
+        --accent-blue: #58a6ff;
+        --accent-green: #3fb950;
+        --accent-orange: #d29922;
+        --accent-red: #f85149;
+        --card-radius: 8px;
+        --transition: 0.2s;
+    }
+
+    .matches-container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+    .page-header h1 { font-size: 22px; font-weight: 600; color: var(--text-primary); margin: 0; }
+
+    .stats-row { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+    .stat-card {
+        background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--card-radius);
+        padding: 16px 20px; min-width: 160px; flex: 1;
+    }
+    .stat-card .stat-number { font-size: 28px; font-weight: 700; color: var(--text-primary); }
+    .stat-card .stat-label { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+    .stat-card .stat-number.blue { color: var(--accent-blue); }
+    .stat-card .stat-number.green { color: var(--accent-green); }
+    .stat-card .stat-number.red { color: var(--accent-red); }
+    .stat-card .stat-number.orange { color: var(--accent-orange); }
+
+    .filter-bar {
+        display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center;
+        background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--card-radius);
+        padding: 12px 16px;
+    }
+    .filter-bar label { font-size: 11px; color: var(--text-secondary); font-weight: 600; }
+    .filter-bar select, .filter-bar input {
+        background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px;
+        color: var(--text-primary); padding: 5px 8px; font-size: 12px;
+    }
+    .filter-bar select:focus, .filter-bar input:focus { border-color: var(--accent-blue); outline: none; }
+    .filter-btn {
+        background: var(--accent-blue); color: #fff; border: none; border-radius: 6px;
+        padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer;
+    }
+    .filter-btn:hover { opacity: 0.9; }
+
+    .table-card { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--card-radius); overflow: hidden; margin-top: 16px; }
+    .table-header { padding: 12px 16px; border-bottom: 1px solid var(--border-color); background: var(--bg-tertiary); display: flex; justify-content: space-between; align-items: center; }
+    .table-header h4 { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); }
+
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+        background: var(--bg-tertiary); color: var(--text-secondary); font-size: 11px; font-weight: 600;
+        text-transform: uppercase; letter-spacing: 0.5px; padding: 10px 12px; border-bottom: 1px solid var(--border-color); text-align: left;
+    }
+    tbody td { padding: 10px 12px; font-size: 13px; color: var(--text-primary); border-bottom: 1px solid rgba(48,54,61,0.3); vertical-align: middle; }
+    tbody tr:hover { background: rgba(88,166,255,0.04); }
+    tbody tr:last-child td { border-bottom: none; }
+
+    .score-badge {
+        display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 12px;
+        font-size: 11px; font-weight: 600;
+    }
+    .score-high { background: rgba(63,185,80,0.15); color: var(--accent-green); }
+    .score-medium { background: rgba(210,153,34,0.15); color: var(--accent-orange); }
+    .score-low { background: rgba(248,81,73,0.15); color: var(--accent-red); }
+
+    .pagination { display: flex; gap: 4px; padding: 12px 16px; justify-content: center; align-items: center; }
+    .pagination a, .pagination span {
+        padding: 4px 10px; border-radius: 4px; font-size: 12px; text-decoration: none;
+        background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-secondary);
+    }
+    .pagination a:hover { border-color: var(--accent-blue); color: var(--accent-blue); }
+    .pagination .current { background: var(--accent-blue); color: #fff; border-color: var(--accent-blue); }
+
+    .view-tabs { display: flex; gap: 4px; }
+    .view-tab {
+        padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 600;
+        background: var(--bg-tertiary); border: 1px solid var(--border-color);
+        color: var(--text-secondary); cursor: pointer; text-decoration: none;
+    }
+    .view-tab.active { background: var(--accent-blue); color: #fff; border-color: var(--accent-blue); }
+    .view-tab:hover:not(.active) { border-color: var(--accent-blue); color: var(--text-primary); }
+
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+    .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+    .empty-state p { font-size: 14px; margin: 0; }
+
+    /* ===== PIPELINE HORIZONTAL NODES (property → requirements) ===== */
+    .pipeline-timeline {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 0;
+        padding: 8px 4px;
+        width: 100%;
+        overflow-x: auto;
+    }
+    .pipeline-node {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 4px 8px;
+        min-width: 72px;
+        text-align: center;
+        flex-shrink: 0;
+        transition: var(--transition);
+    }
+    .pipeline-node.completed { border-color: var(--accent-green); box-shadow: 0 0 4px rgba(63,185,80,0.1); }
+    .pipeline-node.pending { border-color: var(--accent-orange); opacity: 0.7; }
+    .pipeline-node.na { border-color: var(--text-muted); opacity: 0.4; }
+    .pipeline-marker { font-size: 14px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--bg-secondary); border: 2px solid var(--border-color); flex-shrink: 0; }
+    .pipeline-node.completed .pipeline-marker { border-color: var(--accent-green); }
+    .pipeline-title { font-size: 8px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.2px; white-space: nowrap; }
+    .pipeline-node.completed .pipeline-title { color: var(--accent-green); }
+    .pipeline-date { font-size: 9px; color: var(--text-primary); font-weight: 500; white-space: nowrap; }
+    .pipeline-score { font-size: 8px; color: var(--accent-blue); font-weight: 600; }
+    .pipeline-connector {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1px;
+        min-width: 24px;
+        flex-shrink: 0;
+        position: relative;
+    }
+    .connector-line { width: 100%; height: 2px; background: var(--border-color); position: relative; }
+    .pipeline-node.completed + .pipeline-connector .connector-line { background: var(--accent-green); opacity: 0.35; }
+    .lapso-badge {
+        background: var(--bg-secondary); border: 1px solid var(--accent-blue); color: var(--accent-blue);
+        padding: 0 5px; border-radius: 7px; font-size: 8px; font-weight: 600; white-space: nowrap; line-height: 1.6;
+    }
+
+    .pipeline-expand-row { display: none; }
+    .pipeline-expand-row.visible { display: table-row; }
+    .pipeline-expand-row td { padding: 6px 12px 10px 12px; background: rgba(13,17,23,0.5); }
+    .pipeline-toggle {
+        display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px;
+        border-radius: 6px; border: 1px solid var(--border-color); background: transparent;
+        color: var(--text-secondary); cursor: pointer; transition: var(--transition); font-size: 12px;
+    }
+    .pipeline-toggle:hover { border-color: var(--accent-blue); color: var(--accent-blue); background: rgba(88,166,255,0.1); }
+    .pipeline-toggle.active { background: var(--accent-blue); border-color: var(--accent-blue); color: #fff; }
+    .pipeline-loading { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; color: var(--text-muted); font-size: 12px; }
+    .pipeline-spinner { width: 16px; height: 16px; border: 2px solid var(--border-color); border-top-color: var(--accent-blue); border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .pipeline-error { padding: 8px; color: var(--accent-red); font-size: 11px; text-align: center; }
+
+    /* ===== TARJETAS DE RAMAS (requirements) ===== */
+    .branch-cards {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 4px 0;
+    }
+    .branch-row {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 0;
+        position: relative;
+    }
+    .branch-row.is-fork {
+        margin-left: 40px;
+    }
+    .branch-row.is-fork::before {
+        content: '';
+        position: absolute;
+        left: -20px;
+        top: -8px;
+        width: 20px;
+        height: calc(50% + 8px);
+        border-left: 2px solid var(--border-color);
+        border-bottom: 2px solid var(--border-color);
+        border-radius: 0 0 0 6px;
+    }
+
+    .pipe-card {
+        display: flex;
+        flex-direction: column;
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 8px 10px;
+        min-width: 140px;
+        max-width: 180px;
+        flex-shrink: 0;
+    }
+    .pipe-card.card-req {
+        border-left: 3px solid var(--accent-blue);
+    }
+    .pipe-card.card-score-high { border-left: 3px solid var(--accent-green); }
+    .pipe-card.card-score-medium { border-left: 3px solid var(--accent-orange); }
+    .pipe-card.card-score-low { border-left: 3px solid var(--accent-red); }
+
+    .pipe-card .card-icon { font-size: 14px; margin-bottom: 2px; }
+    .pipe-card .card-code { font-size: 12px; font-weight: 700; color: var(--accent-blue); }
+    .pipe-card .card-title { font-size: 9px; color: var(--text-primary); line-height: 1.2; margin: 2px 0; }
+    .pipe-card .card-date { font-size: 9px; color: var(--text-muted); }
+    .pipe-card .card-score { font-size: 14px; font-weight: 700; color: var(--accent-green); margin-top: 2px; }
+    .pipe-card .card-assigned { font-size: 9px; color: var(--text-secondary); }
+
+    .prop-thumb {
+        width: 36px;
+        height: 36px;
+        border-radius: 4px;
+        object-fit: cover;
+        border: 1px solid var(--border-color);
+        margin-bottom: 2px;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Poblar datalist de asignados
+(function() {
+    var data = {{ assigned_list_json|safe }};
+    var datalist = document.getElementById('assignedList');
+    if (datalist && data) {
+        data.forEach(function(name) {
+            var opt = document.createElement('option');
+            opt.value = name;
+            datalist.appendChild(opt);
+        });
+    }
+})();
+
+// ── Helpers de formato ──
+function formatDate(isoStr) {
+    if (!isoStr) return '';
+    try {
+        var d = new Date(isoStr);
+        if (isNaN(d.getTime())) return isoStr.substring(0, 16);
+        var dd = String(d.getDate()).padStart(2, '0');
+        var mm = String(d.getMonth() + 1).padStart(2, '0');
+        var hh = String(d.getHours()).padStart(2, '0');
+        var min = String(d.getMinutes()).padStart(2, '0');
+        return dd + '/' + mm + ' ' + hh + ':' + min;
+    } catch(e) {
+        return isoStr.substring(0, 16);
+    }
+}
+function formatDateShort(isoStr) {
+    if (!isoStr) return '';
+    try {
+        var d = new Date(isoStr);
+        if (isNaN(d.getTime())) return isoStr.substring(0, 10);
+        var dd = String(d.getDate()).padStart(2, '0');
+        var mm = String(d.getMonth() + 1).padStart(2, '0');
+        return dd + '/' + mm;
+    } catch(e) {
+        return isoStr.substring(0, 10);
+    }
+}
+
+function calcLapso(isoDesde, isoHasta) {
+    if (!isoDesde || !isoHasta) return '';
+    try {
+        var d1 = new Date(isoDesde);
+        var d2 = new Date(isoHasta);
+        if (isNaN(d1.getTime()) || isNaN(d2.getTime())) return '';
+        var diffMs = Math.abs(d2 - d1);
+        var diffMin = Math.floor(diffMs / 60000);
+        if (diffMin < 60) return diffMin + 'm';
+        var diffHoras = Math.floor(diffMs / 3600000);
+        if (diffHoras < 24) return diffHoras + 'h';
+        var diffDias = Math.floor(diffMs / 86400000);
+        return diffDias + 'd';
+    } catch(e) {
+        return '';
+    }
+}
+
+// Datos de pipeline embebidos desde el backend
+var pipelineData = {{ pipeline_data_json|safe }};
+
+function togglePropertyPipeline(groupId, propertyId) {
+    var row = document.getElementById('pipe-row-' + groupId);
+    var btn = document.getElementById('pipe-btn-' + groupId);
+    var content = document.getElementById('pipe-content-' + groupId);
+
+    if (row.classList.contains('visible')) {
+        row.classList.remove('visible');
+        btn.classList.remove('active');
+        return;
+    }
+
+    row.classList.add('visible');
+    btn.classList.add('active');
+
+    // Usar datos embebidos directamente (sin llamada API)
+    var data = pipelineData[String(propertyId)];
+    if (data) {
+        renderPropertyPipeline(data, content);
+    } else {
+        content.innerHTML = '<div class="pipeline-error">⚠️ Sin datos de pipeline disponibles</div>';
+    }
+}
+
+function renderPropertyPipeline(data, container) {
+    if (data.error) {
+        container.innerHTML = '<div class="pipeline-error">⚠️ ' + data.error + '</div>';
+        return;
+    }
+
+    var ramas = data.ramas || [];
+    var html = '';
+
+    // ===== PIPELINE PRINCIPAL: 🏠 Property → 📝 Req Principal (mejor score) =====
+    html += '<div class="pipeline-timeline" style="margin-bottom:0;">';
+
+    // 🏠 Propiedad (nodo principal)
+    var etapaProp = data.etapa_propiedad || {};
+    html += '<div class="pipeline-node completed">';
+    html += '  <div class="pipeline-marker">🏠</div>';
+    html += '  <div class="pipeline-title">' + (data.property_code || '#Prop') + '</div>';
+    html += '  <div class="pipeline-date">' + (etapaProp.fecha_display || '—') + '</div>';
+    html += '</div>';
+
+    if (ramas.length > 0) {
+        var mainReq = ramas[0];
+        var lapsoPropReq = calcLapso(data.property_created_at, mainReq.computed_at);
+
+        // connector 🏠 → 📝
+        html += '<div class="pipeline-connector">';
+        html += '  <div class="connector-line"></div>';
+        if (lapsoPropReq) html += '  <span class="lapso-badge">' + lapsoPropReq + '</span>';
+        html += '</div>';
+
+        // 📝 Requirement Principal (mejor score)
+        var scoreVal = mainReq.score || 0;
+        var scoreClass = scoreVal >= 80 ? 'completed' : (scoreVal >= 50 ? 'pending' : 'na');
+        html += '<div class="pipeline-node ' + scoreClass + '" style="min-width:80px;">';
+        html += '  <div class="pipeline-marker">📝</div>';
+        html += '  <div class="pipeline-title">' + (mainReq.requirement_code || '#Req') + '</div>';
+        html += '  <div class="pipeline-date">' + (mainReq.requirement_assigned || '') + '</div>';
+        html += '  <div class="pipeline-date">' + (mainReq.requirement_operation || '') + '</div>';
+        html += '  <div class="pipeline-score">' + scoreVal + '%</div>';
+        html += '</div>';
+    }
+
+    html += '</div>'; // end pipeline-timeline principal
+
+    // ===== RAMAS: Requirements 2, 3... (bifurcados desde la propiedad) =====
+    if (ramas.length > 1) {
+        html += '<div class="branch-cards">';
+
+        for (var i = 1; i < ramas.length; i++) {
+            var rama = ramas[i];
+            var scoreVal = rama.score || 0;
+
+            html += '<div class="branch-row is-fork">';
+
+            // 📝 Requirement N
+            html += '<div class="pipeline-node ' + (scoreVal >= 80 ? 'completed' : 'pending') + '" style="min-width:80px;">';
+            html += '  <div class="pipeline-marker">📝</div>';
+            html += '  <div class="pipeline-title">' + (rama.requirement_code || '#Req') + '</div>';
+            html += '  <div class="pipeline-date">' + (rama.requirement_assigned || '') + '</div>';
+            html += '  <div class="pipeline-date">' + (rama.requirement_operation || '') + '</div>';
+            html += '  <div class="pipeline-score">' + scoreVal + '%</div>';
+            html += '</div>';
+
+            html += '</div>'; // end branch-row
+        }
+
+        html += '</div>'; // end branch-cards
+    }
+
+    if (ramas.length === 0) {
+        html += '<div style="padding: 8px; text-align: center; color: var(--text-muted); font-size: 12px;">📭 Sin requerimientos matchados</div>';
+    }
+
+    container.innerHTML = html;
+
+    // Posicionar ramas desde la 🏠 Propiedad
+    var mainTimeline = container.querySelector('.pipeline-timeline');
+    var branchCards = container.querySelector('.branch-cards');
+    if (mainTimeline && branchCards) {
+        var propNodes = mainTimeline.querySelectorAll('.pipeline-node');
+        if (propNodes.length >= 1) {
+            var propNode = propNodes[0]; // 🏠 Propiedad (índice 0)
+            var offsetLeft = propNode.offsetLeft;
+            var branchRows = branchCards.querySelectorAll('.branch-row');
+            branchRows.forEach(function(row) {
+                row.style.marginLeft = offsetLeft + 'px';
+            });
+        }
+    }
+}
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="matches-container">
+    <div class="page-header">
+        <h1><i class="bi bi-building" style="color:var(--accent-blue);margin-right:8px;"></i> Matches por Propiedad</h1>
+        <div class="view-tabs">
+            <a href="?view=all" class="view-tab {% if view_mode == 'all' %}active{% endif %}"> Todas</a>
+            <a href="?view=day&date={% now 'Y-m-d' %}" class="view-tab {% if view_mode == 'day' %}active{% endif %}"> Hoy</a>
+            <a href="?view=week&date={% now 'Y-m-d' %}" class="view-tab {% if view_mode == 'week' %}active{% endif %}"> Semana</a>
+            <a href="?view=month&date={% now 'Y-m' %}" class="view-tab {% if view_mode == 'month' %}active{% endif %}"> Mes</a>
+        </div>
+    </div>
+
+    <div class="stats-row">
+        <div class="stat-card">
+            <div class="stat-number blue">{{ total_matches }}</div>
+            <div class="stat-label">Total Property-Matches</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number green">{{ total_groups }}</div>
+            <div class="stat-label">Propiedades Únicas</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number orange">{{ current_page }}</div>
+            <div class="stat-label">Página Actual</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number orange">{{ total_pages }}</div>
+            <div class="stat-label">Total Páginas</div>
+        </div>
+    </div>
+
+    <form class="filter-bar" method="GET">
+        <label>Vista:</label>
+        <select name="view">
+            <option value="all" {% if view_mode == 'all' %}selected{% endif %}>Todas</option>
+            <option value="day" {% if view_mode == 'day' %}selected{% endif %}>Por día</option>
+            <option value="week" {% if view_mode == 'week' %}selected{% endif %}>Por semana</option>
+            <option value="month" {% if view_mode == 'month' %}selected{% endif %}>Por mes</option>
+        </select>
+        <input type="date" name="date" value="{{ filter_date }}">
+        <label>Propiedad:</label>
+        <input type="text" name="property_code" value="{{ property_code }}" placeholder="Código propiedad..." style="width:140px;">
+        <label>Asignado:</label>
+        <input type="text" name="assigned_to" id="assignedInput" value="{{ assigned_to }}" placeholder="Escribe para buscar..." style="width:180px;" list="assignedList" autocomplete="off">
+        <datalist id="assignedList"></datalist>
+        <button type="submit" class="filter-btn">Filtrar</button>
+    </form>
+
+    <div class="table-card">
+        <div class="table-header">
+            <h4><i class="bi bi-list"></i> Matches de Propify por Propiedad</h4>
+            <span style="font-size:12px;color:var(--text-secondary);">{{ total_matches }} registros · {{ total_groups }} propiedades únicas · Página {{ current_page }}/{{ total_pages }}</span>
+        </div>
+
+        {% if grouped_propiedades %}
+        <div style="overflow-x:auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width:36px;"></th>
+                        <th style="width:60px;">Foto</th>
+                        <th>Propiedad</th>
+                        <th>Distrito</th>
+                        <th>Precio</th>
+                        <th>Requerimientos</th>
+                        <th>Mejor Score</th>
+                        <th>Computado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for group in grouped_propiedades %}
+                    {% with prop_id=group.property_id|default:0 %}
+                    <tr>
+                        <td style="text-align:center;">
+                            <button class="pipeline-toggle" id="pipe-btn-{{ forloop.counter }}" onclick="togglePropertyPipeline({{ forloop.counter }}, {{ prop_id }})" title="Ver pipeline requerimientos">📊</button>
+                        </td>
+                        <td style="padding:2px;">
+                            {% if group.property_image_url %}
+                            <img src="{{ group.property_image_url }}" alt="Foto"
+                                 style="width:56px;height:56px;object-fit:cover;border-radius:4px;border:1px solid var(--border-color);display:block;">
+                            {% else %}
+                            <div style="width:56px;height:56px;border-radius:4px;border:1px solid var(--border-color);display:flex;align-items:center;justify-content:center;background:var(--bg-tertiary);font-size:20px;">🏠</div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div style="color:var(--accent-blue);font-weight:600;font-size:13px;">
+                                {{ group.property_code|default:group.property_id }}
+                            </div>
+                            <div style="font-size:10px;color:var(--text-muted);">
+                                {{ group.property_title|truncatechars:40 }}
+                            </div>
+                            {% if group.property_responsible %}
+                            <div style="font-size:9px;color:var(--accent-orange);margin-top:2px;">
+                                👤 {{ group.property_responsible }}
+                            </div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span style="font-size:12px;color:var(--text-primary);">
+                                {{ group.property_district_name|default:'---' }}
+                            </span>
+                        </td>
+                        <td style="font-size:12px;color:var(--text-primary);font-weight:600;white-space:nowrap;">
+                            {{ group.property_price_display|default:'---' }}
+                        </td>
+                        <td>
+                            {% with first=group.first_match %}
+                            {% if first %}
+                            <div style="font-size:12px;font-weight:600;color:var(--accent-blue);">{{ first.req_code }}</div>
+                            <div style="font-size:10px;color:var(--text-secondary);">{{ first.req_assigned|default:'' }}</div>
+                            {% endif %}
+                            {% endwith %}
+                            <div style="font-size:10px;color:var(--text-muted);margin-top:2px;">
+                                + {{ group.total_requirements|add:-1 }} más
+                            </div>
+                        </td>
+                        <td>
+                            {% with score=group.best_score %}
+                            <span class="score-badge
+                                {% if score >= 80 %}score-high
+                                {% elif score >= 50 %}score-medium
+                                {% else %}score-low{% endif %}">
+                                {{ score|floatformat:0 }}%
+                            </span>
+                            {% endwith %}
+                        </td>
+                        <td style="font-size:11px;color:var(--text-secondary);white-space:nowrap;">
+                            {% with first=group.first_match %}
+                            {{ first.computed_at|slice:':16'|default:'---' }}
+                            {% endwith %}
+                        </td>
+                    </tr>
+                    <!-- Pipeline expand row -->
+                    <tr class="pipeline-expand-row" id="pipe-row-{{ forloop.counter }}">
+                        <td colspan="8">
+                            <div id="pipe-content-{{ forloop.counter }}"></div>
+                        </td>
+                    </tr>
+                    {% endwith %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="icon">🏠</div>
+            <p>No se encontraron matches desde Propify agrupados por propiedad.</p>
+        </div>
+        {% endif %}
+
+        {% if total_pages > 1 %}
+        <div class="pagination">
+            {% if has_prev %}
+            <a href="?page=1{% if filter_date %}&date={{ filter_date }}&view={{ view_mode }}{% endif %}{% if property_code %}&property_code={{ property_code }}{% endif %}">&laquo;</a>
+            <a href="?page={{ current_page|add:-1 }}{% if filter_date %}&date={{ filter_date }}&view={{ view_mode }}{% endif %}{% if property_code %}&property_code={{ property_code }}{% endif %}">&lsaquo;</a>
+            {% endif %}
+            <span class="current">{{ current_page }} / {{ total_pages }}</span>
+            {% if has_next %}
+            <a href="?page={{ current_page|add:1 }}{% if filter_date %}&date={{ filter_date }}&view={{ view_mode }}{% endif %}{% if property_code %}&property_code={{ property_code }}{% endif %}">&rsaquo;</a>
+            <a href="?page={{ total_pages }}{% if filter_date %}&date={{ filter_date }}&view={{ view_mode }}{% endif %}{% if property_code %}&property_code={{ property_code }}{% endif %}">&raquo;</a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

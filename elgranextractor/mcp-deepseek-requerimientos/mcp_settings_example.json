@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "deepseek-requerimientos": {
+      "command": "node",
+      "args": ["D:/proyectos/prometeo/mcp-deepseek-requerimientos/build/index.js"],
+      "env": {
+        "DEEPSEEK_API_KEY": "sk-460d28e38c7e4b05a13fa2bebd27159c"
+      },
+      "disabled": false,
+      "alwaysAllow": [],
+      "disabledTools": []
+    }
+  }
+}

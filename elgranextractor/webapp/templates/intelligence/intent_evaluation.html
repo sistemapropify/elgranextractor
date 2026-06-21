@@ -1,0 +1,95 @@
+{% extends "intelligence/base/base.html" %}
+
+{% block title %}Evaluación de Intenciones - Propifai Intelligence Layer{% endblock %}
+
+{% block page_title %}Evaluación de Clasificación de Intenciones{% endblock %}
+
+{% block content %}
+        @media (max-width: 900px) { .table th, .table td { padding: 10px 8px; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧠 Evaluación del Clasificador de Intenciones</h1>
+            <p>Monitoreo de precisión de intención, enrutamiento y coincidencia esperada por pregunta.</p>
+            <div class="nav-links">
+                <a href="{% url 'intelligence:dashboard' %}" class="nav-link">Dashboard</a>
+                <a href="{% url 'intelligence:intent_evaluation' %}" class="nav-link active">Evaluación Intenciones</a>
+                <a href="{% url 'intelligence:user_simulator' %}" class="nav-link">Simulador</a>
+                <a href="{% url 'intelligence:system_stats' %}" class="nav-link">Estadísticas</a>
+                <a href="{% url 'intelligence:activity_logs' %}" class="nav-link">Logs</a>
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value">{{ total_samples }}</div>
+                <div class="stat-label">Preguntas evaluadas</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ intent_accuracy }}%</div>
+                <div class="stat-label">Exactitud de intención</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ correct_intent }} / {{ total_samples }}</div>
+                <div class="stat-label">Clasificaciones correctas</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{% if skill_accuracy is not None %}{{ skill_accuracy }}%{% else %}N/A{% endif %}</div>
+                <div class="stat-label">Exactitud de skill</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">Resultados por pregunta</h2>
+            <div class="card">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Pregunta</th>
+                            <th>Intención esperada</th>
+                            <th>Intención predicha</th>
+                            <th>Coincide</th>
+                            <th>Skill esperada</th>
+                            <th>Skill predicha</th>
+                            <th>Skill OK</th>
+                            <th>Confianza</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in evaluation_rows %}
+                        <tr>
+                            <td>{{ forloop.counter }}</td>
+                            <td><div>{{ row.question }}</div><div class="small-text">{{ row.expected_description }}</div></td>
+                            <td>{{ row.expected_intent }}</td>
+                            <td>{{ row.predicted_intent }}</td>
+                            <td>
+                                {% if row.intent_match %}
+                                    <span class="badge badge-success">Sí</span>
+                                {% else %}
+                                    <span class="badge badge-danger">No</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ row.expected_skill }}</td>
+                            <td>{{ row.predicted_skill }}</td>
+                            <td>
+                                {% if row.skill_match == 'Sí' %}
+                                    <span class="badge badge-success">Sí</span>
+                                {% elif row.skill_match == 'No' %}
+                                    <span class="badge badge-danger">No</span>
+                                {% else %}
+                                    <span class="badge badge-info">N/A</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ row.intent_confidence }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

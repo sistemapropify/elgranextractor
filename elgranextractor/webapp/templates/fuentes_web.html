@@ -1,0 +1,614 @@
+{% extends "base.html" %}
+
+{% block title %}Fuentes Web - El Gran Extractor{% endblock %}
+
+{% block extra_css %}
+<style>
+    .badge-categoria {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 12px;
+    }
+
+    .badge-oferta { background-color: #10b981; color: white; }
+    .badge-legal { background-color: #3b82f6; color: white; }
+    .badge-infraestructura { background-color: #8b5cf6; color: white; }
+    .badge-inteligencia { background-color: #f59e0b; color: white; }
+    .badge-riesgo { background-color: #ef4444; color: white; }
+    .badge-actores { background-color: #6b7280; color: white; }
+
+    .badge-estado {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 12px;
+    }
+
+    .badge-activa { background-color: #10b981; color: white; }
+    .badge-pausada { background-color: #f59e0b; color: white; }
+    .badge-error { background-color: #ef4444; color: white; }
+    .badge-eliminada { background-color: #6b7280; color: white; }
+
+    .chart-container {
+        height: 250px;
+        position: relative;
+    }
+
+    .stat-card .stat-number {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #10b981;
+    }
+
+    .table-fuentes {
+        font-size: 0.9rem;
+    }
+
+    .table-fuentes th {
+        background-color: #d1fae5;
+        border-bottom: 2px solid #a7f3d0;
+        color: #065f46;
+    }
+
+    .table-fuentes tbody tr:hover {
+        background-color: rgba(16, 185, 129, 0.1);
+    }
+
+    .url-truncate {
+        max-width: 250px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: inline-block;
+    }
+
+    .priority-stars {
+        color: #f59e0b;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Encabezado de página -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0"><i class="bi bi-globe me-2"></i>Fuentes Web</h1>
+            <p class="text-muted mb-0">Gestión completa de fuentes de monitoreo web</p>
+        </div>
+        <div>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalAgregarFuente">
+                <i class="bi bi-plus-circle me-2"></i>Agregar Fuente
+            </button>
+            <button class="btn btn-outline-secondary ms-2" id="btnActualizar" onclick="cargarTodosLosDatos()">
+                <i class="bi bi-arrow-clockwise me-2"></i>Actualizar
+            </button>
+        </div>
+    </div>
+
+    <!-- Tarjetas de resumen -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card stat-card">
+                <div class="card-body text-center">
+                    <h5 class="card-title text-muted">Total Fuentes</h5>
+                    <div class="stat-number" id="totalFuentes">{{ total_fuentes }}</div>
+                    <p class="text-muted mb-0">Activas: <span id="fuentesActivas">{{ fuentes_activas }}</span></p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card">
+                <div class="card-body text-center">
+                    <h5 class="card-title text-muted">Por Categoría</h5>
+                    <div class="stat-number">6</div>
+                    <p class="text-muted mb-0">Distribución por tipo</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card">
+                <div class="card-body text-center">
+                    <h5 class="card-title text-muted">Capturas Totales</h5>
+                    <div class="stat-number" id="totalCapturas">0</div>
+                    <p class="text-muted mb-0">Últimas 24h: <span id="capturas24h">0</span></p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card">
+                <div class="card-body text-center">
+                    <h5 class="card-title text-muted">Cambios Detectados</h5>
+                    <div class="stat-number" id="totalCambios">0</div>
+                    <p class="text-muted mb-0">Tasa de cambio: <span id="tasaCambio">0%</span></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráficos -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0"><i class="bi bi-pie-chart me-2"></i>Distribución por Categoría</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="chartCategorias"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0"><i class="bi bi-bar-chart me-2"></i>Estado de Fuentes</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="chartEstados"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla de fuentes -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0"><i class="bi bi-table me-2"></i>Lista de Fuentes Web</h5>
+            <div class="d-flex">
+                <select class="form-select form-select-sm me-2" id="filterCategoria" style="width: 150px;" onchange="filtrarTabla()">
+                    <option value="">Todas las categorías</option>
+                    <option value="oferta">Oferta</option>
+                    <option value="legal">Legal</option>
+                    <option value="infraestructura">Infraestructura</option>
+                    <option value="inteligencia">Inteligencia</option>
+                    <option value="riesgo">Riesgo</option>
+                    <option value="actores">Actores</option>
+                </select>
+                <select class="form-select form-select-sm" id="filterEstado" style="width: 150px;" onchange="filtrarTabla()">
+                    <option value="">Todos los estados</option>
+                    <option value="activa">Activa</option>
+                    <option value="pausada">Pausada</option>
+                    <option value="eliminada">Eliminada</option>
+                </select>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover table-fuentes" id="tablaFuentes">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nombre</th>
+                            <th>URL</th>
+                            <th>Categoría</th>
+                            <th>Estado</th>
+                            <th>Prioridad</th>
+                            <th>Frecuencia</th>
+                            <th>Última Revisión</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tablaFuentesBody">
+                        <!-- Datos cargados desde Django -->
+                        {% for fuente in fuentes %}
+                        <tr data-categoria="{{ fuente.categoria }}" data-estado="{{ fuente.estado }}">
+                            <td>{{ fuente.id }}</td>
+                            <td><strong>{{ fuente.nombre|truncatechars:30 }}</strong></td>
+                            <td>
+                                <a href="{{ fuente.url }}" target="_blank" class="url-truncate" title="{{ fuente.url }}">
+                                    {{ fuente.url|truncatechars:40 }}
+                                </a>
+                            </td>
+                            <td>
+                                <span class="badge badge-categoria badge-{{ fuente.categoria }}">
+                                    {% if fuente.categoria == 'oferta' %}Oferta
+                                    {% elif fuente.categoria == 'legal' %}Legal
+                                    {% elif fuente.categoria == 'infraestructura' %}Infraestructura
+                                    {% elif fuente.categoria == 'inteligencia' %}Inteligencia
+                                    {% elif fuente.categoria == 'riesgo' %}Riesgo
+                                    {% elif fuente.categoria == 'actores' %}Actores
+                                    {% else %}{{ fuente.categoria }}{% endif %}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge badge-estado badge-{{ fuente.estado }}">
+                                    {% if fuente.estado == 'activa' %}Activa
+                                    {% elif fuente.estado == 'pausada' %}Pausada
+                                    {% elif fuente.estado == 'eliminada' %}Eliminada
+                                    {% else %}{{ fuente.estado }}{% endif %}
+                                </span>
+                            </td>
+                            <td class="priority-stars">
+                                {% for i in "12345" %}
+                                    {% if forloop.counter <= fuente.prioridad %}★{% else %}☆{% endif %}
+                                {% endfor %}
+                            </td>
+                            <td>{{ fuente.frecuencia_revision_horas }}h</td>
+                            <td>
+                                {% if fuente.fecha_ultima_revision %}
+                                    {{ fuente.fecha_ultima_revision|date:"d/m/Y H:i" }}
+                                {% else %}
+                                    <span class="text-muted">Nunca</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <button type="button" class="btn btn-outline-primary" onclick="verDetalle({{ fuente.id }})" title="Ver detalles">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-outline-success" onclick="cambiarEstado({{ fuente.id }}, 'activa')" title="Activar">
+                                        <i class="bi bi-play-circle"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-outline-warning" onclick="cambiarEstado({{ fuente.id }}, 'pausada')" title="Pausar">
+                                        <i class="bi bi-pause-circle"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-outline-danger" onclick="eliminarFuente({{ fuente.id }})" title="Eliminar">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="9" class="text-center py-4">
+                                <div class="alert alert-info mb-0">
+                                    <i class="bi bi-info-circle me-2"></i>
+                                    No hay fuentes web registradas en el sistema.
+                                    <div class="mt-2">
+                                        <small>Puedes crear tu primera fuente haciendo clic en "Agregar Fuente".</small>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="text-muted">
+                    Mostrando {{ fuentes|length }} fuentes
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para agregar fuente -->
+<div class="modal fade" id="modalAgregarFuente" tabindex="-1" aria-labelledby="modalAgregarFuenteLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="modalAgregarFuenteLabel"><i class="bi bi-plus-circle me-2"></i>Agregar Nueva Fuente Web</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formFuente">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="nombre" class="form-label">Nombre *</label>
+                            <input type="text" class="form-control" id="nombre" name="nombre" required>
+                            <div class="form-text">Nombre descriptivo para identificar la fuente</div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="urlInput" class="form-label">URL *</label>
+                            <input type="url" class="form-control" id="urlInput" name="url" required>
+                            <div class="form-text">URL completa de la página a monitorear</div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="categoriaSelect" class="form-label">Categoría *</label>
+                            <select class="form-select" id="categoriaSelect" name="categoria" required>
+                                <option value="">Seleccionar categoría</option>
+                                <option value="oferta">Oferta (precios, productos, servicios)</option>
+                                <option value="legal">Legal (leyes, normativas, regulaciones)</option>
+                                <option value="infraestructura">Infraestructura (proyectos, obras, licitaciones)</option>
+                                <option value="inteligencia">Inteligencia (análisis, informes, estudios)</option>
+                                <option value="riesgo">Riesgo (alertas, amenazas, vulnerabilidades)</option>
+                                <option value="actores">Actores (empresas, personas, organizaciones)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="prioridadSelect" class="form-label">Prioridad</label>
+                            <select class="form-select" id="prioridadSelect" name="prioridad">
+                                <option value="1">Muy baja (1)</option>
+                                <option value="2">Baja (2)</option>
+                                <option value="3" selected>Media (3)</option>
+                                <option value="4">Alta (4)</option>
+                                <option value="5">Muy alta (5)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="frecuenciaInput" class="form-label">Frecuencia de revisión (horas)</label>
+                            <input type="number" class="form-control" id="frecuenciaInput" name="frecuencia" min="1" max="720" value="24">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="delayInput" class="form-label">Delay entre requests (segundos)</label>
+                            <input type="number" class="form-control" id="delayInput" name="delay" min="0" max="60" value="2">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="descripcionInput" class="form-label">Descripción</label>
+                        <textarea class="form-control" id="descripcionInput" name="descripcion" rows="2"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="guardarFuente()">
+                    <i class="bi bi-check-circle me-1"></i>Guardar Fuente
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para detalles -->
+<div class="modal fade" id="modalDetalle" tabindex="-1" aria-labelledby="modalDetalleLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalDetalleLabel"><i class="bi bi-info-circle me-2"></i>Detalles de la Fuente</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="modalDetalleBody">
+                <!-- Contenido cargado dinámicamente -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Datos de fuentes del contexto Django
+    let fuentesData = {{ fuentes_json|safe }};
+    let chartCategorias = null;
+    let chartEstados = null;
+
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('Página cargada. Fuentes:', fuentesData.length);
+        
+        // Cargar estadísticas
+        cargarEstadisticas();
+        
+        // Inicializar gráficos
+        inicializarGraficos();
+    });
+
+    function cargarTodosLosDatos() {
+        cargarEstadisticas();
+        // Recargar la página para obtener datos frescos del servidor
+        window.location.reload();
+    }
+
+    function cargarEstadisticas() {
+        fetch('/api/estadisticas/')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('totalCapturas').textContent = data.total_capturas || 0;
+                document.getElementById('totalCambios').textContent = data.cambios_detectados || 0;
+            })
+            .catch(error => {
+                console.error('Error cargando estadísticas:', error);
+            });
+    }
+
+    function inicializarGraficos() {
+        // Contar por categoría
+        const categorias = ['oferta', 'legal', 'infraestructura', 'inteligencia', 'riesgo', 'actores'];
+        const datosCategorias = categorias.map(cat => 
+            fuentesData.filter(f => f.categoria === cat).length
+        );
+
+        // Gráfico de categorías (doughnut)
+        const ctxCategorias = document.getElementById('chartCategorias');
+        if (ctxCategorias) {
+            chartCategorias = new Chart(ctxCategorias.getContext('2d'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['Oferta', 'Legal', 'Infraestructura', 'Inteligencia', 'Riesgo', 'Actores'],
+                    datasets: [{
+                        data: datosCategorias,
+                        backgroundColor: [
+                            '#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#6b7280'
+                        ],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right'
+                        }
+                    }
+                }
+            });
+        }
+
+        // Contar por estado
+        const estados = ['activa', 'pausada', 'eliminada'];
+        const datosEstados = estados.map(est => 
+            fuentesData.filter(f => f.estado === est).length
+        );
+
+        // Gráfico de estados (bar)
+        const ctxEstados = document.getElementById('chartEstados');
+        if (ctxEstados) {
+            chartEstados = new Chart(ctxEstados.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: ['Activa', 'Pausada', 'Eliminada'],
+                    datasets: [{
+                        label: 'Cantidad',
+                        data: datosEstados,
+                        backgroundColor: [
+                            '#10b981', '#f59e0b', '#6b7280'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    function filtrarTabla() {
+        const categoriaFiltro = document.getElementById('filterCategoria').value.toLowerCase();
+        const estadoFiltro = document.getElementById('filterEstado').value.toLowerCase();
+        const filas = document.querySelectorAll('#tablaFuentesBody tr[data-categoria]');
+        
+        filas.forEach(fila => {
+            const categoria = fila.getAttribute('data-categoria').toLowerCase();
+            const estado = fila.getAttribute('data-estado').toLowerCase();
+            
+            let mostrar = true;
+            
+            if (categoriaFiltro && categoria !== categoriaFiltro) {
+                mostrar = false;
+            }
+            if (estadoFiltro && estado !== estadoFiltro) {
+                mostrar = false;
+            }
+            
+            fila.style.display = mostrar ? '' : 'none';
+        });
+    }
+
+    function guardarFuente() {
+        const nombre = document.getElementById('nombre').value.trim();
+        const url = document.getElementById('urlInput').value.trim();
+        const categoria = document.getElementById('categoriaSelect').value;
+        const prioridad = document.getElementById('prioridadSelect').value;
+        const frecuencia = document.getElementById('frecuenciaInput').value;
+        const descripcion = document.getElementById('descripcionInput').value.trim();
+
+        if (!nombre || !url || !categoria) {
+            alert('Por favor completa los campos obligatorios (Nombre, URL, Categoría)');
+            return;
+        }
+
+        fetch('/api/agregar-fuente/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken') || ''
+            },
+            body: JSON.stringify({
+                url: url,
+                nombre: nombre,
+                categoria: categoria,
+                prioridad: prioridad,
+                frecuencia: parseInt(frecuencia) * 60  // Convertir horas a minutos
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Fuente agregada exitosamente');
+                // Cerrar modal y recargar página
+                const modal = bootstrap.Modal.getInstance(document.getElementById('modalAgregarFuente'));
+                modal.hide();
+                window.location.reload();
+            } else {
+                alert('Error: ' + (data.error || 'No se pudo agregar la fuente'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error al agregar la fuente');
+        });
+    }
+
+    function verDetalle(id) {
+        const fuente = fuentesData.find(f => f.id === id);
+        if (!fuente) {
+            alert('Fuente no encontrada');
+            return;
+        }
+
+        const modalBody = document.getElementById('modalDetalleBody');
+        modalBody.innerHTML = `
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>Información Básica</h6>
+                    <p><strong>ID:</strong> ${fuente.id}</p>
+                    <p><strong>Nombre:</strong> ${fuente.nombre}</p>
+                    <p><strong>URL:</strong> <a href="${fuente.url}" target="_blank">${fuente.url}</a></p>
+                    <p><strong>Categoría:</strong> <span class="badge badge-categoria badge-${fuente.categoria}">${fuente.categoria}</span></p>
+                    <p><strong>Estado:</strong> <span class="badge badge-estado badge-${fuente.estado}">${fuente.estado}</span></p>
+                </div>
+                <div class="col-md-6">
+                    <h6>Configuración</h6>
+                    <p><strong>Prioridad:</strong> ${fuente.prioridad}/5</p>
+                    <p><strong>Frecuencia:</strong> ${fuente.frecuencia_revision_horas}h</p>
+                    <p><strong>Capturas:</strong> ${fuente.total_capturas || 0}</p>
+                    <p><strong>Cambios detectados:</strong> ${fuente.total_cambios_detectados || 0}</p>
+                    <p><strong>Descripción:</strong> ${fuente.descripcion || 'Sin descripción'}</p>
+                </div>
+            </div>
+        `;
+
+        const modal = new bootstrap.Modal(document.getElementById('modalDetalle'));
+        modal.show();
+    }
+
+    function cambiarEstado(id, nuevoEstado) {
+        if (!confirm(`¿Cambiar el estado de la fuente a "${nuevoEstado}"?`)) {
+            return;
+        }
+        
+        // Por ahora solo muestra un mensaje
+        alert(`Funcionalidad de cambio de estado a "${nuevoEstado}" - Implementar API`);
+    }
+
+    function eliminarFuente(id) {
+        if (!confirm('¿Estás seguro de eliminar esta fuente? Esta acción no se puede deshacer.')) {
+            return;
+        }
+        
+        // Por ahora solo muestra un mensaje
+        alert('Funcionalidad de eliminación - Implementar API');
+    }
+
+    // Helper function to get CSRF token
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+</script>
+{% endblock %}

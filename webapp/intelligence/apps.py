@@ -76,3 +76,12 @@ class IntelligenceConfig(AppConfig):
             logger.info("Skills registradas en SkillRegistry al iniciar Django")
         except Exception as e:
             logger.warning(f"No se pudieron registrar skills en startup: {e}")
+
+        # 4. Pre-calcular embeddings del Semantic Router (F1-001)
+        try:
+            from .services.semantic_router import precompute_router_embeddings
+            n = precompute_router_embeddings()
+            if n > 0:
+                logger.info(f"Semantic Router: {n} templates embeddeados para routing semántico")
+        except Exception as e:
+            logger.warning(f"No se pudieron pre-calcular embeddings del Semantic Router: {e}")

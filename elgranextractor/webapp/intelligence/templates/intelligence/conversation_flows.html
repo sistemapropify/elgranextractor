@@ -1,0 +1,135 @@
+{% extends "intelligence/base/base.html" %}
+{% load static %}
+
+{% block page_title %}Flujos de Conversación{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --bg-dark: #0d1117;
+        --bg-card: #161b22;
+        --border-color: #30363d;
+        --text-primary: #c9d1d9;
+        --text-secondary: #8b949e;
+        --accent-blue: #58a6ff;
+        --accent-green: #238636;
+        --accent-yellow: #d29922;
+        --accent-red: #f85149;
+        --accent-cyan: #3ddbd9;
+    }
+    body {
+        margin: 0;
+        padding: 20px;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+        background-color: var(--bg-dark);
+        color: var(--text-primary);
+    }
+    .container { max-width: 1400px; margin: 0 auto; }
+    .header { margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid var(--border-color); }
+    .header h1 { margin: 0; font-size: 32px; color: var(--accent-blue); }
+    .header p { margin: 8px 0 0; color: var(--text-secondary); }
+    .nav-links { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
+    .nav-link { color: var(--text-secondary); text-decoration: none; padding: 8px 16px; border-radius: 7px; border: 1px solid var(--border-color); transition: all 0.2s ease; }
+    .nav-link:hover { background-color: rgba(88, 166, 255, 0.1); color: var(--accent-blue); border-color: var(--accent-blue); }
+    .nav-link.active { background-color: var(--accent-blue); color: white; border-color: var(--accent-blue); }
+    .page-actions { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 24px; flex-wrap: wrap; }
+    .btn-primary { background: var(--accent-blue); color: white; border: none; padding: 10px 18px; border-radius: 8px; display: inline-flex; align-items: center; gap: 8px; text-decoration: none; }
+    .btn-secondary { background: transparent; color: var(--text-primary); border: 1px solid var(--border-color); padding: 10px 18px; border-radius: 8px; text-decoration: none; }
+    .btn-primary:hover, .btn-secondary:hover { filter: brightness(1.05); }
+    .alert { border-radius: 12px; padding: 16px; margin-bottom: 20px; background: #1b242f; border: 1px solid #2e3a47; }
+    .table-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; overflow: hidden; }
+    .table { width: 100%; border-collapse: collapse; }
+    .table th, .table td { padding: 16px 18px; border-bottom: 1px solid var(--border-color); }
+    .table th { color: var(--text-secondary); font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .table tr:hover { background: rgba(88, 166, 255, 0.06); }
+    .table tbody tr:last-child td { border-bottom: none; }
+    .badge { display: inline-flex; align-items: center; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+    .badge-success { background: rgba(35, 134, 54, 0.16); color: var(--accent-green); }
+    .badge-info { background: rgba(88, 166, 255, 0.16); color: var(--accent-blue); }
+    .badge-muted { background: rgba(139, 148, 158, 0.14); color: var(--text-secondary); }
+    .text-muted { color: var(--text-secondary); }
+    .card-empty { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 36px; text-align: center; }
+    .card-empty h4 { margin-bottom: 12px; color: var(--text-primary); }
+    .card-empty p { margin-bottom: 20px; color: var(--text-secondary); }
+    .icon { font-size: 24px; margin-right: 8px; }
+    @media (max-width: 900px) { .table th, .table td { padding: 12px 10px; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="header">
+        <h1>📘 Flujos de Conversación</h1>
+        <p>Gestiona los flujos del chat con el estilo moderno de Propifai Intelligence.</p>
+        <div class="nav-links">
+            <a href="{% url 'intelligence:dashboard' %}" class="nav-link">Dashboard</a>
+            <a href="{% url 'intelligence:intent_evaluation' %}" class="nav-link">Evaluación Intent</a>
+            <a href="{% url 'intelligence:user_simulator' %}" class="nav-link">Simulador</a>
+            <a href="{% url 'intelligence:system_stats' %}" class="nav-link">Estadísticas</a>
+            <a href="{% url 'intelligence:activity_logs' %}" class="nav-link">Logs</a>
+        </div>
+    </div>
+
+    <div class="page-actions">
+        <div>
+            <h2 style="margin:0; color: var(--text-primary);">Lista de flujos</h2>
+            <p class="text-muted" style="margin:4px 0 0;">Crea y edita los flujos que guiarán las conversaciones.</p>
+        </div>
+        <a href="{% url 'intelligence:conversation_flow_create' %}" class="btn-primary">
+            <span class="icon">+</span> Nuevo flujo
+        </a>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+
+    {% if flows %}
+        <div class="table-card">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Descripción</th>
+                        <th>Estado inicial</th>
+                        <th>Activo</th>
+                        <th>Actualizado</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for flow in flows %}
+                    <tr>
+                        <td>{{ flow.name }}</td>
+                        <td class="text-muted" style="max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ flow.description|default:'Sin descripción' }}</td>
+                        <td>{{ flow.initial_state }}</td>
+                        <td>
+                            {% if flow.is_active %}
+                                <span class="badge badge-success">Activo</span>
+                            {% else %}
+                                <span class="badge badge-muted">Inactivo</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ flow.updated_at|date:'Y-m-d H:i' }}</td>
+                        <td style="text-align: right;">
+                            <a href="{% url 'intelligence:conversation_flow_edit' flow.id %}" class="btn-secondary" style="font-size: 0.9rem;">
+                                Editar
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="card-empty">
+            <div style="font-size: 48px; margin-bottom: 16px;">🤖</div>
+            <h4>No hay flujos definidos</h4>
+            <p class="text-muted">Crea tu primer flujo para que el chat pueda seguir una conversación guiada.</p>
+            <a href="{% url 'intelligence:conversation_flow_create' %}" class="btn-primary">Crear flujo</a>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

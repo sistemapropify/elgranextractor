@@ -1,0 +1,1430 @@
+{% extends 'propifai_base.html' %}
+{% load static %}
+
+{% block title %}Mapa de Zonas - Cuadrantización{% endblock %}
+
+{% block extra_head %}
+{{ block.super }}
+<style>
+/* ===== OVERRIDE content-area para mapa fullscreen ===== */
+.content-area {
+    padding: 0 !important;
+    overflow: hidden;
+}
+
+/* ============================================================
+   CUADRANTIZACIÓN MAPA — Estilos
+   ============================================================ */
+
+/* Layout principal */
+.map-layout {
+    display: flex;
+    height: calc(100vh - 60px);
+    gap: 0;
+    position: relative;
+}
+
+.map-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    min-width: 0;
+}
+
+#map-container {
+    flex: 1;
+    position: relative;
+    background: var(--bg-primary, #0d1117);
+    overflow: hidden;
+}
+
+#map {
+    width: 100%;
+    height: 100%;
+    min-height: 500px;
+}
+
+/* Loading overlay */
+.loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(13, 17, 23, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+}
+
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--border-color, #30363d);
+    border-top-color: var(--accent-color, #58a6ff);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Map controls panel */
+.map-controls {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: var(--bg-secondary, #161b22);
+    border: 1px solid var(--border-color, #30363d);
+    border-radius: 8px;
+    padding: 12px;
+    width: 280px;
+    z-index: 100;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.map-controls .form-group {
+    margin-bottom: 8px;
+}
+
+.map-controls label {
+    display: block;
+    font-size: 12px;
+    color: var(--text-secondary, #8b949e);
+    margin-bottom: 4px;
+    font-weight: 500;
+}
+
+.map-controls .form-control {
+    width: 100%;
+    padding: 6px 10px;
+    background: var(--bg-tertiary, #21262d);
+    border: 1px solid var(--border-color, #30363d);
+    border-radius: 6px;
+    color: var(--text-primary, #f0f6fc);
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+}
+
+.map-controls .form-control:focus {
+    border-color: var(--accent-color, #58a6ff);
+}
+
+.map-controls .form-control option {
+    background: var(--bg-secondary, #161b22);
+    color: var(--text-primary, #f0f6fc);
+}
+
+/* Drawing controls */
+.drawing-controls {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+
+.btn-draw {
+    padding: 6px 10px;
+    background: var(--bg-tertiary, #21262d);
+    border: 1px solid var(--border-color, #30363d);
+    border-radius: 6px;
+    color: var(--text-primary, #f0f6fc);
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.btn-draw:hover {
+    background: var(--bg-tertiary, #30363d);
+    border-color: var(--accent-color, #58a6ff);
+}
+
+.btn-draw.active {
+    background: var(--accent-color, #58a6ff);
+    border-color: var(--accent-color, #58a6ff);
+    color: #fff;
+}
+
+.btn-draw svg {
+    width: 16px;
+    height: 16px;
+}
+
+.btn-success {
+    padding: 8px 16px;
+    background: #238636;
+    border: 1px solid rgba(35, 134, 54, 0.6);
+    border-radius: 6px;
+    color: #fff;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    width: 100%;
+    transition: background 0.2s;
+}
+
+.btn-success:hover {
+    background: #2ea043;
+}
+
+.btn-block {
+    display: block;
+    width: 100%;
+}
+
+/* Input group */
+.input-group {
+    display: flex;
+    gap: 4px;
+}
+
+.input-group .form-control {
+    flex: 1;
+}
+
+.input-group .btn-search {
+    padding: 6px 10px;
+    background: var(--accent-color, #58a6ff);
+    border: 1px solid var(--accent-color, #58a6ff);
+    border-radius: 6px;
+    color: #fff;
+    cursor: pointer;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+/* Legend */
+.legend {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-color, #30363d);
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-secondary, #8b949e);
+}
+
+.legend-color {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+/* Zone info panel */
+.zone-info-panel {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg-secondary, #161b22);
+    border: 1px solid var(--border-color, #30363d);
+    border-radius: 8px;
+    padding: 12px 16px;
+    z-index: 100;
+    min-width: 300px;
+    max-width: 400px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.zone-info-panel h4 {
+    margin: 0 0 8px 0;
+    font-size: 14px;
+    color: var(--text-primary, #f0f6fc);
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    font-size: 12px;
+    border-bottom: 1px solid var(--border-color, #30363d);
+}
+
+.info-row:last-child {
+    border-bottom: none;
+}
+
+.info-label {
+    color: var(--text-secondary, #8b949e);
+}
+
+.info-value {
+    color: var(--text-primary, #f0f6fc);
+    text-align: right;
+}
+
+.btn-group {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.btn-group .btn {
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    border: 1px solid var(--border-color, #30363d);
+    background: var(--bg-tertiary, #21262d);
+    color: var(--text-primary, #f0f6fc);
+    transition: all 0.2s;
+}
+
+.btn-group .btn:hover {
+    background: var(--bg-tertiary, #30363d);
+}
+
+.btn-warning {
+    background: #d29922 !important;
+    border-color: #d29922 !important;
+    color: #fff !important;
+}
+
+.btn-danger {
+    background: #da3633 !important;
+    border-color: #da3633 !important;
+    color: #fff !important;
+}
+
+/* Sidebar */
+.map-sidebar {
+    width: 280px;
+    min-width: 280px;
+    background: var(--bg-secondary, #161b22);
+    border-left: 1px solid var(--border-color, #30363d);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.map-panel {
+    border-bottom: 1px solid var(--border-color, #30363d);
+}
+
+.map-panel:last-child {
+    border-bottom: none;
+}
+
+.map-panel-header {
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary, #f0f6fc);
+    background: var(--bg-tertiary, #21262d);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border-color, #30363d);
+}
+
+.map-panel-header h3 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.panel-badge, .badge {
+    background: var(--accent-color, #58a6ff);
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.map-panel-body {
+    padding: 10px 14px;
+}
+
+.section-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary, #8b949e);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 8px 0 4px;
+}
+
+.section-title:first-child {
+    margin-top: 0;
+}
+
+.hierarchy-list {
+    margin-bottom: 8px;
+}
+
+.hierarchy-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 8px;
+    font-size: 12px;
+    color: var(--text-primary, #f0f6fc);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.hierarchy-item:hover {
+    background: var(--bg-tertiary, #21262d);
+}
+
+.hierarchy-count {
+    background: var(--bg-tertiary, #21262d);
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-size: 11px;
+    color: var(--text-secondary, #8b949e);
+}
+
+.info-box {
+    background: var(--bg-tertiary, #21262d);
+    border: 1px solid var(--border-color, #30363d);
+    border-radius: 6px;
+    padding: 10px;
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--text-secondary, #8b949e);
+    line-height: 1.5;
+}
+
+.info-box strong {
+    color: var(--text-primary, #f0f6fc);
+    display: block;
+    margin-bottom: 4px;
+}
+
+.info-box ol {
+    margin: 4px 0;
+    padding-left: 18px;
+}
+
+.info-box li {
+    margin-bottom: 2px;
+}
+
+/* Zones list */
+.zones-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.zone-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 8px;
+    font-size: 12px;
+    color: var(--text-primary, #f0f6fc);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s;
+    border-bottom: 1px solid var(--border-color, #30363d);
+}
+
+.zone-item:last-child {
+    border-bottom: none;
+}
+
+.zone-item:hover {
+    background: var(--bg-tertiary, #21262d);
+}
+
+.zone-name {
+    font-weight: 500;
+}
+
+.zone-type {
+    font-size: 10px;
+    color: var(--text-secondary, #8b949e);
+    background: var(--bg-tertiary, #21262d);
+    padding: 1px 6px;
+    border-radius: 8px;
+    text-transform: capitalize;
+}
+
+/* Alert toasts */
+.alert-toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+.alert-toast.success {
+    background: #238636;
+    color: #fff;
+}
+
+.alert-toast.error {
+    background: #da3633;
+    color: #fff;
+}
+
+.alert-toast.warning {
+    background: #d29922;
+    color: #fff;
+}
+
+.alert-toast.info {
+    background: var(--accent-color, #58a6ff);
+    color: #fff;
+}
+
+.alert-close {
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 0 0 0 8px;
+    opacity: 0.7;
+}
+
+.alert-close:hover {
+    opacity: 1;
+}
+
+/* Config button */
+.config-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--bg-tertiary, #21262d);
+    border: 1px solid var(--border-color, #30363d);
+    border-radius: 6px;
+    color: var(--text-primary, #f0f6fc);
+    cursor: pointer;
+    font-size: 12px;
+    text-decoration: none;
+    transition: all 0.2s;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.config-btn:hover {
+    background: var(--bg-tertiary, #30363d);
+    border-color: var(--accent-color, #58a6ff);
+    color: var(--text-primary, #f0f6fc);
+}
+
+.config-btn-icon {
+    font-size: 16px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .map-layout {
+        flex-direction: column;
+    }
+
+    .map-sidebar {
+        width: 100%;
+        min-width: 100%;
+        max-height: 40vh;
+        border-left: none;
+        border-top: 1px solid var(--border-color, #30363d);
+    }
+
+    .map-controls {
+        width: 200px;
+        padding: 8px;
+    }
+}
+
+/* Scrollbar */
+.map-sidebar::-webkit-scrollbar,
+.zones-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.map-sidebar::-webkit-scrollbar-track,
+.zones-list::-webkit-scrollbar-track {
+    background: var(--bg-secondary, #161b22);
+}
+
+.map-sidebar::-webkit-scrollbar-thumb,
+.zones-list::-webkit-scrollbar-thumb {
+    background: var(--border-color, #30363d);
+    border-radius: 3px;
+}
+
+.map-sidebar::-webkit-scrollbar-thumb:hover,
+.zones-list::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary, #8b949e);
+}
+</style>
+
+<!-- Google Maps API -->
+<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&libraries=drawing,places,geometry&callback=onGoogleMapsLoaded" async defer></script>
+{% endblock %}
+
+{% block content %}
+<div class="map-layout">
+    <!-- Mapa -->
+    <div class="map-main">
+        <div id="map-container">
+            <div id="map"></div>
+
+            <!-- Controles del mapa -->
+            <div class="map-controls" id="map-controls">
+                <div class="drawing-controls">
+                    <button class="btn-draw" id="draw-polygon" title="Dibujar polígono">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7l6-4 6 4 6-4v14l-6 4-6-4-6 4V7z"/></svg>
+                        Polígono
+                    </button>
+                    <button class="btn-draw" id="draw-rectangle" title="Dibujar rectángulo">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18"/></svg>
+                        Rect.
+                    </button>
+                    <button class="btn-draw" id="draw-circle" title="Dibujar círculo">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/></svg>
+                        Círculo
+                    </button>
+                    <button class="btn-draw" id="draw-marker" title="Colocar marcador">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                        Marker
+                    </button>
+                    <button class="btn-draw" id="draw-select" title="Seleccionar / Editar">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/></svg>
+                        Seleccionar
+                    </button>
+                </div>
+
+                <div class="form-group">
+                    <label for="address-search">Buscar dirección</label>
+                    <div class="input-group">
+                        <input type="text" id="address-search" class="form-control" placeholder="Ej: Av. Ejército, Yanahuara">
+                        <button class="btn-search" id="search-address">Ir</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="zone-level">Nivel de zona</label>
+                    <select id="zone-level" class="form-control">
+                        <option value="pais">País</option>
+                        <option value="departamento">Departamento</option>
+                        <option value="provincia">Provincia</option>
+                        <option value="distrito" selected>Distrito</option>
+                        <option value="zona">Zona</option>
+                        <option value="subzona">Subzona</option>
+                        <option value="cuadrante">Cuadrante</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="zone-parent">Zona padre</label>
+                    <select id="zone-parent" class="form-control">
+                        <option value="">Ninguna (raíz)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="zone-name">Nombre de la zona</label>
+                    <input type="text" id="zone-name" class="form-control" placeholder="Ej: Cayma alta">
+                </div>
+
+                <button class="btn-success btn-block" id="save-zone">Guardar zona</button>
+
+                <div class="legend">
+                    <div class="legend-item">
+                        <span class="legend-color" style="background: #58a6ff;"></span>
+                        Zonas existentes
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background: #f0883e;"></span>
+                        Nueva zona
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background: #f85149;"></span>
+                        Zona seleccionada
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panel de información de zona -->
+            <div class="zone-info-panel" id="zone-info-panel" style="display: none;">
+                <h4 id="zone-info-title">Zona</h4>
+                <div id="zone-info-content"></div>
+                <div class="btn-group">
+                    <button class="btn btn-warning btn-sm" id="edit-zone-btn">Editar</button>
+                    <button class="btn btn-danger btn-sm" id="delete-zone-btn">Eliminar</button>
+                    <button class="btn btn-sm" id="close-zone-info" style="border-color: var(--border-color);">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar de información -->
+    <div class="map-sidebar">
+        <div class="map-panel">
+            <div class="map-panel-header">
+                Jerarquía de zonas
+                <span class="panel-badge" id="total-zones-badge">0</span>
+            </div>
+            <div class="map-panel-body">
+                <div class="hierarchy-info">
+                    <div class="section-title">Distritos</div>
+                    <div id="districts-list" class="hierarchy-list">
+                        <div class="hierarchy-item">
+                            <span>Cargando...</span>
+                        </div>
+                    </div>
+
+                    <div class="section-title">Zonas recientes</div>
+                    <div id="recent-zones-list" class="hierarchy-list">
+                        <div class="hierarchy-item">
+                            <span>Sin zonas creadas</span>
+                        </div>
+                    </div>
+
+                    <div class="info-box">
+                        <strong>💡 Cómo usar:</strong>
+                        <ol>
+                            <li>Selecciona una herramienta de dibujo</li>
+                            <li>Dibuja sobre el mapa</li>
+                            <li>Asigna un nombre y nivel</li>
+                            <li>Guarda la zona</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="map-panel">
+            <div class="map-panel-header">
+                Lista de zonas
+                <span class="panel-badge" id="zones-count-badge">0</span>
+            </div>
+            <div class="map-panel-body">
+                <div id="zones-list" class="zones-list">
+                    <div class="zone-item">
+                        <span class="zone-name">Cargando...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="map-panel">
+            <div class="map-panel-header">
+                Configuración
+            </div>
+            <div class="map-panel-body">
+                <a href="/cuadrantizacion/jerarquia/" class="config-btn">
+                    <span class="config-btn-icon">⚙️</span>
+                    <span>Gestionar jerarquía de zonas</span>
+                </a>
+                <button id="refresh-zones-btn" class="config-btn" style="margin-top: 8px;">
+                    <span class="config-btn-icon">🔄</span>
+                    <span>Actualizar mapa</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+{{ block.super }}
+<script>
+// ============================================================
+// CUADRANTIZACIÓN MAPA — JavaScript
+// ============================================================
+
+let map;
+let drawingManager;
+let selectedShape = null;
+let currentZoneData = null;
+let markers = [];
+let zones = [];
+let allZones = [];
+
+// Colores para zonas
+const ZONE_COLORS = {
+    default: '#58a6ff',
+    new: '#f0883e',
+    selected: '#f85149',
+    fill: 'rgba(88, 166, 255, 0.2)',
+    fillNew: 'rgba(240, 136, 62, 0.2)',
+    fillSelected: 'rgba(248, 81, 73, 0.2)'
+};
+
+// ============================================================
+// Utilidades
+// ============================================================
+
+function showAlert(message, type = 'info') {
+    const icons = {
+        success: '✅',
+        error: '❌',
+        warning: '⚠️',
+        info: 'ℹ️'
+    };
+
+    const toast = document.createElement('div');
+    toast.className = `alert-toast ${type}`;
+    toast.innerHTML = `
+        <span class="alert-icon">${icons[type] || 'ℹ️'}</span>
+        <span>${message}</span>
+        <button class="alert-close" onclick="this.parentElement.remove()">&times;</button>
+    `;
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+        if (toast.parentElement) {
+            toast.style.opacity = '0';
+            toast.style.transition = 'opacity 0.3s ease';
+            setTimeout(() => toast.remove(), 300);
+        }
+    }, 5000);
+}
+
+function showLoading(show) {
+    let overlay = document.querySelector('.loading-overlay');
+    if (show) {
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.className = 'loading-overlay';
+            overlay.innerHTML = '<div class="spinner"></div>';
+            document.getElementById('map-container').appendChild(overlay);
+        }
+        overlay.style.display = 'flex';
+    } else {
+        if (overlay) overlay.style.display = 'none';
+        const loadingText = document.getElementById('loading-text');
+        if (loadingText) loadingText.style.display = 'none';
+    }
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// ============================================================
+// Inicialización del mapa
+// ============================================================
+
+function initMap() {
+    // Coordenadas de Arequipa
+    const arequipa = { lat: -16.4090, lng: -71.5375 };
+
+    map = new google.maps.Map(document.getElementById('map'), {
+        center: arequipa,
+        zoom: 13,
+        mapTypeId: google.maps.MapTypeId.ROADMAP,
+        mapTypeControl: true,
+        mapTypeControlOptions: {
+            style: google.maps.MapTypeControlStyle.HORIZONTAL_BAR,
+            position: google.maps.ControlPosition.TOP_RIGHT
+        },
+        streetViewControl: false,
+        fullscreenControl: true,
+        fullscreenControlOptions: {
+            position: google.maps.ControlPosition.RIGHT_BOTTOM
+        },
+        zoomControl: true,
+        zoomControlOptions: {
+            position: google.maps.ControlPosition.RIGHT_BOTTOM
+        }
+    });
+
+    // Inicializar DrawingManager
+    drawingManager = new google.maps.drawing.DrawingManager({
+        drawingMode: null,
+        drawingControl: false,
+        polygonOptions: {
+            fillColor: ZONE_COLORS.fillNew,
+            fillOpacity: 0.4,
+            strokeColor: ZONE_COLORS.new,
+            strokeWeight: 2,
+            editable: true,
+            draggable: true
+        },
+        rectangleOptions: {
+            fillColor: ZONE_COLORS.fillNew,
+            fillOpacity: 0.4,
+            strokeColor: ZONE_COLORS.new,
+            strokeWeight: 2,
+            editable: true,
+            draggable: true
+        },
+        circleOptions: {
+            fillColor: ZONE_COLORS.fillNew,
+            fillOpacity: 0.4,
+            strokeColor: ZONE_COLORS.new,
+            strokeWeight: 2,
+            editable: true,
+            draggable: true
+        },
+        markerOptions: {
+            draggable: true,
+            animation: google.maps.Animation.DROP
+        }
+    });
+
+    drawingManager.setMap(map);
+
+    // Eventos de dibujo
+    google.maps.event.addListener(drawingManager, 'overlaycomplete', function(event) {
+        if (selectedShape) {
+            selectedShape.setMap(null);
+        }
+        selectedShape = event.overlay;
+        selectedShape.type = event.type;
+
+        // Remover listeners de edición anteriores
+        google.maps.event.clearListeners(selectedShape, 'click');
+
+        // Click para seleccionar
+        google.maps.event.addListener(selectedShape, 'click', function() {
+            selectShape(this);
+        });
+
+        // Desactivar modo dibujo
+        drawingManager.setDrawingMode(null);
+        resetDrawButtons();
+
+        // Extraer coordenadas
+        updateZoneDataFromShape(selectedShape);
+
+        showAlert('Forma dibujada. Asigna un nombre y guarda.', 'success');
+    });
+
+    // Cargar zonas existentes
+    loadZones();
+    loadDistricts();
+    loadZoneParents();
+
+    // Configurar búsqueda de dirección
+    setupAddressSearch();
+
+    // Configurar botones de dibujo
+    setupDrawButtons();
+
+    // Configurar guardado
+    setupSaveZone();
+
+    // Configurar panel de información
+    setupInfoPanel();
+
+    // Configurar actualización
+    document.getElementById('refresh-zones-btn').addEventListener('click', function() {
+        loadZones();
+        loadDistricts();
+        showAlert('Zonas actualizadas', 'success');
+    });
+
+    showLoading(false);
+}
+
+// ============================================================
+// Botones de dibujo
+// ============================================================
+
+function setupDrawButtons() {
+    const drawModes = {
+        'draw-polygon': google.maps.drawing.OverlayType.POLYGON,
+        'draw-rectangle': google.maps.drawing.OverlayType.RECTANGLE,
+        'draw-circle': google.maps.drawing.OverlayType.CIRCLE,
+        'draw-marker': google.maps.drawing.OverlayType.MARKER,
+        'draw-select': null
+    };
+
+    Object.entries(drawModes).forEach(([id, mode]) => {
+        const btn = document.getElementById(id);
+        if (!btn) return;
+
+        btn.addEventListener('click', function() {
+            resetDrawButtons();
+            if (mode === null) {
+                // Modo selección
+                drawingManager.setDrawingMode(null);
+                if (selectedShape) {
+                    selectedShape.setEditable(true);
+                    selectedShape.setDraggable(true);
+                }
+                showAlert('Modo selección activado. Haz clic en una zona para editarla.', 'info');
+            } else {
+                this.classList.add('active');
+                drawingManager.setDrawingMode(mode);
+                showAlert(`Modo ${this.textContent.trim()} activado. Dibuja sobre el mapa.`, 'info');
+            }
+        });
+    });
+}
+
+function resetDrawButtons() {
+    document.querySelectorAll('.btn-draw').forEach(btn => btn.classList.remove('active'));
+}
+
+// ============================================================
+// Manejo de formas
+// ============================================================
+
+function selectShape(shape) {
+    if (selectedShape && selectedShape !== shape) {
+        selectedShape.setOptions({
+            fillColor: ZONE_COLORS.fill,
+            strokeColor: ZONE_COLORS.default,
+            strokeWeight: 2
+        });
+    }
+
+    selectedShape = shape;
+    shape.setOptions({
+        fillColor: ZONE_COLORS.fillSelected,
+        strokeColor: ZONE_COLORS.selected,
+        strokeWeight: 3
+    });
+
+    updateZoneDataFromShape(shape);
+    showZoneInfo(shape);
+}
+
+function updateZoneDataFromShape(shape) {
+    currentZoneData = {
+        type: shape.type || 'polygon',
+        coordinates: getShapeCoordinates(shape)
+    };
+}
+
+function getShapeCoordinates(shape) {
+    if (shape.type === 'polygon' || shape.type === google.maps.drawing.OverlayType.POLYGON) {
+        return shape.getPath().getArray().map(function(latLng) {
+            return { lat: latLng.lat(), lng: latLng.lng() };
+        });
+    } else if (shape.type === 'rectangle' || shape.type === google.maps.drawing.OverlayType.RECTANGLE) {
+        var bounds = shape.getBounds();
+        var ne = bounds.getNorthEast();
+        var sw = bounds.getSouthWest();
+        return [
+            { lat: ne.lat(), lng: sw.lng() },
+            { lat: ne.lat(), lng: ne.lng() },
+            { lat: sw.lat(), lng: ne.lng() },
+            { lat: sw.lat(), lng: sw.lng() }
+        ];
+    } else if (shape.type === 'circle' || shape.type === google.maps.drawing.OverlayType.CIRCLE) {
+        var center = shape.getCenter();
+        var radius = shape.getRadius();
+        return {
+            center: { lat: center.lat(), lng: center.lng() },
+            radius: radius
+        };
+    } else if (shape.type === 'marker' || shape.type === google.maps.drawing.OverlayType.MARKER) {
+        var pos = shape.getPosition();
+        return { lat: pos.lat(), lng: pos.lng() };
+    }
+    return [];
+}
+
+function showZoneInfo(shape) {
+    var panel = document.getElementById('zone-info-panel');
+    var content = document.getElementById('zone-info-content');
+    if (!panel || !content) return;
+
+    var coords = getShapeCoordinates(shape);
+    var coordsText = '';
+
+    if (Array.isArray(coords)) {
+        coordsText = coords.length + ' vertices';
+    } else if (coords && coords.center) {
+        coordsText = 'Centro: (' + coords.center.lat.toFixed(4) + ', ' + coords.center.lng.toFixed(4) + '), Radio: ' + Math.round(coords.radius) + 'm';
+    } else if (coords && coords.lat) {
+        coordsText = 'Lat: ' + coords.lat.toFixed(4) + ', Lng: ' + coords.lng.toFixed(4);
+    }
+
+    content.innerHTML = '';
+    var rows = [
+        { label: 'Tipo', value: (shape.type || 'polygon').charAt(0).toUpperCase() + (shape.type || 'polygon').slice(1) },
+        { label: 'Coordenadas', value: coordsText }
+    ];
+
+    rows.forEach(function(row) {
+        var div = document.createElement('div');
+        div.className = 'info-row';
+        div.innerHTML = '<span class="info-label">' + row.label + '</span><span class="info-value">' + row.value + '</span>';
+        content.appendChild(div);
+    });
+
+    panel.style.display = 'block';
+}
+
+function setupInfoPanel() {
+    document.getElementById('close-zone-info').addEventListener('click', function() {
+        document.getElementById('zone-info-panel').style.display = 'none';
+    });
+
+    document.getElementById('edit-zone-btn').addEventListener('click', function() {
+        if (selectedShape) {
+            selectedShape.setEditable(true);
+            selectedShape.setDraggable(true);
+            showAlert('Modo edicion activado. Arrastra los vertices para modificar la forma.', 'info');
+        } else {
+            showAlert('Selecciona una zona primero.', 'warning');
+        }
+    });
+
+    document.getElementById('delete-zone-btn').addEventListener('click', function() {
+        if (selectedShape) {
+            if (confirm('Estas seguro de eliminar esta zona del mapa?')) {
+                selectedShape.setMap(null);
+                selectedShape = null;
+                document.getElementById('zone-info-panel').style.display = 'none';
+                currentZoneData = null;
+                showAlert('Zona eliminada del mapa.', 'success');
+            }
+        } else {
+            showAlert('Selecciona una zona primero.', 'warning');
+        }
+    });
+}
+
+function setupSaveZone() {
+    document.getElementById('save-zone').addEventListener('click', function() {
+        var name = document.getElementById('zone-name').value.trim();
+        var level = document.getElementById('zone-level').value;
+        var parentId = document.getElementById('zone-parent').value;
+
+        if (!name) {
+            showAlert('Por favor ingresa un nombre para la zona.', 'warning');
+            return;
+        }
+
+        if (!currentZoneData) {
+            showAlert('Primero dibuja una forma en el mapa.', 'warning');
+            return;
+        }
+
+        var data = {
+            nombre_zona: name,
+            nivel: level,
+            parent: parentId || null,
+            coordenadas: JSON.stringify(currentZoneData.coordinates)
+        };
+
+        showLoading(true);
+
+        fetch('/cuadrantizacion/zonas/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify(data)
+        })
+        .then(function(response) {
+            if (!response.ok) {
+                return response.json().then(function(err) { throw new Error(JSON.stringify(err)); });
+            }
+            return response.json();
+        })
+        .then(function(result) {
+            showAlert('Zona "' + name + '" guardada exitosamente.', 'success');
+            document.getElementById('zone-name').value = '';
+            loadZones();
+            loadDistricts();
+            loadZoneParents();
+        })
+        .catch(function(error) {
+            showAlert('Error: ' + error.message, 'error');
+        })
+        .finally(function() {
+            showLoading(false);
+        });
+    });
+}
+
+function loadZones() {
+    fetch('/cuadrantizacion/zonas/')
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            // La API devuelve un array plano directamente
+            allZones = Array.isArray(data) ? data : (data.zonas || data.results || []);
+            renderZonesList(allZones);
+            renderExistingZones(allZones);
+            document.getElementById('total-zones-badge').textContent = allZones.length;
+            document.getElementById('zones-count-badge').textContent = allZones.length;
+        })
+        .catch(function(error) {
+            console.error('Error loading zones:', error);
+        });
+}
+
+function renderZonesList(zones) {
+    var container = document.getElementById('zones-list');
+    if (!container) return;
+
+    if (!zones || zones.length === 0) {
+        container.innerHTML = '<div class="zone-item"><span class="zone-name">Sin zonas creadas</span></div>';
+        return;
+    }
+
+    container.innerHTML = '';
+    zones.forEach(function(zone) {
+        var item = document.createElement('div');
+        item.className = 'zone-item';
+        // El serializer usa 'nombre_zona', no 'name' ni 'nombre'
+        item.innerHTML = '<span class="zone-name">' + (zone.nombre_zona || 'Sin nombre') + '</span>' +
+            '<span class="zone-type">' + (zone.nivel_display || zone.nivel || 'zona') + '</span>';
+        item.addEventListener('click', function() {
+            flyToZone(zone);
+        });
+        container.appendChild(item);
+    });
+}
+
+function renderExistingZones(zones) {
+    zones.forEach(function(zone) {
+        if (zone.coordenadas || zone.geom) {
+            try {
+                var coords = typeof zone.coordenadas === 'string' ?
+                    JSON.parse(zone.coordenadas) : zone.coordenadas;
+
+                // Las coordenadas vienen como [[lat, lng], [lat, lng], ...]
+                var path = coords.map(function(c) {
+                    if (Array.isArray(c)) {
+                        return { lat: parseFloat(c[0]), lng: parseFloat(c[1]) };
+                    }
+                    return { lat: parseFloat(c.lat || c.latitude || c[0]), lng: parseFloat(c.lng || c.longitude || c[1]) };
+                });
+
+                var polygon = new google.maps.Polygon({
+                    paths: path,
+                    fillColor: zone.color_fill || ZONE_COLORS.fill,
+                    fillOpacity: parseFloat(zone.opacidad || 0.3),
+                    strokeColor: zone.color_borde || ZONE_COLORS.default,
+                    strokeWeight: 1.5,
+                    map: map,
+                    zoneId: zone.id,
+                    clickable: true
+                });
+
+                // Calcular centro del polígono para la etiqueta
+                var bounds = new google.maps.LatLngBounds();
+                path.forEach(function(p) {
+                    bounds.extend(p);
+                });
+                var center = bounds.getCenter();
+
+                // Crear overlay de texto personalizado
+                var labelDiv = document.createElement('div');
+                labelDiv.className = 'zone-label-overlay';
+                labelDiv.textContent = zone.nombre_zona || 'Zona';
+                labelDiv.style.cssText = 'color: #dc3545; font-size: 12px; font-weight: 400; ' +
+                    'font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; ' +
+                    'white-space: nowrap; pointer-events: none; user-select: none; ' +
+                    'background: transparent; padding: 0; ' +
+                    'position: absolute; transform: translate(-50%, -50%); ' +
+                    'z-index: 1000;';
+
+                var labelOverlay = new google.maps.OverlayView();
+                labelOverlay.onAdd = function() {
+                    var panes = this.getPanes();
+                    panes.floatPane.appendChild(labelDiv);
+                };
+                labelOverlay.draw = function() {
+                    var projection = this.getProjection();
+                    var point = projection.fromLatLngToDivPixel(center);
+                    if (point) {
+                        labelDiv.style.left = point.x + 'px';
+                        labelDiv.style.top = point.y + 'px';
+                    }
+                };
+                labelOverlay.onRemove = function() {
+                    if (labelDiv.parentNode) {
+                        labelDiv.parentNode.removeChild(labelDiv);
+                    }
+                };
+                labelOverlay.setMap(map);
+
+                // Al hacer click en el polígono, seleccionar
+                google.maps.event.addListener(polygon, 'click', function() {
+                    selectShape(this);
+                });
+            } catch(e) {
+                console.warn('Error rendering zone:', zone.nombre_zona, e);
+            }
+        }
+    });
+}
+
+function flyToZone(zone) {
+    if (zone.coordenadas || zone.geom) {
+        try {
+            var coords = typeof zone.coordenadas === 'string' ?
+                JSON.parse(zone.coordenadas) : zone.coordenadas;
+            if (coords && coords.length > 0) {
+                var bounds = new google.maps.LatLngBounds();
+                coords.forEach(function(c) {
+                    if (Array.isArray(c)) {
+                        bounds.extend({ lat: parseFloat(c[0]), lng: parseFloat(c[1]) });
+                    } else {
+                        bounds.extend({ lat: parseFloat(c.lat || c.latitude || c[0]), lng: parseFloat(c.lng || c.longitude || c[1]) });
+                    }
+                });
+                map.fitBounds(bounds);
+            }
+        } catch(e) {
+            console.warn('Error flying to zone:', e);
+        }
+    }
+}
+
+function loadDistricts() {
+    fetch('/cuadrantizacion/zonas/?nivel=distrito')
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            // La API devuelve un array plano
+            var districts = Array.isArray(data) ? data : (data.distritos || data.results || []);
+            var container = document.getElementById('districts-list');
+            if (!container) return;
+
+            if (!districts || districts.length === 0) {
+                container.innerHTML = '<div class="hierarchy-item"><span>Sin distritos</span></div>';
+                return;
+            }
+
+            container.innerHTML = '';
+            districts.forEach(function(d) {
+                var item = document.createElement('div');
+                item.className = 'hierarchy-item';
+                // El serializer usa 'nombre_zona'
+                item.innerHTML = '<span>' + (d.nombre_zona || 'Sin nombre') + '</span>' +
+                    '<span class="hierarchy-count">' + (d.cantidad_propiedades_analizadas || 0) + '</span>';
+                container.appendChild(item);
+            });
+        })
+        .catch(function(error) {
+            console.error('Error loading districts:', error);
+        });
+}
+
+function loadZoneParents() {
+    fetch('/cuadrantizacion/zonas/?raiz=true')
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            // La API devuelve un array plano
+            var parents = Array.isArray(data) ? data : (data.zonas || data.results || []);
+            var select = document.getElementById('zone-parent');
+            if (!select) return;
+
+            select.innerHTML = '<option value="">Ninguna (raiz)</option>';
+            parents.forEach(function(z) {
+                var opt = document.createElement('option');
+                opt.value = z.id;
+                // El serializer usa 'nombre_zona'
+                opt.textContent = z.nombre_zona || 'Zona #' + z.id;
+                select.appendChild(opt);
+            });
+        })
+        .catch(function(error) {
+            console.error('Error loading parents:', error);
+        });
+}
+
+function setupAddressSearch() {
+    var searchBtn = document.getElementById('search-address');
+    var searchInput = document.getElementById('address-search');
+
+    if (!searchBtn || !searchInput) return;
+
+    searchBtn.addEventListener('click', function() {
+        geocodeAddress(searchInput.value);
+    });
+
+    searchInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            geocodeAddress(searchInput.value);
+        }
+    });
+}
+
+function geocodeAddress(address) {
+    if (!address || address.trim() === '') {
+        showAlert('Ingresa una direccion para buscar.', 'warning');
+        return;
+    }
+
+    var geocoder = new google.maps.Geocoder();
+    geocoder.geocode({
+        address: address + ', Arequipa, Peru',
+        componentRestrictions: { country: 'PE' }
+    }, function(results, status) {
+        if (status === 'OK' && results && results.length > 0) {
+            var location = results[0].geometry.location;
+            map.setCenter(location);
+            map.setZoom(16);
+
+            var marker = new google.maps.Marker({
+                position: location,
+                map: map,
+                title: address,
+                animation: google.maps.Animation.DROP
+            });
+
+            if (window._searchMarker) {
+                window._searchMarker.setMap(null);
+            }
+            window._searchMarker = marker;
+
+            showAlert('Direccion encontrada: ' + results[0].formatted_address, 'success');
+        } else {
+            showAlert('No se encontro la direccion. Intenta con terminos mas generales.', 'error');
+        }
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof google !== 'undefined' && google.maps) {
+        initMap();
+    }
+});
+
+function onGoogleMapsLoaded() {
+    if (typeof initMap === 'function') {
+        initMap();
+    }
+}
+</script>
+{% endblock %}

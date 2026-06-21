@@ -1,0 +1,419 @@
+{% extends "propifai_base.html" %}
+{% load static %}
+
+{% block title %}Mapa de POIs — Propifai{% endblock %}
+
+{% block extra_head %}
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ===== OVERRIDE content-area para mapa fullscreen ===== */
+    .content-area {
+        padding: 0 !important;
+        position: relative !important;
+        overflow: hidden !important;
+    }
+
+    /* ===== MAPA ===== */
+    #map {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+    }
+
+    /* ===== MAP HEADER (capas) ===== */
+    .map-header {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 10;
+        height: 48px;
+        background: rgba(22, 27, 34, 0.92);
+        backdrop-filter: blur(8px);
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        align-items: center;
+        padding: 0 16px;
+        gap: 10px;
+    }
+
+    .map-header-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-primary);
+        white-space: nowrap;
+    }
+
+    .map-header-title span {
+        color: var(--text-secondary);
+        font-weight: 400;
+    }
+
+    .layers-wrap {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex: 1;
+        overflow-x: auto;
+        min-width: 0;
+        white-space: nowrap;
+    }
+
+    .layers-wrap::-webkit-scrollbar { height: 2px; }
+    .layers-wrap::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 2px; }
+
+    .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 8px 3px 6px;
+        border-radius: 14px;
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        cursor: pointer;
+        font-size: 11px;
+        color: var(--text-secondary);
+        user-select: none;
+        transition: all 0.15s;
+        flex-shrink: 0;
+    }
+
+    .chip:hover { border-color: var(--accent-blue); color: var(--text-primary); }
+    .chip.active { background: rgba(88,166,255,0.12); border-color: var(--accent-blue); color: var(--text-primary); }
+    .chip-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .chip-count { font-size: 9px; color: var(--text-secondary); background: rgba(255,255,255,0.06); padding: 0 4px; border-radius: 6px; }
+
+    .badge {
+        font-size: 10px;
+        padding: 2px 8px;
+        border-radius: 10px;
+        background: var(--bg-tertiary);
+        color: var(--text-secondary);
+        border: 1px solid var(--border-color);
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    .loading {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        color: var(--text-secondary);
+        font-size: 11px;
+    }
+
+    .spinner {
+        width: 14px;
+        height: 14px;
+        border: 2px solid var(--border-color);
+        border-top-color: var(--accent-blue);
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .overlay {
+        position: absolute; inset: 0;
+        background: rgba(13,17,23,0.85);
+        display: flex; align-items: center; justify-content: center;
+        z-index: 20;
+        transition: opacity 0.3s;
+    }
+
+    .overlay.hidden { opacity: 0; pointer-events: none; }
+
+    .big-spinner {
+        width: 36px; height: 36px;
+        border: 3px solid var(--border-color);
+        border-top-color: var(--accent-blue);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+
+    .toolbar {
+        position: absolute;
+        top: 60px;
+        right: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        z-index: 5;
+    }
+
+    .btn-map {
+        width: 34px;
+        height: 34px;
+        border-radius: 6px;
+        border: 1px solid var(--border-color);
+        background: var(--bg-secondary);
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 14px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        transition: all 0.15s;
+    }
+
+    .btn-map:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+
+    .info {
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 8px 16px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        z-index: 5;
+        opacity: 0;
+        transition: opacity 0.3s;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+
+    .info.visible { opacity: 1; }
+
+    .stat { text-align: center; }
+    .stat-val { font-size: 15px; font-weight: 700; color: var(--text-primary); }
+    .stat-lbl { font-size: 9px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+    .divider { width: 1px; height: 26px; background: var(--border-color); }
+
+    .win {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        min-width: 200px;
+    }
+
+    .win h6 { font-weight: 600; margin: 0 0 5px 0; font-size: 14px; }
+    .win .cat { font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 6px; }
+    .win .det { font-size: 0.85rem; color: #c9d1d9; margin-bottom: 3px; }
+</style>
+{% endblock %}
+
+{% block sidebar_brand %}
+<div class="sidebar-brand">
+    <div class="brand-icon">&#x1F4CD;</div>
+    <div>
+        <div class="brand-text">Propifai POIs</div>
+        <div class="brand-subtext">Mapa de puntos de interés</div>
+    </div>
+</div>
+{% endblock %}
+
+{% block header_title_area %}
+<div class="header-title">&#x1F4CD; POIs <span>— Propifai</span></div>
+{% endblock %}
+
+{% block content %}
+<div style="position:relative;width:100%;height:100%;">
+    <div id="map"></div>
+
+    <!-- Map header (capas) -->
+    <div class="map-header">
+        <div class="map-header-title">&#x1F4CD; POIs <span>— Propifai</span></div>
+        <div class="layers-wrap" id="layersWrap">
+            <div class="loading" id="layersLoading">
+                <div class="spinner"></div>
+                Cargando...
+            </div>
+            <div id="layersChips" style="display:none;align-items:center;gap:4px;"></div>
+        </div>
+        <span class="badge" id="totalBadge">0 capas</span>
+    </div>
+
+    <!-- Loading overlay -->
+    <div class="overlay" id="overlay">
+        <div class="big-spinner"></div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+        <div class="btn-map" onclick="centrar()" title="Centrar">&#x2316;</div>
+        <div class="btn-map" onclick="recargar()" title="Recargar">&#x21BB;</div>
+    </div>
+
+    <!-- Info panel -->
+    <div class="info" id="infoPanel">
+        <div class="stat">
+            <div class="stat-val" id="statPois">0</div>
+            <div class="stat-lbl">POIs</div>
+        </div>
+        <div class="divider"></div>
+        <div class="stat">
+            <div class="stat-val" id="statCapas">0</div>
+            <div class="stat-lbl">Capas</div>
+        </div>
+        <div class="divider"></div>
+        <div class="stat">
+            <div class="stat-val" id="statRadio">0</div>
+            <div class="stat-lbl">Radio km</div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const KEY = '{{ google_maps_api_key }}';
+let map, markers = [], allCapas = [], activeCapas = new Set(), infoWindow, geoData = { features: [] };
+const COLORS = ['#58a6ff','#f78166','#3fb950','#d2a8ff','#ffa657','#79c0ff','#ff7b72','#7ee787'];
+
+function color(c, i) { return c.color && c.color !== '#58a6ff' ? c.color : COLORS[i % COLORS.length]; }
+
+window.initMap = function() {
+    map = new google.maps.Map(document.getElementById('map'), {
+        center: { lat: -16.3988, lng: -71.5375 },
+        zoom: 14,
+        styles: [
+            { elementType: 'geometry', stylers: [{ color: '#242f3e' }] },
+            { elementType: 'labels.text.stroke', stylers: [{ color: '#242f3e' }] },
+            { elementType: 'labels.text.fill', stylers: [{ color: '#746855' }] },
+            { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#d59563' }] },
+            { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#d59563' }] },
+            { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#263c3f' }] },
+            { featureType: 'poi.park', elementType: 'labels.text.fill', stylers: [{ color: '#6b9a76' }] },
+            { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#38414e' }] },
+            { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#212a37' }] },
+            { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#9ca5b3' }] },
+            { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#746855' }] },
+            { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#1f2835' }] },
+            { featureType: 'road.highway', elementType: 'labels.text.fill', stylers: [{ color: '#f3d19c' }] },
+            { featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#2f3948' }] },
+            { featureType: 'transit.station', elementType: 'labels.text.fill', stylers: [{ color: '#d59563' }] },
+            { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#17263c' }] },
+            { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#515c6d' }] },
+            { featureType: 'water', elementType: 'labels.text.stroke', stylers: [{ color: '#17263c' }] }
+        ],
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false,
+    });
+    infoWindow = new google.maps.InfoWindow();
+    google.maps.event.addListener(map, 'bounds_changed', updateStats);
+    google.maps.event.addListener(map, 'zoom_changed', updateStats);
+    cargar();
+};
+
+async function cargar() {
+    try {
+        const r = await fetch('/api/pois/capas/');
+        const d = await r.json();
+        allCapas = d.capas || [];
+        allCapas.forEach(c => activeCapas.add(c.slug));
+        renderChips();
+        const r2 = await fetch('/api/pois/all.geojson');
+        geoData = await r2.json();
+        renderMarkers();
+        updateStats();
+        done();
+    } catch(e) {
+        console.error('Error:', e);
+        document.getElementById('layersLoading').innerHTML = '&#x26A0; Error';
+        done();
+    }
+}
+
+function done() {
+    var l = document.getElementById('layersLoading');
+    var c = document.getElementById('layersChips');
+    if (l) l.style.display = 'none';
+    if (c) c.style.display = 'flex';
+    var o = document.getElementById('overlay');
+    if (o) o.classList.add('hidden');
+    var i = document.getElementById('infoPanel');
+    if (i) i.classList.add('visible');
+}
+
+function renderChips() {
+    var el = document.getElementById('layersChips');
+    if (!el) return;
+    if (!allCapas.length) { el.innerHTML = '<span style="color:#8b949e;font-size:11px;">Sin capas</span>'; return; }
+    el.innerHTML = allCapas.map((c, i) =>
+        `<span class="chip ${activeCapas.has(c.slug)?'active':''}" onclick="toggle('${c.slug}')">
+            <span class="chip-dot" style="background:${color(c,i)}"></span>
+            ${c.nombre}
+            <span class="chip-count">${c.total_pois}</span>
+        </span>`
+    ).join('');
+    var b = document.getElementById('totalBadge');
+    if (b) b.textContent = allCapas.length + ' capas';
+}
+
+function toggle(slug) {
+    if (activeCapas.has(slug)) activeCapas.delete(slug); else activeCapas.add(slug);
+    renderChips(); renderMarkers(); updateStats();
+}
+
+function renderMarkers() {
+    markers.forEach(m => m.setMap(null));
+    markers = [];
+    (geoData.features || []).forEach(f => {
+        var p = f.properties, coords = f.geometry.coordinates;
+        if (!activeCapas.has(p.categoria_slug)) return;
+        var ca = allCapas.find(c => c.slug === p.categoria_slug);
+        var col = ca ? color(ca, allCapas.indexOf(ca)) : '#58a6ff';
+        var m = new google.maps.Marker({
+            position: { lat: coords[1], lng: coords[0] },
+            map: map,
+            title: p.nombre,
+            icon: { path: google.maps.SymbolPath.CIRCLE, fillColor: col, fillOpacity: 0.9, strokeColor: '#fff', strokeWeight: 2, scale: 8 },
+            animation: google.maps.Animation.DROP,
+        });
+        m.addListener('click', function() {
+            infoWindow.setContent(
+                '<div class="win"><h6>' + (p.categoria_icono||'') + ' ' + p.nombre + '</h6>' +
+                '<div class="cat"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + col + ';margin-right:6px;"></span>' + p.categoria_nombre + '</div>' +
+                (p.direccion ? '<div class="det">&#x1F4CD; ' + p.direccion + '</div>' : '') +
+                (p.telefono ? '<div class="det">&#x260E; ' + p.telefono + '</div>' : '') +
+                (p.sitio_web ? '<div class="det">&#x1F310; <a href="' + p.sitio_web + '" target="_blank" style="color:#58a6ff">' + p.sitio_web + '</a></div>' : '') +
+                '</div>'
+            );
+            infoWindow.open(map, m);
+        });
+        markers.push(m);
+    });
+    var sp = document.getElementById('statPois');
+    if (sp) sp.textContent = markers.length;
+}
+
+function updateStats() {
+    var vis = (geoData.features || []).filter(f => activeCapas.has(f.properties.categoria_slug));
+    var sp = document.getElementById('statPois');
+    var sc = document.getElementById('statCapas');
+    var sr = document.getElementById('statRadio');
+    if (sp) sp.textContent = vis.length;
+    if (sc) sc.textContent = activeCapas.size;
+    if (map && sr) {
+        var b = map.getBounds();
+        if (b) {
+            var ne = b.getNorthEast(), sw = b.getSouthWest();
+            sr.textContent = Math.max(ne.lat()-sw.lat(), ne.lng()-sw.lng()).toFixed(1);
+        }
+    }
+}
+
+function centrar() {
+    if (markers.length) {
+        var b = new google.maps.LatLngBounds();
+        markers.forEach(m => b.extend(m.getPosition()));
+        map.fitBounds(b);
+    } else { map.setCenter({lat:-16.3988,lng:-71.5375}); map.setZoom(14); }
+}
+
+function recargar() {
+    document.getElementById('overlay').classList.remove('hidden');
+    cargar();
+}
+</script>
+<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&callback=initMap&libraries=places" async defer></script>
+{% endblock %}

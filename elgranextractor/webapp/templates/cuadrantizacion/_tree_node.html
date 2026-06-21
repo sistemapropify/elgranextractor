@@ -1,0 +1,105 @@
+<div class="tree-node level-{{ nodo.nivel }}" 
+     data-zone-id="{{ nodo.zona.id }}" 
+     data-zone-name="{{ nodo.zona.nombre_zona }}" 
+     data-zone-level="{{ nodo.zona.nivel }}"
+     draggable="true">
+    
+    <div class="node-header">
+        <div class="node-title">
+            <i class="fas fa-map-marker-alt me-2"></i>
+            {{ nodo.zona.nombre_zona }}
+        </div>
+        <div class="node-badges">
+            <span class="badge badge-level">
+                <i class="fas fa-layer-group"></i> {{ nodo.zona.get_nivel_display }}
+            </span>
+            {% if nodo.hijos %}
+            <span class="badge badge-children">
+                <i class="fas fa-sitemap"></i> {{ nodo.hijos|length }} hijo{{ nodo.hijos|length|pluralize }}
+            </span>
+            {% endif %}
+            {% if nodo.zona.parent %}
+            <span class="badge bg-secondary">
+                <i class="fas fa-level-up-alt"></i> Padre: {{ nodo.zona.parent.nombre_zona|truncatechars:15 }}
+            </span>
+            {% else %}
+            <span class="badge bg-primary">
+                <i class="fas fa-flag"></i> Zona Raíz
+            </span>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="node-details">
+        <div class="row">
+            <div class="col-md-6">
+                <small>
+                    <i class="fas fa-info-circle"></i> 
+                    {{ nodo.zona.descripcion|default:"Sin descripción"|truncatechars:60 }}
+                </small>
+            </div>
+            <div class="col-md-6 text-end">
+                <small>
+                    <i class="fas fa-calendar"></i> 
+                    Creada: {{ nodo.zona.fecha_creacion|date:"d/m/Y" }}
+                </small>
+            </div>
+        </div>
+        
+        {% if nodo.zona.cantidad_propiedades_analizadas %}
+        <div class="mt-2">
+            <small>
+                <i class="fas fa-chart-bar"></i> 
+                {{ nodo.zona.cantidad_propiedades_analizadas }} propiedades analizadas | 
+                <i class="fas fa-dollar-sign"></i> 
+                ${{ nodo.zona.precio_promedio_m2|default:"0"|floatformat:2 }}/m²
+            </small>
+        </div>
+        {% endif %}
+    </div>
+    
+    <div class="node-actions">
+        <button class="btn btn-sm btn-outline-primary btn-toggle" title="Expandir/Colapsar">
+            <i class="fas fa-{% if nodo.hijos %}minus{% else %}plus{% endif %}"></i>
+        </button>
+        
+        <button class="btn btn-sm btn-outline-info btn-edit-zone" 
+                data-zone-id="{{ nodo.zona.id }}"
+                title="Editar zona">
+            <i class="fas fa-edit"></i>
+        </button>
+        
+        {% if nodo.zona.children.count %}
+        <span class="btn btn-sm btn-outline-success disabled" title="Tiene {{ nodo.zona.children.count }} subzonas">
+            <i class="fas fa-sitemap"></i> {{ nodo.zona.children.count }}
+        </span>
+        {% endif %}
+        
+        <button class="btn btn-sm btn-outline-danger btn-delete-zone" 
+                data-zone-id="{{ nodo.zona.id }}"
+                data-zone-name="{{ nodo.zona.nombre_zona }}"
+                title="Eliminar zona">
+            <i class="fas fa-trash"></i>
+        </button>
+        
+        <small class="ms-auto text-muted">
+            ID: {{ nodo.zona.id }} | 
+            <i class="fas fa-arrows-alt"></i> Arrastra para reorganizar
+        </small>
+    </div>
+    
+    {% if nodo.hijos %}
+    <div class="children-container" style="display: block;">
+        {% for hijo in nodo.hijos %}
+            {% include "cuadrantizacion/_tree_node.html" with nodo=hijo %}
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="children-container empty-children" style="display: none;">
+        <i class="fas fa-info-circle"></i> Esta zona no tiene subzonas. 
+        <a href="#" class="btn-add-child" data-parent-id="{{ nodo.zona.id }}">
+            <i class="fas fa-plus"></i> Agregar subzona
+        </a>
+    </div>
+    {% endif %}
+</div>

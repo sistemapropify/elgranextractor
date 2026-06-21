@@ -1,0 +1,200 @@
+{% extends "intelligence/base/base.html" %}
+{% load static %}
+
+{% block title %}{% if is_edit %}Editar{% else %}Crear{% endif %} Skill — Propifai Skills{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --bg-dark: #0d1117;
+        --bg-card: #161b22;
+        --bg-input: #0d1117;
+        --border-color: #30363d;
+        --text-primary: #e6edf3;
+        --text-secondary: #8b949e;
+        --text-muted: #484f58;
+        --accent-blue: #58a6ff;
+        --accent-green: #238636;
+        --accent-green-hover: #2ea043;
+        --accent-red: #f85149;
+        --accent-orange: #d29922;
+        --accent-purple: #bc8cff;
+        --accent-cyan: #39d2c0;
+        --radius: 8px;
+        --radius-sm: 6px;
+    }
+    body { background: var(--bg-dark); color: var(--text-primary); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif; }
+    .container { max-width: 900px; margin: 0 auto; padding: 24px; }
+    .header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+    .header h1 { font-size: 22px; font-weight: 700; margin: 0; }
+    .nav-links { display: flex; gap: 4px; margin-bottom: 24px; flex-wrap: wrap; }
+    .nav-link { padding: 6px 14px; border-radius: var(--radius-sm); font-size: 13px; color: var(--text-secondary); text-decoration: none; border: 1px solid var(--border-color); background: transparent; transition: all 0.15s; }
+    .nav-link:hover { color: var(--text-primary); background: rgba(255,255,255,0.05); }
+    .card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius); margin-bottom: 16px; overflow: hidden; }
+    .card-header { padding: 14px 20px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; }
+    .card-header h3 { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); }
+    .card-body { padding: 20px; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 13px; color: var(--text-secondary); font-weight: 500; margin-bottom: 6px; }
+    .form-group .help-text { font-size: 11px; color: var(--text-muted); margin-top: 4px; display: block; }
+    .form-group code { background: rgba(88,166,255,0.1); color: var(--accent-blue); padding: 1px 4px; border-radius: 3px; font-size: 12px; }
+    .input { width: 100%; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 8px 12px; color: var(--text-primary); font-size: 14px; box-sizing: border-box; }
+    .input:focus { outline: none; border-color: var(--accent-blue); }
+    .input-static { padding: 8px 12px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-secondary); font-family: monospace; font-size: 14px; }
+    .select { width: 100%; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 8px 12px; color: var(--text-primary); font-size: 14px; box-sizing: border-box; }
+    .select:focus { outline: none; border-color: var(--accent-blue); }
+    .textarea { width: 100%; background: var(--bg-input); border: 1px solid var(--border-color); padding: 12px; color: var(--text-primary); font-size: 13px; font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace; line-height: 1.6; tab-size: 4; box-sizing: border-box; resize: vertical; }
+    .textarea:focus { outline: none; border-color: var(--accent-blue); }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500; text-decoration: none; border: 1px solid var(--border-color); background: transparent; color: var(--text-primary); cursor: pointer; transition: all 0.15s; }
+    .btn:hover { background: rgba(255,255,255,0.05); }
+    .btn-primary { background: var(--accent-green); border-color: var(--accent-green); color: #fff; }
+    .btn-primary:hover { background: var(--accent-green-hover); }
+    .alert { padding: 12px 16px; border-radius: var(--radius-sm); font-size: 13px; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+    .alert-error { background: rgba(248,81,73,0.1); border: 1px solid rgba(248,81,73,0.3); color: var(--accent-red); }
+    .alert-success { background: rgba(35,134,54,0.1); border: 1px solid rgba(35,134,54,0.3); color: #3fb950; }
+    .alert-warning { background: rgba(210,153,34,0.1); border: 1px solid rgba(210,153,34,0.3); color: var(--accent-orange); }
+    .code-editor-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--border-color); font-size: 12px; color: var(--text-secondary); }
+    .code-editor-header code { background: rgba(88,166,255,0.1); color: var(--accent-blue); padding: 1px 4px; border-radius: 3px; }
+    .actions-bar { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+    @media (max-width: 768px) {
+        .grid-2 { grid-template-columns: 1fr; }
+        .header { flex-direction: column; align-items: flex-start; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <!-- Nav -->
+    <div class="nav-links">
+        <a href="{% url 'intelligence:skills_dashboard' %}" class="nav-link">← Dashboard</a>
+        <a href="{% url 'intelligence:skill_logs' %}" class="nav-link">📋 Logs</a>
+    </div>
+
+    <!-- Header -->
+    <div class="header">
+        <h1>{% if is_edit %}✏️ Editar Skill: {{ skill_name }}{% else %}➕ Crear Nueva Skill{% endif %}</h1>
+    </div>
+
+    <!-- Messages -->
+    {% if messages %}
+    {% for message in messages %}
+    <div class="alert alert-{% if message.tags == 'error' %}error{% elif message.tags == 'warning' %}warning{% else %}success{% endif %}">
+        {{ message }}
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    {% if error %}
+    <div class="alert alert-error">⚠️ {{ error }}</div>
+    {% endif %}
+
+    <!-- Form -->
+    <form method="POST" action="{% if is_edit %}{% url 'intelligence:skill_edit' skill_name %}{% else %}{% url 'intelligence:skill_create' %}{% endif %}">
+        {% csrf_token %}
+
+        <div class="card">
+            <div class="card-header"><h3>📋 Información Básica</h3></div>
+            <div class="card-body">
+                {% if not is_edit %}
+                <div class="form-group">
+                    <label for="skill_name">Nombre de la Skill *</label>
+                    <input type="text" id="skill_name" name="skill_name" class="input"
+                           placeholder="ej: mi_skill_personalizada"
+                           value="{{ form_data.skill_name|default:'' }}"
+                           pattern="^[a-z_][a-z0-9_]*$"
+                           title="Minúsculas, números y underscores. Empezar con letra o underscore."
+                           required>
+                    <span class="help-text">Solo minúsculas, números y underscores. Ej: <code>analisis_avanzado</code></span>
+                </div>
+                {% else %}
+                <input type="hidden" name="skill_name" value="{{ skill_name }}">
+                <div class="form-group">
+                    <label>Nombre de la Skill</label>
+                    <div class="input-static">{{ skill_name }}</div>
+                </div>
+                {% endif %}
+
+                <div class="form-group">
+                    <label for="description">Descripción</label>
+                    <input type="text" id="description" name="description" class="input"
+                           placeholder="Breve descripción de lo que hace esta skill"
+                           value="{% if skill_info %}{{ form_data.description|default:skill_info.description|default:'' }}{% else %}{{ form_data.description|default:'' }}{% endif %}">
+                </div>
+
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label for="category">Categoría</label>
+                        <select id="category" name="category" class="select">
+                            <option value="general" {% if skill_info and skill_info.category == 'general' or form_data.category == 'general' %}selected{% endif %}>General</option>
+                            <option value="query" {% if skill_info and skill_info.category == 'query' or form_data.category == 'query' %}selected{% endif %}>Query</option>
+                            <option value="analysis" {% if skill_info and skill_info.category == 'analysis' or form_data.category == 'analysis' %}selected{% endif %}>Analysis</option>
+                            <option value="utility" {% if skill_info and skill_info.category == 'utility' or form_data.category == 'utility' %}selected{% endif %}>Utility</option>
+                            <option value="data" {% if skill_info and skill_info.category == 'data' or form_data.category == 'data' %}selected{% endif %}>Data</option>
+                            <option value="integration" {% if skill_info and skill_info.category == 'integration' or form_data.category == 'integration' %}selected{% endif %}>Integration</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="required_level">Nivel Requerido</label>
+                        <select id="required_level" name="required_level" class="select">
+                            <option value="1" {% if form_data.required_level == '1' or skill_info and skill_info.required_level == 1 %}selected{% endif %}>Nivel 1 (Básico)</option>
+                            <option value="2" {% if form_data.required_level == '2' or skill_info and skill_info.required_level == 2 %}selected{% endif %}>Nivel 2 (Intermedio)</option>
+                            <option value="3" {% if form_data.required_level == '3' or skill_info and skill_info.required_level == 3 %}selected{% endif %}>Nivel 3 (Avanzado)</option>
+                            <option value="4" {% if form_data.required_level == '4' or skill_info and skill_info.required_level == 4 %}selected{% endif %}>Nivel 4 (Admin)</option>
+                            <option value="5" {% if form_data.required_level == '5' or skill_info and skill_info.required_level == 5 %}selected{% endif %}>Nivel 5 (Super Admin)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Code Editor -->
+        <div class="card">
+            <div class="card-header">
+                <h3>💻 Código de la Skill</h3>
+                <span class="help-text" style="margin:0;">Python</span>
+            </div>
+            <div class="card-body" style="padding:0;">
+                <div class="code-editor-header">
+                    <span>🐍 {{ skill_name|default:"nueva_skill" }}.py</span>
+                    <span>Debe contener una clase que herede de <code>Skill</code></span>
+                </div>
+                <textarea id="code_content" name="code_content" class="textarea"
+                          placeholder="# Escribe aquí el código de tu skill..."
+                          style="min-height:350px;border:none;border-radius:0;" required>{% if is_edit %}{{ code_content }}{% else %}{{ form_data.code_content|default:'' }}{% endif %}</textarea>
+            </div>
+            <div style="padding:8px 16px 12px;border-top:1px solid var(--border-color);">
+                <span class="help-text">La clase debe heredar de <code>Skill</code> e implementar el método <code>execute(self, **kwargs) -> SkillResult</code>. Usa <code>self.validate_params(**kwargs)</code> para validar parámetros.</span>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="actions-bar">
+            <a href="{% url 'intelligence:skills_dashboard' %}" class="btn">Cancelar</a>
+            <button type="submit" class="btn btn-primary">
+                {% if is_edit %}✓ Guardar Cambios{% else %}➕ Crear Skill{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const textarea = document.getElementById('code_content');
+    if (textarea) {
+        textarea.addEventListener('keydown', function(e) {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                const start = this.selectionStart;
+                const end = this.selectionEnd;
+                this.value = this.value.substring(0, start) + '    ' + this.value.substring(end);
+                this.selectionStart = this.selectionEnd = start + 4;
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

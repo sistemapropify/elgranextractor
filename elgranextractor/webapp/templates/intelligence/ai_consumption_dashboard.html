@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consumo de IA - Propifai Intelligence Layer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #0d1117;
+            color: #c9d1d9;
+            line-height: 1.6;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #30363d;
+        }
+        
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            color: #f0f6fc;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .header p {
+            color: #8b949e;
+            font-size: 14px;
+            margin-top: 4px;
+        }
+        
+        .header-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            border: 1px solid #30363d;
+            background: #21262d;
+            color: #c9d1d9;
+            transition: all 0.2s;
+        }
+        
+        .btn:hover {
+            background: #30363d;
+            border-color: #8b949e;
+        }
+        
+        .btn-primary {
+            background: #238636;
+            border-color: #238636;
+            color: #fff;
+        }
+        
+        .btn-primary:hover {
+            background: #2ea043;
+        }
+        
+        .btn-sm {
+            padding: 4px 10px;
+            font-size: 12px;
+        }
+        
+        .btn-danger {
+            background: #da3633;
+            border-color: #da3633;
+            color: #fff;
+        }
+        
+        .btn-danger:hover {
+            background: #f85149;
+        }
+        
+        /* Selector de fecha */
+        .filter-bar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+            padding: 16px;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            flex-wrap: wrap;
+        }
+        
+        .filter-bar label {
+            font-size: 13px;
+            color: #8b949e;
+            font-weight: 500;
+        }
+        
+        .filter-bar input[type="date"],
+        .filter-bar select {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 6px 12px;
+            color: #c9d1d9;
+            font-size: 13px;
+        }
+        
+        .filter-bar input[type="date"]:focus,
+        .filter-bar select:focus {
+            outline: none;
+            border-color: #58a6ff;
+        }
+        
+        .filter-bar select {
+            min-width: 200px;
+        }
+        
+        /* Tarjetas de métricas */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        
+        .metric-card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 20px;
+            transition: border-color 0.2s;
+        }
+        
+        .metric-card:hover {
+            border-color: #58a6ff;
+        }
+        
+        .metric-card .metric-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+        
+        .metric-card .metric-label {
+            font-size: 12px;
+            color: #8b949e;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+        }
+        
+        .metric-card .metric-icon {
+            font-size: 20px;
+            opacity: 0.7;
+        }
+        
+        .metric-card .metric-value {
+            font-size: 32px;
+            font-weight: 700;
+            line-height: 1.2;
+            margin-bottom: 4px;
+        }
+        
+        .metric-card .metric-sub {
+            font-size: 12px;
+            color: #8b949e;
+        }
+        
+        .text-blue { color: #58a6ff; }
+        .text-green { color: #3fb950; }
+        .text-orange { color: #f78166; }
+        .text-purple { color: #bc8cff; }
+        .text-yellow { color: #d29922; }
+        
+        /* Gráfico */
+        .chart-section {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+        
+        .chart-section h3 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #f0f6fc;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .chart-toggles {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        
+        .chart-toggles button {
+            background: transparent;
+            border: 1px solid #30363d;
+            color: #8b949e;
+            padding: 4px 14px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .chart-toggles button.active {
+            background: #58a6ff;
+            border-color: #58a6ff;
+            color: #fff;
+        }
+        
+        .chart-toggles button:hover:not(.active) {
+            border-color: #8b949e;
+            color: #f0f6fc;
+        }
+        
+        .chart-wrapper {
+            position: relative;
+            height: 350px;
+            width: 100%;
+        }
+        
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        
+        @media (max-width: 1024px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        /* Tablas */
+        .table-section {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 24px;
+            overflow-x: auto;
+        }
+        
+        .table-section h3 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #f0f6fc;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .table-section .section-desc {
+            font-size: 12px;
+            color: #8b949e;
+            margin-bottom: 16px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        
+        table th {
+            text-align: left;
+            padding: 8px 12px;
+            color: #8b949e;
+            font-weight: 500;
+            border-bottom: 2px solid #30363d;
+            white-space: nowrap;
+        }
+        
+        table td {
+            padding: 8px 12px;
+            border-bottom: 1px solid #21262d;
+        }
+        
+        table tr:hover td {
+            background: rgba(88, 166, 255, 0.05);
+        }
+        
+        .bar-cell {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .bar-cell .bar {
+            height: 8px;
+            border-radius: 4px;
+            background: #58a6ff;
+            min-width: 2px;
+            transition: width 0.3s;
+        }
+        
+        .bar-cell .bar-green {
+            background: #3fb950;
+        }
+        
+        .bar-cell .bar-orange {
+            background: #f78166;
+        }
+        
+        .bar-cell .bar-purple {
+            background: #bc8cff;
+        }
+        
+        .bar-cell .bar-value {
+            font-size: 12px;
+            color: #8b949e;
+            min-width: 40px;
+            text-align: right;
+        }
+        
+        .badge-success {
+            display: inline-block;
+            background: rgba(63, 185, 80, 0.15);
+            color: #3fb950;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        
+        .badge-error {
+            display: inline-block;
+            background: rgba(248, 81, 73, 0.15);
+            color: #f85149;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        
+        .badge-warning {
+            display: inline-block;
+            background: rgba(210, 153, 34, 0.15);
+            color: #d29922;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        
+        .badge-info {
+            display: inline-block;
+            background: rgba(88, 166, 255, 0.15);
+            color: #58a6ff;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        
+        .empty-state {
+            text-align: center;
+            color: #8b949e;
+            padding: 40px 20px;
+        }
+        
+        .empty-state .empty-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+        
+        .empty-state p {
+            font-size: 14px;
+        }
+        
+        .caller-app-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        
+        .caller-bot { background: rgba(88, 166, 255, 0.15); color: #58a6ff; }
+        .caller-extractor { background: rgba(210, 153, 34, 0.15); color: #d29922; }
+        .caller-skills { background: rgba(188, 140, 255, 0.15); color: #bc8cff; }
+        .caller-views { background: rgba(63, 185, 80, 0.15); color: #3fb950; }
+        .caller-processor { background: rgba(247, 129, 102, 0.15); color: #f78166; }
+        .caller-memory { background: rgba(139, 148, 158, 0.15); color: #8b949e; }
+        
+        @media (max-width: 768px) {
+            .metrics-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .metric-card .metric-value {
+                font-size: 24px;
+            }
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div>
+                <h1>
+                    <span>📊</span>
+                    Consumo de IA
+                    {% if caller_filter %}
+                    <span class="badge-info" style="font-size:14px;padding:4px 12px;">Filtro: {{ caller_filter }}</span>
+                    {% endif %}
+                </h1>
+                <p>Monitoreo granular de tokens, llamadas y costos del modelo DeepSeek por proceso.</p>
+            </div>
+            <div class="header-actions">
+                <a href="/intelligence/dashboard/" class="btn">← Volver</a>
+            </div>
+        </div>
+
+        <!-- Selector de fecha + filtro caller_app -->
+        <form method="GET" class="filter-bar">
+            <label for="fecha">📅 Fecha:</label>
+            <input type="date" id="fecha" name="fecha" value="{{ fecha_seleccionada_str }}" max="{{ hoy.isoformat }}">
+            
+            <label for="caller">🔍 Proceso:</label>
+            <select id="caller" name="caller">
+                <option value="">Todos los procesos</option>
+                {% for stat in caller_stats %}
+                <option value="{{ stat.caller_app }}" {% if caller_filter == stat.caller_app %}selected{% endif %}>
+                    {{ stat.caller_app }} ({{ stat.llamadas }} llamadas)
+                </option>
+                {% endfor %}
+            </select>
+            
+            <button type="submit" class="btn btn-primary">Filtrar</button>
+            {% if caller_filter %}
+            <a href="?fecha={{ fecha_seleccionada_str }}" class="btn btn-sm btn-danger">✕ Quitar filtro</a>
+            {% endif %}
+        </form>
+
+        {% if total_llamadas > 0 %}
+        <!-- Tarjetas de métricas -->
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-header">
+                    <span class="metric-label">Total de llamadas</span>
+                    <span class="metric-icon">💬</span>
+                </div>
+                <div class="metric-value text-blue">{{ total_llamadas }}</div>
+                <div class="metric-sub">
+                    {{ llamadas_exitosas }} exitosas / {{ llamadas_fallidas }} fallidas
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-header">
+                    <span class="metric-label">Tokens totales</span>
+                    <span class="metric-icon">🔤</span>
+                </div>
+                <div class="metric-value text-green">{{ total_tokens|default:"0"|floatformat:0 }}</div>
+                <div class="metric-sub">
+                    {{ total_prompt|default:"0"|floatformat:0 }} prompt · {{ total_completion|default:"0"|floatformat:0 }} completion
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-header">
+                    <span class="metric-label">Costo estimado</span>
+                    <span class="metric-icon">💰</span>
+                </div>
+                <div class="metric-value text-orange">${{ costo_total|default:"0.00000000"|floatformat:6 }}</div>
+                <div class="metric-sub">USD (precios DeepSeek)</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-header">
+                    <span class="metric-label">Duración promedio</span>
+                    <span class="metric-icon">⏱️</span>
+                </div>
+                <div class="metric-value text-purple">{{ duracion_promedio }} ms</div>
+                <div class="metric-sub">por llamada</div>
+            </div>
+        </div>
+
+        <!-- Gráficos lado a lado -->
+        <div class="charts-grid">
+            <!-- Gráfico de consumo por hora -->
+            <div class="chart-section">
+                <h3>📈 Consumo por hora</h3>
+                <div class="chart-toggles">
+                    <button class="active" data-chart="llamadas" onclick="toggleChart('llamadas')">📞 Llamadas</button>
+                    <button data-chart="tokens" onclick="toggleChart('tokens')">🔤 Tokens</button>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="consumptionChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Gráfico por caller_app -->
+            <div class="chart-section">
+                <h3>📊 Consumo por proceso</h3>
+                <div class="chart-toggles">
+                    <button class="active" data-chart2="llamadas" onclick="toggleChart2('llamadas')">📞 Llamadas</button>
+                    <button data-chart2="tokens" onclick="toggleChart2('tokens')">🔤 Tokens</button>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="callerChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- DESGLOSE GRANULAR: Por caller_app -->
+        <div class="table-section">
+            <h3>🔬 Desglose por proceso (caller_app)</h3>
+            <div class="section-desc">
+                Cada fila representa un proceso/subsistema que consume la API de DeepSeek.
+                Los datos incluyen todas las llamadas agrupadas por caller_app.
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Proceso</th>
+                        <th>Llamadas</th>
+                        <th>Tokens</th>
+                        <th>Prompt</th>
+                        <th>Completion</th>
+                        <th>Costo USD</th>
+                        <th>Duración prom.</th>
+                        <th>Éxito</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for stat in caller_stats %}
+                    <tr>
+                        <td>
+                            <span class="caller-app-badge 
+                                {% if 'chat' in stat.caller_app %}caller-bot
+                                {% elif 'extractor' in stat.caller_app or 'whatsapp' in stat.caller_app %}caller-extractor
+                                {% elif 'skill' in stat.caller_app %}caller-skills
+                                {% elif 'views' in stat.caller_app %}caller-views
+                                {% elif 'processor' in stat.caller_app %}caller-processor
+                                {% elif 'memory' in stat.caller_app %}caller-memory
+                                {% else %}caller-memory{% endif %}">
+                                {{ stat.caller_app }}
+                            </span>
+                        </td>
+                        <td><strong>{{ stat.llamadas }}</strong></td>
+                        <td>{{ stat.tokens|default:"0"|floatformat:0 }}</td>
+                        <td>{{ stat.prompt|default:"0"|floatformat:0 }}</td>
+                        <td>{{ stat.completion|default:"0"|floatformat:0 }}</td>
+                        <td>${{ stat.costo|default:"0"|floatformat:6 }}</td>
+                        <td>{{ stat.duracion_promedio }} ms</td>
+                        <td>
+                            <span class="{% if stat.tasa_exito >= 90 %}badge-success{% elif stat.tasa_exito >= 50 %}badge-warning{% else %}badge-error{% endif %}">
+                                {{ stat.tasa_exito }}%
+                            </span>
+                            <span style="font-size:11px;color:#8b949e;">({{ stat.exitosas }}/{{ stat.llamadas }})</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- DESGLOSE GRANULAR: Por endpoint (función específica) -->
+        <div class="table-section">
+            <h3>⚙️ Desglose por endpoint (función)</h3>
+            <div class="section-desc">
+                Cada fila representa una función/método específico que llamó a DeepSeek.
+                Permite identificar exactamente qué funcionalidad está consumiendo más recursos.
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Función / Endpoint</th>
+                        <th>Llamadas</th>
+                        <th>Tokens</th>
+                        <th>Costo USD</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ep in endpoint_stats %}
+                    <tr>
+                        <td><code>{{ ep.endpoint }}</code></td>
+                        <td><strong>{{ ep.llamadas }}</strong></td>
+                        <td>{{ ep.tokens|default:"0"|floatformat:0 }}</td>
+                        <td>${{ ep.costo|default:"0"|floatformat:6 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Tabla de detalle por hora -->
+        <div class="table-section">
+            <h3>📋 Detalle por hora</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Hora</th>
+                        <th>Llamadas</th>
+                        <th>Tokens</th>
+                        <th>Costo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for hora in horas_data %}
+                    <tr>
+                        <td><strong>{{ hora.hora_label }}</strong></td>
+                        <td>
+                            <div class="bar-cell">
+                                <div class="bar" style="width: {% widthratio hora.llamadas total_llamadas 100 %}%;"></div>
+                                <span class="bar-value">{{ hora.llamadas }}</span>
+                            </div>
+                        </td>
+                        <td>{{ hora.tokens|default:"0"|floatformat:0 }}</td>
+                        <td>${{ hora.costo|default:"0"|floatformat:6 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Últimos registros -->
+        <div class="table-section">
+            <h3>📝 Últimas llamadas</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Hora</th>
+                        <th>Proceso</th>
+                        <th>Función</th>
+                        <th>Tokens</th>
+                        <th>Duración</th>
+                        <th>Costo</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in ultimos_registros %}
+                    <tr>
+                        <td>{{ log.created_at|date:"H:i:s" }}</td>
+                        <td>
+                            <span class="caller-app-badge 
+                                {% if 'chat' in log.caller_app %}caller-bot
+                                {% elif 'extractor' in log.caller_app or 'whatsapp' in log.caller_app %}caller-extractor
+                                {% elif 'skill' in log.caller_app %}caller-skills
+                                {% elif 'views' in log.caller_app %}caller-views
+                                {% elif 'processor' in log.caller_app %}caller-processor
+                                {% else %}caller-memory{% endif %}">
+                                {{ log.caller_app|default:"-"|truncatechars:25 }}
+                            </span>
+                        </td>
+                        <td><code>{{ log.endpoint|default:"-"|truncatechars:30 }}</code></td>
+                        <td>{{ log.total_tokens }}</td>
+                        <td>{{ log.duration_ms }} ms</td>
+                        <td>${{ log.estimated_cost_usd|floatformat:8 }}</td>
+                        <td>
+                            {% if log.success %}
+                            <span class="badge-success">✓ Éxito</span>
+                            {% else %}
+                            <span class="badge-error">✗ Error</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="empty-state">
+                            No hay registros de consumo para esta fecha.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <!-- Estado vacío -->
+        <div class="table-section">
+            <div class="empty-state">
+                <div class="empty-icon">🤖</div>
+                <h3 style="color: #f0f6fc; margin-bottom: 8px;">Sin datos de consumo</h3>
+                <p>No hay registros de consumo de IA para la fecha seleccionada.</p>
+                <p style="margin-top: 8px; font-size: 12px;">Los datos comienzan a registrarse automáticamente cuando se realizan llamadas a DeepSeek desde cualquier proceso (chatbot, extractor, skills, etc.).</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script>
+        // ── Gráfico 1: Consumo por hora ──
+        var chartLabels = {{ chart_labels|safe }};
+        var chartLlamadas = {{ chart_llamadas|safe }};
+        var chartTokens = {{ chart_tokens|safe }};
+
+        var currentMetric = 'llamadas';
+        var consumptionChart = null;
+
+        function initChart() {
+            var ctx = document.getElementById('consumptionChart');
+            if (!ctx) return;
+            ctx = ctx.getContext('2d');
+            
+            consumptionChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: chartLabels,
+                    datasets: [{
+                        label: 'Llamadas',
+                        data: chartLlamadas,
+                        backgroundColor: 'rgba(88, 166, 255, 0.7)',
+                        borderColor: 'rgba(88, 166, 255, 1)',
+                        borderWidth: 1,
+                        borderRadius: 3,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#161b22',
+                            titleColor: '#f0f6fc',
+                            bodyColor: '#8b949e',
+                            borderColor: '#30363d',
+                            borderWidth: 1,
+                            padding: 10,
+                            callbacks: {
+                                label: function(context) {
+                                    var value = context.parsed.y;
+                                    if (currentMetric === 'tokens') {
+                                        return value.toLocaleString() + ' tokens';
+                                    }
+                                    return value + ' llamadas';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(48, 54, 61, 0.3)' },
+                            ticks: { color: '#8b949e', font: { size: 11 }, maxRotation: 45 }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(48, 54, 61, 0.3)' },
+                            ticks: {
+                                color: '#8b949e',
+                                font: { size: 11 },
+                                callback: function(value) {
+                                    if (currentMetric === 'tokens' && value >= 1000) {
+                                        return (value / 1000).toFixed(1) + 'k';
+                                    }
+                                    return value;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function toggleChart(metric) {
+            currentMetric = metric;
+            
+            document.querySelectorAll('.chart-toggles button[data-chart]').forEach(function(btn) {
+                btn.classList.toggle('active', btn.dataset.chart === metric);
+            });
+
+            if (!consumptionChart) return;
+
+            if (metric === 'llamadas') {
+                consumptionChart.data.datasets[0].label = 'Llamadas';
+                consumptionChart.data.datasets[0].data = chartLlamadas;
+                consumptionChart.data.datasets[0].backgroundColor = 'rgba(88, 166, 255, 0.7)';
+                consumptionChart.data.datasets[0].borderColor = 'rgba(88, 166, 255, 1)';
+            } else {
+                consumptionChart.data.datasets[0].label = 'Tokens';
+                consumptionChart.data.datasets[0].data = chartTokens;
+                consumptionChart.data.datasets[0].backgroundColor = 'rgba(63, 185, 80, 0.7)';
+                consumptionChart.data.datasets[0].borderColor = 'rgba(63, 185, 80, 1)';
+            }
+            
+            consumptionChart.update();
+        }
+
+        // ── Gráfico 2: Consumo por caller_app ──
+        var callerLabels = {{ caller_chart_labels|safe }};
+        var callerLlamadas = {{ caller_chart_llamadas|safe }};
+        var callerTokens = {{ caller_chart_tokens|safe }};
+
+        var currentMetric2 = 'llamadas';
+        var callerChart = null;
+
+        function initCallerChart() {
+            var ctx = document.getElementById('callerChart');
+            if (!ctx) return;
+            ctx = ctx.getContext('2d');
+
+            var colors = [
+                'rgba(88, 166, 255, 0.7)', 'rgba(63, 185, 80, 0.7)',
+                'rgba(247, 129, 102, 0.7)', 'rgba(188, 140, 255, 0.7)',
+                'rgba(210, 153, 34, 0.7)'
+            ];
+            var borderColors = [
+                'rgba(88, 166, 255, 1)', 'rgba(63, 185, 80, 1)',
+                'rgba(247, 129, 102, 1)', 'rgba(188, 140, 255, 1)',
+                'rgba(210, 153, 34, 1)'
+            ];
+
+            callerChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: callerLabels,
+                    datasets: [{
+                        label: 'Llamadas',
+                        data: callerLlamadas,
+                        backgroundColor: colors.slice(0, callerLabels.length),
+                        borderColor: borderColors.slice(0, callerLabels.length),
+                        borderWidth: 1,
+                        borderRadius: 3,
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#161b22',
+                            titleColor: '#f0f6fc',
+                            bodyColor: '#8b949e',
+                            borderColor: '#30363d',
+                            borderWidth: 1,
+                            padding: 10,
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(48, 54, 61, 0.3)' },
+                            ticks: { color: '#8b949e', font: { size: 11 } }
+                        },
+                        y: {
+                            grid: { display: false },
+                            ticks: { color: '#8b949e', font: { size: 11 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        function toggleChart2(metric) {
+            currentMetric2 = metric;
+            
+            document.querySelectorAll('.chart-toggles button[data-chart2]').forEach(function(btn) {
+                btn.classList.toggle('active', btn.dataset.chart2 === metric);
+            });
+
+            if (!callerChart) return;
+
+            if (metric === 'llamadas') {
+                callerChart.data.datasets[0].label = 'Llamadas';
+                callerChart.data.datasets[0].data = callerLlamadas;
+            } else {
+                callerChart.data.datasets[0].label = 'Tokens';
+                callerChart.data.datasets[0].data = callerTokens;
+            }
+            
+            callerChart.update();
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            initChart();
+            initCallerChart();
+        });
+    </script>
+</body>
+</html>

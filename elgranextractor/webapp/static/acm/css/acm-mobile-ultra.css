@@ -1,0 +1,417 @@
+/* ============================================================
+   ESTILOS GLOBALES (Desktop y Mobile)
+   Los 5 campos (m² const, m² terr, Piso, Hab, Baños) en UNA SOLA LÍNEA
+   ============================================================ */
+.acm-all-fields-row {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: 0.3rem !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+}
+
+.acm-all-fields-row .acm-field-col {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+.acm-all-fields-row .acm-field-label {
+    font-size: 0.75rem !important;
+    margin-bottom: 0.1rem !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    display: block !important;
+    width: 100% !important;
+}
+
+.acm-all-fields-row .acm-field-input {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+}
+
+/* Reset para móvil */
+@media (max-width: 767.98px) {
+    /* Contenedor principal sin padding */
+    .acm-container {
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    
+    /* Panel de parámetros - altura automática, sin scroll */
+    .mobile-params-panel {
+        height: auto !important;
+        max-height: none !important;
+        margin-bottom: 0.25rem !important;
+    }
+    
+    .mobile-params-panel .card {
+        border: none !important;
+        box-shadow: none !important;
+        margin: 0 !important;
+    }
+    
+    .mobile-params-panel .card-header {
+        padding: 0.25rem 0.4rem !important;
+        background: #f8f9fa !important;
+        border-bottom: 1px solid #dee2e6 !important;
+    }
+    
+    .mobile-params-panel .card-header h6 {
+        font-size: 0.75rem !important;
+        margin: 0 !important;
+    }
+    
+    .mobile-params-panel .card-body {
+        padding: 0.3rem !important;
+        max-height: none !important;
+        overflow: visible !important; /* Sin scroll */
+    }
+    
+    /* Formulario ultra compacto - diseño en línea */
+    #acmForm {
+        display: grid !important;
+        grid-template-columns: repeat(4, 1fr) !important;
+        gap: 0.2rem !important;
+    }
+    
+    /* Tipo de propiedad - ocupa todo el ancho */
+    #acmForm > div:first-child {
+        grid-column: span 4 !important;
+    }
+    
+    /* Todos los campos (m² const, m² terr, Piso, Hab, Baños) en UNA SOLA LÍNEA */
+    .acm-all-fields-row {
+        grid-column: span 4 !important;
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        gap: 0.15rem !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        align-items: flex-end !important;
+    }
+    
+    .acm-all-fields-row .acm-field-col {
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+        max-width: none !important;
+        padding: 0 !important;
+    }
+    
+    .acm-all-fields-row .acm-field-label {
+        font-size: 0.5rem !important;
+        margin-bottom: 0.02rem !important;
+        line-height: 1 !important;
+        display: block !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        width: 100% !important;
+    }
+    
+    .acm-all-fields-row .acm-field-input {
+        font-size: 0.6rem !important;
+        padding: 0.08rem 0.15rem !important;
+        height: 22px !important;
+        min-height: 22px !important;
+        line-height: 1 !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: none !important;
+    }
+    
+    /* Labels ultra pequeños - sin truncamiento (solo para labels fuera de .acm-all-fields-row) */
+    .mobile-params-panel .form-label.small:not(.acm-field-label) {
+        font-size: 0.55rem !important;
+        margin-bottom: 0.02rem !important;
+        display: block !important;
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        line-height: 1 !important;
+        word-break: break-word !important;
+    }
+    
+    /* Inputs ultra compactos */
+    .form-control-sm, .form-select-sm {
+        font-size: 0.65rem !important;
+        padding: 0.1rem 0.2rem !important;
+        height: 22px !important;
+        min-height: 22px !important;
+        line-height: 1 !important;
+    }
+    
+    
+    /* Radio de búsqueda - compacto */
+    #acmForm > .mb-2 {
+        grid-column: span 4 !important;
+        margin: 0.15rem 0 !important;
+    }
+    
+    .form-range {
+        height: 0.7rem !important;
+        margin: 0.05rem 0 !important;
+    }
+    
+    .d-flex.justify-content-between.mt-1 .small {
+        font-size: 0.5rem !important;
+    }
+    
+    /* Botón de búsqueda dentro del formulario (solo desktop) */
+    #acmForm > .d-grid {
+        grid-column: span 4 !important;
+        margin-top: 0.2rem !important;
+    }
+    
+    #btnBuscar {
+        padding: 0.2rem !important;
+        font-size: 0.7rem !important;
+        height: 24px !important;
+        line-height: 1 !important;
+    }
+    
+    /* Botón de búsqueda debajo del mapa (solo móvil) */
+    #btnBuscarMobileContainer {
+        grid-column: none !important;
+        margin-top: 0 !important;
+        padding: 0.3rem 0.5rem !important;
+    }
+    
+    #btnBuscarMobile {
+        padding: 0.3rem !important;
+        font-size: 0.75rem !important;
+        height: 32px !important;
+        line-height: 1.2 !important;
+        width: 100% !important;
+    }
+    
+    /* Alert de punto seleccionado */
+    #puntoSeleccionadoAlert {
+        grid-column: span 4 !important;
+        margin-top: 0.15rem !important;
+        padding: 0.15rem !important;
+        font-size: 0.55rem !important;
+    }
+    
+    /* Buscador de direcciones Google Places */
+    .acm-search-box {
+        display: flex !important;
+        align-items: center !important;
+        gap: 0.3rem !important;
+        background: #fff !important;
+        border: 1px solid #ced4da !important;
+        border-radius: 4px !important;
+        padding: 0.1rem 0.4rem !important;
+    }
+    
+    .acm-search-box i {
+        font-size: 0.75rem !important;
+        color: #6c757d !important;
+        flex-shrink: 0 !important;
+    }
+    
+    .acm-search-box input {
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0.15rem 0 !important;
+        font-size: 0.7rem !important;
+        height: 24px !important;
+        background: transparent !important;
+    }
+    
+    .acm-search-box input:focus {
+        outline: none !important;
+    }
+    
+    /* Panel del mapa - altura reducida a ~mitad para que las tarjetas ACM suban */
+    .mobile-map-panel {
+        height: auto !important;
+        min-height: 35vh !important;
+        margin: 0 !important;
+    }
+    
+    .mobile-map-panel .card {
+        border: none !important;
+        box-shadow: none !important;
+        margin: 0 !important;
+    }
+    
+    .mobile-map-panel .card-header {
+        padding: 0.25rem 0.4rem !important;
+        background: #f8f9fa !important;
+        border-bottom: 1px solid #dee2e6 !important;
+    }
+    
+    .mobile-map-panel .card-header h5 {
+        font-size: 0.8rem !important;
+        margin: 0 !important;
+    }
+    
+    #acmMap {
+        height: calc(35vh - 80px) !important;
+        width: 100% !important;
+    }
+    
+    /* Ocultar elementos no esenciales */
+    #toggleParamsPanel,
+    .bi.me-2 {
+        display: none !important;
+    }
+    
+    /* Botón flotante más pequeño */
+    #mobileComparablesBtn {
+        padding: 0.3rem 0.6rem !important;
+        font-size: 0.65rem !important;
+        bottom: 8px !important;
+        right: 8px !important;
+        left: auto !important;
+        width: auto !important;
+    }
+    
+    #mobileComparablesCount {
+        font-size: 0.65rem !important;
+    }
+    
+    #mobileComparablesBadge {
+        font-size: 0.55rem !important;
+        padding: 0.08rem 0.25rem !important;
+    }
+    
+    /* Texto de ayuda extra pequeño */
+    .extra-small {
+        font-size: 0.4rem !important;
+    }
+}
+
+/* Para móviles muy pequeños (< 400px) */
+@media (max-width: 399.98px) {
+    .mobile-map-panel {
+        min-height: 30vh !important;
+    }
+    
+    #acmMap {
+        height: calc(30vh - 80px) !important;
+    }
+    
+    /* Formulario aún más compacto */
+    #acmForm {
+        gap: 0.15rem !important;
+    }
+    
+    .form-control-sm, .form-select-sm {
+        font-size: 0.6rem !important;
+        padding: 0.08rem 0.15rem !important;
+        height: 20px !important;
+    }
+    
+    .form-label.small {
+        font-size: 0.5rem !important;
+    }
+    
+    /* Inputs aún más pequeños en la fila de 5 campos */
+    .acm-all-fields-row .acm-field-input {
+        font-size: 0.55rem !important;
+        padding: 0.05rem 0.1rem !important;
+        height: 18px !important;
+        min-height: 18px !important;
+    }
+    
+    .acm-all-fields-row .acm-field-label {
+        font-size: 0.45rem !important;
+    }
+    
+    /* Botón más pequeño */
+    #btnBuscar {
+        padding: 0.15rem !important;
+        font-size: 0.65rem !important;
+        height: 22px !important;
+    }
+    
+    #btnBuscarMobile {
+        padding: 0.25rem !important;
+        font-size: 0.7rem !important;
+        height: 28px !important;
+    }
+}
+
+/* Para móviles en orientación horizontal */
+@media (max-width: 767.98px) and (orientation: landscape) {
+    .mobile-params-panel {
+        max-height: 25vh !important;
+    }
+    
+    .mobile-map-panel {
+        min-height: 45vh !important;
+    }
+    
+    #acmMap {
+        height: calc(45vh - 80px) !important;
+    }
+    
+    /* Formulario en 4 columnas para mejor uso del espacio */
+    #acmForm {
+        grid-template-columns: repeat(4, 1fr) !important;
+    }
+    
+    /* Los 5 campos en landscape - un poco más de espacio */
+    .acm-all-fields-row {
+        gap: 0.25rem !important;
+    }
+    
+    .acm-all-fields-row .acm-field-input {
+        height: 24px !important;
+        min-height: 24px !important;
+        font-size: 0.65rem !important;
+    }
+}
+
+/* Utilidades para móvil ultra compacto */
+.mobile-ultra-compact .form-control-sm {
+    font-size: 0.65rem !important;
+    padding: 0.08rem 0.15rem !important;
+}
+
+.mobile-ultra-compact .form-label {
+    font-size: 0.55rem !important;
+    margin-bottom: 0.02rem !important;
+}
+
+.mobile-ultra-compact .btn-sm {
+    padding: 0.15rem 0.3rem !important;
+    font-size: 0.65rem !important;
+}
+
+/* Ajustes para mejorar la legibilidad en móvil */
+@media (max-width: 767.98px) {
+    body {
+        -webkit-text-size-adjust: 100%;
+        -moz-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+    }
+    
+    /* Mejorar contraste para inputs */
+    .form-control:focus {
+        border-color: #0d6efd;
+        box-shadow: 0 0 0 0.15rem rgba(13, 110, 253, 0.25);
+    }
+    
+    /* Placeholders visibles */
+    ::placeholder {
+        color: #6c757d;
+        opacity: 0.8;
+        font-size: 0.6rem;
+    }
+    
+    /* Reducir altura de tarjeta */
+    .mobile-params-panel .card-body {
+        padding: 0.4rem !important;
+    }
+    
+    .mobile-params-panel .card-header {
+        padding: 0.3rem 0.5rem !important;
+    }
+}

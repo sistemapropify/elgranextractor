@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test PNG Access</title>
+</head>
+<body>
+    <h1>Test PNG Access</h1>
+    <p>Testing if PNG can be loaded from static directory:</p>
+    
+    <h2>Method 1: Direct URL</h2>
+    <img id="img1" src="/static/requerimientos/data/Pin-propify.png" alt="PNG Direct" width="100" height="100">
+    <p>URL: /static/requerimientos/data/Pin-propify.png</p>
+    
+    <h2>Method 2: Full URL</h2>
+    <img id="img2" src="http://localhost:8000/static/requerimientos/data/Pin-propify.png" alt="PNG Full URL" width="100" height="100">
+    <p>URL: http://localhost:8000/static/requerimientos/data/Pin-propify.png</p>
+    
+    <h2>Method 3: Data URL (truncated for display)</h2>
+    <img id="img3" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAKAAAADkCAYAAAAfBi9XAAAQAElEQVR4AeydCZwkVZ3n/5FZVX3SB33QTR/Q0A1KA0KDHDJ2C4qAs6jMR93PrrsrCqOreCCjjjsuAi4zszPrMR6D6w6szKqzzvKZbUcuZYTBY1ARGhBQQO6roZu+u6GPqsr5f1/Fq46KenFkRkRFbWJ/757vf+xy/+74jIrJr0/noa6KAGegDsoPJ7Q4v0ANhDQUc10ANgR9XfG7wHwB4GOqqBHgA7qv7e4BMXgD3bl0IDPQCWwgwTl4keACeu7UsheQ+ApTDDxGWiB8AY2zcaDY9iDfuUdikNpaBBrbNTqe63NX0Q79F4DUx4ACpQPKW60l6l4QA1VF0mreFepalK6CuJAN40rbuPvjQEtKYf0kqM069hDdLyCX2hzAmlADU6gIPwavtU+CGlQaV+JbyVJU2aK5w2mSk+bLtwyDh7tD1j4i0BJLxQT7MLv0o1wIQBoAIPI+9W7QM4CK/Wp+lOGJ4xLQFIeMFTAsZJyitlylr3X10NQAypBPDwNhh5kpoU41rSZCkuyw9gfEU5AoxM4VM03tVXVwJQQYcXAXDW07Euw8hZjMmaEIrrg3JLcfXiyuATwjuz8cErsv6Ma1PZsq4CoAKPxT3eDi+CN8GQUFYDNX50220XXfKJT1zr3XyzRNEf/umfXvOzu+5afvs997xZBwSIGmS64B052FUDxIFMvZWwcVcA0AceGwoW9y17uyhgab535p49V33pjW98b5wNr1616sLXb9z42OkvvPBPtFEaC1YPPMX1EFlGQ4C4W2XdoYSMkZWrVFBpAGIIpZdV4QCPKQtDaTL2sp6p0dfXNxQESWyrPApvuikOkJavuJGQb7pWeEXl7oppua0AVMXldqkBJmtn7GpZqGMYTSZejVqtZkHgDV1/fWc9SRCQylci9/sr4A1ZH+5RPVR6Wq7tl6kaMVU467ydyi2eD6+n0eTL93Re48Yb04I1udM8ayhfPo/N9Ar4mJY3q14qZ0sErRTTqmS8HuDjSUMqILVgVPTSUWqSZ/QwWxnervrhmEmj1bkqA0BVrgUfd32ihps0YmJ/najQpAzclGxQWJJ0gt2Wxiw9ABV4HCTvUOmYchPXbE0aTbst/9WETHZtuFX1hmcsvXClBqAqkSlll2qRnV+sQnVz0cBQWrdrL+SDEgRETzO1Dt4w8YbVeh29SgtABR9TLp4vccrFKKXdXBjz5vuBvCl6tFNy6o1aij5zr1JKACr48HyAjyklUmgMAUVW6OIC5PY8nF2skKwH2ZyUFoSlA2AAfLFKwwCxqp8Ihf45YoKopQZhqQCo4DPKUoVGeb5hLev6tZ7K2NSV4mZEr6wJo/Ta1Hh5Vi4NABV8PFrapsJFrfkGL73iiq+nULZ2MfGuFHphTb1N9VwqEJYCgKoUwLdVYROlnKHrrr/+D6886aQPaZ3EhY/Wyf16+4IFAn1t5UqJo/ctWmTqzZ/EMjZ3NmI7BISeF6sePGGpQNhxACr4sBSeLwp8jb/77nevfFdf3/9W7cdqV8tzuSzQ1p12mqw/4wxpnHOOrD3+eEMXLV0qcXTNsceaei9qu51vfrPQx7df8xoBmG0BZfK60IIwdo2diyJFJKmfjgJQwQfoeLQWqQy9q713z5x5mQpSGPiOmjZNrlyxQu5WwFmwAbLjZ8yQBRk82bR6Xejj3QcfLAATUP5u9WoBkIypMhV2qd7i+gaEpXh+XIvjsg1lm3WMKPANJyhRm2a7Llm2TG4/+WR5UEHxmeXLZZUCLluPya2XK9gBJGMCRoBflGf0vNh79gDl9nmljl4dA6B6Pw5KWfu5FDC8YsWKTa6CrHkYmzUc0+MXXvUqWXPggVm7bLk9YAT4j69ZU4xXZDqOB+F8tQPesGUZsjbsCABVaIDHpsM1Pi+KNh79ylfmZRUu2N4CD2MzvTI9Bss7GYcX6xW..." alt="PNG Data URL" width="100" height="100">
+    <p>Data URL (truncated)</p>
+    
+    <script>
+        // Test if images loaded successfully
+        window.onload = function() {
+            const images = document.querySelectorAll('img');
+            images.forEach((img, index) => {
+                img.onload = function() {
+                    console.log(`Image ${index + 1} loaded successfully`);
+                };
+                img.onerror = function() {
+                    console.error(`Image ${index + 1} failed to load`);
+                };
+            });
+        };
+    </script>
+</body>
+</html>

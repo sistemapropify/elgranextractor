@@ -1,0 +1,226 @@
+{% extends 'acm/acm_base.html' %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Historial ACM - Propifai{% endblock %}
+
+{% block acm_content %}
+<style>
+    .historial-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+    .historial-header h4 {
+        margin: 0;
+        color: #1a1a2e;
+        font-weight: 600;
+    }
+    .codigo-badge {
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: white;
+        padding: 3px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+        font-family: 'Courier New', monospace;
+        letter-spacing: 0.5px;
+    }
+    .origen-badge {
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 10px;
+    }
+    .origen-pdf {
+        background: #dbeafe;
+        color: #1d4ed8;
+    }
+    .origen-compartir {
+        background: #d1fae5;
+        color: #065f46;
+    }
+    .origen-ambos {
+        background: #fef3c7;
+        color: #92400e;
+    }
+    .table-acm th {
+        background: #f8fafc;
+        color: #475569;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        border-bottom: 2px solid #e2e8f0;
+        padding: 10px 12px;
+    }
+    .table-acm td {
+        padding: 10px 12px;
+        vertical-align: middle;
+        font-size: 13px;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    .table-acm tr:hover {
+        background: #f8fafc;
+    }
+    .acciones-cell .btn {
+        padding: 4px 10px;
+        font-size: 12px;
+    }
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #94a3b8;
+    }
+    .empty-state i {
+        font-size: 48px;
+        margin-bottom: 16px;
+        color: #cbd5e1;
+    }
+    .empty-state h5 {
+        color: #64748b;
+        margin-bottom: 8px;
+    }
+    .empty-state p {
+        font-size: 14px;
+        margin-bottom: 20px;
+    }
+</style>
+
+<div class="container-fluid py-3 px-2 px-md-3">
+    <div class="historial-header">
+        <h4>
+            <i class="bi bi-clock-history me-2"></i>Historial de Análisis ACM
+            <span class="badge bg-success ms-2">{{ historial_count }}</span>
+        </h4>
+        <a href="/acm/analisis/" class="btn btn-success btn-sm">
+            <i class="bi bi-plus-lg me-1"></i>Nuevo Análisis
+        </a>
+    </div>
+
+    {% if acms %}
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-acm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Tipo</th>
+                            <th>Área</th>
+                            <th>Valor Comercial</th>
+                            <th>Comparables</th>
+                            <th>Origen</th>
+                            <th>Fecha</th>
+                            <th class="text-center">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for acm in acms %}
+                        <tr>
+                            <td>
+                                <span class="codigo-badge">{{ acm.codigo|default:acm.short_id }}</span>
+                            </td>
+                            <td>{{ acm.tipo_propiedad|capfirst }}</td>
+                            <td>{{ acm.area_m2|floatformat:0 }} m²</td>
+                            <td>
+                                <strong>US$ {{ acm.valor_comercial|floatformat:2|intcomma }}</strong>
+                            </td>
+                            <td>{{ acm.num_comparables }}</td>
+                            <td>
+                                {% if acm.origen == 'pdf' %}
+                                <span class="origen-badge origen-pdf">
+                                    <i class="bi bi-file-earmark-pdf me-1"></i>PDF
+                                </span>
+                                {% elif acm.origen == 'compartir' %}
+                                <span class="origen-badge origen-compartir">
+                                    <i class="bi bi-whatsapp me-1"></i>WhatsApp
+                                </span>
+                                {% elif acm.origen == 'ambos' %}
+                                <span class="origen-badge origen-ambos">
+                                    <i class="bi bi-file-earmark-pdf me-1"></i>
+                                    <i class="bi bi-whatsapp me-1"></i>Ambos
+                                </span>
+                                {% else %}
+                                <span class="origen-badge">{{ acm.origen|default:'—' }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <small class="text-muted">{{ acm.created_at|date:'d/m/Y H:i' }}</small>
+                            </td>
+                            <td class="acciones-cell text-center">
+                                <div class="d-flex gap-1 justify-content-center">
+                                    <a href="/acm/ver-pdf/{{ acm.id }}/" target="_blank"
+                                       class="btn btn-outline-success btn-sm" title="Ver PDF">
+                                        <i class="bi bi-file-earmark-pdf"></i>
+                                    </a>
+                                    <button type="button" class="btn btn-outline-primary btn-sm"
+                                            onclick="compartirACM_Historial('{{ acm.id }}')"
+                                            title="Compartir por WhatsApp">
+                                        <i class="bi bi-whatsapp"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="card border-0 shadow-sm">
+        <div class="card-body">
+            <div class="empty-state">
+                <i class="bi bi-graph-up"></i>
+                <h5>No hay análisis ACM guardados</h5>
+                <p>Los análisis ACM se guardan automáticamente cuando generas un PDF o compartes por WhatsApp.</p>
+                <a href="/acm/analisis/" class="btn btn-success">
+                    <i class="bi bi-plus-lg me-1"></i>Realizar mi primer análisis
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script>
+    // Variables globales para el historial
+    var ACM_USER_ID = '{{ user_id|default:"" }}';
+    var ACM_USER_PHONE = '{{ user_phone|default:"" }}';
+
+    /**
+     * Comparte un ACM existente desde el historial por WhatsApp.
+     * Reutiliza el endpoint generar-enlace pero con datos ya guardados.
+     */
+    async function compartirACM_Historial(acmId) {
+        try {
+            const response = await fetch('/acm/generar-enlace/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken(),
+                },
+                body: JSON.stringify({
+                    acm_id: acmId,
+                    user_id: ACM_USER_ID || undefined,
+                }),
+            });
+            const data = await response.json();
+            if (data.status === 'ok' && data.whatsapp_url) {
+                window.location.href = data.whatsapp_url;
+            } else {
+                mostrarToast('warning', data.message || 'No se pudo generar el enlace');
+            }
+        } catch (error) {
+            console.error('Error compartiendo ACM:', error);
+            mostrarToast('danger', 'Error al compartir: ' + error.message);
+        }
+    }
+</script>
+{% endblock %}

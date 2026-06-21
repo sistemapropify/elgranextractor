@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Meta tags para prevenir caché en desarrollo -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Dashboard de Visitas y Actividad por Propiedad - Propifai</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --header-height: 60px;
+            --sidebar-width: 250px;
+            --primary-color: #10b981;          /* Verde esmeralda brillante */
+            --secondary-color: #059669;        /* Verde esmeralda medio */
+            --accent-color: #34d399;           /* Verde esmeralda claro */
+            --light-teal: #a7f3d0;             /* Verde muy claro */
+            --very-light-teal: #d1fae5;        /* Verde super claro */
+            --sidebar-bg: #059669;             /* Verde medio para sidebar */
+            --header-bg: #ffffff;              /* Blanco para header */
+            --content-bg: rgba(16, 185, 129, 0.08); /* Color base con transparencia */
+            --card-bg: #ffffff;                /* Blanco para cards */
+            --text-dark: #065f46;              /* Verde oscuro para texto */
+            --text-light: #ffffff;             /* Blanco para texto claro */
+        }
+        
+        body {
+            background-color: var(--content-bg);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+            color: var(--text-dark);
+        }
+        
+        /* Header delgado */
+        .app-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: var(--header-height);
+            background-color: var(--header-bg);
+            box-shadow: 0 2px 10px rgba(3, 94, 94, 0.1);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            border-bottom: 1px solid var(--very-light-teal);
+        }
+        
+        .logo-container {
+            display: flex;
+            align-items: center;
+            height: 100%;
+        }
+        
+        .logo {
+            height: 40px;
+            width: auto;
+            margin-right: 10px;
+        }
+        
+        .logo-text {
+            font-weight: 700;
+            font-size: 1.5rem;
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+        
+        .logo-text:hover {
+            color: var(--secondary-color);
+        }
+        
+        /* Barra lateral delgada */
+        .app-sidebar {
+            position: fixed;
+            top: var(--header-height);
+            left: 0;
+            width: var(--sidebar-width);
+            height: calc(100vh - var(--header-height));
+            background-color: var(--sidebar-bg);
+            color: var(--text-light);
+            overflow-y: auto;
+            transition: transform 0.3s ease;
+            z-index: 999;
+            border-right: 1px solid var(--light-teal);
+        }
+        
+        .sidebar-menu {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .sidebar-menu li {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .sidebar-menu a {
+            display: flex;
+            align-items: center;
+            padding: 15px 20px;
+            color: rgba(255, 255, 255, 0.9);
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+        
+        .sidebar-menu a:hover {
+            background-color: rgba(255, 255, 255, 0.15);
+            color: white;
+        }
+        
+        .sidebar-menu a.active {
+            background-color: rgba(255, 255, 255, 0.2);
+            color: white;
+            border-left: 4px solid var(--accent-color);
+        }
+        
+        .sidebar-menu i {
+            margin-right: 10px;
+            font-size: 1.2rem;
+            width: 24px;
+            text-align: center;
+        }
+        
+        /* Contenido principal */
+        .app-content {
+            margin-left: var(--sidebar-width);
+            margin-top: var(--header-height);
+            padding: 20px;
+            min-height: calc(100vh - var(--header-height));
+            transition: margin-left 0.3s ease;
+            background-color: var(--content-bg);
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .app-sidebar {
+                transform: translateX(-100%);
+            }
+            
+            .app-content {
+                margin-left: 0;
+            }
+            
+            .sidebar-toggle {
+                display: block;
+            }
+            
+            .sidebar-open .app-sidebar {
+                transform: translateX(0);
+            }
+            
+            .sidebar-open .app-content {
+                margin-left: var(--sidebar-width);
+            }
+        }
+        
+        /* Botón para mostrar/ocultar sidebar en móviles */
+        .sidebar-toggle {
+            display: none;
+            background: none;
+            border: none;
+            color: var(--primary-color);
+            font-size: 1.5rem;
+            margin-right: 15px;
+            cursor: pointer;
+        }
+        
+        /* Estilos adicionales para contenido */
+        .card {
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(3, 94, 94, 0.1);
+            margin-bottom: 1.5rem;
+            background-color: var(--card-bg);
+            border: 1px solid var(--very-light-teal);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            border: none;
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(135deg, var(--accent-color) 0%, var(--primary-color) 100%);
+        }
+        
+        .btn-outline-secondary {
+            border-color: var(--light-teal);
+            color: var(--primary-color);
+        }
+        
+        .btn-outline-info {
+            border-color: var(--light-teal);
+            color: var(--primary-color);
+        }
+        
+        .stat-card {
+            text-align: center;
+            padding: 1.5rem;
+            background-color: var(--card-bg);
+        }
+        
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+        
+        .footer {
+            margin-top: 3rem;
+            padding: 1.5rem 0;
+            background-color: var(--sidebar-bg);
+            color: var(--text-light);
+            text-align: center;
+            border-top: 1px solid var(--light-teal);
+        }
+        
+        /* Espacio para el logo placeholder */
+        .logo-placeholder {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+        
+        /* Estilos para enlaces */
+        a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+        
+        a:hover {
+            color: var(--secondary-color);
+        }
+        
+        /* Estilos para formularios */
+        .form-control {
+            border: 1px solid var(--light-teal);
+        }
+        
+        .form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.25rem rgba(4, 125, 125, 0.25);
+        }
+        
+        /* Estilos para alertas */
+        .alert-info {
+            background-color: rgba(4, 125, 125, 0.1);
+            border-color: var(--light-teal);
+            color: var(--text-dark);
+        }
+        
+        /* Estilos para bordes y separadores */
+        hr {
+            border-color: var(--very-light-teal);
+        }
+
+        /* Estilos para submenús en sidebar */
+        .has-submenu > a {
+            position: relative;
+        }
+        .has-submenu > a .bi-chevron-down {
+            transition: transform 0.3s ease;
+            font-size: 0.9rem;
+            margin-left: auto;
+        }
+        .has-submenu.active > a .bi-chevron-down {
+            transform: rotate(180deg);
+        }
+        .submenu {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            background-color: rgba(0, 0, 0, 0.2);
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+        .has-submenu.active .submenu {
+            max-height: 200px;
+        }
+        .submenu li {
+            border-bottom: none;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .submenu a {
+            padding-left: 50px;
+            padding-top: 12px;
+            padding-bottom: 12px;
+            font-size: 0.95rem;
+        }
+        .submenu a.active {
+            background-color: rgba(255, 255, 255, 0.15);
+            border-left: 4px solid var(--accent-color);
+        }
+        .submenu i {
+            font-size: 1rem;
+            margin-right: 10px;
+        }
+    </style>
+    
+<style>
+:root {
+    --color-disponible: #28a745;
+    --color-vendida: #6f42c1;
+    --color-reservada: #007bff;
+    --color-negociacion: #ffc107;
+    --color-retirada: #6c757d;
+    --color-visita: #007bff;
+    --color-seguimiento: #ffc107;
+    --color-propuesta: #6f42c1;
+    --color-llamada: #28a745;
+    --color-cierre

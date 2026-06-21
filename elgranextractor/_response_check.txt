@@ -1,0 +1,1680 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Dashboard â€” Extractor WhatsApp</title>
+
+    
+
+    <style>
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #21262d;
+            --border-color: #30363d;
+            --text-primary: #f0f6fc;
+            --text-secondary: #8b949e;
+            --accent-blue: #58a6ff;
+            --accent-green: #238636;
+            --accent-purple: #8957e5;
+            --accent-orange: #f78166;
+            --sidebar-width: 260px;
+            --sidebar-collapsed-width: 60px;
+            --header-height: 60px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* ===== LAYOUT ===== */
+        .app-layout {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* ===== SIDEBAR ===== */
+        .app-sidebar {
+            width: var(--sidebar-width);
+            min-width: var(--sidebar-width);
+            background-color: var(--bg-secondary);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            position: sticky;
+            top: 0;
+            overflow-y: auto;
+            z-index: 100;
+            transition: width 0.3s ease, min-width 0.3s ease;
+        }
+
+        .app-sidebar.collapsed {
+            width: var(--sidebar-collapsed-width);
+            min-width: var(--sidebar-collapsed-width);
+        }
+
+        .app-sidebar.collapsed .sidebar-brand .brand-text,
+        .app-sidebar.collapsed .sidebar-brand .brand-subtext,
+        .app-sidebar.collapsed .nav-section-title,
+        .app-sidebar.collapsed .nav-item span:not(.nav-badge),
+        .app-sidebar.collapsed .nav-item .nav-badge {
+            display: none;
+        }
+
+        .app-sidebar.collapsed .sidebar-brand {
+            justify-content: center;
+            padding: 20px 10px;
+        }
+
+        .app-sidebar.collapsed .nav-item {
+            justify-content: center;
+            padding: 10px 0;
+        }
+
+        .app-sidebar.collapsed .nav-item i,
+        .app-sidebar.collapsed .nav-item .nav-icon {
+            margin: 0;
+            font-size: 18px;
+        }
+
+        .sidebar-brand {
+            padding: 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: padding 0.3s ease;
+        }
+
+        .sidebar-brand .brand-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .sidebar-brand .brand-text {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-primary);
+            line-height: 1.2;
+            white-space: nowrap;
+        }
+
+        .sidebar-brand .brand-subtext {
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-weight: 400;
+            white-space: nowrap;
+        }
+
+        .sidebar-nav {
+            padding: 8px 0;
+            flex: 1;
+        }
+
+        .nav-section-title {
+            padding: 8px 20px 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 9px 20px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 14px;
+            transition: all 0.2s ease;
+            border-left: 3px solid transparent;
+            cursor: pointer;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+
+        .nav-item:hover {
+            background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .nav-item.active {
+            background-color: rgba(88, 166, 255, 0.1);
+            color: var(--accent-blue);
+            border-left-color: var(--accent-blue);
+        }
+
+        .nav-item i,
+        .nav-item .nav-icon {
+            width: 20px;
+            text-align: center;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+
+        .nav-item .nav-badge {
+            margin-left: auto;
+            background-color: var(--bg-tertiary);
+            color: var(--text-secondary);
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+
+        .nav-item.active .nav-badge {
+            background-color: rgba(88, 166, 255, 0.2);
+            color: var(--accent-blue);
+        }
+
+        /* ===== MAIN CONTENT ===== */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        /* ===== HEADER ===== */
+        .app-header {
+            height: var(--header-height);
+            background-color: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            padding: 0 24px;
+            gap: 16px;
+            position: sticky;
+            top: 0;
+            z-index: 99;
+        }
+
+        .header-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .header-title span {
+            color: var(--text-secondary);
+            font-weight: 400;
+        }
+
+        .header-actions {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-tertiary);
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 16px;
+        }
+
+        .header-btn:hover {
+            background-color: var(--border-color);
+            color: var(--text-primary);
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: white;
+            font-weight: 600;
+        }
+
+        .sidebar-toggle-desktop {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-tertiary);
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+            font-size: 16px;
+        }
+
+        .sidebar-toggle-desktop:hover {
+            background-color: var(--border-color);
+            color: var(--text-primary);
+        }
+
+        .mobile-menu-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-tertiary);
+            color: var(--text-secondary);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        /* ===== CONTENT AREA ===== */
+        .content-area {
+            padding: 24px;
+            flex: 1;
+        }
+
+        /* ===== SCROLLBAR ===== */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-primary);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--border-color);
+        }
+
+        /* ===== OVERLAY ===== */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+
+        .sidebar-overlay.active {
+            display: block;
+        }
+
+        /* ===== RESPONSIVE ===== */
+        @media (max-width: 768px) {
+            .app-sidebar {
+                position: fixed;
+                left: 0;
+                top: 0;
+                width: 85%;
+                max-width: 300px;
+                height: 100vh;
+                z-index: 1000;
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+                display: flex !important;
+            }
+
+            .app-sidebar.mobile-open {
+                transform: translateX(0);
+            }
+
+            .content-area {
+                padding: 16px;
+            }
+
+            .mobile-menu-btn {
+                display: flex !important;
+            }
+
+            .sidebar-toggle-desktop {
+                display: none !important;
+            }
+        }
+
+        @media (min-width: 769px) {
+            .mobile-menu-btn {
+                display: none !important;
+            }
+            .sidebar-toggle-desktop {
+                display: flex !important;
+            }
+        }
+
+        /* ===== SUBMENÚ ===== */
+        .nav-item.has-submenu {
+            flex-direction: column;
+            padding: 0;
+            gap: 0;
+            border-left: 3px solid transparent;
+        }
+
+        .nav-item.has-submenu.active {
+            background-color: rgba(88, 166, 255, 0.1);
+            border-left-color: var(--accent-blue);
+        }
+
+        .nav-item.has-submenu .nav-link.submenu-toggle {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 9px 20px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 14px;
+            transition: all 0.2s ease;
+            width: 100%;
+            cursor: pointer;
+            white-space: nowrap;
+            overflow: hidden;
+            background: none;
+            border: none;
+        }
+
+        .nav-item.has-submenu .nav-link.submenu-toggle:hover {
+            background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .nav-item.has-submenu.active > .nav-link.submenu-toggle {
+            color: var(--accent-blue);
+        }
+
+        .submenu-arrow {
+            margin-left: auto;
+            font-size: 10px;
+            transition: transform 0.3s ease;
+            color: var(--text-secondary);
+        }
+
+        .nav-item.has-submenu.open .submenu-arrow {
+            transform: rotate(180deg);
+        }
+
+        .submenu-items {
+            display: none;
+            flex-direction: column;
+            width: 100%;
+            padding: 2px 0 4px 0;
+        }
+
+        .nav-item.has-submenu.open .submenu-items {
+            display: flex;
+        }
+
+        .submenu-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 7px 20px 7px 52px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 13px;
+            transition: all 0.2s ease;
+            border-left: 2px solid transparent;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+
+        .submenu-item:hover {
+            background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .submenu-item.active {
+            color: var(--accent-blue);
+            border-left-color: var(--accent-blue);
+            background-color: rgba(88, 166, 255, 0.08);
+        }
+
+        .submenu-item .submenu-icon {
+            width: 16px;
+            text-align: center;
+            font-size: 13px;
+            flex-shrink: 0;
+        }
+
+        .app-sidebar.collapsed .nav-item.has-submenu .submenu-items,
+        .app-sidebar.collapsed .nav-item.has-submenu .submenu-arrow {
+            display: none;
+        }
+
+        .app-sidebar.collapsed .nav-item.has-submenu .nav-link.submenu-toggle {
+            justify-content: center;
+            padding: 10px 0;
+        }
+
+        .app-sidebar.collapsed .nav-item.has-submenu .nav-link.submenu-toggle span:not(.nav-icon) {
+            display: none;
+        }
+
+        
+<style>
+    /* ===== SISTEMA DE DISEÃ‘O - WHATSAPP EXTRACTOR ===== */
+    :root {
+        --we-bg: #0d1117;
+        --we-bg-secondary: #161b22;
+        --we-bg-tertiary: #21262d;
+        --we-border: #30363d;
+        --we-border-light: #3d444d;
+        --we-text-primary: #f0f6fc;
+        --we-text-secondary: #8b949e;
+        --we-accent: #58a6ff;
+        --we-accent-hover: #1f6feb;
+        --we-green: #238636;
+        --we-green-bg: rgba(35, 134, 54, 0.15);
+        --we-red: #da3633;
+        --we-red-bg: rgba(218, 54, 51, 0.15);
+        --we-orange: #bb8009;
+        --we-orange-bg: rgba(187, 128, 9, 0.15);
+        --we-purple: #8957e5;
+        --we-cyan: #39d2c0;
+        --we-radius: 10px;
+        --we-radius-sm: 6px;
+        --we-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+        --we-shadow-hover: 0 8px 30px rgba(0, 0, 0, 0.35);
+        --we-transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* ===== CONTENEDOR PRINCIPAL ===== */
+    .we-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 0 4px;
+    }
+
+    /* ===== HEADER ===== */
+    .we-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 28px;
+        flex-wrap: wrap;
+        gap: 12px;
+        padding: 16px 20px;
+        background: linear-gradient(135deg, var(--we-bg-secondary), #1a2030);
+        border: 1px solid var(--we-border);
+        border-radius: var(--we-radius);
+        box-shadow: var(--we-shadow);
+    }
+    .we-header h2 {
+        margin: 0;
+        font-size: 22px;
+        font-weight: 700;
+        color: var(--we-text-primary);
+        letter-spacing: -0.3px;
+    }
+    .we-header-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    /* ===== TARJETAS KPI ===== */
+    .we-kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+        gap: 14px;
+        margin-bottom: 28px;
+    }
+    .we-kpi {
+        background: var(--we-bg-secondary);
+        border: 1px solid var(--we-border);
+        border-radius: var(--we-radius);
+        padding: 18px 20px 16px;
+        transition: var(--we-transition);
+        position: relative;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    }
+    .we-kpi::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 3px;
+        background: var(--we-accent);
+        opacity: 0.6;
+        transition: var(--we-transition);
+    }
+    .we-kpi:hover {
+        transform: translateY(-4px);
+        border-color: var(--we-border-light);
+        box-shadow: var(--we-shadow-hover);
+    }
+    .we-kpi:hover::before {
+        opacity: 1;
+        height: 4px;
+    }
+    /* Variantes de acento en la barra superior */
+    .we-kpi-accent-blue::before { background: linear-gradient(90deg, var(--we-accent), #79b8ff); }
+    .we-kpi-accent-green::before { background: linear-gradient(90deg, var(--we-green), #2ea043); }
+    .we-kpi-accent-red::before { background: linear-gradient(90deg, var(--we-red), #f85149); }
+    .we-kpi-accent-purple::before { background: linear-gradient(90deg, var(--we-purple), #b088f5); }
+    .we-kpi-accent-orange::before { background: linear-gradient(90deg, var(--we-orange), #d29922); }
+    .we-kpi-accent-cyan::before { background: linear-gradient(90deg, var(--we-cyan), #56d4c4); }
+    
+    .we-kpi-value {
+        font-size: 30px;
+        font-weight: 800;
+        line-height: 1.15;
+        letter-spacing: -0.5px;
+        position: relative;
+        z-index: 1;
+    }
+    .we-kpi-accent-blue .we-kpi-value {
+        color: var(--we-accent);
+        text-shadow: 0 0 20px rgba(88, 166, 255, 0.2);
+    }
+    .we-kpi-accent-green .we-kpi-value {
+        color: var(--we-green);
+        text-shadow: 0 0 20px rgba(35, 134, 54, 0.2);
+    }
+    .we-kpi-accent-red .we-kpi-value {
+        color: var(--we-red);
+        text-shadow: 0 0 20px rgba(218, 54, 51, 0.2);
+    }
+    .we-kpi-accent-purple .we-kpi-value {
+        color: var(--we-purple);
+        text-shadow: 0 0 20px rgba(137, 87, 229, 0.2);
+    }
+    .we-kpi-accent-orange .we-kpi-value {
+        color: var(--we-orange);
+        text-shadow: 0 0 20px rgba(187, 128, 9, 0.2);
+    }
+    .we-kpi-accent-cyan .we-kpi-value {
+        color: var(--we-cyan);
+        text-shadow: 0 0 20px rgba(57, 210, 192, 0.2);
+    }
+    .we-kpi-label {
+        font-size: 12px;
+        color: var(--we-text-secondary);
+        margin-top: 6px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        position: relative;
+        z-index: 1;
+    }
+    .we-kpi-sub {
+        font-size: 11px;
+        color: var(--we-text-secondary);
+        margin-top: 2px;
+        opacity: 0.7;
+        position: relative;
+        z-index: 1;
+    }
+
+    /* ===== TARJETAS PRINCIPALES (CARDS) ===== */
+    .we-card {
+        background: var(--we-bg-secondary);
+        border: 1px solid var(--we-border);
+        border-radius: var(--we-radius);
+        margin-bottom: 20px;
+        transition: var(--we-transition);
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+        overflow: hidden;
+    }
+    .we-card:hover {
+        border-color: var(--we-border-light);
+        box-shadow: var(--we-shadow-hover);
+    }
+    .we-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 22px;
+        border-bottom: 1px solid var(--we-border);
+        background: rgba(255,255,255,0.02);
+    }
+    .we-card-title {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--we-text-primary);
+        letter-spacing: -0.2px;
+    }
+    .we-card-body {
+        padding: 20px 22px;
+    }
+
+    /* ===== GRID SYSTEM ===== */
+    .we-grid-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+    }
+    .we-grid-3 {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 20px;
+    }
+    @media (max-width: 1024px) {
+        .we-grid-2, .we-grid-3 { grid-template-columns: 1fr; }
+    }
+
+    /* ===== TABLAS ===== */
+    .we-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .we-table th {
+        text-align: left;
+        padding: 12px 14px;
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--we-text-secondary);
+        border-bottom: 2px solid var(--we-border);
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        background: rgba(255,255,255,0.02);
+        white-space: nowrap;
+    }
+    .we-table td {
+        padding: 12px 14px;
+        font-size: 13px;
+        color: var(--we-text-primary);
+        border-bottom: 1px solid var(--we-border);
+        transition: background 0.15s ease;
+    }
+    .we-table tbody tr {
+        transition: background 0.15s ease;
+    }
+    .we-table tbody tr:hover td {
+        background: rgba(88, 166, 255, 0.04);
+    }
+    .we-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+    /* Scrollbar para tablas */
+    .we-card-body div[style*="overflow-x:auto"]::-webkit-scrollbar {
+        height: 6px;
+    }
+    .we-card-body div[style*="overflow-x:auto"]::-webkit-scrollbar-track {
+        background: var(--we-bg);
+        border-radius: 3px;
+    }
+    .we-card-body div[style*="overflow-x:auto"]::-webkit-scrollbar-thumb {
+        background: var(--we-border);
+        border-radius: 3px;
+    }
+    .we-card-body div[style*="overflow-x:auto"]::-webkit-scrollbar-thumb:hover {
+        background: var(--we-border-light);
+    }
+
+    /* ===== BADGES ===== */
+    .we-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+        gap: 5px;
+        letter-spacing: 0.2px;
+        transition: var(--we-transition);
+    }
+    .we-badge:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    .we-badge-green {
+        background: linear-gradient(135deg, var(--we-green-bg), rgba(35, 134, 54, 0.25));
+        color: #3fb950;
+        border: 1px solid rgba(63, 185, 80, 0.3);
+    }
+    .we-badge-red {
+        background: linear-gradient(135deg, var(--we-red-bg), rgba(218, 54, 51, 0.25));
+        color: #f85149;
+        border: 1px solid rgba(248, 81, 73, 0.3);
+    }
+    .we-badge-orange {
+        background: linear-gradient(135deg, var(--we-orange-bg), rgba(187, 128, 9, 0.25));
+        color: #d29922;
+        border: 1px solid rgba(210, 153, 34, 0.3);
+    }
+    .we-badge-blue {
+        background: linear-gradient(135deg, rgba(88, 166, 255, 0.15), rgba(88, 166, 255, 0.25));
+        color: #58a6ff;
+        border: 1px solid rgba(88, 166, 255, 0.3);
+    }
+    .we-badge-gray {
+        background: linear-gradient(135deg, rgba(139, 148, 158, 0.15), rgba(139, 148, 158, 0.25));
+        color: #8b949e;
+        border: 1px solid rgba(139, 148, 158, 0.3);
+    }
+
+    /* ===== BOTONES ===== */
+    .we-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 16px;
+        border-radius: var(--we-radius-sm);
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--we-text-primary);
+        background: var(--we-bg-tertiary);
+        border: 1px solid var(--we-border);
+        cursor: pointer;
+        text-decoration: none;
+        transition: var(--we-transition);
+        white-space: nowrap;
+    }
+    .we-btn:hover {
+        background: rgba(255,255,255,0.06);
+        border-color: var(--we-border-light);
+        color: var(--we-text-primary);
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    .we-btn-primary {
+        background: linear-gradient(135deg, var(--we-accent), #1f6feb);
+        border-color: var(--we-accent);
+        color: #fff;
+        box-shadow: 0 2px 8px rgba(88, 166, 255, 0.2);
+    }
+    .we-btn-primary:hover {
+        background: linear-gradient(135deg, #1f6feb, var(--we-accent-hover));
+        border-color: var(--we-accent-hover);
+        color: #fff;
+        box-shadow: 0 4px 12px rgba(88, 166, 255, 0.3);
+    }
+    .we-btn-danger {
+        color: var(--we-red);
+    }
+    .we-btn-danger:hover {
+        background: var(--we-red-bg);
+        border-color: var(--we-red);
+        color: var(--we-red);
+    }
+    .we-btn-sm {
+        padding: 4px 12px;
+        font-size: 11px;
+    }
+
+    /* ===== ESTADO VACÃO ===== */
+    .we-empty {
+        text-align: center;
+        padding: 48px 24px;
+        color: var(--we-text-secondary);
+    }
+    .we-empty h3 {
+        font-size: 20px;
+        margin-bottom: 10px;
+        color: var(--we-text-primary);
+        font-weight: 600;
+    }
+    .we-empty p {
+        font-size: 14px;
+        margin: 0 0 8px;
+        color: var(--we-text-secondary);
+        line-height: 1.6;
+    }
+
+    /* ===== HELPERS DE TEXTO ===== */
+    .we-text-small {
+        font-size: 12px;
+        color: var(--we-text-secondary);
+    }
+    .we-text-mono {
+        font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    }
+    .we-link {
+        color: var(--we-accent);
+        text-decoration: none;
+        font-weight: 600;
+        transition: var(--we-transition);
+    }
+    .we-link:hover {
+        color: #79b8ff;
+        text-decoration: underline;
+    }
+    .we-section {
+        margin-bottom: 28px;
+    }
+
+    /* ===== INDICADORES DE ESTADO ===== */
+    .we-status-dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 6px;
+        position: relative;
+    }
+    .we-status-dot-green {
+        background: var(--we-green);
+        box-shadow: 0 0 6px rgba(35, 134, 54, 0.5);
+    }
+    .we-status-dot-red {
+        background: var(--we-red);
+        box-shadow: 0 0 6px rgba(218, 54, 51, 0.5);
+    }
+    .we-status-dot-orange {
+        background: var(--we-orange);
+        box-shadow: 0 0 6px rgba(187, 128, 9, 0.5);
+    }
+    .we-status-dot-gray {
+        background: var(--we-text-secondary);
+    }
+
+    /* ===== ELEMENTOS DENTRO DE CARDS ===== */
+    /* Items de grupo (para la lista de grupos activos) */
+    .we-card .we-bg-tertiary-item {
+        background: var(--we-bg-tertiary);
+        border-radius: var(--we-radius-sm);
+        padding: 10px 14px;
+        transition: var(--we-transition);
+        border: 1px solid transparent;
+    }
+    .we-card .we-bg-tertiary-item:hover {
+        border-color: var(--we-border);
+        background: #252b35;
+        transform: translateX(2px);
+    }
+
+    /* ===== ANIMACIONES ===== */
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(16px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes slideIn {
+        from { opacity: 0; transform: translateX(-10px); }
+        to { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes pulseGlow {
+        0%, 100% { box-shadow: 0 0 6px rgba(88, 166, 255, 0.2); }
+        50% { box-shadow: 0 0 14px rgba(88, 166, 255, 0.4); }
+    }
+
+    .we-kpi-grid .we-kpi {
+        animation: fadeInUp 0.5s ease forwards;
+        opacity: 0;
+    }
+    .we-kpi-grid .we-kpi:nth-child(1) { animation-delay: 0s; }
+    .we-kpi-grid .we-kpi:nth-child(2) { animation-delay: 0.06s; }
+    .we-kpi-grid .we-kpi:nth-child(3) { animation-delay: 0.12s; }
+    .we-kpi-grid .we-kpi:nth-child(4) { animation-delay: 0.18s; }
+    .we-kpi-grid .we-kpi:nth-child(5) { animation-delay: 0.24s; }
+    .we-kpi-grid .we-kpi:nth-child(6) { animation-delay: 0.30s; }
+    .we-kpi-grid .we-kpi:nth-child(7) { animation-delay: 0.36s; }
+
+    .we-card {
+        animation: fadeInUp 0.5s ease forwards;
+        opacity: 0;
+    }
+    .we-card:nth-of-type(1) { animation-delay: 0.1s; }
+    .we-card:nth-of-type(2) { animation-delay: 0.2s; }
+    .we-card:nth-of-type(3) { animation-delay: 0.3s; }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 768px) {
+        .we-header {
+            flex-direction: column;
+            align-items: stretch;
+            padding: 14px 16px;
+        }
+        .we-header h2 {
+            font-size: 18px;
+        }
+        .we-header-actions {
+            justify-content: stretch;
+        }
+        .we-header-actions .we-btn {
+            flex: 1;
+            justify-content: center;
+        }
+        .we-kpi-grid {
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 10px;
+        }
+        .we-kpi {
+            padding: 14px 16px;
+        }
+        .we-kpi-value {
+            font-size: 24px;
+        }
+        .we-card-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 8px;
+            padding: 14px 16px;
+        }
+        .we-card-body {
+            padding: 14px 16px;
+        }
+        .we-table th,
+        .we-table td {
+            padding: 8px 10px;
+            font-size: 12px;
+        }
+    }
+</style>
+
+    </style>
+</head>
+<body>
+    <!-- Overlay for mobile -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <div class="app-layout">
+        <!-- ===== SIDEBAR ===== -->
+        <nav class="app-sidebar" id="appSidebar">
+            
+            <div class="sidebar-brand">
+                <div class="brand-icon">P</div>
+                <div>
+                    <div class="brand-text">Propifai</div>
+                    <div class="brand-subtext">Plataforma Inmobiliaria</div>
+                </div>
+            </div>
+            
+
+            <div class="sidebar-nav">
+                
+                <!-- ===== DASHBOARD PRINCIPAL ===== -->
+                <div class="nav-section-title">Dashboard</div>
+
+                <a href="/" class="nav-item ">
+                    <span class="nav-icon">&#x1F4CA;</span>
+                    <span>Dashboard General</span>
+                </a>
+
+                <!-- ===== GESTIÓN INMOBILIARIA ===== -->
+                <div class="nav-section-title" style="margin-top: 12px;">Gesti&oacute;n Inmobiliaria</div>
+
+                <a href="/propifai/propiedades/" class="nav-item ">
+                    <span class="nav-icon">&#x1F3E0;</span>
+                    <span>Propiedades Propify</span>
+                </a>
+
+                <a href="/ingestas/propiedades/" class="nav-item ">
+                    <span class="nav-icon">&#x1F3E2;</span>
+                    <span>Propiedades Externas</span>
+                </a>
+
+                <!-- Requerimientos con submenú -->
+                <div class="nav-item has-submenu active">
+                    <a href="#" class="nav-link submenu-toggle">
+                        <span class="nav-icon">&#x1F4CB;</span>
+                        <span>Requerimientos</span>
+                        <span class="submenu-arrow">&#x25BC;</span>
+                    </a>
+                    <div class="submenu-items">
+                        <a href="/requerimientos/lista/" class="submenu-item ">
+                            <span class="submenu-icon">&#x1F4CB;</span>
+                            <span>Lista de Requerimientos</span>
+                        </a>
+                        <a href="/requerimientos/dashboard-analisis/" class="submenu-item ">
+                            <span class="submenu-icon">&#x1F4CA;</span>
+                            <span>Dashboard An&aacute;lisis</span>
+                        </a>
+                        <a href="/whatsapp-extractor/" class="submenu-item active">
+                            <span class="submenu-icon">&#x1F4F1;</span>
+                            <span>WhatsApp Extractor</span>
+                        </a>
+                    </div>
+                </div>
+
+                <a href="/matching/masivo/" class="nav-item ">
+                    <span class="nav-icon">&#x26A1;</span>
+                    <span>Matching</span>
+                </a>
+
+                <!-- ===== ANÁLISIS E INTELIGENCIA ===== -->
+                <div class="nav-section-title" style="margin-top: 12px;">An&aacute;lisis & Mercado</div>
+
+                <!-- ACM con submenú -->
+                <div class="nav-item has-submenu ">
+                    <a href="#" class="nav-link submenu-toggle">
+                        <span class="nav-icon">&#x1F4D0;</span>
+                        <span>ACM</span>
+                        <span class="submenu-arrow">&#x25BC;</span>
+                    </a>
+                    <div class="submenu-items">
+                        <a href="/acm/" class="submenu-item ">
+                            <span class="submenu-icon">&#x1F3E0;</span>
+                            <span>Dashboard</span>
+                        </a>
+                        <a href="/acm/analisis/" class="submenu-item ">
+                            <span class="submenu-icon">&#x1F50D;</span>
+                            <span>Nuevo An&aacute;lisis</span>
+                        </a>
+                        <a href="/acm/historial/" class="submenu-item ">
+                            <span class="submenu-icon">&#x1F4C4;</span>
+                            <span>Historial</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Análisis de Mercado con submenú -->
+                <div class="nav-item has-submenu ">
+                    <a href="#" class="nav-link submenu-toggle">
+                        <span class="nav-icon">&#x1F525;</span>
+                        <span>An&aacute;lisis de Mercado</span>
+                        <span class="submenu-arrow">&#x25BC;</span>
+                    </a>
+                    <div class="submenu-items">
+                        <a href="/market-analysis/heatmap/" class="submenu-item ">
+                            <span class="submenu-icon">&#x1F3E0;</span>
+                            <span>Heatmap de Precios</span>
+                        </a>
+                        <a href="/market-analysis/dashboard/" class="submenu-item ">
+                            <span class="submenu-icon">&#x1F4CA;</span>
+                            <span>Dashboard Mercado</span>
+                        </a>
+                    </div>
+                </div>
+
+                <a href="/cuadrantizacion/mapa/" class="nav-item ">
+                    <span class="nav-icon">&#x1F5FA;</span>
+                    <span>Cuadrantizaci&oacute;n</span>
+                </a>
+
+                <a href="/api/pois/mapa/" class="nav-item ">
+                    <span class="nav-icon">&#x1F4CD;</span>
+                    <span>Mapa de POIs</span>
+                </a>
+
+                <!-- ===== MARKETING Y PROSPECCIÓN ===== -->
+                <div class="nav-section-title" style="margin-top: 12px;">Marketing & Prospecci&oacute;n</div>
+
+                <!-- Prospección con submenú -->
+                <div class="nav-item has-submenu ">
+                    <a href="#" class="nav-link submenu-toggle">
+                        <span class="nav-icon">&#x1F4F7;</span>
+                        <span>Prospecci&oacute;n</span>
+                        <span class="submenu-arrow">&#x25BC;</span>
+                    </a>
+                    <div class="submenu-items">
+                        <a href="/prospects/capture/" class="submenu-item ">
+                            <span class="submenu-icon">&#x1F4F7;</span>
+                            <span>Captura</span>
+                        </a>
+                        <a href="/prospects/" class="submenu-item ">
+                            <span class="submenu-icon">&#x1F4CB;</span>
+                            <span>Lista de Prospectos</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Meta Ads con submenú -->
+                <div class="nav-item has-submenu ">
+                    <a href="#" class="nav-link submenu-toggle">
+                        <span class="nav-icon">&#x1F4E3;</span>
+                        <span>Meta Ads</span>
+                        <span class="submenu-arrow">&#x25BC;</span>
+                    </a>
+                    <div class="submenu-items">
+                        <a href="/meta-ads/dashboard/exacto/" class="submenu-item ">
+                            <span class="submenu-icon">&#x1F4CA;</span>
+                            <span>Dashboard</span>
+                        </a>
+                        <a href="/meta-ads/analisis/historico/" class="submenu-item ">
+                            <span class="submenu-icon">&#x1F4C8;</span>
+                            <span>An&aacute;lisis Hist&oacute;rico</span>
+                        </a>
+                        <a href="/meta-ads/campa%C3%B1as/" class="submenu-item ">
+                            <span class="submenu-icon">&#x1F3AF;</span>
+                            <span>Campa&ntilde;as</span>
+                        </a>
+                        <a href="/meta-ads/sincronizar/" class="submenu-item ">
+                            <span class="submenu-icon">&#x1F504;</span>
+                            <span>Sincronizar</span>
+                        </a>
+                    </div>
+                </div>
+
+                <a href="/analisis-crm/" class="nav-item ">
+                    <span class="nav-icon">&#x1F465;</span>
+                    <span>Leads CRM</span>
+                </a>
+
+                <!-- ===== INTELIGENCIA ARTIFICIAL ===== -->
+                <div class="nav-section-title" style="margin-top: 12px;">Inteligencia Artificial</div>
+
+                <!-- Intelligence Layer - Dashboard Principal -->
+                <a href="/intelligence/dashboard/" class="nav-item ">
+                    <span class="nav-icon">&#x1F9E0;</span>
+                    <span>Dashboard IA</span>
+                </a>
+
+                <!-- Skills con submenú -->
+                <div class="nav-item has-submenu ">
+                    <a href="#" class="nav-link submenu-toggle">
+                        <span class="nav-icon">&#x26A1;</span>
+                        <span>Skills</span>
+                        <span class="submenu-arrow">&#x25BC;</span>
+                    </a>
+                    <div class="submenu-items">
+                        <a href="/intelligence/skills/dashboard/" class="submenu-item ">
+                            <span class="submenu-icon">&#x1F4CA;</span>
+                            <span>Dashboard</span>
+                        </a>
+                        <a href="/intelligence/skills/create/" class="submenu-item ">
+                            <span class="submenu-icon">&#x2795;</span>
+                            <span>Crear Skill</span>
+                        </a>
+                        <a href="/intelligence/skills/logs/" class="submenu-item ">
+                            <span class="submenu-icon">&#x1F4DD;</span>
+                            <span>Logs</span>
+                        </a>
+                        <a href="/intelligence/skills/metrics/global/" class="submenu-item ">
+                            <span class="submenu-icon">&#x1F4C8;</span>
+                            <span>M&eacute;tricas</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Colecciones RAG con submenú -->
+                <div class="nav-item has-submenu ">
+                    <a href="#" class="nav-link submenu-toggle">
+                        <span class="nav-icon">&#x1F4DA;</span>
+                        <span>Colecciones RAG</span>
+                        <span class="submenu-arrow">&#x25BC;</span>
+                    </a>
+                    <div class="submenu-items">
+                        <a href="/intelligence/collections/" class="submenu-item ">
+                            <span class="submenu-icon">&#x1F4CB;</span>
+                            <span>Lista de Colecciones</span>
+                        </a>
+                        <a href="/intelligence/collections/create/" class="submenu-item ">
+                            <span class="submenu-icon">&#x2795;</span>
+                            <span>Crear Colecci&oacute;n</span>
+                        </a>
+                        <a href="/intelligence/collections/sync/" class="submenu-item ">
+                            <span class="submenu-icon">&#x1F504;</span>
+                            <span>Sincronizar</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Evaluación de Intenciones -->
+                <a href="/intelligence/intent-evaluation/" class="nav-item ">
+                    <span class="nav-icon">&#x1F3AF;</span>
+                    <span>Evaluaci&oacute;n de Intenciones</span>
+                </a>
+
+                <!-- Chat Asistente -->
+                <a href="/intelligence/chat-web/" class="nav-item ">
+                    <span class="nav-icon">&#x1F4AC;</span>
+                    <span>Chat Asistente</span>
+                </a>
+
+                <!-- Flujos Conversacionales -->
+                <a href="/intelligence/chat-workflows/manage/" class="nav-item ">
+                    <span class="nav-icon">&#x1F504;</span>
+                    <span>Flujos Conversacionales</span>
+                </a>
+
+                <!-- Memoria Episódica -->
+                <a href="/intelligence/episodic-memory/" class="nav-item ">
+                    <span class="nav-icon">&#x1F9E0;</span>
+                    <span>Memoria Epis&oacute;dica</span>
+                </a>
+
+                <!-- Perfiles de IA -->
+                <a href="/intelligence/profiles/" class="nav-item ">
+                    <span class="nav-icon">&#x1F464;</span>
+                    <span>Perfiles de IA</span>
+                </a>
+
+                <!-- ===== ADMINISTRACIÓN IA ===== -->
+                <div class="nav-section-title" style="margin-top: 12px;">Administraci&oacute;n IA</div>
+
+                <!-- Usuarios -->
+                <a href="/intelligence/users/" class="nav-item ">
+                    <span class="nav-icon">&#x1F465;</span>
+                    <span>Usuarios</span>
+                </a>
+
+                <!-- Roles -->
+                <a href="/intelligence/roles/" class="nav-item ">
+                    <span class="nav-icon">&#x1F3DB;</span>
+                    <span>Roles</span>
+                </a>
+
+                <!-- Simulador de Usuario -->
+                <a href="/intelligence/simulator/" class="nav-item ">
+                    <span class="nav-icon">&#x1F916;</span>
+                    <span>Simulador</span>
+                </a>
+
+                <!-- ===== MONITOREO ===== -->
+                <div class="nav-section-title" style="margin-top: 12px;">Monitoreo</div>
+
+                <!-- Estadísticas del Sistema -->
+                <a href="/intelligence/stats/" class="nav-item ">
+                    <span class="nav-icon">&#x1F4CA;</span>
+                    <span>Estad&iacute;sticas</span>
+                </a>
+
+                <!-- Logs de Actividad -->
+                <a href="/intelligence/logs/" class="nav-item ">
+                    <span class="nav-icon">&#x1F4DD;</span>
+                    <span>Logs de Actividad</span>
+                </a>
+
+                <!-- Configuraciones -->
+                <a href="/intelligence/config/" class="nav-item ">
+                    <span class="nav-icon">&#x2699;&#xFE0F;</span>
+                    <span>Configuraciones</span>
+                </a>
+
+                <!-- Errores -->
+                <a href="/intelligence/errors/" class="nav-item ">
+                    <span class="nav-icon">&#x1F6A8;</span>
+                    <span>Errores</span>
+                </a>
+
+                <!-- Tests -->
+                <a href="/intelligence/tests/" class="nav-item ">
+                    <span class="nav-icon">&#x1F9EA;</span>
+                    <span>Tests</span>
+                </a>
+
+                <!-- ===== SISTEMA ===== -->
+                <div class="nav-section-title" style="margin-top: 12px;">Sistema</div>
+
+                <a href="/fuentes-web/" class="nav-item ">
+                    <span class="nav-icon">&#x1F310;</span>
+                    <span>Fuentes Web</span>
+                </a>
+
+                <a href="/capturas/" class="nav-item ">
+                    <span class="nav-icon">&#x1F4F8;</span>
+                    <span>Capturas</span>
+                </a>
+
+                <a href="/eventos/" class="nav-item ">
+                    <span class="nav-icon">&#x1F4C5;</span>
+                    <span>Eventos</span>
+                </a>
+
+                
+                
+            </div>
+        </nav>
+
+        <!-- ===== MAIN CONTENT ===== -->
+        <div class="main-content">
+            <!-- Header -->
+            <header class="app-header">
+                
+                <button class="mobile-menu-btn" id="mobileMenuBtn" type="button">&#x2630;</button>
+                <button class="sidebar-toggle-desktop" id="sidebarToggleDesktop" type="button" title="Colapsar sidebar">&#x2630;</button>
+                
+
+                
+<div class="header-title">Intelligence Layer <span>— ðŸ“± Extractor WhatsApp</span></div>
+
+
+                <div class="header-actions">
+                    
+                    <button class="header-btn" title="Actualizar" onclick="location.reload()">&#x21BB;</button>
+                    <button class="header-btn" title="Notificaciones">&#x1F514;</button>
+                    
+                    <a href="/intelligence/login/?next=/intelligence/skills/dashboard/" class="header-btn" title="Iniciar Sesión" style="text-decoration:none;">🔑</a>
+                    
+                    
+                </div>
+            </header>
+
+            <!-- Content -->
+            <div class="content-area">
+                
+<div class="intelligence-main">
+
+                
+<div class="we-container">
+
+    <!-- Header -->
+    <div class="we-header">
+        <h2>ðŸ“± Dashboard de ExtracciÃ³n WhatsApp</h2>
+        <div class="we-header-actions">
+            <span class="we-text-small">&lt;QuerySet [&lt;WhatsappGroupSession: [ACT] RED INMOBILIARIA AREQUIPA&gt;]&gt; grupos activos Â· 3 ejecuciones Â· 2 archivos</span>
+            <a href="/whatsapp-extractor/upload/" class="we-btn we-btn-primary we-btn-sm">ðŸ“¤ Subir archivo</a>
+            <a href="/whatsapp-extractor/archivos/" class="we-btn we-btn-sm">ðŸ“ Archivos</a>
+            <a href="/whatsapp-extractor/grupo/nuevo/" class="we-btn we-btn-primary we-btn-sm">âž• Nuevo Grupo</a>
+            <a href="/whatsapp-extractor/grupos/" class="we-btn we-btn-sm">ðŸ“‹ Grupos</a>
+        </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="we-kpi-grid">
+        <div class="we-kpi we-kpi-accent-blue">
+            <div class="we-kpi-value"></div>
+            <div class="we-kpi-label">Extracciones Totales</div>
+            <div class="we-kpi-sub">histÃ³rico completo</div>
+        </div>
+        <div class="we-kpi we-kpi-accent-green">
+            <div class="we-kpi-value">0,0%</div>
+            <div class="we-kpi-label">Tasa de Ã‰xito</div>
+            <div class="we-kpi-sub"> exitosas</div>
+        </div>
+        <div class="we-kpi we-kpi-accent-red">
+            <div class="we-kpi-value"></div>
+            <div class="we-kpi-label">Errores</div>
+            <div class="we-kpi-sub"> totales</div>
+        </div>
+        <div class="we-kpi we-kpi-accent-purple">
+            <div class="we-kpi-value"></div>
+            <div class="we-kpi-label">Mensajes ExtraÃ­dos</div>
+            <div class="we-kpi-sub">suma total</div>
+        </div>
+        <div class="we-kpi we-kpi-accent-orange">
+            <div class="we-kpi-value"></div>
+            <div class="we-kpi-label">Requerimientos Nuevos</div>
+            <div class="we-kpi-sub">generados en logs</div>
+        </div>
+        <div class="we-kpi we-kpi-accent-cyan">
+            <div class="we-kpi-value">&lt;QuerySet [&lt;WhatsappGroupSession: [ACT] RED INMOBILIARIA AREQUIPA&gt;]&gt;</div>
+            <div class="we-kpi-label">Grupos Activos</div>
+            <div class="we-kpi-sub">monitoreando</div>
+        </div>
+        <div class="we-kpi we-kpi-accent-purple">
+            <div class="we-kpi-value">457</div>
+            <div class="we-kpi-label">Total Requerimientos en BD</div>
+            <div class="we-kpi-sub">acumulados histÃ³ricos</div>
+        </div>
+    </div>
+
+    <!-- Ãšltima ejecuciÃ³n + Grupos activos -->
+    <div class="we-grid-2">
+        <!-- Ãšltima ejecuciÃ³n -->
+        <div class="we-card">
+            <div class="we-card-header">
+                <h3 class="we-card-title">â±ï¸ Ãšltima EjecuciÃ³n</h3>
+                
+                <a href="/whatsapp-extractor/log/36/" class="we-link we-text-small">Ver detalle â†’</a>
+                
+            </div>
+            <div class="we-card-body">
+                
+                <div style="display:flex;flex-direction:column;gap:12px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <span class="we-text-small">Estado</span>
+                        <span class="we-badge we-badge-blue">
+                            â³ Ejecutando
+                        </span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;">
+                        <span class="we-text-small">Fecha</span>
+                        <span style="font-size:13px;color:var(--we-text-primary);">13/05/2026 03:35:46</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;">
+                        <span class="we-text-small">Mensajes extraÃ­dos</span>
+                        <span style="font-size:13px;color:var(--we-text-primary);">0</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;">
+                        <span class="we-text-small">VÃ¡lidos</span>
+                        <span style="font-size:13px;color:var(--we-text-primary);">0</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;">
+                        <span class="we-text-small">Requerimientos nuevos</span>
+                        <span style="font-size:13px;color:var(--we-green);">0</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;">
+                        <span class="we-text-small">Duplicados</span>
+                        <span style="font-size:13px;color:var(--we-orange);">0</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;">
+                        <span class="we-text-small">Basura filtrada</span>
+                        <span style="font-size:13px;color:var(--we-text-secondary);">0</span>
+                    </div>
+                    
+                    
+                </div>
+                
+            </div>
+        </div>
+
+        <!-- Grupos activos -->
+        <div class="we-card">
+            <div class="we-card-header">
+                <h3 class="we-card-title">ðŸ‘¥ Grupos Activos</h3>
+                <a href="/whatsapp-extractor/grupos/" class="we-link we-text-small">Ver todos â†’</a>
+            </div>
+            <div class="we-card-body">
+                
+                <div class="we-empty">
+                    <h3>ðŸ‘¥ Sin grupos configurados</h3>
+                    <p>No hay grupos WhatsApp registrados.</p>
+                    <div style="margin-top:16px;">
+                        <a href="/whatsapp-extractor/grupo/nuevo/" class="we-btn we-btn-primary">âž• Crear grupo</a>
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+    </div>
+
+    <!-- Archivos recientes -->
+    <div class="we-section">
+        <div class="we-card">
+            <div class="we-card-header">
+                <h3 class="we-card-title">ðŸ“ Archivos Recientes</h3>
+                <a href="/whatsapp-extractor/archivos/" class="we-link we-text-small">Ver todos â†’</a>
+            </div>
+            <div class="we-card-body">
+                
+                <div style="overflow-x:auto;">
+                    <table class="we-table">
+                        <thead>
+                            <tr>
+                                <th>Nombre</th>
+                                <th>Fecha</th>
+                                <th>TamaÃ±o</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            
+                            <tr>
+                                <td>
+                                    <a href="/whatsapp-extractor/archivo/24/" class="we-link">
+                                        Chat de WhatsApp con RED INMOBILIARIA AREQUIPA.txt
+                                    </a>
+                                </td>
+                                <td style="white-space:nowrap;">12/05/2026 11:44</td>
+                                <td class="we-text-small">451 KB</td>
+                                <td>
+                                    
+                                    <span class="we-badge we-badge-orange">
+                                        <span class="we-status-dot we-status-dot-orange"></span>
+                                        Pendiente
+                                    </span>
+                                    
+                                </td>
+                                <td>
+                                    <a href="/whatsapp-extractor/archivo/24/" class="we-btn we-btn-sm">Ver</a>
+                                </td>
+                            </tr>
+                            
+                            <tr>
+                                <td>
+                                    <a href="/whatsapp-extractor/archivo/23/" class="we-link">
+                                        Chat de WhatsApp con RED INMOBILIARIA AREQUIPA.txt
+                                    </a>
+                                </td>
+                                <td style="white-space:nowrap;">08/05/2026 15:56</td>
+                                <td class="we-text-small">457 KB</td>
+                                <td>
+                                    
+                                    <span class="we-badge we-badge-orange">
+                                        <span class="we-status-dot we-status-dot-orange"></span>
+                                        Pendiente
+                                    </span>
+                                    
+                                </td>
+                                <td>
+                                    <a href="/whatsapp-extractor/archivo/23/" class="we-btn we-btn-sm">Ver</a>
+                                </td>
+                            </tr>
+                            
+                        </tbody>
+                    </table>
+                </div>
+                
+            </div>
+        </div>
+    </div>
+
+    <!-- Historial de ejecuciones -->
+    <div class="we-section">
+        <div class="we-card">
+            <div class="we-card-header">
+                <h3 class="we-card-title">ðŸ“‹ Historial de Ejecuciones</h3>
+                <span class="we-text-small">Ãºltimas 0</span>
+            </div>
+            <div class="we-card-body">
+                
+                <div class="we-empty">
+                    <h3>ðŸ“‹ Sin ejecuciones registradas</h3>
+                    <p>El historial de extracciones aparecerÃ¡ aquÃ­ cuando se ejecuten las tareas.</p>
+                </div>
+                
+            </div>
+        </div>
+    </div>
+
+</div>
+
+                
+</div>
+
+            </div>
+        </div>
+    </div>
+
+    
+<script src="/static/intelligence/js/intelligence.js"></script>
+
+
+    <script>
+        (function() {
+            'use strict';
+            var mobileMenuBtn = document.getElementById('mobileMenuBtn');
+            var sidebarToggleDesktop = document.getElementById('sidebarToggleDesktop');
+            var sidebar = document.getElementById('appSidebar');
+            var overlay = document.getElementById('sidebarOverlay');
+
+            function toggleMobileSidebar() {
+                sidebar.classList.toggle('mobile-open');
+                overlay.classList.toggle('active');
+            }
+
+            function toggleDesktopSidebar() {
+                sidebar.classList.toggle('collapsed');
+            }
+
+            if (mobileMenuBtn) {
+                mobileMenuBtn.addEventListener('click', toggleMobileSidebar);
+            }
+
+            if (sidebarToggleDesktop) {
+                sidebarToggleDesktop.addEventListener('click', toggleDesktopSidebar);
+            }
+
+            if (overlay) {
+                overlay.addEventListener('click', toggleMobileSidebar);
+            }
+
+            // Submenu toggle
+            var submenuToggles = document.querySelectorAll('.submenu-toggle');
+            for (var i = 0; i < submenuToggles.length; i++) {
+                (function(toggle) {
+                    toggle.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        var parent = this.closest('.has-submenu');
+                        if (parent) {
+                            parent.classList.toggle('open');
+                        }
+                    });
+                })(submenuToggles[i]);
+            }
+
+            // Auto-open submenu if a child is active
+            var submenus = document.querySelectorAll('.has-submenu');
+            for (var j = 0; j < submenus.length; j++) {
+                var activeItems = submenus[j].querySelectorAll('.submenu-item.active');
+                if (activeItems.length > 0) {
+                    submenus[j].classList.add('open');
+                }
+            }
+        })();
+    </script>
+
+    
+<script>
+(function() {
+    // Auto-refresh cada 30s
+    function doRefresh() {
+        fetch('/whatsapp-extractor/api/ultimos-logs/')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                // Por ahora solo recargamos la pÃ¡gina si hay cambios
+                if (data && data.length > 0) {
+                    var firstRow = document.querySelector('.we-table tbody tr');
+                    if (firstRow) {
+                        var firstId = firstRow.querySelector('td:first-child');
+                        if (firstId && firstId.textContent.trim() !== '#' + data[0].id) {
+                            location.reload();
+                        }
+                    }
+                }
+            })
+            .catch(function() {});
+    }
+    setInterval(doRefresh, 30000);
+})();
+</script>
+
+</body>
+</html>

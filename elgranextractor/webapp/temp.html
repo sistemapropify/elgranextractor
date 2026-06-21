@@ -1,0 +1,2534 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Meta tags para prevenir caché en desarrollo -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Dashboard de Eventos - El Gran Extractor</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --header-height: 60px;
+            --sidebar-width: 250px;
+            --primary-color: #10b981;          /* Verde esmeralda brillante */
+            --secondary-color: #059669;        /* Verde esmeralda medio */
+            --accent-color: #34d399;           /* Verde esmeralda claro */
+            --light-teal: #a7f3d0;             /* Verde muy claro */
+            --very-light-teal: #d1fae5;        /* Verde super claro */
+            --sidebar-bg: #059669;             /* Verde medio para sidebar */
+            --header-bg: #ffffff;              /* Blanco para header */
+            --content-bg: rgba(16, 185, 129, 0.08); /* Color base con transparencia */
+            --card-bg: #ffffff;                /* Blanco para cards */
+            --text-dark: #065f46;              /* Verde oscuro para texto */
+            --text-light: #ffffff;             /* Blanco para texto claro */
+        }
+        
+        body {
+            background-color: var(--content-bg);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+            color: var(--text-dark);
+        }
+        
+        /* Header delgado */
+        .app-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: var(--header-height);
+            background-color: var(--header-bg);
+            box-shadow: 0 2px 10px rgba(3, 94, 94, 0.1);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            border-bottom: 1px solid var(--very-light-teal);
+        }
+        
+        .logo-container {
+            display: flex;
+            align-items: center;
+            height: 100%;
+        }
+        
+        .logo {
+            height: 40px;
+            width: auto;
+            margin-right: 10px;
+        }
+        
+        .logo-text {
+            font-weight: 700;
+            font-size: 1.5rem;
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+        
+        .logo-text:hover {
+            color: var(--secondary-color);
+        }
+        
+        /* Barra lateral delgada */
+        .app-sidebar {
+            position: fixed;
+            top: var(--header-height);
+            left: 0;
+            width: var(--sidebar-width);
+            height: calc(100vh - var(--header-height));
+            background-color: var(--sidebar-bg);
+            color: var(--text-light);
+            overflow-y: auto;
+            transition: transform 0.3s ease;
+            z-index: 999;
+            border-right: 1px solid var(--light-teal);
+        }
+        
+        .sidebar-menu {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .sidebar-menu li {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .sidebar-menu a {
+            display: flex;
+            align-items: center;
+            padding: 15px 20px;
+            color: rgba(255, 255, 255, 0.9);
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+        
+        .sidebar-menu a:hover {
+            background-color: rgba(255, 255, 255, 0.15);
+            color: white;
+        }
+        
+        .sidebar-menu a.active {
+            background-color: rgba(255, 255, 255, 0.2);
+            color: white;
+            border-left: 4px solid var(--accent-color);
+        }
+        
+        .sidebar-menu i {
+            margin-right: 10px;
+            font-size: 1.2rem;
+            width: 24px;
+            text-align: center;
+        }
+        
+        /* Contenido principal */
+        .app-content {
+            margin-left: var(--sidebar-width);
+            margin-top: var(--header-height);
+            padding: 20px;
+            min-height: calc(100vh - var(--header-height));
+            transition: margin-left 0.3s ease;
+            background-color: var(--content-bg);
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .app-sidebar {
+                transform: translateX(-100%);
+            }
+            
+            .app-content {
+                margin-left: 0;
+            }
+            
+            .sidebar-toggle {
+                display: block;
+            }
+            
+            .sidebar-open .app-sidebar {
+                transform: translateX(0);
+            }
+            
+            .sidebar-open .app-content {
+                margin-left: var(--sidebar-width);
+            }
+        }
+        
+        /* Botón para mostrar/ocultar sidebar en móviles */
+        .sidebar-toggle {
+            display: none;
+            background: none;
+            border: none;
+            color: var(--primary-color);
+            font-size: 1.5rem;
+            margin-right: 15px;
+            cursor: pointer;
+        }
+        
+        /* Estilos adicionales para contenido */
+        .card {
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(3, 94, 94, 0.1);
+            margin-bottom: 1.5rem;
+            background-color: var(--card-bg);
+            border: 1px solid var(--very-light-teal);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            border: none;
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(135deg, var(--accent-color) 0%, var(--primary-color) 100%);
+        }
+        
+        .btn-outline-secondary {
+            border-color: var(--light-teal);
+            color: var(--primary-color);
+        }
+        
+        .btn-outline-info {
+            border-color: var(--light-teal);
+            color: var(--primary-color);
+        }
+        
+        .stat-card {
+            text-align: center;
+            padding: 1.5rem;
+            background-color: var(--card-bg);
+        }
+        
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+        
+        .footer {
+            margin-top: 3rem;
+            padding: 1.5rem 0;
+            background-color: var(--sidebar-bg);
+            color: var(--text-light);
+            text-align: center;
+            border-top: 1px solid var(--light-teal);
+        }
+        
+        /* Espacio para el logo placeholder */
+        .logo-placeholder {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+        
+        /* Estilos para enlaces */
+        a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+        
+        a:hover {
+            color: var(--secondary-color);
+        }
+        
+        /* Estilos para formularios */
+        .form-control {
+            border: 1px solid var(--light-teal);
+        }
+        
+        .form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.25rem rgba(4, 125, 125, 0.25);
+        }
+        
+        /* Estilos para alertas */
+        .alert-info {
+            background-color: rgba(4, 125, 125, 0.1);
+            border-color: var(--light-teal);
+            color: var(--text-dark);
+        }
+        
+        /* Estilos para bordes y separadores */
+        hr {
+            border-color: var(--very-light-teal);
+        }
+
+        /* Estilos para submenús en sidebar */
+        .has-submenu > a {
+            position: relative;
+        }
+        .has-submenu > a .bi-chevron-down {
+            transition: transform 0.3s ease;
+            font-size: 0.9rem;
+            margin-left: auto;
+        }
+        .has-submenu.active > a .bi-chevron-down {
+            transform: rotate(180deg);
+        }
+        .submenu {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            background-color: rgba(0, 0, 0, 0.2);
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+        .has-submenu.active .submenu {
+            max-height: 200px;
+        }
+        .submenu li {
+            border-bottom: none;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .submenu a {
+            padding-left: 50px;
+            padding-top: 12px;
+            padding-bottom: 12px;
+            font-size: 0.95rem;
+        }
+        .submenu a.active {
+            background-color: rgba(255, 255, 255, 0.15);
+            border-left: 4px solid var(--accent-color);
+        }
+        .submenu i {
+            font-size: 1rem;
+            margin-right: 10px;
+        }
+    </style>
+    
+</head>
+<body>
+    <!-- Header delgado -->
+    <header class="app-header">
+        <button class="sidebar-toggle" id="sidebarToggle">
+            <i class="bi bi-list"></i>
+        </button>
+        
+        <div class="logo-container">
+            <div class="logo-placeholder">
+                <i class="bi bi-binoculars-fill"></i>
+            </div>
+            <a href="/" class="logo-text ms-2">El Gran Extractor</a>
+        </div>
+        
+        <div class="ms-auto d-flex align-items-center">
+            <a href="/admin/" class="btn btn-outline-secondary btn-sm me-2" target="_blank">
+                <i class="bi bi-gear"></i> Admin
+            </a>
+            <a href="/api/" class="btn btn-outline-info btn-sm" target="_blank">
+                <i class="bi bi-code-slash"></i> API
+            </a>
+        </div>
+    </header>
+    
+    <!-- Barra lateral delgada -->
+    <nav class="app-sidebar" id="appSidebar">
+        <ul class="sidebar-menu">
+            <li>
+                <a href="/" class="">
+                    <i class="bi bi-speedometer2"></i>
+                    <span>Dashboard</span>
+                </a>
+            </li>
+            <li>
+                <a href="/fuentes-web/" class="">
+                    <i class="bi bi-globe"></i>
+                    <span>Fuentes Web</span>
+                </a>
+            </li>
+            <li>
+                <a href="/capturas/" class="">
+                    <i class="bi bi-camera"></i>
+                    <span>Capturas</span>
+                </a>
+            </li>
+            <li>
+                <a href="/ingestas/" class="">
+                    <i class="bi bi-database"></i>
+                    <span>Ingestas</span>
+                </a>
+            </li>
+            <li>
+                <a href="/ingestas/propiedades/" class="">
+                    <i class="bi bi-house-door"></i>
+                    <span>Propiedades</span>
+                </a>
+            </li>
+            <li class="has-submenu ">
+                <a href="#">
+                    <i class="bi bi-house-door-fill"></i>
+                    <span>Propiedades Propify</span>
+                    <i class="bi bi-chevron-down ms-auto"></i>
+                </a>
+                <ul class="submenu">
+                    <li>
+                        <a href="/propifai/dashboard/calidad/" class="">
+                            <i class="bi bi-bar-chart-line"></i>
+                            <span>Análisis de Cartera</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/propifai/propiedades/" class="">
+                            <i class="bi bi-list-ul"></i>
+                            <span>Lista de Propiedades</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/propifai/dashboard/visitas/" class="">
+                            <i class="bi bi-calendar-check"></i>
+                            <span>Dashboard de Visitas</span>
+                        </a>
+                    </li>
+                </ul>
+            </li>
+            <li>
+                <a href="/requerimientos/lista/" class="">
+                    <i class="bi bi-clipboard-check"></i>
+                    <span>Requerimientos</span>
+                </a>
+            </li>
+            <li>
+                <a href="/matching/masivo/" class="">
+                    <i class="bi bi-lightning-charge-fill"></i>
+                    <span>Matching Masivo</span>
+                </a>
+            </li>
+            <li>
+                <a href="/cuadrantizacion/mapa/" class="">
+                    <i class="bi bi-map"></i>
+                    <span>Cuadrantización</span>
+                </a>
+            </li>
+            <li>
+                <a href="/acm/analisis/" class="">
+                    <i class="bi bi-graph-up"></i>
+                    <span>Análisis Comparativo (ACM)</span>
+                </a>
+            </li>
+            <li>
+                <a href="/market-analysis/dashboard/" class="">
+                    <i class="bi bi-speedometer"></i>
+                    <span>Dashboard Mercado</span>
+                </a>
+            </li>
+            <li>
+                <a href="/market-analysis/heatmap/" class="">
+                    <i class="bi bi-thermometer-high"></i>
+                    <span>Heatmap Mercado</span>
+                </a>
+            </li>
+            <li class="has-submenu ">
+                <a href="#">
+                    <i class="bi bi-megaphone-fill"></i>
+                    <span>Meta Ads</span>
+                    <i class="bi bi-chevron-down ms-auto"></i>
+                </a>
+                <ul class="submenu">
+                    <li>
+                        <a href="/meta-ads/dashboard/" class="">
+                            <i class="bi bi-speedometer"></i>
+                            <span>Dashboard Principal</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/meta-ads/analisis/historico/" class="">
+                            <i class="bi bi-bar-chart-line"></i>
+                            <span>Análisis Histórico</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/meta-ads/campañas/" class="">
+                            <i class="bi bi-list-ul"></i>
+                            <span>Lista de Campañas</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/meta-ads/sincronizar/" class="">
+                            <i class="bi bi-arrow-repeat"></i>
+                            <span>Sincronizar Datos</span>
+                        </a>
+                    </li>
+                </ul>
+            </li>
+            <li>
+                <a href="/analisis-crm/" class="">
+                    <i class="bi bi-people-fill"></i>
+                    <span>Leads CRM</span>
+                </a>
+            </li>
+            <li>
+                <a href="/eventos/" class="active">
+                    <i class="bi bi-calendar-event"></i>
+                    <span>Análisis de Eventos</span>
+                </a>
+            </li>
+            <li>
+                <a href="#">
+                    <i class="bi bi-search"></i>
+                    <span>Descubrimiento</span>
+                </a>
+            </li>
+            <li>
+                <a href="#">
+                    <i class="bi bi-gear"></i>
+                    <span>Configuración</span>
+                </a>
+            </li>
+            <li>
+                <a href="#">
+                    <i class="bi bi-question-circle"></i>
+                    <span>Ayuda</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+    
+    <!-- Contenido principal -->
+    <main class="app-content" id="appContent">
+        
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">
+                    <i class="bi bi-calendar-event me-2"></i>Dashboard de Eventos
+                </h1>
+                <div class="d-flex gap-2">
+                    <a href="?dia=2026-04-08" class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-calendar-day"></i> Hoy
+                    </a>
+                    <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#filtrosModal">
+                        <i class="bi bi-funnel"></i> Filtros
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estadísticas -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Total Eventos</h6>
+                            <h3 class="mb-0">392</h3>
+                        </div>
+                        <div class="bg-primary bg-opacity-10 p-3 rounded-circle">
+                            <i class="bi bi-calendar-check text-primary fs-4"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Eventos Hoy</h6>
+                            <h3 class="mb-0">11</h3>
+                        </div>
+                        <div class="bg-success bg-opacity-10 p-3 rounded-circle">
+                            <i class="bi bi-calendar-day text-success fs-4"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Eventos Semana</h6>
+                            <h3 class="mb-0">31</h3>
+                        </div>
+                        <div class="bg-info bg-opacity-10 p-3 rounded-circle">
+                            <i class="bi bi-calendar-week text-info fs-4"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Página Actual</h6>
+                            <h3 class="mb-0">1/16</h3>
+                        </div>
+                        <div class="bg-warning bg-opacity-10 p-3 rounded-circle">
+                            <i class="bi bi-file-text text-warning fs-4"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráfico de evolución semanal de tipos de eventos -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-0">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-graph-up me-2"></i>Evolución Semanal de Tipos de Eventos
+                    </h5>
+                    <p class="text-muted small mb-0">Distribución de eventos por tipo en las últimas semanas</p>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <canvas id="evolucionTiposChart" height="250"></canvas>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card border-0 bg-light">
+                                <div class="card-body">
+                                    <h6 class="card-title">Leyenda</h6>
+                                    <div id="chartLegend" class="small">
+                                        <!-- La leyenda se generará con JavaScript -->
+                                    </div>
+                                    <hr>
+                                    <p class="small text-muted mb-0">
+                                        <i class="bi bi-info-circle me-1"></i>
+                                        Este gráfico muestra la evolución de eventos por tipo en las últimas semanas.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros activos -->
+    
+
+    <!-- Tabla de eventos -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Código</th>
+                                    <th>Título</th>
+                                    <th>Fecha</th>
+                                    <th>Hora Inicio</th>
+                                    <th>Hora Fin</th>
+                                    <th>Interesado</th>
+                                    <th>Propiedad</th>
+                                    <th>Coordenadas</th>
+                                    <th>Tipo</th>
+                                    <th>Agente</th>
+                                    <th>Estado</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#444</span></td>
+                                    <td><code>EVT202644QGFR</code></td>
+                                    <td>
+                                        <strong>Senda</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: nicolas castañeda corzo
+…</small>
+                                        
+                                    </td>
+                                    <td>11/04/2026</td>
+                                    <td>11:30</td>
+                                    <td>12:10</td>
+                                    <td>Nicolas Castañeda C…</td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">Valery Gonzales Pastor</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">ACCEPTED</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/444/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#442</span></td>
+                                    <td><code>EVT2026FK053I</code></td>
+                                    <td>
+                                        <strong>Senda</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: Oscar Montero López
+Telé…</small>
+                                        
+                                    </td>
+                                    <td>11/04/2026</td>
+                                    <td>10:00</td>
+                                    <td>11:05</td>
+                                    <td>Oscar Montero López</td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">Valery Gonzales Pastor</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">PENDING</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/442/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#369</span></td>
+                                    <td><code>EVT2026ZXF1NN</code></td>
+                                    <td>
+                                        <strong>Plaza Las Americas</strong>
+                                        
+                                        <br><small class="text-muted">LLAMAR</small>
+                                        
+                                    </td>
+                                    <td>11/04/2026</td>
+                                    <td>09:00</td>
+                                    <td>09:05</td>
+                                    <td></td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Captación
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">Valery Gonzales Pastor</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary"></span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/369/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#448</span></td>
+                                    <td><code>EVT2026CN2RKE</code></td>
+                                    <td>
+                                        <strong>Almira Visita Eka</strong>
+                                        
+                                        <br><small class="text-muted">Visita con agente Erika</small>
+                                        
+                                    </td>
+                                    <td>11/04/2026</td>
+                                    <td>09:00</td>
+                                    <td>10:30</td>
+                                    <td></td>
+                                    <td>
+                                        
+                                        <div class="d-flex flex-column">
+                                            <span class="badge bg-info mb-1">#34</span>
+                                            
+                                            <small class="text-muted" style="font-size: 0.8rem;">
+                                                <i class="bi bi-building"></i> Departamento En Venta En Condominio Almira De Hunter
+                                            </small>
+                                            
+                                        </div>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <button class="btn btn-sm btn-outline-success"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#mapModal"
+                                                data-latitude="-16.438691"
+                                                data-longitude="-71.558936"
+                                                data-title="Departamento En Venta En Condominio Almira De Hunter">
+                                            <i class="bi bi-geo-alt"></i> Ver Mapa
+                                        </button>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">Veronica Alejandra Palacios Trigoso</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">PENDING</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/448/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#449</span></td>
+                                    <td><code>EVT20263FDTI0</code></td>
+                                    <td>
+                                        <strong>Casa Paucarpata</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: Mary Caceres
+Teléfono: +…</small>
+                                        
+                                    </td>
+                                    <td>09/04/2026</td>
+                                    <td>13:00</td>
+                                    <td>14:00</td>
+                                    <td>Mary Caceres</td>
+                                    <td>
+                                        
+                                        <div class="d-flex flex-column">
+                                            <span class="badge bg-info mb-1">#91</span>
+                                            
+                                            <small class="text-muted" style="font-size: 0.8rem;">
+                                                <i class="bi bi-building"></i> Casa A Pasos De La Av. Mariscal Castilla - Mariano Melgar, Arequipa
+                                            </small>
+                                            
+                                        </div>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <button class="btn btn-sm btn-outline-success"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#mapModal"
+                                                data-latitude="-16.412184"
+                                                data-longitude="-71.504266"
+                                                data-title="Casa A Pasos De La Av. Mariscal Castilla - Mariano Melgar, Arequipa">
+                                            <i class="bi bi-geo-alt"></i> Ver Mapa
+                                        </button>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">Valery Gonzales Pastor</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">PENDING</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/449/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#439</span></td>
+                                    <td><code>EVT202698RMFZ</code></td>
+                                    <td>
+                                        <strong>Senda</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: Maciel Granda
+Teléfono: …</small>
+                                        
+                                    </td>
+                                    <td>09/04/2026</td>
+                                    <td>11:00</td>
+                                    <td>11:45</td>
+                                    <td>Maciel Granda</td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">Valery Gonzales Pastor</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">PENDING</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/439/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#452</span></td>
+                                    <td><code>EVT2026QWOUQD</code></td>
+                                    <td>
+                                        <strong>Apima</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: Luis Daniel Zevallos Veg…</small>
+                                        
+                                    </td>
+                                    <td>08/04/2026</td>
+                                    <td>16:30</td>
+                                    <td>17:30</td>
+                                    <td>Luis Daniel Zevallo…</td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">brayan Tong</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">ACCEPTED</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/452/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#440</span></td>
+                                    <td><code>EVT2026F6OD1E</code></td>
+                                    <td>
+                                        <strong>Depas Mariscal Castilla</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: Carmen Pineda
+Teléfono: …</small>
+                                        
+                                    </td>
+                                    <td>08/04/2026</td>
+                                    <td>16:00</td>
+                                    <td>17:00</td>
+                                    <td>Carmen Pineda</td>
+                                    <td>
+                                        
+                                        <div class="d-flex flex-column">
+                                            <span class="badge bg-info mb-1">#9</span>
+                                            
+                                            <small class="text-muted" style="font-size: 0.8rem;">
+                                                <i class="bi bi-building"></i> Vendo 2 Departamentos Mariscal Castilla Cerro Colorado
+                                            </small>
+                                            
+                                        </div>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <button class="btn btn-sm btn-outline-success"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#mapModal"
+                                                data-latitude="-16.391994"
+                                                data-longitude="-71.568237"
+                                                data-title="Vendo 2 Departamentos Mariscal Castilla Cerro Colorado">
+                                            <i class="bi bi-geo-alt"></i> Ver Mapa
+                                        </button>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">Valery Gonzales Pastor</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">ACCEPTED</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/440/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#450</span></td>
+                                    <td><code>EVT2026NXFGWI</code></td>
+                                    <td>
+                                        <strong>Senda</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: Marlube Aguilar Valencia…</small>
+                                        
+                                    </td>
+                                    <td>08/04/2026</td>
+                                    <td>15:00</td>
+                                    <td>15:40</td>
+                                    <td>Marlube Aguilar Val…</td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">Valery Gonzales Pastor</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">PENDING</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/450/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#451</span></td>
+                                    <td><code>EVT2026LM18G4</code></td>
+                                    <td>
+                                        <strong>Senda</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: Gustavo Flores  Cáceres
+…</small>
+                                        
+                                    </td>
+                                    <td>08/04/2026</td>
+                                    <td>15:00</td>
+                                    <td>15:55</td>
+                                    <td>Gustavo Flores Cáce…</td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">Valery Gonzales Pastor</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">PENDING</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/451/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#443</span></td>
+                                    <td><code>EVT2026AIGWUE</code></td>
+                                    <td>
+                                        <strong>Casa Paucarpata</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: Luz Mamani
+Teléfono: +51…</small>
+                                        
+                                    </td>
+                                    <td>08/04/2026</td>
+                                    <td>12:30</td>
+                                    <td>13:15</td>
+                                    <td>Luz Mamani</td>
+                                    <td>
+                                        
+                                        <div class="d-flex flex-column">
+                                            <span class="badge bg-info mb-1">#91</span>
+                                            
+                                            <small class="text-muted" style="font-size: 0.8rem;">
+                                                <i class="bi bi-building"></i> Casa A Pasos De La Av. Mariscal Castilla - Mariano Melgar, Arequipa
+                                            </small>
+                                            
+                                        </div>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <button class="btn btn-sm btn-outline-success"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#mapModal"
+                                                data-latitude="-16.412184"
+                                                data-longitude="-71.504266"
+                                                data-title="Casa A Pasos De La Av. Mariscal Castilla - Mariano Melgar, Arequipa">
+                                            <i class="bi bi-geo-alt"></i> Ver Mapa
+                                        </button>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">brayan Tong</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">PENDING</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/443/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#438</span></td>
+                                    <td><code>EVT2026GBXAGE</code></td>
+                                    <td>
+                                        <strong>Casa Paucarpata</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: Christian alfaro saico
+T…</small>
+                                        
+                                    </td>
+                                    <td>08/04/2026</td>
+                                    <td>12:00</td>
+                                    <td>13:00</td>
+                                    <td>Christian Alfaro Sa…</td>
+                                    <td>
+                                        
+                                        <div class="d-flex flex-column">
+                                            <span class="badge bg-info mb-1">#91</span>
+                                            
+                                            <small class="text-muted" style="font-size: 0.8rem;">
+                                                <i class="bi bi-building"></i> Casa A Pasos De La Av. Mariscal Castilla - Mariano Melgar, Arequipa
+                                            </small>
+                                            
+                                        </div>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <button class="btn btn-sm btn-outline-success"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#mapModal"
+                                                data-latitude="-16.412184"
+                                                data-longitude="-71.504266"
+                                                data-title="Casa A Pasos De La Av. Mariscal Castilla - Mariano Melgar, Arequipa">
+                                            <i class="bi bi-geo-alt"></i> Ver Mapa
+                                        </button>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">brayan Tong</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">PENDING</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/438/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#434</span></td>
+                                    <td><code>EVT2026HJDB60</code></td>
+                                    <td>
+                                        <strong>En Villalba 315a Casona</strong>
+                                        
+                                        <br><small class="text-muted">En Villalba 315A CERCADO PABLO BUSTINZA</small>
+                                        
+                                    </td>
+                                    <td>08/04/2026</td>
+                                    <td>10:00</td>
+                                    <td>11:00</td>
+                                    <td></td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Capacitacion
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">Valery Gonzales Pastor</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">ACCEPTED</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/434/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#441</span></td>
+                                    <td><code>EVT2026M0IYI4</code></td>
+                                    <td>
+                                        <strong>Terreno Real Plaza</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: Ronald valer
+Teléfono: +…</small>
+                                        
+                                    </td>
+                                    <td>08/04/2026</td>
+                                    <td>10:00</td>
+                                    <td>11:00</td>
+                                    <td>Ronald Valer</td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">Veronica Alejandra Palacios Trigoso</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">PENDING</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/441/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#446</span></td>
+                                    <td><code>EVT2026XILUXC</code></td>
+                                    <td>
+                                        <strong>Apima</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: Carlos portugal
+Teléfono…</small>
+                                        
+                                    </td>
+                                    <td>08/04/2026</td>
+                                    <td>10:00</td>
+                                    <td>11:00</td>
+                                    <td>Carlos Portugal</td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">brayan Tong</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">PENDING</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/446/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#445</span></td>
+                                    <td><code>EVT2026QDY7MF</code></td>
+                                    <td>
+                                        <strong>Casa Paucarpata</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: Miluska Velarde Obando
+T…</small>
+                                        
+                                    </td>
+                                    <td>08/04/2026</td>
+                                    <td>09:00</td>
+                                    <td>09:40</td>
+                                    <td>Miluska Velarde Oba…</td>
+                                    <td>
+                                        
+                                        <div class="d-flex flex-column">
+                                            <span class="badge bg-info mb-1">#91</span>
+                                            
+                                            <small class="text-muted" style="font-size: 0.8rem;">
+                                                <i class="bi bi-building"></i> Casa A Pasos De La Av. Mariscal Castilla - Mariano Melgar, Arequipa
+                                            </small>
+                                            
+                                        </div>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <button class="btn btn-sm btn-outline-success"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#mapModal"
+                                                data-latitude="-16.412184"
+                                                data-longitude="-71.504266"
+                                                data-title="Casa A Pasos De La Av. Mariscal Castilla - Mariano Melgar, Arequipa">
+                                            <i class="bi bi-geo-alt"></i> Ver Mapa
+                                        </button>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">brayan Tong</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">PENDING</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/445/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#447</span></td>
+                                    <td><code>EVT2026F3X66W</code></td>
+                                    <td>
+                                        <strong>Casa Paucarpata</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: Ana Oviedo
+Teléfono: +51…</small>
+                                        
+                                    </td>
+                                    <td>08/04/2026</td>
+                                    <td>09:00</td>
+                                    <td>10:00</td>
+                                    <td>Ana Oviedo</td>
+                                    <td>
+                                        
+                                        <div class="d-flex flex-column">
+                                            <span class="badge bg-info mb-1">#91</span>
+                                            
+                                            <small class="text-muted" style="font-size: 0.8rem;">
+                                                <i class="bi bi-building"></i> Casa A Pasos De La Av. Mariscal Castilla - Mariano Melgar, Arequipa
+                                            </small>
+                                            
+                                        </div>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <button class="btn btn-sm btn-outline-success"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#mapModal"
+                                                data-latitude="-16.412184"
+                                                data-longitude="-71.504266"
+                                                data-title="Casa A Pasos De La Av. Mariscal Castilla - Mariano Melgar, Arequipa">
+                                            <i class="bi bi-geo-alt"></i> Ver Mapa
+                                        </button>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">brayan Tong</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">PENDING</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/447/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#437</span></td>
+                                    <td><code>EVT2026CZG3U6</code></td>
+                                    <td>
+                                        <strong>Casa Paucarpata</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: Hilda Geldrez
+Teléfono: …</small>
+                                        
+                                    </td>
+                                    <td>07/04/2026</td>
+                                    <td>16:30</td>
+                                    <td>17:45</td>
+                                    <td>Hilda Geldrez</td>
+                                    <td>
+                                        
+                                        <div class="d-flex flex-column">
+                                            <span class="badge bg-info mb-1">#91</span>
+                                            
+                                            <small class="text-muted" style="font-size: 0.8rem;">
+                                                <i class="bi bi-building"></i> Casa A Pasos De La Av. Mariscal Castilla - Mariano Melgar, Arequipa
+                                            </small>
+                                            
+                                        </div>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <button class="btn btn-sm btn-outline-success"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#mapModal"
+                                                data-latitude="-16.412184"
+                                                data-longitude="-71.504266"
+                                                data-title="Casa A Pasos De La Av. Mariscal Castilla - Mariano Melgar, Arequipa">
+                                            <i class="bi bi-geo-alt"></i> Ver Mapa
+                                        </button>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">brayan Tong</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">PENDING</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/437/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#433</span></td>
+                                    <td><code>EVT202616ITLP</code></td>
+                                    <td>
+                                        <strong>Pampa De Camarones</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: Juan Carlos choque condo…</small>
+                                        
+                                    </td>
+                                    <td>07/04/2026</td>
+                                    <td>13:00</td>
+                                    <td>14:00</td>
+                                    <td>Juan Carlos Choque …</td>
+                                    <td>
+                                        
+                                        <div class="d-flex flex-column">
+                                            <span class="badge bg-info mb-1">#35</span>
+                                            
+                                            <small class="text-muted" style="font-size: 0.8rem;">
+                                                <i class="bi bi-building"></i> Casa Como Terreno En Pampa De Camarones
+                                            </small>
+                                            
+                                        </div>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <button class="btn btn-sm btn-outline-success"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#mapModal"
+                                                data-latitude="-16.41062"
+                                                data-longitude="-71.568797"
+                                                data-title="Casa Como Terreno En Pampa De Camarones">
+                                            <i class="bi bi-geo-alt"></i> Ver Mapa
+                                        </button>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">brayan Tong</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">PENDING</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/433/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#432</span></td>
+                                    <td><code>EVT2026FSNIC4</code></td>
+                                    <td>
+                                        <strong>Monterrico</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: Mercedes Bravo Silva
+Tel…</small>
+                                        
+                                    </td>
+                                    <td>07/04/2026</td>
+                                    <td>10:00</td>
+                                    <td>11:00</td>
+                                    <td>Mercedes Bravo Silva</td>
+                                    <td>
+                                        
+                                        <div class="d-flex flex-column">
+                                            <span class="badge bg-info mb-1">#57</span>
+                                            
+                                            <small class="text-muted" style="font-size: 0.8rem;">
+                                                <i class="bi bi-building"></i> 🏢 Proyecto De Solo 5 Departamentos Con Cochera - Monterrico
+                                            </small>
+                                            
+                                        </div>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <button class="btn btn-sm btn-outline-success"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#mapModal"
+                                                data-latitude="-16.432856"
+                                                data-longitude="-71.52029"
+                                                data-title="🏢 Proyecto De Solo 5 Departamentos Con Cochera - Monterrico">
+                                            <i class="bi bi-geo-alt"></i> Ver Mapa
+                                        </button>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">Valery Gonzales Pastor</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">ACCEPTED</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/432/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#435</span></td>
+                                    <td><code>EVT20262BMU3E</code></td>
+                                    <td>
+                                        <strong>Plaza Las Americas</strong>
+                                        
+                                        <br><small class="text-muted">958 795 768 sra claudia
+J.M.Cuadros 327-B Cerro …</small>
+                                        
+                                    </td>
+                                    <td>06/04/2026</td>
+                                    <td>17:00</td>
+                                    <td>17:30</td>
+                                    <td></td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Capacitacion
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">Valery Gonzales Pastor</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">PENDING</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/435/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#426</span></td>
+                                    <td><code>EVT2026W4II6W</code></td>
+                                    <td>
+                                        <strong>Pampa De Camarones</strong>
+                                        
+                                        <br><small class="text-muted">Cesar ticona (986992521)
+Lunes 3:30</small>
+                                        
+                                    </td>
+                                    <td>06/04/2026</td>
+                                    <td>15:30</td>
+                                    <td>16:30</td>
+                                    <td></td>
+                                    <td>
+                                        
+                                        <div class="d-flex flex-column">
+                                            <span class="badge bg-info mb-1">#35</span>
+                                            
+                                            <small class="text-muted" style="font-size: 0.8rem;">
+                                                <i class="bi bi-building"></i> Casa Como Terreno En Pampa De Camarones
+                                            </small>
+                                            
+                                        </div>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <button class="btn btn-sm btn-outline-success"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#mapModal"
+                                                data-latitude="-16.41062"
+                                                data-longitude="-71.568797"
+                                                data-title="Casa Como Terreno En Pampa De Camarones">
+                                            <i class="bi bi-geo-alt"></i> Ver Mapa
+                                        </button>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">brayan Tong</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">ACCEPTED</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/426/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#431</span></td>
+                                    <td><code>EVT20265PEROC</code></td>
+                                    <td>
+                                        <strong>Depas Mariscal Castilla</strong>
+                                        
+                                        <br><small class="text-muted">--- CONTACTO ---
+Nombre: RONY AQUINO
+Teléfono: +5…</small>
+                                        
+                                    </td>
+                                    <td>06/04/2026</td>
+                                    <td>14:00</td>
+                                    <td>14:40</td>
+                                    <td>Rony Aquino</td>
+                                    <td>
+                                        
+                                        <div class="d-flex flex-column">
+                                            <span class="badge bg-info mb-1">#9</span>
+                                            
+                                            <small class="text-muted" style="font-size: 0.8rem;">
+                                                <i class="bi bi-building"></i> Vendo 2 Departamentos Mariscal Castilla Cerro Colorado
+                                            </small>
+                                            
+                                        </div>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <button class="btn btn-sm btn-outline-success"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#mapModal"
+                                                data-latitude="-16.391994"
+                                                data-longitude="-71.568237"
+                                                data-title="Vendo 2 Departamentos Mariscal Castilla Cerro Colorado">
+                                            <i class="bi bi-geo-alt"></i> Ver Mapa
+                                        </button>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Visita
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">brayan Tong</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">ACCEPTED</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/431/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#436</span></td>
+                                    <td><code>EVT2026Z42BF3</code></td>
+                                    <td>
+                                        <strong>Quinta Natura</strong>
+                                        
+                                        <br><small class="text-muted">FIRMA EN LA DESARROLLADORA</small>
+                                        
+                                    </td>
+                                    <td>06/04/2026</td>
+                                    <td>14:00</td>
+                                    <td>14:30</td>
+                                    <td></td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Cierre
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">Valery Gonzales Pastor</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">PENDING</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/436/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                                <tr>
+                                    <td><span class="badge bg-secondary">#430</span></td>
+                                    <td><code>EVT2026DT92JX</code></td>
+                                    <td>
+                                        <strong>Alcides Carrion</strong>
+                                        
+                                        <br><small class="text-muted">La direccion es Av. Daniel Alcides Carrion 215-A …</small>
+                                        
+                                    </td>
+                                    <td>06/04/2026</td>
+                                    <td>10:30</td>
+                                    <td>11:30</td>
+                                    <td></td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="text-muted">—</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge" style="background-color: #047D7D; color: white;">
+                                            Captación
+                                        </span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-dark">Veronica Alejandra Palacios Trigoso</span>
+                                        
+                                    </td>
+                                    <td>
+                                        
+                                        <span class="badge bg-secondary">PENDING</span>
+                                        
+                                    </td>
+                                    <td>
+                                        <a href="/eventos/430/" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <!-- Paginación -->
+                
+                <div class="card-footer border-0 bg-light">
+                    <nav aria-label="Paginación de eventos">
+                        <ul class="pagination justify-content-center mb-0">
+                            
+                            
+                            
+                                
+                                <li class="page-item active">
+                                    <span class="page-link">1</span>
+                                </li>
+                                
+                            
+                                
+                                <li class="page-item">
+                                    <a class="page-link" href="?page=2">2</a>
+                                </li>
+                                
+                            
+                                
+                                <li class="page-item">
+                                    <a class="page-link" href="?page=3">3</a>
+                                </li>
+                                
+                            
+                                
+                            
+                                
+                            
+                                
+                            
+                                
+                            
+                                
+                            
+                                
+                            
+                                
+                            
+                                
+                            
+                                
+                            
+                                
+                            
+                                
+                            
+                                
+                            
+                                
+                            
+                            
+                            
+                            <li class="page-item">
+                                <a class="page-link" href="?page=2">
+                                    <i class="bi bi-chevron-right"></i>
+                                </a>
+                            </li>
+                            
+                        </ul>
+                        <p class="text-center text-muted small mt-2">
+                            Mostrando 1–25 de 392 eventos
+                        </p>
+                    </nav>
+                </div>
+                
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Google Maps -->
+<div class="modal fade" id="mapModal" tabindex="-1" aria-labelledby="mapModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="mapModalLabel">
+                    <i class="bi bi-geo-alt me-2"></i>Ubicación de la Propiedad
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <div id="map" style="height: 400px; width: 100%; border-radius: 8px;"></div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-body">
+                                <h6 class="card-title">Información de la Propiedad</h6>
+                                <div class="mb-3">
+                                    <small class="text-muted">Título:</small>
+                                    <p id="propTitle" class="mb-1 fw-bold">Cargando...</p>
+                                </div>
+                                <div class="mb-3">
+                                    <small class="text-muted">Coordenadas:</small>
+                                    <p id="propCoords" class="mb-1">Cargando...</p>
+                                </div>
+                                <div class="mb-3">
+                                    <small class="text-muted">Latitud:</small>
+                                    <p id="propLat" class="mb-1">—</p>
+                                </div>
+                                <div class="mb-3">
+                                    <small class="text-muted">Longitud:</small>
+                                    <p id="propLng" class="mb-1">—</p>
+                                </div>
+                                <div class="mt-3">
+                                    <a href="#" id="propLink" class="btn btn-sm btn-outline-primary w-100" target="_blank">
+                                        <i class="bi bi-arrow-up-right-square"></i> Ver en Google Maps
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de filtros -->
+<div class="modal fade" id="filtrosModal" tabindex="-1" aria-labelledby="filtrosModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="filtrosModalLabel">
+                    <i class="bi bi-funnel me-2"></i>Filtrar Eventos
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="get" action="">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="dia" class="form-label">Día específico</label>
+                        <input type="date" class="form-control" id="dia" name="dia" value="">
+                        <div class="form-text">Selecciona una fecha para filtrar eventos de ese día.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="propiedad" class="form-label">ID de Propiedad</label>
+                        <input type="number" class="form-control" id="propiedad" name="propiedad" value="" placeholder="Ej: 12345">
+                    </div>
+                    <div class="mb-3">
+                        <label for="tipo" class="form-label">Tipo de Evento</label>
+                        <select class="form-select" id="tipo" name="tipo">
+                            <option value="">Todos los tipos</option>
+                            
+                            <option value="5" >
+                                Capacitacion (#047D7D)
+                            </option>
+                            
+                            <option value="2" >
+                                Captación (#047D7D)
+                            </option>
+                            
+                            <option value="3" >
+                                Cierre (#047D7D)
+                            </option>
+                            
+                            <option value="6" >
+                                Otro (#51A7F0)
+                            </option>
+                            
+                            <option value="4" >
+                                Tramite (#047D7D)
+                            </option>
+                            
+                            <option value="1" >
+                                Visita (#047D7D)
+                            </option>
+                            
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="agente" class="form-label">ID de Agente Asignado</label>
+                        <input type="number" class="form-control" id="agente" name="agente" value="" placeholder="Ej: 101">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-filter"></i> Aplicar Filtros
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Datos del gráfico en formato JSON -->
+
+<div id="graficoEvolucionData" style="display: none;">{'semanas': ['Sem 09/02', 'Sem 16/02', 'Sem 23/02', 'Sem 02/03', 'Sem 09/03', 'Sem 16/03', 'Sem 23/03', 'Sem 30/03', 'Sem 06/04'], 'tipos': {'5': 'Capacitacion', '2': 'Captación', '3': 'Cierre', '6': 'Otro', '4': 'Tramite', '1': 'Visita'}, 'datos': {'5': [1, 5, 0, 1, 0, 3, 1, 0, 2], '2': [2, 7, 3, 13, 6, 7, 4, 2, 2], '3': [0, 0, 0, 3, 1, 0, 0, 0, 1], '6': [0, 0, 1, 10, 2, 6, 3, 4, 0], '4': [1, 2, 1, 1, 0, 1, 1, 0, 0], '1': [33, 37, 31, 42, 41, 37, 29, 8, 21]}, 'colores': {'5': '#047D7D', '2': '#3498db', '3': '#2ecc71', '6': '#51A7F0', '4': '#e74c3c', '1': '#f39c12'}}</div>
+
+
+
+    </main>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Toggle sidebar en móviles
+        document.addEventListener('DOMContentLoaded', function() {
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            const appSidebar = document.getElementById('appSidebar');
+            const appContent = document.getElementById('appContent');
+            
+            if (sidebarToggle) {
+                sidebarToggle.addEventListener('click', function() {
+                    document.body.classList.toggle('sidebar-open');
+                });
+            }
+            
+            // Cerrar sidebar al hacer clic fuera en móviles
+            appContent.addEventListener('click', function() {
+                if (window.innerWidth <= 768 && document.body.classList.contains('sidebar-open')) {
+                    document.body.classList.remove('sidebar-open');
+                }
+            });
+            
+            // Actualizar clase activa en menú
+            const currentPath = window.location.pathname;
+            const menuItems = document.querySelectorAll('.sidebar-menu a');
+            
+            menuItems.forEach(item => {
+                if (item.getAttribute('href') === currentPath) {
+                    item.classList.add('active');
+                }
+            });
+
+            // Submenús: alternar al hacer clic en el enlace padre
+            document.querySelectorAll('.has-submenu > a').forEach(link => {
+                link.addEventListener('click', function(e) {
+                    // Solo si el enlace no tiene href válido (es #)
+                    if (this.getAttribute('href') === '#') {
+                        e.preventDefault();
+                        const parentLi = this.parentElement;
+                        parentLi.classList.toggle('active');
+                    }
+                });
+            });
+
+            // Expandir submenú si alguna subpágina está activa
+            document.querySelectorAll('.has-submenu').forEach(li => {
+                const activeSub = li.querySelector('.submenu a.active');
+                if (activeSub) {
+                    li.classList.add('active');
+                }
+            });
+        });
+    </script>
+    
+    
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Auto-enfocar el campo de fecha al abrir el modal
+    document.getElementById('filtrosModal').addEventListener('shown.bs.modal', function () {
+        document.getElementById('dia').focus();
+    });
+    
+    // Botón para limpiar filtros
+    document.querySelectorAll('.clear-filter').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            window.location.href = this.getAttribute('href');
+        });
+    });
+    
+    // Variables globales para el mapa (Leaflet)
+    let map = null;
+    let marker = null;
+    
+    // Inicializar el mapa cuando se abre el modal
+    document.getElementById('mapModal').addEventListener('shown.bs.modal', function (event) {
+        const button = event.relatedTarget;
+        const latitude = parseFloat(button.getAttribute('data-latitude'));
+        const longitude = parseFloat(button.getAttribute('data-longitude'));
+        const title = button.getAttribute('data-title') || 'Propiedad';
+        
+        // Actualizar información en el panel lateral
+        document.getElementById('propTitle').textContent = title;
+        document.getElementById('propCoords').textContent = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+        document.getElementById('propLat').textContent = latitude.toFixed(6);
+        document.getElementById('propLng').textContent = longitude.toFixed(6);
+        
+        // Actualizar enlace a Google Maps
+        const googleMapsUrl = `https://www.google.com/maps?q=${latitude},${longitude}`;
+        document.getElementById('propLink').href = googleMapsUrl;
+        
+        // Cargar Leaflet CSS si no está cargado
+        if (!document.querySelector('link[href*="leaflet"]')) {
+            const leafletCSS = document.createElement('link');
+            leafletCSS.rel = 'stylesheet';
+            leafletCSS.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+            leafletCSS.integrity = 'sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=';
+            leafletCSS.crossOrigin = '';
+            document.head.appendChild(leafletCSS);
+        }
+        
+        // Cargar Leaflet JS si no está cargado
+        if (typeof L === 'undefined') {
+            const leafletJS = document.createElement('script');
+            leafletJS.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+            leafletJS.integrity = 'sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=';
+            leafletJS.crossOrigin = '';
+            leafletJS.onload = function() {
+                initializeMap(latitude, longitude, title);
+            };
+            document.head.appendChild(leafletJS);
+        } else {
+            initializeMap(latitude, longitude, title);
+        }
+    });
+    
+    // Función para inicializar el mapa Leaflet
+    function initializeMap(latitude, longitude, title) {
+        const mapElement = document.getElementById('map');
+        
+        // Limpiar el mapa anterior si existe
+        if (map) {
+            map.remove();
+            map = null;
+            marker = null;
+        }
+        
+        // Inicializar nuevo mapa
+        map = L.map('map').setView([latitude, longitude], 15);
+        
+        // Añadir capa de OpenStreetMap
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            maxZoom: 19
+        }).addTo(map);
+        
+        // Añadir marcador
+        marker = L.marker([latitude, longitude]).addTo(map)
+            .bindPopup(`<b>${title}</b><br>Lat: ${latitude.toFixed(6)}<br>Lng: ${longitude.toFixed(6)}`)
+            .openPopup();
+        
+        // Añadir círculo para mejor visibilidad
+        L.circle([latitude, longitude], {
+            color: 'blue',
+            fillColor: '#3388ff',
+            fillOpacity: 0.2,
+            radius: 100
+        }).addTo(map);
+    }
+    
+    // Limpiar el mapa cuando se cierra el modal
+    document.getElementById('mapModal').addEventListener('hidden.bs.modal', function () {
+        if (map) {
+            map.remove();
+            map = null;
+            marker = null;
+        }
+    });
+
+    // Gráfico de evolución de tipos de eventos
+    document.addEventListener('DOMContentLoaded', function() {
+        // Verificar si hay datos para el gráfico
+        let graficoData = null;
+        const dataElement = document.getElementById('graficoEvolucionData');
+        
+        if (dataElement && dataElement.textContent) {
+            try {
+                graficoData = JSON.parse(dataElement.textContent);
+            } catch (e) {
+                console.error('Error parsing chart data:', e);
+            }
+        }
+        
+        if (graficoData && graficoData.semanas && graficoData.semanas.length > 0) {
+            // Preparar datos para Chart.js
+            const semanas = graficoData.semanas;
+            const tipos = graficoData.tipos;
+            const datos = graficoData.datos;
+            const colores = graficoData.colores;
+            
+            // Crear datasets para cada tipo de evento
+            const datasets = [];
+            const legendItems = [];
+            
+            for (const tipoId in tipos) {
+                if (datos[tipoId] && datos[tipoId].length > 0) {
+                    const color = colores[tipoId] || getRandomColor();
+                    datasets.push({
+                        label: tipos[tipoId],
+                        data: datos[tipoId],
+                        borderColor: color,
+                        backgroundColor: color + '20', // Agregar transparencia
+                        tension: 0.3,
+                        fill: false,
+                        borderWidth: 3, // Líneas más gruesas
+                        pointRadius: 4,
+                        pointHoverRadius: 6
+                    });
+                    
+                    // Agregar a la leyenda
+                    legendItems.push(`
+                        <div class="d-flex align-items-center mb-2">
+                            <span class="badge me-2" style="background-color: ${color}; width: 16px; height: 16px; display: inline-block; border-radius: 4px;"></span>
+                            <span class="small">${tipos[tipoId]}</span>
+                        </div>
+                    `);
+                }
+            }
+            
+            // Actualizar leyenda en el HTML
+            if (legendItems.length > 0) {
+                document.getElementById('chartLegend').innerHTML = legendItems.join('');
+            }
+            
+            // Crear el gráfico
+            const ctx = document.getElementById('evolucionTiposChart').getContext('2d');
+            const chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: semanas,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false // Usamos nuestra propia leyenda
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                            titleFont: { size: 12 },
+                            bodyFont: { size: 12 },
+                            padding: 10
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                display: true,
+                                color: 'rgba(0, 0, 0, 0.05)'
+                            },
+                            title: {
+                                display: true,
+                                text: 'Semanas',
+                                font: { size: 12, weight: 'bold' }
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            grid: {
+                                display: true,
+                                color: 'rgba(0, 0, 0, 0.05)'
+                            },
+                            title: {
+                                display: true,
+                                text: 'Número de Eventos',
+                                font: { size: 12, weight: 'bold' }
+                            },
+                            ticks: {
+                                precision: 0,
+                                stepSize: 1
+                            }
+                        }
+                    },
+                    interaction: {
+                        intersect: false,
+                        mode: 'nearest'
+                    },
+                    elements: {
+                        line: {
+                            tension: 0.3 // Suavizado de líneas
+                        }
+                    }
+                }
+            });
+        } else {
+            // Si no hay datos, mostrar mensaje
+            document.getElementById('evolucionTiposChart').parentElement.innerHTML = `
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    No hay datos suficientes para mostrar el gráfico de evolución.
+                </div>
+            `;
+        }
+    });
+
+    // Función para generar colores aleatorios
+    function getRandomColor() {
+        const letters = '0123456789ABCDEF';
+        let color = '#';
+        for (let i = 0; i < 6; i++) {
+            color += letters[Math.floor(Math.random() * 16)];
+        }
+        return color;
+    }
+</script>
+
+</body>
+</html>

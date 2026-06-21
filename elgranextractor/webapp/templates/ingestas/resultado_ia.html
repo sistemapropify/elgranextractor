@@ -1,0 +1,366 @@
+{% extends 'base.html' %}
+
+{% block title %}Resultados del Procesamiento con IA{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ===== CARD BASE ===== */
+    .card {
+        margin-bottom: 20px;
+        border-radius: 12px;
+        overflow: hidden;
+        transition: all 0.3s ease;
+    }
+    .card:hover {
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+    }
+
+    /* ===== METRIC CARDS ===== */
+    .metric-card {
+        background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+        color: white;
+        border: none;
+        border-radius: 14px !important;
+        position: relative;
+        overflow: hidden;
+    }
+    .metric-card::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -50%;
+        width: 100%;
+        height: 100%;
+        background: rgba(255,255,255,0.08);
+        border-radius: 50%;
+        transition: transform 0.5s ease;
+    }
+    .metric-card:hover::before {
+        transform: scale(1.5);
+    }
+    .metric-card:nth-child(2) {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+    .metric-card:nth-child(3) {
+        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    }
+    .metric-value {
+        font-size: 2.5rem;
+        font-weight: 800;
+        line-height: 1.1;
+    }
+
+    /* ===== TABLA CON SCROLL ===== */
+    .table-fixed {
+        max-height: 400px;
+        overflow-y: auto;
+        border-radius: 8px;
+        border: 1px solid #dee2e6;
+    }
+    .table-fixed::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+    .table-fixed::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+    .table-fixed::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 4px;
+    }
+    .table-fixed::-webkit-scrollbar-thumb:hover {
+        background: #a1a1a1;
+    }
+    .table-fixed table {
+        margin-bottom: 0;
+    }
+    .table-fixed thead th {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: #f8f9fa !important;
+        border-bottom: 2px solid #dee2e6;
+    }
+
+    /* ===== BADGES CUSTOM ===== */
+    .badge-custom {
+        font-size: 0.85em;
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    /* ===== LOG ENTRIES ===== */
+    .log-entry {
+        font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+        font-size: 0.8rem;
+        padding: 8px 12px;
+        border-left: 3px solid #007bff;
+        margin-bottom: 4px;
+        background-color: #f8f9fa;
+        border-radius: 0 4px 4px 0;
+        transition: background-color 0.2s ease;
+    }
+    .log-entry:hover {
+        background-color: #f0f0f0;
+    }
+    .log-entry.log-info {
+        border-left-color: #17a2b8;
+    }
+    .log-entry.log-success {
+        border-left-color: #28a745;
+    }
+    .log-entry.log-warning {
+        border-left-color: #ffc107;
+    }
+    .log-entry.log-error {
+        border-left-color: #dc3545;
+        background-color: #fff5f5;
+    }
+
+    /* ===== LISTA DE INFORMACIÓN ===== */
+    .list-unstyled li {
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #f0f0f0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .list-unstyled li:last-child {
+        border-bottom: none;
+    }
+    .list-unstyled li strong {
+        color: #495057;
+    }
+
+    /* ===== ANIMACIONES ===== */
+    .card {
+        animation: fadeInUp 0.5s ease forwards;
+        opacity: 0;
+    }
+    .card:nth-child(2) { animation-delay: 0.05s; }
+    .card:nth-child(3) { animation-delay: 0.1s; }
+    .card:nth-child(4) { animation-delay: 0.15s; }
+    .card:nth-child(5) { animation-delay: 0.2s; }
+
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 768px) {
+        .metric-value {
+            font-size: 1.8rem;
+        }
+        .metric-card {
+            padding: 1rem !important;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0"><i class="bi bi-robot"></i> Resultados del Procesamiento con IA</h4>
+                    <a href="{% url 'ingestas:procesar_ia' %}" class="btn btn-light btn-sm">
+                        <i class="bi bi-arrow-repeat"></i> Procesar otro archivo
+                    </a>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-4">
+                        <div class="col-md-4">
+                            <div class="card metric-card text-center">
+                                <div class="card-body">
+                                    <h5 class="card-title">Filas procesadas</h5>
+                                    <div class="metric-value">{{ resultado.metricas.total_filas_procesadas }}</div>
+                                    <p class="card-text">Total de filas en el archivo</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card metric-card text-center">
+                                <div class="card-body">
+                                    <h5 class="card-title">Filas exitosas</h5>
+                                    <div class="metric-value">{{ resultado.metricas.filas_exitosas }}</div>
+                                    <p class="card-text">Filas analizadas correctamente</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card metric-card text-center">
+                                <div class="card-body">
+                                    <h5 class="card-title">Campos únicos</h5>
+                                    <div class="metric-value">{{ resultado.metricas.campos_dinamicos_unicos }}</div>
+                                    <p class="card-text">Campos dinámicos detectados</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header bg-info text-white">
+                                    <h5 class="mb-0">Top Campos Detectados</h5>
+                                </div>
+                                <div class="card-body">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Campo</th>
+                                                <th>Ocurrencias</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for campo, count in resultado.metricas.top_campos %}
+                                            <tr>
+                                                <td><span class="badge bg-primary badge-custom">{{ campo }}</span></td>
+                                                <td>{{ count }}</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header bg-warning text-dark">
+                                    <h5 class="mb-0">Información de Procesamiento</h5>
+                                </div>
+                                <div class="card-body">
+                                    <ul class="list-group list-group-flush">
+                                        <li class="list-group-item d-flex justify-content-between">
+                                            <span>Fuente:</span>
+                                            <strong>{{ nombre_fuente|default:"No especificado" }}</strong>
+                                        </li>
+                                        <li class="list-group-item d-flex justify-content-between">
+                                            <span>Portal de origen:</span>
+                                            <strong>{{ portal_origen|default:"No especificado" }}</strong>
+                                        </li>
+                                        <li class="list-group-item d-flex justify-content-between">
+                                            <span>Filas con error:</span>
+                                            <strong>{{ resultado.metricas.filas_con_error }}</strong>
+                                        </li>
+                                        <li class="list-group-item d-flex justify-content-between">
+                                            <span>Tiempo de procesamiento:</span>
+                                            <strong>{{ resultado.metricas.tiempo_procesamiento }}</strong>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card mt-4">
+                        <div class="card-header bg-success text-white">
+                            <h5 class="mb-0">Detalle de Campos Dinámicos</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-fixed">
+                                <table class="table table-sm table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Campo Normalizado</th>
+                                            <th>Nombre Original</th>
+                                            <th>Ocurrencias</th>
+                                            <th>Valores de Ejemplo</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for campo, info in resultado.campos_unicos.items %}
+                                        <tr>
+                                            <td><code>{{ campo }}</code></td>
+                                            <td>{{ info.nombre_original }}</td>
+                                            <td><span class="badge bg-secondary">{{ info.ocurrencias }}</span></td>
+                                            <td>
+                                                {% for val in info.valores_ejemplo|slice:":3" %}
+                                                    <span class="badge bg-light text-dark">{{ val }}</span>
+                                                {% endfor %}
+                                                {% if info.valores_ejemplo|length > 3 %}
+                                                    <span class="badge bg-light text-dark">+{{ info.valores_ejemplo|length|add:"-3" }} más</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card mt-4">
+                        <div class="card-header bg-dark text-white">
+                            <h5 class="mb-0">Vista Previa de Resultados (Primeras 3 filas)</h5>
+                        </div>
+                        <div class="card-body">
+                            {% for fila in resultado.resultados|slice:":3" %}
+                            <div class="card mb-3">
+                                <div class="card-header">
+                                    <strong>Fila {{ forloop.counter }}</strong> - ID: {{ fila.id|truncatechars:10 }}
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <h6>Datos Base</h6>
+                                            <ul class="list-unstyled">
+                                                {% for key, value in fila.datos_base.items %}
+                                                <li><strong>{{ key }}:</strong> {{ value|default:"-" }}</li>
+                                                {% endfor %}
+                                            </ul>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <h6>Campos Dinámicos</h6>
+                                            {% if fila.campos_dinamicos %}
+                                                <ul class="list-unstyled">
+                                                    {% for key, value in fila.campos_dinamicos.items %}
+                                                    <li><span class="badge bg-info">{{ key }}:</span> {{ value }}</li>
+                                                    {% endfor %}
+                                                </ul>
+                                            {% else %}
+                                                <span class="text-muted">No se detectaron campos</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <div class="mt-2">
+                                        <small class="text-muted"><strong>Descripción cruda:</strong> {{ fila.descripcion_cruda|truncatechars:150 }}</small>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="card mt-4">
+                        <div class="card-header bg-secondary text-white">
+                            <h5 class="mb-0">Acciones</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="d-grid gap-2 d-md-flex justify-content-md-start">
+                                <a href="#" class="btn btn-primary me-md-2" onclick="alert('Funcionalidad en desarrollo')">
+                                    <i class="bi bi-download"></i> Exportar JSON
+                                </a>
+                                <a href="#" class="btn btn-success me-md-2" onclick="alert('Funcionalidad en desarrollo')">
+                                    <i class="bi bi-database"></i> Guardar en Base de Datos
+                                </a>
+                                <a href="{% url 'ingestas:subir_excel' %}" class="btn btn-outline-secondary">
+                                    <i class="bi bi-arrow-left"></i> Volver al método tradicional
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

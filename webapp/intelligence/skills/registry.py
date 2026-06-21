@@ -9,6 +9,9 @@ Responsabilidades:
 - list_available(user_level): lista todas las skills activas accesibles para ese nivel
 - deactivate(name) / activate(name): control operacional sin reiniciar
 
+F1-001: Integrado con SemanticSkillRouter como método primario de clasificación.
+         El keyword matching queda como fallback graceful.
+
 Refactor B — SPEC: plans/spec_tecnica_propifai_intelligence.md
 """
 
@@ -21,6 +24,7 @@ from typing import Any, Dict, List, Optional, Type
 from django.conf import settings
 
 from .base import BaseSkill
+from ..services.semantic_router import get_router, RoutingResult
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +119,8 @@ class SkillRegistry:
     _skill_classes: Dict[str, Type[BaseSkill]] = {}
 
     # Umbral mínimo de confianza para selección semántica (0.0 - 1.0)
-    MIN_CONFIDENCE_THRESHOLD = 0.25
+    # F1-005: Aumentado de 0.25 a 0.45 para reducir falsos positivos
+    MIN_CONFIDENCE_THRESHOLD = 0.45
 
     def __new__(cls) -> 'SkillRegistry':
         if cls._instance is None:
@@ -177,23 +182,16 @@ class SkillRegistry:
         active_context: Optional[Dict[str, Any]] = None,
     ) -> Optional[BaseSkill]:
         """
-        Dada una intención extraída por el LLM, retorna la skill más adecuada
-        que el usuario tiene permiso de usar.
+        Dada una intención extraída por el LLM, retorna la skill más adecuada.
 
-        Estrategia de matching:
-        1. Detectar si la intención contiene palabras clave del dominio (propiedades)
-        2. Si sí, calcular score contra skills de búsqueda
-        3. Si no, buscar en todas las skills por coincidencia de tokens
-        4. Si hay contexto activo, considerar mensajes de seguimiento (B4)
+        Estrategia (F1-001):
+        1. PRIMARIO: SemanticSkillRouter con embeddings E5-large
+        2. FALLBACK: Keyword matching existente
 
-        Refactor B3: Nuevo parámetro active_context para mejorar routing
-        cuando hay contexto conversacional activo.
-        Refactor B4: Detección de mensajes de seguimiento — si hay contexto
-        activo y el mensaje no tiene keywords propias, asumir que es
-        continuación de la búsqueda anterior.
+        F1-005: Threshold aumentado de 0.25 a 0.45.
 
         Args:
-            intent: Texto de intención del usuario (ej: 'buscar depas en Cayma')
+            intent: Texto de intención del usuario
             user_level: Nivel de acceso del usuario
             active_context: Dict con contexto activo (opcional)
 
@@ -203,141 +201,100 @@ class SkillRegistry:
         if not intent or not intent.strip():
             return None
 
+        # ── 1. PRIMARIO: Routing semántico ──
+        router = get_router(threshold=self.MIN_CONFIDENCE_THRESHOLD)
+        routing_result: RoutingResult = router.classify(intent)
+
+        logger.info(
+            f"[SkillRegistry] Routing — "
+            f"semantic_skill={routing_result.skill_name}, "
+            f"score={routing_result.score:.4f}, "
+            f"threshold={routing_result.threshold}, "
+            f"accepted={routing_result.accepted}, "
+            f"latency={routing_result.latency_ms:.1f}ms"
+        )
+
+        if routing_result.accepted and routing_result.skill_name:
+            skill = self._skills.get(routing_result.skill_name)
+            if skill and skill.can_user_access(user_level):
+                logger.debug(
+                    f"[SkillRegistry] Skill por router semántico: "
+                    f"'{skill.name}' (score: {routing_result.score:.4f})"
+                )
+                return skill
+
+        # ── 2. FALLBACK: Keyword matching existente ──
         intent_lower = intent.lower().strip()
 
-        # ── Detección de distritos multi-palabra en mensaje original ──────
-        # Algunos distritos tienen nombres compuestos como "cerro colorado",
-        # "selva alegre", "mariano melgar", etc. El tokenizer los divide
-        # y no coinciden con las keywords (que usan guión bajo).
-        # Verificamos si el mensaje ORIGINAL contiene algún distrito conocido.
         _DISTRITOS_COMPUESTOS = [
             'cerro colorado', 'cerrocolorado',
             'jose luis bustamante', 'bustamante',
-            'mariano melgar',
-            'selva alegre', 'alto selva alegre',
-            'san juan de siguas', 'santa isabel de siguas',
-            'jacobo hunter',
-            'quebrada honda',
-            'la campiña', 'la campina',
-            'la joya',
+            'mariano melgar', 'selva alegre',
+            'san juan de siguas', 'jacobo hunter',
+            'la campiña', 'la campina', 'la joya',
         ]
         mensaje_menciona_distrito = any(
             d in intent_lower for d in _DISTRITOS_COMPUESTOS
         )
 
-        # Extraer tokens relevantes (>= 3 caracteres)
-        intent_tokens = set(
-            t for t in re.findall(r'\b\w{3,}\b', intent_lower)
-        )
-
-        # ── Detección de palabras de seguimiento en mensajes cortos ───────
-        # Para mensajes como "y en cerro colorado", tokenizamos palabras
-        # de 1+ caracter (no solo 3+) para capturar 'y', 'en', etc.
-        all_tokens_short = set(
-            t for t in re.findall(r'\b\w+\b', intent_lower)
-        )
+        intent_tokens = set(t for t in re.findall(r'\b\w{3,}\b', intent_lower))
+        all_tokens_short = set(t for t in re.findall(r'\b\w+\b', intent_lower))
 
         if not intent_tokens and not mensaje_menciona_distrito:
             return None
 
-        # Detectar si la intención es sobre propiedades
         es_consulta_propiedades = bool(
             intent_tokens & _KEYWORDS_PROPIEDADES
         ) or mensaje_menciona_distrito
 
-        # ── B4: Detección de mensajes de seguimiento ──────────────────────
-        # Si hay contexto activo pero el mensaje NO contiene keywords de
-        # propiedades, puede ser un mensaje de seguimiento (ej: "solo
-        # departamentos", "y en cayma", "muestrame", "y en cerro colorado").
-        # En ese caso, forzamos busqueda_propiedades.
         es_seguimiento = False
-        if (
-            active_context
-            and not es_consulta_propiedades
-        ):
-            # Palabras que indican seguimiento/refinamiento
-            # Incluye palabras cortas como 'y', 'en' que se capturan con
-            # all_tokens_short (sin límite de 3 caracteres)
+        if active_context and not es_consulta_propiedades:
             _PALABRAS_SEGUIMIENTO = {
-                'solo', 'solamente', 'unicamente', 'tambien',
-                'y', 'en', 'de', 'con', 'sin', 'por', 'para',
-                'pero', 'entonces', 'ahora',
-                'muestrame', 'listame', 'dime', 'ensename',
-                'cuales', 'cuantas', 'cuantos', 'cual',
-                'refinar', 'filtra', 'filtrar',
+                'solo', 'tambien', 'y', 'en', 'de', 'con',
+                'muestrame', 'dime', 'cuales', 'filtra', 'filtrar',
             }
             if (intent_tokens & _PALABRAS_SEGUIMIENTO) or (all_tokens_short & _PALABRAS_SEGUIMIENTO):
                 es_seguimiento = True
-                logger.debug(
-                    f"[find_best_skill] Mensaje de seguimiento detectado: "
-                    f"'{intent}' (contexto activo presente)"
-                )
 
         best_skill = None
         best_score = 0.0
 
         for name, skill in self._skills.items():
-            # Verificar acceso del usuario
             if not skill.can_user_access(user_level):
                 continue
-
             desc_lower = skill.description.lower()
-            desc_tokens = set(
-                t for t in re.findall(r'\b\w{3,}\b', desc_lower)
-            )
-
+            desc_tokens = set(t for t in re.findall(r'\b\w{3,}\b', desc_lower))
             if not desc_tokens:
                 continue
-
             score = 0.0
-
-            # ── B4: Si es seguimiento, dar bonus fuerte a busqueda_propiedades ──
             if es_seguimiento and name == 'busqueda_propiedades':
-                score = 0.6  # Score alto directo para seguimiento
-            # Si es consulta de propiedades y la skill es de búsqueda
+                score = 0.6
             elif es_consulta_propiedades and skill.category == 'busqueda':
-                # Score base por ser la skill correcta para el dominio
                 score = 0.3
-
-                # Coincidencia de tokens con la descripción
                 common = intent_tokens & desc_tokens
                 if common:
-                    # Proporción de tokens de la intención que están en la descripción
                     score += len(common) / len(intent_tokens) * 0.5
-
-                # Bonus si el nombre de la skill está en la intención
                 if name in intent_lower:
                     score += 0.2
-
             else:
-                # Para otras skills, matching general de tokens
                 common = intent_tokens & desc_tokens
                 if common:
                     score = len(common) / len(intent_tokens)
-
-                    # Bonus por nombre
                     if name in intent_lower:
                         score += 0.2
-
-                    # Bonus por categoría
                     if skill.category in intent_lower:
                         score += 0.1
-
             if score > best_score:
                 best_score = score
                 best_skill = skill
 
-        # Solo retornar si supera el umbral
         if best_score >= self.MIN_CONFIDENCE_THRESHOLD:
-            logger.debug(
-                f"Skill seleccionada: '{best_skill.name}' "
-                f"(score: {best_score:.2f}, umbral: {self.MIN_CONFIDENCE_THRESHOLD})"
-            )
+            logger.debug(f"[Keyword] Skill: '{best_skill.name}' (score: {best_score:.2f})")
             return best_skill
 
         logger.debug(
-            f"Ninguna skill superó el umbral de confianza "
-            f"(mejor score: {best_score:.2f}, umbral: {self.MIN_CONFIDENCE_THRESHOLD})"
+            f"[SkillRegistry] Sin skill (keyword: {best_score:.2f}, "
+            f"semantic: {routing_result.score:.4f})"
         )
         return None
 

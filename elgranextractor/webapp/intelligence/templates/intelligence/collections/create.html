@@ -1,0 +1,1670 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crear Colección RAG Dinámica - Propifai Intelligence Layer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #0d1117;
+            color: #c9d1d9;
+            line-height: 1.6;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #30363d;
+        }
+        
+        .header h1 {
+            color: #58a6ff;
+            font-size: 28px;
+        }
+        
+        .header-actions {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background-color: #238636;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background-color: #2ea043;
+        }
+        
+        .btn-secondary {
+            background-color: #30363d;
+            color: #c9d1d9;
+        }
+        
+        .btn-secondary:hover {
+            background-color: #3c444d;
+        }
+        
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+        
+        .messages {
+            margin-bottom: 20px;
+        }
+        
+        .alert {
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+        }
+        
+        .alert-success {
+            background-color: #238636;
+            color: white;
+            border: 1px solid #2ea043;
+        }
+        
+        .alert-error {
+            background-color: #da3633;
+            color: white;
+            border: 1px solid #f85149;
+        }
+        
+        .alert-info {
+            background-color: #1f6feb;
+            color: white;
+            border: 1px solid #388bfd;
+        }
+        
+        .form-container {
+            background-color: #161b22;
+            border-radius: 8px;
+            padding: 30px;
+            border: 1px solid #30363d;
+        }
+        
+        .form-section {
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #30363d;
+        }
+        
+        .form-section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+        
+        .form-section h2 {
+            color: #58a6ff;
+            font-size: 20px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #8b949e;
+            font-weight: 500;
+        }
+        
+        .form-control {
+            width: 100%;
+            padding: 10px 12px;
+            background-color: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            color: #c9d1d9;
+            font-size: 14px;
+        }
+        
+        .form-control:focus {
+            outline: none;
+            border-color: #58a6ff;
+            box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2);
+        }
+        
+        .form-check {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .form-check-input {
+            width: 18px;
+            height: 18px;
+            accent-color: #238636;
+        }
+        
+        .form-check-label {
+            color: #c9d1d9;
+            font-size: 14px;
+        }
+        
+        .dynamic-fields-section {
+            background-color: #0d1117;
+            border-radius: 6px;
+            padding: 20px;
+            border: 1px solid #30363d;
+            margin-top: 20px;
+        }
+        
+        .dynamic-fields-section.hidden {
+            display: none;
+        }
+        
+        .fields-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .field-card {
+            background-color: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 15px;
+        }
+        
+        .field-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #30363d;
+        }
+        
+        .field-name {
+            font-weight: 600;
+            color: #58a6ff;
+        }
+        
+        .field-type {
+            font-size: 12px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            background-color: #30363d;
+            color: #8b949e;
+        }
+        
+        .field-options {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .field-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .field-option label {
+            font-size: 13px;
+            color: #8b949e;
+            cursor: pointer;
+        }
+        
+        .text-field .field-type {
+            background-color: #0c2d6b;
+            color: #58a6ff;
+        }
+        
+        .numeric-field .field-type {
+            background-color: #1a7f37;
+            color: #7ee787;
+        }
+        
+        .date-field .field-type {
+            background-color: #8957e5;
+            color: #d2a8ff;
+        }
+        
+        .boolean-field .field-type {
+            background-color: #da3633;
+            color: #ffa198;
+        }
+        
+        .other-field .field-type {
+            background-color: #6e7681;
+            color: #b1bac4;
+        }
+        
+        .form-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 15px;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #30363d;
+        }
+        
+        .help-text {
+            font-size: 12px;
+            color: #8b949e;
+            margin-top: 5px;
+        }
+        
+        .select-multiple {
+            min-height: 120px;
+        }
+        
+        .select-multiple option {
+            padding: 8px 12px;
+        }
+        
+        .select-multiple option:checked {
+            background-color: #238636;
+            color: white;
+        }
+        
+        /* === ESTILOS PARA SUGERENCIAS IA === */
+        
+        /* Contenedor flexible para nombre + tipo + badges */
+        .field-name-type {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        
+        /* Sección derecha del header con categoría */
+        .field-analysis {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+        
+        /* Texto de categoría con icono */
+        .field-category {
+            font-size: 12px;
+            color: #8b949e;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background-color: #21262d;
+            border: 1px solid #30363d;
+            white-space: nowrap;
+        }
+        
+        /* Notas de análisis debajo del header */
+        .field-notes {
+            font-size: 12px;
+            color: #8b949e;
+            margin-bottom: 10px;
+            padding: 8px 10px;
+            background-color: #0d1117;
+            border-radius: 4px;
+            border-left: 3px solid #58a6ff;
+            line-height: 1.5;
+        }
+        
+        /* Badge "💡 Sugerido" */
+        .suggestion-badge {
+            display: inline-block;
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background-color: #1a7f37;
+            color: #7ee787;
+            font-weight: 500;
+            margin-left: 4px;
+            animation: pulse-suggestion 2s ease-in-out infinite;
+        }
+        
+        @keyframes pulse-suggestion {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        /* Badges base (PK, ID) */
+        .badge {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .badge.bg-primary {
+            background-color: #1f6feb;
+            color: #c8e1ff;
+        }
+        
+        .badge.bg-info {
+            background-color: #8957e5;
+            color: #d2a8ff;
+        }
+        
+        /* Alerta de validación */
+        .alert-warning {
+            background-color: #3d2e00;
+            color: #d29922;
+            border: 1px solid #5a3e00;
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+        }
+        
+        .alert-warning strong {
+            display: block;
+            margin-bottom: 6px;
+        }
+        
+        .alert-warning ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        
+        .alert-warning li {
+            margin-bottom: 4px;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        
+        /* Utilidades de margen */
+        .mt-3 {
+            margin-top: 15px;
+        }
+        
+        .mb-0 {
+            margin-bottom: 0;
+        }
+        
+        /* Checkbox sugerido - resaltado sutil */
+        .field-option input[data-suggested="true"] + label {
+            color: #7ee787;
+        }
+        
+        .field-option input[data-suggested="true"] + label .suggestion-badge {
+            animation: none;
+            opacity: 1;
+        }
+        /* === ESTILOS PARA CONSTRUCTOR DE RELACIONES === */
+        
+        .relationships-section {
+            background-color: #0d1117;
+            border-radius: 6px;
+            padding: 20px;
+            border: 1px solid #30363d;
+            margin-top: 20px;
+        }
+        
+        .relationships-section.hidden {
+            display: none;
+        }
+        
+        .relationship-card {
+            background-color: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 12px;
+            position: relative;
+        }
+        
+        .relationship-card:hover {
+            border-color: #58a6ff;
+        }
+        
+        .relationship-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #30363d;
+        }
+        
+        .relationship-title {
+            font-weight: 600;
+            color: #58a6ff;
+            font-size: 14px;
+        }
+        
+        .relationship-subtitle {
+            font-size: 12px;
+            color: #8b949e;
+            margin-top: 2px;
+        }
+        
+        .relationship-body {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        
+        .relationship-field {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        
+        .relationship-field label {
+            font-size: 11px;
+            color: #8b949e;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .relationship-field select,
+        .relationship-field input {
+            padding: 6px 10px;
+            background-color: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 4px;
+            color: #c9d1d9;
+            font-size: 13px;
+        }
+        
+        .relationship-field select:focus,
+        .relationship-field input:focus {
+            outline: none;
+            border-color: #58a6ff;
+        }
+        
+        .relationship-field select[multiple] {
+            min-height: 80px;
+        }
+        
+        .relationship-badge {
+            display: inline-block;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background-color: #1f6feb;
+            color: #c8e1ff;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .relationship-badge.inferred {
+            background-color: #9a6700;
+            color: #d29922;
+        }
+        
+        .relationship-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #30363d;
+        }
+        
+        .btn-danger {
+            background-color: #da3633;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background-color: #f85149;
+        }
+        
+        .btn-outline {
+            background-color: transparent;
+            color: #58a6ff;
+            border: 1px solid #58a6ff;
+        }
+        
+        .btn-outline:hover {
+            background-color: rgba(88, 166, 255, 0.1);
+        }
+        
+        .relationship-preview {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #0d1117;
+            border-radius: 4px;
+            border-left: 3px solid #238636;
+            font-size: 12px;
+            color: #8b949e;
+            font-family: 'Consolas', 'Courier New', monospace;
+            white-space: pre-wrap;
+            word-break: break-all;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+        
+        .relationship-preview strong {
+            color: #7ee787;
+        }
+        
+        .detect-relations-loading {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 15px;
+            color: #8b949e;
+            font-size: 14px;
+        }
+        
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #30363d;
+            border-top-color: #58a6ff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .empty-relations {
+            text-align: center;
+            padding: 30px;
+            color: #8b949e;
+        }
+        
+        .empty-relations p {
+            margin-top: 10px;
+            font-size: 14px;
+        }
+        
+        .btn-success {
+            background-color: #238636;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background-color: #2ea043;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📚 Crear Nueva Colección RAG Dinámica</h1>
+            <div class="header-actions">
+                <a href="/intelligence/collections/" class="btn btn-secondary">← Volver a Colecciones</a>
+                <a href="/intelligence/" class="btn btn-secondary">🏠 Dashboard</a>
+            </div>
+        </div>
+        
+        <div class="messages">
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        </div>
+        
+        <form method="post" id="collection-form">
+            {% csrf_token %}
+            
+            <div class="form-container">
+                <!-- Sección 1: Información Básica -->
+                <div class="form-section">
+                    <h2>📋 Información Básica</h2>
+                    
+                    <div class="form-group">
+                        <label for="name">Nombre de la Colección *</label>
+                        <input type="text" id="name" name="name" class="form-control" required 
+                               placeholder="Ej: Propiedades Urbania 2024" maxlength="200">
+                        <div class="help-text">Nombre descriptivo para identificar la colección</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="description">Descripción</label>
+                        <textarea id="description" name="description" class="form-control" rows="3" 
+                                  placeholder="Describe el propósito y contenido de esta colección"></textarea>
+                        <div class="help-text">Opcional: información adicional sobre la colección</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="min_level">Nivel Mínimo Requerido *</label>
+                        <select id="min_level" name="min_level" class="form-control" required>
+                            <option value="">Seleccionar nivel mínimo</option>
+                            <option value="1">1 - Consulta básica</option>
+                            <option value="2">2 - Consulta avanzada</option>
+                            <option value="3">3 - Análisis</option>
+                            <option value="4">4 - Edición</option>
+                            <option value="5">5 - Administración total</option>
+                        </select>
+                        <div class="help-text">Nivel mínimo que debe tener el usuario para acceder a esta colección</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="domain">Dominio Funcional *</label>
+                        <select id="domain" name="domain" class="form-control" required>
+                            <option value="">Seleccionar dominio</option>
+                            <option value="publico">🌐 Público</option>
+                            <option value="legal">⚖️ Legal / Regulatorio</option>
+                            <option value="marketing">📢 Marketing / Ventas</option>
+                            <option value="escuela">🎓 Escuela / Capacitación</option>
+                            <option value="gerencia">🏢 Gerencia / Estrategia</option>
+                            <option value="ti">💻 TI / Infraestructura</option>
+                            <option value="general">📋 General / Sin clasificar</option>
+                        </select>
+                        <div class="help-text">Dominio al que pertenece esta colección. Controla qué usuarios pueden verla según sus dominios asignados.</div>
+                    </div>
+                    
+                    <div class="form-check">
+                        <input type="checkbox" id="is_public" name="is_public" class="form-check-input">
+                        <label for="is_public" class="form-check-label">Colección Pública</label>
+                        <div class="help-text" style="margin-left: 25px;">Si está marcada, cualquier usuario autenticado puede verla sin importar su dominio</div>
+                    </div>
+                    
+                    <div class="form-check">
+                        <input type="checkbox" id="is_active" name="is_active" class="form-check-input" checked>
+                        <label for="is_active" class="form-check-label">Colección activa</label>
+                        <div class="help-text">Si está desactivada, no estará disponible para búsquedas</div>
+                    </div>
+                </div>
+                
+                <!-- Sección 2: Configuración de Origen de Datos -->
+                <div class="form-section">
+                    <h2>🗃️ Configuración de Origen de Datos</h2>
+                    
+                    <div class="form-group">
+                        <label for="database_alias">Base de Datos *</label>
+                        <select id="database_alias" name="database_alias" class="form-control" required>
+                            <option value="propifai">🔵 dbpropify_be — Base de datos Propifai (propiedades propias)</option>
+                            <option value="default">🟢 propiextractor — Base de datos principal (extractor, requerimientos)</option>
+                        </select>
+                        <div class="help-text">Selecciona la base de datos donde se encuentra la tabla. Cambia esta selección y luego haz clic en "Cargar Tablas" para ver las tablas disponibles.</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="table_name">Tabla de Base de Datos *</label>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <select id="table_name" name="table_name" class="form-control" required>
+                                <option value="">Seleccionar tabla...</option>
+                            </select>
+                            <div style="display: flex; flex-direction: column; gap: 5px;">
+                                <button type="button" id="refreshTablesBtn" class="btn btn-secondary btn-sm">
+                                    🔄 Cargar Tablas
+                                </button>
+                                <button type="button" id="forceRefreshTablesBtn" class="btn btn-warning btn-sm" style="background-color: #9a6700; color: white;">
+                                    🔥 Forzar Recarga (sin caché)
+                                </button>
+                            </div>
+                        </div>
+                        <div class="help-text">Selecciona la tabla que contiene los datos para esta colección. Usa "Forzar Recarga" si no ves tus tablas.</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="schema_name">Esquema (Schema)</label>
+                        <input type="text" id="schema_name" name="schema_name" class="form-control"
+                               placeholder="Ej: dbo (dejar vacío para default)" value="dbo">
+                        <div class="help-text">Nombre del esquema de la tabla (generalmente 'dbo' para SQL Server)</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <button type="button" id="analyzeTableBtn" class="btn btn-primary">
+                            🔍 Analizar Estructura de la Tabla
+                        </button>
+                        <div class="help-text">Analiza la estructura de la tabla seleccionada para detectar campos automáticamente</div>
+                    </div>
+                </div>
+                
+                <!-- Sección 3: Campos Detectados (dinámica) -->
+                <!-- Sección 3.5: Relaciones entre Tablas (FK Resolution) -->
+                <div id="relationships-container" class="relationships-section hidden">
+                    <h2>🔗 Relaciones entre Tablas</h2>
+                    <div class="help-text" style="margin-bottom: 15px;">
+                        Detecta y configura cómo se resolverán las claves foráneas (FK) para enriquecer los embeddings.
+                        Cuando una columna contiene un ID numérico (ej: <code>district_fk_id = 5</code>), el sistema
+                        consultará la tabla relacionada y reemplazará el ID por el texto real (ej: "Cayma").
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                        <button type="button" id="detectRelationsBtn" class="btn btn-primary btn-sm">
+                            🔍 Detectar Relaciones Automáticamente
+                        </button>
+                        <button type="button" id="addManualRelationBtn" class="btn btn-outline btn-sm">
+                            ➕ Agregar Relación Manual
+                        </button>
+                    </div>
+                    
+                    <div id="relations-loading" class="detect-relations-loading hidden">
+                        <span class="spinner"></span>
+                        <span>Detectando relaciones entre tablas...</span>
+                    </div>
+                    
+                    <div id="relations-list">
+                        <!-- Las tarjetas de relación se insertarán aquí -->
+                    </div>
+                    
+                    <div id="empty-relations" class="empty-relations">
+                        <p>🔍 Haz clic en "Detectar Relaciones" para encontrar automáticamente las claves foráneas de esta tabla.</p>
+                    </div>
+                    
+                    <div class="help-text" style="margin-top: 15px; padding: 10px; background-color: #161b22; border-radius: 4px; border-left: 3px solid #58a6ff;">
+                        <strong>💡 ¿Cómo funciona?</strong> Cuando se genera el embedding para cada fila, el sistema
+                        reemplazará los IDs numéricos por el texto de los campos que selecciones. Por ejemplo:
+                        <code style="display: block; margin-top: 5px; color: #7ee787;">
+                        "district_fk_id: 5" → "Distrito: Cayma | Código: CAY-001"
+                        </code>
+                    </div>
+                </div>
+                
+                <!-- Sección 4: Campos Detectados (dinámica) -->
+                <div id="fields-container" class="dynamic-fields-section hidden">
+                    <h2>📊 Campos Detectados</h2>
+                    <div class="help-text" style="margin-bottom: 15px;">
+                        Campos detectados en la tabla. Selecciona cómo se usarán cada uno.
+                    </div>
+                    
+                    <div id="fields-grid" class="fields-grid">
+                        <!-- Los campos se insertarán aquí dinámicamente -->
+                    </div>
+                    
+                    <div class="form-group" style="margin-top: 20px;">
+                        <h3>⚙️ Configuración de Campos Clave</h3>
+                        <div class="help-text" style="margin-bottom: 15px;">
+                            Selecciona los campos que se usarán para diferentes propósitos:
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="embedding_fields">Campos para Embedding (Búsqueda Semántica) *</label>
+                            <select id="embedding_fields" name="embedding_fields" class="form-control select-multiple" multiple required>
+                                <!-- Opciones se insertarán dinámicamente -->
+                            </select>
+                            <div class="help-text">Selecciona los campos cuyo contenido se usará para búsqueda semántica. Generalmente campos de texto descriptivo.</div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="display_fields">Campos para Visualización</label>
+                            <select id="display_fields" name="display_fields" class="form-control select-multiple" multiple>
+                                <!-- Opciones se insertarán dinámicamente -->
+                            </select>
+                            <div class="help-text">Selecciona los campos que se mostrarán en los resultados de búsqueda.</div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="filter_fields">Campos para Filtrado</label>
+                            <select id="filter_fields" name="filter_fields" class="form-control select-multiple" multiple>
+                                <!-- Opciones se insertarán dinámicamente -->
+                            </select>
+                            <div class="help-text">Selecciona los campos que se pueden usar para filtrar resultados.</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Sección 5: Acciones -->
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="window.history.back()">Cancelar</button>
+                    <button type="submit" id="submitBtn" class="btn btn-primary">Crear Colección</button>
+                </div>
+            </div>
+        </form>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const tableSelect = document.getElementById('table_name');
+            const refreshBtn = document.getElementById('refreshTablesBtn');
+            const forceRefreshBtn = document.getElementById('forceRefreshTablesBtn');
+            const analyzeBtn = document.getElementById('analyzeTableBtn');
+            const fieldsContainer = document.getElementById('fields-container');
+            const fieldsGrid = document.getElementById('fields-grid');
+            const embeddingSelect = document.getElementById('embedding_fields');
+            const displaySelect = document.getElementById('display_fields');
+            const filterSelect = document.getElementById('filter_fields');
+            const submitBtn = document.getElementById('submitBtn');
+            
+            // Elementos de relaciones
+            const relationshipsContainer = document.getElementById('relationships-container');
+            const relationsList = document.getElementById('relations-list');
+            const emptyRelations = document.getElementById('empty-relations');
+            const detectRelationsBtn = document.getElementById('detectRelationsBtn');
+            const addManualRelationBtn = document.getElementById('addManualRelationBtn');
+            const relationsLoading = document.getElementById('relations-loading');
+            
+            let currentFields = [];
+            let currentRelationships = []; // Array de objetos de relación
+            let availableTablesCache = {}; // Cache de tablas disponibles para selects
+            
+            // Cargar tablas al inicio
+            loadTables();
+            
+            // Evento para refrescar tablas
+            refreshBtn.addEventListener('click', () => loadTables());
+            
+            // Evento para forzar recarga (sin caché)
+            forceRefreshBtn.addEventListener('click', () => loadTables(true));
+            
+            // Evento para analizar tabla
+            analyzeBtn.addEventListener('click', function() {
+                const tableName = tableSelect.value;
+                const schema = document.getElementById('schema_name').value || 'dbo';
+                
+                if (!tableName) {
+                    alert('Por favor selecciona una tabla primero.');
+                    return;
+                }
+                
+                analyzeTable(tableName, schema);
+            });
+            
+            // Evento para detectar relaciones automáticamente
+            detectRelationsBtn.addEventListener('click', function() {
+                const tableName = tableSelect.value;
+                const schema = document.getElementById('schema_name').value || 'dbo';
+                
+                if (!tableName) {
+                    alert('Por favor selecciona una tabla primero.');
+                    return;
+                }
+                
+                detectForeignKeys(tableName, schema);
+            });
+            
+            // Evento para agregar relación manual
+            addManualRelationBtn.addEventListener('click', function() {
+                addManualRelationship();
+            });
+            
+            // Función para cargar tablas - USA LA BASE DE DATOS SELECCIONADA
+            function loadTables(forceRefresh = false) {
+                refreshBtn.disabled = true;
+                forceRefreshBtn.disabled = true;
+                refreshBtn.innerHTML = '🔄 Cargando...';
+                forceRefreshBtn.innerHTML = '🔥 Cargando...';
+                
+                // Obtener la base de datos seleccionada del desplegable
+                const dbSelect = document.getElementById('database_alias');
+                const selectedDb = dbSelect ? dbSelect.value : 'propifai';
+                
+                let url = '/api/v1/intelligence/rag/tables/?database=' + encodeURIComponent(selectedDb);
+                if (forceRefresh) {
+                    url += '&nocache=true';
+                }
+                
+                console.log('[DEBUG DB] Cargando tablas de la base de datos: ' + selectedDb + ', URL:', url);
+                
+                fetch(url)
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log('[DEBUG MEJORADO] Respuesta completa:', data);
+                        
+                        if (data.success && data.tables && Array.isArray(data.tables)) {
+                            tableSelect.innerHTML = '<option value="">Seleccionar tabla...</option>';
+                            
+                            // Mostrar información en consola
+                            console.log(`[DEBUG MEJORADO] Se recibieron ${data.tables.length} tablas`);
+                            console.log(`[DEBUG MEJORADO] Schema: ${data.schema}, Database: ${data.database}`);
+                            
+                            // Procesar cada tabla (ahora son objetos con name y row_count)
+                            data.tables.forEach((table, index) => {
+                                // Mostrar estructura de la tabla
+                                console.log(`[DEBUG MEJORADO] Tabla ${index}:`, table);
+                                
+                                // Crear opción para el select
+                                const option = document.createElement('option');
+                                
+                                // Extraer nombre y conteo de filas
+                                let tableName = table.name || `tabla_${index}`;
+                                let rowCount = table.row_count !== undefined && table.row_count !== null ? table.row_count : 'N/A';
+                                
+                                option.value = tableName;
+                                option.textContent = `${tableName} (${rowCount} filas)`;
+                                option.setAttribute('data-index', index);
+                                tableSelect.appendChild(option);
+                            });
+                            
+                            console.log(`[DEBUG MEJORADO] Procesamiento completado. ${data.tables.length} tablas agregadas.`);
+                            
+                            // Si hay tablas, seleccionar la primera
+                            if (data.tables.length > 0) {
+                                console.log(`[DEBUG MEJORADO] Primera tabla seleccionada: ${tableSelect.options[1]?.textContent}`);
+                            }
+                        } else {
+                            console.error('[DEBUG MEJORADO] Error en estructura de datos:', data);
+                            alert(`Error al cargar tablas: ${data.error || 'Estructura de respuesta inválida'}`);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('[DEBUG MEJORADO] Error en fetch:', error);
+                        alert('Error de conexión al servidor. Revisa la consola para más detalles.');
+                    })
+                    .finally(() => {
+                        refreshBtn.disabled = false;
+                        forceRefreshBtn.disabled = false;
+                        refreshBtn.innerHTML = '🔄 Cargar Tablas';
+                        forceRefreshBtn.innerHTML = '🔥 Forzar Recarga (sin caché)';
+                    });
+            }
+            
+            // Variables para análisis y sugerencias
+            let currentFieldAnalysis = null;
+            let currentSuggestions = null;
+            
+            // Función para analizar tabla - USA LA BASE DE DATOS SELECCIONADA
+            function analyzeTable(tableName, schema) {
+                analyzeBtn.disabled = true;
+                analyzeBtn.innerHTML = '🔍 Analizando...';
+                fieldsContainer.classList.add('hidden');
+                
+                // Obtener la base de datos seleccionada del desplegable
+                const dbSelect = document.getElementById('database_alias');
+                const selectedDb = dbSelect ? dbSelect.value : 'propifai';
+                
+                console.log(`[DEBUG DB] Analizando tabla: ${tableName}, schema: ${schema}, database: ${selectedDb}`);
+                
+                // Incluir el parámetro database con la selección del usuario
+                fetch(`/api/v1/intelligence/rag/tables/${tableName}/schema/?schema=${schema}&database=${encodeURIComponent(selectedDb)}`)
+                    .then(response => {
+                        console.log(`[DEBUG DB] Respuesta HTTP: ${response.status}, ${response.statusText}`);
+                        if (!response.ok) {
+                            throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        console.log('[DEBUG DB] Datos recibidos:', data);
+                        
+                        if (data.success) {
+                            // La API devuelve los campos en data.analysis.columns
+                            console.log('[DEBUG DB] analysis.columns:', data.analysis?.columns);
+                            
+                            if (data.analysis && data.analysis.columns && Array.isArray(data.analysis.columns)) {
+                                // Guardar análisis completo y sugerencias del backend
+                                currentFieldAnalysis = data.analysis.field_analysis || null;
+                                currentSuggestions = data.analysis.suggestions || null;
+                                
+                                console.log('[DEBUG] field_analysis:', currentFieldAnalysis);
+                                console.log('[DEBUG] suggestions:', currentSuggestions);
+                                
+                                currentFields = data.analysis.columns.map(col => ({
+                                    name: col.name || col.column_name || 'sin_nombre',
+                                    type: col.type || col.data_type || 'desconocido',
+                                    is_nullable: col.is_nullable || false,
+                                    max_length: col.max_length || col.length || null,
+                                    is_primary: col.is_primary || false,
+                                    is_identity: col.is_identity || false
+                                }));
+                                
+                                console.log('[DEBUG DB] currentFields mapeados:', currentFields);
+                                renderFields(currentFields, currentFieldAnalysis);
+                                fieldsContainer.classList.remove('hidden');
+                                
+                                // Poblar selects DESPUÉS de renderizar campos (para que updateSelectOptions funcione)
+                                populateSelectOptions();
+                                // Sincronizar selects con checkboxes después de poblar
+                                updateSelectOptions();
+                                
+                                // Mostrar sección de relaciones
+                                relationshipsContainer.classList.remove('hidden');
+                                detectForeignKeys(tableName, schema);
+                                
+                                // Mostrar advertencias si existen
+                                if (currentSuggestions && currentSuggestions.validation_warnings && currentSuggestions.validation_warnings.length > 0) {
+                                    showValidationWarnings(currentSuggestions.validation_warnings);
+                                }
+                                
+                                // Scroll a la sección de campos
+                                fieldsContainer.scrollIntoView({ behavior: 'smooth' });
+                            } else {
+                                console.error('[DEBUG DB] Estructura de columns inválida:', data.analysis);
+                                alert('Error: La tabla no tiene columnas o la estructura de datos es inválida.');
+                            }
+                        } else {
+                            console.error('[DEBUG DB] Error en respuesta:', data.error);
+                            alert('Error al analizar tabla: ' + (data.error || 'Error desconocido'));
+                        }
+                    })
+                    .catch(error => {
+                        console.error('[DEBUG DB] Error en fetch:', error);
+                        alert('Error de conexión al analizar tabla: ' + error.message);
+                    })
+                    .finally(() => {
+                        analyzeBtn.disabled = false;
+                        analyzeBtn.innerHTML = '🔍 Analizar Estructura de la Tabla';
+                    });
+            }
+            
+            // Función para renderizar campos con análisis IA
+            function renderFields(fields, fieldAnalysis = null) {
+                fieldsGrid.innerHTML = '';
+                
+                fields.forEach(field => {
+                    const fieldCard = document.createElement('div');
+                    fieldCard.className = 'field-card';
+                    
+                    const fieldTypeClass = getFieldTypeClass(field.type);
+                    const analysis = fieldAnalysis ? fieldAnalysis[field.name] : null;
+                    const category = analysis ? analysis.category : 'other';
+                    const notes = analysis ? analysis.notes : '';
+                    
+                    // Determinar icono según categoría
+                    const categoryIcon = getCategoryIcon(category);
+                    
+                    fieldCard.innerHTML = `
+                        <div class="field-header">
+                            <div class="field-name-type">
+                                <span class="field-name">${field.name}</span>
+                                <span class="field-type ${fieldTypeClass}">${field.type}</span>
+                                ${field.is_primary ? '<span class="badge bg-primary">PK</span>' : ''}
+                                ${field.is_identity ? '<span class="badge bg-info">ID</span>' : ''}
+                            </div>
+                            <div class="field-analysis">
+                                <span class="field-category" title="${category}">${categoryIcon} ${category}</span>
+                            </div>
+                        </div>
+                        ${notes ? `<div class="field-notes">${notes}</div>` : ''}
+                        <div class="field-options">
+                            <div class="field-option">
+                                <input type="checkbox" id="embed_${field.name}" data-field="${field.name}"
+                                       ${analysis && analysis.suggested_for_embedding ? 'data-suggested="true"' : ''}>
+                                <label for="embed_${field.name}">
+                                    <span>Usar para embedding</span>
+                                    ${analysis && analysis.suggested_for_embedding ? '<span class="suggestion-badge">💡 Sugerido</span>' : ''}
+                                </label>
+                            </div>
+                            <div class="field-option">
+                                <input type="checkbox" id="display_${field.name}" data-field="${field.name}"
+                                       ${analysis && analysis.suggested_for_display ? 'data-suggested="true"' : ''}>
+                                <label for="display_${field.name}">
+                                    <span>Mostrar en resultados</span>
+                                    ${analysis && analysis.suggested_for_display ? '<span class="suggestion-badge">💡 Sugerido</span>' : ''}
+                                </label>
+                            </div>
+                            <div class="field-option">
+                                <input type="checkbox" id="filter_${field.name}" data-field="${field.name}"
+                                       ${analysis && analysis.suggested_for_filtering ? 'data-suggested="true"' : ''}>
+                                <label for="filter_${field.name}">
+                                    <span>Usar para filtrado</span>
+                                    ${analysis && analysis.suggested_for_filtering ? '<span class="suggestion-badge">💡 Sugerido</span>' : ''}
+                                </label>
+                            </div>
+                        </div>
+                    `;
+                    
+                    fieldsGrid.appendChild(fieldCard);
+                    
+                    // Agregar event listeners a los checkboxes
+                    const embedCheckbox = fieldCard.querySelector(`#embed_${field.name}`);
+                    const displayCheckbox = fieldCard.querySelector(`#display_${field.name}`);
+                    const filterCheckbox = fieldCard.querySelector(`#filter_${field.name}`);
+                    
+                    embedCheckbox.addEventListener('change', function() {
+                        updateSelectOptions();
+                    });
+                    
+                    displayCheckbox.addEventListener('change', function() {
+                        updateSelectOptions();
+                    });
+                    
+                    filterCheckbox.addEventListener('change', function() {
+                        updateSelectOptions();
+                    });
+                    
+                    // Marcar checkboxes sugeridos automáticamente
+                    if (analysis && analysis.suggested_for_embedding) {
+                        embedCheckbox.checked = true;
+                    }
+                    if (analysis && analysis.suggested_for_display) {
+                        displayCheckbox.checked = true;
+                    }
+                    if (analysis && analysis.suggested_for_filtering) {
+                        filterCheckbox.checked = true;
+                    }
+                });
+                
+                // Actualizar selects después de renderizar
+                updateSelectOptions();
+            }
+            
+            // Función para obtener clase CSS según tipo de campo
+            function getFieldTypeClass(fieldType) {
+                if (fieldType.includes('char') || fieldType.includes('text') || fieldType.includes('varchar')) {
+                    return 'text-field';
+                } else if (fieldType.includes('int') || fieldType.includes('decimal') || fieldType.includes('numeric')) {
+                    return 'numeric-field';
+                } else if (fieldType.includes('date') || fieldType.includes('time') || fieldType.includes('datetime')) {
+                    return 'date-field';
+                } else if (fieldType.includes('bit') || fieldType.includes('bool')) {
+                    return 'boolean-field';
+                } else {
+                    return 'other-field';
+                }
+            }
+            
+            // Función para obtener icono según categoría
+            function getCategoryIcon(category) {
+                switch(category) {
+                    case 'text': return '📝';
+                    case 'numeric': return '🔢';
+                    case 'date': return '📅';
+                    case 'boolean': return '✅';
+                    case 'identifier': return '🆔';
+                    case 'categorical': return '🏷️';
+                    default: return '❓';
+                }
+            }
+            
+            // Función para mostrar advertencias de validación
+            function showValidationWarnings(warnings) {
+                if (!warnings || warnings.length === 0) return;
+                
+                let warningHtml = '<div class="alert alert-warning mt-3">';
+                warningHtml += '<strong>⚠️ Sugerencias de Validación:</strong><ul class="mb-0">';
+                
+                warnings.forEach(warning => {
+                    warningHtml += `<li>${warning}</li>`;
+                });
+                
+                warningHtml += '</ul></div>';
+                
+                // Insertar después del header de la sección de campos
+                const fieldsHeader = fieldsContainer.querySelector('h2');
+                if (fieldsHeader) {
+                    fieldsHeader.insertAdjacentHTML('afterend', warningHtml);
+                }
+            }
+            
+            // Función para poblar opciones de selects
+            function populateSelectOptions() {
+                embeddingSelect.innerHTML = '';
+                displaySelect.innerHTML = '';
+                filterSelect.innerHTML = '';
+                
+                currentFields.forEach(field => {
+                    // Para embedding select
+                    const embedOption = document.createElement('option');
+                    embedOption.value = field.name;
+                    embedOption.textContent = `${field.name} (${field.type})`;
+                    embeddingSelect.appendChild(embedOption);
+                    
+                    // Para display select
+                    const displayOption = document.createElement('option');
+                    displayOption.value = field.name;
+                    displayOption.textContent = `${field.name} (${field.type})`;
+                    displaySelect.appendChild(displayOption);
+                    
+                    // Para filter select
+                    const filterOption = document.createElement('option');
+                    filterOption.value = field.name;
+                    filterOption.textContent = `${field.name} (${field.type})`;
+                    filterSelect.appendChild(filterOption);
+                });
+            }
+            
+            // Función para actualizar selects basado en checkboxes
+            function updateSelectOptions() {
+                const selectedEmbedFields = [];
+                const selectedDisplayFields = [];
+                const selectedFilterFields = [];
+                
+                // Recorrer todos los checkboxes
+                currentFields.forEach(field => {
+                    const embedCheckbox = document.querySelector(`#embed_${field.name}`);
+                    const displayCheckbox = document.querySelector(`#display_${field.name}`);
+                    const filterCheckbox = document.querySelector(`#filter_${field.name}`);
+                    
+                    if (embedCheckbox && embedCheckbox.checked) {
+                        selectedEmbedFields.push(field.name);
+                    }
+                    
+                    if (displayCheckbox && displayCheckbox.checked) {
+                        selectedDisplayFields.push(field.name);
+                    }
+                    
+                    if (filterCheckbox && filterCheckbox.checked) {
+                        selectedFilterFields.push(field.name);
+                    }
+                });
+                
+                // Actualizar selects
+                Array.from(embeddingSelect.options).forEach(option => {
+                    option.selected = selectedEmbedFields.includes(option.value);
+                });
+                
+                Array.from(displaySelect.options).forEach(option => {
+                    option.selected = selectedDisplayFields.includes(option.value);
+                });
+                
+                Array.from(filterSelect.options).forEach(option => {
+                    option.selected = selectedFilterFields.includes(option.value);
+                });
+            }
+            
+            // ========== FUNCIONES PARA RELACIONES ENTRE TABLAS ==========
+            
+            // Función para detectar foreign keys
+            function detectForeignKeys(tableName, schema) {
+                detectRelationsBtn.disabled = true;
+                relationsLoading.classList.remove('hidden');
+                emptyRelations.classList.add('hidden');
+                relationsList.innerHTML = '';
+                
+                const url = `/api/v1/intelligence/rag/tables/${tableName}/foreign-keys/?database=propifai&schema=${schema}`;
+                console.log('[RELATIONS] Detectando FK:', url);
+                
+                fetch(url)
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log('[RELATIONS] FK detectadas:', data);
+                        
+                        if (data.success && data.foreign_keys && data.foreign_keys.length > 0) {
+                            // Limpiar relaciones actuales
+                            currentRelationships = [];
+                            
+                            // Crear una relación por cada FK detectada
+                            data.foreign_keys.forEach(fk => {
+                                // Determinar campos sugeridos para display (texto, nombre, descripción)
+                                const suggestedDisplayFields = getSuggestedDisplayFields(fk.referenced_columns || []);
+                                
+                                const relationship = {
+                                    column: fk.column,
+                                    referenced_table: fk.referenced_table,
+                                    referenced_column: fk.referenced_column || 'id',
+                                    referenced_schema: fk.referenced_schema || schema,
+                                    display_fields: suggestedDisplayFields,
+                                    is_inferred: fk.is_inferred || false,
+                                    label: getDefaultLabel(fk.column, fk.referenced_table),
+                                    enabled: true
+                                };
+                                
+                                currentRelationships.push(relationship);
+                            });
+                            
+                            renderRelationships();
+                        } else {
+                            emptyRelations.classList.remove('hidden');
+                            emptyRelations.innerHTML = `
+                                <p>🔍 No se detectaron relaciones automáticas.</p>
+                                <p style="font-size: 13px; color: #8b949e; margin-top: 5px;">
+                                    Puedes agregar relaciones manualmente usando el botón "Agregar Relación Manual".
+                                </p>
+                            `;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('[RELATIONS] Error:', error);
+                        emptyRelations.classList.remove('hidden');
+                        emptyRelations.innerHTML = `
+                            <p>❌ Error al detectar relaciones: ${error.message}</p>
+                        `;
+                    })
+                    .finally(() => {
+                        detectRelationsBtn.disabled = false;
+                        relationsLoading.classList.add('hidden');
+                    });
+            }
+            
+            // Función para obtener campos sugeridos para display de una tabla referenciada
+            function getSuggestedDisplayFields(columns) {
+                if (!columns || columns.length === 0) return [];
+                
+                // Palabras clave que indican campos útiles para mostrar
+                const priorityKeywords = ['name', 'nombre', 'title', 'titulo', 'code', 'codigo',
+                                          'description', 'descripcion', 'label', 'etiqueta',
+                                          'full_name', 'username', 'email', 'first_name', 'last_name'];
+                
+                // Primero buscar campos que coincidan con keywords
+                const priorityFields = [];
+                const otherTextFields = [];
+                
+                columns.forEach(col => {
+                    const colName = (col.name || '').toLowerCase();
+                    const colType = (col.type || '').toLowerCase();
+                    
+                    // Saltar campos binarios, IDs, etc.
+                    if (colName === 'id' || colName === 'password' || colType.includes('binary')) return;
+                    
+                    const isText = colType.includes('char') || colType.includes('text') || colType.includes('varchar');
+                    
+                    if (priorityKeywords.some(kw => colName.includes(kw))) {
+                        priorityFields.push(col.name);
+                    } else if (isText) {
+                        otherTextFields.push(col.name);
+                    }
+                });
+                
+                // Combinar: prioridad + otros (máximo 3)
+                const result = [...priorityFields, ...otherTextFields].slice(0, 3);
+                return result;
+            }
+            
+            // Función para generar label por defecto
+            function getDefaultLabel(column, referencedTable) {
+                // Extraer nombre base de la columna (ej: district_fk_id -> district)
+                const baseMatch = column.match(/^(.+?)(?:_fk_?|_id)$/);
+                const baseName = baseMatch ? baseMatch[1] : column;
+                
+                // Capitalizar y formatear
+                return baseName
+                    .replace(/_/g, ' ')
+                    .replace(/\b\w/g, c => c.toUpperCase())
+                    .trim();
+            }
+            
+            // Función para renderizar todas las relaciones
+            function renderRelationships() {
+                relationsList.innerHTML = '';
+                emptyRelations.classList.add('hidden');
+                
+                if (currentRelationships.length === 0) {
+                    emptyRelations.classList.remove('hidden');
+                    emptyRelations.innerHTML = `
+                        <p>No hay relaciones configuradas.</p>
+                    `;
+                    return;
+                }
+                
+                currentRelationships.forEach((rel, index) => {
+                    if (!rel.enabled) return;
+                    
+                    const card = document.createElement('div');
+                    card.className = 'relationship-card';
+                    card.dataset.index = index;
+                    
+                    // Generar preview del texto enriquecido
+                    const previewText = generateRelationshipPreview(rel);
+                    
+                    card.innerHTML = `
+                        <div class="relationship-header">
+                            <div>
+                                <div class="relationship-title">
+                                    ${rel.label || rel.column}
+                                    <span class="relationship-badge ${rel.is_inferred ? 'inferred' : ''}">
+                                        ${rel.is_inferred ? '🔍 Inferida' : '✓ Declarativa'}
+                                    </span>
+                                </div>
+                                <div class="relationship-subtitle">
+                                    ${rel.column} → ${rel.referenced_schema}.${rel.referenced_table}.${rel.referenced_column}
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-danger btn-sm" onclick="removeRelationship(${index})">
+                                🗑️
+                            </button>
+                        </div>
+                        <div class="relationship-body">
+                            <div class="relationship-field">
+                                <label>Columna FK</label>
+                                <input type="text" value="${rel.column}" readonly>
+                            </div>
+                            <div class="relationship-field">
+                                <label>Tabla Referenciada</label>
+                                <input type="text" value="${rel.referenced_table}" readonly>
+                            </div>
+                            <div class="relationship-field">
+                                <label>Columna de Join</label>
+                                <input type="text" value="${rel.referenced_column}" readonly>
+                            </div>
+                            <div class="relationship-field">
+                                <label>Campos a Mostrar (texto para embedding)</label>
+                                <select multiple class="display-fields-select" data-index="${index}">
+                                    ${renderDisplayFieldOptions(rel)}
+                                </select>
+                                <div class="help-text">Selecciona los campos que se incluirán en el embedding (máx. 3)</div>
+                            </div>
+                        </div>
+                        <div class="relationship-preview" id="preview-${index}">
+                            <strong>🔤 Texto generado para embedding:</strong>
+                            ${previewText}
+                        </div>
+                        <div class="relationship-actions">
+                            <button type="button" class="btn btn-outline btn-sm" onclick="refreshReferencedColumns(${index})">
+                                🔄 Recargar Columnas
+                            </button>
+                        </div>
+                    `;
+                    
+                    relationsList.appendChild(card);
+                    
+                    // Agregar event listener al select multiple
+                    const select = card.querySelector('.display-fields-select');
+                    select.addEventListener('change', function() {
+                        const selectedOptions = Array.from(this.selectedOptions).map(opt => opt.value);
+                        currentRelationships[index].display_fields = selectedOptions;
+                        updatePreview(index);
+                    });
+                });
+            }
+            
+            // Función para renderizar opciones del select de campos a mostrar
+            function renderDisplayFieldOptions(rel) {
+                // Obtener columnas de la tabla referenciada desde el API
+                // Por ahora usamos referenced_columns si están disponibles
+                const columns = rel.referenced_columns || [];
+                
+                if (columns.length === 0) {
+                    return '<option value="" disabled>Cargando columnas...</option>';
+                }
+                
+                return columns
+                    .filter(col => {
+                        const name = (col.name || '').toLowerCase();
+                        const type = (col.type || '').toLowerCase();
+                        // Excluir campos binarios y password
+                        if (name === 'password' || type.includes('binary')) return false;
+                        return true;
+                    })
+                    .map(col => {
+                        const isSelected = (rel.display_fields || []).includes(col.name);
+                        return `<option value="${col.name}" ${isSelected ? 'selected' : ''}>${col.name} (${col.type})</option>`;
+                    })
+                    .join('');
+            }
+            
+            // Función para generar preview del texto enriquecido
+            function generateRelationshipPreview(rel) {
+                const displayFields = rel.display_fields || [];
+                if (displayFields.length === 0) {
+                    return '<span style="color: #da3633;">Selecciona al menos un campo para mostrar</span>';
+                }
+                
+                const label = rel.label || rel.column;
+                const parts = displayFields.map(f => `${f}: "[valor]"`);
+                return `<strong>${label}:</strong> ${parts.join(' | ')}`;
+            }
+            
+            // Función para actualizar preview
+            function updatePreview(index) {
+                const rel = currentRelationships[index];
+                if (!rel) return;
+                
+                const previewEl = document.getElementById(`preview-${index}`);
+                if (previewEl) {
+                    previewEl.innerHTML = `<strong>🔤 Texto generado para embedding:</strong> ${generateRelationshipPreview(rel)}`;
+                }
+            }
+            
+            // Función para eliminar una relación
+            window.removeRelationship = function(index) {
+                if (!confirm('¿Eliminar esta relación?')) return;
+                
+                currentRelationships.splice(index, 1);
+                renderRelationships();
+            };
+            
+            // Función para refrescar columnas de una tabla referenciada
+            window.refreshReferencedColumns = function(index) {
+                const rel = currentRelationships[index];
+                if (!rel) return;
+                
+                const schema = rel.referenced_schema || 'dbo';
+                const url = `/api/v1/intelligence/rag/tables/${rel.referenced_table}/schema/?database=propifai&schema=${schema}`;
+                
+                fetch(url)
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.success && data.analysis && data.analysis.columns) {
+                            rel.referenced_columns = data.analysis.columns.map(col => ({
+                                name: col.name || col.column_name,
+                                type: col.type || col.data_type
+                            }));
+                            renderRelationships();
+                        }
+                    })
+                    .catch(err => {
+                        console.error('[RELATIONS] Error refrescando columnas:', err);
+                        alert('Error al recargar columnas: ' + err.message);
+                    });
+            };
+            
+            // Función para agregar relación manual
+            function addManualRelationship() {
+                const tableName = tableSelect.value;
+                if (!tableName) {
+                    alert('Selecciona una tabla primero.');
+                    return;
+                }
+                
+                const newRel = {
+                    column: '',
+                    referenced_table: '',
+                    referenced_column: 'id',
+                    referenced_schema: 'dbo',
+                    display_fields: [],
+                    is_inferred: true,
+                    label: 'Nueva Relación',
+                    enabled: true,
+                    is_manual: true
+                };
+                
+                currentRelationships.push(newRel);
+                renderRelationships();
+                
+                // Scroll al último elemento
+                const lastCard = relationsList.lastElementChild;
+                if (lastCard) {
+                    lastCard.scrollIntoView({ behavior: 'smooth' });
+                }
+            }
+            
+            // ========== MANEJO DEL ENVÍO DEL FORMULARIO ==========
+            
+            document.getElementById('collection-form').addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                // Validar que se haya seleccionado al menos un campo para embedding
+                const selectedEmbedFields = Array.from(embeddingSelect.selectedOptions).map(opt => opt.value);
+                const selectedDisplayFields = Array.from(displaySelect.selectedOptions).map(opt => opt.value);
+                const selectedFilterFields = Array.from(filterSelect.selectedOptions).map(opt => opt.value);
+                
+                if (selectedEmbedFields.length === 0) {
+                    alert('Debes seleccionar al menos un campo para embedding (búsqueda semántica).');
+                    return;
+                }
+                
+                // Crear objeto con los datos del formulario
+                const formData = new FormData(this);
+                
+                // Agregar field_definitions como JSON
+                const fieldDefinitions = currentFields.map(field => ({
+                    name: field.name,
+                    type: field.type,
+                    is_nullable: field.is_nullable || false,
+                    max_length: field.max_length || null
+                }));
+                
+                // Agregar los campos seleccionados como arrays JSON
+                formData.append('embedding_fields', JSON.stringify(selectedEmbedFields));
+                formData.append('display_fields', JSON.stringify(selectedDisplayFields));
+                formData.append('filter_fields', JSON.stringify(selectedFilterFields));
+                formData.append('field_definitions', JSON.stringify(fieldDefinitions));
+                
+                // Agregar relaciones entre tablas
+                const enabledRelationships = currentRelationships
+                    .filter(rel => rel.enabled && rel.column && rel.referenced_table)
+                    .map(rel => ({
+                        column: rel.column,
+                        referenced_table: rel.referenced_table,
+                        referenced_column: rel.referenced_column || 'id',
+                        referenced_schema: rel.referenced_schema || 'dbo',
+                        display_fields: rel.display_fields || [],
+                        label: rel.label || rel.column,
+                        is_inferred: rel.is_inferred || false
+                    }));
+                
+                formData.append('table_relationships', JSON.stringify(enabledRelationships));
+                
+                console.log('[DEBUG] Campos para embedding:', selectedEmbedFields);
+                console.log('[DEBUG] Campos para display:', selectedDisplayFields);
+                console.log('[DEBUG] Campos para filter:', selectedFilterFields);
+                console.log('[DEBUG] Relaciones entre tablas:', enabledRelationships);
+                
+                // Enviar formulario
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = 'Creando...';
+                
+                fetch('/api/v1/intelligence/rag/collections/', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                    }
+                })
+                .then(response => {
+                    // Intentar parsear JSON incluso si la respuesta es error HTTP
+                    return response.json().then(data => ({
+                        status: response.status,
+                        ok: response.ok,
+                        data: data
+                    }));
+                })
+                .then(({status, ok, data}) => {
+                    console.log('[DEBUG] Respuesta del servidor:', data);
+                    if (data.success) {
+                        window.location.href = '/intelligence/collections/';
+                    } else {
+                        // El backend puede devolver 'error' o 'message' según el caso
+                        const errorMsg = data.error || data.message || 'Error desconocido';
+                        alert('Error al crear colección: ' + errorMsg);
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = 'Crear Colección';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error de conexión al crear colección: ' + error.message);
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = 'Crear Colección';
+                });
+            });
+        });
+    </script>
+</body>
+</html>

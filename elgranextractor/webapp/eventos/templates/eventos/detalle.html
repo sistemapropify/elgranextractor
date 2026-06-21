@@ -1,0 +1,278 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Evento #{{ evento.id }} - El Gran Extractor{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'eventos:dashboard_eventos' %}">Dashboard de Eventos</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Evento #{{ evento.id }}</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    {% if evento %}
+    <div class="row">
+        <div class="col-lg-8">
+            <!-- Información principal -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0">
+                        <i class="bi bi-calendar-event me-2"></i>{{ evento.titulo }}
+                    </h4>
+                    <span class="badge bg-primary fs-6">#{{ evento.code }}</span>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <table class="table table-borderless">
+                                <tr>
+                                    <th width="40%">ID:</th>
+                                    <td><code>{{ evento.id }}</code></td>
+                                </tr>
+                                <tr>
+                                    <th>Fecha:</th>
+                                    <td>
+                                        <i class="bi bi-calendar me-1"></i>
+                                        {{ evento.fecha_evento|date:"l, d F Y" }}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>Horario:</th>
+                                    <td>
+                                        <i class="bi bi-clock me-1"></i>
+                                        {{ evento.hora_inicio|time:"H:i" }} - {{ evento.hora_fin|time:"H:i" }}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>Interesado:</th>
+                                    <td>
+                                        <i class="bi bi-person me-1"></i>
+                                        {{ evento.interesado }}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>Propiedad ID:</th>
+                                    <td>
+                                        {% if evento.property_id %}
+                                        <span class="badge bg-info">#{{ evento.property_id }}</span>
+                                        {% else %}
+                                        <span class="text-muted">No asignada</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <table class="table table-borderless">
+                                <tr>
+                                    <th width="40%">Tipo:</th>
+                                    <td>
+                                        {% if evento.event_type %}
+                                        <span class="badge" style="background-color: {{ evento.event_type.color }}; color: white;">
+                                            {{ evento.event_type.name }}
+                                        </span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>Agente Asignado:</th>
+                                    <td>
+                                        {% if evento.assigned_agent_id %}
+                                        <span class="badge bg-dark">Agente #{{ evento.assigned_agent_id }}</span>
+                                        {% else %}
+                                        <span class="text-muted">No asignado</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>Estado:</th>
+                                    <td>
+                                        {% if evento.status == 'completed' %}
+                                        <span class="badge bg-success">Completado</span>
+                                        {% elif evento.status == 'pending' %}
+                                        <span class="badge bg-warning">Pendiente</span>
+                                        {% elif evento.status == 'cancelled' %}
+                                        <span class="badge bg-danger">Cancelado</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">{{ evento.status }}</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>Contacto ID:</th>
+                                    <td>
+                                        {% if evento.contact_id %}
+                                        <span class="badge bg-secondary">#{{ evento.contact_id }}</span>
+                                        {% else %}
+                                        <span class="text-muted">—</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>Activo:</th>
+                                    <td>
+                                        {% if evento.is_active %}
+                                        <span class="badge bg-success">Sí</span>
+                                        {% else %}
+                                        <span class="badge bg-danger">No</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Detalle -->
+                    <div class="mt-4">
+                        <h5 class="border-bottom pb-2">
+                            <i class="bi bi-card-text me-2"></i>Detalle del Evento
+                        </h5>
+                        <div class="bg-light p-3 rounded">
+                            {% if evento.detalle %}
+                                {{ evento.detalle|linebreaks }}
+                            {% else %}
+                                <p class="text-muted mb-0">No hay detalles adicionales.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Seguimiento -->
+                    <div class="mt-4">
+                        <h5 class="border-bottom pb-2">
+                            <i class="bi bi-chat-left-text me-2"></i>Seguimiento
+                        </h5>
+                        <div class="bg-light p-3 rounded">
+                            {% if evento.seguimiento %}
+                                {{ evento.seguimiento|linebreaks }}
+                            {% else %}
+                                <p class="text-muted mb-0">No hay información de seguimiento.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer bg-white border-0 d-flex justify-content-between">
+                    <small class="text-muted">
+                        <i class="bi bi-clock-history me-1"></i>
+                        Creado: {{ evento.created_at|date:"d/m/Y H:i" }}
+                        {% if evento.updated_at != evento.created_at %}
+                        · Actualizado: {{ evento.updated_at|date:"d/m/Y H:i" }}
+                        {% endif %}
+                    </small>
+                    <div>
+                        <a href="{% url 'eventos:dashboard_eventos' %}" class="btn btn-outline-secondary btn-sm">
+                            <i class="bi bi-arrow-left"></i> Volver al Dashboard
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel lateral -->
+        <div class="col-lg-4">
+            <!-- Información adicional -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white border-0">
+                    <h5 class="mb-0">
+                        <i class="bi bi-info-circle me-2"></i>Información Adicional
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Lead ID
+                            <span>
+                                {% if evento.lead_id %}
+                                <span class="badge bg-info">#{{ evento.lead_id }}</span>
+                                {% else %}
+                                <span class="text-muted">—</span>
+                                {% endif %}
+                            </span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Proposal ID
+                            <span>
+                                {% if evento.proposal_id %}
+                                <span class="badge bg-info">#{{ evento.proposal_id }}</span>
+                                {% else %}
+                                <span class="text-muted">—</span>
+                                {% endif %}
+                            </span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Creado por ID
+                            <span class="badge bg-secondary">#{{ evento.created_by_id }}</span>
+                        </li>
+                        <li class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <strong>Razón de Rechazo</strong>
+                                    <div class="mt-1 small">
+                                        {% if evento.rejection_reason %}
+                                            {{ evento.rejection_reason|truncatechars:100 }}
+                                        {% else %}
+                                            <span class="text-muted">Ninguna</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Acciones rápidas -->
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-0">
+                    <h5 class="mb-0">
+                        <i class="bi bi-lightning me-2"></i>Acciones Rápidas
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="?propiedad={{ evento.property_id }}" class="btn btn-outline-primary">
+                            <i class="bi bi-house-door me-2"></i>Ver eventos de esta propiedad
+                        </a>
+                        {% if evento.assigned_agent_id %}
+                        <a href="?agente={{ evento.assigned_agent_id }}" class="btn btn-outline-info">
+                            <i class="bi bi-person-badge me-2"></i>Ver eventos de este agente
+                        </a>
+                        {% endif %}
+                        {% if evento.event_type_id %}
+                        <a href="?tipo={{ evento.event_type_id }}" class="btn btn-outline-success">
+                            <i class="bi bi-tag me-2"></i>Ver eventos de este tipo
+                        </a>
+                        {% endif %}
+                        <a href="?dia={{ evento.fecha_evento|date:'Y-m-d' }}" class="btn btn-outline-warning">
+                            <i class="bi bi-calendar-day me-2"></i>Ver eventos de este día
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body text-center py-5">
+                    <i class="bi bi-exclamation-triangle fs-1 text-warning"></i>
+                    <h3 class="mt-3">Evento no encontrado</h3>
+                    <p class="text-muted">El evento solicitado no existe o ha sido eliminado.</p>
+                    <a href="{% url 'eventos:dashboard_eventos' %}" class="btn btn-primary">
+                        <i class="bi bi-arrow-left me-2"></i>Volver al Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,80 @@
+{% extends "intelligence/base/base.html" %}
+
+{% block title %}Evaluación de Intenciones - Propifai Intelligence Layer{% endblock %}
+
+{% block active_section %}intent_evaluation{% endblock %}
+
+{% block page_title %}Evaluación de Clasificación de Intenciones{% endblock %}
+
+{% block content %}
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value">{{ intent_accuracy }}%</div>
+        <div class="stat-label">Precisión de Intenciones</div>
+        <div class="small-text">{{ correct_intent }}/{{ total_samples }} correctas</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ skill_accuracy|default:"N/A" }}%</div>
+        <div class="stat-label">Precisión de Skills</div>
+        <div class="small-text">{{ correct_skill|default:0 }}/{{ total_skill_checks|default:0 }} correctas</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ total_samples }}</div>
+        <div class="stat-label">Muestras Evaluadas</div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Resultados Detallados</h3>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Pregunta</th>
+                        <th>Intención Esperada</th>
+                        <th>Intención Predicha</th>
+                        <th>Coincide</th>
+                        <th>Skill Esperada</th>
+                        <th>Skill Predicha</th>
+                        <th>Skill OK</th>
+                        <th>Confianza</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in evaluation_rows %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td><div>{{ row.question }}</div><div class="small-text">{{ row.expected_description }}</div></td>
+                        <td>{{ row.expected_intent }}</td>
+                        <td>{{ row.predicted_intent }}</td>
+                        <td>
+                            {% if row.intent_match %}
+                                <span class="badge badge-success">Sí</span>
+                            {% else %}
+                                <span class="badge badge-danger">No</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ row.expected_skill }}</td>
+                        <td>{{ row.predicted_skill }}</td>
+                        <td>
+                            {% if row.skill_match == 'Sí' %}
+                                <span class="badge badge-success">Sí</span>
+                            {% elif row.skill_match == 'No' %}
+                                <span class="badge badge-danger">No</span>
+                            {% else %}
+                                <span class="badge badge-info">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ row.intent_confidence }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

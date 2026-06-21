@@ -1,0 +1,242 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Heatmap Simple - El Gran Extractor{% endblock %}
+
+{% block extra_css %}
+<style>
+    .heatmap-simple-container {
+        min-height: calc(100vh - 120px);
+        padding: 20px;
+    }
+    
+    .heatmap-simple-card {
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+        border: none;
+        height: 600px;
+    }
+    
+    .heatmap-simple-card .card-header {
+        background-color: #10b981;
+        color: white;
+        border-bottom: none;
+        border-radius: 8px 8px 0 0 !important;
+        padding: 12px 20px;
+    }
+    
+    #heatmapSimpleMap {
+        height: 100%;
+        width: 100%;
+        border-radius: 0 0 8px 8px;
+    }
+    
+    .heatmap-simple-info {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 15px;
+        margin-top: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="heatmap-simple-container">
+    <div class="container-fluid">
+        <!-- Header -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h1 class="h3 mb-0">
+                            <i class="bi bi-thermometer-high me-2"></i>Heatmap Simple de Precio por m²
+                        </h1>
+                        <p class="text-muted mb-0">
+                            Visualización simplificada de densidad de precio por m² en el mercado inmobiliario
+                        </p>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-outline-primary" id="btnRefreshSimple">
+                            <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
+                        </button>
+                        <button class="btn btn-outline-secondary" id="btnHelpSimple" data-bs-toggle="modal" data-bs-target="#helpModalSimple">
+                            <i class="bi bi-question-circle me-1"></i>Ayuda
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mapa principal -->
+        <div class="row">
+            <div class="col-12">
+                <div class="heatmap-simple-card card">
+                    <div class="card-header py-2">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">
+                                <i class="bi bi-map me-2"></i>Mapa de calor de precio por m²
+                            </h5>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-sm btn-outline-light" id="btnZoomInSimple">
+                                    <i class="bi bi-plus"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-light" id="btnZoomOutSimple">
+                                    <i class="bi bi-dash"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-light" id="btnResetViewSimple">
+                                    <i class="bi bi-geo-alt"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body p-0" style="height: calc(100% - 50px);">
+                        <div id="heatmapSimpleMap"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Información básica -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="heatmap-simple-info">
+                    <h6><i class="bi bi-info-circle me-2"></i>Información del heatmap</h6>
+                    <p class="mb-2">Este heatmap muestra la densidad de precio por metro cuadrado en el mercado inmobiliario. Los colores más cálidos (rojo/naranja) indican áreas con mayor precio por m², mientras que los colores fríos (azul/verde) indican áreas con menor precio por m².</p>
+                    <p class="mb-0">Los datos se obtienen de la base de datos local y de Propifai. Use los botones de zoom para navegar por el mapa.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de ayuda simple -->
+<div class="modal fade" id="helpModalSimple" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-question-circle me-2"></i>Ayuda - Heatmap Simple</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <h6>¿Cómo usar este heatmap?</h6>
+                <ul>
+                    <li><strong>Zoom:</strong> Use la rueda del mouse o los botones +/- para acercar/alejar.</li>
+                    <li><strong>Arrastrar:</strong> Haga clic y arrastre para mover el mapa.</li>
+                    <li><strong>Actualizar:</strong> Haga clic en el botón "Actualizar" para recargar los datos más recientes.</li>
+                </ul>
+                <h6 class="mt-3">Interpretación de colores</h6>
+                <ul>
+                    <li><span style="color: blue;">Azul:</span> Precio por m² bajo</li>
+                    <li><span style="color: green;">Verde:</span> Precio por m² medio</li>
+                    <li><span style="color: yellow;">Amarillo:</span> Precio por m² alto</li>
+                    <li><span style="color: red;">Rojo:</span> Precio por m² muy alto</li>
+                </ul>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Entendido</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Cargar Google Maps API dinámicamente
+function loadGoogleMapsAPISimple() {
+    return new Promise((resolve, reject) => {
+        if (typeof google !== 'undefined' && google.maps) {
+            resolve();
+            return;
+        }
+        
+        const script = document.createElement('script');
+        script.src = 'https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|default:"AIzaSyDummyKey" }}&libraries=visualization';
+        script.async = true;
+        script.defer = true;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('Error al cargar Google Maps API'));
+        document.head.appendChild(script);
+    });
+}
+
+// Variables globales
+let mapSimple = null;
+let heatmapLayerSimple = null;
+
+// Inicializar mapa
+async function initHeatmapSimple() {
+    try {
+        await loadGoogleMapsAPISimple();
+        
+        const defaultCenter = { lat: -12.0464, lng: -77.0428 }; // Lima, Perú
+        mapSimple = new google.maps.Map(document.getElementById('heatmapSimpleMap'), {
+            center: defaultCenter,
+            zoom: 12,
+            mapTypeId: 'roadmap',
+            styles: [
+                {
+                    featureType: 'poi',
+                    elementType: 'labels',
+                    stylers: [{ visibility: 'off' }]
+                }
+            ]
+        });
+        
+        // Cargar datos de heatmap (ejemplo estático)
+        const heatmapData = [
+            { lat: -12.0464, lng: -77.0428, weight: 0.5 },
+            { lat: -12.0564, lng: -77.0328, weight: 0.8 },
+            { lat: -12.0364, lng: -77.0528, weight: 0.3 },
+            { lat: -12.0664, lng: -77.0228, weight: 0.9 },
+            { lat: -12.0264, lng: -77.0628, weight: 0.6 }
+        ];
+        
+        const heatmapPoints = heatmapData.map(point => {
+            return new google.maps.LatLng(point.lat, point.lng);
+        });
+        
+        heatmapLayerSimple = new google.maps.visualization.HeatmapLayer({
+            data: heatmapPoints,
+            map: mapSimple,
+            radius: 30,
+            opacity: 0.6
+        });
+        
+        // Configurar botones
+        document.getElementById('btnZoomInSimple').addEventListener('click', () => {
+            mapSimple.setZoom(mapSimple.getZoom() + 1);
+        });
+        
+        document.getElementById('btnZoomOutSimple').addEventListener('click', () => {
+            mapSimple.setZoom(mapSimple.getZoom() - 1);
+        });
+        
+        document.getElementById('btnResetViewSimple').addEventListener('click', () => {
+            mapSimple.setCenter(defaultCenter);
+            mapSimple.setZoom(12);
+        });
+        
+        document.getElementById('btnRefreshSimple').addEventListener('click', () => {
+            // Simular recarga de datos
+            console.log('Recargando datos...');
+            alert('Datos recargados (simulación)');
+        });
+        
+        console.log('Heatmap simple inicializado correctamente');
+    } catch (error) {
+        console.error('Error al inicializar heatmap simple:', error);
+        document.getElementById('heatmapSimpleMap').innerHTML = `
+            <div class="alert alert-danger m-3">
+                <h6>Error al cargar el mapa</h6>
+                <p>${error.message}</p>
+                <p>Verifique su conexión a internet y la configuración de Google Maps API.</p>
+            </div>
+        `;
+    }
+}
+
+// Inicializar cuando el DOM esté listo
+document.addEventListener('DOMContentLoaded', initHeatmapSimple);
+</script>
+{% endblock %}

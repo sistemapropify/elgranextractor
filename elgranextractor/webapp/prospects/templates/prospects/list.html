@@ -1,0 +1,472 @@
+{% extends "acm_base_moderno.html" %}
+{% load static %}
+
+{% block title %}Mis Prospectos — Propifai{% endblock %}
+
+{% block extra_css %}
+{{ block.super }}
+<style>
+  :root {
+    --bg-body: #0d1117;
+    --bg-card: #161b22;
+    --bg-card-hover: #1c2333;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --text-dim: #484f58;
+    --primary: #58a6ff;
+    --primary-hover: #79c0ff;
+    --success: #3fb950;
+    --warning: #d29922;
+    --danger: #f85149;
+    --radius: 10px;
+    --radius-sm: 6px;
+    --shadow: 0 1px 3px rgba(0,0,0,.3);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg-body);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  .prospects-wrapper {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 20px 16px 40px;
+  }
+
+  /* ── Header ── */
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+
+  .page-header h1 {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -.3px;
+  }
+
+  .page-header h1 small {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--text-muted);
+    margin-left: 8px;
+  }
+
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    padding: 9px 18px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background .15s;
+  }
+  .btn-primary:hover { background: var(--primary-hover); }
+
+  .btn-outline {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 7px 14px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all .15s;
+  }
+  .btn-outline:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--text-muted);
+  }
+
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+  /* ── Stats row ── */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: all .15s;
+    text-decoration: none;
+    color: inherit;
+  }
+  .stat-card:hover { background: var(--bg-card-hover); }
+  .stat-card.active {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 1px var(--primary);
+  }
+
+  .stat-number {
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+  .stat-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+
+  .stat-color-total { color: var(--text); }
+  .stat-color-borrador { color: var(--text-dim); }
+  .stat-color-pendiente { color: var(--warning); }
+  .stat-color-contactado { color: var(--primary); }
+  .stat-color-negociando { color: var(--success); }
+  .stat-color-captado { color: #a371f7; }
+
+  /* ── Filters ── */
+  .filters-bar {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+
+  .filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 5px 14px;
+    font-size: 12px;
+    color: var(--text-muted);
+    cursor: pointer;
+    text-decoration: none;
+    transition: all .15s;
+  }
+  .filter-chip:hover {
+    background: var(--bg-card-hover);
+    color: var(--text);
+  }
+  .filter-chip.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
+  }
+
+  /* ── Prospect cards ── */
+  .prospects-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .prospect-card {
+    display: flex;
+    gap: 14px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px;
+    transition: all .15s;
+    text-decoration: none;
+    color: inherit;
+    position: relative;
+  }
+  .prospect-card:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--text-muted);
+  }
+
+  .prospect-thumb {
+    width: 80px;
+    height: 80px;
+    border-radius: var(--radius-sm);
+    object-fit: cover;
+    background: var(--bg-body);
+    flex-shrink: 0;
+  }
+  .prospect-thumb-placeholder {
+    width: 80px;
+    height: 80px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-body);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-dim);
+    flex-shrink: 0;
+    font-size: 24px;
+  }
+
+  .prospect-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .prospect-title {
+    font-size: 15px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .prospect-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .prospect-meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .prospect-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: auto;
+    padding-top: 6px;
+  }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 10px;
+    border-radius: 20px;
+    text-transform: capitalize;
+  }
+
+  .status-borrador {
+    background: rgba(72,79,88,.3);
+    color: var(--text-dim);
+  }
+  .status-pendiente {
+    background: rgba(210,153,34,.15);
+    color: var(--warning);
+  }
+  .status-contactado {
+    background: rgba(88,166,255,.15);
+    color: var(--primary);
+  }
+  .status-negociando {
+    background: rgba(63,185,80,.15);
+    color: var(--success);
+  }
+  .status-captado {
+    background: rgba(163,113,247,.15);
+    color: #a371f7;
+  }
+  .status-perdido {
+    background: rgba(248,81,73,.15);
+    color: var(--danger);
+  }
+
+  .prospect-date {
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  /* ── Empty state ── */
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-muted);
+  }
+  .empty-state .empty-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+    opacity: .4;
+  }
+  .empty-state h3 {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--text);
+  }
+  .empty-state p {
+    font-size: 14px;
+    margin-bottom: 20px;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 600px) {
+    .prospects-wrapper { padding: 14px 12px 30px; }
+    .page-header h1 { font-size: 18px; }
+    .stats-row { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .stat-card { padding: 10px 6px; }
+    .stat-number { font-size: 18px; }
+    .stat-label { font-size: 9px; }
+    .prospect-card { padding: 10px; gap: 10px; }
+    .prospect-thumb,
+    .prospect-thumb-placeholder { width: 60px; height: 60px; }
+    .prospect-title { font-size: 13px; }
+    .prospect-meta { font-size: 11px; gap: 4px 8px; }
+  }
+
+  @media (max-width: 400px) {
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="prospects-wrapper">
+
+  <!-- ── Header ── -->
+  <div class="page-header">
+    <div>
+      <h1>
+        Mis Prospectos
+        <small>{{ prospects|length }} capturas</small>
+      </h1>
+    </div>
+    <a href="{% url 'prospects:capture' %}" class="btn-primary">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>
+      </svg>
+      Nueva Captura
+    </a>
+  </div>
+
+  <!-- ── Stats ── -->
+  <div class="stats-row">
+    <a href="{% url 'prospects:list' %}" class="stat-card {% if not status_filter %}active{% endif %}">
+      <div class="stat-number stat-color-total">{{ stats.total }}</div>
+      <div class="stat-label">Total</div>
+    </a>
+    <a href="{% url 'prospects:list' %}?status=borrador" class="stat-card {% if status_filter == 'borrador' %}active{% endif %}">
+      <div class="stat-number stat-color-borrador">{{ stats.borradores }}</div>
+      <div class="stat-label">Borradores</div>
+    </a>
+    <a href="{% url 'prospects:list' %}?status=pendiente" class="stat-card {% if status_filter == 'pendiente' %}active{% endif %}">
+      <div class="stat-number stat-color-pendiente">{{ stats.pendientes }}</div>
+      <div class="stat-label">Pendientes</div>
+    </a>
+    <a href="{% url 'prospects:list' %}?status=contactado" class="stat-card {% if status_filter == 'contactado' %}active{% endif %}">
+      <div class="stat-number stat-color-contactado">{{ stats.contactados }}</div>
+      <div class="stat-label">Contactados</div>
+    </a>
+    <a href="{% url 'prospects:list' %}?status=negociando" class="stat-card {% if status_filter == 'negociando' %}active{% endif %}">
+      <div class="stat-number stat-color-negociando">{{ stats.negociando }}</div>
+      <div class="stat-label">Negociando</div>
+    </a>
+    <a href="{% url 'prospects:list' %}?status=captado" class="stat-card {% if status_filter == 'captado' %}active{% endif %}">
+      <div class="stat-number stat-color-captado">{{ stats.captados }}</div>
+      <div class="stat-label">Captados</div>
+    </a>
+  </div>
+
+  <!-- ── Filters ── -->
+  <div class="filters-bar">
+    <a href="{% url 'prospects:list' %}" class="filter-chip {% if not status_filter %}active{% endif %}">Todos</a>
+    <a href="{% url 'prospects:list' %}?status=borrador" class="filter-chip {% if status_filter == 'borrador' %}active{% endif %}">📝 Borrador</a>
+    <a href="{% url 'prospects:list' %}?status=pendiente" class="filter-chip {% if status_filter == 'pendiente' %}active{% endif %}">⏳ Pendiente</a>
+    <a href="{% url 'prospects:list' %}?status=contactado" class="filter-chip {% if status_filter == 'contactado' %}active{% endif %}">📞 Contactado</a>
+    <a href="{% url 'prospects:list' %}?status=negociando" class="filter-chip {% if status_filter == 'negociando' %}active{% endif %}">🤝 Negociando</a>
+    <a href="{% url 'prospects:list' %}?status=captado" class="filter-chip {% if status_filter == 'captado' %}active{% endif %}">✅ Captado</a>
+  </div>
+
+  <!-- ── List ── -->
+  <div class="prospects-list">
+    {% for p in prospects %}
+    <a href="{% url 'prospects:detail' pk=p.pk %}" class="prospect-card">
+      {% if p.photo %}
+      <img src="{{ p.photo.url }}" alt="" class="prospect-thumb" loading="lazy">
+      {% else %}
+      <div class="prospect-thumb-placeholder">📷</div>
+      {% endif %}
+
+      <div class="prospect-info">
+        <div class="prospect-title">
+          {% if p.owner_name %}
+            {{ p.owner_name }}
+          {% elif p.address %}
+            {{ p.address|truncatechars:40 }}
+          {% else %}
+            <span style="color:var(--text-dim)">Sin datos</span>
+          {% endif %}
+        </div>
+
+        <div class="prospect-meta">
+          {% if p.property_type %}
+          <span>🏠 {{ p.get_property_type_display }}</span>
+          {% endif %}
+          {% if p.operation_type %}
+          <span>{% if p.operation_type == 'venta' %}💰{% else %}🔑{% endif %} {{ p.get_operation_type_display }}</span>
+          {% endif %}
+          {% if p.price %}
+          <span>💵 {{ p.currency }} {{ p.price|floatformat:0 }}</span>
+          {% endif %}
+          {% if p.district %}
+          <span>📍 {{ p.district }}</span>
+          {% endif %}
+          {% if p.bedrooms %}
+          <span>🛏️ {{ p.bedrooms }} dorm.</span>
+          {% endif %}
+          {% if p.area_m2 %}
+          <span>📐 {{ p.area_m2 }} m²</span>
+          {% endif %}
+        </div>
+
+        <div class="prospect-footer">
+          <span class="status-badge status-{{ p.status }}">
+            {% if p.status == 'borrador' %}📝{% elif p.status == 'pendiente' %}⏳{% elif p.status == 'contactado' %}📞{% elif p.status == 'negociando' %}🤝{% elif p.status == 'captado' %}✅{% elif p.status == 'perdido' %}❌{% endif %}
+            {{ p.get_status_display }}
+          </span>
+          <span class="prospect-date">{{ p.created_at|date:"d/m/Y H:i" }}</span>
+        </div>
+      </div>
+    </a>
+    {% empty %}
+    <div class="empty-state">
+      <div class="empty-icon">📸</div>
+      <h3>No hay prospectos aún</h3>
+      <p>Captura tu primera propiedad desde tu móvil para empezar a gestionar prospectos.</p>
+      <a href="{% url 'prospects:capture' %}" class="btn-primary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>
+        </svg>
+        Nueva Captura
+      </a>
+    </div>
+    {% endfor %}
+  </div>
+
+</div>
+{% endblock %}

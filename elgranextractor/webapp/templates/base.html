@@ -1,0 +1,1456 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>{% block title %}El Gran Extractor{% endblock %}</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    
+    <style>
+        :root {
+            --primary-color: #047d7d;
+            --secondary-color: #035e5e;
+            --sidebar-width: 250px;
+            --header-height: 56px;
+            
+            /* Colores para tarjetas y componentes */
+            --card-bg: #ffffff;
+            --card-border: #dee2e6;
+            --card-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            --card-radius: 10px;
+            --btn-radius: 6px;
+            --badge-radius: 12px;
+            --alert-radius: 8px;
+            --text-muted: #6c757d;
+            --text-dark: #212529;
+            --border-light: #e9ecef;
+            --bg-light: #f8f9fa;
+            --bg-white: #ffffff;
+            --success: #28a745;
+            --warning: #ffc107;
+            --danger: #dc3545;
+            --info: #17a2b8;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background-color: #f0f7f7;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* Header delgado */
+        .app-header {
+            height: var(--header-height);
+            background: white;
+            border-bottom: 2px solid #047d7d;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+        }
+        
+        .sidebar-toggle {
+            width: 36px;
+            height: 36px;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            background: white;
+            color: #047d7d;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            margin-right: 12px;
+            transition: all 0.2s;
+        }
+        
+        .sidebar-toggle:hover {
+            background: #047d7d;
+            color: white;
+        }
+        
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .logo-placeholder {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #047d7d, #035e5e);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+        
+        /* Sidebar delgada */
+        .app-sidebar {
+            width: var(--sidebar-width);
+            background: white;
+            border-right: 1px solid #dee2e6;
+            position: fixed;
+            top: var(--header-height);
+            left: 0;
+            bottom: 0;
+            overflow-y: auto;
+            z-index: 999;
+            transition: transform 0.3s ease;
+        }
+        
+        .app-sidebar.collapsed {
+            transform: translateX(-100%);
+        }
+        
+        .sidebar-menu {
+            list-style: none;
+            padding: 8px 0;
+            margin: 0;
+        }
+        
+        .sidebar-menu li {
+            margin: 0;
+        }
+        
+        .sidebar-menu li a {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 20px;
+            color: #495057;
+            text-decoration: none;
+            font-size: 14px;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+        }
+        
+        .sidebar-menu li a:hover {
+            background: #e8f5f5;
+            color: #047d7d;
+        }
+        
+        .sidebar-menu li a.active {
+            background: #e8f5f5;
+            color: #047d7d;
+            border-left-color: #047d7d;
+            font-weight: 600;
+        }
+        
+        .sidebar-menu li a i {
+            width: 20px;
+            text-align: center;
+            font-size: 16px;
+        }
+        
+        .sidebar-menu li.has-submenu > a {
+            cursor: pointer;
+        }
+        
+        .sidebar-menu li.has-submenu > a .bi-chevron-down {
+            transition: transform 0.2s;
+            font-size: 12px;
+        }
+        
+        .sidebar-menu li.has-submenu.open > a .bi-chevron-down {
+            transform: rotate(180deg);
+        }
+        
+        .submenu {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: none;
+            background: #f8fbfb;
+        }
+        
+        .has-submenu.open .submenu {
+            display: block;
+        }
+        
+        .submenu li a {
+            padding-left: 50px;
+            font-size: 13px;
+        }
+        
+        /* Contenido principal */
+        .app-content {
+            margin-top: var(--header-height);
+            margin-left: var(--sidebar-width);
+            padding: 24px;
+            min-height: calc(100vh - var(--header-height));
+            transition: margin-left 0.3s ease;
+        }
+        
+        .app-content.expanded {
+            margin-left: 0;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .app-sidebar {
+                transform: translateX(-100%);
+            }
+            .app-sidebar.mobile-open {
+                transform: translateX(0);
+            }
+            .app-content {
+                margin-left: 0;
+            }
+        }
+        
+        /* ===== ESTILOS DE TARJETAS (Cards) ===== */
+        .card {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            word-wrap: break-word;
+            background-color: var(--card-bg);
+            background-clip: border-box;
+            border: 1px solid var(--card-border);
+            border-radius: var(--card-radius);
+            box-shadow: var(--card-shadow);
+            margin-bottom: 1.25rem;
+        }
+        
+        .card.border-0 {
+            border: none !important;
+        }
+        
+        .card.border-primary {
+            border-color: var(--primary-color) !important;
+        }
+        .card.border-success {
+            border-color: var(--success) !important;
+        }
+        .card.border-warning {
+            border-color: var(--warning) !important;
+        }
+        .card.border-info {
+            border-color: var(--info) !important;
+        }
+        .card.border-danger {
+            border-color: var(--danger) !important;
+        }
+        
+        .card-header {
+            padding: 0.75rem 1.25rem;
+            margin-bottom: 0;
+            background-color: rgba(0,0,0,0.03);
+            border-bottom: 1px solid var(--card-border);
+        }
+        .card-header:first-child {
+            border-radius: calc(var(--card-radius) - 1px) calc(var(--card-radius) - 1px) 0 0;
+        }
+        .card-header.bg-white {
+            background-color: var(--bg-white) !important;
+        }
+        .card-header.bg-primary {
+            background-color: var(--primary-color) !important;
+            color: white;
+        }
+        .card-header.bg-success {
+            background-color: var(--success) !important;
+            color: white;
+        }
+        .card-header.bg-warning {
+            background-color: var(--warning) !important;
+            color: #212529;
+        }
+        .card-header.bg-info {
+            background-color: var(--info) !important;
+            color: white;
+        }
+        .card-header.bg-danger {
+            background-color: var(--danger) !important;
+            color: white;
+        }
+        .card-header.bg-secondary {
+            background-color: #6c757d !important;
+            color: white;
+        }
+        .card-header.bg-dark {
+            background-color: #343a40 !important;
+            color: white;
+        }
+        .card-header h4, .card-header h5 {
+            margin-bottom: 0;
+        }
+        
+        .card-body {
+            flex: 1 1 auto;
+            padding: 1.25rem;
+        }
+        
+        .card-footer {
+            padding: 0.75rem 1.25rem;
+            background-color: rgba(0,0,0,0.03);
+            border-top: 1px solid var(--card-border);
+        }
+        .card-footer:last-child {
+            border-radius: 0 0 calc(var(--card-radius) - 1px) calc(var(--card-radius) - 1px);
+        }
+        .card-footer.bg-white {
+            background-color: var(--bg-white) !important;
+        }
+        .card-footer.bg-transparent {
+            background-color: transparent !important;
+        }
+        
+        .card-title {
+            margin-bottom: 0.75rem;
+        }
+        .card-text {
+            margin-top: 0;
+            margin-bottom: 0.5rem;
+        }
+        .card.h-100 {
+            height: 100%;
+        }
+        
+        /* ===== SISTEMA DE GRID ===== */
+        .container {
+            width: 100%;
+            padding-right: 15px;
+            padding-left: 15px;
+            margin-right: auto;
+            margin-left: auto;
+            max-width: 1140px;
+        }
+        .container-fluid {
+            width: 100%;
+            padding-right: 15px;
+            padding-left: 15px;
+            margin-right: auto;
+            margin-left: auto;
+        }
+        .row {
+            display: flex;
+            flex-wrap: wrap;
+            margin-right: -15px;
+            margin-left: -15px;
+        }
+        .row.g-2 {
+            margin-right: -8px;
+            margin-left: -8px;
+        }
+        .row.g-2 > [class*="col-"] {
+            padding-right: 8px;
+            padding-left: 8px;
+        }
+        .row.g-3 {
+            margin-right: -12px;
+            margin-left: -12px;
+        }
+        .row.g-3 > [class*="col-"] {
+            padding-right: 12px;
+            padding-left: 12px;
+        }
+        [class*="col-"] {
+            position: relative;
+            width: 100%;
+            padding-right: 15px;
+            padding-left: 15px;
+        }
+        .col-12 { flex: 0 0 100%; max-width: 100%; }
+        .col-11 { flex: 0 0 91.666667%; max-width: 91.666667%; }
+        .col-10 { flex: 0 0 83.333333%; max-width: 83.333333%; }
+        .col-9 { flex: 0 0 75%; max-width: 75%; }
+        .col-8 { flex: 0 0 66.666667%; max-width: 66.666667%; }
+        .col-7 { flex: 0 0 58.333333%; max-width: 58.333333%; }
+        .col-6 { flex: 0 0 50%; max-width: 50%; }
+        .col-5 { flex: 0 0 41.666667%; max-width: 41.666667%; }
+        .col-4 { flex: 0 0 33.333333%; max-width: 33.333333%; }
+        .col-3 { flex: 0 0 25%; max-width: 25%; }
+        .col-2 { flex: 0 0 16.666667%; max-width: 16.666667%; }
+        
+        @media (min-width: 768px) {
+            .col-md-12 { flex: 0 0 100%; max-width: 100%; }
+            .col-md-11 { flex: 0 0 91.666667%; max-width: 91.666667%; }
+            .col-md-10 { flex: 0 0 83.333333%; max-width: 83.333333%; }
+            .col-md-9 { flex: 0 0 75%; max-width: 75%; }
+            .col-md-8 { flex: 0 0 66.666667%; max-width: 66.666667%; }
+            .col-md-7 { flex: 0 0 58.333333%; max-width: 58.333333%; }
+            .col-md-6 { flex: 0 0 50%; max-width: 50%; }
+            .col-md-5 { flex: 0 0 41.666667%; max-width: 41.666667%; }
+            .col-md-4 { flex: 0 0 33.333333%; max-width: 33.333333%; }
+            .col-md-3 { flex: 0 0 25%; max-width: 25%; }
+            .col-md-2 { flex: 0 0 16.666667%; max-width: 16.666667%; }
+        }
+        @media (min-width: 992px) {
+            .col-lg-12 { flex: 0 0 100%; max-width: 100%; }
+            .col-lg-11 { flex: 0 0 91.666667%; max-width: 91.666667%; }
+            .col-lg-10 { flex: 0 0 83.333333%; max-width: 83.333333%; }
+            .col-lg-9 { flex: 0 0 75%; max-width: 75%; }
+            .col-lg-8 { flex: 0 0 66.666667%; max-width: 66.666667%; }
+            .col-lg-7 { flex: 0 0 58.333333%; max-width: 58.333333%; }
+            .col-lg-6 { flex: 0 0 50%; max-width: 50%; }
+            .col-lg-5 { flex: 0 0 41.666667%; max-width: 41.666667%; }
+            .col-lg-4 { flex: 0 0 33.333333%; max-width: 33.333333%; }
+            .col-lg-3 { flex: 0 0 25%; max-width: 25%; }
+            .col-lg-2 { flex: 0 0 16.666667%; max-width: 16.666667%; }
+        }
+        
+        /* ===== BOTONES ===== */
+        .btn {
+            display: inline-block;
+            font-weight: 400;
+            text-align: center;
+            vertical-align: middle;
+            cursor: pointer;
+            padding: 0.375rem 0.75rem;
+            font-size: 1rem;
+            line-height: 1.5;
+            border-radius: var(--btn-radius);
+            border: 1px solid transparent;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            user-select: none;
+        }
+        .btn:hover {
+            filter: brightness(0.95);
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+            border-color: var(--primary-color);
+        }
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #059999 0%, #047d7d 100%);
+        }
+        .btn-success {
+            background-color: var(--success);
+            color: white;
+        }
+        .btn-success:hover {
+            background-color: #218838;
+        }
+        .btn-warning {
+            background-color: var(--warning);
+            color: #212529;
+        }
+        .btn-warning:hover {
+            background-color: #e0a800;
+        }
+        .btn-info {
+            background-color: var(--info);
+            color: white;
+        }
+        .btn-info:hover {
+            background-color: #138496;
+        }
+        .btn-danger {
+            background-color: var(--danger);
+            color: white;
+        }
+        .btn-danger:hover {
+            background-color: #c82333;
+        }
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background-color: #5a6268;
+        }
+        .btn-outline-primary {
+            background: transparent;
+            color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+        .btn-outline-primary:hover {
+            background: var(--primary-color);
+            color: white;
+        }
+        .btn-outline-secondary {
+            background: transparent;
+            color: #6c757d;
+            border-color: #6c757d;
+        }
+        .btn-outline-secondary:hover {
+            background: #6c757d;
+            color: white;
+        }
+        .btn-outline-success {
+            background: transparent;
+            color: var(--success);
+            border-color: var(--success);
+        }
+        .btn-outline-success:hover {
+            background: var(--success);
+            color: white;
+        }
+        .btn-outline-danger {
+            background: transparent;
+            color: var(--danger);
+            border-color: var(--danger);
+        }
+        .btn-outline-danger:hover {
+            background: var(--danger);
+            color: white;
+        }
+        .btn-outline-info {
+            background: transparent;
+            color: var(--info);
+            border-color: var(--info);
+        }
+        .btn-outline-info:hover {
+            background: var(--info);
+            color: white;
+        }
+        .btn-outline-dark {
+            background: transparent;
+            color: #343a40;
+            border-color: #343a40;
+        }
+        .btn-outline-dark:hover {
+            background: #343a40;
+            color: white;
+        }
+        .btn-sm {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+            border-radius: 4px;
+        }
+        .btn-lg {
+            padding: 0.5rem 1rem;
+            font-size: 1.25rem;
+            border-radius: 8px;
+        }
+        .w-100 { width: 100%; }
+        .d-grid { display: grid; }
+        .d-grid.gap-2 { gap: 0.5rem; }
+        .d-flex { display: flex; }
+        .d-inline-flex { display: inline-flex; }
+        .justify-content-between { justify-content: space-between; }
+        .justify-content-center { justify-content: center; }
+        .align-items-center { align-items: center; }
+        .align-items-start { align-items: flex-start; }
+        .flex-wrap { flex-wrap: wrap; }
+        .flex-column { flex-direction: column; }
+        .ms-auto { margin-left: auto; }
+        .ms-1 { margin-left: 0.25rem; }
+        .ms-2 { margin-left: 0.5rem; }
+        .me-1 { margin-right: 0.25rem; }
+        .me-2 { margin-right: 0.5rem; }
+        .mb-0 { margin-bottom: 0; }
+        .mb-1 { margin-bottom: 0.25rem; }
+        .mb-2 { margin-bottom: 0.5rem; }
+        .mb-3 { margin-bottom: 1rem; }
+        .mb-4 { margin-bottom: 1.5rem; }
+        .mt-1 { margin-top: 0.25rem; }
+        .mt-2 { margin-top: 0.5rem; }
+        .mt-3 { margin-top: 1rem; }
+        .mt-4 { margin-top: 1.5rem; }
+        .mt-5 { margin-top: 3rem; }
+        .p-0 { padding: 0; }
+        .p-1 { padding: 0.25rem; }
+        .p-2 { padding: 0.5rem; }
+        .p-3 { padding: 1rem; }
+        .p-4 { padding: 1.5rem; }
+        .p-5 { padding: 3rem; }
+        .py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+        .py-3 { padding-top: 1rem; padding-bottom: 1rem; }
+        .py-4 { padding-top: 1.5rem; padding-bottom: 1.5rem; }
+        .py-5 { padding-top: 3rem; padding-bottom: 3rem; }
+        .px-2 { padding-left: 0.5rem; padding-right: 0.5rem; }
+        .px-3 { padding-left: 1rem; padding-right: 1rem; }
+        .gap-1 { gap: 0.25rem; }
+        .gap-2 { gap: 0.5rem; }
+        .gap-3 { gap: 1rem; }
+        
+        /* ===== BADGES ===== */
+        .badge {
+            display: inline-block;
+            padding: 0.25em 0.6em;
+            font-size: 0.75rem;
+            font-weight: 600;
+            line-height: 1;
+            text-align: center;
+            white-space: nowrap;
+            vertical-align: baseline;
+            border-radius: var(--badge-radius);
+        }
+        .badge.bg-primary { background-color: var(--primary-color); color: white; }
+        .badge.bg-success { background-color: var(--success); color: white; }
+        .badge.bg-warning { background-color: var(--warning); color: #212529; }
+        .badge.bg-danger { background-color: var(--danger); color: white; }
+        .badge.bg-info { background-color: var(--info); color: white; }
+        .badge.bg-secondary { background-color: #6c757d; color: white; }
+        .badge.bg-dark { background-color: #343a40; color: white; }
+        .badge.bg-light { background-color: #f8f9fa; color: #212529; }
+        .badge.fs-6 { font-size: 1rem; }
+        
+        /* ===== ALERTAS ===== */
+        .alert {
+            position: relative;
+            padding: 0.75rem 1.25rem;
+            margin-bottom: 1rem;
+            border: 1px solid transparent;
+            border-radius: var(--alert-radius);
+        }
+        .alert-info {
+            color: #0c5460;
+            background-color: #d1ecf1;
+            border-color: #bee5eb;
+        }
+        .alert-success {
+            color: #155724;
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+        .alert-warning {
+            color: #856404;
+            background-color: #fff3cd;
+            border-color: #ffeeba;
+        }
+        .alert-danger {
+            color: #721c24;
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+        .alert-dismissible {
+            padding-right: 4rem;
+        }
+        .alert-dismissible .btn-close {
+            position: absolute;
+            top: 0;
+            right: 0;
+            padding: 0.75rem 1.25rem;
+            color: inherit;
+            background: transparent;
+            border: none;
+            font-size: 1.25rem;
+            cursor: pointer;
+        }
+        
+        /* ===== TABLAS ===== */
+        .table {
+            width: 100%;
+            margin-bottom: 1rem;
+            background-color: transparent;
+            border-collapse: collapse;
+        }
+        .table th,
+        .table td {
+            padding: 0.75rem;
+            vertical-align: top;
+            border-top: 1px solid #dee2e6;
+        }
+        .table thead th {
+            vertical-align: bottom;
+            border-bottom: 2px solid #dee2e6;
+            background-color: #f8f9fa;
+            font-weight: 600;
+        }
+        .table.table-bordered {
+            border: 1px solid #dee2e6;
+        }
+        .table.table-bordered th,
+        .table.table-bordered td {
+            border: 1px solid #dee2e6;
+        }
+        .table.table-hover tbody tr:hover {
+            background-color: rgba(0,0,0,0.04);
+        }
+        .table.table-striped tbody tr:nth-of-type(odd) {
+            background-color: rgba(0,0,0,0.03);
+        }
+        .table-sm th,
+        .table-sm td {
+            padding: 0.3rem;
+        }
+        .table-borderless th,
+        .table-borderless td,
+        .table-borderless thead th {
+            border: none;
+        }
+        
+        /* ===== TEXTOS ===== */
+        .text-muted { color: var(--text-muted); }
+        .text-white { color: white; }
+        .text-primary { color: var(--primary-color); }
+        .text-success { color: var(--success); }
+        .text-warning { color: #856404; }
+        .text-danger { color: var(--danger); }
+        .text-dark { color: var(--text-dark); }
+        .text-center { text-align: center; }
+        .text-end { text-align: right; }
+        .fw-bold { font-weight: 700; }
+        .fw-normal { font-weight: 400; }
+        .fw-semibold { font-weight: 600; }
+        .small { font-size: 0.875rem; }
+        .fs-1 { font-size: 2.5rem; }
+        .lead { font-size: 1.15rem; font-weight: 300; }
+        .h3 { font-size: 1.75rem; font-weight: 500; }
+        .h4 { font-size: 1.5rem; font-weight: 500; }
+        .h5 { font-size: 1.25rem; font-weight: 500; }
+        .h6 { font-size: 1rem; font-weight: 500; }
+        h1, h2, h3, h4, h5, h6 {
+            margin-top: 0;
+            margin-bottom: 0.5rem;
+        }
+        p {
+            margin-top: 0;
+            margin-bottom: 1rem;
+        }
+        
+        /* ===== FORMULARIOS ===== */
+        .form-control, .form-select {
+            display: block;
+            width: 100%;
+            padding: 0.375rem 0.75rem;
+            font-size: 1rem;
+            line-height: 1.5;
+            color: #495057;
+            background-color: #fff;
+            background-clip: padding-box;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            transition: border-color 0.15s ease;
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: var(--primary-color);
+            outline: 0;
+            box-shadow: 0 0 0 0.2rem rgba(4, 125, 125, 0.25);
+        }
+        .form-control-sm, .form-select-sm {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+        }
+        .form-label {
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+        .form-text {
+            display: block;
+            margin-top: 0.25rem;
+            font-size: 0.875rem;
+            color: #6c757d;
+        }
+        .form-check {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.25rem;
+        }
+        .form-check-input {
+            width: 1em;
+            height: 1em;
+            margin-top: 0;
+        }
+        .form-check-label {
+            font-size: 0.9rem;
+        }
+        .mb-3 {
+            margin-bottom: 1rem;
+        }
+        
+        /* ===== LISTAS ===== */
+        .list-unstyled {
+            padding-left: 0;
+            list-style: none;
+        }
+        .list-group {
+            display: flex;
+            flex-direction: column;
+            padding-left: 0;
+            margin-bottom: 0;
+        }
+        .list-group-item {
+            position: relative;
+            display: block;
+            padding: 0.75rem 1.25rem;
+            margin-bottom: -1px;
+            background-color: #fff;
+            border: 1px solid rgba(0,0,0,0.125);
+        }
+        .list-group-item:first-child {
+            border-top-left-radius: 4px;
+            border-top-right-radius: 4px;
+        }
+        .list-group-item:last-child {
+            margin-bottom: 0;
+            border-bottom-left-radius: 4px;
+            border-bottom-right-radius: 4px;
+        }
+        .list-group-item-success {
+            background-color: #d4edda;
+        }
+        .list-group-item-warning {
+            background-color: #fff3cd;
+        }
+        .list-group-item-danger {
+            background-color: #f8d7da;
+        }
+        .list-group-flush .list-group-item {
+            border-right: 0;
+            border-left: 0;
+            border-radius: 0;
+        }
+        .list-group-flush .list-group-item:first-child {
+            border-top: 0;
+        }
+        .list-group-flush .list-group-item:last-child {
+            border-bottom: 0;
+        }
+        
+        /* ===== UTILIDADES ===== */
+        .border { border: 1px solid #dee2e6; }
+        .border-0 { border: none !important; }
+        .border-bottom { border-bottom: 1px solid #dee2e6; }
+        .border-top { border-top: 1px solid #dee2e6; }
+        .rounded { border-radius: 6px; }
+        .rounded-circle { border-radius: 50%; }
+        .shadow-sm { box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        .bg-light { background-color: #f8f9fa; }
+        .bg-white { background-color: #fff; }
+        .bg-primary { background-color: var(--primary-color); }
+        .bg-success { background-color: var(--success); }
+        .bg-warning { background-color: var(--warning); }
+        .bg-info { background-color: var(--info); }
+        .bg-danger { background-color: var(--danger); }
+        .bg-secondary { background-color: #6c757d; }
+        .bg-dark { background-color: #343a40; }
+        .bg-transparent { background-color: transparent; }
+        .img-fluid { max-width: 100%; height: auto; }
+        .overflow-hidden { overflow: hidden; }
+        .overflow-y-auto { overflow-y: auto; }
+        .position-relative { position: relative; }
+        .position-absolute { position: absolute; }
+        .top-0 { top: 0; }
+        .end-0 { right: 0; }
+        
+        /* ===== NAV / BREADCRUMB ===== */
+        .breadcrumb {
+            display: flex;
+            flex-wrap: wrap;
+            padding: 0.75rem 1rem;
+            margin-bottom: 1rem;
+            list-style: none;
+            background-color: #e9ecef;
+            border-radius: 4px;
+        }
+        .breadcrumb-item + .breadcrumb-item {
+            padding-left: 0.5rem;
+        }
+        .breadcrumb-item + .breadcrumb-item::before {
+            display: inline-block;
+            padding-right: 0.5rem;
+            color: #6c757d;
+            content: "/";
+        }
+        .breadcrumb-item a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+        .breadcrumb-item.active {
+            color: #6c757d;
+        }
+        
+        /* ===== DROPDOWN ===== */
+        .dropdown {
+            position: relative;
+            display: inline-block;
+        }
+        .dropdown-menu {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            z-index: 1000;
+            display: none;
+            min-width: 10rem;
+            padding: 0.5rem 0;
+            margin: 0.125rem 0 0;
+            font-size: 1rem;
+            color: #212529;
+            text-align: left;
+            background-color: #fff;
+            background-clip: padding-box;
+            border: 1px solid rgba(0,0,0,0.15);
+            border-radius: 4px;
+        }
+        .dropdown-menu.show {
+            display: block;
+        }
+        .dropdown-item {
+            display: block;
+            width: 100%;
+            padding: 0.25rem 1.5rem;
+            clear: both;
+            font-weight: 400;
+            color: #212529;
+            text-align: inherit;
+            white-space: nowrap;
+            background-color: transparent;
+            border: 0;
+            text-decoration: none;
+        }
+        .dropdown-item:hover {
+            background-color: #f8f9fa;
+        }
+        .dropdown-toggle::after {
+            display: inline-block;
+            margin-left: 0.255em;
+            vertical-align: 0.255em;
+            content: "";
+            border-top: 0.3em solid;
+            border-right: 0.3em solid transparent;
+            border-bottom: 0;
+            border-left: 0.3em solid transparent;
+        }
+        
+        /* ===== MODAL ===== */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 1050;
+            display: none;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            outline: 0;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal.show {
+            display: block;
+        }
+        .modal-dialog {
+            position: relative;
+            width: auto;
+            margin: 1.75rem auto;
+            max-width: 500px;
+        }
+        .modal-dialog.modal-lg {
+            max-width: 800px;
+        }
+        .modal-content {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            pointer-events: auto;
+            background-color: #fff;
+            background-clip: padding-box;
+            border: 1px solid rgba(0,0,0,0.2);
+            border-radius: 8px;
+            outline: 0;
+        }
+        .modal-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            padding: 1rem;
+            border-bottom: 1px solid #dee2e6;
+            border-top-left-radius: 8px;
+            border-top-right-radius: 8px;
+        }
+        .modal-body {
+            position: relative;
+            flex: 1 1 auto;
+            padding: 1rem;
+        }
+        .modal-footer {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding: 0.75rem;
+            border-top: 1px solid #dee2e6;
+        }
+        .modal-title {
+            margin-bottom: 0;
+            line-height: 1.5;
+        }
+        .btn-close {
+            background: transparent;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+            color: #000;
+            opacity: 0.5;
+        }
+        .btn-close:hover {
+            opacity: 0.75;
+        }
+        
+        /* ===== CODE ===== */
+        code {
+            font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+            padding: 0.2em 0.4em;
+            font-size: 87.5%;
+            color: #e83e8c;
+            background-color: #f8f9fa;
+            border-radius: 3px;
+        }
+
+        {% block extra_css %}{% endblock %}
+    </style>
+</head>
+<body>
+    <!-- Header delgado -->
+    <header class="app-header">
+        <button class="sidebar-toggle" id="sidebarToggle">
+            <i class="bi bi-list"></i>
+        </button>
+        
+        <div class="logo-container">
+            <a href="/" class="d-flex align-items-center text-decoration-none">
+                <div class="logo-placeholder">P</div>
+            </a>
+            {% block header_title %}
+            {% endblock %}
+        </div>
+        
+        <div class="ms-auto d-flex align-items-center">
+            {% block header_actions %}
+            {% if request.current_user %}
+                <span class="text-success me-2 small d-none d-md-inline">
+                    <i class="bi bi-person-circle"></i>
+                    {{ request.current_user.username }}
+                </span>
+                <a href="{% url 'intelligence:logout' %}?next={{ request.path }}" class="btn btn-outline-danger btn-sm me-2">
+                    <i class="bi bi-box-arrow-right"></i> Cerrar sesión
+                </a>
+            {% else %}
+                <button onclick="document.getElementById('login-modal').style.display='flex'" class="btn btn-outline-success btn-sm me-2" style="border:none;background:none;cursor:pointer;">
+                    <i class="bi bi-box-arrow-in-right"></i> Iniciar sesión
+                </button>
+            {% endif %}
+            {% if user.is_staff %}
+            <a href="/admin/" class="btn btn-outline-secondary btn-sm me-2" target="_blank">
+                <i class="bi bi-gear"></i> Admin
+            </a>
+            {% endif %}
+            {% endblock %}
+        </div>
+    </header>
+    
+    <!-- Barra lateral delgada -->
+    {% block sidebar %}
+    <nav class="app-sidebar" id="appSidebar">
+        <ul class="sidebar-menu">
+            <li>
+                <a href="/" class="{% if request.path == '/' %}active{% endif %}">
+                    <i class="bi bi-speedometer2"></i>
+                    <span>Dashboard</span>
+                </a>
+            </li>
+            <li>
+                <a href="/fuentes-web/" class="{% if '/fuentes-web/' in request.path %}active{% endif %}">
+                    <i class="bi bi-globe"></i>
+                    <span>Fuentes Web</span>
+                </a>
+            </li>
+            <li>
+                <a href="/capturas/" class="{% if '/capturas/' in request.path %}active{% endif %}">
+                    <i class="bi bi-camera"></i>
+                    <span>Capturas</span>
+                </a>
+            </li>
+            <li>
+                <a href="/ingestas/" class="{% if '/ingestas/' in request.path %}active{% endif %}">
+                    <i class="bi bi-database"></i>
+                    <span>Ingestas</span>
+                </a>
+            </li>
+            <li>
+                <a href="/ingestas/propiedades/" class="{% if '/ingestas/propiedades/' in request.path %}active{% endif %}">
+                    <i class="bi bi-house-door"></i>
+                    <span>Propiedades</span>
+                </a>
+            </li>
+            <li class="has-submenu {% if '/prospects/' in request.path %}active{% endif %}">
+                <a href="#">
+                    <i class="bi bi-binoculars-fill"></i>
+                    <span>Prospección</span>
+                    <i class="bi bi-chevron-down ms-auto"></i>
+                </a>
+                <ul class="submenu">
+                    <li>
+                        <a href="/prospects/capture/" class="{% if '/prospects/capture/' in request.path %}active{% endif %}">
+                            <i class="bi bi-camera-fill"></i>
+                            <span>Captura</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/prospects/" class="{% if '/prospects/' in request.path and '/capture/' not in request.path %}active{% endif %}">
+                            <i class="bi bi-list-ul"></i>
+                            <span>Lista de Prospectos</span>
+                        </a>
+                    </li>
+                </ul>
+            </li>
+            <li class="has-submenu {% if '/propifai/' in request.path %}active{% endif %}">
+                <a href="#">
+                    <i class="bi bi-house-door-fill"></i>
+                    <span>Propiedades Propify</span>
+                    <i class="bi bi-chevron-down ms-auto"></i>
+                </a>
+                <ul class="submenu">
+                    <li>
+                        <a href="/propifai/dashboard/calidad/" class="{% if '/propifai/dashboard/calidad/' in request.path %}active{% endif %}">
+                            <i class="bi bi-bar-chart-line"></i>
+                            <span>Análisis de Cartera</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/propifai/propiedades/" class="{% if '/propifai/propiedades/' in request.path and '/dashboard/calidad/' not in request.path %}active{% endif %}">
+                            <i class="bi bi-list-ul"></i>
+                            <span>Lista de Propiedades</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/propifai/dashboard/visitas/" class="{% if '/propifai/dashboard/visitas/' in request.path %}active{% endif %}">
+                            <i class="bi bi-calendar-check"></i>
+                            <span>Dashboard de Visitas</span>
+                        </a>
+                    </li>
+                </ul>
+            </li>
+            <li>
+                <a href="/requerimientos/lista/" class="{% if '/requerimientos/' in request.path %}active{% endif %}">
+                    <i class="bi bi-clipboard-check"></i>
+                    <span>Requerimientos</span>
+                </a>
+            </li>
+            <li class="has-submenu {% if '/matching/' in request.path %}active{% endif %}">
+                <a href="#">
+                    <i class="bi bi-lightning-charge-fill"></i>
+                    <span>Matching</span>
+                    <i class="bi bi-chevron-down ms-auto"></i>
+                </a>
+                <ul class="submenu">
+                    <li>
+                        <a href="/matching/masivo/" class="{% if '/matching/masivo/' in request.path %}active{% endif %}">
+                            <i class="bi bi-list-ul"></i>
+                            <span>Masivo</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/matching/calendar/" class="{% if '/matching/calendar/' in request.path %}active{% endif %}">
+                            <i class="bi bi-calendar3"></i>
+                            <span>Calendario</span>
+                        </a>
+                    </li>
+                    <li class="has-submenu {% if '/matching/propuestas/' in request.path %}active{% endif %}">
+                        <a href="#">
+                            <i class="bi bi-whatsapp"></i>
+                            <span>Propuestas</span>
+                            <i class="bi bi-chevron-down ms-auto"></i>
+                        </a>
+                        <ul class="submenu" style="padding-left:20px;">
+                            <li>
+                                <a href="/matching/propuestas/dashboard/" class="{% if '/matching/propuestas/dashboard/' in request.path %}active{% endif %}">
+                                    <i class="bi bi-speedometer2"></i>
+                                    <span>Dashboard</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+                </ul>
+            </li>
+            <li>
+                <a href="/acm/analisis/" class="{% if '/acm/' in request.path %}active{% endif %}">
+                    <i class="bi bi-graph-up"></i>
+                    <span>Análisis Comparativo (ACM)</span>
+                </a>
+            </li>
+            <li class="has-submenu {% if '/intelligence/' in request.path %}active{% endif %}">
+                <a href="#">
+                    <i class="bi bi-cpu"></i>
+                    <span>Intelligence Layer</span>
+                    <i class="bi bi-chevron-down ms-auto"></i>
+                </a>
+                <ul class="submenu">
+                    <li>
+                        <a href="/intelligence/dashboard/" class="{% if request.path == '/intelligence/' or request.path == '/intelligence/dashboard/' %}active{% endif %}">
+                            <i class="bi bi-speedometer2"></i>
+                            <span>Dashboard IA</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/skills/dashboard/" class="{% if '/intelligence/skills/' in request.path %}active{% endif %}">
+                            <i class="bi bi-lightning-charge-fill"></i>
+                            <span>Skills</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/collections/" class="{% if '/intelligence/collections/' in request.path %}active{% endif %}">
+                            <i class="bi bi-collection"></i>
+                            <span>Colecciones RAG</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/intent-evaluation/" class="{% if '/intelligence/intent-evaluation/' in request.path %}active{% endif %}">
+                            <i class="bi bi-bullseye"></i>
+                            <span>Evaluaci&oacute;n de Intenciones</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/chat-web/" class="{% if '/intelligence/chat-web/' in request.path %}active{% endif %}">
+                            <i class="bi bi-chat-dots"></i>
+                            <span>Chat Asistente</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/chat-workflows/manage/" class="{% if '/intelligence/chat-workflows/' in request.path %}active{% endif %}">
+                            <i class="bi bi-arrow-repeat"></i>
+                            <span>Flujos Conversacionales</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/episodic-memory/" class="{% if '/intelligence/episodic-memory/' in request.path %}active{% endif %}">
+                            <i class="bi bi-memory"></i>
+                            <span>Memoria Epis&oacute;dica</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/profiles/" class="{% if '/intelligence/profiles/' in request.path %}active{% endif %}">
+                            <i class="bi bi-person-badge"></i>
+                            <span>Perfiles de IA</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/users/" class="{% if '/intelligence/users/' in request.path %}active{% endif %}">
+                            <i class="bi bi-people"></i>
+                            <span>Usuarios</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/roles/" class="{% if '/intelligence/roles/' in request.path %}active{% endif %}">
+                            <i class="bi bi-shield-lock"></i>
+                            <span>Roles</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/simulator/" class="{% if '/intelligence/simulator/' in request.path %}active{% endif %}">
+                            <i class="bi bi-robot"></i>
+                            <span>Simulador</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/stats/" class="{% if '/intelligence/stats/' in request.path %}active{% endif %}">
+                            <i class="bi bi-bar-chart-line"></i>
+                            <span>Estad&iacute;sticas</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/logs/" class="{% if '/intelligence/logs/' in request.path %}active{% endif %}">
+                            <i class="bi bi-journal-text"></i>
+                            <span>Logs de Actividad</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/config/" class="{% if '/intelligence/config/' in request.path %}active{% endif %}">
+                            <i class="bi bi-gear"></i>
+                            <span>Configuraciones</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/errors/" class="{% if '/intelligence/errors/' in request.path %}active{% endif %}">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            <span>Errores</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/intelligence/tests/" class="{% if '/intelligence/tests/' in request.path %}active{% endif %}">
+                            <i class="bi bi-flask"></i>
+                            <span>Tests</span>
+                        </a>
+                    </li>
+                </ul>
+            </li>
+            <li class="has-submenu {% if '/meta-ads/' in request.path %}active{% endif %}">
+                <a href="#">
+                    <i class="bi bi-megaphone-fill"></i>
+                    <span>Meta Ads</span>
+                    <i class="bi bi-chevron-down ms-auto"></i>
+                </a>
+                <ul class="submenu">
+                    <li>
+                        <a href="/meta-ads/dashboard/exacto/" class="{% if '/meta-ads/dashboard/' in request.path or '/meta-ads/dashboard/exacto/' in request.path %}active{% endif %}">
+                            <i class="bi bi-speedometer"></i>
+                            <span>Dashboard Principal</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/meta-ads/analisis/historico/" class="{% if '/meta-ads/analisis/historico/' in request.path %}active{% endif %}">
+                            <i class="bi bi-bar-chart-line"></i>
+                            <span>Análisis Histórico</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/meta-ads/campañas/" class="{% if '/meta-ads/campañas/' in request.path and '/dashboard/' not in request.path and '/dashboard/rediseno/' not in request.path and '/dashboard/exacto/' not in request.path and '/analisis/' not in request.path %}active{% endif %}">
+                            <i class="bi bi-list-ul"></i>
+                            <span>Lista de Campañas</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/meta-ads/sincronizar/" class="{% if '/meta-ads/sincronizar/' in request.path %}active{% endif %}">
+                            <i class="bi bi-arrow-repeat"></i>
+                            <span>Sincronizar Datos</span>
+                        </a>
+                    </li>
+                </ul>
+            </li>
+            <li>
+                <a href="/analisis-crm/" class="{% if '/analisis-crm/' in request.path %}active{% endif %}">
+                    <i class="bi bi-people-fill"></i>
+                    <span>Leads CRM</span>
+                </a>
+            </li>
+            <li>
+                <a href="/eventos/" class="{% if '/eventos/' in request.path %}active{% endif %}">
+                    <i class="bi bi-calendar-event"></i>
+                    <span>Análisis de Eventos</span>
+                </a>
+            </li>
+            <li>
+                <a href="#">
+                    <i class="bi bi-search"></i>
+                    <span>Descubrimiento</span>
+                </a>
+            </li>
+            <li>
+                <a href="#">
+                    <i class="bi bi-gear"></i>
+                    <span>Configuración</span>
+                </a>
+            </li>
+            <li>
+                <a href="#">
+                    <i class="bi bi-question-circle"></i>
+                    <span>Ayuda</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+    {% endblock %}
+    
+    <!-- Contenido principal -->
+    <main class="app-content" id="appContent">
+        {% block content %}
+        <!-- El contenido específico de cada página irá aquí -->
+        {% endblock %}
+    </main>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Toggle sidebar en móviles
+        document.getElementById('sidebarToggle')?.addEventListener('click', function() {
+            var sidebar = document.getElementById('appSidebar');
+            var content = document.getElementById('appContent');
+            sidebar.classList.toggle('mobile-open');
+            if (window.innerWidth > 768) {
+                sidebar.classList.toggle('collapsed');
+                content.classList.toggle('expanded');
+            }
+        });
+        
+        // Submenús
+        document.querySelectorAll('.has-submenu > a').forEach(function(link) {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                this.parentElement.classList.toggle('open');
+            });
+        });
+        
+        {% block extra_js %}{% endblock %}
+    </script>
+
+    {% if not request.current_user %}
+    <!-- LOGIN MODAL -->
+    <div id="login-modal" class="auth-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;justify-content:center;align-items:center;">
+        <div style="position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);" onclick="document.getElementById('login-modal').style.display='none'"></div>
+        <div style="position:relative;background:var(--bg-primary,#1e1e2e);border-radius:12px;padding:28px;width:90%;max-width:400px;box-shadow:0 8px 32px rgba(0,0,0,0.4);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+                <h3 style="margin:0;color:var(--text-primary,#e6edf3);">🔑 Iniciar Sesión</h3>
+                <button onclick="document.getElementById('login-modal').style.display='none'" style="background:none;border:none;color:var(--text-secondary,#8b949e);font-size:24px;cursor:pointer;">&times;</button>
+            </div>
+            <form method="POST" action="{% url 'intelligence:login' %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.path }}">
+                <div style="margin-bottom:14px;">
+                    <label style="display:block;margin-bottom:4px;font-size:13px;color:var(--text-secondary,#8b949e);">Usuario</label>
+                    <input type="text" name="username" placeholder="Nombre de usuario" required style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border-color,#30363d);background:var(--bg-secondary,#161b22);color:var(--text-primary,#e6edf3);font-size:14px;box-sizing:border-box;">
+                </div>
+                <div style="margin-bottom:20px;">
+                    <label style="display:block;margin-bottom:4px;font-size:13px;color:var(--text-secondary,#8b949e);">Contraseña</label>
+                    <input type="password" name="password" placeholder="Contraseña" required style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border-color,#30363d);background:var(--bg-secondary,#161b22);color:var(--text-primary,#e6edf3);font-size:14px;box-sizing:border-box;">
+                </div>
+                <div style="display:flex;justify-content:flex-end;gap:8px;">
+                    <button type="button" onclick="document.getElementById('login-modal').style.display='none'" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border-color,#30363d);background:transparent;color:var(--text-primary,#e6edf3);cursor:pointer;font-size:13px;">Cancelar</button>
+                    <button type="submit" style="padding:8px 16px;border-radius:8px;border:none;background:#238636;color:#fff;cursor:pointer;font-size:13px;font-weight:500;">Ingresar</button>
+                </div>
+            </form>
+            <div style="margin-top:14px;text-align:center;font-size:13px;color:var(--text-secondary,#8b949e);">
+                ¿No tienes cuenta?
+                <a href="#" onclick="document.getElementById('login-modal').style.display='none';document.getElementById('register-modal').style.display='flex';return false;" style="color:#58a6ff;">Regístrate aquí</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- REGISTER MODAL -->
+    <div id="register-modal" class="auth-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;justify-content:center;align-items:center;">
+        <div style="position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);" onclick="document.getElementById('register-modal').style.display='none'"></div>
+        <div style="position:relative;background:var(--bg-primary,#1e1e2e);border-radius:12px;padding:28px;width:90%;max-width:400px;box-shadow:0 8px 32px rgba(0,0,0,0.4);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+                <h3 style="margin:0;color:var(--text-primary,#e6edf3);">📝 Crear Cuenta</h3>
+                <button onclick="document.getElementById('register-modal').style.display='none'" style="background:none;border:none;color:var(--text-secondary,#8b949e);font-size:24px;cursor:pointer;">&times;</button>
+            </div>
+            <form method="POST" action="{% url 'intelligence:register' %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.path }}">
+                <div style="margin-bottom:14px;">
+                    <label style="display:block;margin-bottom:4px;font-size:13px;color:var(--text-secondary,#8b949e);">Nombre de usuario</label>
+                    <input type="text" name="username" placeholder="Ej: juanperez" required style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border-color,#30363d);background:var(--bg-secondary,#161b22);color:var(--text-primary,#e6edf3);font-size:14px;box-sizing:border-box;">
+                </div>
+                <div style="margin-bottom:14px;">
+                    <label style="display:block;margin-bottom:4px;font-size:13px;color:var(--text-secondary,#8b949e);">Contraseña</label>
+                    <input type="password" name="password" placeholder="Mínimo 6 caracteres" required minlength="6" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border-color,#30363d);background:var(--bg-secondary,#161b22);color:var(--text-primary,#e6edf3);font-size:14px;box-sizing:border-box;">
+                </div>
+                <div style="margin-bottom:20px;">
+                    <label style="display:block;margin-bottom:4px;font-size:13px;color:var(--text-secondary,#8b949e);">Teléfono (opcional)</label>
+                    <input type="text" name="phone" placeholder="Ej: +51999888777" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border-color,#30363d);background:var(--bg-secondary,#161b22);color:var(--text-primary,#e6edf3);font-size:14px;box-sizing:border-box;">
+                </div>
+                <div style="display:flex;justify-content:flex-end;gap:8px;">
+                    <button type="button" onclick="document.getElementById('register-modal').style.display='none'" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border-color,#30363d);background:transparent;color:var(--text-primary,#e6edf3);cursor:pointer;font-size:13px;">Cancelar</button>
+                    <button type="submit" style="padding:8px 16px;border-radius:8px;border:none;background:#238636;color:#fff;cursor:pointer;font-size:13px;font-weight:500;">Crear Cuenta</button>
+                </div>
+            </form>
+            <div style="margin-top:14px;text-align:center;font-size:13px;color:var(--text-secondary,#8b949e);">
+                ¿Ya tienes cuenta?
+                <a href="#" onclick="document.getElementById('register-modal').style.display='none';document.getElementById('login-modal').style.display='flex';return false;" style="color:#58a6ff;">Inicia sesión</a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</body>
+</html>

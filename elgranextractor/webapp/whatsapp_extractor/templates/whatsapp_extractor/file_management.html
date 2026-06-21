@@ -1,0 +1,415 @@
+{% extends "intelligence/base/base.html" %}
+{% load static %}
+
+{% block title %}Archivos — Extractor WhatsApp{% endblock %}
+
+{% block active_section %}files{% endblock %}
+
+{% block page_title %}📁 Archivos de Extracción{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --we-bg: #0d1117;
+        --we-bg-secondary: #161b22;
+        --we-bg-tertiary: #21262d;
+        --we-border: #30363d;
+        --we-text-primary: #c9d1d9;
+        --we-text-secondary: #8b949e;
+        --we-accent: #58a6ff;
+        --we-accent-hover: #1f6feb;
+        --we-green: #238636;
+        --we-green-bg: rgba(35, 134, 54, 0.15);
+        --we-red: #da3633;
+        --we-red-bg: rgba(218, 54, 51, 0.15);
+        --we-orange: #bb8009;
+        --we-orange-bg: rgba(187, 128, 9, 0.15);
+        --we-purple: #8957e5;
+        --we-radius: 8px;
+        --we-radius-sm: 6px;
+        --we-transition: all 0.2s ease;
+    }
+
+    /* ===== Contenedor ===== */
+    .we-container { max-width: 1200px; margin: 0 auto; }
+
+    /* ===== Header ===== */
+    .we-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+        gap: 12px;
+        padding: 0 0 20px;
+        border-bottom: 1px solid var(--we-border);
+    }
+    .we-header h2 { margin: 0; font-size: 20px; font-weight: 600; color: var(--we-accent); }
+    .we-header-actions { display: flex; align-items: center; gap: 12px; }
+
+    /* ===== KPI Cards ===== */
+    .we-kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 12px;
+        margin-bottom: 24px;
+    }
+    .we-kpi {
+        background: #161b22;
+        border: 1px solid var(--we-border);
+        border-radius: var(--we-radius);
+        padding: 16px 20px;
+    }
+    .we-kpi-accent-blue .we-kpi-value { color: var(--we-accent); }
+    .we-kpi-accent-green .we-kpi-value { color: #3fb950; }
+    .we-kpi-accent-orange .we-kpi-value { color: #d29922; }
+    .we-kpi-value {
+        font-size: 24px;
+        font-weight: 700;
+        color: var(--we-text-primary);
+        line-height: 1.2;
+    }
+    .we-kpi-label {
+        font-size: 12px;
+        color: var(--we-text-secondary);
+        margin-top: 4px;
+    }
+
+    /* ===== Cards ===== */
+    .we-card {
+        background: #161b22;
+        border: 1px solid var(--we-border);
+        border-radius: var(--we-radius);
+        margin-bottom: 16px;
+    }
+    .we-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 14px 20px;
+        border-bottom: 1px solid var(--we-border);
+        background: #21262d;
+        border-radius: var(--we-radius) var(--we-radius) 0 0;
+    }
+    .we-card-title { margin: 0; font-size: 15px; font-weight: 600; color: var(--we-text-primary); }
+    .we-card-body { padding: 20px; }
+
+    /* ===== Tablas ===== */
+    .we-table { width: 100%; border-collapse: collapse; }
+    .we-table th {
+        text-align: left;
+        padding: 10px 12px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--we-text-secondary);
+        border-bottom: 2px solid var(--we-border);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        background: #21262d;
+    }
+    .we-table td {
+        padding: 10px 12px;
+        font-size: 14px;
+        color: var(--we-text-primary);
+        border-bottom: 1px solid var(--we-border);
+    }
+    .we-table tbody tr:hover td { background: rgba(88, 166, 255, 0.04); }
+
+    /* Scrollbar */
+    .we-card-body ::-webkit-scrollbar,
+    div[style*="overflow-x:auto"]::-webkit-scrollbar {
+        height: 8px; width: 8px;
+    }
+    .we-card-body ::-webkit-scrollbar-track,
+    div[style*="overflow-x:auto"]::-webkit-scrollbar-track {
+        background: var(--we-bg-tertiary);
+        border-radius: 4px;
+    }
+    .we-card-body ::-webkit-scrollbar-thumb,
+    div[style*="overflow-x:auto"]::-webkit-scrollbar-thumb {
+        background: var(--we-border);
+        border-radius: 4px;
+    }
+    .we-card-body ::-webkit-scrollbar-thumb:hover,
+    div[style*="overflow-x:auto"]::-webkit-scrollbar-thumb:hover {
+        background: var(--we-text-secondary);
+    }
+
+    /* ===== Badges ===== */
+    .we-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 500;
+        gap: 4px;
+    }
+    .we-badge-green { background: rgba(35, 134, 54, 0.15); color: #3fb950; border: 1px solid rgba(63, 185, 80, 0.3); }
+    .we-badge-red { background: rgba(218, 54, 51, 0.15); color: #f85149; border: 1px solid rgba(248, 81, 73, 0.3); }
+    .we-badge-orange { background: rgba(187, 128, 9, 0.15); color: #d29922; border: 1px solid rgba(210, 153, 34, 0.3); }
+    .we-badge-blue { background: rgba(88, 166, 255, 0.15); color: var(--we-accent); border: 1px solid rgba(88, 166, 255, 0.3); }
+    .we-badge-gray { background: rgba(139, 148, 158, 0.15); color: var(--we-text-secondary); border: 1px solid rgba(139, 148, 158, 0.3); }
+
+    /* ===== Botones ===== */
+    .we-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 14px;
+        border-radius: var(--we-radius);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--we-text-primary);
+        background: #30363d;
+        border: 1px solid var(--we-border);
+        cursor: pointer;
+        text-decoration: none;
+        transition: var(--we-transition);
+    }
+    .we-btn:hover {
+        background: rgba(255,255,255,0.05);
+        border-color: var(--we-text-secondary);
+        color: var(--we-text-primary);
+    }
+    .we-btn-primary {
+        background: #238636;
+        border-color: rgba(35, 134, 54, 0.3);
+        color: #fff;
+    }
+    .we-btn-primary:hover { background: #2ea043; border-color: rgba(35, 134, 54, 0.5); color: #fff; }
+    .we-btn-sm { padding: 4px 10px; font-size: 12px; }
+
+    /* ===== Empty State ===== */
+    .we-empty { text-align: center; padding: 60px 20px; color: var(--we-text-secondary); }
+    .we-empty h3 { font-size: 20px; margin-bottom: 8px; color: var(--we-text-primary); }
+    .we-empty p { font-size: 14px; margin: 0; }
+
+    /* ===== Texto ===== */
+    .we-text-small { font-size: 12px; color: var(--we-text-secondary); }
+    .we-text-mono { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; }
+    .we-link { color: var(--we-accent); text-decoration: none; font-weight: 500; }
+    .we-link:hover { color: var(--we-accent-hover); text-decoration: underline; }
+
+    /* ===== Status Dots ===== */
+    .we-status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+    .we-status-dot-green { background: var(--we-green); }
+    .we-status-dot-red { background: var(--we-red); }
+    .we-status-dot-orange { background: var(--we-orange); }
+    .we-status-dot-gray { background: var(--we-text-secondary); }
+
+    /* ===== Search bar ===== */
+    .we-search {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+    .we-search input {
+        padding: 6px 12px;
+        border-radius: var(--we-radius);
+        border: 1px solid var(--we-border);
+        background: var(--we-bg);
+        color: var(--we-text-primary);
+        font-size: 13px;
+        width: 200px;
+    }
+    .we-search input:focus {
+        outline: none;
+        border-color: var(--we-accent);
+        box-shadow: 0 0 0 3px rgba(88,166,255,0.15);
+    }
+
+    /* ===== Filter Buttons ===== */
+    .we-filter-group {
+        display: flex;
+        gap: 4px;
+    }
+    .we-filter-btn {
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        border: 1px solid var(--we-border);
+        background: transparent;
+        color: var(--we-text-secondary);
+        cursor: pointer;
+        text-decoration: none;
+    }
+    .we-filter-btn:hover {
+        border-color: var(--we-accent);
+        color: var(--we-accent);
+    }
+    .we-filter-btn.active {
+        background: #238636;
+        border-color: rgba(35, 134, 54, 0.3);
+        color: #fff;
+    }
+
+    /* ===== Pagination ===== */
+    .we-pagination {
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 20px;
+    }
+    .we-pagination a, .we-pagination span {
+        padding: 6px 12px;
+        border-radius: var(--we-radius);
+        font-size: 13px;
+        color: var(--we-text-primary);
+        background: #21262d;
+        border: 1px solid var(--we-border);
+        text-decoration: none;
+    }
+    .we-pagination a:hover {
+        background: var(--we-bg-secondary);
+        border-color: var(--we-accent);
+        color: var(--we-accent);
+    }
+    .we-pagination .current {
+        background: #238636;
+        border-color: rgba(35, 134, 54, 0.3);
+        color: #fff;
+    }
+
+    /* ===== Responsive ===== */
+    @media (max-width: 768px) {
+        .we-header { flex-direction: column; align-items: stretch; text-align: center; }
+        .we-header-actions { justify-content: center; }
+        .we-search { flex-direction: column; }
+        .we-search input { width: 100%; }
+        .we-filter-group { flex-wrap: wrap; justify-content: center; }
+        .we-btn { justify-content: center; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="we-container">
+
+    <!-- Header -->
+    <div class="we-header">
+        <h2>📁 Archivos de Extracción</h2>
+        <div class="we-header-actions">
+            <span class="we-text-small">{{ total_archivos }} archivos</span>
+            <a href="{% url 'whatsapp_extractor:upload_extract_file' %}" class="we-btn we-btn-primary we-btn-sm">📤 Subir archivo</a>
+            <a href="{% url 'whatsapp_extractor:dashboard' %}" class="we-btn we-btn-sm">📊 Dashboard</a>
+        </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="we-kpi-grid">
+        <div class="we-kpi we-kpi-accent-blue">
+            <div class="we-kpi-value">{{ total_archivos }}</div>
+            <div class="we-kpi-label">Total Archivos</div>
+        </div>
+        <div class="we-kpi we-kpi-accent-green">
+            <div class="we-kpi-value">{{ archivos_procesados }}</div>
+            <div class="we-kpi-label">Procesados</div>
+        </div>
+        <div class="we-kpi we-kpi-accent-orange">
+            <div class="we-kpi-value">{{ archivos_pendientes }}</div>
+            <div class="we-kpi-label">Pendientes</div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="we-card">
+        <div class="we-card-body">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+                <div class="we-filter-group">
+                    <a href="{% url 'whatsapp_extractor:file_management' %}" class="we-filter-btn {% if filtro_actual == 'todos' %}active{% endif %}">Todos</a>
+                    <a href="{% url 'whatsapp_extractor:file_management' %}?estado=procesados" class="we-filter-btn {% if filtro_actual == 'procesados' %}active{% endif %}">Procesados</a>
+                    <a href="{% url 'whatsapp_extractor:file_management' %}?estado=pendientes" class="we-filter-btn {% if filtro_actual == 'pendientes' %}active{% endif %}">Pendientes</a>
+                </div>
+                <form method="get" class="we-search">
+                    <input type="text" name="q" placeholder="Buscar archivo..." value="{{ busqueda }}">
+                    <button type="submit" class="we-btn we-btn-sm">🔍 Buscar</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- File list -->
+    <div class="we-card">
+        <div class="we-card-header">
+            <h3 class="we-card-title">Archivos subidos</h3>
+        </div>
+        <div class="we-card-body">
+            {% if archivos %}
+            <div style="overflow-x:auto;">
+                <table class="we-table">
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>Fecha</th>
+                            <th>Tamaño</th>
+                            <th>Estado</th>
+                            <th>Mensajes</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for archivo in archivos %}
+                        <tr>
+                            <td>
+                                <a href="{% url 'whatsapp_extractor:archivo_detail' archivo.id %}" class="we-link">
+                                    {{ archivo.nombre_archivo_original }}
+                                </a>
+                            </td>
+                            <td style="white-space:nowrap;">{{ archivo.fecha_subida|date:"d/m/Y H:i" }}</td>
+                            <td class="we-text-small">{{ archivo.tamanio_formateado }}</td>
+                            <td>
+                                {% if archivo.procesado %}
+                                <span class="we-badge we-badge-green">
+                                    <span class="we-status-dot we-status-dot-green"></span>
+                                    Procesado
+                                </span>
+                                {% else %}
+                                <span class="we-badge we-badge-orange">
+                                    <span class="we-status-dot we-status-dot-orange"></span>
+                                    Pendiente
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td>{{ archivo.total_mensajes|default:"—" }}</td>
+                            <td>
+                                <a href="{% url 'whatsapp_extractor:archivo_detail' archivo.id %}" class="we-btn we-btn-sm">Ver</a>
+                                {% if archivo.procesado %}
+                                <a href="{% url 'whatsapp_extractor:archivo_reprocesar' archivo.id %}" class="we-btn we-btn-sm">🔄 Reprocesar</a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            {% if is_paginated %}
+            <div class="we-pagination">
+                {% if page_obj.has_previous %}
+                <a href="?page=1{% if filtro_actual != 'todos' %}&estado={{ filtro_actual }}{% endif %}{% if busqueda %}&q={{ busqueda }}{% endif %}">&laquo; Primera</a>
+                <a href="?page={{ page_obj.previous_page_number }}{% if filtro_actual != 'todos' %}&estado={{ filtro_actual }}{% endif %}{% if busqueda %}&q={{ busqueda }}{% endif %}">Anterior</a>
+                {% endif %}
+                <span class="current">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+                {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}{% if filtro_actual != 'todos' %}&estado={{ filtro_actual }}{% endif %}{% if busqueda %}&q={{ busqueda }}{% endif %}">Siguiente</a>
+                <a href="?page={{ page_obj.paginator.num_pages }}{% if filtro_actual != 'todos' %}&estado={{ filtro_actual }}{% endif %}{% if busqueda %}&q={{ busqueda }}{% endif %}">Última &raquo;</a>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {% else %}
+            <div class="we-empty">
+                <h3>📂 Sin archivos</h3>
+                <p>No hay archivos de extracción subidos aún.</p>
+                <div style="margin-top:16px;">
+                    <a href="{% url 'whatsapp_extractor:upload_extract_file' %}" class="we-btn we-btn-primary">📤 Subir primer archivo</a>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+</div>
+{% endblock %}

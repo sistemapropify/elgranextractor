@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test PNG Image</title>
+</head>
+<body>
+    <h1>Test PNG Image Loading</h1>
+    <p>Testing image from relative path:</p>
+    <img src="/static/requerimientos/data/Pin-propify.png" alt="Propify Pin" style="width: 80px; height: 114px;">
+    <p>Testing image from absolute path (relative to static):</p>
+    <img src="requerimientos/data/Pin-propify.png" alt="Propify Pin" style="width: 80px; height: 114px;">
+    <p>Testing image from file system path (not recommended):</p>
+    <img src="file:///d:/proyectos/prometeo/webapp/static/requerimientos/data/Pin-propify.png" alt="Propify Pin" style="width: 80px; height: 114px;">
+    <script>
+        // Check if images loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            const images = document.querySelectorAll('img');
+            images.forEach((img, index) => {
+                img.onload = () => console.log(`Image ${index} loaded successfully`);
+                img.onerror = () => console.error(`Image ${index} failed to load`);
+            });
+        });
+    </script>
+</body>
+</html>

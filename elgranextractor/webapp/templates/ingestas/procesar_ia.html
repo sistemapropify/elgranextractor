@@ -1,0 +1,300 @@
+{% extends 'base.html' %}
+
+{% block title %}Procesar con IA - Extracción de Campos Dinámicos{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ===== PREVIEW TABLE ===== */
+    .preview-table {
+        max-height: 400px;
+        overflow-y: auto;
+        border-radius: 8px;
+        border: 1px solid #dee2e6;
+    }
+    .preview-table::-webkit-scrollbar {
+        width: 8px;
+    }
+    .preview-table::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+    .preview-table::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 4px;
+    }
+
+    /* ===== CARDS ===== */
+    .card {
+        margin-bottom: 20px;
+        border-radius: 12px;
+        overflow: hidden;
+        transition: all 0.3s ease;
+    }
+    .card:hover {
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+    }
+
+    /* ===== ALERTAS ===== */
+    .alert-info {
+        background-color: #d1ecf1;
+        border-color: #bee5eb;
+        border-radius: 10px;
+        border-left-width: 4px;
+    }
+
+    /* ===== FORMULARIO ===== */
+    .form-control, .form-select {
+        border-radius: 8px;
+        border: 1.5px solid #dee2e6;
+        padding: 0.5rem 0.75rem;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .form-control:focus, .form-select:focus {
+        border-color: var(--color-primary, #047d7d);
+        box-shadow: 0 0 0 3px rgba(4, 125, 125, 0.15);
+    }
+    .form-label {
+        font-weight: 600;
+        font-size: 0.88rem;
+        color: #495057;
+        margin-bottom: 0.35rem;
+    }
+
+    /* ===== BOTONES ===== */
+    .btn {
+        border-radius: 8px;
+        font-weight: 500;
+        padding: 0.5rem 1.25rem;
+        transition: all 0.25s ease;
+    }
+    .btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    .btn-primary {
+        background: linear-gradient(135deg, var(--color-primary, #047d7d), #036666);
+        border: none;
+    }
+    .btn-primary:hover {
+        background: linear-gradient(135deg, #036666, #025555);
+    }
+
+    /* ===== LOG VIEWER ===== */
+    .log-container {
+        scroll-behavior: smooth;
+    }
+    .log-container::-webkit-scrollbar {
+        width: 8px;
+    }
+    .log-container::-webkit-scrollbar-track {
+        background: #1a1a1a;
+    }
+    .log-container::-webkit-scrollbar-thumb {
+        background: #444;
+        border-radius: 4px;
+    }
+
+    /* ===== LISTA DE INSTRUCCIONES ===== */
+    ol li {
+        padding: 0.4rem 0;
+        color: #495057;
+        line-height: 1.6;
+    }
+    ol li::marker {
+        font-weight: 700;
+        color: var(--color-primary, #047d7d);
+    }
+
+    /* ===== ANIMACIONES ===== */
+    .card {
+        animation: fadeInUp 0.5s ease forwards;
+        opacity: 0;
+    }
+    .card:nth-child(2) { animation-delay: 0.1s; }
+    .card:nth-child(3) { animation-delay: 0.2s; }
+
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h4 class="mb-0"><i class="bi bi-robot"></i> Procesar Archivo con IA</h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <strong>Nuevo módulo de IA:</strong> Sube un archivo Excel/CSV con descripciones inmobiliarias y el sistema extraerá automáticamente campos dinámicos usando inteligencia artificial.
+                    </div>
+
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+
+                    <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label for="id_archivo" class="form-label">Archivo Excel/CSV</label>
+                            {{ form.archivo }}
+                            <div class="form-text">Formatos soportados: .xlsx, .xls, .csv (máx 10MB). Debe contener una columna con descripciones textuales.</div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="id_nombre_fuente" class="form-label">Nombre de la fuente</label>
+                                    {{ form.nombre_fuente }}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="id_portal_origen" class="form-label">Portal de origen</label>
+                                    {{ form.portal_origen }}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-success btn-lg">
+                                <i class="bi bi-magic"></i> Procesar con IA
+                            </button>
+                            <a href="{% url 'ingestas:subir_excel' %}" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-left"></i> Volver al método tradicional
+                            </a>
+                        </div>
+                    </form>
+                </div>
+                <div class="card-footer text-muted">
+                    <small>El procesamiento puede tomar unos segundos. Se analizarán hasta 50 filas por lote.</small>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">¿Cómo funciona?</h5>
+                </div>
+                <div class="card-body">
+                    <ol>
+                        <li>El sistema detecta automáticamente las columnas del archivo.</li>
+                        <li>Busca la columna que contiene las descripciones (requerimiento).</li>
+                        <li>Para cada fila, envía el texto a un modelo de IA que extrae campos estructurados (ubicación, dormitorios, presupuesto, etc.).</li>
+                        <li>Normaliza los nombres de campos y unifica sinónimos.</li>
+                        <li>Genera un reporte con los resultados y métricas.</li>
+                    </ol>
+                    <p class="mb-0"><strong>Nota:</strong> Actualmente se usa un motor de IA simulado. Para producción, integrar con OpenAI, DeepSeek, etc.</p>
+                </div>
+            </div>
+
+            <!-- Panel de Logs -->
+            <div class="card mt-4">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-terminal"></i> Logs de Depuración
+                        <span class="badge bg-secondary ms-2">{{ logs|length }}</span>
+                    </h5>
+                    <div>
+                        <button type="button" class="btn btn-sm btn-outline-light ms-2" onclick="clearLogs()">
+                            <i class="bi bi-trash"></i> Limpiar
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="log-container" style="background-color: #1a1a1a; color: #f8f9fa; max-height: 300px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 0.85rem;">
+                        {% if logs %}
+                            {% for log in logs reversed %}
+                            <div class="log-entry p-2 border-bottom border-secondary log-{{ log.nivel }}">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <span class="badge bg-{% if log.nivel == 'success' %}success{% elif log.nivel == 'error' %}danger{% elif log.nivel == 'warning' %}warning{% elif log.nivel == 'info' %}info{% else %}secondary{% endif %} me-2">
+                                            {{ log.nivel|upper }}
+                                        </span>
+                                        <strong>[{{ log.timestamp }}]</strong>
+                                        <span>{{ log.mensaje }}</span>
+                                    </div>
+                                    {% if log.datos %}
+                                    <button type="button" class="btn btn-sm btn-outline-info" onclick="toggleData('log-data-{{ forloop.revcounter }}')">
+                                        <i class="bi bi-code"></i> Datos
+                                    </button>
+                                    {% endif %}
+                                </div>
+                                {% if log.datos %}
+                                <pre id="log-data-{{ forloop.revcounter }}" class="mt-2 mb-0 p-2 bg-black text-light rounded" style="display: none; font-size: 0.75rem; max-height: 150px; overflow: auto;">
+{{ log.datos|json_script:""|safe }}
+{{ log.datos|pprint }}
+                                </pre>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="p-3 text-center text-muted">
+                                <i class="bi bi-info-circle"></i> No hay logs disponibles. Los eventos aparecerán aquí.
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="card-footer bg-dark text-muted py-1">
+                    <small>
+                        <i class="bi bi-info-circle"></i> Últimos {{ logs|length }} eventos. Los logs se mantienen en sesión.
+                    </small>
+                </div>
+            </div>
+            <!-- Fin Panel de Logs -->
+
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+    // Funciones para el panel de logs
+    function toggleData(logId) {
+        var element = document.getElementById(logId);
+        if (element.style.display === 'none' || element.style.display === '') {
+            element.style.display = 'block';
+        } else {
+            element.style.display = 'none';
+        }
+    }
+
+    function clearLogs() {
+        if (confirm('¿Estás seguro de que quieres limpiar todos los logs? Esto no afecta los datos de la base de datos.')) {
+            // Enviar solicitud para limpiar logs
+            fetch('{% url "ingestas:limpiar_logs" %}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'Content-Type': 'application/json'
+                }
+            }).then(response => {
+                if (response.ok) {
+                    location.reload();
+                } else {
+                    alert('Error al limpiar logs');
+                }
+            });
+        }
+    }
+
+    // Auto-scroll al final del contenedor de logs
+    document.addEventListener('DOMContentLoaded', function() {
+        var logContainer = document.querySelector('.log-container');
+        if (logContainer) {
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+    });
+</script>
+{% endblock %}
+
+{% endblock %}

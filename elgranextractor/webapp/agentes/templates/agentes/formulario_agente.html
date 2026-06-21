@@ -1,0 +1,712 @@
+{% extends 'propifai_base.html' %}
+{% load static %}
+
+{% block title %}
+    {% if form.instance.pk %}Editar Agente{% else %}Nuevo Agente{% endif %} — Propifai
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --bg-primary: #0d1117;
+        --bg-secondary: #161b22;
+        --bg-tertiary: #21262d;
+        --border-color: #30363d;
+        --border-hover: #484f58;
+        --text-primary: #e6edf3;
+        --text-secondary: #8b949e;
+        --text-muted: #6e7681;
+        --accent-blue: #58a6ff;
+        --accent-green: #3fb950;
+        --accent-orange: #d29922;
+        --accent-purple: #bc8cff;
+        --accent-red: #f85149;
+        --gradient-start: #0d1117;
+        --gradient-mid: #161b22;
+        --gradient-end: #1c2333;
+    }
+
+    /* === HERO SECTION === */
+    .hero-section-form {
+        background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-mid) 50%, var(--gradient-end) 100%);
+        border-bottom: 1px solid var(--border-color);
+        padding: 2.5rem 1.5rem;
+        position: relative;
+        overflow: hidden;
+    }
+    .hero-section-form::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -20%;
+        width: 500px;
+        height: 500px;
+        background: radial-gradient(circle, rgba(88,166,255,0.05) 0%, transparent 70%);
+        border-radius: 50%;
+        pointer-events: none;
+    }
+    .hero-content-form {
+        position: relative;
+        z-index: 1;
+        max-width: 900px;
+        margin: 0 auto;
+    }
+    .hero-content-form h1 {
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 0.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+    .hero-content-form h1 i {
+        color: var(--accent-blue);
+        font-size: 1.5rem;
+    }
+    .hero-content-form p {
+        color: var(--text-secondary);
+        font-size: 0.95rem;
+        margin-bottom: 0;
+        padding-left: 2.25rem;
+    }
+
+    /* === FORM CARD === */
+    .form-card {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        overflow: hidden;
+        max-width: 720px;
+        margin: 0 auto;
+    }
+    .form-card-header {
+        padding: 1.25rem 1.5rem;
+        border-bottom: 1px solid var(--border-color);
+        background: var(--bg-tertiary);
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+    .form-card-header i {
+        font-size: 1.1rem;
+        color: var(--accent-blue);
+    }
+    .form-card-header h5 {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+    .form-card-body {
+        padding: 1.75rem 1.5rem 1.5rem;
+    }
+
+    /* === FORM CONTROLS === */
+    .form-group-acm {
+        margin-bottom: 1.25rem;
+    }
+    .form-label-acm {
+        display: block;
+        font-size: 0.85rem;
+        font-weight: 500;
+        color: var(--text-secondary);
+        margin-bottom: 0.4rem;
+        letter-spacing: 0.02em;
+    }
+    .form-label-acm i {
+        margin-right: 0.4rem;
+        width: 1rem;
+        color: var(--accent-blue);
+        font-size: 0.8rem;
+    }
+    .form-control-acm {
+        width: 100%;
+        padding: 0.6rem 0.85rem;
+        background: var(--bg-primary);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        color: var(--text-primary);
+        font-size: 0.9rem;
+        transition: all 0.2s ease;
+        outline: none;
+    }
+    .form-control-acm:focus {
+        border-color: var(--accent-blue);
+        box-shadow: 0 0 0 3px rgba(88,166,255,0.15);
+    }
+    .form-control-acm::placeholder {
+        color: #6b7280;
+        opacity: 0.55;
+    }
+    .form-control-acm::-webkit-input-placeholder {
+        color: #6b7280;
+        opacity: 0.55;
+    }
+    .form-control-acm::-moz-placeholder {
+        color: #6b7280;
+        opacity: 0.55;
+    }
+    .form-control-acm:-ms-input-placeholder {
+        color: #6b7280;
+        opacity: 0.55;
+    }
+    select.form-control-acm {
+        cursor: pointer;
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238b949e' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 0.75rem center;
+        padding-right: 2rem;
+    }
+    select.form-control-acm option {
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+    }
+    textarea.form-control-acm {
+        resize: vertical;
+        min-height: 80px;
+    }
+
+    /* === ERROR STATES === */
+    .form-error {
+        color: var(--accent-red);
+        font-size: 0.8rem;
+        margin-top: 0.3rem;
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+    }
+    .form-error i {
+        font-size: 0.75rem;
+    }
+    .has-error .form-control-acm {
+        border-color: var(--accent-red);
+    }
+    .has-error .form-control-acm:focus {
+        box-shadow: 0 0 0 3px rgba(248,81,73,0.15);
+    }
+    .alert-acm-error {
+        background: rgba(248,81,73,0.1);
+        border: 1px solid rgba(248,81,73,0.3);
+        border-radius: 8px;
+        padding: 0.85rem 1rem;
+        color: var(--accent-red);
+        font-size: 0.85rem;
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: flex-start;
+        gap: 0.6rem;
+    }
+    .alert-acm-error i {
+        margin-top: 0.1rem;
+        flex-shrink: 0;
+    }
+    .alert-acm-error ul {
+        margin: 0;
+        padding-left: 1.25rem;
+    }
+
+    /* === FORM ACTIONS === */
+    .form-actions {
+        display: flex;
+        gap: 0.75rem;
+        padding-top: 1.25rem;
+        border-top: 1px solid var(--border-color);
+        margin-top: 0.5rem;
+    }
+    .btn-acm {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.6rem 1.25rem;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        font-weight: 500;
+        text-decoration: none;
+        border: none;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    .btn-acm-primary {
+        background: var(--accent-blue);
+        color: #fff;
+    }
+    .btn-acm-primary:hover {
+        background: #4a9ae8;
+        color: #fff;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(88,166,255,0.3);
+    }
+    .btn-acm-secondary {
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+        border: 1px solid var(--border-color);
+    }
+    .btn-acm-secondary:hover {
+        background: var(--border-color);
+        color: var(--text-primary);
+        border-color: var(--border-hover);
+    }
+
+    /* === HELPER TEXT === */
+    .helper-text {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        margin-top: 0.3rem;
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+    }
+    .helper-text i {
+        font-size: 0.7rem;
+    }
+
+    /* ── Separador de secciones ───────────────────── */
+    .section-divider {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin: 2rem 0 1.5rem;
+    }
+    .section-divider .section-hr {
+        flex: 1;
+        border: none;
+        border-top: 1px solid rgba(255,255,255,0.08);
+        margin: 0;
+    }
+    .section-divider .section-label {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--text-muted, #8b949e);
+        white-space: nowrap;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .section-divider .section-label i {
+        font-size: 1rem;
+        color: var(--accent-color, #58a6ff);
+    }
+
+    /* === RESPONSIVE === */
+    @media (max-width: 768px) {
+        .hero-section-form {
+            padding: 1.5rem 1rem;
+        }
+        .hero-content-form h1 {
+            font-size: 1.35rem;
+            flex-wrap: wrap;
+        }
+        .hero-content-form p {
+            padding-left: 0;
+        }
+        .form-card-body {
+            padding: 1.25rem 1rem;
+        }
+        .form-actions {
+            flex-direction: column;
+        }
+        .form-actions .btn-acm {
+            width: 100%;
+            justify-content: center;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="hero-section-form">
+    <div class="hero-content-form">
+        <h1>
+            <i class="fas fa-user-plus"></i>
+            {% if form.instance.pk %}Editar Agente{% else %}Nuevo Agente{% endif %}
+        </h1>
+        <p>
+            {% if form.instance.pk %}
+                Modifica los datos del agente <strong>{{ form.instance.nombre_completo }}</strong>
+            {% else %}
+                Registra un nuevo agente en el sistema
+            {% endif %}
+        </p>
+    </div>
+</div>
+
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8 col-xl-7">
+            <div class="form-card">
+                <div class="form-card-header">
+                    <i class="fas fa-id-card"></i>
+                    <h5>Información del Agente</h5>
+                </div>
+                <div class="form-card-body">
+                    <form method="POST" enctype="multipart/form-data" novalidate>
+                        {% csrf_token %}
+
+                        {% if form.non_field_errors %}
+                        <div class="alert-acm-error">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <div>
+                                <strong>Errores de validación:</strong>
+                                <ul>
+                                    {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        {% if form.errors and not form.non_field_errors %}
+                        <div class="alert-acm-error">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <div>
+                                <strong>Corrige los siguientes errores:</strong>
+                                <ul>
+                                    {% for field in form %}
+                                        {% for error in field.errors %}
+                                        <li>{{ field.label }}: {{ error }}</li>
+                                        {% endfor %}
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <div class="form-group-acm {% if form.nombre_completo.errors %}has-error{% endif %}">
+                            <label class="form-label-acm" for="{{ form.nombre_completo.id_for_label }}">
+                                <i class="fas fa-user"></i>Nombre Completo
+                            </label>
+                            <input type="text"
+                                   name="{{ form.nombre_completo.html_name }}"
+                                   id="{{ form.nombre_completo.id_for_label }}"
+                                   class="form-control-acm"
+                                   placeholder="Ej: Juan Pérez García"
+                                   value="{{ form.nombre_completo.value|default:'' }}"
+                                   required>
+                            {% if form.nombre_completo.errors %}
+                            <div class="form-error">
+                                <i class="fas fa-times-circle"></i>
+                                {{ form.nombre_completo.errors.0 }}
+                            </div>
+                            {% endif %}
+                            <div class="helper-text">
+                                <i class="fas fa-info-circle"></i>
+                                Ingresa nombres y apellidos completos
+                            </div>
+                        </div>
+
+                        <div class="form-group-acm {% if form.codigo_agente.errors %}has-error{% endif %}">
+                            <label class="form-label-acm" for="{{ form.codigo_agente.id_for_label }}">
+                                <i class="fas fa-hashtag"></i>Código de Agente
+                            </label>
+                            <input type="text"
+                                   name="{{ form.codigo_agente.html_name }}"
+                                   id="{{ form.codigo_agente.id_for_label }}"
+                                   class="form-control-acm"
+                                   placeholder="Ej: AG-001"
+                                   value="{{ form.codigo_agente.value|default:'' }}">
+                            {% if form.codigo_agente.errors %}
+                            <div class="form-error">
+                                <i class="fas fa-times-circle"></i>
+                                {{ form.codigo_agente.errors.0 }}
+                            </div>
+                            {% endif %}
+                            <div class="helper-text">
+                                <i class="fas fa-info-circle"></i>
+                                Código interno o ID del agente (opcional)
+                            </div>
+                        </div>
+
+                        <div class="form-group-acm {% if form.correo_electronico.errors %}has-error{% endif %}">
+                            <label class="form-label-acm" for="{{ form.correo_electronico.id_for_label }}">
+                                <i class="fas fa-envelope"></i>Correo Electrónico
+                            </label>
+                            <input type="email"
+                                   name="{{ form.correo_electronico.html_name }}"
+                                   id="{{ form.correo_electronico.id_for_label }}"
+                                   class="form-control-acm"
+                                   placeholder="ej: juan.perez@email.com"
+                                   value="{{ form.correo_electronico.value|default:'' }}">
+                            {% if form.correo_electronico.errors %}
+                            <div class="form-error">
+                                <i class="fas fa-times-circle"></i>
+                                {{ form.correo_electronico.errors.0 }}
+                            </div>
+                            {% endif %}
+                            <div class="helper-text">
+                                <i class="fas fa-info-circle"></i>
+                                Correo electrónico del agente (opcional)
+                            </div>
+                        </div>
+
+                        <div class="form-group-acm {% if form.telefono.errors %}has-error{% endif %}">
+                            <label class="form-label-acm" for="{{ form.telefono.id_for_label }}">
+                                <i class="fas fa-phone"></i>Teléfono
+                            </label>
+                            <input type="tel"
+                                   name="{{ form.telefono.html_name }}"
+                                   id="{{ form.telefono.id_for_label }}"
+                                   class="form-control-acm"
+                                   placeholder="Ej: +51999888777"
+                                   value="{{ form.telefono.value|default:'' }}"
+                                   required>
+                            {% if form.telefono.errors %}
+                            <div class="form-error">
+                                <i class="fas fa-times-circle"></i>
+                                {{ form.telefono.errors.0 }}
+                            </div>
+                            {% endif %}
+                            <div class="helper-text">
+                                <i class="fas fa-info-circle"></i>
+                                Formato E.164: <strong>+51</strong> (código Perú) + 9 dígitos. Ej: +51999888777
+                            </div>
+                        </div>
+
+                        <div class="form-group-acm {% if form.tipo_agente.errors %}has-error{% endif %}">
+                            <label class="form-label-acm" for="{{ form.tipo_agente.id_for_label }}">
+                                <i class="fas fa-briefcase"></i>Tipo de Agente
+                            </label>
+                            <select name="{{ form.tipo_agente.html_name }}"
+                                    id="{{ form.tipo_agente.id_for_label }}"
+                                    class="form-control-acm"
+                                    required>
+                                {% for value, label in form.fields.tipo_agente.choices %}
+                                <option value="{{ value }}" {% if form.tipo_agente.value == value %}selected{% endif %}>
+                                    {{ label }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            {% if form.tipo_agente.errors %}
+                            <div class="form-error">
+                                <i class="fas fa-times-circle"></i>
+                                {{ form.tipo_agente.errors.0 }}
+                            </div>
+                            {% endif %}
+                            <div class="helper-text">
+                                <i class="fas fa-info-circle"></i>
+                                Si seleccionas "De Inmobiliaria", deberás elegir la inmobiliaria abajo
+                            </div>
+                        </div>
+
+                        <div class="form-group-acm {% if form.inmobiliaria.errors %}has-error{% endif %}" id="inmobiliaria-field">
+                            <label class="form-label-acm" for="{{ form.inmobiliaria.id_for_label }}">
+                                <i class="fas fa-building"></i>Inmobiliaria
+                            </label>
+                            <select name="{{ form.inmobiliaria.html_name }}"
+                                    id="{{ form.inmobiliaria.id_for_label }}"
+                                    class="form-control-acm">
+                                <option value="">---------</option>
+                                {% for inmobiliaria in form.fields.inmobiliaria.queryset %}
+                                <option value="{{ inmobiliaria.id }}" {% if form.inmobiliaria.value|stringformat:"s" == inmobiliaria.id|stringformat:"s" %}selected{% endif %}>
+                                    {{ inmobiliaria.nombre }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            {% if form.inmobiliaria.errors %}
+                            <div class="form-error">
+                                <i class="fas fa-times-circle"></i>
+                                {{ form.inmobiliaria.errors.0 }}
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- ── Redes Sociales y Web ────────────────────────────── -->
+                        <div class="section-divider">
+                            <hr class="section-hr">
+                            <span class="section-label"><i class="fas fa-share-alt"></i> Redes Sociales y Web</span>
+                            <hr class="section-hr">
+                        </div>
+
+                        <div class="form-group-acm {% if form.sitio_web.errors %}has-error{% endif %}">
+                            <label class="form-label-acm" for="{{ form.sitio_web.id_for_label }}">
+                                <i class="fas fa-globe"></i>Sitio Web
+                            </label>
+                            <input type="url"
+                                   name="{{ form.sitio_web.html_name }}"
+                                   id="{{ form.sitio_web.id_for_label }}"
+                                   class="form-control-acm"
+                                   placeholder="https://mipagina.com"
+                                   value="{{ form.sitio_web.value|default:'' }}">
+                            {% if form.sitio_web.errors %}
+                            <div class="form-error">
+                                <i class="fas fa-times-circle"></i>
+                                {{ form.sitio_web.errors.0 }}
+                            </div>
+                            {% endif %}
+                            <div class="helper-text">
+                                <i class="fas fa-info-circle"></i>
+                                Página web personal o profesional (opcional)
+                            </div>
+                        </div>
+
+                        <div class="form-group-acm {% if form.facebook_url.errors %}has-error{% endif %}">
+                            <label class="form-label-acm" for="{{ form.facebook_url.id_for_label }}">
+                                <i class="fab fa-facebook"></i>Facebook
+                            </label>
+                            <input type="url"
+                                   name="{{ form.facebook_url.html_name }}"
+                                   id="{{ form.facebook_url.id_for_label }}"
+                                   class="form-control-acm"
+                                   placeholder="https://facebook.com/miperfil"
+                                   value="{{ form.facebook_url.value|default:'' }}">
+                            {% if form.facebook_url.errors %}
+                            <div class="form-error">
+                                <i class="fas fa-times-circle"></i>
+                                {{ form.facebook_url.errors.0 }}
+                            </div>
+                            {% endif %}
+                            <div class="helper-text">
+                                <i class="fas fa-info-circle"></i>
+                                URL del perfil o página de Facebook (opcional)
+                            </div>
+                        </div>
+
+                        <div class="form-group-acm {% if form.instagram_url.errors %}has-error{% endif %}">
+                            <label class="form-label-acm" for="{{ form.instagram_url.id_for_label }}">
+                                <i class="fab fa-instagram"></i>Instagram
+                            </label>
+                            <input type="url"
+                                   name="{{ form.instagram_url.html_name }}"
+                                   id="{{ form.instagram_url.id_for_label }}"
+                                   class="form-control-acm"
+                                   placeholder="https://instagram.com/miperfil"
+                                   value="{{ form.instagram_url.value|default:'' }}">
+                            {% if form.instagram_url.errors %}
+                            <div class="form-error">
+                                <i class="fas fa-times-circle"></i>
+                                {{ form.instagram_url.errors.0 }}
+                            </div>
+                            {% endif %}
+                            <div class="helper-text">
+                                <i class="fas fa-info-circle"></i>
+                                URL del perfil de Instagram (opcional)
+                            </div>
+                        </div>
+
+                        <div class="form-group-acm {% if form.linkedin_url.errors %}has-error{% endif %}">
+                            <label class="form-label-acm" for="{{ form.linkedin_url.id_for_label }}">
+                                <i class="fab fa-linkedin"></i>LinkedIn
+                            </label>
+                            <input type="url"
+                                   name="{{ form.linkedin_url.html_name }}"
+                                   id="{{ form.linkedin_url.id_for_label }}"
+                                   class="form-control-acm"
+                                   placeholder="https://linkedin.com/in/miperfil"
+                                   value="{{ form.linkedin_url.value|default:'' }}">
+                            {% if form.linkedin_url.errors %}
+                            <div class="form-error">
+                                <i class="fas fa-times-circle"></i>
+                                {{ form.linkedin_url.errors.0 }}
+                            </div>
+                            {% endif %}
+                            <div class="helper-text">
+                                <i class="fas fa-info-circle"></i>
+                                URL del perfil de LinkedIn (opcional)
+                            </div>
+                        </div>
+
+                        <div class="form-group-acm {% if form.tiktok_url.errors %}has-error{% endif %}">
+                            <label class="form-label-acm" for="{{ form.tiktok_url.id_for_label }}">
+                                <i class="fab fa-tiktok"></i>TikTok
+                            </label>
+                            <input type="url"
+                                   name="{{ form.tiktok_url.html_name }}"
+                                   id="{{ form.tiktok_url.id_for_label }}"
+                                   class="form-control-acm"
+                                   placeholder="https://tiktok.com/@miperfil"
+                                   value="{{ form.tiktok_url.value|default:'' }}">
+                            {% if form.tiktok_url.errors %}
+                            <div class="form-error">
+                                <i class="fas fa-times-circle"></i>
+                                {{ form.tiktok_url.errors.0 }}
+                            </div>
+                            {% endif %}
+                            <div class="helper-text">
+                                <i class="fas fa-info-circle"></i>
+                                URL del perfil de TikTok (opcional)
+                            </div>
+                        </div>
+
+                        <div class="section-divider">
+                            <hr><span><i class="fas fa-camera"></i> Foto de Perfil</span><hr>
+                        </div>
+
+                        <div class="form-group-acm {% if form.foto_perfil.errors %}has-error{% endif %}">
+                            <label class="form-label-acm" for="{{ form.foto_perfil.id_for_label }}">
+                                <i class="fas fa-user-circle"></i>Foto de Perfil
+                            </label>
+                            <div class="file-upload-row">
+                                <div class="file-input-wrapper">
+                                    <input type="file"
+                                           name="{{ form.foto_perfil.html_name }}"
+                                           id="{{ form.foto_perfil.id_for_label }}"
+                                           class="form-control-acm"
+                                           accept="image/png,image/jpeg,image/jpg">
+                                    {% if form.foto_perfil.errors %}
+                                    <div class="form-error">
+                                        <i class="fas fa-times-circle"></i>
+                                        {{ form.foto_perfil.errors.0 }}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                {% if form.instance.pk and form.instance.foto_perfil %}
+                                <div class="file-preview" id="foto-preview-container">
+                                    <img src="{{ form.instance.foto_perfil.url }}" alt="Foto actual"
+                                         class="img-thumbnail" style="max-width:100px; max-height:100px; border-radius:50%;">
+                                </div>
+                                {% endif %}
+                            </div>
+                            <div class="helper-text">
+                                <i class="fas fa-info-circle"></i>
+                                Foto del agente (JPG/PNG, opcional). Se almacena en Azure Blob Storage.
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn-acm btn-acm-primary">
+                                <i class="fas fa-save"></i>
+                                {% if form.instance.pk %}Guardar Cambios{% else %}Registrar Agente{% endif %}
+                            </button>
+                            <a href="{% url 'agentes:lista_agentes' %}" class="btn-acm btn-acm-secondary">
+                                <i class="fas fa-times"></i>
+                                Cancelar
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const tipoSelect = document.getElementById('{{ form.tipo_agente.id_for_label }}');
+    const inmobiliariaField = document.getElementById('inmobiliaria-field');
+    const inmobiliariaSelect = document.getElementById('{{ form.inmobiliaria.id_for_label }}');
+
+    function toggleInmobiliariaField() {
+        if (tipoSelect.value === 'INMOBILIARIA') {
+            inmobiliariaField.style.display = 'block';
+            inmobiliariaSelect.required = true;
+        } else {
+            inmobiliariaField.style.display = 'none';
+            inmobiliariaSelect.required = false;
+            inmobiliariaSelect.value = '';
+        }
+    }
+
+    // Initial state
+    toggleInmobiliariaField();
+
+    // On change
+    tipoSelect.addEventListener('change', toggleInmobiliariaField);
+});
+</script>
+{% endblock %}

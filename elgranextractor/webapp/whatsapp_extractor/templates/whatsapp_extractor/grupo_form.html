@@ -1,0 +1,224 @@
+{% extends "intelligence/base/base.html" %}
+{% load static %}
+
+{% block title %}Nuevo Grupo — Extractor WhatsApp{% endblock %}
+
+{% block active_section %}dashboard{% endblock %}
+
+{% block page_title %}➕ Nuevo Grupo WhatsApp{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --we-bg: #0d1117;
+        --we-bg-secondary: #161b22;
+        --we-bg-tertiary: #21262d;
+        --we-border: #30363d;
+        --we-text-primary: #c9d1d9;
+        --we-text-secondary: #8b949e;
+        --we-accent: #58a6ff;
+        --we-accent-hover: #1f6feb;
+        --we-green: #238636;
+        --we-green-bg: rgba(35, 134, 54, 0.15);
+        --we-red: #da3633;
+        --we-red-bg: rgba(218, 54, 51, 0.15);
+        --we-radius: 8px;
+        --we-radius-sm: 6px;
+        --we-transition: all 0.2s ease;
+    }
+
+    .we-container {
+        max-width: 700px;
+        margin: 0 auto;
+    }
+
+    .we-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+        gap: 12px;
+        padding: 0 0 20px;
+        border-bottom: 1px solid var(--we-border);
+    }
+    .we-header h2 { margin: 0; font-size: 20px; font-weight: 600; color: var(--we-accent); }
+    .we-header-actions { display: flex; align-items: center; gap: 12px; }
+
+    .we-card {
+        background: #161b22;
+        border: 1px solid var(--we-border);
+        border-radius: var(--we-radius);
+        margin-bottom: 16px;
+    }
+
+    .we-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 14px 20px;
+        border-bottom: 1px solid var(--we-border);
+        background: #21262d;
+        border-radius: var(--we-radius) var(--we-radius) 0 0;
+    }
+    .we-card-title { margin: 0; font-size: 15px; font-weight: 600; color: var(--we-text-primary); }
+    .we-card-body { padding: 24px; }
+
+    .we-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 14px;
+        border-radius: var(--we-radius);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--we-text-primary);
+        background: #30363d;
+        border: 1px solid var(--we-border);
+        cursor: pointer;
+        text-decoration: none;
+        transition: var(--we-transition);
+    }
+    .we-btn:hover {
+        background: rgba(255,255,255,0.05);
+        border-color: var(--we-text-secondary);
+        color: var(--we-text-primary);
+    }
+    .we-btn-primary {
+        background: #238636;
+        border-color: rgba(35, 134, 54, 0.3);
+        color: #fff;
+    }
+    .we-btn-primary:hover {
+        background: #2ea043;
+        border-color: rgba(35, 134, 54, 0.5);
+        color: #fff;
+    }
+    .we-btn-sm { padding: 4px 10px; font-size: 12px; }
+    .we-text-small { font-size: 12px; color: var(--we-text-secondary); }
+    .we-link { color: var(--we-accent); text-decoration: none; font-weight: 500; }
+    .we-link:hover { color: var(--we-accent-hover); text-decoration: underline; }
+
+    /* Form styles */
+    .we-form-group { margin-bottom: 20px; }
+    .we-form-label {
+        display: block;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--we-text-primary);
+        margin-bottom: 6px;
+    }
+    .we-form-input {
+        width: 100%;
+        padding: 10px 12px;
+        background: var(--we-bg-tertiary);
+        border: 1px solid var(--we-border);
+        border-radius: var(--we-radius);
+        color: var(--we-text-primary);
+        font-size: 14px;
+        outline: none;
+        transition: var(--we-transition);
+        box-sizing: border-box;
+    }
+    .we-form-input:focus {
+        border-color: var(--we-accent);
+        box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.15);
+    }
+    .we-form-input::placeholder { color: var(--we-text-secondary); }
+    .we-form-help {
+        font-size: 12px;
+        color: var(--we-text-secondary);
+        margin-top: 4px;
+    }
+    .we-form-check {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 4px;
+    }
+    .we-form-check input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        accent-color: var(--we-accent);
+    }
+    .we-form-actions {
+        display: flex;
+        gap: 12px;
+        justify-content: flex-end;
+        padding-top: 16px;
+        border-top: 1px solid var(--we-border);
+        margin-top: 24px;
+    }
+    select.we-form-input {
+        appearance: none;
+        -webkit-appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238b949e' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 12px center;
+        padding-right: 36px;
+    }
+    select.we-form-input option {
+        background: var(--we-bg-secondary);
+        color: var(--we-text-primary);
+    }
+
+    @media (max-width: 768px) {
+        .we-header { flex-direction: column; text-align: center; }
+        .we-header-actions { width: 100%; justify-content: center; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="we-container">
+
+    <div class="we-header">
+        <h2>➕ Nuevo Grupo WhatsApp</h2>
+        <div class="we-header-actions">
+            <a href="{% url 'whatsapp_extractor:grupo_list' %}" class="we-btn we-btn-sm">⬅ Volver</a>
+        </div>
+    </div>
+
+    <div class="we-card">
+        <div class="we-card-header">
+            <h3 class="we-card-title">Configuración del Grupo</h3>
+        </div>
+        <div class="we-card-body">
+            <form method="post" novalidate>
+                {% csrf_token %}
+
+                <div class="we-form-group">
+                    <label class="we-form-label" for="id_nombre_grupo">Nombre del Grupo</label>
+                    <input type="text" name="nombre_grupo" id="id_nombre_grupo" class="we-form-input" placeholder="Ej: Grupo Inmobiliario Arequipa" required maxlength="255">
+                    <div class="we-form-help">Nombre exacto del grupo en WhatsApp Web</div>
+                </div>
+
+                <div class="we-form-group">
+                    <label class="we-form-label" for="id_fuente_choice">Fuente Asociada</label>
+                    <select name="fuente_choice" id="id_fuente_choice" class="we-form-input">
+                        <option value="">Seleccionar fuente...</option>
+                        <option value="grupo_whatsapp_1">Grupo WhatsApp Inmobiliario 1</option>
+                        <option value="grupo_whatsapp_2">Grupo WhatsApp Inmobiliario 2</option>
+                        <option value="grupo_whatsapp_3">Grupo WhatsApp Inmobiliario 3</option>
+                    </select>
+                    <div class="we-form-help">Fuente que se asignará a los requerimientos extraídos de este grupo</div>
+                </div>
+
+                <div class="we-form-group">
+                    <div class="we-form-check">
+                        <input type="checkbox" name="activo" id="id_activo" checked>
+                        <label for="id_activo" style="font-size:14px;color:var(--we-text-primary);cursor:pointer;">Activar grupo para extracción automática</label>
+                    </div>
+                    <div class="we-form-help">Si está activo, se incluirá en las ejecuciones programadas</div>
+                </div>
+
+                <div class="we-form-actions">
+                    <a href="{% url 'whatsapp_extractor:grupo_list' %}" class="we-btn">Cancelar</a>
+                    <button type="submit" class="we-btn we-btn-primary">💾 Crear Grupo</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

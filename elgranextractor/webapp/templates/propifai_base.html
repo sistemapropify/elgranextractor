@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>{% block title %}Propifai{% endblock %}</title>
+
+    {% block extra_head %}{% endblock %}
+
+    <style>
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #21262d;
+            --border-color: #30363d;
+            --text-primary: #f0f6fc;
+            --text-secondary: #8b949e;
+            --accent-blue: #58a6ff;
+            --accent-green: #238636;
+            --accent-purple: #8957e5;
+            --accent-orange: #f78166;
+            --sidebar-width: 260px;
+            --sidebar-collapsed-width: 60px;
+            --header-height: 60px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* ===== LAYOUT ===== */
+        .app-layout {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* ===== SIDEBAR ===== */
+        .app-sidebar {
+            width: var(--sidebar-width);
+            min-width: var(--sidebar-width);
+            background-color: var(--bg-secondary);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            position: sticky;
+            top: 0;
+            overflow-y: auto;
+            z-index: 100;
+            transition: width 0.3s ease, min-width 0.3s ease;
+        }
+
+        .app-sidebar.collapsed {
+            width: var(--sidebar-collapsed-width);
+            min-width: var(--sidebar-collapsed-width);
+        }
+
+        .app-sidebar.collapsed .sidebar-brand .brand-text,
+        .app-sidebar.collapsed .sidebar-brand .brand-subtext,
+        .app-sidebar.collapsed .nav-section-title,
+        .app-sidebar.collapsed .nav-item span:not(.nav-badge),
+        .app-sidebar.collapsed .nav-item .nav-badge {
+            display: none;
+        }
+
+        .app-sidebar.collapsed .sidebar-brand {
+            justify-content: center;
+            padding: 20px 10px;
+        }
+
+        .app-sidebar.collapsed .nav-item {
+            justify-content: center;
+            padding: 10px 0;
+        }
+
+        .app-sidebar.collapsed .nav-item i,
+        .app-sidebar.collapsed .nav-item .nav-icon {
+            margin: 0;
+            font-size: 18px;
+        }
+
+        .sidebar-brand {
+            padding: 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: padding 0.3s ease;
+        }
+
+        .sidebar-brand .brand-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .sidebar-brand .brand-text {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-primary);
+            line-height: 1.2;
+            white-space: nowrap;
+        }
+
+        .sidebar-brand .brand-subtext {
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-weight: 400;
+            white-space: nowrap;
+        }
+
+        .sidebar-nav {
+            padding: 8px 0;
+            flex: 1;
+        }
+
+        .nav-section-title {
+            padding: 8px 20px 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 9px 20px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 14px;
+            transition: all 0.2s ease;
+            border-left: 3px solid transparent;
+            cursor: pointer;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+
+        .nav-item:hover {
+            background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .nav-item.active {
+            background-color: rgba(88, 166, 255, 0.1);
+            color: var(--accent-blue);
+            border-left-color: var(--accent-blue);
+        }
+
+        .nav-item i,
+        .nav-item .nav-icon {
+            width: 20px;
+            text-align: center;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+
+        .nav-item .nav-badge {
+            margin-left: auto;
+            background-color: var(--bg-tertiary);
+            color: var(--text-secondary);
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+
+        .nav-item.active .nav-badge {
+            background-color: rgba(88, 166, 255, 0.2);
+            color: var(--accent-blue);
+        }
+
+        /* ===== MAIN CONTENT ===== */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        /* ===== HEADER ===== */
+        .app-header {
+            height: var(--header-height);
+            background-color: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            padding: 0 24px;
+            gap: 16px;
+            position: sticky;
+            top: 0;
+            z-index: 99;
+        }
+
+        .header-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .header-title span {
+            color: var(--text-secondary);
+            font-weight: 400;
+        }
+
+        .header-actions {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-tertiary);
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 16px;
+        }
+
+        .header-btn:hover {
+            background-color: var(--border-color);
+            color: var(--text-primary);
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: white;
+            font-weight: 600;
+        }
+
+        .sidebar-toggle-desktop {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-tertiary);
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+            font-size: 16px;
+        }
+
+        .sidebar-toggle-desktop:hover {
+            background-color: var(--border-color);
+            color: var(--text-primary);
+        }
+
+        .mobile-menu-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-tertiary);
+            color: var(--text-secondary);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        /* ===== CONTENT AREA ===== */
+        .content-area {
+            padding: 24px;
+            flex: 1;
+        }
+
+        /* ===== SCROLLBAR ===== */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-primary);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--border-color);
+        }
+
+        /* ===== OVERLAY ===== */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+
+        .sidebar-overlay.active {
+            display: block;
+        }
+
+        /* ===== RESPONSIVE ===== */
+        @media (max-width: 768px) {
+            .app-sidebar {
+                position: fixed;
+                left: 0;
+                top: 0;
+                width: 85%;
+                max-width: 300px;
+                height: 100vh;
+                z-index: 1000;
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+                display: flex !important;
+            }
+
+            .app-sidebar.mobile-open {
+                transform: translateX(0);
+            }
+
+            .content-area {
+                padding: 16px;
+            }
+
+            .mobile-menu-btn {
+                display: flex !important;
+            }
+
+            .sidebar-toggle-desktop {
+                display: none !important;
+            }
+        }
+
+        @media (min-width: 769px) {
+            .mobile-menu-btn {
+                display: none !important;
+            }
+            .sidebar-toggle-desktop {
+                display: flex !important;
+            }
+        }
+
+        /* ===== SUBMENÚ ===== */
+        .nav-item.has-submenu {
+            flex-direction: column;
+            padding: 0;
+            gap: 0;
+            border-left: 3px solid transparent;
+        }
+
+        .nav-item.has-submenu.active {
+            background-color: rgba(88, 166, 255, 0.1);
+            border-left-color: var(--accent-blue);
+        }
+
+        .nav-item.has-submenu .nav-link.submenu-toggle {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 9px 20px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 14px;
+            transition: all 0.2s ease;
+            width: 100%;
+            cursor: pointer;
+            white-space: nowrap;
+            overflow: hidden;
+            background: none;
+            border: none;
+        }
+
+        .nav-item.has-submenu .nav-link.submenu-toggle:hover {
+            background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .nav-item.has-submenu.active > .nav-link.submenu-toggle {
+            color: var(--accent-blue);
+        }
+
+        .submenu-arrow {
+            margin-left: auto;
+            font-size: 10px;
+            transition: transform 0.3s ease;
+            color: var(--text-secondary);
+        }
+
+        .nav-item.has-submenu.open .submenu-arrow {
+            transform: rotate(180deg);
+        }
+
+        .submenu-items {
+            display: none;
+            flex-direction: column;
+            width: 100%;
+            padding: 2px 0 4px 0;
+        }
+
+        .nav-item.has-submenu.open .submenu-items {
+            display: flex;
+        }
+
+        .submenu-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 7px 20px 7px 52px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 13px;
+            transition: all 0.2s ease;
+            border-left: 2px solid transparent;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+
+        .submenu-item:hover {
+            background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .submenu-item.active {
+            color: var(--accent-blue);
+            border-left-color: var(--accent-blue);
+            background-color: rgba(88, 166, 255, 0.08);
+        }
+
+        .submenu-item .submenu-icon {
+            width: 16px;
+            text-align: center;
+            font-size: 13px;
+            flex-shrink: 0;
+        }
+
+        .app-sidebar.collapsed .nav-item.has-submenu .submenu-items,
+        .app-sidebar.collapsed .nav-item.has-submenu .submenu-arrow {
+            display: none;
+        }
+
+        .app-sidebar.collapsed .nav-item.has-submenu .nav-link.submenu-toggle {
+            justify-content: center;
+            padding: 10px 0;
+        }
+
+        .app-sidebar.collapsed .nav-item.has-submenu .nav-link.submenu-toggle span:not(.nav-icon) {
+            display: none;
+        }
+
+        {% block extra_css %}{% endblock %}
+    </style>
+</head>
+<body>
+    <!-- Overlay for mobile -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <div class="app-layout">
+        <!-- ===== SIDEBAR ===== -->
+        <nav class="app-sidebar" id="appSidebar">
+            {% block sidebar_brand %}
+            <div class="sidebar-brand">
+                <div class="brand-icon">P</div>
+                <div>
+                    <div class="brand-text">Propifai</div>
+                    <div class="brand-subtext">Plataforma Inmobiliaria</div>
+                </div>
+            </div>
+            {% endblock %}
+
+            <div class="sidebar-nav">
+                {% block sidebar_menu %}
+                <!-- ===== DASHBOARD PRINCIPAL ===== -->
+                <div class="nav-section-title">Dashboard</div>
+
+                <a href="/" class="nav-item {% if request.path == '/' %}active{% endif %}">
+                    <span class="nav-icon">&#x1F4CA;</span>
+                    <span>Dashboard General</span>
+                </a>
+
+                <!-- ===== GESTIÓN INMOBILIARIA ===== -->
+                <div class="nav-section-title" style="margin-top: 12px;">Gesti&oacute;n Inmobiliaria</div>
+
+                <a href="/propifai/propiedades/" class="nav-item {% if '/propifai/' in request.path %}active{% endif %}">
+                    <span class="nav-icon">&#x1F3E0;</span>
+                    <span>Propiedades Propify</span>
+                </a>
+
+                <a href="/ingestas/propiedades/" class="nav-item {% if '/ingestas/' in request.path %}active{% endif %}">
+                    <span class="nav-icon">&#x1F3E2;</span>
+                    <span>Propiedades Externas</span>
+                </a>
+
+                <!-- Requerimientos con submenú -->
+                <div class="nav-item has-submenu {% if '/requerimientos/' in request.path or '/whatsapp-extractor/' in request.path %}active{% endif %}">
+                    <a href="#" class="nav-link submenu-toggle">
+                        <span class="nav-icon">&#x1F4CB;</span>
+                        <span>Requerimientos</span>
+                        <span class="submenu-arrow">&#x25BC;</span>
+                    </a>
+                    <div class="submenu-items">
+                        <a href="/requerimientos/lista/" class="submenu-item {% if '/requerimientos/lista/' in request.path %}active{% endif %}">
+                            <span class="submenu-icon">&#x1F4CB;</span>
+                            <span>Lista de Requerimientos</span>
+                        </a>
+                        <a href="/requerimientos/dashboard-analisis/" class="submenu-item {% if '/requerimientos/dashboard-analisis/' in request.path %}active{% endif %}">
+                            <span class="submenu-icon">&#x1F4CA;</span>
+                            <span>Dashboard An&aacute;lisis</span>
+                        </a>
+                        <a href="/whatsapp-extractor/" class="submenu-item {% if '/whatsapp-extractor/' in request.path %}active{% endif %}">
+                            <span class="submenu-icon">&#x1F4F1;</span>
+                            <span>WhatsApp Extractor</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Matching con submenú -->
+                <div class="nav-item has-submenu {% if '/matching/' in request.path %}active{% endif %}">
+                    <a href="#" class="nav-link submenu-toggle">
+                        <span class="nav-icon">&#x26A1;</span>
+                        <span>Matching</span>
+                        <span class="submenu-arrow">&#x25BC;</span>
+                    </a>
+                    <div class="submenu-items">
+                        <a href="/matching/masivo/" class="submenu-item {% if '/matching/masivo/' in request.path %}active{% endif %}">
+                            <span class="submenu-icon">&#x1F4CA;</span>
+                            <span>Masivo</span>
+                        </a>
+                        <a href="/matching/calendar/" class="submenu-item {% if '/matching/calendar/' in request.path %}active{% endif %}">
+                            <span class="submenu-icon">&#x1F4C5;</span>
+                            <span>Calendario</span>
+                        </a>
+                        <a href="/matching/propuestas/dashboard/" class="submenu-item {% if '/matching/propuestas/' in request.path %}active{% endif %}">
+                            <span class="submenu-icon">&#x1F4AC;</span>
+                            <span>Propuestas</span>
+                        </a>
+                        <a href="/matching/matches/" class="submenu-item {% if '/matching/matches/' in request.path %}active{% endif %}">
+                            <span class="submenu-icon">&#x1F50D;</span>
+                            <span>Matches x Req</span>
+                        </a>
+                        <a href="/matching/matches-por-propiedad/" class="submenu-item {% if '/matching/matches-por-propiedad/' in request.path %}active{% endif %}">
+                            <span class="submenu-icon">&#x1F3E0;</span>
+                            <span>Matches x Prop</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Agentes con submenú -->
+                <div class="nav-item has-submenu {% if '/agentes/' in request.path %}active{% endif %}">
+                    <a href="#" class="nav-link submenu-toggle">
+                        <span class="nav-icon">&#x1F465;</span>
+                        <span>Agentes</span>
+                        <span class="submenu-arrow">&#x25BC;</span>
+                    </a>
+                    <div class="submenu-items">
+                        <a href="/agentes/" class="submenu-item {% if request.path == '/agentes/' %}active{% endif %}">
+                            <span class="submenu-icon">&#x1F464;</span>
+                            <span>Lista de Agentes</span>
+                        </a>
+                        <a href="/agentes/inmobiliarias/" class="submenu-item {% if '/inmobiliarias/' in request.path %}active{% endif %}">
+                            <span class="submenu-icon">&#x1F3E2;</span>
+                            <span>Inmobiliarias</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- ===== ANÁLISIS E INTELIGENCIA ===== -->
+                <div class="nav-section-title" style="margin-top: 12px;">An&aacute;lisis & Mercado</div>
+
+                <!-- ACM con submenú -->
+                <div class="nav-item has-submenu {% if '/acm/' in request.path %}active{% endif %}">
+                    <a href="#" class="nav-link submenu-toggle">
+                        <span class="nav-icon">&#x1F4D0;</span>
+                        <span>ACM</span>
+                        <span class="submenu-arrow">&#x25BC;</span>
+                    </a>
+                    <div class="submenu-items">
+                        <a href="/acm/" class="submenu-item {% if request.path == '/acm/' %}active{% endif %}">
+                            <span class="submenu-icon">&#x1F3E0;</span>
+                            <span>Dashboard</span>
+                        </a>
+                        <a href="/acm/analisis/" class="submenu-item {% if '/acm/analisis/' in request.path %}active{% endif %}">
+                            <span class="submenu-icon">&#x1F50D;</span>
+                            <span>Nuevo An&aacute;lisis</span>
+                        </a>
+                        <a href="/acm/historial/" class="submenu-item {% if '/acm/historial/' in request.path %}active{% endif %}">
+                            <span class="submenu-icon">&#x1F4C4;</span>
+                            <span>Historial</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Análisis de Mercado con submenú -->
+                <div class="nav-item has-submenu {% if '/market-analysis/' in request.path %}active{% endif %}">
+                    <a href="#" class="nav-link submenu-toggle">
+                        <span class="nav-icon">&#x1F525;</span>
+                        <span>An&aacute;lisis de Mercado</span>
+                        <span class="submenu-arrow">&#x25BC;</span>
+                    </a>
+                    <div class="submenu-items">
+                        <a href="/market-analysis/heatmap/" class="submenu-item {% if '/market-analysis/heatmap/' in request.path %}active{% endif %}">
+                            <span class="submenu-icon">&#x1F3E0;</span>
+                            <span>Heatmap de Precios</span>
+                        </a>
+                        <a href="/market-analysis/dashboard/" class="submenu-item {% if '/market-analysis/dashboard/' in request.path %}active{% endif %}">
+                            <span class="submenu-icon">&#x1F4CA;</span>
+                            <span>Dashboard Mercado</span>
+                        </a>
+                        <a href="/market-analysis/ubicaciones/" class="submenu-item {% if '/market-analysis/ubicaciones/' in request.path %}active{% endif %}">
+                            <span class="submenu-icon">&#x1F4CD;</span>
+                            <span>Ubicaciones</span>
+                        </a>
+                    </div>
+                </div>
+
+                <a href="/cuadrantizacion/mapa/" class="nav-item {% if '/cuadrantizacion/' in request.path %}active{% endif %}">
+                    <span class="nav-icon">&#x1F5FA;</span>
+                    <span>Cuadrantizaci&oacute;n</span>
+                </a>
+
+                <a href="/api/pois/mapa/" class="nav-item {% if '/pois/mapa/' in request.path %}active{% endif %}">
+                    <span class="nav-icon">&#x1F4CD;</span>
+                    <span>Mapa de POIs</span>
+                </a>
+
+                <!-- ===== MARKETING Y PROSPECCIÓN ===== -->
+                <div class="nav-section-title" style="margin-top: 12px;">Marketing & Prospecci&oacute;n</div>
+
+                <!-- Prospección con submenú -->
+                <div class="nav-item has-submenu {% if '/prospects/' in request.path %}active{% endif %}">
+                    <a href="#" class="nav-link submenu-toggle">
+                        <span class="nav-icon">&#x1F4F7;</span>
+                        <span>Prospecci&oacute;n</span>
+                        <span class="submenu-arrow">&#x25BC;</span>
+                    </a>
+                    <div class="submenu-items">
+                        <a href="/prospects/capture/" class="submenu-item {% if '/prospects/capture/' in request.path %}active{% endif %}">
+                            <span class="submenu-icon">&#x1F4F7;</span>
+                            <span>Captura</span>
+                        </a>
+                        <a href="/prospects/" class="submenu-item {% if '/prospects/' in request.path and '/capture/' not in request.path %}active{% endif %}">
+                            <span class="submenu-icon">&#x1F4CB;</span>
+                            <span>Lista de Prospectos</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Meta Ads con submenú -->
+                <div class="nav-item has-submenu {% if '/meta-ads/' in request.path %}active{% endif %}">
+                    <a href="#" class="nav-link submenu-toggle">
+                        <span class="nav-icon">&#x1F4E3;</span>
+                        <span>Meta Ads</span>
+                        <span class="submenu-arrow">&#x25BC;</span>
+                    </a>
+                    <div class="submenu-items">
+                        <a href="/meta-ads/dashboard/exacto/" class="submenu-item {% if '/meta-ads/dashboard/' in request.path %}active{% endif %}">
+                            <span class="submenu-icon">&#x1F4CA;</span>
+                            <span>Dashboard</span>
+                        </a>
+                        <a href="/meta-ads/analisis/historico/" class="submenu-item {% if '/meta-ads/analisis/historico/' in request.path %}active{% endif %}">
+                            <span class="submenu-icon">&#x1F4C8;</span>
+                            <span>An&aacute;lisis Hist&oacute;rico</span>
+                        </a>
+                        <a href="/meta-ads/campa%C3%B1as/" class="submenu-item {% if '/meta-ads/campañas/' in request.path %}active{% endif %}">
+                            <span class="submenu-icon">&#x1F3AF;</span>
+                            <span>Campa&ntilde;as</span>
+                        </a>
+                        <a href="/meta-ads/sincronizar/" class="submenu-item {% if '/meta-ads/sincronizar/' in request.path %}active{% endif %}">
+                            <span class="submenu-icon">&#x1F504;</span>
+                            <span>Sincronizar</span>
+                        </a>
+                    </div>
+                </div>
+
+                <a href="/analisis-crm/" class="nav-item {% if '/analisis-crm/' in request.path %}active{% endif %}">
+                    <span class="nav-icon">&#x1F465;</span>
+                    <span>Leads CRM</span>
+                </a>
+
+                <!-- ===== INTELIGENCIA ARTIFICIAL ===== -->
+                <div class="nav-section-title" style="margin-top: 12px;">Inteligencia Artificial</div>
+
+                <!-- Intelligence Layer - Dashboard Principal -->
+                <a href="/intelligence/dashboard/" class="nav-item {% if request.path == '/intelligence/' or request.path == '/intelligence/dashboard/' %}active{% endif %}">
+                    <span class="nav-icon">&#x1F9E0;</span>
+                    <span>Dashboard IA</span>
+                </a>
+
+                <!-- Skills con submenú -->
+                <div class="nav-item has-submenu {% if '/intelligence/skills/' in request.path %}active{% endif %}">
+                    <a href="#" class="nav-link submenu-toggle">
+                        <span class="nav-icon">&#x26A1;</span>
+                        <span>Skills</span>
+                        <span class="submenu-arrow">&#x25BC;</span>
+                    </a>
+                    <div class="submenu-items">
+                        <a href="/intelligence/skills/dashboard/" class="submenu-item {% if '/intelligence/skills/dashboard/' in request.path %}active{% endif %}">
+                            <span class="submenu-icon">&#x1F4CA;</span>
+                            <span>Dashboard</span>
+                        </a>
+                        <a href="/intelligence/skills/create/" class="submenu-item {% if '/intelligence/skills/create/' in request.path %}active{% endif %}">
+                            <span class="submenu-icon">&#x2795;</span>
+                            <span>Crear Skill</span>
+                        </a>
+                        <a href="/intelligence/skills/logs/" class="submenu-item {% if '/intelligence/skills/logs/' in request.path %}active{% endif %}">
+                            <span class="submenu-icon">&#x1F4DD;</span>
+                            <span>Logs</span>
+                        </a>
+                        <a href="/intelligence/skills/metrics/global/" class="submenu-item {% if '/intelligence/skills/metrics/' in request.path %}active{% endif %}">
+                            <span class="submenu-icon">&#x1F4C8;</span>
+                            <span>M&eacute;tricas</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Colecciones RAG con submenú -->
+                <div class="nav-item has-submenu {% if '/intelligence/collections/' in request.path %}active{% endif %}">
+                    <a href="#" class="nav-link submenu-toggle">
+                        <span class="nav-icon">&#x1F4DA;</span>
+                        <span>Colecciones RAG</span>
+                        <span class="submenu-arrow">&#x25BC;</span>
+                    </a>
+                    <div class="submenu-items">
+                        <a href="/intelligence/collections/" class="submenu-item {% if request.path == '/intelligence/collections/' %}active{% endif %}">
+                            <span class="submenu-icon">&#x1F4CB;</span>
+                            <span>Lista de Colecciones</span>
+                        </a>
+                        <a href="/intelligence/collections/create/" class="submenu-item {% if '/intelligence/collections/create/' in request.path %}active{% endif %}">
+                            <span class="submenu-icon">&#x2795;</span>
+                            <span>Crear Colecci&oacute;n</span>
+                        </a>
+                        <a href="/intelligence/collections/sync/" class="submenu-item {% if '/intelligence/collections/sync/' in request.path %}active{% endif %}">
+                            <span class="submenu-icon">&#x1F504;</span>
+                            <span>Sincronizar</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Evaluación de Intenciones -->
+                <a href="/intelligence/intent-evaluation/" class="nav-item {% if '/intelligence/intent-evaluation/' in request.path %}active{% endif %}">
+                    <span class="nav-icon">&#x1F3AF;</span>
+                    <span>Evaluaci&oacute;n de Intenciones</span>
+                </a>
+
+                <!-- Chat Asistente -->
+                <a href="/intelligence/chat-web/" class="nav-item {% if '/intelligence/chat-web/' in request.path %}active{% endif %}">
+                    <span class="nav-icon">&#x1F4AC;</span>
+                    <span>Chat Asistente</span>
+                </a>
+
+                <!-- Flujos Conversacionales -->
+                <a href="/intelligence/chat-workflows/manage/" class="nav-item {% if '/intelligence/chat-workflows/' in request.path %}active{% endif %}">
+                    <span class="nav-icon">&#x1F504;</span>
+                    <span>Flujos Conversacionales</span>
+                </a>
+
+                <!-- Memoria Episódica -->
+                <a href="/intelligence/episodic-memory/" class="nav-item {% if '/intelligence/episodic-memory/' in request.path %}active{% endif %}">
+                    <span class="nav-icon">&#x1F9E0;</span>
+                    <span>Memoria Epis&oacute;dica</span>
+                </a>
+
+                <!-- Perfiles de IA -->
+                <a href="/intelligence/profiles/" class="nav-item {% if '/intelligence/profiles/' in request.path %}active{% endif %}">
+                    <span class="nav-icon">&#x1F464;</span>
+                    <span>Perfiles de IA</span>
+                </a>
+
+                <!-- ===== ADMINISTRACIÓN IA ===== -->
+                <div class="nav-section-title" style="margin-top: 12px;">Administraci&oacute;n IA</div>
+
+                <!-- Usuarios -->
+                <a href="/intelligence/users/" class="nav-item {% if '/intelligence/users/' in request.path %}active{% endif %}">
+                    <span class="nav-icon">&#x1F465;</span>
+                    <span>Usuarios</span>
+                </a>
+
+                <!-- Roles -->
+                <a href="/intelligence/roles/" class="nav-item {% if '/intelligence/roles/' in request.path %}active{% endif %}">
+                    <span class="nav-icon">&#x1F3DB;</span>
+                    <span>Roles</span>
+                </a>
+
+                <!-- Simulador de Usuario -->
+                <a href="/intelligence/simulator/" class="nav-item {% if '/intelligence/simulator/' in request.path %}active{% endif %}">
+                    <span class="nav-icon">&#x1F916;</span>
+                    <span>Simulador</span>
+                </a>
+
+                <!-- ===== MONITOREO ===== -->
+                <div class="nav-section-title" style="margin-top: 12px;">Monitoreo</div>
+
+                <!-- Estadísticas del Sistema -->
+                <a href="/intelligence/stats/" class="nav-item {% if '/intelligence/stats/' in request.path %}active{% endif %}">
+                    <span class="nav-icon">&#x1F4CA;</span>
+                    <span>Estad&iacute;sticas</span>
+                </a>
+
+                <!-- Consumo de IA -->
+                <a href="/intelligence/consumo-ia/" class="nav-item {% if '/intelligence/consumo-ia/' in request.path %}active{% endif %}">
+                    <span class="nav-icon">&#x1F916;</span>
+                    <span>Consumo de IA</span>
+                </a>
+
+                <!-- Logs de Actividad -->
+                <a href="/intelligence/logs/" class="nav-item {% if '/intelligence/logs/' in request.path %}active{% endif %}">
+                    <span class="nav-icon">&#x1F4DD;</span>
+                    <span>Logs de Actividad</span>
+                </a>
+
+                <!-- Configuraciones -->
+                <a href="/intelligence/config/" class="nav-item {% if '/intelligence/config/' in request.path %}active{% endif %}">
+                    <span class="nav-icon">&#x2699;&#xFE0F;</span>
+                    <span>Configuraciones</span>
+                </a>
+
+                <!-- Errores -->
+                <a href="/intelligence/errors/" class="nav-item {% if '/intelligence/errors/' in request.path %}active{% endif %}">
+                    <span class="nav-icon">&#x1F6A8;</span>
+                    <span>Errores</span>
+                </a>
+
+                <!-- Tests -->
+                <a href="/intelligence/tests/" class="nav-item {% if '/intelligence/tests/' in request.path %}active{% endif %}">
+                    <span class="nav-icon">&#x1F9EA;</span>
+                    <span>Tests</span>
+                </a>
+
+                <!-- ===== SISTEMA ===== -->
+                <div class="nav-section-title" style="margin-top: 12px;">Sistema</div>
+
+                <a href="/fuentes-web/" class="nav-item {% if '/fuentes-web/' in request.path %}active{% endif %}">
+                    <span class="nav-icon">&#x1F310;</span>
+                    <span>Fuentes Web</span>
+                </a>
+
+                <a href="/capturas/" class="nav-item {% if '/capturas/' in request.path %}active{% endif %}">
+                    <span class="nav-icon">&#x1F4F8;</span>
+                    <span>Capturas</span>
+                </a>
+
+                <a href="/eventos/" class="nav-item {% if '/eventos/' in request.path %}active{% endif %}">
+                    <span class="nav-icon">&#x1F4C5;</span>
+                    <span>Eventos</span>
+                </a>
+
+                {% if user.is_staff %}
+                <a href="/admin/" class="nav-item" target="_blank">
+                    <span class="nav-icon">&#x2699;</span>
+                    <span>Admin Django</span>
+                </a>
+                {% endif %}
+                {% endblock %}
+            </div>
+        </nav>
+
+        <!-- ===== MAIN CONTENT ===== -->
+        <div class="main-content">
+            <!-- Header -->
+            <header class="app-header">
+                {% block header_controls %}
+                <button class="mobile-menu-btn" id="mobileMenuBtn" type="button">&#x2630;</button>
+                <button class="sidebar-toggle-desktop" id="sidebarToggleDesktop" type="button" title="Colapsar sidebar">&#x2630;</button>
+                {% endblock %}
+
+                {% block header_title_area %}
+                <div class="header-title">Propifai <span>— Plataforma Inmobiliaria</span></div>
+                {% endblock %}
+
+                <div class="header-actions">
+                    {% block header_actions %}
+                    <button class="header-btn" title="Actualizar" onclick="location.reload()">&#x21BB;</button>
+                    <button class="header-btn" title="Notificaciones">&#x1F514;</button>
+                    {% if request.current_user %}
+                    <div class="user-info" style="display:flex;align-items:center;gap:8px;padding:4px 12px;border-right:1px solid var(--border-color);">
+                        <div class="user-avatar" title="{{ request.current_user.username }}">{{ request.current_user.username|first|upper }}</div>
+                        <span style="font-size:13px;color:var(--text-primary);font-weight:500;">{{ request.current_user.username }}</span>
+                    </div>
+                    <a href="{% url 'intelligence:logout' %}?next={{ request.path }}"
+                       class="auth-btn auth-btn-logout"
+                       title="Cerrar Sesión"
+                       style="text-decoration:none;display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:8px;border:1px solid var(--border-color);background-color:var(--bg-tertiary);color:#f85149;font-size:13px;font-weight:500;transition:all 0.2s ease;cursor:pointer;">
+                        <span style="font-size:16px;">🚪</span>
+                        <span>Cerrar Sesión</span>
+                    </a>
+                    {% else %}
+                    <button class="auth-btn auth-btn-login"
+                            onclick="document.getElementById('login-modal').style.display='flex'"
+                            title="Iniciar Sesión"
+                            style="text-decoration:none;display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:8px;border:1px solid #238636;background-color:#1f6f3a;color:#fff;font-size:13px;font-weight:500;transition:all 0.2s ease;cursor:pointer;">
+                        <span style="font-size:16px;">🔑</span>
+                        <span>Iniciar Sesión</span>
+                    </button>
+                    {% endif %}
+                    {% endblock %}
+                </div>
+            </header>
+
+            <!-- Content -->
+            <div class="content-area">
+                {% block before_content %}{% endblock %}
+                {% block content %}{% endblock %}
+                {% block after_content %}{% endblock %}
+            </div>
+        </div>
+    </div>
+
+    {% if not request.current_user %}
+    <!-- ═══════════════════════════════════════════════════════════════
+         LOGIN MODAL — Sistema de autenticación Intelligence
+         ═══════════════════════════════════════════════════════════════ -->
+    <div id="login-modal" class="auth-modal" style="display:none;">
+        <div class="auth-modal-backdrop" onclick="document.getElementById('login-modal').style.display='none'"></div>
+        <div class="auth-modal-content">
+            <div class="auth-modal-header">
+                <h3>🔑 Iniciar Sesión</h3>
+                <button class="auth-modal-close" onclick="document.getElementById('login-modal').style.display='none'">&times;</button>
+            </div>
+            <form method="POST" action="{% url 'intelligence:login' %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.path }}">
+                <div class="auth-form-group">
+                    <label class="auth-form-label">Usuario</label>
+                    <input type="text" name="username" class="auth-form-input" placeholder="Nombre de usuario" required>
+                </div>
+                <div class="auth-form-group">
+                    <label class="auth-form-label">Contraseña</label>
+                    <input type="password" name="password" class="auth-form-input" placeholder="Contraseña" required>
+                </div>
+                <div class="auth-modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('login-modal').style.display='none'">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Ingresar</button>
+                </div>
+            </form>
+            <div style="margin-top:12px;text-align:center;font-size:13px;color:var(--text-secondary);">
+                ¿No tienes cuenta?
+                <a href="#" onclick="document.getElementById('login-modal').style.display='none';document.getElementById('register-modal').style.display='flex';return false;" style="color:var(--accent-blue);">Regístrate aquí</a>
+            </div>
+            {% if messages %}
+            <div style="margin-top:12px;">
+                {% for message in messages %}
+                <div class="alert alert-{% if message.tags == 'error' %}error{% else %}info{% endif %}" style="padding:8px 12px;border-radius:6px;font-size:13px;{% if message.tags == 'error' %}background-color:rgba(248,81,73,0.1);color:#f85149;border:1px solid rgba(248,81,73,0.3);{% else %}background-color:rgba(88,166,255,0.1);color:#58a6ff;border:1px solid rgba(88,166,255,0.3);{% endif %}">{{ message }}</div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         REGISTER MODAL
+         ═══════════════════════════════════════════════════════════════ -->
+    <div id="register-modal" class="auth-modal" style="display:none;">
+        <div class="auth-modal-backdrop" onclick="document.getElementById('register-modal').style.display='none'"></div>
+        <div class="auth-modal-content">
+            <div class="auth-modal-header">
+                <h3>📝 Crear Cuenta</h3>
+                <button class="auth-modal-close" onclick="document.getElementById('register-modal').style.display='none'">&times;</button>
+            </div>
+            <form method="POST" action="{% url 'intelligence:register' %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.path }}">
+                <div class="auth-form-group">
+                    <label class="auth-form-label">Nombre de usuario</label>
+                    <input type="text" name="username" class="auth-form-input" placeholder="Ej: juanperez" required>
+                </div>
+                <div class="auth-form-group">
+                    <label class="auth-form-label">Contraseña</label>
+                    <input type="password" name="password" class="auth-form-input" placeholder="Mínimo 6 caracteres" required minlength="6">
+                </div>
+                <div class="auth-form-group">
+                    <label class="auth-form-label">Teléfono (opcional)</label>
+                    <input type="text" name="phone" class="auth-form-input" placeholder="Ej: +51999888777">
+                </div>
+                <div class="auth-modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('register-modal').style.display='none'">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Crear Cuenta</button>
+                </div>
+            </form>
+            <div style="margin-top:12px;text-align:center;font-size:13px;color:var(--text-secondary);">
+                ¿Ya tienes cuenta?
+                <a href="#" onclick="document.getElementById('register-modal').style.display='none';document.getElementById('login-modal').style.display='flex';return false;" style="color:var(--accent-blue);">Inicia sesión</a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% block extra_scripts %}{% endblock %}
+
+    <script>
+        (function() {
+            'use strict';
+            var mobileMenuBtn = document.getElementById('mobileMenuBtn');
+            var sidebarToggleDesktop = document.getElementById('sidebarToggleDesktop');
+            var sidebar = document.getElementById('appSidebar');
+            var overlay = document.getElementById('sidebarOverlay');
+
+            function toggleMobileSidebar() {
+                sidebar.classList.toggle('mobile-open');
+                overlay.classList.toggle('active');
+            }
+
+            function toggleDesktopSidebar() {
+                sidebar.classList.toggle('collapsed');
+            }
+
+            if (mobileMenuBtn) {
+                mobileMenuBtn.addEventListener('click', toggleMobileSidebar);
+            }
+
+            if (sidebarToggleDesktop) {
+                sidebarToggleDesktop.addEventListener('click', toggleDesktopSidebar);
+            }
+
+            if (overlay) {
+                overlay.addEventListener('click', toggleMobileSidebar);
+            }
+
+            // Submenu toggle
+            var submenuToggles = document.querySelectorAll('.submenu-toggle');
+            for (var i = 0; i < submenuToggles.length; i++) {
+                (function(toggle) {
+                    toggle.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        var parent = this.closest('.has-submenu');
+                        if (parent) {
+                            parent.classList.toggle('open');
+                        }
+                    });
+                })(submenuToggles[i]);
+            }
+
+            // Auto-open submenu if a child is active
+            var submenus = document.querySelectorAll('.has-submenu');
+            for (var j = 0; j < submenus.length; j++) {
+                var activeItems = submenus[j].querySelectorAll('.submenu-item.active');
+                if (activeItems.length > 0) {
+                    submenus[j].classList.add('open');
+                }
+            }
+        })();
+    </script>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

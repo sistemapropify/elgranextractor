@@ -1,0 +1,156 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="mb-4">{{ title }}</h1>
+            <p class="lead">Lista completa de leads (paginada)</p>
+        </div>
+    </div>
+
+    <!-- Filtros simples (podrían expandirse) -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-body">
+                    <form method="get" class="row g-3">
+                        <div class="col-md-3">
+                            <label for="search" class="form-label">Buscar</label>
+                            <input type="text" class="form-control" id="search" name="search" placeholder="Nombre, teléfono, email..." value="{{ request.GET.search }}">
+                        </div>
+                        <div class="col-md-2">
+                            <label for="is_active" class="form-label">Estado</label>
+                            <select class="form-select" id="is_active" name="is_active">
+                                <option value="">Todos</option>
+                                <option value="1" {% if request.GET.is_active == '1' %}selected{% endif %}>Activo</option>
+                                <option value="0" {% if request.GET.is_active == '0' %}selected{% endif %}>Inactivo</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="order_by" class="form-label">Ordenar por</label>
+                            <select class="form-select" id="order_by" name="order_by">
+                                <option value="-date_entry" {% if request.GET.order_by == '-date_entry' %}selected{% endif %}>Más reciente (fecha entrada)</option>
+                                <option value="date_entry" {% if request.GET.order_by == 'date_entry' %}selected{% endif %}>Más antiguo (fecha entrada)</option>
+                                <option value="-created_at" {% if request.GET.order_by == '-created_at' %}selected{% endif %}>Más reciente (creación)</option>
+                                <option value="created_at" {% if request.GET.order_by == 'created_at' %}selected{% endif %}>Más antiguo (creación)</option>
+                                <option value="full_name" {% if request.GET.order_by == 'full_name' %}selected{% endif %}>Nombre A-Z</option>
+                                <option value="-full_name" {% if request.GET.order_by == '-full_name' %}selected{% endif %}>Nombre Z-A</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="bi bi-funnel"></i> Filtrar
+                            </button>
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <a href="{% url 'analisis_crm:lead_list' %}" class="btn btn-outline-secondary w-100">
+                                <i class="bi bi-arrow-clockwise"></i> Limpiar
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla de leads -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">Leads ({{ page_obj.paginator.count }} total)</h6>
+                    <a href="{% url 'analisis_crm:dashboard' %}" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-dashboard"></i> Dashboard
+                    </a>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover" width="100%" cellspacing="0">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Nombre</th>
+                                    <th>Teléfono</th>
+                                    <th>Email</th>
+                                    <th>Fecha Entrada</th>
+                                    <th>Estado</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for lead in page_obj %}
+                                <tr>
+                                    <td>{{ lead.id }}</td>
+                                    <td>{{ lead.full_name|default:"Sin nombre" }}</td>
+                                    <td>{{ lead.phone }}</td>
+                                    <td>{{ lead.email|default:"-" }}</td>
+                                    <td>{% if lead.date_entry %}{{ lead.date_entry|date:"d/m/Y H:i" }}{% else %}{{ lead.created_at|date:"d/m/Y H:i" }}{% endif %}</td>
+                                    <td>
+                                        {% if lead.is_active %}
+                                        <span class="badge bg-success">Activo</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">Inactivo</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{% url 'analisis_crm:lead_detail' lead.id %}" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="7" class="text-center">No hay leads que coincidan con los filtros.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Paginación -->
+                    {% if page_obj.paginator.num_pages > 1 %}
+                    <nav aria-label="Page navigation">
+                        <ul class="pagination justify-content-center">
+                            {% if page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Anterior</a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">Anterior</span>
+                            </li>
+                            {% endif %}
+
+                            {% for num in page_obj.paginator.page_range %}
+                                {% if page_obj.number == num %}
+                                <li class="page-item active">
+                                    <span class="page-link">{{ num }}</span>
+                                </li>
+                                {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ num }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a>
+                                </li>
+                                {% endif %}
+                            {% endfor %}
+
+                            {% if page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Siguiente</a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">Siguiente</span>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,578 @@
+{% extends "intelligence/base/base.html" %}
+{% load static %}
+
+{% block title %}Skills Dashboard — Propifai Intelligence Layer{% endblock %}
+
+{% block active_section %}skills{% endblock %}
+
+{% block page_title %}Dashboard de Skills{% endblock %}
+
+{% block extra_css %}
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+
+    body { background-color: #0d1117; color: #c9d1d9; line-height: 1.6; padding: 20px; }
+
+    .sd-container { max-width: 1400px; margin: 0 auto; padding: 20px; }no se
+
+    /* ── Header ── */
+    .sd-header {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #30363d;
+        flex-wrap: wrap; gap: 12px;
+    }
+    .sd-header h1 { color: #58a6ff; font-size: 28px; }
+    .sd-header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .sd-header-info {
+        font-size: 13px; color: #8b949e;
+        padding: 6px 12px; background: #161b22; border-radius: 6px;
+        border: 1px solid #30363d;
+    }
+    .sd-user-badge {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 4px 12px; background: #161b22; border-radius: 6px;
+        border: 1px solid #30363d; font-size: 13px; color: #c9d1d9;
+    }
+
+    /* ── Botones (mismo diseño que Collections) ── */
+    .btn {
+        padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer;
+        font-size: 14px; font-weight: 500; transition: all 0.2s;
+        text-decoration: none; display: inline-flex; align-items: center; gap: 8px;
+    }
+    .btn-primary { background-color: #238636; color: white; }
+    .btn-primary:hover { background-color: #2ea043; }
+    .btn-secondary { background-color: #30363d; color: #c9d1d9; }
+    .btn-secondary:hover { background-color: #3c444d; }
+    .btn-danger { background-color: #da3633; color: white; }
+    .btn-danger:hover { background-color: #f85149; }
+    .btn-sm { padding: 6px 12px; font-size: 12px; }
+
+    /* ── Mensajes ── */
+    .messages { margin-bottom: 20px; }
+    .alert {
+        padding: 12px 16px; border-radius: 6px; margin-bottom: 10px;
+        border: 1px solid transparent;
+    }
+    .alert-success { background-color: rgba(35, 134, 54, 0.1); border-color: rgba(35, 134, 54, 0.3); color: #3fb950; }
+    .alert-error { background-color: rgba(218, 54, 51, 0.1); border-color: rgba(218, 54, 51, 0.3); color: #f85149; }
+    .alert-info { background-color: rgba(88, 166, 255, 0.1); border-color: rgba(88, 166, 255, 0.3); color: #58a6ff; }
+
+    /* ── KPIs ── */
+    .kpi-grid {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px; margin-bottom: 30px;
+    }
+    .kpi-card {
+        background-color: #161b22; border: 1px solid #30363d;
+        border-radius: 8px; padding: 20px; text-align: center;
+        transition: border-color 0.2s;
+    }
+    .kpi-card:hover { border-color: #58a6ff; }
+    .kpi-value { font-size: 32px; font-weight: 700; margin-bottom: 4px; }
+    .kpi-value.blue { color: #58a6ff; }
+    .kpi-value.green { color: #3fb950; }
+    .kpi-value.red { color: #f85149; }
+    .kpi-value.purple { color: #8957e5; }
+    .kpi-value.orange { color: #d29922; }
+    .kpi-value.cyan { color: #39d2c0; }
+    .kpi-label { font-size: 14px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; }
+    .kpi-sub { font-size: 12px; color: #484f58; margin-top: 2px; }
+
+    /* ── Charts Grid ── */
+    .charts-grid {
+        display: grid; grid-template-columns: repeat(3, 1fr);
+        gap: 16px; margin-bottom: 30px;
+    }
+
+    /* ── Cards genéricas ── */
+    .sd-card {
+        background-color: #161b22; border: 1px solid #30363d;
+        border-radius: 8px; overflow: hidden;
+    }
+    .sd-card-header {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 16px 20px; background-color: #21262d;
+        border-bottom: 1px solid #30363d;
+    }
+    .sd-card-title { font-size: 16px; font-weight: 600; color: #c9d1d9; }
+    .sd-card-body { padding: 20px; }
+    .sd-text-small { font-size: 13px; color: #8b949e; }
+    .sd-text-mono { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; }
+
+    /* ── Bar Chart ── */
+    .sd-chart-container {
+        display: flex; align-items: flex-end; gap: 3px;
+        height: 200px; padding: 10px 0;
+        border-bottom: 1px solid #30363d; margin-top: 10px;
+    }
+    .sd-chart-bar {
+        flex: 1; display: flex; flex-direction: column;
+        align-items: center; justify-content: flex-end; min-width: 0;
+        position: relative;
+    }
+    .sd-chart-bar-value {
+        font-size: 10px; color: #c9d1d9; font-weight: 600;
+        margin-bottom: 4px; position: absolute; top: -20px;
+        left: 50%; transform: translateX(-50%);
+    }
+    .sd-chart-bar-fill {
+        width: 100%;
+        background: linear-gradient(180deg, #58a6ff 0%, #1f6feb 100%);
+        border-radius: 2px 2px 0 0; min-height: 2px;
+        transition: all 0.3s ease;
+    }
+    .sd-chart-bar-label {
+        font-size: 9px; color: #8b949e; margin-top: 4px;
+        text-align: center; white-space: nowrap; overflow: hidden;
+        text-overflow: ellipsis; max-width: 100%;
+    }
+
+    /* ── Donut Chart ── */
+    .sd-donut-container {
+        display: flex; align-items: center; gap: 20px;
+        justify-content: center; padding: 10px 0;
+    }
+    .sd-donut {
+        width: 100px; height: 100px; border-radius: 50%;
+        flex-shrink: 0; position: relative;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .sd-donut-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
+    .sd-donut-center-value { font-size: 18px; font-weight: 700; line-height: 1; color: #c9d1d9; }
+    .sd-donut-center-label { font-size: 11px; color: #8b949e; margin-top: 2px; }
+    .sd-donut-legend { display: flex; flex-direction: column; gap: 6px; }
+    .sd-donut-legend-item { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #8b949e; }
+    .sd-donut-legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+    /* ── Tablas ── */
+    .sd-table-wrapper { overflow-x: auto; }
+    .sd-table { width: 100%; border-collapse: collapse; }
+    .sd-table th {
+        padding: 12px 14px; border-bottom: 1px solid #30363d;
+        text-align: left; font-size: 12px; font-weight: 600;
+        color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px;
+        background-color: #21262d;
+    }
+    .sd-table td {
+        padding: 12px 14px; border-bottom: 1px solid #30363d;
+        color: #c9d1d9; font-size: 14px;
+    }
+    .sd-table tr:hover td { background-color: #1c2128; }
+    .sd-table tr:last-child td { border-bottom: none; }
+
+    /* ── Badges ── */
+    .sd-badge {
+        display: inline-block; padding: 4px 10px; border-radius: 12px;
+        font-size: 12px; font-weight: 500;
+    }
+    .sd-badge-green { background-color: rgba(35, 134, 54, 0.2); color: #3fb950; }
+    .sd-badge-red { background-color: rgba(218, 54, 51, 0.2); color: #f85149; }
+    .sd-badge-blue { background-color: rgba(88, 166, 255, 0.2); color: #58a6ff; }
+    .sd-badge-orange { background-color: rgba(210, 153, 34, 0.2); color: #d29922; }
+    .sd-badge-purple { background-color: rgba(137, 87, 229, 0.2); color: #8957e5; }
+    .sd-badge-gray { background-color: rgba(110, 118, 129, 0.2); color: #8b949e; }
+
+    /* ── Enlaces ── */
+    .sd-link { color: #58a6ff; text-decoration: none; font-weight: 500; }
+    .sd-link:hover { color: #79c0ff; text-decoration: underline; }
+
+    /* ── Empty State ── */
+    .sd-empty { text-align: center; padding: 40px 20px; color: #8b949e; }
+    .sd-empty h3 { font-size: 18px; margin-bottom: 8px; color: #c9d1d9; }
+    .sd-empty p { margin-bottom: 0; }
+
+    /* ── Modal Login ── */
+    .sd-modal {
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        z-index: 9999; display: flex; align-items: center; justify-content: center;
+    }
+    .sd-modal-backdrop {
+        position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.6);
+    }
+    .sd-modal-content {
+        position: relative; background: #161b22; border: 1px solid #30363d;
+        border-radius: 8px; padding: 24px; width: 90%; max-width: 400px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.4); z-index: 1;
+    }
+    .sd-modal-header {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 16px;
+    }
+    .sd-modal-header h3 { margin: 0; font-size: 18px; color: #c9d1d9; }
+    .sd-modal-close {
+        background: none; border: none; color: #8b949e; font-size: 24px;
+        cursor: pointer; padding: 0; line-height: 1;
+    }
+    .sd-modal-close:hover { color: #c9d1d9; }
+    .sd-form-group { margin-bottom: 14px; }
+    .sd-form-label { display: block; font-size: 14px; color: #8b949e; margin-bottom: 6px; font-weight: 500; }
+    .sd-form-input {
+        width: 100%; padding: 10px 12px; background: #0d1117;
+        border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;
+        font-size: 14px; box-sizing: border-box;
+    }
+    .sd-form-input:focus { outline: none; border-color: #58a6ff; box-shadow: 0 0 0 2px rgba(88,166,255,0.2); }
+    .sd-modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+
+    /* ── Footer ── */
+    .sd-footer { text-align: center; color: #8b949e; font-size: 14px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #30363d; }
+
+    /* ── Responsive ── */
+    @media (max-width: 992px) { .charts-grid { grid-template-columns: 1fr; } }
+    @media (max-width: 768px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 480px) { .kpi-grid { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="sd-container">
+
+    <!-- ═══ Header ═══ -->
+    <div class="sd-header">
+        <h1>⚙️ Dashboard de Skills</h1>
+        <div class="sd-header-actions">
+            <span class="sd-header-info">{{ active_count }} activas · {{ skills|length }} totales</span>
+            <button class="btn btn-secondary btn-sm" onclick="location.reload()">🔄 Refrescar</button>
+            {% if user %}
+                <span class="sd-user-badge">👤 {{ user.username }}{% if user.role %}<span class="sd-badge sd-badge-blue" style="margin-left:4px;">{{ user.role.name }}</span>{% endif %}</span>
+                <a href="{% url 'intelligence:logout' %}?next={% url 'intelligence:skills_dashboard' %}" class="btn btn-secondary btn-sm">🚪 Salir</a>
+            {% else %}
+                <button class="btn btn-primary btn-sm" onclick="document.getElementById('login-modal').style.display='flex'">🔑 Iniciar Sesión</button>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if not user %}
+    <!-- ═══ Login Modal ═══ -->
+    <div id="login-modal" class="sd-modal" style="display:none;">
+        <div class="sd-modal-backdrop" onclick="document.getElementById('login-modal').style.display='none'"></div>
+        <div class="sd-modal-content">
+            <div class="sd-modal-header">
+                <h3>🔑 Iniciar Sesión</h3>
+                <button class="sd-modal-close" onclick="document.getElementById('login-modal').style.display='none'">&times;</button>
+            </div>
+            <form method="POST" action="{% url 'intelligence:login' %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{% url 'intelligence:skills_dashboard' %}">
+                <div class="sd-form-group">
+                    <label class="sd-form-label">Usuario</label>
+                    <input type="text" name="username" class="sd-form-input" placeholder="Nombre de usuario" required>
+                </div>
+                <div class="sd-form-group">
+                    <label class="sd-form-label">Contraseña</label>
+                    <input type="password" name="password" class="sd-form-input" placeholder="Contraseña" required>
+                </div>
+                <div class="sd-modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('login-modal').style.display='none'">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Ingresar</button>
+                </div>
+            </form>
+            {% if messages %}
+            <div style="margin-top:12px;">
+                {% for message in messages %}
+                <div class="alert alert-{% if message.tags == 'error' %}error{% else %}info{% endif %}">{{ message }}</div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- ═══ Mensajes ═══ -->
+    {% if messages %}
+    <div class="messages">
+        {% for message in messages %}
+            <div class="alert alert-{% if message.tags == 'error' %}error{% elif message.tags == 'success' %}success{% else %}info{% endif %}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- ═══ KPIs ═══ -->
+    <div class="kpi-grid" id="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-value blue" id="kpi-total">{{ total_execs }}</div>
+            <div class="kpi-label">Ejecuciones Totales</div>
+            <div class="kpi-sub">histórico completo</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-value green" id="kpi-success-rate">{{ success_rate }}%</div>
+            <div class="kpi-label">Tasa de Éxito</div>
+            <div class="kpi-sub">{{ success_count }} exitosas</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-value red" id="kpi-errors">{{ error_count }}</div>
+            <div class="kpi-label">Errores</div>
+            <div class="kpi-sub">{{ error_count }} totales</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-value purple" id="kpi-latency">{{ avg_latency }} <span style="font-size:16px;color:#8b949e;">ms</span></div>
+            <div class="kpi-label">Latencia Promedio</div>
+            <div class="kpi-sub">solo exitosas</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-value orange" id="kpi-today">{{ today_count }}</div>
+            <div class="kpi-label">Hoy</div>
+            <div class="kpi-sub">últimas 24h</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-value cyan" id="kpi-cache">{{ cache_hit_rate }}%</div>
+            <div class="kpi-label">Cache Hit Rate</div>
+            <div class="kpi-sub">{{ cached_count }} cacheadas</div>
+        </div>
+    </div>
+
+    <!-- ═══ Charts ═══ -->
+    <div class="charts-grid">
+        <!-- Bar Chart: Ejecuciones por Hora -->
+        <div class="sd-card">
+            <div class="sd-card-header">
+                <span class="sd-card-title">Ejecuciones por Hora</span>
+            </div>
+            <div class="sd-card-body">
+                <div class="sd-chart-container" id="chart-hourly">
+                    {% if executions_by_hour %}
+                        {% for hour in executions_by_hour %}
+                            <div class="sd-chart-bar">
+                                <span class="sd-chart-bar-value">{{ hour.count }}</span>
+                                <div class="sd-chart-bar-fill" style="height:{{ hour.display_height_pct }}%;min-height:{% if hour.count > 0 %}4{% else %}2{% endif %}px;" title="{{ hour.label }}: {{ hour.count }}"></div>
+                                <span class="sd-chart-bar-label">{{ hour.label }}</span>
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <div style="width:100%;text-align:center;color:#8b949e;padding:40px 0;">Sin datos</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Donut: Tasa de Éxito -->
+        <div class="sd-card">
+            <div class="sd-card-header">
+                <span class="sd-card-title">Tasa de Éxito</span>
+            </div>
+            <div class="sd-card-body">
+                <div class="sd-donut-container">
+                    <div class="sd-donut" id="donut-success" style="background: conic-gradient(#238636 0% {{ success_rate }}%, #da3633 {{ success_rate }}% 100%);">
+                        <div class="sd-donut-center">
+                            <div class="sd-donut-center-value">{{ success_rate }}%</div>
+                            <div class="sd-donut-center-label">Éxito</div>
+                        </div>
+                    </div>
+                    <div class="sd-donut-legend">
+                        <div class="sd-donut-legend-item"><span class="sd-donut-legend-dot" style="background:#238636;"></span> Éxito: {{ success_rate }}%</div>
+                        <div class="sd-donut-legend-item"><span class="sd-donut-legend-dot" style="background:#da3633;"></span> Error: {{ error_rate }}%</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Donut: Cache Hit Rate -->
+        <div class="sd-card">
+            <div class="sd-card-header">
+                <span class="sd-card-title">Cache Hit Rate</span>
+            </div>
+            <div class="sd-card-body">
+                <div class="sd-donut-container">
+                    <div class="sd-donut" id="donut-cache" style="background: conic-gradient(#d29922 0% {{ cache_hit_rate }}%, #484f58 {{ cache_hit_rate }}% 100%);">
+                        <div class="sd-donut-center">
+                            <div class="sd-donut-center-value">{{ cache_hit_rate }}%</div>
+                            <div class="sd-donut-center-label">Cache</div>
+                        </div>
+                    </div>
+                    <div class="sd-donut-legend">
+                        <div class="sd-donut-legend-item"><span class="sd-donut-legend-dot" style="background:#d29922;"></span> Cache: {{ cache_hit_rate }}%</div>
+                        <div class="sd-donut-legend-item"><span class="sd-donut-legend-dot" style="background:#484f58;"></span> No cache: {{ nocache_pct }}%</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ Tabla de Skills ═══ -->
+    <div class="sd-card" style="margin-bottom:24px;">
+        <div class="sd-card-header">
+            <span class="sd-card-title">Skills del Sistema</span>
+            <span class="sd-text-small">{{ skills|length }} registradas</span>
+        </div>
+        <div class="sd-card-body">
+            {% if skills %}
+            <div class="sd-table-wrapper">
+                <table class="sd-table">
+                    <thead>
+                        <tr>
+                            <th>Skill</th>
+                            <th>Categoría</th>
+                            <th>Estado</th>
+                            <th>Ejecuciones</th>
+                            <th>Latencia Prom.</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for skill in skills %}
+                        <tr>
+                            <td>
+                                <a href="{% url 'intelligence:skill_detail' skill.name %}" class="sd-link">{{ skill.name }}</a>
+                                <div class="sd-text-small" style="margin-top:2px;">{{ skill.description|truncatechars:60 }}</div>
+                            </td>
+                            <td><span class="sd-badge sd-badge-blue">{{ skill.category|default:"general" }}</span></td>
+                            <td>
+                                {% if skill.is_active|default:True %}
+                                <span class="sd-badge sd-badge-green">Activa</span>
+                                {% else %}
+                                <span class="sd-badge sd-badge-orange">Inactiva</span>
+                                {% endif %}
+                            </td>
+                            <td class="sd-text-small">{{ skill.execution_count|default:0 }}</td>
+                            <td class="sd-text-small">
+                                {% if skill.avg_latency %}{{ skill.avg_latency }} ms{% else %}—{% endif %}
+                            </td>
+                            <td>
+                                <div style="display:flex;gap:4px;">
+                                    <a href="{% url 'intelligence:skill_detail' skill.name %}" class="btn btn-secondary btn-sm">Ver</a>
+                                    {% if user and user.role and user.role.level >= 4 %}
+                                    <form method="POST" action="{% url 'intelligence:skill_toggle_active' skill.name %}" style="display:inline;">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-secondary btn-sm">{% if skill.is_active|default:True %}⏸️{% else %}▶️{% endif %}</button>
+                                    </form>
+                                    <form method="POST" action="{% url 'intelligence:skill_clear_cache' skill.name %}" style="display:inline;">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-danger btn-sm">🗑️</button>
+                                    </form>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="sd-empty">
+                <h3>⚙️ Sin skills registradas</h3>
+                <p>No hay skills disponibles en el sistema.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- ═══ Ejecuciones Recientes ═══ -->
+    <div class="sd-card" style="margin-bottom:24px;">
+        <div class="sd-card-header">
+            <span class="sd-card-title">Ejecuciones Recientes</span>
+            <span class="sd-text-small">últimas 20</span>
+        </div>
+        <div class="sd-card-body">
+            {% if recent_executions %}
+            <div class="sd-table-wrapper">
+                <table class="sd-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Skill</th>
+                            <th>Estado</th>
+                            <th>Latencia</th>
+                            <th>Ejecutado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for exec in recent_executions %}
+                        <tr>
+                            <td class="sd-text-mono" style="font-size:11px;">
+                                <a href="{% url 'intelligence:skill_execution_detail' exec.id %}" class="sd-link">{{ exec.id|stringformat:"s"|truncatechars:8 }}</a>
+                            </td>
+                            <td>
+                                <a href="{% url 'intelligence:skill_detail' exec.skill_name %}" class="sd-link">{{ exec.skill_name }}</a>
+                            </td>
+                            <td>
+                                <span class="sd-badge {% if exec.status == 'success' %}sd-badge-green{% elif exec.status == 'error' %}sd-badge-red{% elif exec.status == 'cached' %}sd-badge-blue{% else %}sd-badge-gray{% endif %}">
+                                    {% if exec.status == 'success' %}✓ Éxito{% elif exec.status == 'error' %}✗ Error{% elif exec.status == 'cached' %}⏳ Cache{% else %}{{ exec.status }}{% endif %}
+                                </span>
+                            </td>
+                            <td class="sd-text-small">
+                                {% if exec.latency_ms < 1000 %}{{ exec.latency_ms|floatformat:0 }} ms{% else %}{{ exec.latency_ms|floatformat:1 }} s{% endif %}
+                            </td>
+                            <td class="sd-text-small" style="white-space:nowrap;">{{ exec.executed_at|date:"d/m/Y H:i:s" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="sd-empty">
+                <h3>⏳ Sin ejecuciones recientes</h3>
+                <p>Las ejecuciones de skills aparecerán aquí.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="sd-footer">
+        <p>Propifai Intelligence Layer • Dashboard de Skills • {{ skills|length }} skill(s) registradas</p>
+    </div>
+
+</div>
+
+<script>
+(function() {
+    function doRefresh() {
+        fetch('{% url "intelligence:skill_stats_api" %}')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var kpiTotal = document.getElementById('kpi-total');
+                var kpiSuccess = document.getElementById('kpi-success-rate');
+                var kpiErrors = document.getElementById('kpi-errors');
+                var kpiLatency = document.getElementById('kpi-latency');
+                var kpiToday = document.getElementById('kpi-today');
+                var kpiCache = document.getElementById('kpi-cache');
+
+                if (kpiTotal) kpiTotal.textContent = data.total_executions || 0;
+                if (kpiSuccess) {
+                    kpiSuccess.textContent = (data.success_rate || 0) + '%';
+                    updateDonutChart('donut-success', data.success_rate || 0, '#238636', '#da3633');
+                    updateDonutCenter('donut-success', data.success_rate || 0, 'Éxito');
+                }
+                if (kpiErrors) kpiErrors.textContent = data.failed_executions || 0;
+                if (kpiLatency) kpiLatency.innerHTML = (data.average_execution_time || 0) + ' <span style="font-size:16px;color:#8b949e;">ms</span>';
+                if (kpiToday) kpiToday.textContent = data.today_count || 0;
+                if (kpiCache) {
+                    kpiCache.textContent = (data.cache_hit_rate || 0) + '%';
+                    updateDonutChart('donut-cache', data.cache_hit_rate || 0, '#d29922', '#484f58');
+                    updateDonutCenter('donut-cache', data.cache_hit_rate || 0, 'Cache');
+                }
+            })
+            .catch(function() {});
+    }
+
+    function updateDonutChart(donutId, percentage, color1, color2) {
+        var donut = document.getElementById(donutId);
+        if (donut) {
+            donut.style.background = 'conic-gradient(' + color1 + ' 0% ' + percentage + '%, ' + color2 + ' ' + percentage + '% 100%)';
+        }
+    }
+
+    function updateDonutCenter(donutId, percentage, label) {
+        var donut = document.getElementById(donutId);
+        if (donut) {
+            var center = donut.querySelector('.sd-donut-center-value');
+            var centerLabel = donut.querySelector('.sd-donut-center-label');
+            if (center) center.textContent = percentage + '%';
+            if (centerLabel) centerLabel.textContent = label;
+        }
+    }
+
+    doRefresh();
+    setInterval(doRefresh, 30000);
+
+    var loginModal = document.getElementById('login-modal');
+    var errorMessages = document.querySelectorAll('.alert-error');
+    if (loginModal && errorMessages.length > 0) {
+        loginModal.style.display = 'flex';
+    }
+})();
+</script>
+{% endblock %}

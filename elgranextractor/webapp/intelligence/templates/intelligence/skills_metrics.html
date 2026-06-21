@@ -1,0 +1,304 @@
+{% extends "intelligence/base/base.html" %}
+{% load static %}
+
+{% block title %}Métricas Globales — Propifai Skills{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --bg-dark: #0d1117;
+        --bg-card: #161b22;
+        --border-color: #30363d;
+        --text-primary: #e6edf3;
+        --text-secondary: #8b949e;
+        --text-muted: #484f58;
+        --accent-blue: #58a6ff;
+        --accent-green: #238636;
+        --accent-green-hover: #2ea043;
+        --accent-red: #f85149;
+        --accent-orange: #d29922;
+        --accent-purple: #bc8cff;
+        --accent-cyan: #39d2c0;
+        --radius: 8px;
+        --radius-sm: 6px;
+    }
+    body { background: var(--bg-dark); color: var(--text-primary); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+    .header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+    .header h1 { font-size: 22px; font-weight: 700; margin: 0; }
+    .nav-links { display: flex; gap: 4px; margin-bottom: 24px; flex-wrap: wrap; }
+    .nav-link { padding: 6px 14px; border-radius: var(--radius-sm); font-size: 13px; color: var(--text-secondary); text-decoration: none; border: 1px solid var(--border-color); background: transparent; transition: all 0.15s; }
+    .nav-link:hover { color: var(--text-primary); background: rgba(255,255,255,0.05); }
+    .nav-link.active { color: var(--accent-blue); border-color: var(--accent-blue); background: rgba(88,166,255,0.1); }
+    .card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius); margin-bottom: 24px; overflow: hidden; }
+    .card-header { padding: 14px 20px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; }
+    .card-header h3 { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); }
+    .card-body { padding: 20px; }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px; }
+    .stat-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius); padding: 16px 20px; }
+    .stat-label { font-size: 12px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+    .stat-value { font-size: 24px; font-weight: 700; color: var(--text-primary); }
+    .stat-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+    .table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .table th { text-align: left; padding: 10px 12px; color: var(--text-secondary); font-weight: 600; border-bottom: 1px solid var(--border-color); white-space: nowrap; }
+    .table td { padding: 10px 12px; border-bottom: 1px solid var(--border-color); color: var(--text-primary); }
+    .table tr:last-child td { border-bottom: none; }
+    .table tr:hover td { background: rgba(255,255,255,0.02); }
+    .small-text { font-size: 12px; color: var(--text-secondary); }
+    .mono { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; }
+    /* Bar chart */
+    .chart-container { height: 220px; display: flex; align-items: flex-end; gap: 4px; padding: 0 4px; }
+    .chart-bar-wrapper { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; }
+    .chart-bar { width: 100%; min-height: 2px; border-radius: 3px 3px 0 0; transition: height 0.3s; }
+    .chart-bar:hover { opacity: 0.8; }
+    .chart-label { font-size: 9px; color: var(--text-muted); margin-top: 4px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60px; }
+    .chart-value { font-size: 10px; color: var(--text-secondary); margin-bottom: 2px; }
+    /* Horizontal bar chart */
+    .h-bar-chart { display: flex; flex-direction: column; gap: 8px; }
+    .h-bar-row { display: flex; align-items: center; gap: 8px; }
+    .h-bar-label { width: 100px; font-size: 12px; color: var(--text-secondary); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; }
+    .h-bar-track { flex: 1; height: 20px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden; }
+    .h-bar-fill { height: 100%; border-radius: 4px; transition: width 0.3s; min-width: 2px; }
+    .h-bar-value { font-size: 12px; color: var(--text-secondary); width: 50px; text-align: left; flex-shrink: 0; }
+    /* Donut chart */
+    .donut-container { display: flex; align-items: center; gap: 20px; justify-content: center; padding: 10px 0; }
+    .donut { width: 140px; height: 140px; border-radius: 50%; flex-shrink: 0; }
+    .donut-legend { display: flex; flex-direction: column; gap: 6px; }
+    .donut-legend-item { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); }
+    .donut-legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+    .empty-state h3 { font-size: 18px; margin-bottom: 8px; color: var(--text-secondary); }
+    .empty-state p { font-size: 14px; }
+    @media (max-width: 768px) {
+        .grid-2 { grid-template-columns: 1fr; }
+        .header { flex-direction: column; align-items: flex-start; }
+        .stats-grid { grid-template-columns: 1fr 1fr; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <!-- Nav -->
+    <div class="nav-links">
+        <a href="{% url 'intelligence:skills_dashboard' %}" class="nav-link">← Dashboard</a>
+        <a href="{% url 'intelligence:skill_logs' %}" class="nav-link">📋 Logs</a>
+        <a href="{% url 'intelligence:skill_metrics_global' %}" class="nav-link active">📊 Métricas</a>
+    </div>
+
+    <!-- Header -->
+    <div class="header">
+        <h1>📊 Métricas Globales</h1>
+        <span class="small-text">— Análisis de rendimiento del sistema de skills</span>
+    </div>
+
+    <!-- KPIs -->
+    <div class="stats-grid">
+        <div class="stat-card" style="border-color:var(--accent-blue);">
+            <div class="stat-label">Total Ejecuciones</div>
+            <div class="stat-value">{{ total_execs }}</div>
+            <div class="stat-sub">histórico completo</div>
+        </div>
+        <div class="stat-card" style="border-color:var(--accent-green);">
+            <div class="stat-label">Tasa de Éxito</div>
+            <div class="stat-value">{{ success_rate }}%</div>
+            <div class="stat-sub">{{ metrics.success_count|default:"0" }} exitosas</div>
+        </div>
+        <div class="stat-card" style="border-color:var(--accent-red);">
+            <div class="stat-label">Errores</div>
+            <div class="stat-value">{{ error_count }}</div>
+            <div class="stat-sub">{{ metrics.error_count|default:"0" }} totales</div>
+        </div>
+        <div class="stat-card" style="border-color:var(--accent-orange);">
+            <div class="stat-label">Latencia Promedio</div>
+            <div class="stat-value">{{ avg_latency }} <span class="small-text" style="font-size:14px;">ms</span></div>
+            <div class="stat-sub">solo ejecuciones exitosas</div>
+        </div>
+    </div>
+
+    <!-- Charts Grid -->
+    <div class="grid-2">
+        <!-- Timeline (7 días) -->
+        <div class="card">
+            <div class="card-header"><h3>📈 Ejecuciones (7 días)</h3></div>
+            <div class="card-body">
+                {% if timeline %}
+                {% with timeline_list=timeline.items %}
+                {% with max_val=timeline.values|dictsortreversed:0|first %}
+                <div class="chart-container">
+                    {% for date, count in timeline.items %}
+                    <div class="chart-bar-wrapper">
+                        {% if count > 0 %}
+                        <div class="chart-value">{{ count }}</div>
+                        {% endif %}
+                        <div class="chart-bar" style="background:var(--accent-blue);height:{% widthratio count max_val 100 %}%;"></div>
+                        <div class="chart-label">{{ date|slice:":5" }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endwith %}
+                {% endwith %}
+                {% else %}
+                <div class="empty-state" style="padding:30px 20px;">
+                    <p>Sin datos en los últimos 7 días</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Success Rate por Categoría -->
+        <div class="card">
+            <div class="card-header"><h3>✅ Success Rate por Categoría</h3></div>
+            <div class="card-body">
+                {% if success_by_category %}
+                {% with cat_count=success_by_category|length %}
+                <div class="donut-container">
+                    <div class="donut" id="donut-category"></div>
+                    <div class="donut-legend" id="donut-legend-category">
+                        {% for cat, rate in success_by_category.items %}
+                        <div class="donut-legend-item">
+                            <span class="donut-legend-dot" id="dot-{{ forloop.counter0 }}"></span>
+                            {{ cat }}: {{ rate }}%
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endwith %}
+                {% else %}
+                <div class="empty-state" style="padding:30px 20px;">
+                    <p>Sin datos de categorías</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="grid-2">
+        <!-- Ejecuciones por Skill (horizontal bar) -->
+        <div class="card">
+            <div class="card-header"><h3>📊 Ejecuciones por Skill</h3></div>
+            <div class="card-body">
+                {% if execs_by_skill %}
+                {% with max_exec=execs_by_skill.values|dictsortreversed:0|first %}
+                <div class="h-bar-chart">
+                    {% for name, count in execs_by_skill.items %}
+                    <div class="h-bar-row">
+                        <div class="h-bar-label" title="{{ name }}">{{ name }}</div>
+                        <div class="h-bar-track">
+                            <div class="h-bar-fill" style="background:var(--accent-blue);width:{% widthratio count max_exec 100 %}%;"></div>
+                        </div>
+                        <div class="h-bar-value">{{ count }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endwith %}
+                {% else %}
+                <div class="empty-state" style="padding:30px 20px;">
+                    <p>Sin datos de ejecuciones</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Latencia por Skill (horizontal bar) -->
+        <div class="card">
+            <div class="card-header"><h3>⏱️ Latencia por Skill (ms)</h3></div>
+            <div class="card-body">
+                {% if latency_by_skill %}
+                {% with max_lat=latency_by_skill.values|dictsortreversed:0|first %}
+                <div class="h-bar-chart">
+                    {% for name, lat in latency_by_skill.items %}
+                    <div class="h-bar-row">
+                        <div class="h-bar-label" title="{{ name }}">{{ name }}</div>
+                        <div class="h-bar-track">
+                            <div class="h-bar-fill" style="background:var(--accent-orange);width:{% widthratio lat max_lat 100 %}%;"></div>
+                        </div>
+                        <div class="h-bar-value">{{ lat }}ms</div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endwith %}
+                {% else %}
+                <div class="empty-state" style="padding:30px 20px;">
+                    <p>Sin datos de latencia</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Orquestador Metrics -->
+    {% if metrics %}
+    <div class="card">
+        <div class="card-header"><h3>⚙️ Métricas del Orquestador</h3></div>
+        <div class="card-body">
+            <div style="overflow-x:auto;">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Métrica</th>
+                            <th>Valor</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for key, value in metrics.items %}
+                        <tr>
+                            <td style="font-weight:500;">{{ key }}</td>
+                            <td class="mono small-text">
+                                {% if value is mapping %}
+                                    {{ value|pprint|truncatechars:100 }}
+                                {% else %}
+                                    {{ value }}
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    // Build donut chart via JS to avoid Django template issues inside conic-gradient
+    var donut = document.getElementById('donut-category');
+    if (!donut) return;
+    var legend = document.getElementById('donut-legend-category');
+    if (!legend) return;
+    var items = legend.querySelectorAll('.donut-legend-item');
+    var colors = ['#3fb950', '#58a6ff', '#d29922', '#bc8cff', '#39d2c0', '#f85149'];
+    var gradients = [];
+    var total = 0;
+    // Parse rates from legend text
+    var rates = [];
+    items.forEach(function(item) {
+        var text = item.textContent.trim();
+        var match = text.match(/(\d+(?:\.\d+)?)%/);
+        if (match) {
+            rates.push(parseFloat(match[1]));
+        }
+    });
+    if (rates.length === 0) return;
+    // Build conic gradient string
+    var gradientParts = [];
+    var currentAngle = 0;
+    rates.forEach(function(rate, i) {
+        var color = colors[i % colors.length];
+        var startPct = currentAngle;
+        var endPct = currentAngle + rate;
+        gradientParts.push(color + ' ' + startPct + '% ' + endPct + '%');
+        currentAngle = endPct;
+        // Set dot color
+        var dot = document.getElementById('dot-' + i);
+        if (dot) dot.style.background = color;
+    });
+    donut.style.background = 'conic-gradient(' + gradientParts.join(', ') + ')';
+})();
+</script>
+{% endblock %}
