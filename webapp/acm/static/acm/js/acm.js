@@ -9,6 +9,7 @@ let propiedadesSeleccionadas = new Map(); // id -> data
 let propiedadesEncontradas = []; // Todas las propiedades encontradas en la búsqueda
 
 // URLs de iconos PNG personalizados por fuente
+const ICONO_PRINCIPAL = 'https://maps.google.com/mapfiles/ms/icons/yellow-dot.png';
 const ICONO_PROPIFFY = '/static/requerimientos/data/Pin-propify.png';
 const ICONO_REMAX = '/static/requerimientos/data/pin-remax.png';
 const ICONO_ADONDEVIVIR = '/static/requerimientos/data/adondevivir-pin.png';
