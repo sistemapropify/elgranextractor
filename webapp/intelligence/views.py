@@ -642,11 +642,26 @@ def collection_sync(request, collection_id):
                     force_full_sync=True,
                 )
             if success:
-                messages.success(
-                    request,
-                    f'Colección sincronizada: {stats.get("total_processed", 0)} documentos procesados, '
-                    f'{stats.get("created", 0)} creados, {stats.get("errors", 0)} errores.'
+                # Reconstruir índice FAISS después de sync
+                faiss_indexed = 0
+                try:
+                    from .services.faiss_index import FAISSIndexManager
+                    from .services.rag import RAGService
+                    faiss_indexed = FAISSIndexManager.rebuild_for_collection(
+                        collection.name,
+                        RAGService.EMBEDDING_DIMENSIONS
+                    )
+                except Exception as faiss_err:
+                    logger.warning(f"No se pudo reconstruir FAISS: {faiss_err}")
+                
+                msg = (
+                    f'Sync: {stats.get("total_processed", 0)} procesados, '
+                    f'{stats.get("created", 0)} creados. '
                 )
+                if faiss_indexed > 0:
+                    msg += f'FAISS: {faiss_indexed} vectores indexados.'
+                
+                messages.success(request, msg)
             else:
                 messages.error(request, f'Error en sincronización: {message}')
         except Exception as e:
@@ -823,6 +838,19 @@ def collection_detail(request, collection_id):
             'updated_at': doc.updated_at,
         })
 
+    # Obtener info del índice FAISS
+    faiss_info = None
+    try:
+        from .services.faiss_index import FAISSIndexManager
+        faiss_instance = FAISSIndexManager.get_instance(collection.name)
+        if faiss_instance and faiss_instance.is_loaded:
+            faiss_info = {
+                'indexed': faiss_instance.ntotal,
+                'dimension': faiss_instance.dimension,
+            }
+    except Exception:
+        pass
+
     return render(request, 'intelligence/collections/detail.html', {
         'collection': collection,
         'field_definitions': field_defs,
@@ -834,6 +862,7 @@ def collection_detail(request, collection_id):
         'documents': doc_list,
         'active_section': 'collections',
         'field_names': ordered_fields,
+        'faiss_info': faiss_info,
     })
 
 
@@ -998,6 +1027,112 @@ def intelligence_tests(request):
     """Vista de tests del sistema Intelligence."""
     return render(request, 'intelligence/tests.html', {
         'active_section': 'tests'
+    })
+
+
+def pil_evaluation(request):
+    """
+    Vista de evaluación PIL — F5-001.
+    """
+    import json
+    from intelligence.tests.evaluation.runner import load_dataset
+    
+    dataset = load_dataset()
+    
+    return render(request, 'intelligence/evaluation.html', {
+        'active_section': 'evaluation',
+        'total_queries': len(dataset),
+        'dataset_json': json.dumps([{
+            'id': d['id'],
+            'query': d['query'],
+            'category': d['category'],
+            'expected_skill': d.get('expected_skill'),
+        } for d in dataset]),
+    })
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def pil_evaluation_api(request):
+    """
+    API de evaluación PIL — ejecuta SemanticRouter real y retorna resultados JSON.
+    """
+    import json
+    import time
+    from intelligence.tests.evaluation.runner import load_dataset, _get_router
+    
+    dataset = load_dataset()
+    category_filter = request.data.get('category')
+    
+    if category_filter:
+        dataset = [d for d in dataset if d['category'] == category_filter]
+    
+    results = {
+        'total': len(dataset),
+        'passed': 0,
+        'total_latency_ms': 0.0,
+        'errors': 0,
+        'by_category': {},
+        'details': [],
+    }
+    
+    router = _get_router()
+    
+    for item in dataset:
+        start = time.time()
+        router_result = router.classify(item['query'])
+        elapsed = (time.time() - start) * 1000
+        
+        expected = item.get('expected_skill')
+        detected = router_result.skill_name if router_result.accepted else None
+        
+        is_match = False
+        if expected is None and not router_result.accepted:
+            is_match = True
+        elif expected is not None and router_result.accepted and detected == expected:
+            is_match = True
+        
+        if is_match:
+            results['passed'] += 1
+        
+        results['total_latency_ms'] += elapsed
+        
+        cat = item['category']
+        if cat not in results['by_category']:
+            results['by_category'][cat] = {'total': 0, 'passed': 0}
+        results['by_category'][cat]['total'] += 1
+        if is_match:
+            results['by_category'][cat]['passed'] += 1
+        
+        results['details'].append({
+            'id': item['id'],
+            'query': item['query'],
+            'category': cat,
+            'expected_skill': expected or 'N/A',
+            'detected_skill': detected or 'N/A',
+            'score': round(router_result.score, 4),
+            'match': is_match,
+            'latency_ms': round(elapsed, 1),
+        })
+    
+    accuracy = (results['passed'] / results['total'] * 100) if results['total'] > 0 else 0
+    
+    return Response({
+        'accuracy': round(accuracy, 1),
+        'passed': results['passed'],
+        'total': results['total'],
+        'avg_latency_ms': round(results['total_latency_ms'] / max(results['total'], 1), 0),
+        'errors': results['errors'],
+        'by_category': {
+            cat: {
+                'passed': data['passed'],
+                'total': data['total'],
+                'accuracy': round(data['passed'] / data['total'] * 100, 1) if data['total'] > 0 else 0,
+            }
+            for cat, data in sorted(results['by_category'].items())
+        },
+        'details': results['details'],
     })
 
 
@@ -1518,10 +1653,12 @@ def rag_ingest_pdf(request, collection_name):
     
     except Exception as e:
         import traceback
+        tb = traceback.format_exc()
+        logger.error(f"Error en rag_ingest_pdf (collection={collection_name}): {e}\n{tb}")
         return Response({
             'success': False,
-            'error': str(e),
-            'traceback': traceback.format_exc(),
+            'error': str(e) or 'Error desconocido (ver logs del servidor)',
+            'traceback': tb,
             'timestamp': timezone.now().isoformat()
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -2432,6 +2569,8 @@ def episodic_memory_stats(request):
 
 def register_view(request):
     """Vista de registro de usuarios."""
+    next_url = request.POST.get('next', request.GET.get('next', '/intelligence/skills/dashboard/'))
+
     if request.method == 'POST':
         username = request.POST.get('username', '').strip()
         email = request.POST.get('email', '').strip()
@@ -2444,7 +2583,7 @@ def register_view(request):
         # Validaciones
         if not username:
             field_errors['username'] = 'El nombre de usuario es obligatorio.'
-        elif User.objects.filter(phone=username).exists():
+        elif User.objects.filter(username=username).exists():
             field_errors['username'] = 'El nombre de usuario ya está registrado.'
 
         if not password:
@@ -2467,21 +2606,19 @@ def register_view(request):
                 if user:
                     from .authentication import login_user
                     login_user(request, user)
-                    messages.success(request, f'Bienvenido, {username}!')
-                    return redirect('chat_web')
+                    messages.success(request, f'¡Bienvenido, {username}!')
+                    return redirect(next_url)
                 else:
                     field_errors['username'] = 'Error al crear el usuario.'
             except Exception as e:
                 field_errors['username'] = f'Error: {str(e)}'
 
-        return render(request, 'intelligence/register.html', {
-            'field_errors': field_errors,
-            'values': {
-                'username': username,
-                'email': email,
-                'phone': phone,
-            }
-        })
+        # Si hay errores, guardarlos en messages y redirigir a la página anterior
+        # para que se muestren en el modal
+        for field, error in field_errors.items():
+            messages.error(request, error)
+
+        return redirect(next_url)
 
     return render(request, 'intelligence/register.html', {
         'field_errors': {},
@@ -4123,3 +4260,40 @@ def ai_consumption_dashboard(request):
     }
     
     return render(request, 'intelligence/ai_consumption_dashboard.html', context)
+
+
+def pdf_upload_view(request):
+    """
+    Vista para subir PDFs normativos con interfaz web drag & drop.
+    Muestra las colecciones disponibles y permite subir PDFs con metadatos.
+    """
+    from .models import IntelligenceCollection
+    collections = IntelligenceCollection.objects.filter(is_active=True).order_by('name')
+    tiene_normativas = collections.filter(name='normativas_legales').exists()
+    
+    # Si se solicita crear la colección normativas_legales
+    if request.method == 'POST' and request.POST.get('action') == 'crear_coleccion':
+        from django.core.management import call_command
+        from io import StringIO
+        out = StringIO()
+        try:
+            call_command('crear_coleccion_normativas', stdout=out)
+            messages = out.getvalue()
+            return render(request, 'intelligence/pdf_upload.html', {
+                'collections': IntelligenceCollection.objects.filter(is_active=True).order_by('name'),
+                'seccion_actual': 'pdf-upload',
+                'coleccion_creada': True,
+                'mensaje_creacion': messages,
+            })
+        except Exception as e:
+            return render(request, 'intelligence/pdf_upload.html', {
+                'collections': collections,
+                'seccion_actual': 'pdf-upload',
+                'error_creacion': str(e),
+            })
+
+    return render(request, 'intelligence/pdf_upload.html', {
+        'collections': collections,
+        'seccion_actual': 'pdf-upload',
+        'tiene_normativas': tiene_normativas,
+    })

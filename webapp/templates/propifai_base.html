@@ -808,6 +808,12 @@
                     <span>Perfiles de IA</span>
                 </a>
 
+                <!-- Subir PDF Normativo -->
+                <a href="/intelligence/pdf-upload/" class="nav-item {% if '/intelligence/pdf-upload/' in request.path %}active{% endif %}">
+                    <span class="nav-icon">&#x1F4C4;</span>
+                    <span>Subir PDF Normativo</span>
+                </a>
+
                 <!-- ===== ADMINISTRACIÓN IA ===== -->
                 <div class="nav-section-title" style="margin-top: 12px;">Administraci&oacute;n IA</div>
 
@@ -868,6 +874,12 @@
                     <span>Tests</span>
                 </a>
 
+                <!-- Evaluación PIL -->
+                <a href="/intelligence/evaluation/" class="nav-item {% if '/intelligence/evaluation/' in request.path %}active{% endif %}">
+                    <span class="nav-icon">&#x1F9EE;</span>
+                    <span>Evaluación PIL</span>
+                </a>
+
                 <!-- ===== SISTEMA ===== -->
                 <div class="nav-section-title" style="margin-top: 12px;">Sistema</div>
 
@@ -918,7 +930,7 @@
                         <div class="user-avatar" title="{{ request.current_user.username }}">{{ request.current_user.username|first|upper }}</div>
                         <span style="font-size:13px;color:var(--text-primary);font-weight:500;">{{ request.current_user.username }}</span>
                     </div>
-                    <a href="{% url 'intelligence:logout' %}?next={{ request.path }}"
+                    <a href="{% url 'logout' %}?next={{ request.path }}"
                        class="auth-btn auth-btn-logout"
                        title="Cerrar Sesión"
                        style="text-decoration:none;display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:8px;border:1px solid var(--border-color);background-color:var(--bg-tertiary);color:#f85149;font-size:13px;font-weight:500;transition:all 0.2s ease;cursor:pointer;">
@@ -951,37 +963,37 @@
     <!-- ═══════════════════════════════════════════════════════════════
          LOGIN MODAL — Sistema de autenticación Intelligence
          ═══════════════════════════════════════════════════════════════ -->
-    <div id="login-modal" class="auth-modal" style="display:none;">
-        <div class="auth-modal-backdrop" onclick="document.getElementById('login-modal').style.display='none'"></div>
-        <div class="auth-modal-content">
-            <div class="auth-modal-header">
-                <h3>🔑 Iniciar Sesión</h3>
-                <button class="auth-modal-close" onclick="document.getElementById('login-modal').style.display='none'">&times;</button>
+    <div id="login-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;justify-content:center;align-items:center;">
+        <div style="position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);" onclick="document.getElementById('login-modal').style.display='none'"></div>
+        <div style="position:relative;background:var(--bg-primary,#0d1117);border:1px solid var(--border-color,#30363d);border-radius:12px;padding:28px;width:90%;max-width:400px;box-shadow:0 8px 32px rgba(0,0,0,0.4);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+                <h3 style="margin:0;color:var(--text-primary,#f0f6fc);font-size:18px;">🔑 Iniciar Sesión</h3>
+                <button onclick="document.getElementById('login-modal').style.display='none'" style="background:none;border:none;color:var(--text-secondary,#8b949e);font-size:24px;cursor:pointer;padding:0;line-height:1;">&times;</button>
             </div>
-            <form method="POST" action="{% url 'intelligence:login' %}">
+            <form method="POST" action="{% url 'login' %}">
                 {% csrf_token %}
                 <input type="hidden" name="next" value="{{ request.path }}">
-                <div class="auth-form-group">
-                    <label class="auth-form-label">Usuario</label>
-                    <input type="text" name="username" class="auth-form-input" placeholder="Nombre de usuario" required>
+                <div style="margin-bottom:14px;">
+                    <label style="display:block;margin-bottom:4px;color:var(--text-secondary,#8b949e);font-size:13px;font-weight:500;">Usuario</label>
+                    <input type="text" name="username" style="width:100%;padding:10px 14px;border-radius:8px;border:1px solid var(--border-color,#30363d);background:var(--bg-primary,#0d1117);color:var(--text-primary,#f0f6fc);font-size:14px;box-sizing:border-box;" placeholder="Nombre de usuario" required>
                 </div>
-                <div class="auth-form-group">
-                    <label class="auth-form-label">Contraseña</label>
-                    <input type="password" name="password" class="auth-form-input" placeholder="Contraseña" required>
+                <div style="margin-bottom:14px;">
+                    <label style="display:block;margin-bottom:4px;color:var(--text-secondary,#8b949e);font-size:13px;font-weight:500;">Contraseña</label>
+                    <input type="password" name="password" style="width:100%;padding:10px 14px;border-radius:8px;border:1px solid var(--border-color,#30363d);background:var(--bg-primary,#0d1117);color:var(--text-primary,#f0f6fc);font-size:14px;box-sizing:border-box;" placeholder="Contraseña" required>
                 </div>
-                <div class="auth-modal-footer">
-                    <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('login-modal').style.display='none'">Cancelar</button>
-                    <button type="submit" class="btn btn-primary btn-sm">Ingresar</button>
+                <div style="display:flex;justify-content:flex-end;gap:8px;">
+                    <button type="button" onclick="document.getElementById('login-modal').style.display='none'" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border-color,#30363d);background:transparent;color:var(--text-primary,#f0f6fc);cursor:pointer;font-size:13px;">Cancelar</button>
+                    <button type="submit" style="padding:8px 16px;border-radius:8px;border:none;background:#238636;color:#fff;cursor:pointer;font-size:13px;font-weight:500;">Ingresar</button>
                 </div>
             </form>
-            <div style="margin-top:12px;text-align:center;font-size:13px;color:var(--text-secondary);">
+            <div style="margin-top:14px;text-align:center;font-size:13px;color:var(--text-secondary,#8b949e);">
                 ¿No tienes cuenta?
-                <a href="#" onclick="document.getElementById('login-modal').style.display='none';document.getElementById('register-modal').style.display='flex';return false;" style="color:var(--accent-blue);">Regístrate aquí</a>
+                <a href="#" onclick="document.getElementById('login-modal').style.display='none';document.getElementById('register-modal').style.display='flex';return false;" style="color:#58a6ff;text-decoration:none;">Regístrate aquí</a>
             </div>
             {% if messages %}
             <div style="margin-top:12px;">
                 {% for message in messages %}
-                <div class="alert alert-{% if message.tags == 'error' %}error{% else %}info{% endif %}" style="padding:8px 12px;border-radius:6px;font-size:13px;{% if message.tags == 'error' %}background-color:rgba(248,81,73,0.1);color:#f85149;border:1px solid rgba(248,81,73,0.3);{% else %}background-color:rgba(88,166,255,0.1);color:#58a6ff;border:1px solid rgba(88,166,255,0.3);{% endif %}">{{ message }}</div>
+                <div style="padding:8px 12px;border-radius:6px;font-size:13px;{% if message.tags == 'error' %}background-color:rgba(248,81,73,0.1);color:#f85149;border:1px solid rgba(248,81,73,0.3);{% else %}background-color:rgba(88,166,255,0.1);color:#58a6ff;border:1px solid rgba(88,166,255,0.3);{% endif %}">{{ message }}</div>
                 {% endfor %}
             </div>
             {% endif %}
@@ -991,36 +1003,40 @@
     <!-- ═══════════════════════════════════════════════════════════════
          REGISTER MODAL
          ═══════════════════════════════════════════════════════════════ -->
-    <div id="register-modal" class="auth-modal" style="display:none;">
-        <div class="auth-modal-backdrop" onclick="document.getElementById('register-modal').style.display='none'"></div>
-        <div class="auth-modal-content">
-            <div class="auth-modal-header">
-                <h3>📝 Crear Cuenta</h3>
-                <button class="auth-modal-close" onclick="document.getElementById('register-modal').style.display='none'">&times;</button>
+    <div id="register-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;justify-content:center;align-items:center;">
+        <div style="position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);" onclick="document.getElementById('register-modal').style.display='none'"></div>
+        <div style="position:relative;background:var(--bg-primary,#0d1117);border:1px solid var(--border-color,#30363d);border-radius:12px;padding:28px;width:90%;max-width:400px;box-shadow:0 8px 32px rgba(0,0,0,0.4);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+                <h3 style="margin:0;color:var(--text-primary,#f0f6fc);font-size:18px;">📝 Crear Cuenta</h3>
+                <button onclick="document.getElementById('register-modal').style.display='none'" style="background:none;border:none;color:var(--text-secondary,#8b949e);font-size:24px;cursor:pointer;padding:0;line-height:1;">&times;</button>
             </div>
-            <form method="POST" action="{% url 'intelligence:register' %}">
+            <form method="POST" action="{% url 'register' %}">
                 {% csrf_token %}
                 <input type="hidden" name="next" value="{{ request.path }}">
-                <div class="auth-form-group">
-                    <label class="auth-form-label">Nombre de usuario</label>
-                    <input type="text" name="username" class="auth-form-input" placeholder="Ej: juanperez" required>
+                <div style="margin-bottom:14px;">
+                    <label style="display:block;margin-bottom:4px;color:var(--text-secondary,#8b949e);font-size:13px;font-weight:500;">Nombre de usuario</label>
+                    <input type="text" name="username" style="width:100%;padding:10px 14px;border-radius:8px;border:1px solid var(--border-color,#30363d);background:var(--bg-primary,#0d1117);color:var(--text-primary,#f0f6fc);font-size:14px;box-sizing:border-box;" placeholder="Ej: juanperez" required>
                 </div>
-                <div class="auth-form-group">
-                    <label class="auth-form-label">Contraseña</label>
-                    <input type="password" name="password" class="auth-form-input" placeholder="Mínimo 6 caracteres" required minlength="6">
+                <div style="margin-bottom:14px;">
+                    <label style="display:block;margin-bottom:4px;color:var(--text-secondary,#8b949e);font-size:13px;font-weight:500;">Contraseña</label>
+                    <input type="password" name="password" style="width:100%;padding:10px 14px;border-radius:8px;border:1px solid var(--border-color,#30363d);background:var(--bg-primary,#0d1117);color:var(--text-primary,#f0f6fc);font-size:14px;box-sizing:border-box;" placeholder="Mínimo 6 caracteres" required minlength="6">
                 </div>
-                <div class="auth-form-group">
-                    <label class="auth-form-label">Teléfono (opcional)</label>
-                    <input type="text" name="phone" class="auth-form-input" placeholder="Ej: +51999888777">
+                <div style="margin-bottom:14px;">
+                    <label style="display:block;margin-bottom:4px;color:var(--text-secondary,#8b949e);font-size:13px;font-weight:500;">Confirmar contraseña</label>
+                    <input type="password" name="confirm_password" style="width:100%;padding:10px 14px;border-radius:8px;border:1px solid var(--border-color,#30363d);background:var(--bg-primary,#0d1117);color:var(--text-primary,#f0f6fc);font-size:14px;box-sizing:border-box;" placeholder="Repite la contraseña" required minlength="6">
                 </div>
-                <div class="auth-modal-footer">
-                    <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('register-modal').style.display='none'">Cancelar</button>
-                    <button type="submit" class="btn btn-primary btn-sm">Crear Cuenta</button>
+                <div style="margin-bottom:14px;">
+                    <label style="display:block;margin-bottom:4px;color:var(--text-secondary,#8b949e);font-size:13px;font-weight:500;">Teléfono <span style="color:var(--text-secondary,#8b949e);font-weight:400;">(opcional)</span></label>
+                    <input type="text" name="phone" style="width:100%;padding:10px 14px;border-radius:8px;border:1px solid var(--border-color,#30363d);background:var(--bg-primary,#0d1117);color:var(--text-primary,#f0f6fc);font-size:14px;box-sizing:border-box;" placeholder="Ej: +51999888777">
+                </div>
+                <div style="display:flex;justify-content:flex-end;gap:8px;">
+                    <button type="button" onclick="document.getElementById('register-modal').style.display='none'" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border-color,#30363d);background:transparent;color:var(--text-primary,#f0f6fc);cursor:pointer;font-size:13px;">Cancelar</button>
+                    <button type="submit" style="padding:8px 16px;border-radius:8px;border:none;background:#238636;color:#fff;cursor:pointer;font-size:13px;font-weight:500;">Crear Cuenta</button>
                 </div>
             </form>
-            <div style="margin-top:12px;text-align:center;font-size:13px;color:var(--text-secondary);">
+            <div style="margin-top:14px;text-align:center;font-size:13px;color:var(--text-secondary,#8b949e);">
                 ¿Ya tienes cuenta?
-                <a href="#" onclick="document.getElementById('register-modal').style.display='none';document.getElementById('login-modal').style.display='flex';return false;" style="color:var(--accent-blue);">Inicia sesión</a>
+                <a href="#" onclick="document.getElementById('register-modal').style.display='none';document.getElementById('login-modal').style.display='flex';return false;" style="color:#58a6ff;text-decoration:none;">Inicia sesión</a>
             </div>
         </div>
     </div>
