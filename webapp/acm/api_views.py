@@ -158,7 +158,7 @@ class ComparablesAPIView(APIView):
                     'distrito': DISTRITOS.get(str(prop.district), '') if prop.district else '',
                     'provincia': PROVINCIAS.get(str(prop.province), '') if prop.province else '',
                     'departamento': DEPARTAMENTOS.get(str(prop.department), '') if prop.department else '',
-                    'imagen_url': prop.imagen_url,
+                    'imagen_url': prop.primera_imagen_url or prop.imagen_url,
                     'precio_m2': precio_m2,
                     'precio_m2_final': precio_m2,
                     'distancia_metros': round(distancia, 2),

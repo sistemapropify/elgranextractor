@@ -412,7 +412,7 @@ def buscar_comparables(request):
                     'distrito': distrito_nombre,
                     'provincia': provincia_nombre,
                     'departamento': departamento_nombre,
-                    'imagen_url': prop.imagen_url,  # Usar la propiedad imagen_url del modelo
+                    'imagen_url': prop.primera_imagen_url or prop.imagen_url,
                     'precio_m2': precio_m2,
                     'precio_m2_final': precio_m2_final,
                     'distancia_metros': round(distancia, 2),

@@ -366,14 +366,14 @@ class PropifaiProperty(models.Model):
 class PropertyImage(models.Model):
     """
     Modelo para imágenes de propiedades en la base de datos Propifai.
-    Tabla: property_images
+    Tabla real: property_media
     """
     id = models.BigIntegerField(primary_key=True)
     property_id = models.BigIntegerField(db_column='property_id')
-    image = models.CharField(max_length=500, blank=True, null=True, db_column='image')
+    image = models.CharField(max_length=500, blank=True, null=True, db_column='file')
     
     class Meta:
-        db_table = 'property_images'
+        db_table = 'property_media'
         managed = False
         
     def __str__(self):
