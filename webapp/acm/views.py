@@ -2,6 +2,8 @@ import json
 import math
 import uuid
 from decimal import Decimal
+import logging
+logger = logging.getLogger(__name__)
 from django.shortcuts import render, get_object_or_404
 from django.http import JsonResponse, HttpResponse, Http404
 from django.views.decorators.csrf import csrf_exempt
@@ -438,6 +440,35 @@ def buscar_comparables(request):
         return JsonResponse({'status': 'error', 'message': f'Error en los datos: {str(e)}'}, status=400)
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': f'Error interno: {str(e)}'}, status=500)
+
+
+@csrf_exempt
+def analisis_espacial_png(request):
+    """
+    Endpoint que recibe JSON con propiedades seleccionadas, devuelve PNG del análisis espacial.
+    POST /acm/analisis-espacial/png/
+    Body: {"propiedades": [{...}]}
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Método no permitido'}, status=405)
+
+    try:
+        body = json.loads(request.body)
+        propiedades = body.get('propiedades', [])
+
+        if len(propiedades) < 3:
+            return JsonResponse(
+                {'error': 'Se necesitan al menos 3 propiedades.'},
+                status=400
+            )
+
+        from .spatial_analysis import generar_grafico_espacial
+        png_bytes = generar_grafico_espacial(propiedades)
+        return HttpResponse(png_bytes, content_type='image/png')
+
+    except Exception as e:
+        logger.exception("Error en analisis_espacial_png")
+        return JsonResponse({'error': str(e)}, status=500)
 
 
 @require_POST
