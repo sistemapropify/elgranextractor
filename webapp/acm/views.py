@@ -1,6 +1,7 @@
 import json
 import math
 import uuid
+from decimal import Decimal
 from django.shortcuts import render, get_object_or_404
 from django.http import JsonResponse, HttpResponse, Http404
 from django.views.decorators.csrf import csrf_exempt
@@ -225,12 +226,15 @@ def buscar_comparables(request):
                         # Asignar coordenadas aproximadas temporalmente (no modificar el objeto original)
                         prop_lat, prop_lng = COORDENADAS_APROXIMADAS[distrito_nombre]
                         # Crear una copia del objeto con coordenadas aproximadas
-                        # Usamos un objeto simple con los atributos necesarios
-                        class PropiedadConCoordenadas:
+                        # Usamos un objeto simple que hereda de PropifaiProperty para
+                        # mantener sus propiedades (built_area, land_area, tipo_propiedad, imagen_url, etc.)
+                        class PropiedadConCoordenadas(PropifaiProperty):
                             def __init__(self, original, lat, lng):
-                                self.__dict__ = original.__dict__.copy()
-                                self._latitude = lat
-                                self._longitude = lng
+                                # Copiar todos los campos del original
+                                for field in original._meta.fields:
+                                    setattr(self, field.attname, getattr(original, field.attname))
+                                self._latitude = Decimal(str(lat))
+                                self._longitude = Decimal(str(lng))
                             
                             @property
                             def latitude(self):
