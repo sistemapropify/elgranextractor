@@ -260,7 +260,7 @@
         }
 
         /* ============================================
-           LAYOUT: DOS MITADES
+           LAYOUT: DOS MITADES — ALTURA MINIMA CON TOPE
            ============================================ */
         /* El row principal ocupa toda la altura disponible */
         .acm-container > .container-fluid > .row {
@@ -273,11 +273,12 @@
             padding-right: 8px !important;
         }
 
-        /* Cada mitad ocupa el 50% del ancho */
+        /* Cada mitad ocupa el 50% del ancho, NO crecen mas alla del row */
         .acm-container .acm-left-half,
         .acm-container .acm-right-half {
             display: flex !important;
             flex-direction: column !important;
+            max-height: 100% !important;
         }
 
         /* Mitad izquierda: parametros compacto + mapa expandido */
@@ -285,20 +286,24 @@
             flex: 0 0 auto !important;  /* Tamano natural, no se expande */
         }
         .acm-container .acm-left-half .mobile-map-panel {
-            flex: 1 1 auto !important;  /* Ocupa el espacio restante */
+            flex: 1 1 auto !important;
             display: flex !important;
             flex-direction: column !important;
+            min-height: 0 !important;
         }
         .acm-container .acm-left-half .mobile-map-panel .card {
             flex: 1 1 auto !important;
             display: flex !important;
             flex-direction: column !important;
+            min-height: 0 !important;
         }
         .acm-container .acm-left-half .mobile-map-panel .card-body {
             flex: 1 1 auto !important;
             display: flex !important;
             flex-direction: column !important;
             padding: 0 !important;
+            overflow: hidden !important;
+            min-height: 0 !important;
         }
         /* El mapa se estira para llenar todo el espacio disponible */
         .acm-container .acm-left-half .mobile-map-panel .card-body #acmMap {
@@ -322,6 +327,7 @@
             flex-direction: column !important;
             flex: 1 !important;
             min-height: 0 !important;
+            overflow: hidden !important;
         }
         /* Comparables: se estira para llenar TODO el espacio, contenido scrollable */
         .acm-container .acm-right-half .d-none.d-lg-block {
