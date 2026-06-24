@@ -260,11 +260,23 @@
         }
 
         /* ============================================
-           LAYOUT: DOS MITADES — ALTURA MINIMA CON TOPE
+           LAYOUT: DOS MITADES — ALTURA CONTROLADA
            ============================================ */
-        /* El row principal ocupa toda la altura disponible */
+        /* El acm-container usa flex column para que container-fluid llene el resto */
+        .acm-container {
+            display: flex !important;
+            flex-direction: column !important;
+        }
+        /* Container-fluid llena el espacio restante y no crece */
+        .acm-container > .container-fluid {
+            flex: 1 !important;
+            min-height: 0 !important;
+            overflow: hidden !important;
+        }
+        /* El row principal llena el container-fluid */
         .acm-container > .container-fluid > .row {
-            min-height: calc(100vh - 200px) !important;
+            height: 100% !important;
+            overflow: hidden !important;
         }
 
         /* Container-fluid con menos padding para que el mapa se extienda mas */
