@@ -307,10 +307,11 @@ async function buscarComparables() {
             // Guardar propiedades encontradas
             propiedadesEncontradas = data.propiedades;
 
-            // Crear marcadores para cada propiedad
-            data.propiedades.forEach(prop => {
-                console.log('ACM: Creando marcador para propiedad', prop.id);
-                crearMarcadorComparable(prop);
+            // Crear marcadores para cada propiedad con número secuencial
+            data.propiedades.forEach((prop, index) => {
+                prop.numero_orden = index + 1; // Número para identificar en mapa y tarjetas
+                console.log('ACM: Creando marcador para propiedad', prop.id, 'orden', prop.numero_orden);
+                crearMarcadorComparable(prop, prop.numero_orden);
             });
 
             // Actualizar contador
@@ -551,7 +552,7 @@ async function solicitarAnalisisAvanzado() {
 // ─────────────────────────────────────────────────────────────
 
 // Crear marcador para propiedad comparable
-function crearMarcadorComparable(propiedad) {
+function crearMarcadorComparable(propiedad, numeroOrden) {
     // Determinar icono según la fuente/portal
     let iconoUrl = ICONO_COMPARABLE;
     let esPropifai = propiedad.es_propify || propiedad.fuente === 'propifai';
@@ -571,16 +572,10 @@ function crearMarcadorComparable(propiedad) {
     // Tamaño del icono
     const tamanoIcono = 32;
     
-    // Calcular precio por m² para mostrar en la etiqueta del marcador
-    const precioM2 = propiedad.precio_m2_final || propiedad.precio_m2;
-    let labelText = '';
-    if (precioM2 && precioM2 > 0) {
-        labelText = '$' + Math.round(precioM2).toString() + '/m²';
-    } else {
-        labelText = esPropifai ? 'P' : '?';
-    }
+    // Etiqueta: número secuencial para identificar la propiedad
+    let labelText = numeroOrden ? numeroOrden.toString() : '?';
     
-    // Crear elemento personalizado para el marcador con precio/m² visible
+    // Crear elemento personalizado para el marcador con número visible
     const markerIcon = {
         url: iconoUrl,
         scaledSize: new google.maps.Size(tamanoIcono, tamanoIcono),
@@ -605,7 +600,7 @@ function crearMarcadorComparable(propiedad) {
         toggleSeleccionarPropiedad(propiedad.id);
     });
 
-    // Almacenar referencia
+    // Almacenar referencia, guardando el número de orden original
     marcadoresComparables.set(propiedad.id, {
         marker,
         data: propiedad,
@@ -615,6 +610,7 @@ function crearMarcadorComparable(propiedad) {
         esPropifai,
         tamanoIcono,
         labelText: labelText,
+        numeroOrden: numeroOrden,
     });
 }
 
@@ -639,12 +635,12 @@ function toggleSeleccionarPropiedad(id) {
             url: marcadorInfo.iconoUrl || ICONO_COMPARABLE,
             scaledSize: new google.maps.Size(tamanoIcono, tamanoIcono)
         });
-        // Restaurar etiqueta con precio/m² (guardado en labelText)
-        const labelText = marcadorInfo.labelText || (marcadorInfo.esPropifai ? 'P' : '?');
+        // Restaurar etiqueta con el número secuencial original
+        const labelText = marcadorInfo.numeroOrden ? marcadorInfo.numeroOrden.toString() : (marcadorInfo.labelText || '?');
         marcadorInfo.marker.setLabel({
             text: labelText,
-            color: "#dc3545",
-            fontSize: "12px",
+            color: "#000000",
+            fontSize: "11px",
             fontWeight: "bold"
         });
         marcadorInfo.seleccionado = false;
@@ -681,6 +677,12 @@ function crearTarjetaPropiedad(propiedad) {
     const card = clone.querySelector('.propiedad-card');
     card.id = `propiedad-${propiedad.id}`;
     
+    // Número de orden
+    const numBadge = clone.querySelector('.propiedad-numero');
+    if (numBadge) {
+        numBadge.textContent = propiedad.numero_orden ? `#${propiedad.numero_orden}` : '';
+    }
+
     // Imagen
     const img = clone.querySelector('.propiedad-imagen');
     img.src = propiedad.imagen_url || '/static/acm/img/no-image.svg';
@@ -752,6 +754,11 @@ function crearTarjetaPropiedad(propiedad) {
         cardTablet.id = `propiedad-tablet-${propiedad.id}`;
         
         // Rellenar datos
+        const numBadgeT = cloneTablet.querySelector('.propiedad-numero');
+        if (numBadgeT) {
+            numBadgeT.textContent = propiedad.numero_orden ? `#${propiedad.numero_orden}` : '';
+        }
+
         const imgT = cloneTablet.querySelector('.propiedad-imagen');
         imgT.src = propiedad.imagen_url || '/static/acm/img/no-image.svg';
         cloneTablet.querySelector('.propiedad-tipo').textContent = propiedad.tipo;
@@ -863,7 +870,7 @@ function actualizarNumerosSeleccionados() {
     for (const [id, data] of propiedadesSeleccionadas) {
         const marcadorInfo = marcadoresComparables.get(id);
         if (marcadorInfo) {
-            // Actualizar etiqueta del marcador con el número
+            // Actualizar etiqueta del marcador con el número de selección
             marcadorInfo.marker.setLabel({
                 text: index.toString(),
                 color: "white",
@@ -871,12 +878,20 @@ function actualizarNumerosSeleccionados() {
                 fontWeight: "bold"
             });
         }
-        // Actualizar tarjeta (si existe)
+        // Actualizar tarjeta mobile (si existe)
         const tarjeta = document.getElementById(`propiedad-${id}`);
         if (tarjeta) {
             const numeroElement = tarjeta.querySelector('.propiedad-numero');
             if (numeroElement) {
                 numeroElement.textContent = `#${index}`;
+            }
+        }
+        // Actualizar tarjeta tablet (si existe)
+        const tarjetaTablet = document.getElementById(`propiedad-tablet-${id}`);
+        if (tarjetaTablet) {
+            const numElementT = tarjetaTablet.querySelector('.propiedad-numero');
+            if (numElementT) {
+                numElementT.textContent = `#${index}`;
             }
         }
         index++;
