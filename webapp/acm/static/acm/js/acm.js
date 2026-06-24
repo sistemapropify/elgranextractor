@@ -345,6 +345,8 @@ function crearMarcadorComparable(propiedad) {
     
     if (esPropifai) {
         iconoUrl = ICONO_PROPIFFY;
+    } else if (portal === 'propifai' || portal === 'propify') {
+        iconoUrl = ICONO_PROPIFFY;
     } else if (portal === 'remax') {
         iconoUrl = ICONO_REMAX;
     } else if (portal === 'adondevivir') {
