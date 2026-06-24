@@ -1155,6 +1155,45 @@
 
 </div>
 
+<!-- ══════════════════════════════════════════════════════════
+     ANALISIS AVANZADO — 4 graficos debajo del layout principal
+     ══════════════════════════════════════════════════════════ -->
+<div id="analisisAvanzadoSection" style="display:none;margin-top:16px;padding:0 12px;">
+    <div class="card border-0 shadow-sm" style="background:#0d1117;border:1px solid #30363d;">
+        <div class="card-header d-flex justify-content-between align-items-center py-2" style="background:#161b22;border-bottom:1px solid #30363d;">
+            <h6 class="mb-0" style="color:#e6edf3;">
+                <i class="bi bi-graph-up me-2"></i>An&aacute;lisis Espacial Avanzado
+            </h6>
+            <span style="color:#8b949e;font-size:12px;">Tama&ntilde;o = &Aacute;rea Terreno | Color = Precio</span>
+        </div>
+        <div class="card-body p-2" style="background:#0d1117;">
+            <div class="row g-2">
+                <!-- Columna izquierda: Mapa Espacial -->
+                <div class="col-12 col-md-7">
+                    <div id="chartMapaContainer" style="width:100%;min-height:400px;background:#0f2744;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;">
+                        <span id="chartMapaPlaceholder" style="color:#8b949e;font-size:13px;text-align:center;padding:20px;">
+                            <i class="bi bi-geo-alt" style="font-size:32px;display:block;margin-bottom:8px;"></i>
+                            Selecciona propiedades y usa el bot&oacute;n <strong>"An&aacute;lisis Avanzado"</strong>
+                        </span>
+                    </div>
+                </div>
+                <!-- Columna derecha: 3 charts apilados -->
+                <div class="col-12 col-md-5 d-flex flex-column gap-2">
+                    <div id="chartPrecio" style="width:100%;min-height:130px;background:#0a1628;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;">
+                        <span style="color:#8b949e;font-size:12px;">Precio vs Zona Premium</span>
+                    </div>
+                    <div id="chartPm2" style="width:100%;min-height:130px;background:#0a1628;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;">
+                        <span style="color:#8b949e;font-size:12px;">$/m&sup2; vs Distancia</span>
+                    </div>
+                    <div id="chartTabla" style="width:100%;min-height:140px;background:#0a1628;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;">
+                        <span style="color:#8b949e;font-size:12px;">Tabla Resumen</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Drawer para comparables en movil (oculto en tablet/desktop) -->
 <div class="offcanvas offcanvas-bottom d-lg-none" tabindex="-1" id="mobileComparablesDrawer" aria-labelledby="mobileComparablesDrawerLabel" style="height: 75vh !important;">
     <div class="offcanvas-header">

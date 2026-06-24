@@ -344,84 +344,80 @@ async function buscarComparables() {
 }
 
 // ─────────────────────────────────────────────────────────────
-// ANÁLISIS AVANZADO — 4 imágenes separadas
+// ANÁLISIS AVANZADO — muestra 4 graficos abajo del layout
 // ─────────────────────────────────────────────────────────────
 
 function toggleAnalisisView() {
-    var mapContainer = document.getElementById('acmMap');
-    var chartContainer = document.getElementById('acmChartContainer');
+    var section = document.getElementById('analisisAvanzadoSection');
     var btnAvanzado = document.getElementById('btnAnalisisAvanzado');
-    var btnBuscarContainer = document.getElementById('btnBuscarMapContainer');
-    if (!mapContainer || !chartContainer) return;
+    if (!section) return;
     
-    var showingMap = mapContainer.style.display !== 'none';
+    var isVisible = section.style.display !== 'none';
     
-    if (showingMap) {
-        mapContainer.style.display = 'none';
-        chartContainer.style.display = 'flex';
-        chartContainer.style.alignItems = 'center';
-        chartContainer.style.justifyContent = 'center';
-        if (btnAvanzado) btnAvanzado.textContent = '📊 Análisis Activo';
-        if (btnBuscarContainer) btnBuscarContainer.style.display = 'none';
-        
-        if (propiedadesSeleccionadas.size < 3) {
-            chartContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:200px;background:#0d1117;color:#f85149;flex-direction:column;gap:12px;padding:20px;text-align:center;"><span style="font-size:32px;">⚠️</span><span style="font-size:14px;">Selecciona al menos 3 propiedades</span><button class="btn btn-sm mt-2" onclick="toggleAnalisisView()" style="border:1px solid #555;border-radius:6px;padding:4px 10px;color:#fff;background:transparent;">Volver al mapa</button></div>';
-            return;
-        }
-        
-        chartContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:300px;background:#0d1117;color:#8b949e;flex-direction:column;gap:12px;"><div class="spinner-border text-light" role="status"></div><span style="font-size:14px;">Generando...</span></div>';
-        
-        // Preparar datos
-        var props = [];
-        propiedadesSeleccionadas.forEach(function(prop, id) {
-            props.push({
-                precio: prop.precio || prop.precio_final || 0,
-                area_terreno: prop.metros_terreno || 0,
-                area_construida: prop.metros_construccion || 0,
-                antiguedad: prop.antiguedad || 0,
-                cocheras: prop.cocheras || 0,
-                lat: prop.lat,
-                lon: prop.lng,
-                precio_m2_terreno: prop.precio_m2 || prop.precio_m2_final || 0,
-            });
-        });
-        
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', '/acm/analisis-espacial/png/', true);
-        xhr.setRequestHeader('Content-Type', 'application/json');
-        xhr.onload = function() {
-            if (xhr.status === 200) {
-                try {
-                    var data = JSON.parse(xhr.responseText);
-                    // Mapa espacial (reemplaza Google Maps)
-                    chartContainer.innerHTML = '<img src="data:image/png;base64,' + data.mapa + '" style="width:100%;height:100%;object-fit:contain;"><div style="position:absolute;top:8px;right:8px;z-index:10;"><button type="button" class="btn btn-sm" onclick="toggleAnalisisView()" style="background:rgba(0,0,0,0.7);color:#fff;border:1px solid #555;border-radius:6px;padding:4px 10px;font-size:11px;"><i class="bi bi-map me-1"></i>Volver al Mapa</button></div>';
-                    // 3 charts en panel derecho
-                    var el;
-                    el = document.getElementById('chartPrecio'); if(el){el.style.display='block';el.innerHTML='<img src="data:image/png;base64,'+data.chart_precio+'" style="width:100%;height:auto;max-height:220px;object-fit:contain;">';}
-                    el = document.getElementById('chartPm2'); if(el){el.style.display='block';el.innerHTML='<img src="data:image/png;base64,'+data.chart_pm2+'" style="width:100%;height:auto;max-height:220px;object-fit:contain;">';}
-                    el = document.getElementById('chartTabla'); if(el){el.style.display='block';el.innerHTML='<img src="data:image/png;base64,'+data.tabla+'" style="width:100%;height:auto;max-height:280px;object-fit:contain;">';}
-                } catch(e) {
-                    chartContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:200px;background:#0d1117;color:#f85149;flex-direction:column;gap:8px;text-align:center;padding:20px;"><span style="font-size:24px;">⚠️</span><span style="font-size:13px;">' + e.message + '</span><button class="btn btn-sm mt-2" onclick="toggleAnalisisView()" style="background:rgba(0,0,0,0.7);color:#fff;border:1px solid #555;border-radius:6px;padding:4px 10px;font-size:11px;">Volver al mapa</button></div>';
-                }
-            } else {
-                chartContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:200px;background:#0d1117;color:#f85149;flex-direction:column;gap:8px;text-align:center;padding:20px;"><span style="font-size:24px;">⚠️</span><span style="font-size:13px;">Error del servidor</span><button class="btn btn-sm mt-2" onclick="toggleAnalisisView()" style="background:rgba(0,0,0,0.7);color:#fff;border:1px solid #555;border-radius:6px;padding:4px 10px;font-size:11px;">Volver al mapa</button></div>';
-            }
-        };
-        xhr.onerror = function() {
-            chartContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:200px;background:#0d1117;color:#f85149;flex-direction:column;gap:8px;text-align:center;padding:20px;"><span style="font-size:24px;">⚠️</span><span style="font-size:13px;">Error de conexión</span><button class="btn btn-sm mt-2" onclick="toggleAnalisisView()" style="background:rgba(0,0,0,0.7);color:#fff;border:1px solid #555;border-radius:6px;padding:4px 10px;font-size:11px;">Volver al mapa</button></div>';
-        };
-        xhr.send(JSON.stringify({ propiedades: props }));
-        
-    } else {
-        mapContainer.style.display = 'block';
-        chartContainer.style.display = 'none';
-        if (btnAvanzado) btnAvanzado.innerHTML = '<i class="bi bi-graph-up me-1"></i>Análisis Avanzado';
-        if (btnBuscarContainer) btnBuscarContainer.style.display = 'block';
-        // Ocultar charts al volver al mapa
-        var charts = ['chartPrecio','chartPm2','chartTabla'];
-        for(var i=0;i<charts.length;i++){ var e=document.getElementById(charts[i]); if(e) e.style.display='none'; }
-        if (acmMap) setTimeout(function() { google.maps.event.trigger(acmMap, 'resize'); }, 100);
+    if (isVisible) {
+        // Ocultar seccion
+        section.style.display = 'none';
+        if (btnAvanzado) btnAvanzado.innerHTML = '<i class="bi bi-graph-up me-1"></i>An&aacute;lisis Avanzado';
+        return;
     }
+    
+    if (propiedadesSeleccionadas.size < 3) {
+        alert('Selecciona al menos 3 propiedades como comparables.');
+        return;
+    }
+    
+    // Mostrar seccion con loader
+    section.style.display = 'block';
+    if (btnAvanzado) btnAvanzado.textContent = '📊 Cargando...';
+    
+    // Loader en mapa
+    var mapaContainer = document.getElementById('chartMapaContainer');
+    if (mapaContainer) mapaContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:400px;background:#0f2744;color:#8b949e;flex-direction:column;gap:12px;"><div class="spinner-border text-light" role="status"></div><span style="font-size:14px;">Generando an&aacute;lisis espacial...</span></div>';
+    // Reset charts
+    ['chartPrecio','chartPm2','chartTabla'].forEach(function(id){
+        var el = document.getElementById(id);
+        if(el) el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:130px;background:#0a1628;color:#8b949e;"><div class="spinner-border text-light spinner-border-sm" role="status"></div></div>';
+    });
+    
+    // Preparar datos
+    var props = [];
+    propiedadesSeleccionadas.forEach(function(prop, id) {
+        props.push({
+            precio: prop.precio || prop.precio_final || 0,
+            area_terreno: prop.metros_terreno || 0,
+            area_construida: prop.metros_construccion || 0,
+            antiguedad: prop.antiguedad || 0,
+            cocheras: prop.cocheras || 0,
+            lat: prop.lat,
+            lon: prop.lng,
+            precio_m2_terreno: prop.precio_m2 || prop.precio_m2_final || 0,
+        });
+    });
+    
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/acm/analisis-espacial/png/', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onload = function() {
+        if (xhr.status === 200) {
+            try {
+                var data = JSON.parse(xhr.responseText);
+                if (mapaContainer) mapaContainer.innerHTML = '<img src="data:image/png;base64,'+data.mapa+'" style="width:100%;height:100%;object-fit:contain;">';
+                var el;
+                el = document.getElementById('chartPrecio'); if(el) el.innerHTML = '<img src="data:image/png;base64,'+data.chart_precio+'" style="width:100%;height:auto;max-height:130px;object-fit:contain;">';
+                el = document.getElementById('chartPm2'); if(el) el.innerHTML = '<img src="data:image/png;base64,'+data.chart_pm2+'" style="width:100%;height:auto;max-height:130px;object-fit:contain;">';
+                el = document.getElementById('chartTabla'); if(el) el.innerHTML = '<img src="data:image/png;base64,'+data.tabla+'" style="width:100%;height:auto;max-height:140px;object-fit:contain;">';
+                if (btnAvanzado) btnAvanzado.textContent = '📊 An&aacute;lisis Activo';
+            } catch(e) {
+                if (mapaContainer) mapaContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:400px;background:#0f2744;color:#f85149;flex-direction:column;gap:8px;padding:20px;text-align:center;"><span style="font-size:24px;">⚠️</span><span style="font-size:13px;">'+e.message+'</span></div>';
+            }
+        } else {
+            if (mapaContainer) mapaContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:400px;background:#0f2744;color:#f85149;flex-direction:column;gap:8px;padding:20px;text-align:center;"><span style="font-size:24px;">⚠️</span><span style="font-size:13px;">Error del servidor</span></div>';
+        }
+    };
+    xhr.onerror = function() {
+        if (mapaContainer) mapaContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:400px;background:#0f2744;color:#f85149;flex-direction:column;gap:8px;padding:20px;text-align:center;"><span style="font-size:24px;">⚠️</span><span style="font-size:13px;">Error de conexi&oacute;n</span></div>';
+    };
+    xhr.send(JSON.stringify({ propiedades: props }));
 }
 
 // Solicitar el PNG de análisis espacial al servidor
@@ -553,8 +549,8 @@ function crearMarcadorComparable(propiedad) {
         icon: markerIcon,
         label: {
             text: labelText,
-            color: "#dc3545",
-            fontSize: "12px",
+            color: "#000000",
+            fontSize: "11px",
             fontWeight: "bold"
         }
     });
