@@ -277,6 +277,7 @@
         .acm-container > .container-fluid > .row {
             height: 100% !important;
             overflow: hidden !important;
+            flex-wrap: nowrap !important;
         }
 
         /* Container-fluid con menos padding para que el mapa se extienda mas */
@@ -285,12 +286,13 @@
             padding-right: 8px !important;
         }
 
-        /* Cada mitad ocupa el 50% del ancho, NO crecen mas alla del row */
+        /* Cada mitad ocupa el 50% del ancho, altura exacta del row, NO crecen */
         .acm-container .acm-left-half,
         .acm-container .acm-right-half {
             display: flex !important;
             flex-direction: column !important;
-            max-height: 100% !important;
+            height: 100% !important;
+            overflow: hidden !important;
         }
 
         /* Mitad izquierda: parametros compacto + mapa expandido */
@@ -329,39 +331,43 @@
         }
 
         /* Mitad derecha: comparables desde arriba (parametros) hasta abajo (boton buscar) */
+        /* Usamos CSS Grid para forzar la contenencia real */
         .acm-container .acm-right-half {
-            display: flex !important;
-            flex-direction: column !important;
+            display: grid !important;
+            grid-template-rows: 1fr !important;
+            overflow: hidden !important;
+            min-height: 0 !important;
         }
-        /* Forzar visibilidad de los elementos d-none en desktop */
+        /* Forzar visibilidad de los elementos d-none en desktop y que llenen la grid */
         .acm-container .acm-right-half > div {
             display: flex !important;
             flex-direction: column !important;
-            flex: 1 !important;
             min-height: 0 !important;
             overflow: hidden !important;
         }
         /* Comparables: se estira para llenar TODO el espacio, contenido scrollable */
         .acm-container .acm-right-half .d-none.d-lg-block {
-            flex: 1 !important;
+            display: flex !important;
+            flex-direction: column !important;
             min-height: 0 !important;
+            overflow: hidden !important;
         }
         .acm-container .acm-right-half .d-none.d-lg-block .card {
             display: flex !important;
             flex-direction: column !important;
-            flex: 1 !important;
             min-height: 0 !important;
+            overflow: hidden !important;
         }
         .acm-container .acm-right-half .d-none.d-lg-block .card-body {
             display: flex !important;
             flex-direction: column !important;
-            flex: 1 !important;
             min-height: 0 !important;
             overflow: hidden !important;
         }
         .acm-container .acm-right-half .d-none.d-lg-block .card-body .comparables-container-tablet {
-            flex: 1 !important;
+            flex: 1 1 auto !important;
             min-height: 0 !important;
+            max-height: 100% !important;
             overflow-y: auto !important;
         }
 
