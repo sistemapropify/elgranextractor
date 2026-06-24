@@ -361,15 +361,22 @@ function toggleAnalisisView() {
     if (showingMap) {
         // Cambiar a vista de gráfico
         mapContainer.style.display = 'none';
-        chartContainer.style.display = 'block';
+        chartContainer.style.display = 'flex';
+        chartContainer.style.flexDirection = 'column';
+        chartContainer.style.alignItems = 'center';
+        chartContainer.style.justifyContent = 'center';
         if (btnAvanzado) btnAvanzado.textContent = '📊 Análisis Activo';
         if (btnBuscarContainer) btnBuscarContainer.style.display = 'none';
         
-        // Si no hay imagen cargada, solicitarla
-        const chartImg = document.getElementById('acmChartImg');
-        if (chartImg && !chartImg.src) {
-            solicitarAnalisisAvanzado();
+        // Verificar si hay propiedades seleccionadas
+        if (propiedadesSeleccionadas.size < 3) {
+            chartContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:200px;background:#0d1117;color:#f85149;flex-direction:column;gap:12px;"><span style="font-size:32px;">⚠️</span><span style="font-size:14px;">Selecciona al menos 3 propiedades en el mapa</span><button class="btn btn-sm btn-outline-secondary mt-2" onclick="toggleAnalisisView()" style="border:1px solid #555;border-radius:6px;padding:4px 10px;color:#fff;background:transparent;">Volver al mapa</button></div>';
+            return;
         }
+        
+        // Mostrar loader y llamar a la API
+        chartContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:300px;background:#0d1117;color:#8b949e;flex-direction:column;gap:12px;"><div class="spinner-border text-light" role="status"></div><span style="font-size:14px;">Generando análisis espacial...</span></div>';
+        solicitarAnalisisAvanzado(chartContainer);
     } else {
         // Volver al mapa
         mapContainer.style.display = 'block';
@@ -383,6 +390,68 @@ function toggleAnalisisView() {
                 google.maps.event.trigger(acmMap, 'resize');
             }, 100);
         }
+    }
+}
+
+// Solicitar el PNG de análisis espacial al servidor
+async function solicitarAnalisisAvanzado(chartContainer) {
+    try {
+        const propiedadesData = [];
+        propiedadesSeleccionadas.forEach((prop, id) => {
+            propiedadesData.push({
+                id: prop.id,
+                precio: prop.precio || prop.precio_final || 0,
+                area_terreno: prop.metros_terreno || 0,
+                area_construida: prop.metros_construccion || 0,
+                antiguedad: prop.antiguedad || 0,
+                cocheras: prop.cocheras || 0,
+                lat: prop.lat,
+                lon: prop.lng,
+                precio_m2_terreno: prop.precio_m2 || prop.precio_m2_final || 0,
+            });
+        });
+        
+        const response = await fetch('/acm/analisis-espacial/png/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken(),
+            },
+            body: JSON.stringify({ propiedades: propiedadesData }),
+        });
+        
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.error || 'Error del servidor');
+        }
+        
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        
+        chartContainer.innerHTML = `
+            <img src="${url}" alt="Análisis Espacial"
+                 style="width:100%;height:100%;object-fit:contain;">
+            <div style="position:absolute;top:8px;right:8px;z-index:10;">
+                <button type="button" class="btn btn-sm"
+                        onclick="toggleAnalisisView()"
+                        style="background:rgba(0,0,0,0.7);color:#fff;border:1px solid #555;border-radius:6px;padding:4px 10px;font-size:11px;">
+                    <i class="bi bi-map me-1"></i>Volver al Mapa
+                </button>
+            </div>
+        `;
+        
+    } catch (err) {
+        console.error('Error en análisis espacial:', err);
+        chartContainer.innerHTML = `
+            <div style="display:flex;align-items:center;justify-content:center;height:200px;background:#0d1117;color:#f85149;flex-direction:column;gap:8px;text-align:center;padding:20px;">
+                <span style="font-size:24px;">⚠️</span>
+                <span style="font-size:13px;">${err.message}</span>
+                <button class="btn btn-sm mt-2" onclick="toggleAnalisisView()"
+                        style="background:rgba(0,0,0,0.7);color:#fff;border:1px solid #555;border-radius:6px;padding:4px 10px;font-size:11px;">
+                    Volver al mapa
+                </button>
+            </div>
+        `;
     }
 }
 
