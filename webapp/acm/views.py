@@ -230,8 +230,12 @@ def buscar_comparables(request):
                         # mantener sus propiedades (built_area, land_area, tipo_propiedad, imagen_url, etc.)
                         class PropiedadConCoordenadas(PropifaiProperty):
                             def __init__(self, original, lat, lng):
-                                # Copiar todos los campos del original
+                                # Copiar campos del original, excepto latitude/longitude
+                                # que se manejan como properties (sin setter)
+                                skip_fields = ('latitude', 'longitude')
                                 for field in original._meta.fields:
+                                    if field.attname in skip_fields:
+                                        continue
                                     setattr(self, field.attname, getattr(original, field.attname))
                                 self._latitude = Decimal(str(lat))
                                 self._longitude = Decimal(str(lng))
