@@ -345,20 +345,23 @@
             min-height: 0 !important;
             overflow: hidden !important;
         }
-        /* Comparables: se estira para llenar TODO el espacio, contenido scrollable */
+        /* Comparables: cada nivel tiene flex:1 para llenar el espacio, solo el ultimo hace scroll */
         .acm-container .acm-right-half .d-none.d-lg-block {
+            flex: 1 !important;
             display: flex !important;
             flex-direction: column !important;
             min-height: 0 !important;
             overflow: hidden !important;
         }
         .acm-container .acm-right-half .d-none.d-lg-block .card {
+            flex: 1 !important;
             display: flex !important;
             flex-direction: column !important;
             min-height: 0 !important;
             overflow: hidden !important;
         }
         .acm-container .acm-right-half .d-none.d-lg-block .card-body {
+            flex: 1 !important;
             display: flex !important;
             flex-direction: column !important;
             min-height: 0 !important;
