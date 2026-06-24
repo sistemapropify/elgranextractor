@@ -322,10 +322,11 @@ async function buscarComparables() {
             // Mostrar mensaje de éxito
             mostrarToast('success', `${data.total} propiedades encontradas en el radio de ${radio} metros.`);
             
-            // Mostrar botón "Análisis Avanzado"
+            // Mostrar botón "Análisis Avanzado" con su evento
             const btnAvanzado = document.getElementById('btnAnalisisAvanzado');
             if (btnAvanzado) {
                 btnAvanzado.style.display = 'inline-flex';
+                btnAvanzado.onclick = toggleAnalisisView;
             }
         } else {
             throw new Error(data.message || 'Error en la búsqueda');
