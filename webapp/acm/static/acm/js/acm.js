@@ -572,10 +572,16 @@ function crearMarcadorComparable(propiedad, numeroOrden) {
     // Tamaño del icono
     const tamanoIcono = 32;
     
-    // Etiqueta: número secuencial para identificar la propiedad
-    let labelText = numeroOrden ? numeroOrden.toString() : '?';
+    // Calcular precio por m² para mostrar en la etiqueta del marcador
+    const precioM2 = propiedad.precio_m2_final || propiedad.precio_m2;
+    let labelText = '';
+    if (precioM2 && precioM2 > 0) {
+        labelText = '$' + Math.round(precioM2).toString() + '/m²';
+    } else {
+        labelText = esPropifai ? 'P' : '?';
+    }
     
-    // Crear elemento personalizado para el marcador con número visible
+    // Crear elemento personalizado para el marcador con precio/m² visible
     const markerIcon = {
         url: iconoUrl,
         scaledSize: new google.maps.Size(tamanoIcono, tamanoIcono),
@@ -600,7 +606,7 @@ function crearMarcadorComparable(propiedad, numeroOrden) {
         toggleSeleccionarPropiedad(propiedad.id);
     });
 
-    // Almacenar referencia, guardando el número de orden original
+    // Almacenar referencia, guardando también el número de orden para las tarjetas
     marcadoresComparables.set(propiedad.id, {
         marker,
         data: propiedad,
@@ -635,8 +641,8 @@ function toggleSeleccionarPropiedad(id) {
             url: marcadorInfo.iconoUrl || ICONO_COMPARABLE,
             scaledSize: new google.maps.Size(tamanoIcono, tamanoIcono)
         });
-        // Restaurar etiqueta con el número secuencial original
-        const labelText = marcadorInfo.numeroOrden ? marcadorInfo.numeroOrden.toString() : (marcadorInfo.labelText || '?');
+        // Restaurar etiqueta con precio/m²
+        const labelText = marcadorInfo.labelText || (marcadorInfo.esPropifai ? 'P' : '?');
         marcadorInfo.marker.setLabel({
             text: labelText,
             color: "#000000",
