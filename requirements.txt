@@ -35,3 +35,4 @@ faiss-cpu==1.13.2
 pymupdf==1.27.2.3
 playwright==1.52.0
 langgraph>=1.2.6
+scipy>=1.10.0

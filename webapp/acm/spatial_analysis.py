@@ -90,6 +90,14 @@ def generar_todo_json(propiedades: list[dict], dpi=130) -> dict:
     Genera las 4 imágenes y devuelve dict con base64 de cada una.
     """
     import base64
+    logger = logging.getLogger(__name__)
+    logger.info("generar_todo_json: %d propiedades recibidas", len(propiedades))
+    if propiedades:
+        logger.info("Muestra: precio=%s, area_terreno=%s, lat=%s, lon=%s",
+                    [p.get('precio') for p in propiedades[:3]],
+                    [p.get('area_terreno') for p in propiedades[:3]],
+                    [p.get('lat') for p in propiedades[:3]],
+                    [p.get('lon') for p in propiedades[:3]])
     return {
         'mapa': base64.b64encode(generar_mapa_espacial(propiedades, dpi)).decode(),
         'chart_precio': base64.b64encode(generar_chart_precio(propiedades, dpi)).decode(),
@@ -167,8 +175,12 @@ def _dibujar_mapa(ax, df):
     ax.text(cx, cy - 950, '◆ Zona Premium',
             color=GOLD, fontsize=8.5, ha='center', fontweight='bold', alpha=0.85)
 
-    # Burbujas
-    sizes  = 180 + (df['area_terreno'] / df['area_terreno'].max()) * 620
+    # Burbujas — evitar division por cero si todas las areas son 0
+    area_max = df['area_terreno'].max()
+    if area_max > 0:
+        sizes = 180 + (df['area_terreno'] / area_max) * 620
+    else:
+        sizes = 180
     colors = _colores(df)
     ax.scatter(df['x_m'], df['y_m'],
                s=sizes, c=[df['_norm_precio'].iloc[i] for i in range(len(df))],

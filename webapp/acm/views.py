@@ -481,6 +481,16 @@ def analisis_espacial_png(request):
         result = generar_todo_json(propiedades)
         return JsonResponse(result)
 
+    except ModuleNotFoundError as e:
+        logger.error("ERROR: Módulo faltante en analisis_espacial_png: %s", e)
+        return JsonResponse({
+            'error': f'Módulo faltante: {e}. El servidor no tiene instalada la dependencia necesaria (scipy).'
+        }, status=500)
+    except ZeroDivisionError as e:
+        logger.error("ERROR: División por cero en analisis_espacial_png: %s", e)
+        return JsonResponse({
+            'error': 'División por cero: las propiedades no tienen datos de área o precio.'
+        }, status=500)
     except Exception as e:
         logger.exception("Error en analisis_espacial_png")
         return JsonResponse({'error': str(e)}, status=500)
