@@ -4,7 +4,7 @@
 > **Priority:** 🔴 HIGH
 > **Estimated Effort:** 3 days
 > **Dependencies:** None
-> **Status:** Pending
+> **Status:** ✅ Implemented (2026-06-21)
 
 ---
 
@@ -15,15 +15,15 @@ Implementar pipeline de ingesta de documentos PDF (SUNARP, documentos legales, e
 ## Goals
 
 - [x] **3.1** Analizar plan de implementación existente en `implementacion_rag_mejoras.md`
-- [ ] **3.2** Implementar `services/pdf_ingestion.py` con clase `PDFIngestionService`
-- [ ] **3.3** Implementar extracción de texto con PyMuPDF (fitz)
-- [ ] **3.4** Implementar chunking: 400 palabras, 50 overlap
-- [ ] **3.5** Implementar detección de documentos legales (artículos) con chunking especial
-- [ ] **3.6** Implementar endpoint `POST /rag/collections/{name}/ingest-pdf/`
-- [ ] **3.7** Implementar post-ingesta: reconstruir índice FAISS automáticamente
-- [ ] **3.8** Agregar logging de ingesta (páginas procesadas, chunks creados)
-- [ ] **3.9** Probar con documentos SUNARP reales
-- [ ] **3.10** Documentar formato de documentos soportados
+- [x] **3.2** Implementar `services/pdf_ingestion.py` con clase `PDFIngestionService`
+- [x] **3.3** Implementar extracción de texto con PyMuPDF (fitz) — [`extract_text()`](../webapp/intelligence/services/pdf_ingestion.py:29)
+- [x] **3.4** Implementar chunking: 400 palabras, 50 overlap — [`chunk_text()`](../webapp/intelligence/services/pdf_ingestion.py:79)
+- [x] **3.5** Implementar detección de documentos legales (artículos) con chunking especial — [`chunk_text()`](../webapp/intelligence/services/pdf_ingestion.py:100-120)
+- [x] **3.6** Implementar endpoint `POST /rag/collections/{name}/ingest-pdf/` — [`rag_ingest_pdf`](../webapp/intelligence/views.py:1419) + [`urls.py:22`](../webapp/intelligence/urls.py:22)
+- [x] **3.7** Implementar post-ingesta: reconstruir índice FAISS automáticamente — [`ingest_pdf()`](../webapp/intelligence/services/pdf_ingestion.py:271-282)
+- [x] **3.8** Agregar logging de ingesta (páginas procesadas, chunks creados) — en extract_text, chunk_text e ingest_pdf
+- [ ] **3.9** Probar con documentos SUNARP reales (pendiente de ejecución manual)
+- [ ] **3.10** Documentar formato de documentos soportados (pendiente)
 
 _Prompt: Build a PDF ingestion pipeline that extracts text from legal documents (SUNARP, escrituras), chunks them appropriately (with special handling for legal articles), generates embeddings with E5-large, stores them in IntelligenceDocument, and rebuilds the FAISS index._
 
@@ -70,10 +70,10 @@ class PDFIngestionService:
 
 ## Acceptance Criteria
 
-- [ ] **3.a** Extracción correcta de texto de PDFs con PyMuPDF
-- [ ] **3.b** Chunking de 400 palabras con 50 de overlap (texto general)
-- [ ] **3.c** Chunking sin overlap para documentos legales (artículos)
-- [ ] **3.d** Embeddings generados con mode='passage' (prefijo correcto)
-- [ ] **3.e** FAISS index se reconstruye automáticamente post-ingesta
-- [ ] **3.f** Logging de páginas procesadas, chunks creados, documentos
-- [ ] **3.g** Endpoint REST funcional con validación de archivo
+- [x] **3.a** Extracción correcta de texto de PDFs con PyMuPDF — [`extract_text()`](../webapp/intelligence/services/pdf_ingestion.py:29)
+- [x] **3.b** Chunking de 400 palabras con 50 de overlap (texto general) — [`chunk_text()`](../webapp/intelligence/services/pdf_ingestion.py:79)
+- [x] **3.c** Chunking sin overlap para documentos legales (artículos) — [`chunk_text()`](../webapp/intelligence/services/pdf_ingestion.py:114-120)
+- [x] **3.d** Embeddings generados con mode='passage' (prefijo correcto) — [`ingest_pdf()`](../webapp/intelligence/services/pdf_ingestion.py:239-242)
+- [x] **3.e** FAISS index se reconstruye automáticamente post-ingesta — [`ingest_pdf()`](../webapp/intelligence/services/pdf_ingestion.py:271-282)
+- [x] **3.f** Logging de páginas procesadas, chunks creados, documentos — en extract_text, chunk_text, ingest_pdf
+- [x] **3.g** Endpoint REST funcional con validación de archivo — [`rag_ingest_pdf`](../webapp/intelligence/views.py:1419) (validación de extensión, tamaño, metadata)

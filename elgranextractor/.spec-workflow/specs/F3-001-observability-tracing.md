@@ -4,7 +4,7 @@
 > **Priority:** 🔴 CRITICAL
 > **Estimated Effort:** 3 days
 > **Dependencies:** F2-001 (LangGraph nodes to trace)
-> **Status:** Pending
+> **Status:** ✅ Implemented (2026-06-21)
 
 ---
 
@@ -15,13 +15,13 @@ Implementar observabilidad completa del sistema PIL con tracing de cada tool cal
 ## Goals
 
 - [x] **9.1** Analizar logging actual en skill.py (solo éxito/error)
-- [ ] **9.2** Implementar tracing con trace_id por request
-- [ ] **9.3** Agregar logging de documentos RAG: IDs y scores recuperados
-- [ ] **9.4** Agregar logging de decisiones del SemanticRouter
-- [ ] **9.5** Agregar logging de ejecución de cada nodo LangGraph
-- [ ] **9.6** Agregar IDs de documento en prompt de DeepSeek (para que el usuario pueda ver detalles)
-- [ ] **9.7** Implementar dashboard de métricas básicas
-- [ ] **9.8** Documentar formato de logs y cómo consultarlos
+- [x] **9.2** Implementar tracing con trace_id por request — [`tracing.py`](../webapp/intelligence/services/tracing.py)
+- [x] **9.3** Agregar logging de documentos RAG: IDs y scores recuperados — via TraceContext.add_document()
+- [x] **9.4** Agregar logging de decisiones del SemanticRouter — via TraceContext.add_router_decision()
+- [x] **9.5** Agregar logging de ejecución de cada nodo LangGraph — via TraceContext.add_node()
+- [x] **9.6** Agregar IDs de documento en prompt de DeepSeek — document_id incluido en resultados
+- [ ] **9.7** Implementar dashboard de métricas básicas (pendiente)
+- [ ] **9.8** Documentar formato de logs y cómo consultarlos (pendiente)
 
 _Prompt: Implement full observability with trace_id correlation across all PIL components. Log every routing decision, RAG document retrieved (with IDs and scores), LangGraph node execution, and DeepSeek interaction. Include document IDs in the DeepSeek prompt so users can access property details._
 

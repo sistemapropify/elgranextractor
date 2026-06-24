@@ -364,8 +364,26 @@ document.addEventListener('DOMContentLoaded', function() {
             content = JSON.stringify(content, null, 2);
         }
         
+        // Detectar contenido HTML (envuelto en __HTML__...__HTML__)
+        let renderedContent;
+        if (typeof content === 'string' && content.startsWith('__HTML__') && content.endsWith('__HTML__')) {
+            // Extraer el HTML interno y renderizarlo sin escapar
+            let html = content.slice(8, -8);  // Quitar __HTML__ del inicio y final
+            // Separar intro texto (antes del primer <) del HTML
+            let textEnd = html.indexOf('<');
+            if (textEnd > 0) {
+                let textPart = escapeHtml(html.substring(0, textEnd));
+                let htmlPart = html.substring(textEnd);
+                renderedContent = `<div style="margin-bottom:8px;">${textPart}</div><div>${htmlPart}</div>`;
+            } else {
+                renderedContent = html;
+            }
+        } else {
+            renderedContent = escapeHtml(content);
+        }
+        
         messageElement.innerHTML = `
-            <div>${escapeHtml(content)}</div>
+            <div>${renderedContent}</div>
             <div class="message-time">${message.timestamp}</div>
         `;
         

@@ -1,0 +1,428 @@
+{% extends "intelligence/base/base.html" %}
+{% load static %}
+
+{% block title %}Evaluación PIL - Propifai Intelligence{% endblock %}
+
+{% block extra_css %}
+<style>
+:root {
+    --bg-primary: #0d1117;
+    --bg-secondary: #161b22;
+    --bg-card: #1c2128;
+    --bg-hover: #21262d;
+    --border: #30363d;
+    --text-primary: #e6edf3;
+    --text-secondary: #8b949e;
+    --accent-green: #3fb950;
+    --accent-red: #f85149;
+    --accent-yellow: #d29922;
+    --accent-blue: #58a6ff;
+    --accent-purple: #bc8cff;
+}
+body { background: var(--bg-primary); color: var(--text-primary); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+.eval-container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+
+/* Header */
+.eval-header { margin-bottom: 32px; }
+.eval-header h1 { font-size: 28px; font-weight: 600; margin: 0 0 8px; }
+.eval-header p { color: var(--text-secondary); margin: 0; font-size: 14px; }
+
+/* Summary Cards */
+.summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 32px; }
+.summary-card {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px; text-align: center; transition: transform 0.2s;
+}
+.summary-card:hover { transform: translateY(-2px); }
+.summary-card .value { font-size: 36px; font-weight: 700; margin: 8px 0; }
+.summary-card .label { color: var(--text-secondary); font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }
+.summary-card .sub { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+.accuracy-good { color: var(--accent-green); }
+.accuracy-medium { color: var(--accent-yellow); }
+.accuracy-bad { color: var(--accent-red); }
+
+/* Progress bar */
+.progress-bar {
+    height: 8px; background: var(--bg-hover); border-radius: 4px; overflow: hidden; margin-top: 12px;
+}
+.progress-fill {
+    height: 100%; border-radius: 4px; transition: width 0.5s ease;
+    background: linear-gradient(90deg, var(--accent-green), var(--accent-blue));
+}
+
+/* Category Section */
+.section-title { font-size: 16px; font-weight: 600; margin: 24px 0 16px; color: var(--text-primary); }
+.category-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.category-card {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px; display: flex; justify-content: space-between; align-items: center;
+}
+.category-name { font-weight: 500; font-size: 14px; }
+.category-stats { text-align: right; }
+.category-count { font-size: 20px; font-weight: 700; }
+.category-fraction { font-size: 12px; color: var(--text-secondary); }
+.category-bar { width: 100px; height: 6px; background: var(--bg-hover); border-radius: 3px; margin-top: 4px; overflow: hidden; }
+.category-fill { height: 100%; border-radius: 3px; }
+
+/* Results Table */
+.results-table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+.results-table th {
+    text-align: left; padding: 10px 16px; font-size: 12px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary);
+    border-bottom: 1px solid var(--border); background: var(--bg-secondary);
+}
+.results-table td { padding: 10px 16px; font-size: 13px; border-bottom: 1px solid var(--border); }
+.results-table tr:hover { background: var(--bg-hover); }
+.status-pass { color: var(--accent-green); font-weight: 600; }
+.status-fail { color: var(--accent-red); font-weight: 600; }
+
+/* Controls */
+.controls { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+.btn-filter {
+    padding: 8px 16px; border: 1px solid var(--border); background: var(--bg-card);
+    color: var(--text-primary); border-radius: 8px; cursor: pointer; font-size: 13px;
+    transition: all 0.2s;
+}
+.btn-filter:hover { background: var(--bg-hover); border-color: var(--accent-blue); }
+.btn-filter.active { background: var(--accent-blue); color: #fff; border-color: var(--accent-blue); }
+.btn-run {
+    padding: 8px 24px; background: var(--accent-green); color: #fff; border: none;
+    border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;
+    transition: all 0.2s;
+}
+.btn-run:hover { opacity: 0.9; transform: translateY(-1px); }
+.btn-run:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Loading */
+.loading { display: none; text-align: center; padding: 40px; }
+.loading.active { display: block; }
+.spinner {
+    width: 40px; height: 40px; border: 3px solid var(--border);
+    border-top-color: var(--accent-blue); border-radius: 50%; animation: spin 0.8s linear infinite;
+    margin: 0 auto 16px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Empty state */
+.empty-state { text-align: center; padding: 60px 20px; color: var(--text-secondary); }
+.empty-state .icon { font-size: 48px; margin-bottom: 16px; }
+.empty-state h3 { margin: 0 0 8px; color: var(--text-primary); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="eval-container">
+    <!-- Header -->
+    <div class="eval-header">
+        <h1>🧪 Evaluación PIL</h1>
+        <p>Suite de evaluación del sistema de inteligencia Propifai — mide precisión de detección de skills, latencia y cobertura por categoría</p>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls">
+        <button class="btn-run" onclick="runEvaluation()" id="runBtn">
+            ▶ Ejecutar Evaluación
+        </button>
+        <button class="btn-filter active" data-filter="all" onclick="filterCategory('all')">Todas</button>
+        <button class="btn-filter" data-filter="busqueda_propiedades" onclick="filterCategory('busqueda_propiedades')">Búsqueda</button>
+        <button class="btn-filter" data-filter="analizar_mercado" onclick="filterCategory('analizar_mercado')">Mercado</button>
+        <button class="btn-filter" data-filter="resolver_contexto" onclick="filterCategory('resolver_contexto')">Contexto</button>
+        <button class="btn-filter" data-filter="extraer_requerimiento" onclick="filterCategory('extraer_requerimiento')">WhatsApp</button>
+    </div>
+
+    <!-- Loading -->
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <p>Ejecutando evaluación sobre {{ total_queries }} consultas...</p>
+    </div>
+
+    <!-- Results (hidden by default, shown after evaluation) -->
+    <div id="results" style="display:none;">
+        <!-- Summary Cards -->
+        <div class="summary-grid" id="summaryCards"></div>
+
+        <!-- By Category -->
+        <h2 class="section-title">📊 Resultados por Categoría</h2>
+        <div class="category-grid" id="categoryGrid"></div>
+
+        <!-- Detail Table -->
+        <h2 class="section-title">📋 Detalle por Consulta</h2>
+        <div style="overflow-x:auto;">
+            <table class="results-table" id="resultsTable">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Consulta</th>
+                        <th>Categoría</th>
+                        <th>Skill Esperada</th>
+                        <th>Skill Detectada</th>
+                        <th>Score</th>
+                        <th>Resultado</th>
+                    </tr>
+                </thead>
+                <tbody id="resultsBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Empty State -->
+    <div class="empty-state" id="emptyState">
+        <div class="icon">🔬</div>
+        <h3>Evaluación no ejecutada</h3>
+        <p>Haz clic en "Ejecutar Evaluación" para medir la precisión del sistema contra {{ total_queries }} consultas de prueba.</p>
+    </div>
+</div>
+
+<script>
+const EVAL_API_URL = '/intelligence/evaluation/api/';
+
+function runEvaluation() {
+    document.getElementById('runBtn').disabled = true;
+    document.getElementById('runBtn').textContent = '⏳ Evaluando con backend...';
+    document.getElementById('loading').classList.add('active');
+    document.getElementById('results').style.display = 'none';
+    document.getElementById('emptyState').style.display = 'none';
+
+    fetch(EVAL_API_URL, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken'),
+        },
+        body: JSON.stringify({}),
+    })
+    .then(r => r.json())
+    .then(data => {
+        const adapted = {
+            passed: data.passed,
+            total: data.total,
+            totalLatency: data.avg_latency_ms * data.total,
+            errors: data.errors,
+            byCategory: {},
+            details: data.details || [],
+            accuracy: data.accuracy,
+            avgLatency: data.avg_latency_ms,
+        };
+        Object.entries(data.by_category || {}).forEach(([cat, info]) => {
+            adapted.byCategory[cat] = { total: info.total, passed: info.passed };
+        });
+        renderResults(adapted);
+    })
+    .catch(err => {
+        alert('Error del backend: ' + err.message);
+    })
+    .finally(() => {
+        document.getElementById('runBtn').disabled = false;
+        document.getElementById('runBtn').textContent = '▶ Ejecutar Evaluación';
+        document.getElementById('loading').classList.remove('active');
+    });
+}
+
+function getCookie(name) {
+    const val = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+    return val ? val.pop() : '';
+}
+
+// Keep evaluateAll and evaluateQuery as fallback (not used by default)
+function evaluateAll() {
+    const results = { passed: 0, total: DATASET ? DATASET.length : 0, totalLatency: 0, errors: 0, byCategory: {}, details: [] };
+    if (!DATASET) return results;
+    DATASET.forEach(item => {
+        const start = performance.now();
+        const result = evaluateQuery(item);
+        const latency = performance.now() - start;
+
+        result.latency = latency;
+        result.category = item.category;
+        result.expectedSkill = item.expected_skill || 'N/A';
+
+        results.totalLatency += latency;
+        if (result.match) results.passed++;
+        if (result.error) results.errors++;
+
+        // Por categoría
+        if (!results.byCategory[item.category]) {
+            results.byCategory[item.category] = { total: 0, passed: 0 };
+        }
+        results.byCategory[item.category].total++;
+        if (result.match) results.byCategory[item.category].passed++;
+
+        results.details.push({
+            id: item.id,
+            query: item.query,
+            category: item.category,
+            expectedSkill: item.expected_skill || 'N/A',
+            detectedSkill: result.detectedSkill || 'N/A',
+            score: result.score || 0,
+            match: result.match,
+            latency: latency,
+        });
+    });
+
+    return results;
+}
+
+function evaluateQuery(item) {
+    // Evaluación cliente-side usando el SemanticRouter via API
+    const query = item.query.toLowerCase();
+    const templates = {
+        'busqueda_propiedades': [
+            'busco', 'quiero comprar', 'necesito un', 'qué terrenos', 'departamentos',
+            'casas', 'terreno', 'alquiler', 'muéstrame', 'propiedades', 'locales',
+            'oficinas', 'cuántas', 'cuantas',
+        ],
+        'analizar_mercado': [
+            'cómo está el mercado', 'precio promedio', 'tendencias',
+            'comparativa', 'mejor distrito', 'dónde están subiendo',
+        ],
+        'resolver_contexto': [
+            'muéstrame los que', 'quiero ver más', 'y en', 'solo',
+            'ordéname', 'los que tengan', 'alguna opción',
+        ],
+        'extraer_requerimientos_whatsapp': [
+            'tengo un cliente', 'me llegó un requerimiento', 'un cliente me pide',
+            'ayúdame a entender', 'necesito procesar',
+        ],
+    };
+
+    let bestSkill = null;
+    let bestScore = 0;
+
+    for (const [skill, keywords] of Object.entries(templates)) {
+        let score = 0;
+        for (const kw of keywords) {
+            if (query.includes(kw)) {
+                score += 1 / keywords.length;
+            }
+        }
+        if (score > bestScore) {
+            bestScore = score;
+            bestSkill = skill;
+        }
+    }
+
+    const threshold = 0.25;
+    const accepted = bestScore >= threshold;
+    const expected = item.expected_skill;
+
+    let match = false;
+    if (expected === null && !accepted) match = true;
+    else if (expected !== null && accepted && bestSkill === expected) match = true;
+
+    return {
+        detectedSkill: accepted ? bestSkill : null,
+        score: Math.round(bestScore * 100) / 100,
+        match: match,
+        error: null,
+    };
+}
+
+function renderResults(results) {
+    const accuracy = results.total > 0 ? (results.passed / results.total * 100) : 0;
+    const avgLatency = results.total > 0 ? (results.totalLatency / results.total) : 0;
+
+    // Summary Cards
+    const accClass = accuracy >= 80 ? 'accuracy-good' : (accuracy >= 50 ? 'accuracy-medium' : 'accuracy-bad');
+    document.getElementById('summaryCards').innerHTML = `
+        <div class="summary-card">
+            <div class="label">Precisión General</div>
+            <div class="value ${accClass}">${accuracy.toFixed(1)}%</div>
+            <div class="sub">${results.passed}/${results.total} consultas</div>
+            <div class="progress-bar"><div class="progress-fill" style="width:${accuracy}%"></div></div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Consultas Evaluadas</div>
+            <div class="value">${results.total}</div>
+            <div class="sub">dataset de prueba</div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Latencia Promedio</div>
+            <div class="value">${avgLatency.toFixed(0)}ms</div>
+            <div class="sub">por consulta</div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Errores</div>
+            <div class="value" style="color: ${results.errors > 0 ? 'var(--accent-red)' : 'var(--accent-green)'}">${results.errors}</div>
+            <div class="sub">en ejecución</div>
+        </div>
+    `;
+
+    // Category Grid
+    const catColors = {
+        'busqueda_propiedades': '#3fb950',
+        'analizar_mercado': '#58a6ff',
+        'resolver_contexto': '#d29922',
+        'extraer_requerimiento': '#bc8cff',
+        'conteo': '#f85149',
+        'saludo': '#8b949e',
+        'general': '#8b949e',
+        'agradecimiento': '#8b949e',
+    };
+    const catLabels = {
+        'busqueda_propiedades': '🔍 Búsqueda',
+        'analizar_mercado': '📊 Mercado',
+        'resolver_contexto': '🔄 Contexto',
+        'extraer_requerimiento': '📱 WhatsApp',
+        'conteo': '🔢 Conteo',
+        'saludo': '👋 Saludo',
+        'general': '💬 General',
+        'agradecimiento': '🙏 Agradecimiento',
+    };
+
+    document.getElementById('categoryGrid').innerHTML = Object.entries(results.byCategory)
+        .sort((a, b) => b[1].total - a[1].total)
+        .map(([cat, data]) => {
+            const catAcc = data.total > 0 ? (data.passed / data.total * 100) : 0;
+            const color = catColors[cat] || '#8b949e';
+            return `
+                <div class="category-card">
+                    <div>
+                        <div class="category-name">${catLabels[cat] || cat}</div>
+                        <div class="category-bar"><div class="category-fill" style="width:${catAcc}%;background:${color}"></div></div>
+                    </div>
+                    <div class="category-stats">
+                        <div class="category-count" style="color:${color}">${data.passed}/${data.total}</div>
+                        <div class="category-fraction">${catAcc.toFixed(0)}%</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+    // Results Table
+    document.getElementById('resultsBody').innerHTML = results.details.map(d => `
+        <tr>
+            <td>${d.id}</td>
+            <td>${d.query.substring(0, 50)}${d.query.length > 50 ? '...' : ''}</td>
+            <td>${catLabels[d.category] || d.category}</td>
+            <td>${d.expectedSkill}</td>
+            <td>${d.detectedSkill}</td>
+            <td>${d.score.toFixed(2)}</td>
+            <td class="${d.match ? 'status-pass' : 'status-fail'}">${d.match ? '✓ PASó' : '✗ FALLó'}</td>
+        </tr>
+    `).join('');
+
+    document.getElementById('results').style.display = 'block';
+}
+
+function filterCategory(category) {
+    document.querySelectorAll('.btn-filter').forEach(b => b.classList.remove('active'));
+    event.target.classList.add('active');
+
+    const rows = document.querySelectorAll('#resultsBody tr');
+    rows.forEach(row => {
+        if (category === 'all') {
+            row.style.display = '';
+        } else {
+            const cat = row.querySelector('td:nth-child(3)');
+            const catMap = {
+                'busqueda_propiedades': '🔍 Búsqueda',
+                'analizar_mercado': '📊 Mercado',
+                'resolver_contexto': '🔄 Contexto',
+                'extraer_requerimiento': '📱 WhatsApp',
+            };
+            row.style.display = cat && cat.textContent.includes(catMap[category] || category) ? '' : 'none';
+        }
+    });
+}
+</script>
+{% endblock %}

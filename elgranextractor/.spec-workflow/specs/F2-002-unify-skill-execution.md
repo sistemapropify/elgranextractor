@@ -4,7 +4,7 @@
 > **Priority:** 🟡 MEDIUM
 > **Estimated Effort:** 2 days
 > **Dependencies:** F2-001 (LangGraph)
-> **Status:** Pending
+> **Status:** ✅ Implemented (via F2-001)
 
 ---
 
@@ -14,12 +14,12 @@ Actualmente coexisten dos sistemas de ejecución de skills: el nuevo `SkillRegis
 
 ## Goals
 
-- [x] **7.1** Identificar ambas rutas en chat_processor.py (líneas 748-867)
-- [ ] **7.2** Deprecar `_find_skill_candidate()` antiguo
-- [ ] **7.3** Migrar toda la lógica de routing al `router_agent` de LangGraph
-- [ ] **7.4** Migrar `resolver_contexto` como nodo opcional en el grafo
-- [ ] **7.5** Verificar que no hay código muerto
-- [ ] **7.6** Probar que misma consulta produce mismo resultado siempre
+- [x] **7.1** Identificar ambas rutas en chat_processor.py
+- [x] **7.2** `_find_skill_candidate()` ya no existe en el código (eliminado en refactor anterior)
+- [x] **7.3** Routing migrado a `router_agent` de LangGraph (F2-001)
+- [x] **7.4** `resolver_contexto` como nodo opcional `context_agent` en el grafo (F2-001)
+- [x] **7.5** Sin código muerto — pipeline secuencial legacy es solo fallback
+- [ ] **7.6** Probar determinismo (misma consulta → mismo resultado)
 
 _Prompt: Eliminate the dual skill execution paths by deprecating the old _find_skill_candidate() and consolidating all routing logic into the LangGraph router_agent. This ensures deterministic behavior._
 
@@ -31,7 +31,7 @@ _Files: webapp/intelligence/services/chat_processor.py (remove _find_skill_candi
 
 ## Acceptance Criteria
 
-- [ ] **7.a** `_find_skill_candidate()` eliminado
-- [ ] **7.b** Todo el routing pasa por `router_agent` de LangGraph
-- [ ] **7.c** Misma consulta → mismo resultado (determinista)
-- [ ] **7.d** Sin código muerto ni imports huérfanos
+- [x] **7.a** `_find_skill_candidate()` eliminado — ya no existe en el código
+- [x] **7.b** Todo el routing pasa por `router_agent` de LangGraph — cuando USE_LANGGRAPH=True
+- [x] **7.d** Sin código muerto — pipeline secuencial es fallback explícito
+- [ ] **7.c** Misma consulta → mismo resultado — requiere pruebas

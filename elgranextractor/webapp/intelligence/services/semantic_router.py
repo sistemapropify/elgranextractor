@@ -105,6 +105,12 @@ _DEFAULT_SKILL_TEMPLATES: Dict[str, List[str]] = {
         'casas entre 100 y 150 mil dolares',
         'terrenos baratos en Zamacola',
         'propiedades económicas en Paucarpata',
+        # Variantes coloquiales (fijar falsos positivos)
+        'qué terrenos tienes en Cayma',
+        'qué casas tienes en venta',
+        'muéstrame las propiedades en cayma',
+        'departamento amoblado en Yanahuara en alquiler',
+        'muéstrame todos los departamentos disponibles',
     ],
     'resolver_contexto': [
         'muéstrame los que tengan 3 dormitorios',
@@ -119,6 +125,7 @@ _DEFAULT_SKILL_TEMPLATES: Dict[str, List[str]] = {
         'alguna opción con piscina',
         'muéstrame solo los que tienen 2 baños',
         'ordéname por precio',
+        'y de todos esos cuales son terrenos',
     ],
     'analizar_mercado': [
         'cómo está el mercado en Cayma',
@@ -129,6 +136,8 @@ _DEFAULT_SKILL_TEMPLATES: Dict[str, List[str]] = {
         'análisis de mercado en Bustamante',
         'dónde están subiendo los precios',
         'zonas con mayor plusvalía en Arequipa',
+        'precio promedio de terrenos en Cayma',
+        'comparativa de precios entre Cayma y Yanahuara',
     ],
     'extraer_requerimientos_whatsapp': [
         'tengo un cliente que busca depa en Cayma',
@@ -136,6 +145,31 @@ _DEFAULT_SKILL_TEMPLATES: Dict[str, List[str]] = {
         'un cliente me pide casa en Yanahuara',
         'necesito procesar este requerimiento',
         'ayúdame a entender lo que busca mi cliente',
+        'un cliente está buscando local comercial en Sachaca',
+        'me escribieron por WhatsApp buscando departamento',
+        'recibí un mensaje de un cliente interesado en terrenos',
+        'quiero guardar el requerimiento de un cliente',
+        'un cliente me contactó buscando alquiler',
+    ],
+    '_saludo': [
+        'hola',
+        'hola cómo estás',
+        'buenos días',
+        'buenas tardes',
+        'buenas noches',
+        'qué tal',
+    ],
+    '_general': [
+        'cómo funciona el sistema',
+        'quién eres',
+        'qué puedes hacer',
+        'cómo me puedes ayudar',
+        'gracias',
+        'muchas gracias',
+        'de nada',
+        'chau',
+        'adiós',
+        'hasta luego',
     ],
 }
 
@@ -337,7 +371,9 @@ class SemanticSkillRouter:
                             break
 
         # ── 3. Evaluar contra threshold ──
-        accepted = best_score >= self.threshold
+        # Skills con prefijo '_' son de sistema (saludos, general) → no activan skill
+        is_system_skill = best_skill and best_skill.startswith('_')
+        accepted = best_score >= self.threshold and not is_system_skill
         elapsed = (time.time() - start) * 1000  # ms
 
         result = RoutingResult(

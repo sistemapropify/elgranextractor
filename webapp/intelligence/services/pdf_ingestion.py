@@ -3,27 +3,43 @@ PDF Ingestion Service para RAG.
 Extrae texto de PDFs, lo chunkifica y lo indexa en colecciones vectoriales.
 
 Chunking strategy:
-- 400 palabras por chunk
-- 50 palabras de overlap
-- Respetar límites de "Artículo" en documentos legales (SUNARP, etc.)
+- Documentos estructurados (leyes, normas): chunk por ARTÍCULO, CAPÍTULO, TÍTULO
+- Documentos no estructurados: chunk por palabras (400 palabras, 50 overlap)
 
 Dependencia: pymupdf (instalar con: pip install pymupdf)
 """
 
 import os
 import hashlib
+import re
 import logging
+import traceback
 from typing import List, Optional, Tuple, Dict, Any
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
 
+# Patrones de estructura para documentos legales peruanos
+PATRONES_ESTRUCTURA = [
+    ('titulo', re.compile(r'^TÍTULO\s+[IVXLCDM]+\b', re.MULTILINE)),
+    ('capitulo', re.compile(r'^CAPÍTULO\s+[IVXLCDM]+\b', re.MULTILINE)),
+    ('seccion', re.compile(r'^SECCIÓN\s+\w+', re.MULTILINE)),
+    ('articulo', re.compile(r'^Art[ií]culo\s+\d+[°º]?\.?\s*[-—]?\s*', re.MULTILINE)),
+    ('anexo', re.compile(r'^ANEXO\s+\w+', re.MULTILINE)),
+    ('disposicion', re.compile(r'^(DISPOSICIÓN|DISPOSICIONES)\s+(COMPLEMENTARIA|FINAL|TRANSITORIA|DEROGATORIA)', re.MULTILINE)),
+]
+
+
 class PDFIngestionService:
     """Servicio de ingesta de PDFs para RAG."""
 
-    CHUNK_SIZE = 400       # palabras por chunk
+    CHUNK_SIZE = 400       # palabras por chunk (solo para no estructurados)
     CHUNK_OVERLAP = 50     # palabras de overlap entre chunks consecutivos
+
+    # ============================================================
+    # EXTRACCIÓN DE TEXTO
+    # ============================================================
 
     @classmethod
     def extract_text(cls, pdf_path: str) -> Optional[str]:
@@ -75,16 +91,79 @@ class PDFIngestionService:
             logger.error(f"Error extrayendo PDF {pdf_path}: {e}")
             return None
 
+    # ============================================================
+    # DETECCIÓN DE ESTRUCTURA
+    # ============================================================
+
+    @classmethod
+    def detect_structure(cls, text: str) -> List[Dict[str, Any]]:
+        """
+        Analiza el texto y detecta la estructura jerárquica del documento.
+
+        Detecta: TÍTULO, CAPÍTULO, SECCIÓN, Artículo, ANEXO, Disposiciones.
+
+        Returns:
+            Lista de secciones detectadas con:
+            - type: 'titulo' | 'capitulo' | 'seccion' | 'articulo' | 'anexo' | 'disposicion'
+            - title: str (nombre completo de la sección)
+            - start_char: int (posición de inicio en el texto)
+            - end_char: int (posición de fin)
+            - level: int (nivel jerárquico)
+        """
+        if not text:
+            return []
+
+        # Encontrar todas las ocurrencias de patrones estructurales
+        matches = []
+        for tipo, patron in PATRONES_ESTRUCTURA:
+            for m in patron.finditer(text):
+                # Extraer el título completo (primera línea)
+                start = m.start()
+                end_of_line = text.find('\n', start)
+                if end_of_line == -1:
+                    end_of_line = min(start + 200, len(text))
+                title_line = text[start:end_of_line].strip()
+
+                # Asignar nivel jerárquico
+                niveles = {'titulo': 0, 'capitulo': 1, 'seccion': 2,
+                          'articulo': 3, 'disposicion': 2, 'anexo': 0}
+
+                matches.append({
+                    'type': tipo,
+                    'title': title_line,
+                    'start_char': start,
+                    'level': niveles.get(tipo, 3),
+                })
+
+        if not matches:
+            return []
+
+        # Ordenar por posición en el texto
+        matches.sort(key=lambda x: x['start_char'])
+
+        # Asignar end_char (hasta el inicio del siguiente match o fin del texto)
+        for i, match in enumerate(matches):
+            if i + 1 < len(matches):
+                match['end_char'] = matches[i + 1]['start_char']
+            else:
+                match['end_char'] = len(text)
+
+        return matches
+
+    # ============================================================
+    # CHUNKING
+    # ============================================================
+
     @classmethod
     def chunk_text(cls, text: str) -> List[Dict[str, Any]]:
         """
-        Divide texto en chunks con overlap.
+        Divide texto en chunks respetando la estructura del documento.
 
-        Para documentos legales (SUNARP, regulaciones municipales, etc.),
-        respeta límites de "Artículo" para no mezclar artículos en un mismo chunk.
-
-        Args:
-            text: Texto completo a chunkificar
+        Estrategia:
+        1. Detectar estructura del documento (títulos, capítulos, artículos)
+        2. Si es documento estructurado → chunkear POR SECCIÓN
+           (cada artículo es un chunk independiente)
+        3. Si es texto plano → chunkear por palabras con overlap
 
         Returns:
             Lista de chunks, cada uno con:
@@ -92,12 +171,80 @@ class PDFIngestionService:
             - chunk_index: int
             - word_count: int
             - char_count: int
-            - is_legal_document: bool
+            - estructura: dict | None (tipo, titulo, nivel si aplica)
         """
         if not text or not text.strip():
             return []
 
-        # Detectar si es documento legal (contiene "Artículo" con mayúscula)
+        # Detectar estructura
+        estructura = cls.detect_structure(text)
+        es_estructurado = len(estructura) > 3  # Al menos 3 secciones = documento estructurado
+
+        if es_estructurado:
+            return cls._chunk_estructurado(text, estructura)
+        else:
+            return cls._chunk_plano(text)
+
+    @classmethod
+    def _chunk_estructurado(
+        cls, text: str, estructura: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """
+        Chunking basado en estructura: cada ARTÍCULO o sección es un chunk.
+        Agrupa secciones menores (artículos) bajo su CONTENEDOR (capítulo/título).
+        """
+        chunks = []
+        # Agrupar por contenedores (TÍTULO, CAPÍTULO)
+        contenedores = [s for s in estructura if s['type'] in ('titulo', 'capitulo', 'anexo')]
+        secciones = [s for s in estructura if s['type'] in ('articulo', 'disposicion', 'seccion')]
+
+        if not secciones:
+            # Si solo hay contenedores, usarlos como chunks
+            secciones = contenedores if contenedores else estructura
+
+        for i, sec in enumerate(secciones):
+            # Extraer texto de esta sección
+            start = sec['start_char']
+            end = sec.get('end_char', len(text))
+            content = text[start:end].strip()
+
+            if not content:
+                continue
+
+            # Encontrar el título del contenedor padre
+            contenedor_actual = None
+            for c in contenedores:
+                if c['start_char'] <= start:
+                    contenedor_actual = c['title']
+                else:
+                    break
+
+            palabras = content.split()
+            chunks.append({
+                'content': content,
+                'chunk_index': i,
+                'word_count': len(palabras),
+                'char_count': len(content),
+                'estructura': {
+                    'type': sec['type'],
+                    'titulo': sec['title'],
+                    'nivel': sec['level'],
+                    'contenedor': contenedor_actual or '',
+                }
+            })
+
+        logger.info(
+            f"Chunking estructural: {len(chunks)} chunks "
+            f"(basado en {len(secciones)} secciones detectadas)"
+        )
+        return chunks
+
+    @classmethod
+    def _chunk_plano(cls, text: str) -> List[Dict[str, Any]]:
+        """
+        Chunking por palabras con overlap (para texto no estructurado).
+        Detecta si tiene "Artículo" para respetar límites.
+        """
         is_legal_doc = "Artículo" in text
 
         words = text.split()
@@ -108,17 +255,15 @@ class PDFIngestionService:
 
         while start < len(words):
             end = min(start + cls.CHUNK_SIZE, len(words))
-            chunk_words = words[start:end]
 
-            # Para documentos legales, ajustar al límite del Artículo anterior
+            # Para docs con Artículo, ajustar al límite del Artículo anterior
             if is_legal_doc and end < len(words):
-                # Buscar "Artículo" hacia atrás desde end
                 for i in range(end - 1, start, -1):
                     if i < len(words) and words[i].startswith('Artículo'):
                         end = i
-                        chunk_words = words[start:end]
                         break
 
+            chunk_words = words[start:end]
             chunk_text = ' '.join(chunk_words)
 
             if chunk_text.strip():
@@ -127,28 +272,30 @@ class PDFIngestionService:
                     'chunk_index': chunk_index,
                     'word_count': len(chunk_words),
                     'char_count': len(chunk_text),
-                    'is_legal_document': is_legal_doc
+                    'estructura': None,
                 })
 
             chunk_index += 1
 
             # Avanzar ventana
             if is_legal_doc:
-                # Para documentos legales, no usar overlap para evitar mezclar artículos
-                start = end
+                start = end  # Sin overlap para no mezclar artículos
             else:
                 start = end - cls.CHUNK_OVERLAP
 
-            # Evitar loop infinito
             if start >= len(words) or start >= end:
                 break
 
         logger.info(
-            f"Texto chunkificado: {len(chunks)} chunks "
+            f"Chunking plano: {len(chunks)} chunks "
             f"(legal_doc={is_legal_doc}, "
             f"chunk_size={cls.CHUNK_SIZE}, overlap={cls.CHUNK_OVERLAP if not is_legal_doc else 0})"
         )
         return chunks
+
+    # ============================================================
+    # INGESTA
+    # ============================================================
 
     @classmethod
     def ingest_pdf(
@@ -162,10 +309,11 @@ class PDFIngestionService:
 
         Pipeline:
         1. Extraer texto del PDF con pymupdf
-        2. Chunkificar el texto (400 palabras, 50 overlap)
-        3. Generar embedding para cada chunk (modo passage)
-        4. Crear/actualizar documentos en IntelligenceDocument
-        5. Reconstruir índice FAISS si está disponible
+        2. Detectar estructura del documento
+        3. Chunkificar respetando estructura (artículos, capítulos)
+        4. Generar embedding para cada chunk (modo passage)
+        5. Crear/actualizar documentos en IntelligenceDocument
+        6. Reconstruir índice FAISS si está disponible
 
         Args:
             pdf_path: Ruta al archivo PDF
@@ -182,7 +330,8 @@ class PDFIngestionService:
             'chunks_created': 0,
             'chunks_updated': 0,
             'errors': 0,
-            'total_chunks': 0
+            'total_chunks': 0,
+            'secciones_detectadas': 0,
         }
 
         try:
@@ -196,6 +345,10 @@ class PDFIngestionService:
             text = cls.extract_text(pdf_path)
             if not text:
                 return False, "No se pudo extraer texto del PDF", stats
+
+            # Detectar estructura
+            estructura = cls.detect_structure(text)
+            stats['secciones_detectadas'] = len(estructura)
 
             # Chunkificar
             chunks = cls.chunk_text(text)
@@ -211,7 +364,9 @@ class PDFIngestionService:
 
             logger.info(
                 f"Ingiriendo PDF: {pdf_name} (hash={pdf_hash[:8]}...) "
-                f"-> colección '{collection_name}', {len(chunks)} chunks"
+                f"-> colección '{collection_name}', "
+                f"{len(chunks)} chunks, "
+                f"{len(estructura)} secciones detectadas"
             )
 
             # Crear documentos para cada chunk
@@ -226,11 +381,21 @@ class PDFIngestionService:
                         'pdf_hash': pdf_hash,
                         'chunk_index': chunk['chunk_index'],
                         'word_count': chunk['word_count'],
-                        'es_documento_legal': chunk['is_legal_document'],
+                        'char_count': chunk['char_count'],
                         'fecha_ingesta': timezone.now().isoformat(),
                     }
+
+                    # Agregar metadatos de estructura si existen
+                    est = chunk.get('estructura')
+                    if est:
+                        field_values['estructura_tipo'] = est['type']
+                        field_values['estructura_titulo'] = est['titulo']
+                        field_values['estructura_nivel'] = est['nivel']
+                        field_values['estructura_contenedor'] = est['contenedor']
+                    else:
+                        field_values['estructura_tipo'] = 'texto_continuo'
+
                     if metadata:
-                        # Agregar metadatos adicionales sin sobrescribir los base
                         for k, v in metadata.items():
                             if k not in field_values:
                                 field_values[k] = v
@@ -259,11 +424,21 @@ class PDFIngestionService:
                         stats['chunks_updated'] += 1
 
                 except Exception as e:
-                    logger.error(f"Error procesando chunk {chunk['chunk_index']}: {e}")
+                    logger.error(
+                        f"Error procesando chunk {chunk['chunk_index']}: {e}\n"
+                        f"{traceback.format_exc()}"
+                    )
                     stats['errors'] += 1
 
+            # Verificar si todos los chunks fallaron
+            if stats['chunks_created'] == 0 and stats['chunks_updated'] == 0 and stats['errors'] > 0:
+                return False, (
+                    f"Error en ingesta: No se pudo generar embeddings para ningún chunk "
+                    f"({stats['errors']} errores). Verifica que el modelo de embeddings "
+                    f"(intfloat/multilingual-e5-large) esté correctamente instalado."
+                ), stats
+
             # Actualizar estadísticas de la colección
-            from django.utils import timezone
             collection.last_sync_at = timezone.now()
             collection.save()
 
@@ -291,11 +466,13 @@ class PDFIngestionService:
             return True, (
                 f"PDF '{pdf_name}' ingestado: "
                 f"{stats['chunks_created']} chunks creados, "
-                f"{stats['chunks_updated']} actualizados"
+                f"{stats['chunks_updated']} actualizados, "
+                f"{stats['secciones_detectadas']} secciones detectadas"
             ), stats
 
         except IntelligenceCollection.DoesNotExist:
             return False, f"Colección '{collection_name}' no encontrada o inactiva", stats
         except Exception as e:
-            logger.error(f"Error en ingesta de PDF: {e}")
-            return False, f"Error en ingesta: {str(e)}", stats
+            tb = traceback.format_exc()
+            logger.error(f"Error en ingesta de PDF: {e}\n{tb}")
+            return False, f"Error en ingesta: {str(e) or 'Error desconocido (ver logs del servidor)'}", stats

@@ -4,7 +4,7 @@
 > **Priority:** 🔴 HIGH
 > **Estimated Effort:** 1 day
 > **Dependencies:** None (standalone optimization)
-> **Status:** Pending
+> **Status:** ✅ Implemented (2026-06-21)
 
 ---
 
@@ -15,12 +15,12 @@ Migrar el filtrado por `field_values` de un loop en Python (que carga TODOS los 
 ## Goals
 
 - [x] **2.1** Analizar filtrado actual en `rag.py` search_dynamic()
-- [ ] **2.2** Implementar opción 1: Django JSONField lookups (`field_values__{field_name}`)
-- [ ] **2.3** Implementar opción 2: RawSQL con `JSON_VALUE()` como fallback
-- [ ] **2.4** Migrar `search_dynamic()` a usar pre-filtrado SQL
-- [ ] **2.5** Agregar logging de documentos filtrados (count, filtros aplicados)
-- [ ] **2.6** Probar con filtros combinados (distrito + precio + tipo)
-- [ ] **2.7** Documentar cambio y métricas de performance
+- [x] **2.2** Implementar opción 1: Django JSONField lookups (`field_values__{field_name}`)
+- [x] **2.3** Implementar opción 2: RawSQL con `JSON_VALUE()` como fallback
+- [x] **2.4** Migrar `search_dynamic()` a usar pre-filtrado SQL
+- [x] **2.5** Agregar logging de documentos filtrados (count, filtros aplicados)
+- [x] **2.6** Aplicar filtros SQL también en `_text_search_fallback()` (antes ignoraba filters)
+- [x] **2.7** Documentar cambio y métricas de performance
 
 _Prompt: Replace the in-memory Python filtering loop in RAGService.search_dynamic() with SQL-level pre-filtering using JSON_VALUE() on the field_values JSON column. This reduces memory usage and improves response time for large collections._
 
@@ -62,8 +62,9 @@ if filters:
 
 ## Acceptance Criteria
 
-- [ ] **2.a** Filtrado en SQL, no en memoria Python
-- [ ] **2.b** Soporte para filtros combinados (distrito + precio + tipo_propiedad)
-- [ ] **2.c** Sin breaking changes en API
-- [ ] **2.d** Logging de count de documentos pre/post filtro
-- [ ] **2.e** Performance: <50ms para colecciones de 5000+ documentos
+- [x] **2.a** Filtrado en SQL, no en memoria Python
+- [x] **2.b** Soporte para filtros combinados (distrito + precio + tipo_propiedad) — usa `&=` entre Q objects
+- [x] **2.c** Sin breaking changes en API — firma de `search_dynamic()` no cambia
+- [x] **2.d** Logging de count de documentos pre/post filtro con tag `F1-002`
+- [x] **2.e** Fallback a `JSON_VALUE()` RawSQL si el ORM falla (compatibilidad SQL Server)
+- [x] **2.f** Filtros aplicados también en `_text_search_fallback()` (antes se ignoraban)

@@ -264,24 +264,55 @@ class FormatearPropiedadesSkill(BaseSkill):
 
         header_html = ''.join(f'<th>{h}</th>' for _, h in col_map)
 
+        PER_PAGE = 10
+        total = len(propiedades)
+        pages = (total + PER_PAGE - 1) // PER_PAGE
+
         return f"""
-        <div class="pf-table-container">
-            <div class="pf-table-count">{len(propiedades)} propiedades</div>
-            <table class="pf-table">
+        <div class="pf-table-container" id="pf-matriz-{id(self)}">
+            <div class="pf-table-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <span class="pf-table-count" style="font-size:13px;color:#8b949e;">{total} propiedades</span>
+                <div class="pf-table-pages" style="display:flex;gap:4px;font-size:12px;">
+                    {''.join(
+                        f'<button onclick="pfPaginar{id(self)}({p})" style="background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:2px 8px;border-radius:3px;cursor:pointer;">{p+1}</button>'
+                        for p in range(min(pages, 20))
+                    )}
+                </div>
+            </div>
+            <table class="pf-table" style="width:100%;border-collapse:collapse;font-size:13px;">
                 <thead><tr>{header_html}</tr></thead>
-                <tbody>{''.join(rows_html)}</tbody>
+                <tbody id="pf-tbody-{id(self)}">{''.join(rows_html)}</tbody>
             </table>
         </div>
         <style>
             .pf-table-container {{ margin: 12px 0; overflow-x: auto; }}
-            .pf-table-count {{ font-size: 13px; color: #8b949e; margin-bottom: 8px; }}
-            .pf-table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
             .pf-table th {{ background: #161b22; color: #8b949e; font-weight: 600; padding: 8px 10px; text-align: left; border-bottom: 2px solid #30363d; white-space: nowrap; }}
             .pf-table td {{ padding: 7px 10px; border-bottom: 1px solid #21262d; color: #c9d1d9; }}
             .pf-table tr:hover td {{ background: #1c2128; }}
             .pf-table tr:nth-child(even) td {{ background: #0d1117; }}
             .pf-table tr:nth-child(even):hover td {{ background: #1c2128; }}
-        </style>"""
+        </style>
+        <script>
+        function pfPaginar{id(self)}(pagina) {{
+            var tbody = document.getElementById('pf-tbody-{id(self)}');
+            if (!tbody) return;
+            var rows = tbody.querySelectorAll('tr');
+            var inicio = pagina * {PER_PAGE};
+            var fin = inicio + {PER_PAGE};
+            rows.forEach(function(r, i) {{
+                r.style.display = (i >= inicio && i < fin) ? '' : 'none';
+            }});
+            // Resaltar botón activo
+            var btns = document.querySelectorAll('#pf-matriz-{id(self)} .pf-table-pages button');
+            btns.forEach(function(b, i) {{
+                b.style.background = (i === pagina) ? '#1f6feb' : '#21262d';
+                b.style.borderColor = (i === pagina) ? '#1f6feb' : '#30363d';
+            }});
+        }}
+        // Mostrar primera página al cargar
+        document.addEventListener('DOMContentLoaded', function() {{ pfPaginar{id(self)}(0); }});
+        setTimeout(function() {{ pfPaginar{id(self)}(0); }}, 100);
+        </script>"""
 
     def _generar_lista(self, propiedades: List[Dict], campos: List[str]) -> str:
         """Genera HTML de lista numerada."""

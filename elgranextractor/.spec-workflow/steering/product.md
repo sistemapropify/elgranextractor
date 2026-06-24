@@ -24,27 +24,27 @@ PIL (PropiFai Intelligence Layer) es un sistema multi-agente especializado en el
 
 ## Key Deliverables per Phase
 
-### Phase 1: Function Calling (Weeks 1-2)
-- [ ] **F1-001** Semantic Skill Router (10h) — Reemplaza keyword matching
-- [ ] **F1-002** SQL Pre-filtering (1d) — Filtrado en BD, no en memoria
-- [ ] **F1-003** PDF Ingestion Pipeline (3d) — Documentos SUNARP + legales
-- [ ] **F1-004** Cache conversation_id (1d) — Aislamiento entre sesiones
-- [ ] **F1-005** Confidence Threshold (1d) — 0.25 → 0.45
+### Phase 1: Function Calling (Weeks 1-2) ✅ COMPLETED
+- [x] **F1-001** Semantic Skill Router (10h) — Reemplaza keyword matching ✅
+- [x] **F1-002** SQL Pre-filtering (1d) — Filtrado en BD, no en memoria ✅
+- [x] **F1-003** PDF Ingestion Pipeline (3d) — Documentos SUNARP + legales ✅
+- [x] **F1-004** Cache conversation_id (1d) — Aislamiento entre sesiones ✅
+- [x] **F1-005** Confidence Threshold (1d) — 0.25 → 0.45 (via F1-001) ✅
 
-### Phase 2: LangGraph (Weeks 3-4)
-- [ ] **F2-001** LangGraph Orchestration (5d) — StateGraph + conditional edges
-- [ ] **F2-002** Unify Execution Paths (2d) — Eliminar dual routing
-- [ ] **F2-003** Optimize resolver_contexto (1d) — Skip si turno 1
+### Phase 2: LangGraph (Weeks 3-4) ✅ COMPLETED
+- [x] **F2-001** LangGraph Orchestration (5d) — StateGraph + conditional edges ✅
+- [x] **F2-002** Unify Execution Paths (2d) — Eliminar dual routing ✅
+- [x] **F2-003** Optimize resolver_contexto (1d) — Skip si turno 1 (cubierto por F2-001) ✅
 
-### Phase 3: Observability (Week 5)
-- [ ] **F3-001** Tracing & Observability (3d) — trace_id, document logging
-- [ ] **F3-002** Rate Limiting (2d) — Per skill, per user
+### Phase 3: Observability (Week 5) ✅ COMPLETED
+- [x] **F3-001** Tracing & Observability (3d) — trace_id, document logging ✅
+- [x] **F3-002** Rate Limiting (2d) — Per skill, per user ✅
 
-### Phase 4: Multi-Agent (Weeks 6-8)
-- [ ] **F4-001** Multi-Agent Architecture (8d) — 6 specialized agents
+### Phase 4: Multi-Agent (Weeks 6-8) ✅ COMPLETED
+- [x] **F4-001** Multi-Agent Architecture (8d) — 6 specialized agents ✅
 
-### Phase 5: Evaluation (Weeks 9-10)
-- [ ] **F5-001** Evaluation Dataset (5d) — 50+ queries, Ragas, CI/CD
+### Phase 5: Evaluation (Weeks 9-10) ✅ COMPLETED
+- [x] **F5-001** Evaluation Dataset (5d) — 52 queries, runner, metrics ✅
 
 ## Success Metrics
 

@@ -111,3 +111,11 @@ oryx-manifest.toml
 Procfile
 runtime.txt
 requirements.txt
+
+# Generated Excel exports
+webapp/*.xlsx
+webapp/~$*.xlsx
+
+# Test artifacts
+eval_output*.txt
+eval_stderr*.txt

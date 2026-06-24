@@ -86,9 +86,12 @@ urlpatterns = [
     path('eventos/', include('eventos.urls')),
     
     # Intelligence - Propifai Intelligence Layer (PIL)
-    path('api/v1/intelligence/', include('intelligence.urls')),
+    # Ambos prefijos usan el mismo URLconf para mantener compatibilidad.
+    # Se usan namespaces de instancia para evitar el warning urls.W005
+    # El app_name='intelligence' está definido en intelligence/urls.py
+    path('api/v1/intelligence/', include(('intelligence.urls', 'intelligence'), namespace='intelligence-api')),
     # Vistas HTML de intelligence (sin api/v1/ para acceso directo)
-    path('intelligence/', include('intelligence.urls')),
+    path('intelligence/', include(('intelligence.urls', 'intelligence'), namespace='intelligence-web')),
     
     # Meta Ads - Dashboard de campañas publicitarias de Meta
     path('meta-ads/', include('meta_ads.urls')),  # Dashboard de campañas publicitarias de Meta

@@ -1,4 +1,7 @@
 import logging
+import time
+import os
+import sys
 
 from django.apps import AppConfig
 
@@ -16,7 +19,25 @@ class IntelligenceConfig(AppConfig):
         1. Registra signals (auto-creación de perfiles de inteligencia)
         2. Carga índices FAISS al iniciar la aplicación (en segundo plano)
         3. Registra skills en el SkillRegistry
+        4. Pre-calcula embeddings del Semantic Router (F1-001)
+        5. Pre-carga modelo de embeddings (SPEC-014)
         """
+        # ── Verificar si estamos en proceso principal ──
+        # Evitar precarga durante migraciones, collectstatic, shell, test
+        _should_skip = any([
+            'migrate' in sys.argv,
+            'makemigrations' in sys.argv,
+            'collectstatic' in sys.argv,
+            'flush' in sys.argv,
+            'test' in sys.argv,
+            'shell' in sys.argv,
+            os.environ.get('RUN_MAIN') != 'true' and 'runserver' in sys.argv,
+        ])
+        if _should_skip:
+            logger.debug("Saltando inicialización pesada (proceso secundario o comando administrativo)")
+        else:
+            self._preload_models()
+
         # 1. Registrar signals
         try:
             import intelligence.signals  # noqa: F401
@@ -85,3 +106,52 @@ class IntelligenceConfig(AppConfig):
                 logger.info(f"Semantic Router: {n} templates embeddeados para routing semántico")
         except Exception as e:
             logger.warning(f"No se pudieron pre-calcular embeddings del Semantic Router: {e}")
+
+    def _preload_models(self):
+        """
+        Pre-carga el modelo de embeddings al iniciar Django.
+        
+        SPEC-014: Evita latencia de 10-20s en la primera consulta.
+        Se ejecuta en el proceso principal de Django (RUN_MAIN=true).
+        
+        Logs esperados:
+            [INTEL] Pre-cargando modelo de embeddings: intfloat/multilingual-e5-large
+            [INTEL] GPU CUDA detectada — cargando modelo en GPU
+            [INTEL] Modelo de embeddings inicializado (1024 dimensiones, device=cuda, carga=5234ms)
+            [INTEL] Modelo de embeddings pre-cargado exitosamente
+            [INTEL] Pre-cálculo de templates completado en 320ms (78 templates)
+        """
+        overall_start = time.time()
+        logger.info("=== SPEC-014: Pre-carga de modelos de embeddings ===")
+
+        # 5a. Pre-cargar modelo de embeddings
+        model_loaded = False
+        try:
+            from .services.rag import RAGService
+            model_loaded = RAGService.preload_embedder()
+        except Exception as e:
+            logger.warning(
+                f"[SPEC-014] Error en pre-carga de modelo de embeddings: {e}. "
+                f"Se cargará lazy en la primera consulta."
+            )
+
+        # 5b. Pre-calcular embeddings del Semantic Router
+        templates_ok = 0
+        try:
+            from .services.semantic_router import precompute_router_embeddings
+            templates_ok = precompute_router_embeddings()
+        except Exception as e:
+            logger.warning(
+                f"[SPEC-014] Error en pre-cálculo de templates del router: {e}. "
+                f"Se usarán keywords como fallback."
+            )
+
+        # Resumen final
+        overall_elapsed = (time.time() - overall_start) * 1000
+        logger.info(
+            f"[SPEC-014] Resumen de pre-carga: "
+            f"modelo={'✅' if model_loaded else '❌'} | "
+            f"templates={templates_ok} | "
+            f"tiempo_total={overall_elapsed:.0f}ms"
+        )
+        logger.info("=== SPEC-014: Fin de pre-carga ===")

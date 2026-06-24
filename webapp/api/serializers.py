@@ -379,3 +379,88 @@ class DescubrimientoRequestSerializer(serializers.Serializer):
             )
         
         return data
+
+
+class POICreateSerializer(serializers.Serializer):
+    """
+    Serializer para crear un Punto de Interés (POI) desde el mapa interactivo.
+    Valida que la categoría exista y que las coordenadas estén en rango.
+    """
+    nombre = serializers.CharField(
+        max_length=200,
+        required=True,
+        error_messages={'required': 'El nombre del POI es obligatorio'}
+    )
+    categoria_id = serializers.IntegerField(
+        required=True,
+        error_messages={'required': 'Debe seleccionar una categoría'}
+    )
+    latitud = serializers.DecimalField(
+        max_digits=10, decimal_places=7,
+        required=True,
+        error_messages={'required': 'La latitud es obligatoria'}
+    )
+    longitud = serializers.DecimalField(
+        max_digits=10, decimal_places=7,
+        required=True,
+        error_messages={'required': 'La longitud es obligatoria'}
+    )
+    direccion = serializers.CharField(
+        max_length=300, required=False, allow_blank=True, default=''
+    )
+    telefono = serializers.CharField(
+        max_length=30, required=False, allow_blank=True, default=''
+    )
+    sitio_web = serializers.URLField(
+        max_length=500, required=False, allow_blank=True, default=''
+    )
+    descripcion = serializers.CharField(
+        required=False, allow_blank=True, default=''
+    )
+
+    def validate_categoria_id(self, value):
+        """Verifica que la categoría exista y esté activa."""
+        from .models import CategoriaPOI
+        try:
+            categoria = CategoriaPOI.objects.get(id=value, is_active=True)
+        except CategoriaPOI.DoesNotExist:
+            raise serializers.ValidationError(
+                'La categoría seleccionada no existe o está inactiva'
+            )
+        return value
+
+    def validate_latitud(self, value):
+        """Verifica que la latitud esté en rango válido."""
+        value_float = float(value)
+        if value_float < -90 or value_float > 90:
+            raise serializers.ValidationError(
+                'La latitud debe estar entre -90 y 90'
+            )
+        return value
+
+    def validate_longitud(self, value):
+        """Verifica que la longitud esté en rango válido."""
+        value_float = float(value)
+        if value_float < -180 or value_float > 180:
+            raise serializers.ValidationError(
+                'La longitud debe estar entre -180 y 180'
+            )
+        return value
+
+    def create(self, validated_data):
+        """Crea un PointOfInterest con los datos validados."""
+        from .models import CategoriaPOI, PointOfInterest
+
+        categoria = CategoriaPOI.objects.get(id=validated_data['categoria_id'])
+
+        poi = PointOfInterest.objects.create(
+            nombre=validated_data['nombre'],
+            categoria=categoria,
+            latitud=validated_data['latitud'],
+            longitud=validated_data['longitud'],
+            direccion=validated_data.get('direccion', ''),
+            telefono=validated_data.get('telefono', ''),
+            sitio_web=validated_data.get('sitio_web', ''),
+            descripcion=validated_data.get('descripcion', ''),
+        )
+        return poi

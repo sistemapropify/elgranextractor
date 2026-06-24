@@ -4,7 +4,7 @@
 > **Priority:** 🟡 MEDIUM
 > **Estimated Effort:** 1 day
 > **Dependencies:** F1-001 (Semantic Skill Router)
-> **Status:** Pending
+> **Status:** ✅ Implemented (via F1-001)
 
 ---
 
@@ -15,11 +15,11 @@ El umbral de confianza actual de 0.25 es demasiado bajo, lo que causa falsos pos
 ## Goals
 
 - [x] **5.1** Analizar threshold actual en SkillRegistry y chat_processor
-- [ ] **5.2** Aumentar threshold de 0.25 a 0.45 en SemanticSkillRouter
-- [ ] **5.3** Agregar logging de cada decisión: skill_name, score, threshold, accepted/rejected
-- [ ] **5.4** Agregar métrica de tasa de aceptación/rechazo por skill
-- [ ] **5.5** Probar con consultas borderline (score 0.3-0.5)
-- [ ] **5.6** Documentar criterios de threshold
+- [x] **5.2** Aumentar threshold de 0.25 a 0.45 — [`DEFAULT_THRESHOLD=0.45`](../webapp/intelligence/services/semantic_router.py:172) (implementado en F1-001)
+- [x] **5.3** Logging de cada decisión — [`RoutingResult.to_log()`](../webapp/intelligence/services/semantic_router.py:52) (implementado en F1-001)
+- [x] **5.4** Métricas de aceptación/rechazo — [`_n_classifications`, `_n_accepted`, `_n_fallback`](../webapp/intelligence/services/semantic_router.py:191-193)
+- [ ] **5.5** Probar con consultas borderline (score 0.3-0.5) — pendiente de ejecución manual
+- [ ] **5.6** Documentar criterios de threshold — pendiente
 
 _Prompt: Increase the skill detection confidence threshold from 0.25 to 0.45 to reduce false positives. Add detailed logging for every routing decision including skill name, score, threshold, and whether it was accepted._
 
@@ -31,7 +31,7 @@ _Files: webapp/intelligence/services/semantic_router.py (modify threshold), weba
 
 ## Acceptance Criteria
 
-- [ ] **5.a** Threshold cambiado de 0.25 a 0.45
-- [ ] **5.b** Cada decisión de routing se loguea con: trace_id, skill, score, threshold, resultado
-- [ ] **5.c** Falsos positivos reducidos a <5%
-- [ ] **5.d** Sin afectar detección de consultas legítimas (score >0.45)
+- [x] **5.a** Threshold cambiado de 0.25 a 0.45 — [`DEFAULT_THRESHOLD=0.45`](../webapp/intelligence/services/semantic_router.py:172)
+- [x] **5.b** Cada decisión de routing se loguea con skill, score, threshold, resultado — [`RoutingResult.to_log()`](../webapp/intelligence/services/semantic_router.py:52)
+- [ ] **5.c** Falsos positivos reducidos a <5% — requiere evaluación con dataset real
+- [ ] **5.d** Sin afectar detección de consultas legítimas — requiere verificación manual

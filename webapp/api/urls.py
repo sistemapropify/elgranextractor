@@ -69,6 +69,9 @@ urlpatterns = [
     # Exportar todas las capas como GeoJSON
     path('pois/all.geojson', views.ExportarTodasCapasGeoJSONView.as_view(), name='pois-all-geojson'),
 
+    # Crear nuevo POI (POST desde el mapa interactivo)
+    path('pois/crear/', views.CrearPOIAPIView.as_view(), name='pois-crear'),
+
     # Mapa interactivo de POIs (template HTML)
     path('pois/mapa/', views.POIMapaTemplateView.as_view(), name='pois-mapa'),
 ]

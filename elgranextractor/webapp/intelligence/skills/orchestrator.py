@@ -527,17 +527,27 @@ class SkillOrchestrator:
 
     def _generate_cache_key(self, skill_name: str, parameters: Dict[str, Any],
                            context: ExecutionContext) -> str:
-        """Genera una key única para cache."""
-        # Incluir parámetros y contexto relevante en el hash
+        """
+        Genera una key única para cache.
+        
+        F1-004: Incluye conversation_id para evitar fugas de información
+        entre sesiones. Dos conversaciones diferentes con los mismos parámetros
+        NO comparten caché.
+        
+        Cache key = f"skill:{skill_name}:{conversation_id}:{md5_hash}"
+        Donde md5_hash incluye skill + params + user_id + environment + conversation_id
+        """
+        # Incluir parámetros, contexto y conversation_id en el hash
         cache_data = {
             'skill': skill_name,
             'params': parameters,
             'user_id': context.user_id,
+            'conversation_id': context.conversation_id,
             'environment': context.environment,
         }
         cache_string = str(sorted(cache_data.items()))
         cache_hash = hashlib.md5(cache_string.encode()).hexdigest()
-        return f"skill:{skill_name}:{cache_hash}"
+        return f"skill:{skill_name}:{context.conversation_id}:{cache_hash}"
 
     def _should_cache(self, skill, result: SkillResult) -> bool:
         """Determina si el resultado debe cachearse."""

@@ -4,7 +4,7 @@
 > **Priority:** 🟡 MEDIUM
 > **Estimated Effort:** 1 day
 > **Dependencies:** None
-> **Status:** Pending
+> **Status:** ✅ Implemented (2026-06-21)
 
 ---
 
@@ -15,10 +15,10 @@ El cache key de `SkillOrchestrator` no incluye `conversation_id`, lo que signifi
 ## Goals
 
 - [x] **4.1** Identificar caché en `SkillOrchestrator.execute_skill()`
-- [ ] **4.2** Modificar cache key para incluir `conversation_id`
-- [ ] **4.3** Verificar que no hay otros caches sin conversation_id
-- [ ] **4.4** Agregar test de aislamiento entre conversaciones
-- [ ] **4.5** Documentar política de cache keys
+- [x] **4.2** Modificar cache key para incluir `conversation_id` — [`_generate_cache_key()`](../webapp/intelligence/skills/orchestrator.py:528)
+- [x] **4.3** Verificar que no hay otros caches sin conversation_id — único punto de generación de cache keys en orchestrator
+- [ ] **4.4** Agregar test de aislamiento entre conversaciones (pendiente)
+- [ ] **4.5** Documentar política de cache keys (pendiente)
 
 _Prompt: Add conversation_id to the SkillOrchestrator cache key to prevent cross-session data leakage. The current cache only uses skill parameters, so two users with identical search params get cached results from other sessions._
 
@@ -44,7 +44,7 @@ cache_key = f"skill:{skill_name}:{conversation_id}:{json.dumps(params, sort_keys
 
 ## Acceptance Criteria
 
-- [ ] **4.a** Cache key incluye `conversation_id`
-- [ ] **4.b** Dos conversaciones con mismos params NO comparten caché
-- [ ] **4.c** Misma conversación con mismos params SÍ usa caché
-- [ ] **4.d** Sin breaking changes en API
+- [x] **4.a** Cache key incluye `conversation_id` — formato `skill:{name}:{conv_id}:{hash}`
+- [x] **4.b** Dos conversaciones con mismos params NO comparten caché — conversation_id en hash + key prefix
+- [x] **4.c** Misma conversación con mismos params SÍ usa caché — mismo conversation_id = mismo key
+- [x] **4.d** Sin breaking changes en API — solo cambia generación interna de key

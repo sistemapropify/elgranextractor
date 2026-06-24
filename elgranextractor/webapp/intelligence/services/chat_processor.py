@@ -49,6 +49,9 @@ from .metrics import MetricsService, log
 from ..skills import create_skill_system
 from ..skills.orchestrator import ExecutionContext
 
+# F2-001: LangGraph Orchestration
+from ..agents.orchestrator import PILOrchestrator, create_initial_state
+
 # Skill system singleton
 SKILL_SYSTEM = create_skill_system(enable_cache=True, auto_discover_examples=True)
 
@@ -138,7 +141,14 @@ class ChatProcessor:
     1. Orquestación: DeepSeek decide qué skill ejecutar
     2. Ejecución: sistema ejecuta la skill elegida
     3. Respuesta: DeepSeek genera respuesta natural con los resultados
+
+    F2-001: Integración con LangGraph PILOrchestrator.
+    - Si USE_LANGGRAPH=True, usa StateGraph con 4 nodos
+    - Si USE_LANGGRAPH=False, usa pipeline secuencial original
     """
+
+    # F2-001: Usar LangGraph para orquestación multi-agente
+    USE_LANGGRAPH = True
 
     # ── Método principal (no streaming) ─────────────────────────────────
 
@@ -162,7 +172,27 @@ class ChatProcessor:
                 # Guardar mensaje del usuario
                 cls._save_user_message(ctx.conversation, ctx.message)
 
-                # ── PASO 1: ORQUESTACIÓN ──
+                # ── F2-001: LANGGRAPH ORCHESTRATION ──
+                if cls.USE_LANGGRAPH:
+                    import concurrent.futures
+                    lg_result = None
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(cls._process_with_langgraph, ctx, timer)
+                        try:
+                            lg_result = future.result(timeout=12)
+                        except concurrent.futures.TimeoutError:
+                            log.warning(f"[F2-001] LangGraph excedió 12s timeout. Usando DeepSeek.")
+                        except Exception as lg_err:
+                            log.warning(f"LangGraph falló: {lg_err}")
+                    
+                    if lg_result:
+                        response_text = getattr(lg_result, 'response_text', '')
+                        if response_text and 'Estas son las propiedades' not in response_text and 'No encontré' not in response_text:
+                            return lg_result
+                        log.info(f"[F2-001] LangGraph devolvió fallback. Usando DeepSeek.")
+
+                # ── PIPELINE SECUENCIAL ORIGINAL ──
+                # PASO 1: ORQUESTACIÓN
                 decision = cls._orquestar(ctx)
 
                 if decision.respuesta_directa:
@@ -170,7 +200,7 @@ class ChatProcessor:
                     resultados = None
                     skill_ejecutada = None
                 else:
-                    # ── PASO 2: EJECUCIÓN DE SKILL ──
+                    # PASO 2: EJECUCIÓN DE SKILL
                     skill_ejecutada = decision.skill
                     resultados = cls._ejecutar_skill(
                         skill_name=decision.skill,
@@ -180,15 +210,13 @@ class ChatProcessor:
                     )
 
                     # Guardar resultados de busqueda_propiedades en la conversacion
-                    # para que este disponible en consultas de seguimiento ("en carrusel")
                     if (resultados and resultados.get('success')
                         and decision.skill == 'busqueda_propiedades'
                         and resultados.get('data')):
                         try:
-                            # Almacenar en metadata de la conversacion
                             meta = ctx.conversation.metadata or {}
                             meta['ultima_busqueda'] = {
-                                'resultados': resultados['data'][:50],  # max 50
+                                'resultados': resultados['data'][:50],
                                 'total': len(resultados['data']),
                                 'params': decision.params,
                             }
@@ -197,7 +225,7 @@ class ChatProcessor:
                         except Exception as e:
                             log.warning(f"No se pudo guardar ultima busqueda: {e}")
 
-                    # ── PASO 3: RESPUESTA NATURAL ──
+                    # PASO 3: RESPUESTA NATURAL
                     response_text = cls._generar_respuesta(
                         ctx=ctx,
                         resultados=resultados,
@@ -205,7 +233,7 @@ class ChatProcessor:
                         trace_id=timer.trace_id,
                     )
 
-                # Guardar respuesta en conversación (sin HTML, solo texto)
+                # Guardar respuesta en conversación
                 texto_guardar = response_text
                 if texto_guardar.startswith('__HTML__') and texto_guardar.endswith('__HTML__'):
                     texto_guardar = '🖼️ Resultados mostrados en formato visual.'
@@ -262,6 +290,130 @@ class ChatProcessor:
                     metadata={'error': str(e), 'traceback': error_details},
                     timestamp=timezone.now().isoformat(),
                 )
+
+    # ── F2-001: LangGraph Orchestration ───────────────────────────────
+
+    @classmethod
+    def _process_with_langgraph(cls, ctx: ChatContext, timer) -> ChatResult:
+        """
+        Procesa mensaje usando PILOrchestrator con LangGraph StateGraph.
+
+        F2-001 (6.9): Reemplaza el pipeline secuencial por un grafo
+        dirigido con 4 nodos (router, context, search, formatter) y
+        edges condicionales.
+
+        Args:
+            ctx: ChatContext con mensaje, conversación, usuario
+            timer: MetricsService.timer para métricas
+
+        Returns:
+            ChatResult con respuesta generada por LangGraph
+        """
+        # Fast path para saludos/agradecimientos/despedidas
+        msg_lower = ctx.message.lower().strip()
+        fast_map = {
+            'hola': 'iHola! Soy el asistente de Propifai. iEn que puedo ayudarte hoy?',
+            'hola!': 'iHola! Soy el asistente de Propifai. iEn que puedo ayudarte hoy?',
+            'buenos dias': 'iBuenos dias! Soy el asistente de Propifai. iEn que puedo ayudarte?',
+            'buenas tardes': 'iBuenas tardes! iEn que puedo ayudarte?',
+            'buenas noches': 'iBuenas noches! iEn que puedo ayudarte?',
+            'gracias': 'iDe nada! Si necesitas algo mas, aqui estoy.',
+            'muchas gracias': 'iDe nada! Para eso estoy.',
+            'chau': 'iHasta luego! Si necesitas algo mas, no dudes en escribirme.',
+            'adios': 'iHasta luego! Si necesitas algo mas, no dudes en escribirme.',
+            'bye': 'iHasta luego!',
+        }
+        if msg_lower in fast_map:
+            log.info(f"[FastPath] '{ctx.message}' -> respuesta directa")
+            cls._save_user_message(ctx.conversation, ctx.message)
+            response = fast_map[msg_lower]
+            message_id = cls._save_response(ctx.conversation, response)
+            return ChatResult(
+                success=True, response_text=response,
+                conversation_id=str(ctx.conversation.id), message_id=message_id,
+                metadata={'response': response, 'fast_path': True},
+                context_summary={'orchestration_mode': 'fast_path'},
+                timestamp=timezone.now().isoformat(),
+            )
+
+        # Obtener contexto activo de la conversacion anterior
+        contexto_activo = None
+        try:
+            meta = ctx.conversation.metadata or {}
+            if 'ultimo_contexto' in meta:
+                contexto_activo = meta['ultimo_contexto']
+        except Exception:
+            pass
+
+        # Ejecutar orquestador LangGraph
+        orchestrator = PILOrchestrator()
+        state = orchestrator.run(
+            message=ctx.message,
+            conversation_id=str(ctx.conversation.id),
+            user_id=str(ctx.user.id) if ctx.user else None,
+            contexto_activo=contexto_activo,
+        )
+
+        response_text = state.get('respuesta_generada', '')
+        if not response_text:
+            response_text = (
+                "Lo siento, no pude generar una respuesta. "
+                "¿Puedes reformular tu pregunta?"
+            )
+
+        # Guardar respuesta en conversación
+        texto_guardar = response_text
+        if texto_guardar.startswith('__HTML__') and texto_guardar.endswith('__HTML__'):
+            texto_guardar = '🖼️ Resultados mostrados en formato visual.'
+        message_id = cls._save_response(ctx.conversation, texto_guardar)
+
+        # Guardar contexto actual para el siguiente turno
+        if state.get('params_extraidos'):
+            try:
+                meta = ctx.conversation.metadata or {}
+                meta['ultimo_contexto'] = state['params_extraidos']
+                ctx.conversation.metadata = meta
+                ctx.conversation.save(update_fields=['metadata'])
+            except Exception as e:
+                log.debug(f"No se pudo guardar contexto para siguiente turno: {e}")
+
+        # Post-process (memoria episódica)
+        cls._save_post_process(
+            ctx=ctx,
+            response_text=response_text,
+            trace_id=timer.trace_id,
+        )
+
+        log.info(
+            f"[F2-001] Mensaje procesado con LangGraph",
+            skill=state.get('skill_detectada'),
+            nodos=state.get('nodos_ejecutados', []),
+            latency_ms=f"{timer.latency_ms:.1f}",
+            trace_id=state.get('trace_id', timer.trace_id),
+        )
+
+        return ChatResult(
+            success=True,
+            response_text=response_text,
+            conversation_id=str(ctx.conversation.id),
+            message_id=message_id,
+            metadata={
+                'response': response_text,
+                'skill_executed': state.get('skill_detectada'),
+                'had_skill_results': state.get('total_resultados', 0) > 0,
+                'orchestration_mode': 'langgraph',
+                'trace_id': state.get('trace_id', ''),
+                'nodos_ejecutados': state.get('nodos_ejecutados', []),
+                'total_resultados': state.get('total_resultados', 0),
+                'router_score': state.get('score_routing', 0),
+            },
+            context_summary={
+                'orchestration_mode': 'langgraph',
+                'skill_name': state.get('skill_detectada') or 'rag_puro',
+                'skill_success': state.get('error') is None,
+            },
+            timestamp=timezone.now().isoformat(),
+        )
 
     # ── Streaming ──────────────────────────────────────────────────────
 

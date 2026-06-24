@@ -416,8 +416,12 @@
             <div class="header-actions">
                 <a href="{% url 'intelligence:collections_dashboard' %}" class="btn btn-secondary">← Volver</a>
                 <a href="{% url 'intelligence:collection_edit' collection.id %}" class="btn btn-secondary">✏️ Editar</a>
-                <a href="{% url 'intelligence:collection_sync' collection.id %}" class="btn btn-primary">🔄 Sincronizar</a>
-                <button onclick="generarEmbeddings()" class="btn btn-success" style="background:#3fb950;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600;">🧠 Generar Embeddings</button>
+                <form method="post" action="{% url 'intelligence:collection_sync' collection.id %}" style="display:inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-primary" style="background:#3fb950;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600;">
+                        🔄 Sync + Rebuild
+                    </button>
+                </form>
             </div>
         </div>
 
@@ -476,6 +480,15 @@
                         <label>Registros en Última Sincro</label>
                         <div class="value">{{ collection.last_sync_count|default:"0" }}</div>
                     </div>
+                    {% if faiss_info %}
+                    <div class="info-item">
+                        <label>🔷 Índice FAISS</label>
+                        <div class="value" style="color:#58a6ff;">
+                            {{ faiss_info.indexed }} vectores
+                            <span style="font-size:12px;color:#8b949e;">({{ faiss_info.dimension }} dims)</span>
+                        </div>
+                    </div>
+                    {% endif %}
                     <div class="info-item" style="grid-column: span 2;">
                         <label>Descripción</label>
                         <div class="desc-text">{{ collection.description|default:"Sin descripción" }}</div>

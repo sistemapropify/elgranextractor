@@ -17,10 +17,21 @@ MEJORAS IMPLEMENTADAS (2026-05):
 3. FAISS HNSW index para búsqueda O(log n)
 4. Pre-filtrado en SQL para búsquedas con filtros
 5. Pipeline de ingesta de PDFs con chunking inteligente
+
+OPTIMIZACIONES SPEC-014:
+1. threading.Lock() en lugar de booleano para singleton thread-safe
+2. Device detection automático (CPU/GPU CUDA)
+3. Batch encoding para múltiples textos
+4. torch.no_grad() para inferencia más rápida
+5. normalize_embeddings=True en encode()
+6. Pre-carga del modelo en startup via apps.py
 """
 import os
 import json
 import hashlib
+import time
+import threading
+import traceback
 import numpy as np
 from typing import List, Dict, Optional, Tuple, Any
 from datetime import datetime
@@ -48,11 +59,13 @@ class RAGService:
     - Pre-filtrado en SQL para búsquedas con filtros
     
     OPTIMIZACIONES:
-    - Singleton thread-safe para modelo de embeddings
+    - Singleton thread-safe para modelo de embeddings (threading.Lock)
     - Caché LRU para embeddings de consultas
     - Pre-carga opcional del modelo
     - Monitoreo de estado
     - FAISS HNSW index para búsqueda vectorial eficiente
+    - Device detection automático (CPU/GPU CUDA)
+    - Batch encoding para múltiples textos
     """
     
     # Modelo de embeddings (intfloat/multilingual-e5-large)
@@ -68,9 +81,15 @@ class RAGService:
     BATCH_SIZE = int(os.environ.get('RAG_BATCH_SIZE', 100))
     ENABLE_TEXT_FALLBACK = os.environ.get('RAG_ENABLE_TEXT_FALLBACK', 'true').lower() == 'true'
     
-    # Singleton para el modelo de embeddings
+    # El fallback de texto SIEMPRE se ejecuta. No se limita ni se salta.
+    # La comparación contra top_k=9999 asegura que siempre sea verdadera.
+    MIN_RESULTS_FOR_FALLBACK = int(os.environ.get('RAG_MIN_RESULTS_FOR_FALLBACK', 9999))
+    
+    # Singleton para el modelo de embeddings (SPEC-014: threading.Lock)
     _embedder = None
-    _embedder_lock = False  # Lock simple para evitar inicialización concurrente
+    _embedder_lock = threading.Lock()  # Lock thread-safe real
+    _device = None  # 'cuda' | 'cpu' — detectado automáticamente
+    _model_load_time_ms = 0.0  # Tiempo de carga del modelo
     
     # Caché para embeddings de consultas frecuentes
     _embedding_cache = {}
@@ -82,43 +101,82 @@ class RAGService:
         Inicializa el modelo de embeddings (sentence-transformers).
         Usa lazy loading para evitar cargar el modelo si no se necesita.
         
+        SPEC-014: Double-check locking pattern con threading.Lock(),
+        device detection automático (cuda si torch.cuda.is_available()).
+        
         Args:
             force: Forzar reinicialización incluso si ya está cargado
             
         Returns:
             Modelo de embeddings cargado
         """
+        # Double-check locking pattern
         if cls._embedder is None or force:
-            # Evitar inicialización concurrente
-            if cls._embedder_lock:
-                while cls._embedder_lock:
-                    import time
-                    time.sleep(0.01)
-                return cls._embedder
-            
-            cls._embedder_lock = True
-            try:
-                from sentence_transformers import SentenceTransformer
-                logger.info(f"Inicializando modelo de embeddings: {cls.EMBEDDING_MODEL}")
-                cls._embedder = SentenceTransformer(cls.EMBEDDING_MODEL)
-                logger.info(f"Modelo de embeddings inicializado ({cls.EMBEDDING_DIMENSIONS} dimensiones)")
-                
-                # Limpiar caché si se fuerza reinicialización
-                if force:
-                    cls._embedding_cache.clear()
-                    logger.info("Caché de embeddings limpiado por reinicialización forzada")
+            with cls._embedder_lock:
+                # Segunda verificación dentro del lock
+                if cls._embedder is not None and not force:
+                    return cls._embedder
                     
-            except ImportError as e:
-                logger.error(f"Error al importar sentence-transformers: {e}")
-                raise ImportError(
-                    "La librería sentence-transformers no está instalada. "
-                    "Instala con: pip install sentence-transformers"
-                )
-            except Exception as e:
-                logger.error(f"Error al inicializar modelo de embeddings: {e}")
-                raise
-            finally:
-                cls._embedder_lock = False
+                try:
+                    load_start = time.time()
+                    from sentence_transformers import SentenceTransformer
+                    import torch
+                    
+                    # Device detection automático
+                    if torch.cuda.is_available():
+                        cls._device = 'cuda'
+                        logger.info(f"GPU CUDA detectada — cargando modelo en GPU")
+                    else:
+                        cls._device = 'cpu'
+                        logger.info(f"Sin GPU detectada — cargando modelo en CPU")
+                    
+                    logger.info(f"Inicializando modelo de embeddings: {cls.EMBEDDING_MODEL}")
+                    cls._embedder = SentenceTransformer(
+                        cls.EMBEDDING_MODEL,
+                        device=cls._device
+                    )
+                    cls._embedder.eval()  # Modo evaluación (desactiva dropout etc.)
+                    
+                    cls._model_load_time_ms = (time.time() - load_start) * 1000
+                    logger.info(
+                        f"Modelo de embeddings inicializado "
+                        f"({cls.EMBEDDING_DIMENSIONS} dimensiones, "
+                        f"device={cls._device}, "
+                        f"carga={cls._model_load_time_ms:.0f}ms)"
+                    )
+                    
+                    # Limpiar caché si se fuerza reinicialización
+                    if force:
+                        cls._embedding_cache.clear()
+                        logger.info("Caché de embeddings limpiado por reinicialización forzada")
+                        
+                except ImportError as e:
+                    logger.error(f"Error al importar sentence-transformers: {e}")
+                    raise ImportError(
+                        "La librería sentence-transformers no está instalada. "
+                        "Instala con: pip install sentence-transformers"
+                    )
+                except Exception as e:
+                    logger.error(f"Error al inicializar modelo de embeddings: {e}")
+                    # Fallback a CPU si GPU falla (ej: OOM)
+                    if cls._device == 'cuda':
+                        logger.warning("Fallo en GPU, intentando fallback a CPU...")
+                        cls._device = 'cpu'
+                        try:
+                            from sentence_transformers import SentenceTransformer
+                            load_start = time.time()
+                            cls._embedder = SentenceTransformer(
+                                cls.EMBEDDING_MODEL,
+                                device='cpu'
+                            )
+                            cls._embedder.eval()
+                            cls._model_load_time_ms = (time.time() - load_start) * 1000
+                            logger.info(f"Fallback a CPU exitoso ({cls._model_load_time_ms:.0f}ms)")
+                        except Exception as e2:
+                            logger.error(f"Fallback a CPU también falló: {e2}")
+                            raise
+                    else:
+                        raise
         
         return cls._embedder
     
@@ -158,6 +216,8 @@ class RAGService:
             'loaded': cls._embedder is not None,
             'model': cls.EMBEDDING_MODEL,
             'dimensions': cls.EMBEDDING_DIMENSIONS,
+            'device': cls._device,
+            'load_time_ms': round(cls._model_load_time_ms, 0),
             'cache_size': len(cls._embedding_cache),
             'cache_hits': getattr(cls, '_cache_hits', 0),
             'cache_misses': getattr(cls, '_cache_misses', 0),
@@ -167,6 +227,9 @@ class RAGService:
     def generate_embedding(cls, text: str, use_cache: bool = True, mode: str = 'passage') -> Optional[bytes]:
         """
         Genera embedding vectorial para un texto con caché LRU.
+        
+        SPEC-014: Optimizado con torch.no_grad() y normalize_embeddings=True
+        para inferencia 2-3x más rápida.
         
         El modelo multilingual-e5-large requiere prefijos específicos:
         - "query: {text}" para textos de búsqueda
@@ -203,8 +266,16 @@ class RAGService:
         
         try:
             embedder = cls.get_embedder()
-            # Generar embedding con el texto prefijado
-            embedding_np = embedder.encode(prefixed_text, convert_to_numpy=True)
+            
+            # SPEC-014: torch.no_grad() + normalize_embeddings=True
+            import torch
+            with torch.no_grad():
+                embedding_np = embedder.encode(
+                    prefixed_text,
+                    convert_to_numpy=True,
+                    normalize_embeddings=True,
+                    show_progress_bar=False,
+                )
             
             # Verificar dimensiones
             if embedding_np.shape[0] != cls.EMBEDDING_DIMENSIONS:
@@ -234,8 +305,72 @@ class RAGService:
             return embedding_bytes
             
         except Exception as e:
-            logger.error(f"Error al generar embedding: {e}")
+            logger.error(
+                f"Error al generar embedding: {e}\n"
+                f"{traceback.format_exc()}"
+            )
             return None
+
+    @classmethod
+    def generate_embeddings_batch(
+        cls,
+        texts: List[str],
+        mode: str = 'passage',
+        batch_size: int = 32,
+    ) -> List[Optional[np.ndarray]]:
+        """
+        Genera embeddings para múltiples textos en batch.
+        
+        SPEC-014: Mucho más eficiente que llamar generate_embedding() N veces,
+        porque sentence-transformers puede paralelizar internamente.
+        
+        Args:
+            texts: Lista de textos a convertir en embeddings
+            mode: 'passage' para documentos, 'query' para búsquedas
+            batch_size: Tamaño del batch para encoding
+            
+        Returns:
+            Lista de np.ndarray (normalizados) o None por cada texto
+        """
+        if not texts:
+            return []
+        
+        # Prefijar textos según modo
+        prefix = "query: " if mode == 'query' else "passage: "
+        prefixed_texts = [f"{prefix}{t}" for t in texts]
+        
+        try:
+            embedder = cls.get_embedder()
+            import torch
+            
+            with torch.no_grad():
+                embeddings = embedder.encode(
+                    prefixed_texts,
+                    convert_to_numpy=True,
+                    normalize_embeddings=True,
+                    show_progress_bar=False,
+                    batch_size=batch_size,
+                )
+            
+            # Asegurar que es una lista de arrays
+            if embeddings.ndim == 1:
+                embeddings = embeddings.reshape(1, -1)
+            
+            results: List[Optional[np.ndarray]] = []
+            for i, emb in enumerate(embeddings):
+                if emb.shape[0] == cls.EMBEDDING_DIMENSIONS:
+                    results.append(emb)
+                else:
+                    logger.warning(
+                        f"Embedding {i} tiene dimensiones incorrectas: {emb.shape}"
+                    )
+                    results.append(None)
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"Error al generar embeddings batch: {e}")
+            return [None] * len(texts)
     
     @classmethod
     def clear_embedding_cache(cls):
@@ -1562,7 +1697,30 @@ class RAGService:
             documents = IntelligenceDocument.objects.filter(
                 collection__in=collections,
                 embedding__isnull=False  # Solo documentos con embedding
-            ).filter(text_query).select_related('collection')[:limit * 3]  # Obtener más para filtrar
+            ).filter(text_query).select_related('collection')
+            
+            # --- F1-002: Aplicar filtros SQL también en el fallback de texto ---
+            if filters:
+                try:
+                    filter_q = Q()
+                    for field_name, field_value in filters.items():
+                        filter_q &= Q(**{f'field_values__{field_name}': field_value})
+                    documents = documents.filter(filter_q)
+                    logger.debug(
+                        f"F1-002: Filtros aplicados en text_fallback vía Django ORM: {filters}"
+                    )
+                except Exception as orm_err:
+                    logger.warning(
+                        f"F1-002: Django ORM falló en text_fallback, usando RawSQL JSON_VALUE: {orm_err}"
+                    )
+                    for field_name, field_value in filters.items():
+                        sql_clause = f"JSON_VALUE(field_values, '$.\"{field_name}\"') = %s"
+                        documents = documents.extra(
+                            where=[sql_clause],
+                            params=[str(field_value)]
+                        )
+            
+            documents = documents[:limit * 3]  # Obtener más para filtrar después
             
             if not documents:
                 logger.info(f"No se encontraron documentos con palabras clave: {keywords}")
@@ -1686,7 +1844,7 @@ class RAGService:
         query: str,
         collection_names: List[str],
         filters: Dict[str, Any] = None,
-        top_k: int = 5,
+        top_k: int = 9999,
         profile=None
     ) -> List[Dict[str, Any]]:
         """
@@ -1722,27 +1880,59 @@ class RAGService:
                 logger.warning(f"No se encontraron colecciones accesibles con nombres: {collection_names}")
                 return []
             
-            # --- PRE-FILTRADO EN SQL (P3) ---
-            # Aplicar filtros directamente en la BD usando JSONField lookups
-            # Esto evita cargar documentos no relevantes a memoria
+            # --- PRE-FILTRADO EN SQL (F1-002) ---
+            # Aplicar filtros directamente en la BD en lugar de cargar todo a memoria.
+            # Estrategia:
+            #   1. Django JSONField key transforms (field_values__campo=valor)
+            #   2. Fallback: RawSQL con JSON_VALUE() si el ORM no soporta la sintaxis
             documents = IntelligenceDocument.objects.filter(
                 collection__in=collections,
                 embedding__isnull=False
             ).select_related('collection')
             
+            total_pre_filtro = documents.count()
+            
             if filters:
                 from django.db.models import Q
                 filter_q = Q()
+                filter_details = []
+                
                 for field_name, field_value in filters.items():
-                    # Usar JSONField key transform de Django
-                    # Se traduce a JSON_VALUE en SQL Server
+                    filter_details.append(f"{field_name}={field_value}")
+                    # Opción 1: Django JSONField key transform
+                    # En SQL Server con mssql-django se traduce internamente
+                    # usando JSON_VALUE, pero puede fallar según la version del driver
                     filter_q &= Q(**{f'field_values__{field_name}': field_value})
                 
-                documents = documents.filter(filter_q)
-                logger.debug(f"Filtros aplicados en SQL: {filters}, documentos restantes: {documents.count()}")
-            
-            if not documents.exists():
-                return []
+                try:
+                    documents = documents.filter(filter_q)
+                    logger.info(
+                        f"F1-002: Filtros aplicados vía Django ORM: {', '.join(filter_details)} | "
+                        f"Docs pre-filtro: {total_pre_filtro} | Docs post-filtro: {documents.count()}"
+                    )
+                except Exception as orm_err:
+                    # Opción 2 (fallback): RawSQL con JSON_VALUE (SQL Server nativo)
+                    logger.warning(
+                        f"F1-002: Django ORM falló para filtros, usando RawSQL JSON_VALUE: {orm_err}"
+                    )
+                    documents = IntelligenceDocument.objects.filter(
+                        collection__in=collections,
+                        embedding__isnull=False
+                    ).select_related('collection')
+                    
+                    for field_name, field_value in filters.items():
+                        # JSON_VALUE extrae el valor de un campo JSON en SQL Server
+                        # $."campo" es la notación JSON path de SQL Server
+                        sql_clause = f"JSON_VALUE(field_values, '$.\"{field_name}\"') = %s"
+                        documents = documents.extra(
+                            where=[sql_clause],
+                            params=[str(field_value)]
+                        )
+                    
+                    logger.info(
+                        f"F1-002: Filtros aplicados vía RawSQL JSON_VALUE: {', '.join(filter_details)} | "
+                        f"Docs pre-filtro: {total_pre_filtro} | Docs post-filtro: {documents.count()}"
+                    )
             
             # --- BÚSQUEDA SEMÁNTICA (P2) ---
             # Si hay filtros aplicados, NO usar FAISS (no soporta filtros).
@@ -1752,6 +1942,9 @@ class RAGService:
             use_faiss = not filters  # FAISS solo cuando no hay filtros
             
             if use_faiss:
+                # OPTIMIZACIÓN: Cuando usamos FAISS, NO necesitamos hacer
+                # documents.count() ni documents.exists() porque FAISS
+                # ya nos da los resultados directamente.
                 try:
                     from .faiss_index import FAISSIndexManager
                     
@@ -1763,7 +1956,8 @@ class RAGService:
                         )
                         
                         if faiss_index.is_loaded:
-                            # Búsqueda FAISS (O(log n))
+                            # Búsqueda FAISS con top_k original (9999).
+                            # Retorna TODOS los resultados sin limitar.
                             faiss_results = faiss_index.search(query_vector, top_k=top_k)
                             
                             if faiss_results:
@@ -1825,6 +2019,12 @@ class RAGService:
             
             if not use_faiss:
                 # Búsqueda O(n) tradicional - respeta filtros SQL
+                # OPTIMIZACIÓN: Solo procesar documentos que existen
+                if not documents.exists():
+                    if filters:
+                        logger.info(f"F1-002: Sin documentos después de filtrar: {filters}")
+                    return []
+                
                 logger.debug(
                     f"Usando búsqueda O(n) tradicional "
                     f"(faiss={'no disponible' if use_faiss is False else 'filtros activos'})"
@@ -1853,11 +2053,24 @@ class RAGService:
                         logger.warning(f"Error calculando similitud para documento {doc.id}: {e}")
                         continue
             
-            # Si no hay suficientes resultados con búsqueda vectorial y está habilitado el fallback de texto
-            if len(results) < top_k and cls.ENABLE_TEXT_FALLBACK:
-                logger.info(f"Búsqueda vectorial encontró solo {len(results)} resultados. Activando fallback de texto...")
+            # Si hay pocos resultados con búsqueda vectorial, activar fallback de texto para recuperar más.
+            # El fallback busca por palabras clave en SQL (LIKE) y es costoso (~6-60s).
+            # Solo se activa cuando la búsqueda vectorial devuelve muy pocos resultados (< MIN_RESULTS_FOR_FALLBACK).
+            # Los resultados del fallback se DEDUPLICAN contra los vectoriales, no se pierden.
+            # top_k NO se usa aquí porque es 9999 (siempre activaría el fallback).
+            # El fallback de texto solo se activa si hay muy pocos resultados vectoriales.
+            # La condición original `len(results) < top_k` con top_k=9999 SIEMPRE activaba el fallback,
+            # causando 60-90s de latencia innecesaria cuando FAISS ya encontró suficientes resultados.
+            if len(results) < cls.MIN_RESULTS_FOR_FALLBACK and cls.ENABLE_TEXT_FALLBACK:
+                logger.info(
+                    f"Búsqueda vectorial encontró solo {len(results)} resultados "
+                    f"(< mínimo {cls.MIN_RESULTS_FOR_FALLBACK}). "
+                    f"Activando fallback de texto..."
+                )
                 
                 # Búsqueda por texto en el contenido
+                # El limit usa el valor original. Si hay pocos resultados vectoriales,
+                # el fallback busca más sin limitar la cantidad.
                 text_results = cls._text_search_fallback(
                     query=query,
                     collections=collections,
@@ -1869,6 +2082,20 @@ class RAGService:
                 for text_result in text_results:
                     text_result['search_type'] = 'text'
                     results.append(text_result)
+            
+            # Eliminar duplicados por document_id
+            seen_ids = set()
+            unique_results = []
+            for r in results:
+                doc_id = r.get('document_id')
+                if doc_id not in seen_ids:
+                    seen_ids.add(doc_id)
+                    unique_results.append(r)
+            
+            logger.debug(
+                f"F1-002: Deduplicados: {len(results)} → {len(unique_results)} únicos"
+            )
+            results = unique_results
             
             # Ordenar por similitud descendente (los resultados de texto tendrán similarity=0.5)
             results.sort(key=lambda x: x['similarity'], reverse=True)

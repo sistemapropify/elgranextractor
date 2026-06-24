@@ -4,13 +4,13 @@
 {% block acm_content %}
 <style>
     /* ============================================
-       ESTILOS BASE — TEXTO BLANCO Y COLORES GLOBALES
+       ESTILOS BASE — TEXTO CLARO Y COLORES GLOBALES
        ============================================ */
-    /* Texto blanco para todo el contenedor ACM */
+    /* Texto claro para todo el contenedor ACM (sin !important para permitir overrides) */
     .acm-container,
     .acm-container .card,
     .acm-container .card * {
-        color: #f0f6fc !important;
+        color: #f0f6fc;
     }
     /* Restaurar colores normales en modales (Bootstrap) */
     .modal,
@@ -1168,29 +1168,30 @@
         </div>
         <div class="card-body p-2" style="background:#0d1117;">
             <div class="row g-2">
-                <!-- Columna izquierda: Mapa Espacial -->
-                <div class="col-12 col-md-7">
-                    <div id="chartMapaContainer" style="width:100%;min-height:400px;background:#0f2744;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;">
+                <!-- Columna izquierda: Mapa Espacial (6/12) -->
+                <div class="col-12 col-md-6">
+                    <div id="chartMapaContainer" style="width:100%;min-height:500px;background:#0f2744;border-radius:6px;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:grab;">
                         <span id="chartMapaPlaceholder" style="color:#8b949e;font-size:13px;text-align:center;padding:20px;">
                             <i class="bi bi-geo-alt" style="font-size:32px;display:block;margin-bottom:8px;"></i>
                             Selecciona propiedades y usa el bot&oacute;n <strong>"An&aacute;lisis Avanzado"</strong>
                         </span>
                     </div>
                 </div>
-                <!-- Columna derecha: 3 charts apilados -->
-                <div class="col-12 col-md-5 d-flex flex-column gap-2">
-                    <div id="chartPrecio" style="width:100%;min-height:130px;background:#0a1628;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;">
+                <!-- Columna derecha: 3 charts apilados (6/12) -->
+                <div class="col-12 col-md-6 d-flex flex-column gap-2">
+                    <div id="analisisChartPrecio" style="width:100%;min-height:250px;background:#0a1628;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;">
                         <span style="color:#8b949e;font-size:12px;">Precio vs Zona Premium</span>
                     </div>
-                    <div id="chartPm2" style="width:100%;min-height:130px;background:#0a1628;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;">
+                    <div id="analisisChartPm2" style="width:100%;min-height:250px;background:#0a1628;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;">
                         <span style="color:#8b949e;font-size:12px;">$/m&sup2; vs Distancia</span>
                     </div>
-                    <div id="chartTabla" style="width:100%;min-height:140px;background:#0a1628;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;">
+                    <div id="analisisChartTabla" style="width:100%;min-height:250px;background:#0a1628;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;">
                         <span style="color:#8b949e;font-size:12px;">Tabla Resumen</span>
                     </div>
                 </div>
             </div>
         </div>
+
     </div>
 </div>
 

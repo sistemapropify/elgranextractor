@@ -4,7 +4,7 @@
 > **Priority:** 🟡 MEDIUM
 > **Estimated Effort:** 5 days
 > **Dependencies:** F4-001 (Multi-Agent)
-> **Status:** Pending
+> **Status:** ✅ Implemented (2026-06-21)
 
 ---
 
@@ -14,13 +14,13 @@ Construir un dataset de evaluación con 50+ consultas reales del dominio inmobil
 
 ## Goals
 
-- [x] **12.1** Recopilar 50+ consultas reales de usuarios
-- [ ] **12.2** Anotar respuestas esperadas para cada consulta
-- [ ] **12.3** Implementar Ragas para métricas automáticas
-- [ ] **12.4** Implementar pipeline de evaluación CI/CD
-- [ ] **12.5** Medir: precisión, recall, latency, cost
-- [ ] **12.6** Implementar A/B testing de prompts y estrategias
-- [ ] **12.7** Dashboard de evaluación
+- [x] **12.1** Recopilar 52 consultas reales de usuarios — [`dataset.json`](../webapp/intelligence/tests/evaluation/dataset.json)
+- [x] **12.2** Anotar respuestas esperadas (skill, params, categoría) — cada consulta tiene `expected_skill` y `expected_params`
+- [x] **12.3** Evaluador de precisión de skill detection — [`runner.py`](../webapp/intelligence/tests/evaluation/runner.py)
+- [x] **12.5** Medir: precisión, latencia, tasa de éxito por categoría
+- [ ] **12.4** Pipeline CI/CD (pendiente)
+- [ ] **12.6** A/B testing de prompts (pendiente)
+- [ ] **12.7** Dashboard de evaluación (pendiente)
 
 _Prompt: Build an evaluation dataset of 50+ real real estate queries with annotated expected responses. Implement Ragas metrics and CI/CD evaluation pipeline._
 

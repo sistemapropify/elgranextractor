@@ -373,8 +373,8 @@ function toggleAnalisisView() {
     // Loader en mapa
     var mapaContainer = document.getElementById('chartMapaContainer');
     if (mapaContainer) mapaContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:400px;background:#0f2744;color:#8b949e;flex-direction:column;gap:12px;"><div class="spinner-border text-light" role="status"></div><span style="font-size:14px;">Generando an&aacute;lisis espacial...</span></div>';
-    // Reset charts
-    ['chartPrecio','chartPm2','chartTabla'].forEach(function(id){
+    // Reset charts (inside analisisAvanzadoSection — unique IDs)
+    ['analisisChartPrecio','analisisChartPm2','analisisChartTabla'].forEach(function(id){
         var el = document.getElementById(id);
         if(el) el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:130px;background:#0a1628;color:#8b949e;"><div class="spinner-border text-light spinner-border-sm" role="status"></div></div>';
     });
@@ -401,23 +401,68 @@ function toggleAnalisisView() {
         if (xhr.status === 200) {
             try {
                 var data = JSON.parse(xhr.responseText);
-                if (mapaContainer) mapaContainer.innerHTML = '<img src="data:image/png;base64,'+data.mapa+'" style="width:100%;height:100%;object-fit:contain;">';
+                if (mapaContainer) {
+                    mapaContainer.innerHTML = '<div id="mapaZoomWrapper" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative;"><img id="mapaEspacialImg" src="data:image/png;base64,'+data.mapa+'" draggable="false" style="width:100%;height:100%;object-fit:contain;transition:transform 0.1s ease;transform-origin:center center;cursor:grab;"></div>';
+                    inicializarZoomMapaEspacial();
+                }
                 var el;
-                el = document.getElementById('chartPrecio'); if(el) el.innerHTML = '<img src="data:image/png;base64,'+data.chart_precio+'" style="width:100%;height:auto;max-height:130px;object-fit:contain;">';
-                el = document.getElementById('chartPm2'); if(el) el.innerHTML = '<img src="data:image/png;base64,'+data.chart_pm2+'" style="width:100%;height:auto;max-height:130px;object-fit:contain;">';
-                el = document.getElementById('chartTabla'); if(el) el.innerHTML = '<img src="data:image/png;base64,'+data.tabla+'" style="width:100%;height:auto;max-height:140px;object-fit:contain;">';
+                el = document.getElementById('analisisChartPrecio'); if(el) el.innerHTML = '<img src="data:image/png;base64,'+data.chart_precio+'" style="width:100%;height:100%;object-fit:contain;">';
+                el = document.getElementById('analisisChartPm2'); if(el) el.innerHTML = '<img src="data:image/png;base64,'+data.chart_pm2+'" style="width:100%;height:100%;object-fit:contain;">';
+                el = document.getElementById('analisisChartTabla'); if(el) el.innerHTML = '<img src="data:image/png;base64,'+data.tabla+'" style="width:100%;height:100%;object-fit:contain;">';
                 if (btnAvanzado) btnAvanzado.textContent = '📊 An&aacute;lisis Activo';
             } catch(e) {
-                if (mapaContainer) mapaContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:400px;background:#0f2744;color:#f85149;flex-direction:column;gap:8px;padding:20px;text-align:center;"><span style="font-size:24px;">⚠️</span><span style="font-size:13px;">'+e.message+'</span></div>';
+                if (mapaContainer) mapaContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:500px;background:#0f2744;color:#f85149;flex-direction:column;gap:8px;padding:20px;text-align:center;"><span style="font-size:24px;">⚠️</span><span style="font-size:13px;">'+e.message+'</span></div>';
             }
         } else {
-            if (mapaContainer) mapaContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:400px;background:#0f2744;color:#f85149;flex-direction:column;gap:8px;padding:20px;text-align:center;"><span style="font-size:24px;">⚠️</span><span style="font-size:13px;">Error del servidor</span></div>';
+            if (mapaContainer) mapaContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:500px;background:#0f2744;color:#f85149;flex-direction:column;gap:8px;padding:20px;text-align:center;"><span style="font-size:24px;">⚠️</span><span style="font-size:13px;">Error del servidor</span></div>';
         }
     };
     xhr.onerror = function() {
-        if (mapaContainer) mapaContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:400px;background:#0f2744;color:#f85149;flex-direction:column;gap:8px;padding:20px;text-align:center;"><span style="font-size:24px;">⚠️</span><span style="font-size:13px;">Error de conexi&oacute;n</span></div>';
+        if (mapaContainer) mapaContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:500px;background:#0f2744;color:#f85149;flex-direction:column;gap:8px;padding:20px;text-align:center;"><span style="font-size:24px;">⚠️</span><span style="font-size:13px;">Error de conexi&oacute;n</span></div>';
     };
     xhr.send(JSON.stringify({ propiedades: props }));
+}
+
+// ── Zoom con rueda para el mapa espacial ──
+var mapaZoomScale = 1;
+function inicializarZoomMapaEspacial() {
+    var wrapper = document.getElementById('mapaZoomWrapper');
+    var img = document.getElementById('mapaEspacialImg');
+    if (!wrapper || !img) return;
+    mapaZoomScale = 1;
+    img.style.cursor = 'grab';
+    // Mouse wheel zoom
+    wrapper.onwheel = function(e) {
+        e.preventDefault();
+        var delta = e.deltaY > 0 ? -0.1 : 0.1;
+        mapaZoomScale = Math.min(Math.max(mapaZoomScale + delta, 0.3), 4);
+        img.style.transform = 'scale('+mapaZoomScale+')';
+        wrapper.style.cursor = mapaZoomScale > 1 ? 'grab' : 'grab';
+    };
+    // Click to reset zoom
+    wrapper.ondblclick = function() {
+        mapaZoomScale = 1;
+        img.style.transform = 'scale(1)';
+    };
+    // Pan support when zoomed
+    var isPanning = false, startX, startY, panX = 0, panY = 0;
+    img.onmousedown = function(e) {
+        if (mapaZoomScale <= 1) return;
+        isPanning = true;
+        startX = e.clientX - panX;
+        startY = e.clientY - panY;
+        img.style.cursor = 'grabbing';
+    };
+    document.onmousemove = function(e) {
+        if (!isPanning) return;
+        panX = e.clientX - startX;
+        panY = e.clientY - startY;
+        img.style.transform = 'scale('+mapaZoomScale+') translate('+(panX/mapaZoomScale)+'px,'+(panY/mapaZoomScale)+'px)';
+    };
+    document.onmouseup = function() {
+        isPanning = false;
+        if (img) img.style.cursor = mapaZoomScale > 1 ? 'grab' : 'grab';
+    };
 }
 
 // Solicitar el PNG de análisis espacial al servidor
@@ -927,7 +972,7 @@ function actualizarResumenACM() {
                         <div class="small mb-1">ESTIMACIÓN PARA TU PROPIEDAD</div>
                         <div class="h4 mb-1">${formatearMoneda(valorComercial)}</div>
                         <div class="small opacity-75">Valor Comercial (100%)</div>
-                        <div class="small mt-1" style="color: #ff4444; font-weight: bold;">Precio/m²: ${formatearMoneda(promedioPonderado)}</div>
+                        <div class="small mt-1" style="color: #000000 !important; font-weight: bold;">Precio/m²: ${formatearMoneda(promedioPonderado)}</div>
                     </div>
                 </div>
             </div>

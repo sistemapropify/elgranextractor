@@ -1366,6 +1366,70 @@ class ExportarTodasCapasGeoJSONView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+class CrearPOIAPIView(APIView):
+    """
+    POST /api/v1/pois/crear/
+
+    Crea un nuevo Punto de Interés (POI) desde el mapa interactivo.
+    Recibe los datos del formulario y los valida antes de guardar.
+
+    Cuerpo esperado (JSON):
+        - nombre (str, requerido): Nombre del POI
+        - categoria_id (int, requerido): ID de la categoría/capa
+        - latitud (decimal, requerido): Latitud del punto
+        - longitud (decimal, requerido): Longitud del punto
+        - direccion (str, opcional): Dirección física
+        - telefono (str, opcional): Teléfono de contacto
+        - sitio_web (str, opcional): URL del sitio web
+        - descripcion (str, opcional): Descripción del POI
+
+    Respuesta:
+        201: POI creado exitosamente
+        400: Error de validación
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        from .serializers import POICreateSerializer
+
+        serializer = POICreateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {'status': 'error', 'errors': serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            poi = serializer.save()
+
+            return Response({
+                'status': 'ok',
+                'mensaje': f'POI "{poi.nombre}" creado exitosamente',
+                'poi': {
+                    'id': poi.id,
+                    'nombre': poi.nombre,
+                    'categoria_id': poi.categoria_id,
+                    'categoria_nombre': poi.categoria.nombre,
+                    'categoria_slug': poi.categoria.slug,
+                    'categoria_icono': poi.categoria.icono,
+                    'categoria_color': poi.categoria.color,
+                    'latitud': float(poi.latitud),
+                    'longitud': float(poi.longitud),
+                    'direccion': poi.direccion,
+                    'telefono': poi.telefono,
+                    'sitio_web': poi.sitio_web,
+                    'descripcion': poi.descripcion,
+                }
+            }, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            logger.exception("Error al crear POI")
+            return Response(
+                {'status': 'error', 'mensaje': f'Error interno al crear el POI: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
 class POIMapaTemplateView(APIView):
     """
     GET /api/v1/pois/mapa/

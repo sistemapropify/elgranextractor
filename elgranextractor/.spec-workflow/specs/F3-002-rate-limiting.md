@@ -4,7 +4,7 @@
 > **Priority:** 🟡 MEDIUM
 > **Estimated Effort:** 2 days
 > **Dependencies:** None
-> **Status:** Pending
+> **Status:** ✅ Implemented (2026-06-21)
 
 ---
 
@@ -15,12 +15,12 @@ No hay control de cuántas veces un usuario puede ejecutar skills costosas (bús
 ## Goals
 
 - [x] **10.1** Analizar patrones de uso actuales
-- [ ] **10.2** Implementar `services/rate_limiter.py` con clase `RateLimiter`
-- [ ] **10.3** Definir límites: N requests por minuto/hora/día por skill
-- [ ] **10.4** Implementar storage de contadores (Redis o DB)
-- [ ] **10.5** Integrar rate limiter en LangGraph orchestrator
-- [ ] **10.6** Agregar logging de rate limit hits
-- [ ] **10.7** Probar con burst de requests
+- [x] **10.2** Implementar `services/rate_limiter.py` con clase `RateLimiter` — [`rate_limiter.py`](../webapp/intelligence/services/rate_limiter.py)
+- [x] **10.3** Definir límites: 30/min busqueda, 10/min analisis, 20/min LLM — [`DEFAULT_RATE_LIMITS`](../webapp/intelligence/services/rate_limiter.py:40)
+- [x] **10.4** Storage via Django cache framework (Redis en prod, local fallback)
+- [x] **10.5** Integrar en orchestrator — singleton `get_limiter()`
+- [x] **10.6** Logging de rate limit hits — `logger.warning` con skill, user, count
+- [ ] **10.7** Probar con burst de requests (pendiente)
 
 _Prompt: Implement rate limiting per skill and per user to control operational costs and prevent abuse. Use Redis for distributed counting or DB fallback._
 

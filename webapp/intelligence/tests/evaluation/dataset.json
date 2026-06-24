@@ -1,0 +1,418 @@
+[
+  {
+    "id": 1,
+    "query": "busco departamento en Cayma",
+    "category": "busqueda_propiedades",
+    "expected_skill": "busqueda_propiedades",
+    "expected_params": {"distrito": "Cayma", "tipo_propiedad": "Departamento"},
+    "notes": "Búsqueda simple con distrito y tipo"
+  },
+  {
+    "id": 2,
+    "query": "quiero comprar una casa en Yanahuara",
+    "category": "busqueda_propiedades",
+    "expected_skill": "busqueda_propiedades",
+    "expected_params": {"distrito": "Yanahuara", "tipo_propiedad": "Casa", "operacion": "compra"},
+    "notes": "Búsqueda con intención de compra"
+  },
+  {
+    "id": 3,
+    "query": "necesito un terreno para construir en Sachaca",
+    "category": "busqueda_propiedades",
+    "expected_skill": "busqueda_propiedades",
+    "expected_params": {"distrito": "Sachaca", "tipo_propiedad": "Terreno"},
+    "notes": "Terreno con propósito"
+  },
+  {
+    "id": 4,
+    "query": "qué terrenos tienes en Cayma",
+    "category": "busqueda_propiedades",
+    "expected_skill": "busqueda_propiedades",
+    "expected_params": {"distrito": "Cayma", "tipo_propiedad": "Terreno"},
+    "notes": "Pregunta coloquial por terrenos"
+  },
+  {
+    "id": 5,
+    "query": "departamentos hasta 200 mil soles en Cerro Colorado",
+    "category": "busqueda_propiedades",
+    "expected_skill": "busqueda_propiedades",
+    "expected_params": {"distrito": "Cerro Colorado", "tipo_propiedad": "Departamento", "precio_max": 200000},
+    "notes": "Búsqueda con precio máximo"
+  },
+  {
+    "id": 6,
+    "query": "casas entre 100 y 150 mil dolares en Bustamante",
+    "category": "busqueda_propiedades",
+    "expected_skill": "busqueda_propiedades",
+    "expected_params": {"distrito": "Bustamante", "tipo_propiedad": "Casa", "precio_min": 100000, "precio_max": 150000},
+    "notes": "Rango de precio en dólares"
+  },
+  {
+    "id": 7,
+    "query": "alquiler de departamentos en Miraflores",
+    "category": "busqueda_propiedades",
+    "expected_skill": "busqueda_propiedades",
+    "expected_params": {"distrito": "Miraflores", "tipo_propiedad": "Departamento", "operacion": "alquiler"},
+    "notes": "Búsqueda de alquiler"
+  },
+  {
+    "id": 8,
+    "query": "cómo está el mercado en Cayma",
+    "category": "analizar_mercado",
+    "expected_skill": "analizar_mercado",
+    "expected_params": {"distrito": "Cayma"},
+    "notes": "Análisis de mercado por distrito"
+  },
+  {
+    "id": 9,
+    "query": "precio promedio de departamentos en Yanahuara",
+    "category": "analizar_mercado",
+    "expected_skill": "analizar_mercado",
+    "expected_params": {"distrito": "Yanahuara", "tipo_propiedad": "Departamento"},
+    "notes": "Precio promedio específico"
+  },
+  {
+    "id": 10,
+    "query": "cuál es el mejor distrito para invertir",
+    "category": "analizar_mercado",
+    "expected_skill": "analizar_mercado",
+    "expected_params": {},
+    "notes": "Consulta general de inversión"
+  },
+  {
+    "id": 11,
+    "query": "cuántas propiedades tienes en Cayma",
+    "category": "conteo",
+    "expected_skill": "busqueda_propiedades",
+    "expected_params": {"distrito": "Cayma"},
+    "notes": "Conteo de propiedades"
+  },
+  {
+    "id": 12,
+    "query": "muéstrame los que tengan 3 dormitorios",
+    "category": "resolver_contexto",
+    "expected_skill": "resolver_contexto",
+    "expected_params": {"dormitorios": 3},
+    "notes": "Filtro sobre resultados anteriores"
+  },
+  {
+    "id": 13,
+    "query": "quiero ver más baratos",
+    "category": "resolver_contexto",
+    "expected_skill": "resolver_contexto",
+    "expected_params": {},
+    "notes": "Refinamiento de precio"
+  },
+  {
+    "id": 14,
+    "query": "y en Cerro Colorado",
+    "category": "resolver_contexto",
+    "expected_skill": "resolver_contexto",
+    "expected_params": {"distrito": "Cerro Colorado"},
+    "notes": "Cambio de distrito"
+  },
+  {
+    "id": 15,
+    "query": "enséñame fotos de esa propiedad",
+    "category": "resolver_contexto",
+    "expected_skill": "resolver_contexto",
+    "expected_params": {},
+    "notes": "Solicitud de fotos"
+  },
+  {
+    "id": 16,
+    "query": "tengo un cliente que busca depa en Cayma",
+    "category": "extraer_requerimiento",
+    "expected_skill": "extraer_requerimientos_whatsapp",
+    "expected_params": {"tipo_propiedad": "departamento", "distrito": "Cayma"},
+    "notes": "Requerimiento desde WhatsApp"
+  },
+  {
+    "id": 17,
+    "query": "hola",
+    "category": "saludo",
+    "expected_skill": null,
+    "expected_params": {},
+    "notes": "Saludo simple"
+  },
+  {
+    "id": 18,
+    "query": "buenos días",
+    "category": "saludo",
+    "expected_skill": null,
+    "expected_params": {},
+    "notes": "Saludo formal"
+  },
+  {
+    "id": 19,
+    "query": "gracias",
+    "category": "agradecimiento",
+    "expected_skill": null,
+    "expected_params": {},
+    "notes": "Agradecimiento"
+  },
+  {
+    "id": 20,
+    "query": "quiero propiedades en alquiler en Paucarpata",
+    "category": "busqueda_propiedades",
+    "expected_skill": "busqueda_propiedades",
+    "expected_params": {"distrito": "Paucarpata", "operacion": "alquiler"},
+    "notes": "Alquiler en distrito específico"
+  },
+  {
+    "id": 21,
+    "query": "locales comerciales en el Cercado",
+    "category": "busqueda_propiedades",
+    "expected_skill": "busqueda_propiedades",
+    "expected_params": {"distrito": "Cercado", "tipo_propiedad": "Local Comercial"},
+    "notes": "Locales comerciales"
+  },
+  {
+    "id": 22,
+    "query": "oficinas en renta en Bustamante",
+    "category": "busqueda_propiedades",
+    "expected_skill": "busqueda_propiedades",
+    "expected_params": {"distrito": "Bustamante", "tipo_propiedad": "Oficina", "operacion": "alquiler"},
+    "notes": "Oficinas en renta"
+  },
+  {
+    "id": 23,
+    "query": "tendencias de precios en Cerro Colorado",
+    "category": "analizar_mercado",
+    "expected_skill": "analizar_mercado",
+    "expected_params": {"distrito": "Cerro Colorado"},
+    "notes": "Tendencias"
+  },
+  {
+    "id": 24,
+    "query": "comparativa de zonas residenciales",
+    "category": "analizar_mercado",
+    "expected_skill": "analizar_mercado",
+    "expected_params": {},
+    "notes": "Comparativa general"
+  },
+  {
+    "id": 25,
+    "query": "dónde están subiendo los precios",
+    "category": "analizar_mercado",
+    "expected_skill": "analizar_mercado",
+    "expected_params": {},
+    "notes": "Consulta de plusvalía"
+  },
+  {
+    "id": 26,
+    "query": "me llegó un requerimiento de un terreno",
+    "category": "extraer_requerimiento",
+    "expected_skill": "extraer_requerimientos_whatsapp",
+    "expected_params": {"tipo_propiedad": "terreno"},
+    "notes": "Requerimiento por WhatsApp"
+  },
+  {
+    "id": 27,
+    "query": "un cliente me pide casa en Yanahuara",
+    "category": "extraer_requerimiento",
+    "expected_skill": "extraer_requerimientos_whatsapp",
+    "expected_params": {"tipo_propiedad": "casa", "distrito": "Yanahuara"},
+    "notes": "Requermiento con distrito"
+  },
+  {
+    "id": 28,
+    "query": "cuántos departamentos hay en Cayma",
+    "category": "conteo",
+    "expected_skill": "busqueda_propiedades",
+    "expected_params": {"distrito": "Cayma", "tipo_propiedad": "Departamento"},
+    "notes": "Conteo por tipo y distrito"
+  },
+  {
+    "id": 29,
+    "query": "terrenos baratos en Zamacola",
+    "category": "busqueda_propiedades",
+    "expected_skill": "busqueda_propiedades",
+    "expected_params": {"distrito": "Zamacola", "tipo_propiedad": "Terreno"},
+    "notes": "Terrenos económicos"
+  },
+  {
+    "id": 30,
+    "query": "casa con piscina en Cayma",
+    "category": "busqueda_propiedades",
+    "expected_skill": "busqueda_propiedades",
+    "expected_params": {"distrito": "Cayma", "tipo_propiedad": "Casa"},
+    "notes": "Casa con característica especial"
+  },
+  {
+    "id": 31,
+    "query": "departamento amoblado en Yanahuara",
+    "category": "busqueda_propiedades",
+    "expected_skill": "busqueda_propiedades",
+    "expected_params": {"distrito": "Yanahuara", "tipo_propiedad": "Departamento"},
+    "notes": "Departamento amoblado"
+  },
+  {
+    "id": 32,
+    "query": "terreno de 500 metros en Sachaca",
+    "category": "busqueda_propiedades",
+    "expected_skill": "busqueda_propiedades",
+    "expected_params": {"distrito": "Sachaca", "tipo_propiedad": "Terreno"},
+    "notes": "Terreno con área específica"
+  },
+  {
+    "id": 33,
+    "query": "propiedades económicas en Paucarpata",
+    "category": "busqueda_propiedades",
+    "expected_skill": "busqueda_propiedades",
+    "expected_params": {"distrito": "Paucarpata"},
+    "notes": "Propiedades baratas"
+  },
+  {
+    "id": 34,
+    "query": "casa amplia con jardín en Bustamante",
+    "category": "busqueda_propiedades",
+    "expected_skill": "busqueda_propiedades",
+    "expected_params": {"distrito": "Bustamante", "tipo_propiedad": "Casa"},
+    "notes": "Casa con jardín"
+  },
+  {
+    "id": 35,
+    "query": "departamento luminoso en el Cercado",
+    "category": "busqueda_propiedades",
+    "expected_skill": "busqueda_propiedades",
+    "expected_params": {"distrito": "Cercado", "tipo_propiedad": "Departamento"},
+    "notes": "Departamento con característica"
+  },
+  {
+    "id": 36,
+    "query": "busco propiedad para inversion en Mariano Melgar",
+    "category": "busqueda_propiedades",
+    "expected_skill": "busqueda_propiedades",
+    "expected_params": {"distrito": "Mariano Melgar"},
+    "notes": "Propiedad de inversión"
+  },
+  {
+    "id": 37,
+    "query": "terreno industrial en la Joya",
+    "category": "busqueda_propiedades",
+    "expected_skill": "busqueda_propiedades",
+    "expected_params": {"distrito": "La Joya", "tipo_propiedad": "Terreno"},
+    "notes": "Terreno industrial"
+  },
+  {
+    "id": 38,
+    "query": "muéstrame todos los departamentos",
+    "category": "busqueda_propiedades",
+    "expected_skill": "busqueda_propiedades",
+    "expected_params": {"tipo_propiedad": "Departamento"},
+    "notes": "Todos los departamentos"
+  },
+  {
+    "id": 39,
+    "query": "qué casas tienes en venta",
+    "category": "busqueda_propiedades",
+    "expected_skill": "busqueda_propiedades",
+    "expected_params": {"tipo_propiedad": "Casa", "operacion": "venta"},
+    "notes": "Casas en venta"
+  },
+  {
+    "id": 40,
+    "query": "alguna opción con piscina",
+    "category": "resolver_contexto",
+    "expected_skill": "resolver_contexto",
+    "expected_params": {},
+    "notes": "Filtro sobre resultados"
+  },
+  {
+    "id": 41,
+    "query": "solo departamentos",
+    "category": "resolver_contexto",
+    "expected_skill": "resolver_contexto",
+    "expected_params": {"tipo_propiedad": "Departamento"},
+    "notes": "Filtrar por tipo"
+  },
+  {
+    "id": 42,
+    "query": "ordéname por precio",
+    "category": "resolver_contexto",
+    "expected_skill": "resolver_contexto",
+    "expected_params": {},
+    "notes": "Ordenar resultados"
+  },
+  {
+    "id": 43,
+    "query": "los que tengan garage",
+    "category": "resolver_contexto",
+    "expected_skill": "resolver_contexto",
+    "expected_params": {},
+    "notes": "Filtro por característica"
+  },
+  {
+    "id": 44,
+    "query": "ayúdame a entender lo que busca mi cliente",
+    "category": "extraer_requerimiento",
+    "expected_skill": "extraer_requerimientos_whatsapp",
+    "expected_params": {},
+    "notes": "Ayuda con requerimiento"
+  },
+  {
+    "id": 45,
+    "query": "necesito procesar este requerimiento de un cliente que busca local comercial en Sachaca",
+    "category": "extraer_requerimiento",
+    "expected_skill": "extraer_requerimientos_whatsapp",
+    "expected_params": {"tipo_propiedad": "local comercial", "distrito": "Sachaca"},
+    "notes": "Requerimiento detallado"
+  },
+  {
+    "id": 46,
+    "query": "cómo funciona el sistema",
+    "category": "general",
+    "expected_skill": null,
+    "expected_params": {},
+    "notes": "Pregunta sobre el sistema"
+  },
+  {
+    "id": 47,
+    "query": "quién eres",
+    "category": "general",
+    "expected_skill": null,
+    "expected_params": {},
+    "notes": "Pregunta sobre el asistente"
+  },
+  {
+    "id": 48,
+    "query": "qué puedes hacer",
+    "category": "general",
+    "expected_skill": null,
+    "expected_params": {},
+    "notes": "Capacidades del asistente"
+  },
+  {
+    "id": 49,
+    "query": "muéstrame las propiedades que tienes en cayma",
+    "category": "busqueda_propiedades",
+    "expected_skill": "busqueda_propiedades",
+    "expected_params": {"distrito": "Cayma"},
+    "notes": "Mostrar todas en Cayma"
+  },
+  {
+    "id": 50,
+    "query": "y de todos esos cuales son terrenos",
+    "category": "resolver_contexto",
+    "expected_skill": "resolver_contexto",
+    "expected_params": {"tipo_propiedad": "Terreno"},
+    "notes": "Filtrar terrenos de resultados previos"
+  },
+  {
+    "id": 51,
+    "query": "precio promedio de terrenos en Cayma",
+    "category": "analizar_mercado",
+    "expected_skill": "analizar_mercado",
+    "expected_params": {"distrito": "Cayma", "tipo_propiedad": "Terreno"},
+    "notes": "Precio promedio de terrenos"
+  },
+  {
+    "id": 52,
+    "query": "comparativa de precios entre Cayma y Yanahuara",
+    "category": "analizar_mercado",
+    "expected_skill": "analizar_mercado",
+    "expected_params": {},
+    "notes": "Comparativa entre distritos"
+  }
+]

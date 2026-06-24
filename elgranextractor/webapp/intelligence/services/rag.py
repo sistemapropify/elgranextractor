@@ -1562,7 +1562,30 @@ class RAGService:
             documents = IntelligenceDocument.objects.filter(
                 collection__in=collections,
                 embedding__isnull=False  # Solo documentos con embedding
-            ).filter(text_query).select_related('collection')[:limit * 3]  # Obtener más para filtrar
+            ).filter(text_query).select_related('collection')
+            
+            # --- F1-002: Aplicar filtros SQL también en el fallback de texto ---
+            if filters:
+                try:
+                    filter_q = Q()
+                    for field_name, field_value in filters.items():
+                        filter_q &= Q(**{f'field_values__{field_name}': field_value})
+                    documents = documents.filter(filter_q)
+                    logger.debug(
+                        f"F1-002: Filtros aplicados en text_fallback vía Django ORM: {filters}"
+                    )
+                except Exception as orm_err:
+                    logger.warning(
+                        f"F1-002: Django ORM falló en text_fallback, usando RawSQL JSON_VALUE: {orm_err}"
+                    )
+                    for field_name, field_value in filters.items():
+                        sql_clause = f"JSON_VALUE(field_values, '$.\"{field_name}\"') = %s"
+                        documents = documents.extra(
+                            where=[sql_clause],
+                            params=[str(field_value)]
+                        )
+            
+            documents = documents[:limit * 3]  # Obtener más para filtrar después
             
             if not documents:
                 logger.info(f"No se encontraron documentos con palabras clave: {keywords}")
@@ -1686,7 +1709,7 @@ class RAGService:
         query: str,
         collection_names: List[str],
         filters: Dict[str, Any] = None,
-        top_k: int = 5,
+        top_k: int = 9999,
         profile=None
     ) -> List[Dict[str, Any]]:
         """
@@ -1722,26 +1745,63 @@ class RAGService:
                 logger.warning(f"No se encontraron colecciones accesibles con nombres: {collection_names}")
                 return []
             
-            # --- PRE-FILTRADO EN SQL (P3) ---
-            # Aplicar filtros directamente en la BD usando JSONField lookups
-            # Esto evita cargar documentos no relevantes a memoria
+            # --- PRE-FILTRADO EN SQL (F1-002) ---
+            # Aplicar filtros directamente en la BD en lugar de cargar todo a memoria.
+            # Estrategia:
+            #   1. Django JSONField key transforms (field_values__campo=valor)
+            #   2. Fallback: RawSQL con JSON_VALUE() si el ORM no soporta la sintaxis
             documents = IntelligenceDocument.objects.filter(
                 collection__in=collections,
                 embedding__isnull=False
             ).select_related('collection')
             
+            total_pre_filtro = documents.count()
+            
             if filters:
                 from django.db.models import Q
                 filter_q = Q()
+                filter_details = []
+                
                 for field_name, field_value in filters.items():
-                    # Usar JSONField key transform de Django
-                    # Se traduce a JSON_VALUE en SQL Server
+                    filter_details.append(f"{field_name}={field_value}")
+                    # Opción 1: Django JSONField key transform
+                    # En SQL Server con mssql-django se traduce internamente
+                    # usando JSON_VALUE, pero puede fallar según la version del driver
                     filter_q &= Q(**{f'field_values__{field_name}': field_value})
                 
-                documents = documents.filter(filter_q)
-                logger.debug(f"Filtros aplicados en SQL: {filters}, documentos restantes: {documents.count()}")
+                try:
+                    documents = documents.filter(filter_q)
+                    logger.info(
+                        f"F1-002: Filtros aplicados vía Django ORM: {', '.join(filter_details)} | "
+                        f"Docs pre-filtro: {total_pre_filtro} | Docs post-filtro: {documents.count()}"
+                    )
+                except Exception as orm_err:
+                    # Opción 2 (fallback): RawSQL con JSON_VALUE (SQL Server nativo)
+                    logger.warning(
+                        f"F1-002: Django ORM falló para filtros, usando RawSQL JSON_VALUE: {orm_err}"
+                    )
+                    documents = IntelligenceDocument.objects.filter(
+                        collection__in=collections,
+                        embedding__isnull=False
+                    ).select_related('collection')
+                    
+                    for field_name, field_value in filters.items():
+                        # JSON_VALUE extrae el valor de un campo JSON en SQL Server
+                        # $."campo" es la notación JSON path de SQL Server
+                        sql_clause = f"JSON_VALUE(field_values, '$.\"{field_name}\"') = %s"
+                        documents = documents.extra(
+                            where=[sql_clause],
+                            params=[str(field_value)]
+                        )
+                    
+                    logger.info(
+                        f"F1-002: Filtros aplicados vía RawSQL JSON_VALUE: {', '.join(filter_details)} | "
+                        f"Docs pre-filtro: {total_pre_filtro} | Docs post-filtro: {documents.count()}"
+                    )
             
             if not documents.exists():
+                if filters:
+                    logger.info(f"F1-002: Sin documentos después de filtrar: {filters}")
                 return []
             
             # --- BÚSQUEDA SEMÁNTICA (P2) ---
@@ -1869,6 +1929,20 @@ class RAGService:
                 for text_result in text_results:
                     text_result['search_type'] = 'text'
                     results.append(text_result)
+            
+            # Eliminar duplicados por document_id
+            seen_ids = set()
+            unique_results = []
+            for r in results:
+                doc_id = r.get('document_id')
+                if doc_id not in seen_ids:
+                    seen_ids.add(doc_id)
+                    unique_results.append(r)
+            
+            logger.debug(
+                f"F1-002: Deduplicados: {len(results)} → {len(unique_results)} únicos"
+            )
+            results = unique_results
             
             # Ordenar por similitud descendente (los resultados de texto tendrán similarity=0.5)
             results.sort(key=lambda x: x['similarity'], reverse=True)

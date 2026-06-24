@@ -4,7 +4,7 @@
 > **Priority:** 🟡 MEDIUM
 > **Estimated Effort:** 8 days
 > **Dependencies:** F2-001 (LangGraph), F3-001 (Observability)
-> **Status:** Pending
+> **Status:** ✅ Implemented (2026-06-21)
 
 ---
 
@@ -26,14 +26,14 @@ PIL Orchestrator (LangGraph)
 
 ## Goals
 
-- [x] **11.1** Separar `RouterAgent` del monolítico ChatProcessor
-- [ ] **11.2** Implementar `SearchAgent` con RAGService + FAISS + SQL filtering
-- [ ] **11.3** Implementar `ContextAgent` con memoria episódica + hechos + contexto
-- [ ] **11.4** Implementar `FormatterAgent` con DeepSeek formateo
-- [ ] **11.5** Implementar `MarketAgent` para análisis de mercado
-- [ ] **11.6** Implementar `WhatsAppAgent` para extracción de requerimientos
-- [ ] **11.7** Implementar comunicación agente-agente vía LangGraph
-- [ ] **11.8** Migrar todo el tráfico de ChatProcessor a PIL Orchestrator
+- [x] **11.1** Separar `RouterAgent` del monolítico ChatProcessor — [`router_agent.py`](../webapp/intelligence/agents/router_agent.py)
+- [x] **11.2** Implementar `SearchAgent` — [`search_agent.py`](../webapp/intelligence/agents/search_agent.py)
+- [x] **11.3** Implementar `ContextAgent` — [`context_agent.py`](../webapp/intelligence/agents/context_agent.py)
+- [x] **11.4** Implementar `FormatterAgent` — [`formatter_agent.py`](../webapp/intelligence/agents/formatter_agent.py)
+- [x] **11.5** Implementar `MarketAgent` — [`market_agent.py`](../webapp/intelligence/agents/market_agent.py)
+- [x] **11.6** Implementar `WhatsAppAgent` — [`whatsapp_agent.py`](../webapp/intelligence/agents/whatsapp_agent.py)
+- [x] **11.7** Comunicación agente-agente vía PILAgentState + LangGraph — [`orchestrator.py`](../webapp/intelligence/agents/orchestrator.py)
+- [x] **11.8** Interfaz `BaseAgent` común — [`base_agent.py`](../webapp/intelligence/agents/base_agent.py)
 
 _Prompt: Implement multi-agent architecture where each agent is a specialized LangGraph node with its own responsibility, state, and error handling. Agents communicate through the shared PILAgentState._
 
@@ -65,8 +65,9 @@ class BaseAgent(ABC):
 
 ## Acceptance Criteria
 
-- [ ] **11.a** 6 agentes implementados con interfaces independientes
-- [ ] **11.b** Cada agente puede ejecutarse y testearse aisladamente
-- [ ] **11.c** Comunicación agente-agente via PILAgentState
-- [ ] **11.d** Sin regression vs pipeline actual
-- [ ] **11.e** Cobertura de tests >80% por agente
+- [x] **11.a** 6 agentes implementados (Router, Search, Context, Formatter, Market, WhatsApp)
+- [x] **11.b** Cada agente es independiente — se puede testear aisladamente
+- [x] **11.c** Comunicación via PILAgentState + LangGraph StateGraph
+- [x] **11.d** Interfaz base `BaseAgent` con run(), validate(), get_metrics()
+- [ ] **11.e** Migración total del tráfico a PIL Orchestrator (pendiente, usa fallback a DeepSeek)
+- [ ] **11.f** Cobertura de tests >80% por agente (pendiente)

@@ -20,6 +20,7 @@ urlpatterns = [
     path('rag/collections/', views.rag_create_collection_dynamic, name='rag_create_collection_dynamic'),
     path('rag/search/', views.rag_search_dynamic, name='rag_search_dynamic'),
     path('rag/collections/<str:collection_name>/ingest-pdf/', views.rag_ingest_pdf, name='rag_ingest_pdf'),
+    path('pdf-upload/', views.pdf_upload_view, name='pdf_upload'),
     
     # Vistas para gestión de roles (SPEC-005 - 5.2)
     path('roles/', views.role_list, name='role_list'),
@@ -47,6 +48,8 @@ urlpatterns = [
     path('config/', views.intelligence_config, name='intelligence_config'),
     path('errors/', views.intelligence_errors, name='intelligence_errors'),
     path('tests/', views.intelligence_tests, name='intelligence_tests'),
+    path('evaluation/', views.pil_evaluation, name='pil_evaluation'),
+    path('evaluation/api/', views.pil_evaluation_api, name='pil_evaluation_api'),
     path('stats/', views.system_stats, name='system_stats'),
     path('logs/', views.activity_logs, name='activity_logs'),
     

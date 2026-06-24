@@ -47,6 +47,8 @@ urlpatterns = [
     path('config/', views.intelligence_config, name='intelligence_config'),
     path('errors/', views.intelligence_errors, name='intelligence_errors'),
     path('tests/', views.intelligence_tests, name='intelligence_tests'),
+    path('evaluation/', views.pil_evaluation, name='pil_evaluation'),
+    path('evaluation/api/', views.pil_evaluation_api, name='pil_evaluation_api'),
     path('stats/', views.system_stats, name='system_stats'),
     path('logs/', views.activity_logs, name='activity_logs'),
     

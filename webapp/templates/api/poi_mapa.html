@@ -197,6 +197,197 @@
     .win h6 { font-weight: 600; margin: 0 0 5px 0; font-size: 14px; }
     .win .cat { font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 6px; }
     .win .det { font-size: 0.85rem; color: #c9d1d9; margin-bottom: 3px; }
+
+    /* ===== MODAL DE CREACIÓN DE POI ===== */
+    .modal-overlay {
+        position: fixed; inset: 0;
+        background: rgba(0,0,0,0.6);
+        display: flex; align-items: center; justify-content: center;
+        z-index: 1000;
+        opacity: 0; pointer-events: none;
+        transition: opacity 0.25s;
+    }
+    .modal-overlay.open { opacity: 1; pointer-events: auto; }
+
+    .modal-box {
+        background: var(--bg-secondary, #161b22);
+        border: 1px solid var(--border-color, #30363d);
+        border-radius: 12px;
+        width: 92%;
+        max-width: 480px;
+        max-height: 90vh;
+        overflow-y: auto;
+        padding: 24px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+    .modal-box h3 {
+        margin: 0 0 18px 0;
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--text-primary, #e6edf3);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .modal-close {
+        float: right;
+        background: none; border: none;
+        color: var(--text-secondary, #8b949e);
+        font-size: 22px;
+        cursor: pointer;
+        padding: 0;
+        line-height: 1;
+    }
+    .modal-close:hover { color: var(--text-primary, #e6edf3); }
+
+    .form-group { margin-bottom: 14px; }
+    .form-group label {
+        display: block;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--text-secondary, #8b949e);
+        margin-bottom: 4px;
+    }
+    .form-group label .req { color: #f85149; }
+
+    .form-control {
+        width: 100%;
+        padding: 8px 10px;
+        font-size: 13px;
+        background: var(--bg-tertiary, #0d1117);
+        border: 1px solid var(--border-color, #30363d);
+        border-radius: 6px;
+        color: var(--text-primary, #e6edf3);
+        box-sizing: border-box;
+        transition: border-color 0.15s;
+    }
+    .form-control:focus {
+        outline: none;
+        border-color: var(--accent-blue, #58a6ff);
+    }
+    .form-control[readonly] {
+        opacity: 0.7;
+        cursor: default;
+    }
+    select.form-control { cursor: pointer; }
+    textarea.form-control { resize: vertical; min-height: 60px; }
+
+    .form-row {
+        display: flex;
+        gap: 10px;
+    }
+    .form-row .form-group { flex: 1; }
+
+    .form-error {
+        color: #f85149;
+        font-size: 11px;
+        margin-top: 3px;
+        display: none;
+    }
+    .form-group.has-error .form-control {
+        border-color: #f85149;
+    }
+    .form-group.has-error .form-error {
+        display: block;
+    }
+
+    .modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 20px;
+        padding-top: 14px;
+        border-top: 1px solid var(--border-color, #30363d);
+    }
+
+    .btn-modal {
+        padding: 8px 18px;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        border: 1px solid var(--border-color, #30363d);
+        transition: all 0.15s;
+    }
+    .btn-modal-secondary {
+        background: transparent;
+        color: var(--text-secondary, #8b949e);
+    }
+    .btn-modal-secondary:hover {
+        background: var(--bg-tertiary, #0d1117);
+        color: var(--text-primary, #e6edf3);
+    }
+    .btn-modal-primary {
+        background: #238636;
+        color: #fff;
+        border-color: #2ea043;
+    }
+    .btn-modal-primary:hover {
+        background: #2ea043;
+    }
+    .btn-modal-primary:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    .btn-modal .spinner-btn {
+        display: inline-block;
+        width: 14px; height: 14px;
+        border: 2px solid rgba(255,255,255,0.3);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: spin 0.6s linear infinite;
+        vertical-align: middle;
+        margin-right: 4px;
+    }
+
+    /* ===== TOAST ===== */
+    .toast-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 2000;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .toast {
+        padding: 12px 18px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 500;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        animation: toastIn 0.3s ease;
+        max-width: 360px;
+    }
+    .toast-success { background: #1a3a2a; border: 1px solid #2ea043; color: #7ee787; }
+    .toast-error { background: #3a1a1a; border: 1px solid #f85149; color: #f85149; }
+
+    @keyframes toastIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+    .toast-removing {
+        animation: toastOut 0.3s ease forwards;
+    }
+    @keyframes toastOut {
+        from { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(100%); opacity: 0; }
+    }
+
+    /* Indicador de modo creación */
+    .btn-map.active-mode {
+        background: #238636;
+        border-color: #2ea043;
+        color: #fff;
+    }
+
+    /* Cursor especial en modo creación */
+    .map-create-mode #map {
+        cursor: crosshair !important;
+    }
 </style>
 {% endblock %}
 
@@ -238,6 +429,7 @@
 
     <!-- Toolbar -->
     <div class="toolbar">
+        <div class="btn-map" id="btnAddPoi" onclick="toggleCreateMode()" title="Añadir POI">&#x2795;</div>
         <div class="btn-map" onclick="centrar()" title="Centrar">&#x2316;</div>
         <div class="btn-map" onclick="recargar()" title="Recargar">&#x21BB;</div>
     </div>
@@ -260,13 +452,92 @@
         </div>
     </div>
 </div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Modal de creación de POI -->
+<div class="modal-overlay" id="modalCrearPoi">
+    <div class="modal-box">
+        <button class="modal-close" onclick="cerrarModal()" title="Cerrar">&times;</button>
+        <h3>&#x1F4CD; Nuevo Punto de Interés</h3>
+        <form id="formCrearPoi" onsubmit="return guardarPoi(event)">
+            <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+
+            <div class="form-row">
+                <div class="form-group" style="flex:2;">
+                    <label>Nombre <span class="req">*</span></label>
+                    <input type="text" class="form-control" id="poiNombre" name="nombre"
+                           placeholder="Ej: Real Plaza Arequipa" required maxlength="200">
+                    <div class="form-error" id="errorNombre"></div>
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label>Categoría <span class="req">*</span></label>
+                    <select class="form-control" id="poiCategoria" name="categoria_id" required>
+                        <option value="">Seleccionar...</option>
+                    </select>
+                    <div class="form-error" id="errorCategoria"></div>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Latitud <span class="req">*</span></label>
+                    <input type="text" class="form-control" id="poiLat" name="latitud" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Longitud <span class="req">*</span></label>
+                    <input type="text" class="form-control" id="poiLng" name="longitud" readonly>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Dirección</label>
+                <input type="text" class="form-control" id="poiDireccion" name="direccion"
+                       placeholder="Ej: Av. Ejército 350, Cayma" maxlength="300">
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Teléfono</label>
+                    <input type="text" class="form-control" id="poiTelefono" name="telefono"
+                           placeholder="Ej: 054 123456" maxlength="30">
+                </div>
+                <div class="form-group">
+                    <label>Sitio web</label>
+                    <input type="url" class="form-control" id="poiWeb" name="sitio_web"
+                           placeholder="https://..." maxlength="500">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Descripción</label>
+                <textarea class="form-control" id="poiDescripcion" name="descripcion"
+                          placeholder="Información adicional sobre este punto de interés..." rows="3"></textarea>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="btn-modal btn-modal-secondary" onclick="cerrarModal()">Cancelar</button>
+                <button type="submit" class="btn-modal btn-modal-primary" id="btnGuardarPoi">
+                    &#x1F4BE; Guardar POI
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
+// ── Estado global ──
 const KEY = '{{ google_maps_api_key }}';
 let map, markers = [], allCapas = [], activeCapas = new Set(), infoWindow, geoData = { features: [] };
 const COLORS = ['#58a6ff','#f78166','#3fb950','#d2a8ff','#ffa657','#79c0ff','#ff7b72','#7ee787'];
+
+// ── Estado de creación de POI ──
+let createMode = false;
+let tempMarker = null;
+let mapClickListener = null;
 
 function color(c, i) { return c.color && c.color !== '#58a6ff' ? c.color : COLORS[i % COLORS.length]; }
 
@@ -304,6 +575,8 @@ window.initMap = function() {
     cargar();
 };
 
+// ── Carga de datos ──
+
 async function cargar() {
     try {
         const r = await fetch('/api/pois/capas/');
@@ -334,6 +607,8 @@ function done() {
     if (i) i.classList.add('visible');
 }
 
+// ── Capas / Chips ──
+
 function renderChips() {
     var el = document.getElementById('layersChips');
     if (!el) return;
@@ -353,6 +628,8 @@ function toggle(slug) {
     if (activeCapas.has(slug)) activeCapas.delete(slug); else activeCapas.add(slug);
     renderChips(); renderMarkers(); updateStats();
 }
+
+// ── Marcadores ──
 
 function renderMarkers() {
     markers.forEach(m => m.setMap(null));
@@ -411,8 +688,227 @@ function centrar() {
 }
 
 function recargar() {
+    // Salir del modo creación si está activo
+    if (createMode) toggleCreateMode();
     document.getElementById('overlay').classList.remove('hidden');
     cargar();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  CREACIÓN DE POI
+// ═══════════════════════════════════════════════════════════════
+
+function toggleCreateMode() {
+    createMode = !createMode;
+    var btn = document.getElementById('btnAddPoi');
+
+    if (createMode) {
+        btn.classList.add('active-mode');
+        document.body.classList.add('map-create-mode');
+
+        // Remover marcador temporal previo
+        if (tempMarker) { tempMarker.setMap(null); tempMarker = null; }
+
+        // Listener de clic en el mapa
+        if (mapClickListener) google.maps.event.removeListener(mapClickListener);
+        mapClickListener = map.addListener('click', function(e) {
+            if (!createMode) return;
+            var lat = e.latLng.lat();
+            var lng = e.latLng.lng();
+
+            // Colocar marcador temporal (pin rojo con bounce)
+            if (tempMarker) tempMarker.setMap(null);
+            tempMarker = new google.maps.Marker({
+                position: { lat: lat, lng: lng },
+                map: map,
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    fillColor: '#f85149',
+                    fillOpacity: 1,
+                    strokeColor: '#fff',
+                    strokeWeight: 3,
+                    scale: 12,
+                },
+                animation: google.maps.Animation.BOUNCE,
+                title: 'Nuevo POI',
+                zIndex: 999,
+            });
+
+            // Poblar el modal con las coordenadas
+            document.getElementById('poiLat').value = lat.toFixed(7);
+            document.getElementById('poiLng').value = lng.toFixed(7);
+
+            // Si la categoría no está poblada, cargarla
+            poblarCategorias();
+
+            // Abrir modal
+            abrirModal();
+        });
+    } else {
+        btn.classList.remove('active-mode');
+        document.body.classList.remove('map-create-mode');
+
+        // Remover listener
+        if (mapClickListener) {
+            google.maps.event.removeListener(mapClickListener);
+            mapClickListener = null;
+        }
+
+        // Remover marcador temporal
+        if (tempMarker) { tempMarker.setMap(null); tempMarker = null; }
+    }
+}
+
+function poblarCategorias() {
+    var sel = document.getElementById('poiCategoria');
+    if (sel.options.length > 1) return; // Ya poblado
+
+    sel.innerHTML = '<option value="">Seleccionar...</option>';
+    allCapas.forEach(function(c) {
+        var opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = (c.icono || '') + ' ' + c.nombre;
+        sel.appendChild(opt);
+    });
+}
+
+function abrirModal() {
+    // Limpiar errores
+    document.querySelectorAll('.form-group.has-error').forEach(function(el) {
+        el.classList.remove('has-error');
+    });
+    document.getElementById('modalCrearPoi').classList.add('open');
+    document.getElementById('poiNombre').focus();
+
+    // Poblar categorías si no está hecho
+    poblarCategorias();
+}
+
+function cerrarModal() {
+    document.getElementById('modalCrearPoi').classList.remove('open');
+    // No salir del modo creación, el usuario quizás quiere añadir otro
+}
+
+async function guardarPoi(event) {
+    event.preventDefault();
+
+    // Limpiar errores previos
+    document.querySelectorAll('.form-group.has-error').forEach(function(el) {
+        el.classList.remove('has-error');
+    });
+
+    // Validar campos requeridos
+    var nombre = document.getElementById('poiNombre').value.trim();
+    var categoria = document.getElementById('poiCategoria').value;
+    var lat = document.getElementById('poiLat').value;
+    var lng = document.getElementById('poiLng').value;
+
+    var valid = true;
+    if (!nombre) {
+        document.getElementById('errorNombre').textContent = 'El nombre es obligatorio';
+        document.getElementById('poiNombre').closest('.form-group').classList.add('has-error');
+        valid = false;
+    }
+    if (!categoria) {
+        document.getElementById('errorCategoria').textContent = 'Seleccione una categoría';
+        document.getElementById('poiCategoria').closest('.form-group').classList.add('has-error');
+        valid = false;
+    }
+    if (!lat || !lng) {
+        mostrarToast('Debe hacer clic en el mapa para seleccionar la ubicación', 'error');
+        valid = false;
+    }
+    if (!valid) return false;
+
+    // Deshabilitar botón y mostrar spinner
+    var btn = document.getElementById('btnGuardarPoi');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-btn"></span> Guardando...';
+
+    // Obtener CSRF token
+    var csrf = document.querySelector('input[name="csrfmiddlewaretoken"]').value;
+
+    try {
+        var resp = await fetch('/api/pois/crear/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrf,
+            },
+            body: JSON.stringify({
+                nombre: nombre,
+                categoria_id: parseInt(categoria),
+                latitud: lat,
+                longitud: lng,
+                direccion: document.getElementById('poiDireccion').value.trim(),
+                telefono: document.getElementById('poiTelefono').value.trim(),
+                sitio_web: document.getElementById('poiWeb').value.trim(),
+                descripcion: document.getElementById('poiDescripcion').value.trim(),
+            }),
+        });
+
+        var data = await resp.json();
+
+        if (resp.ok) {
+            mostrarToast(data.mensaje || 'POI creado exitosamente', 'success');
+            cerrarModal();
+
+            // Recargar datos del mapa (recarga async)
+            document.getElementById('overlay').classList.remove('hidden');
+            await cargar();
+
+            // Salir del modo creación
+            if (createMode) toggleCreateMode();
+        } else {
+            // Mostrar errores de validación
+            if (data.errors) {
+                for (var field in data.errors) {
+                    var msgs = data.errors[field];
+                    if (Array.isArray(msgs)) msgs = msgs.join(', ');
+                    var errorEl = document.getElementById('error' + field.charAt(0).toUpperCase() + field.slice(1));
+                    var inputEl = document.getElementById('poi' + field.charAt(0).toUpperCase() + field.slice(1));
+                    if (!errorEl && field === 'categoria_id') {
+                        errorEl = document.getElementById('errorCategoria');
+                    }
+                    if (!inputEl && field === 'categoria_id') {
+                        inputEl = document.getElementById('poiCategoria');
+                    }
+                    if (errorEl) errorEl.textContent = msgs;
+                    if (inputEl) inputEl.closest('.form-group').classList.add('has-error');
+                }
+            } else {
+                mostrarToast(data.mensaje || 'Error al crear el POI', 'error');
+            }
+        }
+    } catch(e) {
+        console.error('Error al guardar POI:', e);
+        mostrarToast('Error de conexión al guardar el POI', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '&#x1F4BE; Guardar POI';
+    }
+
+    return false;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════════════════════════════
+
+function mostrarToast(mensaje, tipo) {
+    tipo = tipo || 'success';
+    var container = document.getElementById('toastContainer');
+
+    var toast = document.createElement('div');
+    toast.className = 'toast toast-' + tipo;
+    toast.innerHTML = (tipo === 'success' ? '&#x2705; ' : '&#x26A0; ') + mensaje;
+    container.appendChild(toast);
+
+    // Auto-remover después de 4 segundos
+    setTimeout(function() {
+        toast.classList.add('toast-removing');
+        setTimeout(function() { toast.remove(); }, 300);
+    }, 4000);
 }
 </script>
 <script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&callback=initMap&libraries=places" async defer></script>

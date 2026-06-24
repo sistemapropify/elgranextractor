@@ -1,0 +1,347 @@
+{% extends "propifai_base.html" %}
+{% load static %}
+{% block title %}Subir PDF - Propifai Intelligence Layer{% endblock %}
+{% block header_title %}Subir PDF Normativo{% endblock %}
+{% block extra_css %}
+<style>
+    .upload-container {
+        max-width: 800px;
+        margin: 20px auto;
+    }
+    .drop-zone {
+        border: 2px dashed #30363d;
+        border-radius: 12px;
+        padding: 40px 20px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s;
+        background: #0d1117;
+    }
+    .drop-zone:hover, .drop-zone.dragover {
+        border-color: #58a6ff;
+        background: #161b22;
+    }
+    .drop-zone-icon { font-size: 48px; color: #58a6ff; margin-bottom: 12px; }
+    .drop-zone-text { color: #8b949e; font-size: 16px; }
+    .drop-zone-hint { color: #484f58; font-size: 13px; margin-top: 8px; }
+    .file-info {
+        background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+        padding: 16px; margin-top: 16px; display: none;
+    }
+    .file-info .name { font-weight: 600; color: #c9d1d9; }
+    .file-info .size { color: #8b949e; font-size: 13px; }
+    .meta-grid {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px;
+    }
+    .meta-field label { display: block; color: #8b949e; font-size: 13px; margin-bottom: 4px; }
+    .meta-field input, .meta-field select {
+        width: 100%; padding: 8px 12px; background: #0d1117; border: 1px solid #30363d;
+        border-radius: 6px; color: #c9d1d9; font-size: 14px;
+    }
+    .meta-field input:focus, .meta-field select:focus {
+        border-color: #58a6ff; outline: none;
+    }
+    .btn-submit {
+        margin-top: 16px; width: 100%; padding: 12px; background: #238636;
+        border: none; border-radius: 6px; color: #fff; font-size: 16px;
+        font-weight: 600; cursor: pointer; display: none;
+    }
+    .btn-submit:hover { background: #2ea043; }
+    .btn-submit:disabled { background: #21262d; color: #484f58; cursor: not-allowed; }
+    .progress-bar {
+        margin-top: 16px; height: 6px; background: #21262d; border-radius: 3px;
+        overflow: hidden; display: none;
+    }
+    .progress-bar-fill {
+        height: 100%; background: linear-gradient(90deg, #238636, #2ea043);
+        transition: width 0.3s; width: 0%;
+    }
+    .result {
+        margin-top: 16px; padding: 16px; border-radius: 8px; display: none;
+    }
+    .result.success { background: #11261b; border: 1px solid #238636; color: #7ee787; }
+    .result.error { background: #261111; border: 1px solid #da3633; color: #f85149; }
+    .collection-selector {
+        margin-top: 16px;
+    }
+    .collection-selector label { display: block; color: #8b949e; font-size: 13px; margin-bottom: 4px; }
+    .collection-selector select {
+        width: 100%; padding: 8px 12px; background: #0d1117; border: 1px solid #30363d;
+        border-radius: 6px; color: #c9d1d9; font-size: 14px;
+    }
+</style>
+{% endblock %}
+{% block content %}
+<div class="upload-container">
+    <div class="card">
+        <div class="card-header"><h3 class="card-title">📄 Subir Documento PDF</h3></div>
+        <div class="card-body">
+            <p style="color:#8b949e;margin-bottom:16px;">
+                Sube leyes, ordenanzas municipales, decretos y normativas.
+                El sistema extraerá el texto, detectará automáticamente la estructura
+                (artículos, capítulos, títulos) y los indexará para búsqueda semántica.
+            </p>
+
+            {% if not tiene_normativas %}
+            <div style="background:#261111;border:1px solid #da3633;border-radius:8px;padding:16px;margin-bottom:16px;color:#f85149;">
+                <strong>⚠️ Colección "normativas_legales" no existe.</strong>
+                <p style="margin:8px 0 0;font-size:13px;color:#8b949e;">
+                    Los PDFs deben subirse a la colección <strong>normativas_legales</strong>,
+                    no a propiedadespropify. Haz clic en el botón para crearla automáticamente.
+                </p>
+                <form method="post" style="margin-top:12px;">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="crear_coleccion">
+                    <button type="submit" style="background:#238636;border:none;border-radius:6px;padding:8px 20px;color:#fff;font-weight:600;cursor:pointer;">
+                        ➕ Crear Colección "normativas_legales"
+                    </button>
+                </form>
+            </div>
+            {% endif %}
+
+            {% if coleccion_creada %}
+            <div style="background:#11261b;border:1px solid #238636;border-radius:8px;padding:16px;margin-bottom:16px;color:#7ee787;">
+                <strong>✅ Colección "normativas_legales" creada exitosamente.</strong>
+                <pre style="margin:8px 0 0;font-size:12px;color:#8b949e;white-space:pre-wrap;">{{ mensaje_creacion }}</pre>
+            </div>
+            {% endif %}
+
+            {% if error_creacion %}
+            <div style="background:#261111;border:1px solid #da3633;border-radius:8px;padding:16px;margin-bottom:16px;color:#f85149;">
+                <strong>❌ Error al crear colección:</strong>
+                <pre style="margin:8px 0 0;font-size:12px;color:#f85149;">{{ error_creacion }}</pre>
+            </div>
+            {% endif %}
+
+            <!-- Drop Zone -->
+            <div class="drop-zone" id="dropZone">
+                <div class="drop-zone-icon">📄</div>
+                <div class="drop-zone-text">Arrastra un PDF aquí o haz clic para seleccionar</div>
+                <div class="drop-zone-hint">Solo PDF · Máximo 50MB</div>
+            </div>
+            <input type="file" id="fileInput" accept=".pdf" style="display:none">
+
+            <!-- File Info -->
+            <div class="file-info" id="fileInfo">
+                <div class="name" id="fileName"></div>
+                <div class="size" id="fileSize"></div>
+            </div>
+
+            <!-- Colección -->
+            <div class="collection-selector">
+                <label>Colección destino</label>
+                <select id="collectionSelect">
+                    {% for c in collections %}
+                    <option value="{{ c.name }}" {% if c.name == 'normativas_legales' %}selected{% endif %}>
+                        {{ c.name }} {% if c.description %}— {{ c.description|truncatechars:60 }}{% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Metadatos -->
+            <div class="meta-grid">
+                <div class="meta-field">
+                    <label>Título del documento</label>
+                    <input type="text" id="metaTitle" placeholder="Ej: Ley 3030, Ordenanza 001-2024">
+                </div>
+                <div class="meta-field">
+                    <label>Tipo de norma</label>
+                    <select id="metaTipo">
+                        <option value="">Seleccionar...</option>
+                        <option value="Ley">Ley</option>
+                        <option value="Decreto Supremo">Decreto Supremo</option>
+                        <option value="Ordenanza">Ordenanza Municipal</option>
+                        <option value="Resolución">Resolución</option>
+                        <option value="Reglamento">Reglamento</option>
+                        <option value="Directiva">Directiva</option>
+                        <option value="Norma Técnica">Norma Técnica</option>
+                        <option value="Otro">Otro</option>
+                    </select>
+                </div>
+                <div class="meta-field">
+                    <label>Fuente / Entidad</label>
+                    <input type="text" id="metaFuente" placeholder="Ej: Municipalidad de Arequipa">
+                </div>
+                <div class="meta-field">
+                    <label>Fecha (opcional)</label>
+                    <input type="date" id="metaFecha">
+                </div>
+            </div>
+
+            <!-- Submit -->
+            <button class="btn-submit" id="btnSubmit" disabled>
+                ⚡ Subir e Indexar PDF
+            </button>
+
+            <!-- Progress Bar with percentage -->
+            <div class="progress-bar" id="progressBar">
+                <div style="display:flex;justify-content:space-between;font-size:12px;color:#8b949e;margin-bottom:4px;">
+                    <span id="progressLabel">Procesando...</span>
+                    <span id="progressPercent">0%</span>
+                </div>
+                <div style="height:8px;background:#21262d;border-radius:4px;overflow:hidden;">
+                    <div class="progress-bar-fill" id="progressFill" style="height:100%;width:0%;background:linear-gradient(90deg,#238636,#2ea043);transition:width 0.3s;"></div>
+                </div>
+            </div>
+
+            <!-- Terminal Log -->
+            <div class="terminal" id="terminal" style="display:none;background:#0d1117;border:1px solid #30363d;border-radius:8px;margin-top:16px;padding:12px;max-height:300px;overflow-y:auto;font-family:monospace;font-size:12px;">
+                <div style="color:#8b949e;margin-bottom:8px;font-weight:600;">📋 Log de ingesta:</div>
+                <div id="terminalContent"></div>
+            </div>
+
+            <!-- Result -->
+            <div class="result" id="result"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const fileInfo = document.getElementById('fileInfo');
+const fileName = document.getElementById('fileName');
+const fileSize = document.getElementById('fileSize');
+const btnSubmit = document.getElementById('btnSubmit');
+const progressBar = document.getElementById('progressBar');
+const progressFill = document.getElementById('progressFill');
+const result = document.getElementById('result');
+let selectedFile = null;
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) handleFile(e.target.files[0]);
+});
+
+function handleFile(file) {
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+        showResult('error', 'Solo se aceptan archivos PDF.');
+        return;
+    }
+    if (file.size > 50 * 1024 * 1024) {
+        showResult('error', 'El archivo es demasiado grande. Máximo 50MB.');
+        return;
+    }
+    selectedFile = file;
+    fileName.textContent = file.name;
+    fileSize.textContent = (file.size / 1024 / 1024).toFixed(2) + ' MB';
+    fileInfo.style.display = 'block';
+    btnSubmit.style.display = 'block';
+    btnSubmit.disabled = false;
+    btnSubmit.textContent = `⚡ Subir e Indexar "${file.name}"`;
+    result.style.display = 'none';
+}
+
+const terminal = document.getElementById('terminal');
+const terminalContent = document.getElementById('terminalContent');
+const progressLabel = document.getElementById('progressLabel');
+const progressPercent = document.getElementById('progressPercent');
+
+function addLog(msg, type = 'info') {
+    terminal.style.display = 'block';
+    const colors = { info: '#8b949e', success: '#7ee787', error: '#f85149', step: '#58a6ff' };
+    const prefix = { info: 'ℹ', success: '✅', error: '❌', step: '➜' };
+    const line = document.createElement('div');
+    line.style.color = colors[type] || colors.info;
+    line.style.marginBottom = '3px';
+    line.style.whiteSpace = 'pre-wrap';
+    line.textContent = `${prefix[type] || '•'} ${msg}`;
+    terminalContent.appendChild(line);
+    terminal.scrollTop = terminal.scrollHeight;
+}
+
+function setProgress(pct, label) {
+    progressFill.style.width = pct + '%';
+    progressPercent.textContent = pct + '%';
+    if (label) progressLabel.textContent = label;
+}
+
+btnSubmit.addEventListener('click', async () => {
+    if (!selectedFile) return;
+    btnSubmit.disabled = true;
+    btnSubmit.textContent = '⏳ Subiendo...';
+    progressBar.style.display = 'block';
+    progressFill.style.width = '0%';
+    result.style.display = 'none';
+    terminal.style.display = 'none';
+    terminalContent.innerHTML = '';
+
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+
+    const metadata = {};
+    const title = document.getElementById('metaTitle').value.trim();
+    const tipo = document.getElementById('metaTipo').value;
+    const fuente = document.getElementById('metaFuente').value.trim();
+    const fecha = document.getElementById('metaFecha').value;
+    if (title) metadata.titulo = title;
+    if (tipo) metadata.tipo_norma = tipo;
+    if (fuente) metadata.fuente = fuente;
+    if (fecha) metadata.fecha = fecha;
+    formData.append('metadata', JSON.stringify(metadata));
+
+    const collection = document.getElementById('collectionSelect').value;
+
+    addLog(`Iniciando ingesta de "${selectedFile.name}" → colección "${collection}"`, 'step');
+    addLog(`Tamaño: ${(selectedFile.size / 1024).toFixed(1)} KB`, 'info');
+    if (title) addLog(`Título: ${title}`, 'info');
+    if (tipo) addLog(`Tipo: ${tipo}`, 'info');
+    if (fuente) addLog(`Fuente: ${fuente}`, 'info');
+
+    try {
+        setProgress(10, 'Subiendo archivo...');
+        addLog('Enviando PDF al servidor...', 'info');
+
+        const resp = await fetch(`/intelligence/rag/collections/${collection}/ingest-pdf/`, {
+            method: 'POST',
+            body: formData,
+        });
+
+        setProgress(50, 'Procesando PDF...');
+        addLog('PDF recibido. Extrayendo texto y detectando estructura...', 'info');
+
+        const data = await resp.json();
+        setProgress(90, 'Generando embeddings...');
+        addLog('Generando embeddings e indexando en FAISS...', 'info');
+
+        setProgress(100, '¡Completado!');
+
+        if (data.success) {
+            addLog(`Ingesta completada exitosamente`, 'success');
+            if (data.stats) {
+                const s = data.stats;
+                addLog(`Chunks creados: ${s.chunks_created}`, 'success');
+                addLog(`Chunks actualizados: ${s.chunks_updated}`, 'info');
+                addLog(`Secciones detectadas: ${s.secciones_detectadas}`, 'info');
+                addLog(`Errores: ${s.errors}`, s.errors > 0 ? 'error' : 'info');
+                addLog(`Total chunks: ${s.total_chunks}`, 'info');
+            }
+            showResult('success', `✅ ${data.message}`);
+        } else {
+            addLog(`Error: ${data.message || data.error || 'Error desconocido'}`, 'error');
+            showResult('error', `❌ ${data.message || data.error || 'Error desconocido'}`);
+        }
+    } catch (err) {
+        addLog(`Error de conexión: ${err.message}`, 'error');
+        showResult('error', `❌ Error de conexión: ${err.message}`);
+    } finally {
+        btnSubmit.disabled = false;
+        btnSubmit.textContent = '⚡ Subir e Indexar PDF';
+    }
+});
+
+function showResult(type, msg) {
+    result.className = `result ${type}`;
+    result.innerHTML = msg;
+    result.style.display = 'block';
+}
+</script>
+{% endblock %}
