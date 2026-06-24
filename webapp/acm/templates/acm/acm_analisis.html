@@ -273,9 +273,10 @@
             min-height: 0 !important;
             overflow: hidden !important;
         }
-        /* El row principal llena el container-fluid */
+        /* El row principal llena el container-fluid via flex (NO height:100%, que falla con min-height) */
         .acm-container > .container-fluid > .row {
-            height: 100% !important;
+            flex: 1 !important;
+            min-height: 0 !important;
             overflow: hidden !important;
             flex-wrap: nowrap !important;
         }
@@ -286,12 +287,11 @@
             padding-right: 8px !important;
         }
 
-        /* Cada mitad ocupa el 50% del ancho, altura exacta del row, NO crecen */
+        /* Cada mitad: flex column, altura se estira naturalmente con align-items:stretch del row */
         .acm-container .acm-left-half,
         .acm-container .acm-right-half {
             display: flex !important;
             flex-direction: column !important;
-            height: 100% !important;
             overflow: hidden !important;
         }
 
@@ -330,43 +330,36 @@
             flex: 0 0 auto !important;
         }
 
-        /* Mitad derecha: comparables desde arriba (parametros) hasta abajo (boton buscar) */
-        /* Usamos CSS Grid para forzar la contenencia real */
+        /* Mitad derecha: flex column — altura controlada por el contenedor padre */
         .acm-container .acm-right-half {
-            display: grid !important;
-            grid-template-rows: 1fr !important;
-            overflow: hidden !important;
-            min-height: 0 !important;
-        }
-        /* Forzar visibilidad de los elementos d-none en desktop y que llenen la grid */
-        .acm-container .acm-right-half > div {
             display: flex !important;
             flex-direction: column !important;
-            min-height: 0 !important;
             overflow: hidden !important;
+            min-height: 0 !important;
         }
-        /* Comparables: cada nivel tiene flex:1 para llenar el espacio, solo el ultimo hace scroll */
         .acm-container .acm-right-half .d-none.d-lg-block {
             flex: 1 !important;
+            min-height: 0 !important;
             display: flex !important;
             flex-direction: column !important;
-            min-height: 0 !important;
             overflow: hidden !important;
         }
         .acm-container .acm-right-half .d-none.d-lg-block .card {
             flex: 1 !important;
+            min-height: 0 !important;
             display: flex !important;
             flex-direction: column !important;
-            min-height: 0 !important;
             overflow: hidden !important;
         }
+        /* card-body usa flex en vez de position relative para que el scroll funcione */
         .acm-container .acm-right-half .d-none.d-lg-block .card-body {
             flex: 1 !important;
+            min-height: 0 !important;
             display: flex !important;
             flex-direction: column !important;
-            min-height: 0 !important;
             overflow: hidden !important;
         }
+        /* Scroll container con flex en vez de position absolute — más robusto */
         .acm-container .acm-right-half .d-none.d-lg-block .card-body .comparables-container-tablet {
             flex: 1 !important;
             min-height: 0 !important;
