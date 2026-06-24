@@ -443,11 +443,26 @@ def buscar_comparables(request):
 
 
 @csrf_exempt
+def analisis_espacial_test(request):
+    """Endpoint GET de prueba que genera el PNG con datos fijos."""
+    from .spatial_analysis import generar_grafico_espacial
+    props = [
+        {"precio":780000,"area_terreno":479,"area_construida":157,"antiguedad":20,"cocheras":2,"lat":-16.37769,"lon":-71.55158,"precio_m2_terreno":1627},
+        {"precio":750000,"area_terreno":470,"area_construida":282,"antiguedad":30,"cocheras":2,"lat":-16.36987,"lon":-71.54477,"precio_m2_terreno":1595},
+        {"precio":600000,"area_terreno":280,"area_construida":390,"antiguedad":15,"cocheras":2,"lat":-16.38319,"lon":-71.54204,"precio_m2_terreno":2143},
+        {"precio":450000,"area_terreno":243,"area_construida":220,"antiguedad":10,"cocheras":2,"lat":-16.37766,"lon":-71.55159,"precio_m2_terreno":1856},
+    ]
+    png_bytes = generar_grafico_espacial(props)
+    return HttpResponse(png_bytes, content_type='image/png')
+
+
+@csrf_exempt
 def analisis_espacial_png(request):
     """
-    Endpoint que recibe JSON con propiedades seleccionadas, devuelve PNG del análisis espacial.
+    Endpoint que recibe JSON con propiedades seleccionadas, devuelve JSON con 4 imágenes base64.
     POST /acm/analisis-espacial/png/
     Body: {"propiedades": [{...}]}
+    Returns: {"mapa":"base64...","chart_precio":"base64...","chart_pm2":"base64...","tabla":"base64..."}
     """
     if request.method != 'POST':
         return JsonResponse({'error': 'Método no permitido'}, status=405)
@@ -462,9 +477,9 @@ def analisis_espacial_png(request):
                 status=400
             )
 
-        from .spatial_analysis import generar_grafico_espacial
-        png_bytes = generar_grafico_espacial(propiedades)
-        return HttpResponse(png_bytes, content_type='image/png')
+        from .spatial_analysis import generar_todo_json
+        result = generar_todo_json(propiedades)
+        return JsonResponse(result)
 
     except Exception as e:
         logger.exception("Error en analisis_espacial_png")

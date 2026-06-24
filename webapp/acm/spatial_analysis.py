@@ -3,10 +3,24 @@ spatial_analysis.py — Módulo reutilizable para análisis espacial de propieda
 Integración Django: views.py lo importa y llama a generar_grafico_espacial()
 """
 import io
-import numpy as np
+import os
+
+# PRIMERO silenciar matplotlib ANTES de cualquier import
+os.environ['MPLBACKEND'] = 'Agg'
+os.environ['MATPLOTLIB_LOG_LEVEL'] = 'CRITICAL'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
+import logging
+logging.getLogger('matplotlib').setLevel(logging.CRITICAL)
+logging.getLogger('matplotlib.font_manager').setLevel(logging.CRITICAL)
+logging.getLogger('PIL').setLevel(logging.CRITICAL)
+
 import matplotlib
 matplotlib.use('Agg')
+matplotlib.set_loglevel('critical')
+# Usar cache de fuentes ya existente para no escanear todas las fuentes
 import matplotlib.pyplot as plt
+import numpy as np
 import matplotlib.cm as cm
 import matplotlib.patheffects as pe
 from matplotlib.patches import Circle
@@ -24,43 +38,68 @@ GOLD    = '#f0b429'
 RED_H   = '#e94560'   # encabezado tabla
 
 
-def generar_grafico_espacial(propiedades: list[dict], figsize=(18, 10), dpi=150) -> bytes:
-    """
-    Genera el gráfico espacial y devuelve PNG como bytes (listo para HttpResponse).
-
-    propiedades: lista de dicts con keys:
-        precio, area_terreno, area_construida, antiguedad,
-        cocheras, lat, lon, precio_m2_terreno   (todos numéricos excepto 'etiqueta' opcional)
-    """
-    df = _preparar(propiedades)
-
-    fig = plt.figure(figsize=figsize, facecolor=BG)
-    fig.suptitle(
-        'Mapa Espacial de Propiedades – Arequipa\n'
-        '(Tamaño = Área Terreno  |  Color = Precio)',
-        fontsize=13, fontweight='bold', color=WHITE, y=0.99
-    )
-
-    gs = GridSpec(3, 2, figure=fig,
-                  left=0.04, right=0.98, top=0.93, bottom=0.05,
-                  hspace=0.52, wspace=0.32,
-                  width_ratios=[1.55, 1])
-
-    ax_map  = fig.add_subplot(gs[:, 0])          # mapa ocupa toda la columna izq
-    ax_sc1  = fig.add_subplot(gs[0, 1])           # scatter precio vs dist
-    ax_sc2  = fig.add_subplot(gs[1, 1])           # scatter pm2 vs dist
-    ax_tbl  = fig.add_subplot(gs[2, 1])           # tabla resumen
-
-    _dibujar_mapa(ax_map, df)
-    _dibujar_scatter_precio(ax_sc1, df)
-    _dibujar_scatter_pm2(ax_sc2, df)
-    _dibujar_tabla(ax_tbl, df)
-
+def _fig_to_png(fig, dpi=130):
+    """Convierte una figura matplotlib a bytes PNG."""
     buf = io.BytesIO()
     fig.savefig(buf, format='png', dpi=dpi, bbox_inches='tight', facecolor=BG)
     plt.close(fig)
     buf.seek(0)
     return buf.read()
+
+
+def generar_mapa_espacial(propiedades: list[dict], dpi=130) -> bytes:
+    """Genera solo el mapa espacial de burbujas. Reemplaza Google Maps."""
+    df = _preparar(propiedades)
+    fig, ax = plt.subplots(1, 1, figsize=(10, 8), facecolor=BG)
+    ax.set_title('Mapa Espacial de Propiedades – Arequipa\n(Tamaño = Área Terreno  |  Color = Precio)',
+                 fontsize=12, fontweight='bold', color=WHITE, pad=15)
+    _dibujar_mapa(ax, df)
+    fig.tight_layout(pad=2)
+    return _fig_to_png(fig, dpi)
+
+
+def generar_chart_precio(propiedades: list[dict], dpi=130) -> bytes:
+    """Genera el scatter de Precio vs Distancia a Zona Premium."""
+    df = _preparar(propiedades)
+    fig, ax = plt.subplots(1, 1, figsize=(6, 3.5), facecolor=BG)
+    _dibujar_scatter_precio(ax, df)
+    fig.tight_layout(pad=1.5)
+    return _fig_to_png(fig, dpi)
+
+
+def generar_chart_pm2(propiedades: list[dict], dpi=130) -> bytes:
+    """Genera el scatter de Precio/m² vs Distancia."""
+    df = _preparar(propiedades)
+    fig, ax = plt.subplots(1, 1, figsize=(6, 3.5), facecolor=BG)
+    _dibujar_scatter_pm2(ax, df)
+    fig.tight_layout(pad=1.5)
+    return _fig_to_png(fig, dpi)
+
+
+def generar_tabla_resumen(propiedades: list[dict], dpi=130) -> bytes:
+    """Genera la tabla resumen de propiedades."""
+    df = _preparar(propiedades)
+    fig, ax = plt.subplots(1, 1, figsize=(6, 4), facecolor=BG)
+    _dibujar_tabla(ax, df)
+    fig.tight_layout(pad=1.5)
+    return _fig_to_png(fig, dpi)
+
+
+def generar_todo_json(propiedades: list[dict], dpi=130) -> dict:
+    """
+    Genera las 4 imágenes y devuelve dict con base64 de cada una.
+    """
+    import base64
+    return {
+        'mapa': base64.b64encode(generar_mapa_espacial(propiedades, dpi)).decode(),
+        'chart_precio': base64.b64encode(generar_chart_precio(propiedades, dpi)).decode(),
+        'chart_pm2': base64.b64encode(generar_chart_pm2(propiedades, dpi)).decode(),
+        'tabla': base64.b64encode(generar_tabla_resumen(propiedades, dpi)).decode(),
+    }
+
+
+# Mantener compatibilidad con código existente
+generar_grafico_espacial = generar_mapa_espacial
 
 
 # ───────────────────────── helpers internos ─────────────────────────

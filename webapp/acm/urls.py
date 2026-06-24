@@ -12,4 +12,5 @@ urlpatterns = [
     path('historial/', views.historial_acm, name='historial_acm'),
     path('ver-pdf/<uuid:uuid>/', views.ver_pdf_acm, name='ver_pdf_acm'),
     path('analisis-espacial/png/', views.analisis_espacial_png, name='analisis_espacial_png'),
+    path('analisis-espacial/test/', views.analisis_espacial_test, name='analisis_espacial_test'),
 ]
