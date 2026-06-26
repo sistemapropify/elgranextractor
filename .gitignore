@@ -99,6 +99,8 @@ screenshot_*.png
 *.jpeg
 *.gif
 *.ico
+!webapp/acm/static/acm/img/LOGO-PROPIFY.png
+!webapp/acm/static/acm/img/LOGO-PROPIFY.jpg
 
 # Environment variables
 .env
