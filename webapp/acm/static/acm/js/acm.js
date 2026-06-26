@@ -1642,9 +1642,7 @@ async function generarPDF_ACM() {
         const data = await response.json();
 
         if (data.status === 'ok') {
-            btns.forEach(btn => { if (btn) btn.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i>Descargando PDF...'; });
-            window.open(data.enlace_publico, '_blank');
-            mostrarToast('success', `PDF generado correctamente (${data.codigo || ''}).`);
+            window.location.href = data.enlace_publico;
         } else {
             throw new Error(data.message || 'Error al guardar análisis');
         }
