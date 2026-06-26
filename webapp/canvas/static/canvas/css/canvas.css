@@ -258,15 +258,16 @@
 
 /* ── NODOS ── */
 .cv-node {
-  position: absolute;
+  position: absolute !important;
   pointer-events: all;
   background: var(--cv-surface);
   border: 1px solid var(--cv-border);
   border-radius: var(--cv-radius);
   box-shadow: var(--cv-shadow);
-  width: 220px;
-  min-width: 200px;
-  overflow: hidden;
+  width: 220px !important;
+  min-width: 220px !important;
+  max-width: 220px !important;
+  overflow: hidden !important;
   transition: border-color 0.15s;
 }
 .cv-node:hover    { border-color: #404460; }
