@@ -424,6 +424,147 @@ function deleteNode(id) {
   markDirty();
 }
 
+/* ── NODO ARCHIVO (Excel, Word, PDF, Imagen) ── */
+
+/**
+ * Crea un nodo de tipo Archivo en el canvas.
+ * @param {object} data - { id, nombre, tipo, blob_url, tamano }
+ * @param {number} x, y - posición inicial
+ */
+function createArchivoNode(data, x, y) {
+  const id = 'archivo_' + data.id;
+  if (STATE.nodos[id]) return id;
+  if (typeof captureState === 'function') captureState();
+
+  const node = document.createElement('div');
+  node.className = 'cv-node cv-node--archivo';
+  node.dataset.id = id;
+  node.style.left = (x || 100) + 'px';
+  node.style.top  = (y || 100) + 'px';
+
+  // Icono según tipo
+  const iconMap = { excel: '📊', word: '📝', pdf: '📄', image: '🖼️', other: '📎' };
+  const icon = iconMap[data.tipo] || '📎';
+  const badgeClass = 'cv-badge--' + (data.tipo || 'other');
+  const tipoLabel = { excel: 'EXCEL', word: 'WORD', pdf: 'PDF', image: 'IMG', other: 'ARCHIVO' };
+  const label = tipoLabel[data.tipo] || 'ARCHIVO';
+
+  // Tamaño formateado
+  const tamanoStr = formatFileSize(data.tamano);
+
+  node.innerHTML = `
+    <div class="cv-node__header">
+      <span class="cv-node__badge cv-badge--archivo ${badgeClass}">${icon} ${label}</span>
+      <span class="cv-node__title">${escHtml(data.nombre)}</span>
+      <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
+    </div>
+    <div class="cv-node__body">
+      <div class="cv-file-info">
+        <span class="cv-file-info__size">${tamanoStr}</span>
+        <div style="display:flex;gap:6px;margin-top:4px;">
+          <a class="cv-file-info__link" href="${escHtml(data.blob_url)}" download="${escHtml(data.nombre)}" style="font-size:11px;">⬇ Descargar</a>
+          ${['excel','word'].includes(data.tipo) ? `<a class="cv-file-info__link" href="https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(data.blob_url)}" target="_blank" rel="noopener" style="font-size:11px;">👁 Ver online</a>` : ''}
+        </div>
+      </div>
+    </div>
+    <div class="cv-port cv-port--top"    data-node="${id}" data-port="top"></div>
+    <div class="cv-port cv-port--right"  data-node="${id}" data-port="right"></div>
+    <div class="cv-port cv-port--bottom" data-node="${id}" data-port="bottom"></div>
+    <div class="cv-port cv-port--left"   data-node="${id}" data-port="left"></div>
+  `;
+
+  dom.nodes.appendChild(node);
+  positionNode(id, node, x || 100, y || 100);
+
+  STATE.nodos[id] = {
+    id, tipo: 'archivo', ref_id: data.id,
+    x: x || 100, y: y || 100, width: 220, height: node.offsetHeight || 90,
+    collapsed: false, color: null, el: node,
+    field_data: {
+      file_url: data.blob_url,
+      file_name: data.nombre,
+      file_type: data.tipo,
+      file_size: data.tamano,
+    },
+  };
+  registerNodeEvents(id, node);
+  markDirty();
+  return id;
+}
+
+
+/* ── NODO ENLACE (URL) ── */
+
+/**
+ * Crea un nodo de tipo Enlace (URL) en el canvas.
+ * @param {string} url - URL del enlace
+ * @param {string} titulo - Título mostrado
+ * @param {number} x, y - posición inicial
+ */
+function createEnlaceNode(url, titulo, x, y) {
+  const id = 'enlace_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
+  if (STATE.nodos[id]) return id;
+  if (typeof captureState === 'function') captureState();
+
+  const node = document.createElement('div');
+  node.className = 'cv-node cv-node--enlace';
+  node.dataset.id = id;
+  node.style.left = (x || 100) + 'px';
+  node.style.top  = (y || 100) + 'px';
+
+  const displayTitle = titulo || url;
+  const displayUrl = url.length > 50 ? url.substring(0, 47) + '...' : url;
+
+  node.innerHTML = `
+    <div class="cv-node__header">
+      <span class="cv-node__badge cv-badge--enlace">🔗 ENLACE</span>
+      <span class="cv-node__title">${escHtml(displayTitle)}</span>
+      <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
+    </div>
+    <div class="cv-node__body">
+      <a class="cv-link-display" href="${escHtml(url)}" target="_blank" rel="noopener" title="${escHtml(url)}">
+        ${escHtml(displayUrl)} ↗
+      </a>
+    </div>
+    <div class="cv-port cv-port--top"    data-node="${id}" data-port="top"></div>
+    <div class="cv-port cv-port--right"  data-node="${id}" data-port="right"></div>
+    <div class="cv-port cv-port--bottom" data-node="${id}" data-port="bottom"></div>
+    <div class="cv-port cv-port--left"   data-node="${id}" data-port="left"></div>
+  `;
+
+  dom.nodes.appendChild(node);
+  positionNode(id, node, x || 100, y || 100);
+
+  STATE.nodos[id] = {
+    id, tipo: 'enlace', ref_id: null,
+    x: x || 100, y: y || 100, width: 220, height: node.offsetHeight || 80,
+    collapsed: false, color: null, el: node,
+    field_data: {
+      url: url,
+      url_title: titulo || url,
+    },
+  };
+  registerNodeEvents(id, node);
+  markDirty();
+  return id;
+}
+
+
+/* ── FORMAT FILE SIZE ── */
+
+function formatFileSize(bytes) {
+  if (!bytes || bytes === 0) return '—';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let i = 0;
+  let size = bytes;
+  while (size >= 1024 && i < units.length - 1) {
+    size /= 1024;
+    i++;
+  }
+  return size.toFixed(i > 0 ? 1 : 0) + ' ' + units[i];
+}
+
+
 /* ── MATCHES ── */
 
 async function loadMatchesForProp(propId, nodeId) {
@@ -500,6 +641,20 @@ function restoreSnapshot(snapshot) {
         id: n.id, tipo: 'nota', ref_id: null,
         x: n.x, y: n.y, width: n.width || 200, height: n.height || 100,
         collapsed: false, color: n.color || null, el: null,
+      };
+    } else if (n.tipo === 'archivo') {
+      STATE.nodos[n.id] = {
+        id: n.id, tipo: 'archivo', ref_id: n.ref_id,
+        x: n.x, y: n.y, width: n.width || 220, height: n.height || 90,
+        collapsed: false, color: null, el: null,
+        field_data: n.field_data || null,
+      };
+    } else if (n.tipo === 'enlace') {
+      STATE.nodos[n.id] = {
+        id: n.id, tipo: 'enlace', ref_id: null,
+        x: n.x, y: n.y, width: n.width || 220, height: n.height || 80,
+        collapsed: false, color: null, el: null,
+        field_data: n.field_data || null,
       };
     }
   });
@@ -604,6 +759,53 @@ function renderPlaceholderNodes(nodos) {
           <span class="cv-node__title">Req #${n.ref_id}</span>
         </div>
         <div class="cv-node__body"><div style="color:var(--cv-text-muted);font-size:11px;text-align:center;padding:8px">Cargando...</div></div>
+        <div class="cv-port cv-port--top"    data-node="${n.id}" data-port="top"></div>
+        <div class="cv-port cv-port--right"  data-node="${n.id}" data-port="right"></div>
+        <div class="cv-port cv-port--bottom" data-node="${n.id}" data-port="bottom"></div>
+        <div class="cv-port cv-port--left"   data-node="${n.id}" data-port="left"></div>
+      `;
+    } else if (n.tipo === 'archivo') {
+      const fd = n.field_data || {};
+      const iconMap = { excel: '📊', word: '📝', pdf: '📄', image: '🖼️', other: '📎' };
+      const icon = iconMap[fd.file_type] || '📎';
+      const tipoLabel = { excel: 'EXCEL', word: 'WORD', pdf: 'PDF', image: 'IMG', other: 'ARCHIVO' };
+      const label = tipoLabel[fd.file_type] || 'ARCHIVO';
+      const badgeClass = 'cv-badge--' + (fd.file_type || 'other');
+      const tamanoStr = formatFileSize(fd.file_size);
+      node.innerHTML = `
+        <div class="cv-node__header">
+          <span class="cv-node__badge cv-badge--archivo ${badgeClass}">${icon} ${label}</span>
+          <span class="cv-node__title">${escHtml(fd.file_name || 'Archivo')}</span>
+          <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
+        </div>
+        <div class="cv-node__body">
+          <div class="cv-file-info">
+            <span class="cv-file-info__size">${tamanoStr}</span>
+            <div style="display:flex;gap:6px;margin-top:4px;">
+              <a class="cv-file-info__link" href="${escHtml(fd.file_url)}" download="${escHtml(fd.file_name || 'archivo')}" style="font-size:11px;">⬇ Descargar</a>
+              ${['excel','word'].includes(fd.file_type) ? `<a class="cv-file-info__link" href="https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(fd.file_url)}" target="_blank" rel="noopener" style="font-size:11px;">👁 Ver online</a>` : ''}
+            </div>
+          </div>
+        </div>
+        <div class="cv-port cv-port--top"    data-node="${n.id}" data-port="top"></div>
+        <div class="cv-port cv-port--right"  data-node="${n.id}" data-port="right"></div>
+        <div class="cv-port cv-port--bottom" data-node="${n.id}" data-port="bottom"></div>
+        <div class="cv-port cv-port--left"   data-node="${n.id}" data-port="left"></div>
+      `;
+    } else if (n.tipo === 'enlace') {
+      const fd = n.field_data || {};
+      const displayUrl = (fd.url || '').length > 50 ? (fd.url || '').substring(0, 47) + '...' : (fd.url || '');
+      node.innerHTML = `
+        <div class="cv-node__header">
+          <span class="cv-node__badge cv-badge--enlace">🔗 ENLACE</span>
+          <span class="cv-node__title">${escHtml(fd.url_title || fd.url || 'Enlace')}</span>
+          <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
+        </div>
+        <div class="cv-node__body">
+          <a class="cv-link-display" href="${escHtml(fd.url)}" target="_blank" rel="noopener" title="${escHtml(fd.url)}">
+            ${escHtml(displayUrl)} ↗
+          </a>
+        </div>
         <div class="cv-port cv-port--top"    data-node="${n.id}" data-port="top"></div>
         <div class="cv-port cv-port--right"  data-node="${n.id}" data-port="right"></div>
         <div class="cv-port cv-port--bottom" data-node="${n.id}" data-port="bottom"></div>

@@ -727,6 +727,7 @@ window.addEventListener('beforeunload', (e) => {
 | 1.0 | 2025-06 | Versión inicial |
 | 1.1 | 2026-06 | Snapshot con `json.dumps()`, botón Guardar forzado, campos reactivos |
 | **1.2** | **2026-06** | **Fotos en tarjetas, persistencia de agente y campos, init async secuencial, beforeunload, CSRF exempt, property_media query** |
+| **1.3** | **2026-06** | **Inserción de archivos (Excel, Word, PDF, Imagen) y enlaces URL en el canvas** |
 
 *Última actualización: Junio 2026*
 *Spec generado para el proyecto Prometeo / Propifai — app `canvas`*

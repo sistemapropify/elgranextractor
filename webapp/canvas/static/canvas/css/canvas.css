@@ -797,3 +797,196 @@
     flex-direction: column;
     overflow: hidden;
 }
+
+/* ── INSERTAR BUTTON WRAPPER ── */
+.cv-topbar__insert-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+/* ── INSERTAR MENU DESPLEGABLE ── */
+.cv-insert-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  background: #1a1c24;
+  border: 1px solid var(--cv-border);
+  border-radius: var(--cv-radius-sm);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  z-index: 200;
+  min-width: 160px;
+  padding: 4px 0;
+}
+.cv-insert-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  font-size: 12px;
+  color: var(--cv-text-sec);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.cv-insert-menu__item:hover {
+  background: var(--cv-surface-2);
+  color: var(--cv-text-pri);
+}
+.cv-insert-menu__sep {
+  height: 1px;
+  background: var(--cv-border);
+  margin: 4px 8px;
+}
+
+/* ── NODO ARCHIVO (Excel, Word, PDF, Imagen) ── */
+.cv-node--archivo {
+  min-width: 200px;
+  max-width: 260px;
+}
+.cv-node--archivo .cv-node__body {
+  padding: 8px 10px;
+}
+.cv-badge--archivo {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.cv-badge--excel { background: #1a3a2e; color: #1d9e75; }
+.cv-badge--word  { background: #1a2a3a; color: #5c9ce6; }
+.cv-badge--pdf   { background: #3a1a1a; color: #e65c5c; }
+.cv-badge--image { background: #2a1a3a; color: #b45ce6; }
+.cv-badge--other { background: var(--cv-surface-2); color: var(--cv-text-muted); }
+
+/* Info del archivo dentro del nodo */
+.cv-file-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cv-file-info__size {
+  font-size: 11px;
+  color: var(--cv-text-muted);
+}
+.cv-file-info__link {
+  font-size: 12px;
+  color: #5c6bc0;
+  text-decoration: none;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.cv-file-info__link:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+
+/* ── NODO ENLACE (URL) ── */
+.cv-node--enlace {
+  min-width: 200px;
+  max-width: 280px;
+}
+.cv-node--enlace .cv-node__body {
+  padding: 8px 10px;
+}
+.cv-badge--enlace {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  background: #1a1a3a;
+  color: #8896f0;
+}
+.cv-link-display {
+  display: block;
+  font-size: 12px;
+  color: #5c6bc0;
+  text-decoration: none;
+  word-break: break-all;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.cv-link-display:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+
+/* ── MODAL URL ── */
+.cv-url-modal {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+.cv-url-modal__overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+}
+.cv-url-modal__box {
+  position: relative;
+  background: #1a1c24;
+  border: 1px solid var(--cv-border);
+  border-radius: var(--cv-radius);
+  padding: 20px 24px;
+  min-width: 320px;
+  max-width: 400px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+.cv-url-modal__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cv-text-pri);
+  margin-bottom: 16px;
+}
+.cv-url-modal__field {
+  margin-bottom: 12px;
+}
+.cv-url-modal__label {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--cv-text-muted);
+  margin-bottom: 4px;
+}
+.cv-url-modal__input {
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--cv-surface-2);
+  border: 1px solid var(--cv-border);
+  border-radius: var(--cv-radius-sm);
+  color: var(--cv-text-pri);
+  font-size: 12px;
+  outline: none;
+  box-sizing: border-box;
+}
+.cv-url-modal__input:focus {
+  border-color: var(--cv-border-act);
+}
+.cv-url-modal__input::placeholder {
+  color: var(--cv-text-muted);
+}
+.cv-url-modal__actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+/* ── DROP ZONE ── */
+.cv-stage--drop {
+  outline: 2px dashed var(--cv-border-act);
+  outline-offset: -2px;
+}
+
+/* ── RESPONSIVE ── */
+@media (max-width: 768px) {
+  .cv-sidebar { display: none; }
+}

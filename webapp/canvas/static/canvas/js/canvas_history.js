@@ -176,7 +176,11 @@ function restoreStateFromHistory(snap) {
   const campos = getActiveCampos();
 
   // Si hay field_data, render con datos completos; si no, placeholder
-  const hasData = nodosList.some(n => n.tipo === 'propiedad' && n.field_data);
+  const hasData = nodosList.some(n =>
+    (n.tipo === 'propiedad' && n.field_data) ||
+    n.tipo === 'archivo' ||
+    n.tipo === 'enlace'
+  );
   if (hasData) {
     nodosList.forEach(n => {
       if (n.tipo === 'propiedad' && n.field_data) {
@@ -276,6 +280,53 @@ function renderSinglePlaceholder(n) {
         <span class="cv-node__title">Req #${n.ref_id}</span>
       </div>
       <div class="cv-node__body"><div style="color:var(--cv-text-muted);font-size:11px;text-align:center;padding:8px">Cargando...</div></div>
+      <div class="cv-port cv-port--top"    data-node="${n.id}" data-port="top"></div>
+      <div class="cv-port cv-port--right"  data-node="${n.id}" data-port="right"></div>
+      <div class="cv-port cv-port--bottom" data-node="${n.id}" data-port="bottom"></div>
+      <div class="cv-port cv-port--left"   data-node="${n.id}" data-port="left"></div>
+    `;
+  } else if (n.tipo === 'archivo') {
+    const fd = n.field_data || {};
+    const iconMap = { excel: '📊', word: '📝', pdf: '📄', image: '🖼️', other: '📎' };
+    const icon = iconMap[fd.file_type] || '📎';
+    const tipoLabel = { excel: 'EXCEL', word: 'WORD', pdf: 'PDF', image: 'IMG', other: 'ARCHIVO' };
+    const label = tipoLabel[fd.file_type] || 'ARCHIVO';
+    const badgeClass = 'cv-badge--' + (fd.file_type || 'other');
+    const tamanoStr = typeof formatFileSize === 'function' ? formatFileSize(fd.file_size) : (fd.file_size || '—');
+    node.innerHTML = `
+      <div class="cv-node__header">
+        <span class="cv-node__badge cv-badge--archivo ${badgeClass}">${icon} ${label}</span>
+        <span class="cv-node__title">${escHtml(fd.file_name || 'Archivo')}</span>
+        <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
+      </div>
+      <div class="cv-node__body">
+        <div class="cv-file-info">
+          <span class="cv-file-info__size">${tamanoStr}</span>
+          <div style="display:flex;gap:6px;margin-top:4px;">
+            <a class="cv-file-info__link" href="${escHtml(fd.file_url)}" download="${escHtml(fd.file_name || 'archivo')}" style="font-size:11px;">⬇ Descargar</a>
+            ${['excel','word'].includes(fd.file_type) ? `<a class="cv-file-info__link" href="https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(fd.file_url)}" target="_blank" rel="noopener" style="font-size:11px;">👁 Ver online</a>` : ''}
+          </div>
+        </div>
+      </div>
+      <div class="cv-port cv-port--top"    data-node="${n.id}" data-port="top"></div>
+      <div class="cv-port cv-port--right"  data-node="${n.id}" data-port="right"></div>
+      <div class="cv-port cv-port--bottom" data-node="${n.id}" data-port="bottom"></div>
+      <div class="cv-port cv-port--left"   data-node="${n.id}" data-port="left"></div>
+    `;
+  } else if (n.tipo === 'enlace') {
+    const fd = n.field_data || {};
+    const displayUrl = (fd.url || '').length > 50 ? (fd.url || '').substring(0, 47) + '...' : (fd.url || '');
+    node.innerHTML = `
+      <div class="cv-node__header">
+        <span class="cv-node__badge cv-badge--enlace">🔗 ENLACE</span>
+        <span class="cv-node__title">${escHtml(fd.url_title || fd.url || 'Enlace')}</span>
+        <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
+      </div>
+      <div class="cv-node__body">
+        <a class="cv-link-display" href="${escHtml(fd.url)}" target="_blank" rel="noopener" title="${escHtml(fd.url)}">
+          ${escHtml(displayUrl)} ↗
+        </a>
+      </div>
       <div class="cv-port cv-port--top"    data-node="${n.id}" data-port="top"></div>
       <div class="cv-port cv-port--right"  data-node="${n.id}" data-port="right"></div>
       <div class="cv-port cv-port--bottom" data-node="${n.id}" data-port="bottom"></div>

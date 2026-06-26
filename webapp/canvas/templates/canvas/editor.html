@@ -31,6 +31,17 @@
   <div class="cv-topbar">
     <input class="cv-topbar__title" id="cv-lienzo-nombre" value="{{ lienzo.nombre }}" spellcheck="false">
     <div class="cv-topbar__sep"></div>
+    <div class="cv-topbar__insert-wrap">
+      <button class="cv-btn" id="btn-insertar">+ Insertar</button>
+      <div class="cv-insert-menu" id="cv-insert-menu" style="display:none">
+        <div class="cv-insert-menu__item" data-tipo="excel">📊 Excel</div>
+        <div class="cv-insert-menu__item" data-tipo="word">📝 Word</div>
+        <div class="cv-insert-menu__item" data-tipo="pdf">📄 PDF</div>
+        <div class="cv-insert-menu__item" data-tipo="image">🖼️ Imagen</div>
+        <div class="cv-insert-menu__sep"></div>
+        <div class="cv-insert-menu__item" data-tipo="url">🔗 Enlace URL</div>
+      </div>
+    </div>
     <button class="cv-btn" id="btn-add-nota">+ Nota</button>
     <button class="cv-btn" id="btn-fit">Encuadrar</button>
     <div class="cv-topbar__sep"></div>
@@ -145,6 +156,26 @@
   </div>
 </div>
 
+<!-- Modal para insertar URL -->
+<div class="cv-url-modal" id="cv-url-modal" style="display:none">
+  <div class="cv-url-modal__overlay"></div>
+  <div class="cv-url-modal__box">
+    <div class="cv-url-modal__title">Insertar enlace URL</div>
+    <div class="cv-url-modal__field">
+      <label class="cv-url-modal__label">URL</label>
+      <input class="cv-url-modal__input" id="cv-url-input" type="url" placeholder="https://ejemplo.com" autofocus>
+    </div>
+    <div class="cv-url-modal__field">
+      <label class="cv-url-modal__label">Título (opcional)</label>
+      <input class="cv-url-modal__input" id="cv-url-title" type="text" placeholder="Mi sitio web">
+    </div>
+    <div class="cv-url-modal__actions">
+      <button class="cv-btn" id="cv-url-cancel">Cancelar</button>
+      <button class="cv-btn cv-btn--pri" id="cv-url-confirm">Insertar</button>
+    </div>
+  </div>
+</div>
+
 <script>
   const LIENZO_ID = {{ lienzo.pk }};
   const CSRF      = '{{ csrf_token }}';
@@ -157,4 +188,5 @@
 <script src="{% static 'canvas/js/canvas_save.js' %}"></script>
 <script src="{% static 'canvas/js/canvas_history.js' %}"></script>
 <script src="{% static 'canvas/js/canvas_modal.js' %}"></script>
+<script src="{% static 'canvas/js/canvas_insert.js' %}"></script>
 {% endblock %}

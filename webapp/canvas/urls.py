@@ -17,4 +17,9 @@ urlpatterns = [
     path('api/reqs/<int:prop_id>/',   views.api_reqs_match,    name='api_reqs'),
     path('api/template/save/',        views.api_template_save, name='api_tpl_save'),
     path('api/template/list/',        views.api_template_list, name='api_tpl_list'),
+
+    # API archivos y enlaces
+    path('api/upload/',               views.api_upload,        name='api_upload'),
+    path('api/link/',                 views.api_link,          name='api_link'),
+    path('api/archivos/<int:lienzo_pk>/', views.api_archivos_list, name='api_archivos'),
 ]

@@ -221,6 +221,9 @@ AZURE_LOGOS_CONTAINER = env('AZURE_LOGOS_CONTAINER', default='logos')
 AZURE_ICONOS_CONTAINER = env('AZURE_ICONOS_CONTAINER', default='iconosmarcadores')
 AZURE_FOTOS_AGENTES_CONTAINER = env('AZURE_FOTOS_AGENTES_CONTAINER', default='fotosperfiles')
 
+# Canvas / Lienzo — Contenedor para archivos subidos al canvas
+LIENZO_STORAGE_CONTAINER = env('LIENZO_STORAGE_CONTAINER', default='lienzostorage')
+
 # Security settings for production
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True

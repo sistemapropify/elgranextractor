@@ -28,7 +28,7 @@ from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import csrf_exempt
 from django.urls import reverse
 
-from .models import Lienzo, CardTemplate, NotaLienzo
+from .models import Lienzo, CardTemplate, NotaLienzo, ArchivoLienzo
 from intelligence.models import IntelligenceCollection, IntelligenceDocument
 from agentes.models import Agente
 
@@ -459,3 +459,189 @@ def api_template_list(request):
         return JsonResponse({'error': 'No autenticado'}, status=401)
     tpls = CardTemplate.objects.filter(user=user).values('id', 'nombre', 'campos')
     return JsonResponse({'templates': list(tpls)})
+
+
+# ── API: UPLOAD FILES ────────────────────────────────────────────
+
+
+@require_POST
+@csrf_exempt
+def api_upload(request):
+    """
+    Sube un archivo al lienzo (Excel, Word, PDF, Imagen).
+    El archivo se almacena en Azure Blob Storage (contenedor 'lienzostorage').
+    Se crea un registro ArchivoLienzo y se devuelven los metadatos.
+    La URL se genera con SAS token para acceso seguro sin necesidad de contenedor público.
+    """
+    user = _get_current_user(request)
+    if not user:
+        return JsonResponse({'error': 'No autenticado'}, status=401)
+
+    lienzo_id = request.POST.get('lienzo_id')
+    if not lienzo_id:
+        return JsonResponse({'error': 'Se requiere lienzo_id'}, status=400)
+
+    try:
+        lienzo = Lienzo.objects.get(pk=lienzo_id, user=user)
+    except Lienzo.DoesNotExist:
+        return JsonResponse({'error': 'Lienzo no encontrado'}, status=404)
+
+    uploaded_file = request.FILES.get('file')
+    if not uploaded_file:
+        return JsonResponse({'error': 'No se envió ningún archivo'}, status=400)
+
+    # Validar tamaño (max 20 MB)
+    MAX_SIZE = 20 * 1024 * 1024
+    if uploaded_file.size > MAX_SIZE:
+        return JsonResponse({'error': 'El archivo excede el límite de 20 MB'}, status=413)
+
+    # Detectar tipo según extensión
+    import os
+    ext = os.path.splitext(uploaded_file.name)[1].lower()
+    tipo_map = {
+        '.xlsx': 'excel', '.xls': 'excel', '.csv': 'excel',
+        '.docx': 'word', '.doc': 'word',
+        '.pdf': 'pdf',
+        '.jpg': 'image', '.jpeg': 'image', '.png': 'image',
+        '.gif': 'image', '.webp': 'image', '.bmp': 'image', '.svg': 'image',
+    }
+    tipo = tipo_map.get(ext, 'other')
+
+    # Subir a Azure Blob Storage
+    from django.conf import settings
+    from captura.azure_storage import ensure_container_exists, get_blob_service_client
+    from azure.storage.blob import ContentSettings
+    from datetime import datetime, timedelta
+    import uuid
+
+    try:
+        container_client = ensure_container_exists(settings.LIENZO_STORAGE_CONTAINER)
+    except Exception:
+        blob_service_client = get_blob_service_client()
+        container_client = blob_service_client.get_container_client(settings.LIENZO_STORAGE_CONTAINER)
+        if not container_client.exists():
+            container_client.create_container()
+
+    # Nombre único para el blob: canvas/{lienzo_id}/{timestamp}_{uuid}.{ext}
+    timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+    unique_id = str(uuid.uuid4())[:8]
+    blob_name = f"canvas/{lienzo_id}/{timestamp}_{unique_id}{ext}"
+
+    # MIME type
+    mime_map = {
+        '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        '.xls': 'application/vnd.ms-excel',
+        '.csv': 'text/csv',
+        '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        '.doc': 'application/msword',
+        '.pdf': 'application/pdf',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.png': 'image/png',
+        '.gif': 'image/gif',
+        '.webp': 'image/webp',
+        '.bmp': 'image/bmp',
+        '.svg': 'image/svg+xml',
+    }
+    content_type = mime_map.get(ext, 'application/octet-stream')
+
+    blob_client = container_client.get_blob_client(blob_name)
+    blob_client.upload_blob(
+        uploaded_file.read(),
+        overwrite=True,
+        content_settings=ContentSettings(content_type=content_type),
+    )
+
+    # Generar SAS token para acceso seguro (válido 24h)
+    from azure.storage.blob import BlobSasPermissions, generate_blob_sas
+    account_key = getattr(settings, 'AZURE_STORAGE_ACCOUNT_KEY', '') or ''
+    if account_key:
+        sas_token = generate_blob_sas(
+            account_name=blob_client.account_name,
+            container_name=blob_client.container_name,
+            blob_name=blob_client.blob_name,
+            account_key=account_key,
+            permission=BlobSasPermissions(read=True),
+            expiry=datetime.utcnow() + timedelta(hours=24),
+        )
+        blob_url = f"{blob_client.url}?{sas_token}"
+    else:
+        blob_url = blob_client.url
+
+    # Crear registro en BD
+    archivo = ArchivoLienzo.objects.create(
+        lienzo=lienzo,
+        nombre=uploaded_file.name,
+        tipo=tipo,
+        blob_url=blob_url,
+        blob_name=blob_name,
+        tamano=uploaded_file.size,
+    )
+
+    return JsonResponse({
+        'ok': True,
+        'archivo': {
+            'id': archivo.pk,
+            'nombre': archivo.nombre,
+            'tipo': archivo.tipo,
+            'blob_url': archivo.blob_url,
+            'tamano': archivo.tamano,
+        }
+    })
+
+
+# ── API: CREATE LINK ─────────────────────────────────────────────
+
+
+@require_POST
+@csrf_exempt
+def api_link(request):
+    """
+    Valida y registra un enlace URL en el lienzo.
+    (No se persiste en BD, solo se valida y devuelve para el nodo frontal)
+    """
+    user = _get_current_user(request)
+    if not user:
+        return JsonResponse({'error': 'No autenticado'}, status=401)
+
+    data = json.loads(request.body)
+    url = data.get('url', '').strip()
+    titulo = data.get('titulo', '').strip()
+
+    if not url:
+        return JsonResponse({'error': 'Se requiere una URL'}, status=400)
+
+    # Validar URL básica
+    if not url.startswith(('http://', 'https://')):
+        url = 'https://' + url
+
+    if not titulo:
+        titulo = url
+
+    return JsonResponse({
+        'ok': True,
+        'enlace': {
+            'url': url,
+            'titulo': titulo,
+        }
+    })
+
+
+# ── API: LIST ARCHIVOS ───────────────────────────────────────────
+
+
+def api_archivos_list(request, lienzo_pk):
+    """Lista los archivos subidos a un lienzo (para restauración)."""
+    user = _get_current_user(request)
+    if not user:
+        return JsonResponse({'error': 'No autenticado'}, status=401)
+
+    try:
+        lienzo = Lienzo.objects.get(pk=lienzo_pk, user=user)
+    except Lienzo.DoesNotExist:
+        return JsonResponse({'error': 'Lienzo no encontrado'}, status=404)
+
+    archivos = ArchivoLienzo.objects.filter(lienzo=lienzo).values(
+        'id', 'nombre', 'tipo', 'blob_url', 'blob_name', 'tamano', 'x', 'y'
+    )
+    return JsonResponse({'archivos': list(archivos)})
