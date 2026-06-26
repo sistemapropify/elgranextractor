@@ -410,7 +410,7 @@
 }
 .cv-field:last-child { border-bottom: none; }
 .cv-field__key { font-size: 11px; color: var(--cv-text-muted); flex-shrink: 0; }
-.cv-field__val { font-size: 12px; color: var(--cv-text-sec); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 120px; }
+.cv-field__val { font-size: 12px; color: var(--cv-text-sec); text-align: right; word-break: break-word; }
 
 /* Score badge */
 .cv-score {
