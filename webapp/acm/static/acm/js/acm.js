@@ -909,11 +909,10 @@ function actualizarResumenACM() {
     const propiedades = Array.from(propiedadesSeleccionadas.values());
     
     if (propiedades.length === 0) {
-        // Mostrar estado vacío
         const emptyHtml = `
-            <div class="col-12 text-center py-4 text-muted">
-                <i class="bi bi-graph-up display-6 mb-3"></i>
-                <p class="mb-0">Selecciona propiedades comparables para ver el análisis</p>
+            <div class="col-12 text-center py-5">
+                <i class="bi bi-graph-up" style="font-size:48px;color:#30363d;display:block;margin-bottom:12px;"></i>
+                <p style="color:#8b949e;font-size:14px;margin:0;">Selecciona propiedades comparables para ver el análisis</p>
             </div>
         `;
         const resumenACM = document.getElementById('resumenACM');
@@ -974,44 +973,35 @@ function actualizarResumenACM() {
         return `US$ ${valor.toLocaleString('es-PE', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     }
     
-    // Generar HTML del resumen compacto - 3 tarjetas de valor
+    // Generar HTML del resumen — diseño oscuro con colores vivos
     const resumenHtml = `
-        <!-- Fila: 3 tarjetas (izquierda: precio venta sugerido, centro: estimación principal, derecha: valor realización inmediata) -->
         <div class="row g-2">
             <div class="col-md-4">
-                <div class="card border-0 bg-light h-100">
-                    <div class="card-body p-2 text-center d-flex flex-column justify-content-center">
-                        <div class="h6 text-primary mb-1">${formatearMoneda(precioVentaSugerido)}</div>
-                        <div class="small text-muted mb-1">Precio Venta Sugerido</div>
-                        <div class="small text-success">94.99% del comercial</div>
-                    </div>
+                <div class="h-100" style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px 10px;text-align:center;border-left:3px solid #58a6ff;">
+                    <div style="color:#58a6ff;font-size:18px;font-weight:700;margin-bottom:4px;">${formatearMoneda(precioVentaSugerido)}</div>
+                    <div style="color:#8b949e;font-size:11px;margin-bottom:2px;">Precio Venta Sugerido</div>
+                    <div style="color:#7ee787;font-size:10px;font-weight:600;">94.99% del comercial</div>
                 </div>
             </div>
             <div class="col-md-4">
-                <div class="card border-0 bg-success bg-opacity-90 text-white h-100">
-                    <div class="card-body p-3 text-center d-flex flex-column justify-content-center">
-                        <div class="small mb-1">ESTIMACIÓN PARA TU PROPIEDAD</div>
-                        <div class="h4 mb-1">${formatearMoneda(valorComercial)}</div>
-                        <div class="small opacity-75">Valor Comercial (100%)</div>
-                        <div class="small mt-1" style="color: #000000 !important; font-weight: bold;">Precio/m²: ${formatearMoneda(promedioPonderado)}</div>
-                    </div>
+                <div class="h-100" style="background:#279896;border-radius:8px;padding:16px 10px;text-align:center;">
+                    <div style="color:rgba(255,255,255,0.8);font-size:10px;font-weight:600;margin-bottom:4px;letter-spacing:0.5px;">ESTIMACIÓN PARA TU PROPIEDAD</div>
+                    <div style="color:#ffffff;font-size:22px;font-weight:800;margin-bottom:2px;">${formatearMoneda(valorComercial)}</div>
+                    <div style="color:rgba(255,255,255,0.8);font-size:11px;">Valor Comercial (100%)</div>
+                    <div style="color:#f0e68c;font-size:11px;font-weight:700;margin-top:4px;">Precio/m²: ${formatearMoneda(promedioPonderado)}</div>
                 </div>
             </div>
             <div class="col-md-4">
-                <div class="card border-0 bg-light h-100">
-                    <div class="card-body p-2 text-center d-flex flex-column justify-content-center">
-                        <div class="h6 text-primary mb-1">${formatearMoneda(valorRealizacionInmediata)}</div>
-                        <div class="small text-muted mb-1">Valor Realización Inmediata</div>
-                        <div class="small text-success">90.00% del comercial</div>
-                    </div>
+                <div class="h-100" style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px 10px;text-align:center;border-left:3px solid #f0883e;">
+                    <div style="color:#f0883e;font-size:18px;font-weight:700;margin-bottom:4px;">${formatearMoneda(valorRealizacionInmediata)}</div>
+                    <div style="color:#8b949e;font-size:11px;margin-bottom:2px;">Valor Realización Inmediata</div>
+                    <div style="color:#7ee787;font-size:10px;font-weight:600;">90.00% del comercial</div>
                 </div>
             </div>
         </div>
-        
-        <!-- Nota al pie -->
         <div class="row mt-3">
             <div class="col-12">
-                <div class="text-muted small">
+                <div style="color:#8b949e;font-size:11px;text-align:center;padding:8px;background:#161b22;border-radius:6px;border:1px solid #30363d;">
                     Basado en ${metros.toFixed(0)} m²${esTerreno ? ' de terreno' : ' de construcción'} y ${propiedades.length} propiedades comparables.
                 </div>
             </div>
@@ -1601,13 +1591,27 @@ async function generarPDF_ACM() {
 
         const propiedadesData = propiedades.map(p => ({
             id: p.id,
+            lat: p.lat,
+            lng: p.lng,
             tipo: p.tipo,
             distrito: p.distrito,
+            provincia: p.provincia || '',
+            departamento: p.departamento || '',
             precio: p.precio,
+            precio_final: p.precio_final || null,
             precio_m2: p.precio_m2_final || p.precio_m2,
             distancia_metros: p.distancia_metros,
             fuente: p.es_propify || p.fuente === 'propifai' ? 'Propifai' : 'Externo',
-            es_propify: p.es_propify || false
+            es_propify: p.es_propify || false,
+            imagen_url: p.imagen_url || '',
+            metros_construccion: p.metros_construccion || null,
+            metros_terreno: p.metros_terreno || null,
+            habitaciones: p.habitaciones || null,
+            baños: p.baños || null,
+            estado: p.estado || 'En Publicación',
+            codigo: p.codigo || '',
+            titulo: p.titulo || '',
+            url_propiedad: p.url_propiedad || ''
         }));
 
         const payload = {
@@ -1637,175 +1641,13 @@ async function generarPDF_ACM() {
 
         const data = await response.json();
 
-        let codigoACM = '';
         if (data.status === 'ok') {
-            codigoACM = data.codigo || '';
+            btns.forEach(btn => { if (btn) btn.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i>Descargando PDF...'; });
+            window.open(data.enlace_publico, '_blank');
+            mostrarToast('success', `PDF generado correctamente (${data.codigo || ''}).`);
         } else {
-            console.warn('No se pudo guardar en historial, generando PDF igual:', data.message);
+            throw new Error(data.message || 'Error al guardar análisis');
         }
-
-        // --- 2. Generar PDF con html2pdf.js ---
-        btns.forEach(btn => { if (btn) btn.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i>Generando PDF...'; });
-
-        function formatearMoneda(valor) {
-            return 'US$ ' + valor.toLocaleString('es-PE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        }
-
-        function formatearPrecioLocal(precio) {
-            if (!precio) return 'US$ 0.00';
-            return 'US$ ' + parseFloat(precio).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        }
-
-        const fechaActual = new Date().toLocaleDateString('es-PE', {
-            year: 'numeric', month: 'long', day: 'numeric'
-        });
-
-        // Filas de propiedades para la tabla
-        let filasPropiedades = '';
-        propiedades.forEach((p, i) => {
-            const precioM2 = p.precio_m2_final || p.precio_m2;
-            const distancia = p.distancia_metros ? (p.distancia_metros.toFixed(0) + ' m') : '—';
-            const fuente = p.es_propify || p.fuente === 'propifai' ? 'Propifai' : 'Externo';
-            filasPropiedades += `
-                <tr>
-                    <td style="padding:6px 8px;border:1px solid #ddd;font-size:11px;text-align:center;">${i + 1}</td>
-                    <td style="padding:6px 8px;border:1px solid #ddd;font-size:11px;">${p.tipo || '—'}</td>
-                    <td style="padding:6px 8px;border:1px solid #ddd;font-size:11px;">${p.distrito || '—'}</td>
-                    <td style="padding:6px 8px;border:1px solid #ddd;font-size:11px;text-align:right;">${formatearPrecioLocal(p.precio)}</td>
-                    <td style="padding:6px 8px;border:1px solid #ddd;font-size:11px;text-align:right;">${precioM2 ? 'US$ ' + precioM2.toFixed(2) : '—'}</td>
-                    <td style="padding:6px 8px;border:1px solid #ddd;font-size:11px;text-align:right;">${distancia}</td>
-                    <td style="padding:6px 8px;border:1px solid #ddd;font-size:11px;text-align:center;">${fuente}</td>
-                </tr>
-            `;
-        });
-
-        const codigoDisplay = codigoACM ? `<p style="margin:2px 0 0 0;font-size:14px;color:#10b981;font-weight:bold;font-family:'Courier New',monospace;">Código: ${codigoACM}</p>` : '';
-
-        const pdfContent = `
-            <div id="pdf-acm-content" style="font-family:Arial,Helvetica,sans-serif;padding:30px;color:#1a1a2e;max-width:800px;margin:0 auto;">
-                <!-- Encabezado -->
-                <div style="text-align:center;margin-bottom:25px;padding-bottom:15px;border-bottom:3px solid #10b981;">
-                    <h1 style="margin:0;font-size:22px;color:#10b981;font-weight:bold;">PROPIFAI</h1>
-                    <p style="margin:4px 0 0 0;font-size:13px;color:#666;">Análisis Comparativo de Mercado (ACM)</p>
-                    <p style="margin:2px 0 0 0;font-size:11px;color:#999;">Generado el ${fechaActual}</p>
-                    ${codigoDisplay}
-                </div>
-
-                <!-- Parámetros de búsqueda -->
-                <div style="margin-bottom:20px;padding:12px 15px;background:#f0fdf4;border-radius:8px;border-left:4px solid #10b981;">
-                    <h3 style="margin:0 0 8px 0;font-size:14px;color:#065f46;">Parámetros del Análisis</h3>
-                    <table style="width:100%;font-size:12px;border-collapse:collapse;">
-                        <tr>
-                            <td style="padding:2px 8px;color:#555;width:50%;"><strong>Tipo:</strong> ${tipoPropiedad.charAt(0).toUpperCase() + tipoPropiedad.slice(1)}</td>
-                            <td style="padding:2px 8px;color:#555;width:50%;"><strong>Área:</strong> ${metros.toFixed(0)} m²${esTerreno ? ' (terreno)' : ' (construcción)'}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding:2px 8px;color:#555;"><strong>Comparables:</strong> ${propiedades.length} propiedades</td>
-                            <td style="padding:2px 8px;color:#555;"><strong>Rango precio/m²:</strong> US$ ${min.toFixed(2)} – US$ ${max.toFixed(2)}</td>
-                        </tr>
-                    </table>
-                </div>
-
-                <!-- 3 Tarjetas de Valoración -->
-                <div style="margin-bottom:20px;">
-                    <h3 style="margin:0 0 10px 0;font-size:14px;color:#065f46;">Valoración Estimada</h3>
-                    <table style="width:100%;border-collapse:collapse;">
-                        <tr>
-                            <td style="width:33.33%;padding:6px;">
-                                <div style="background:#f8f9fa;border-radius:8px;padding:12px;text-align:center;border:1px solid #e5e7eb;">
-                                    <div style="font-size:16px;font-weight:bold;color:#2563eb;">${formatearMoneda(precioVentaSugerido)}</div>
-                                    <div style="font-size:10px;color:#666;margin-top:4px;">Precio Venta Sugerido</div>
-                                    <div style="font-size:9px;color:#10b981;">94.99% del comercial</div>
-                                </div>
-                            </td>
-                            <td style="width:33.33%;padding:6px;">
-                                <div style="background:#10b981;border-radius:8px;padding:14px;text-align:center;color:white;">
-                                    <div style="font-size:10px;margin-bottom:4px;">ESTIMACIÓN PARA TU PROPIEDAD</div>
-                                    <div style="font-size:20px;font-weight:bold;">${formatearMoneda(valorComercial)}</div>
-                                    <div style="font-size:10px;opacity:0.8;">Valor Comercial (100%)</div>
-                                    <div style="font-size:10px;margin-top:4px;font-weight:bold;">Precio/m²: ${formatearMoneda(promedioPonderado)}</div>
-                                </div>
-                            </td>
-                            <td style="width:33.33%;padding:6px;">
-                                <div style="background:#f8f9fa;border-radius:8px;padding:12px;text-align:center;border:1px solid #e5e7eb;">
-                                    <div style="font-size:16px;font-weight:bold;color:#2563eb;">${formatearMoneda(valorRealizacionInmediata)}</div>
-                                    <div style="font-size:10px;color:#666;margin-top:4px;">Valor Realización Inmediata</div>
-                                    <div style="font-size:9px;color:#10b981;">90.00% del comercial</div>
-                                </div>
-                            </td>
-                        </tr>
-                    </table>
-                </div>
-
-                <!-- Tabla de propiedades comparables -->
-                <div style="margin-bottom:15px;">
-                    <h3 style="margin:0 0 8px 0;font-size:14px;color:#065f46;">Propiedades Comparables</h3>
-                    <table style="width:100%;border-collapse:collapse;font-size:11px;">
-                        <thead>
-                            <tr style="background:#10b981;color:white;">
-                                <th style="padding:7px 8px;border:1px solid #10b981;text-align:center;width:30px;">#</th>
-                                <th style="padding:7px 8px;border:1px solid #10b981;text-align:left;">Tipo</th>
-                                <th style="padding:7px 8px;border:1px solid #10b981;text-align:left;">Distrito</th>
-                                <th style="padding:7px 8px;border:1px solid #10b981;text-align:right;">Precio</th>
-                                <th style="padding:7px 8px;border:1px solid #10b981;text-align:right;">US$/m²</th>
-                                <th style="padding:7px 8px;border:1px solid #10b981;text-align:right;">Distancia</th>
-                                <th style="padding:7px 8px;border:1px solid #10b981;text-align:center;">Fuente</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${filasPropiedades}
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- Resumen de estadísticas -->
-                <div style="margin-top:15px;padding:12px 15px;background:#f8f9fa;border-radius:8px;border:1px solid #e5e7eb;">
-                    <h3 style="margin:0 0 8px 0;font-size:13px;color:#065f46;">Estadísticas de Precio por m²</h3>
-                    <table style="width:100%;font-size:12px;border-collapse:collapse;">
-                        <tr>
-                            <td style="padding:3px 8px;color:#555;"><strong>Mínimo:</strong> US$ ${min.toFixed(2)}/m²</td>
-                            <td style="padding:3px 8px;color:#555;"><strong>Máximo:</strong> US$ ${max.toFixed(2)}/m²</td>
-                        </tr>
-                        <tr>
-                            <td style="padding:3px 8px;color:#555;"><strong>Promedio simple:</strong> US$ ${promedio.toFixed(2)}/m²</td>
-                            <td style="padding:3px 8px;color:#555;"><strong>Promedio ponderado:</strong> US$ ${promedioPonderado.toFixed(2)}/m²</td>
-                        </tr>
-                    </table>
-                </div>
-
-                <!-- Footer -->
-                <div style="margin-top:25px;padding-top:12px;border-top:2px solid #10b981;text-align:center;font-size:10px;color:#999;">
-                    <p style="margin:0;">Propifai — Inteligencia Inmobiliaria</p>
-                    <p style="margin:2px 0 0 0;">Arequipa, Perú — Este informe es una estimación basada en datos comparables del mercado.</p>
-                </div>
-            </div>
-        `;
-
-        // Crear un contenedor temporal para el PDF
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = pdfContent;
-        tempDiv.style.position = 'absolute';
-        tempDiv.style.left = '-9999px';
-        tempDiv.style.top = '0';
-        document.body.appendChild(tempDiv);
-
-        // Opciones de html2pdf
-        const opt = {
-            margin:        [0.5, 0.5, 0.5, 0.5],
-            filename:     codigoACM ? `ACM_${codigoACM}.pdf` : `ACM_${tipoPropiedad}_${new Date().toISOString().split('T')[0]}.pdf`,
-            image:        { type: 'jpeg', quality: 0.98 },
-            html2canvas:  { scale: 2, useCORS: true, logging: false },
-            jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
-        };
-
-        // Generar PDF
-        await html2pdf().set(opt).from(tempDiv).save();
-        
-        // Limpiar
-        document.body.removeChild(tempDiv);
-        
-        const msgCodigo = codigoACM ? ` (${codigoACM})` : '';
-        mostrarToast('success', `✅ PDF generado correctamente${msgCodigo}.`);
         
     } catch (error) {
         console.error('Error generando PDF:', error);

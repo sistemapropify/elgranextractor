@@ -1,0 +1,25 @@
+C:\Users\USUARIO\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\requests\__init__.py:113: RequestsDependencyWarning: urllib3 (2.6.3) or chardet (7.4.3)/charset_normalizer (3.4.4) doesn't match a supported version!
+  warnings.warn(
+Traceback (most recent call last):
+  File "C:\Users\USUARIO\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\requests\models.py", line 976, in json
+    return complexjson.loads(self.text, **kwargs)
+           ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\USUARIO\AppData\Local\Python\pythoncore-3.14-64\Lib\json\__init__.py", line 352, in loads
+    return _default_decoder.decode(s)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^
+  File "C:\Users\USUARIO\AppData\Local\Python\pythoncore-3.14-64\Lib\json\decoder.py", line 345, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\USUARIO\AppData\Local\Python\pythoncore-3.14-64\Lib\json\decoder.py", line 363, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import requests; r = requests.get('http://127.0.0.1:8000/canvas/api/propiedades/'); data = r.json(); props = data.get('propiedades',[]); print(f'Total: {len(props)}'); p=props[0] if props else {}; print('Keys in first property:'); [print(f'  {k}') for k in sorted(p.keys())]; print(); print('Sample values:'); [print(f'  {k}={repr(p[k])[:80]}') for k in ['_source_id','title','direction','name','nombre','direccion','address','code','opcional'] if k in p]
+                                                                                               ~~~~~~^^
+  File "C:\Users\USUARIO\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\requests\models.py", line 980, in json
+    raise RequestsJSONDecodeError(e.msg, e.doc, e.pos)
+requests.exceptions.JSONDecodeError: Expecting value: line 1 column 1 (char 0)

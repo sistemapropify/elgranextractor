@@ -12,21 +12,24 @@
     .acm-container .card * {
         color: #f0f6fc;
     }
-    /* Restaurar colores normales en modales (Bootstrap) */
-    .modal,
-    .modal .card,
-    .modal .card *,
-    .modal .modal-header,
-    .modal .modal-body,
-    .modal .modal-footer,
-    .modal .table,
-    .modal .table th,
-    .modal .table td {
-        color: initial !important;
+    /* Modales ACM — fondo oscuro con colores vivos */
+    #modalResumenACM .modal-content {
+        background-color: #0d1117 !important;
+        border: 1px solid #30363d !important;
     }
-    .modal .modal-header.bg-success,
-    .modal .modal-header.bg-success * {
-        color: #fff !important;
+    #modalResumenACM .modal-header {
+        background-color: #161b22 !important;
+        border-bottom: 2px solid #279896 !important;
+    }
+    #modalResumenACM .modal-header .modal-title {
+        color: #e6edf3 !important;
+    }
+    #modalResumenACM .modal-body {
+        background-color: #0d1117 !important;
+    }
+    #modalResumenACM .modal-footer {
+        background-color: #161b22 !important;
+        border-top: 1px solid #30363d !important;
     }
 
     /* Placeholder gris tenue (subtle) */
@@ -1332,35 +1335,34 @@
     </div>
 </div>
 
-<!-- Modal para Resumen ACM (tarjeta emergente) -->
+<!-- Modal para Resumen ACM — Diseño oscuro con colores vivos -->
 <div class="modal fade" id="modalResumenACM" tabindex="-1" aria-labelledby="modalResumenACMLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header bg-success text-white">
-                <h5 class="modal-title" id="modalResumenACMLabel">
-                    <i class="bi bi-bar-chart-line me-2"></i>Resumen del Analisis Comparativo
+        <div class="modal-content" style="background:#0d1117;border:1px solid #30363d;">
+            <div class="modal-header" style="background:#161b22;border-bottom:2px solid #279896;padding:14px 20px;">
+                <h5 class="modal-title" id="modalResumenACMLabel" style="color:#e6edf3;font-weight:600;">
+                    <i class="bi bi-bar-chart-line me-2" style="color:#279896;"></i>Resumen del Análisis Comparativo
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body p-4">
+            <div class="modal-body p-4" style="background:#0d1117;">
                 <div class="row" id="resumenACM">
-                    <!-- Aqui se cargara dinamicamente el resumen -->
-                    <div class="col-12 text-center py-4 text-muted">
-                        <i class="bi bi-graph-up display-6 mb-3"></i>
-                        <p class="mb-0">Selecciona propiedades comparables para ver el analisis</p>
+                    <div class="col-12 text-center py-5" id="resumenACMEmpty">
+                        <i class="bi bi-graph-up display-4 mb-3" style="color:#30363d;"></i>
+                        <p style="color:#8b949e;font-size:15px;">Selecciona propiedades comparables para ver el análisis</p>
                     </div>
                 </div>
             </div>
-            <div class="modal-footer d-flex justify-content-between">
-                <div class="d-flex gap-1">
-                    <button type="button" class="btn btn-outline-success btn-sm" id="btnPDF_ACM_modal" onclick="generarPDF_ACM()" disabled title="Descargar PDF del analisis">
+            <div class="modal-footer d-flex justify-content-between" style="background:#161b22;border-top:1px solid #30363d;padding:12px 20px;">
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-sm" id="btnPDF_ACM_modal" onclick="generarPDF_ACM()" disabled title="Descargar PDF del análisis" style="background:#279896;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:13px;font-weight:500;">
                         <i class="bi bi-file-earmark-pdf me-1"></i>PDF
                     </button>
-                    <button type="button" class="btn btn-outline-primary btn-sm" id="btnCompartirACM_modal" onclick="compartirACM_WhatsApp()" disabled title="Compartir por WhatsApp">
+                    <button type="button" class="btn btn-sm" id="btnCompartirACM_modal" onclick="compartirACM_WhatsApp()" disabled title="Compartir por WhatsApp" style="background:#25D366;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:13px;font-weight:500;">
                         <i class="bi bi-whatsapp me-1"></i>Compartir
                     </button>
                 </div>
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-sm" data-bs-dismiss="modal" style="background:#30363d;color:#c9d1d9;border:none;border-radius:6px;padding:6px 14px;font-size:13px;">Cerrar</button>
             </div>
         </div>
     </div>

@@ -250,7 +250,7 @@
 {% block extra_scripts %}
 <!-- Bootstrap JS (necesario para modales y toasts en ACM) -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbz8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<!-- html2pdf ya no se usa - el PDF se genera del lado servidor con ReportLab -->
 <script>
     // ============================================================
     // VARIABLES GLOBALES PARA COMPARTIR ACM
@@ -264,7 +264,7 @@
     ACM_USER_PHONE = '{{ user_phone }}';
     {% endif %}
 </script>
-<script src="{% static 'acm/js/acm.js' %}?v=22"></script>
+<script src="{% static 'acm/js/acm.js' %}?v=24"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const sidebarToggle = document.getElementById('sidebarToggle');
