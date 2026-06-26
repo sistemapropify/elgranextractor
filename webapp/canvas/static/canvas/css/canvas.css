@@ -507,6 +507,72 @@
 .cv-btn--matches:hover { background: rgba(92,107,192,0.25); }
 .cv-match-count { font-size: 11px; color: var(--cv-text-muted); }
 
+/* ── REQUERIMIENTO NODE — info bar ── */
+.cv-node__req-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 8px;
+  padding: 4px 10px;
+  background: rgba(136, 150, 240, 0.04);
+  border-bottom: 1px solid var(--cv-border);
+  font-size: 10px;
+  color: var(--cv-text-sec);
+}
+.cv-req-info__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+}
+
+/* ── REQUERIMIENTO NODE — body (texto original) ── */
+.cv-node__req-body {
+  padding: 6px 10px;
+  max-height: 80px;
+  overflow-y: auto;
+  border-bottom: 1px solid var(--cv-border);
+  background: rgba(255,255,255,0.01);
+}
+.cv-node__req-body::-webkit-scrollbar {
+  width: 4px;
+}
+.cv-node__req-body::-webkit-scrollbar-thumb {
+  background: var(--cv-border);
+  border-radius: 2px;
+}
+.cv-req-text {
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--cv-text-pri);
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+/* ── REQUERIMIENTO NODE — footer (datos estructurados) ── */
+.cv-node__req-footer {
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: rgba(255,255,255,0.015);
+}
+.cv-node__req-footer .cv-field {
+  padding: 1px 0;
+  border-bottom: none;
+}
+.cv-node__req-footer .cv-field__key {
+  font-size: 10px;
+  min-width: 60px;
+}
+.cv-node__req-footer .cv-field__val {
+  font-size: 11px;
+}
+
+/* Colapsar soporte para req node */
+.cv-node--req.collapsed .cv-node__req-info,
+.cv-node--req.collapsed .cv-node__req-body,
+.cv-node--req.collapsed .cv-node__req-footer { display: none; }
+
 /* ── PUERTOS (4 direcciones) — zona de clic ampliada ── */
 .cv-port {
   position: absolute;

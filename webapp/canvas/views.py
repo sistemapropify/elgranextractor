@@ -392,16 +392,48 @@ def api_reqs_match(request, prop_id):
         matches = []
         for mr in match_results:
             req = mr.requerimiento
+            # Formatear hora como HH:MM si existe
+            hora_str = ''
+            if hasattr(req, 'hora') and req.hora:
+                try:
+                    hora_str = req.hora.strftime('%H:%M')
+                except Exception:
+                    hora_str = str(req.hora)
+
+            # Formatear presupuesto
+            presupuesto_monto = None
+            if hasattr(req, 'presupuesto_monto') and req.presupuesto_monto is not None:
+                try:
+                    presupuesto_monto = float(req.presupuesto_monto)
+                except Exception:
+                    presupuesto_monto = None
+
             matches.append({
                 'id': str(req.id),
-                'titulo': getattr(req, 'cliente', None) or getattr(req, 'nombre', None) or f'Req #{req.id}',
-                'presupuesto': float(mr.score_total) if mr.score_total else 0,
-                'moneda': '',
+                # Dueño / Agente
+                'agente': getattr(req, 'agente', '') or '',
+                'agente_telefono': getattr(req, 'agente_telefono', '') or '',
+                # Fecha y hora
+                'fecha': str(req.fecha) if hasattr(req, 'fecha') and req.fecha else '',
+                'hora': hora_str,
+                # Tipo de requerimiento
+                'tipo_original': getattr(req, 'tipo_original', '') or '',
+                'condicion': getattr(req, 'condicion', '') or '',
+                # Requerimiento original (texto completo)
+                'requerimiento': getattr(req, 'requerimiento', '') or '',
+                # Presupuesto
+                'presupuesto': presupuesto_monto,
+                'presupuesto_monto': presupuesto_monto,
+                'presupuesto_moneda': getattr(req, 'presupuesto_moneda', '') or '',
+                'presupuesto_forma_pago': getattr(req, 'presupuesto_forma_pago', '') or '',
+                # Propiedad buscada
+                'tipo_propiedad': getattr(req, 'tipo_propiedad', '') or '',
                 'distritos': getattr(req, 'distritos', '') or '',
-                'tipo_propiedad': '',
+                'urbanizacion': getattr(req, 'urbanizacion', '') or '',
+                'zona': getattr(req, 'zona', '') or '',
+                # Scores
                 'score_semantico': 0,
                 'score_estructural': float(mr.score_total) if mr.score_total else 0,
-                'fecha': str(req.fecha) if hasattr(req, 'fecha') and req.fecha else '',
                 'tipo': 'estructural',
             })
 

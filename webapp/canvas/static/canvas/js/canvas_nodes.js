@@ -151,31 +151,48 @@ function createReqNode(reqId, data, x, y) {
   node.style.left = x + 'px';
   node.style.top  = y + 'px';
 
-  const titulo   = data.titulo || `Req #${reqId}`;
-  const presup   = data.presupuesto ? formatPrice(data.presupuesto, data.moneda) : (data.score_estructural ? '—' : '—');
-  const distritos = data.distritos || '—';
-  const scoreEstructural = data.score_estructural || 0;
-  const scoreSemantico   = data.score_semantico || 0;
-  const fecha = data.fecha || '';
-  const tipo = data.tipo || 'estructural';
+  // ── Extraer datos con fallbacks ──
+  const agente      = data.agente || data.titulo || `Req #${reqId}`;
+  const telefono    = data.agente_telefono || '';
+  const fecha       = data.fecha || '';
+  const hora        = data.hora || '';
+  const tipoOrig    = data.tipo_original || data.condicion || '';
+  const reqTexto    = data.requerimiento || '';
+
+  // Footer fields
+  const tipoProp    = data.tipo_propiedad || '';
+  const presupuesto = data.presupuesto_monto != null
+    ? formatPrice(data.presupuesto_monto, data.presupuesto_moneda)
+    : (data.presupuesto ? formatPrice(data.presupuesto, data.moneda) : '');
+  const distritos   = data.distritos || '';
+  const urbanizacion = data.urbanizacion || '';
+  const zona        = data.zona || '';
+  const formaPago   = data.presupuesto_forma_pago || '';
+
+  // Formatear tipo_original para mostrar
+  const tipoLabel = formatTipoRequerimiento(tipoOrig);
 
   node.innerHTML = `
     <div class="cv-node__header">
       <span class="cv-node__badge cv-badge--req">REQ</span>
-      <span class="cv-node__title">${escHtml(titulo)}</span>
+      <span class="cv-node__title">${escHtml(agente)}</span>
+      <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
     </div>
-    <div class="cv-node__body">
-      <div class="cv-field"><span class="cv-field__key">Presup.</span><span class="cv-field__val">${escHtml(presup)}</span></div>
-      <div class="cv-field"><span class="cv-field__key">Zona</span><span class="cv-field__val">${escHtml(distritos)}</span></div>
-      <div class="cv-field"><span class="cv-field__key">Fecha</span><span class="cv-field__val">${escHtml(fecha)}</span></div>
-      <div class="cv-field cv-field--score">
-        <span class="cv-field__key">Estructural</span>
-        <span class="cv-score" style="background:color-mix(in srgb, var(--cv-done) 15%, transparent);color:var(--cv-done);border:1px solid color-mix(in srgb, var(--cv-done) 30%, transparent);">${scoreEstructural}%</span>
-      </div>
-      <div class="cv-field cv-field--score">
-        <span class="cv-field__key">Semántico</span>
-        <span class="cv-score" style="background:color-mix(in srgb, #5c6bc0 15%, transparent);color:#8896f0;border:1px solid color-mix(in srgb, #5c6bc0 30%, transparent);">${scoreSemantico}</span>
-      </div>
+    <div class="cv-node__req-info">
+      ${telefono ? `<span class="cv-req-info__item">📞 ${escHtml(telefono)}</span>` : ''}
+      ${fecha ? `<span class="cv-req-info__item">📅 ${escHtml(fecha)}${hora ? ' ' + escHtml(hora) : ''}</span>` : ''}
+      ${tipoLabel ? `<span class="cv-req-info__item">📋 ${escHtml(tipoLabel)}</span>` : ''}
+    </div>
+    <div class="cv-node__req-body">
+      <div class="cv-req-text">${escHtml(reqTexto)}</div>
+    </div>
+    <div class="cv-node__req-footer">
+      ${tipoProp ? `<div class="cv-field"><span class="cv-field__key">🏠 Tipo</span><span class="cv-field__val">${escHtml(tipoProp)}</span></div>` : ''}
+      ${presupuesto ? `<div class="cv-field"><span class="cv-field__key">💰 Presup.</span><span class="cv-field__val">${escHtml(presupuesto)}</span></div>` : ''}
+      ${distritos ? `<div class="cv-field"><span class="cv-field__key">📍 Distritos</span><span class="cv-field__val">${escHtml(distritos)}</span></div>` : ''}
+      ${urbanizacion ? `<div class="cv-field"><span class="cv-field__key">🏘️ Urb.</span><span class="cv-field__val">${escHtml(urbanizacion)}</span></div>` : ''}
+      ${zona ? `<div class="cv-field"><span class="cv-field__key">📌 Zona</span><span class="cv-field__val">${escHtml(zona)}</span></div>` : ''}
+      ${formaPago ? `<div class="cv-field"><span class="cv-field__key">💳 Pago</span><span class="cv-field__val">${escHtml(formaPago)}</span></div>` : ''}
     </div>
     <!-- 4 puertos direccionales -->
     <div class="cv-port cv-port--top"    data-node="${id}" data-port="top"></div>
@@ -808,8 +825,14 @@ function renderPlaceholderNodes(nodos) {
         <div class="cv-node__header">
           <span class="cv-node__badge cv-badge--req">REQ</span>
           <span class="cv-node__title">Req #${n.ref_id}</span>
+          <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
         </div>
-        <div class="cv-node__body"><div style="color:var(--cv-text-muted);font-size:11px;text-align:center;padding:8px">Cargando...</div></div>
+        <div class="cv-node__req-info">
+          <span class="cv-req-info__item" style="color:var(--cv-text-muted);font-size:10px;">Cargando datos...</span>
+        </div>
+        <div class="cv-node__req-body">
+          <div class="cv-req-text" style="color:var(--cv-text-muted);font-size:10px;text-align:center;padding:4px">Cargando...</div>
+        </div>
         <div class="cv-port cv-port--top"    data-node="${n.id}" data-port="top"></div>
         <div class="cv-port cv-port--right"  data-node="${n.id}" data-port="right"></div>
         <div class="cv-port cv-port--bottom" data-node="${n.id}" data-port="bottom"></div>
@@ -946,6 +969,32 @@ function escHtml(str) {
   const div = document.createElement('div');
   div.textContent = String(str);
   return div.innerHTML;
+}
+
+/**
+ * Formatea el tipo de requerimiento para mostrar en la tarjeta.
+ * Traduce valores internos a etiquetas legibles.
+ */
+function formatTipoRequerimiento(val) {
+  if (!val) return '';
+  const map = {
+    'compra': 'Compra',
+    'alquiler': 'Alquiler',
+    'anticresis': 'Anticresis',
+    'ambos': 'Compra y Alquiler',
+    'compartido': 'Compartido',
+    'no_especificado': '',
+    'REQUERIMIENTO': 'Requerimiento',
+    'REQUERIMIENTO COMPRA': 'Req. Compra',
+    'REQUERIMIENTO ALQUILER': 'Req. Alquiler',
+    'REQUERIMIENTO COMPRA, REQUERIMIENTO ALQUILER': 'Compra + Alquiler',
+    'REQUERIMIENTO ALQUILER, REQUERIMIENTO COMPRA': 'Alquiler + Compra',
+    'PROPIEDAD VENTA': 'Prop. Venta',
+    'MIXTO': 'Mixto',
+    'BASURA': '',
+    'OTRO': 'Otro',
+  };
+  return map[val] || val;
 }
 
 /* ── PDF PREVIEW ── */

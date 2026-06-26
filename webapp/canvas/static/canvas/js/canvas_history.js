@@ -278,8 +278,14 @@ function renderSinglePlaceholder(n) {
       <div class="cv-node__header">
         <span class="cv-node__badge cv-badge--req">REQ</span>
         <span class="cv-node__title">Req #${n.ref_id}</span>
+        <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
       </div>
-      <div class="cv-node__body"><div style="color:var(--cv-text-muted);font-size:11px;text-align:center;padding:8px">Cargando...</div></div>
+      <div class="cv-node__req-info">
+        <span class="cv-req-info__item" style="color:var(--cv-text-muted);font-size:10px;">Cargando datos...</span>
+      </div>
+      <div class="cv-node__req-body">
+        <div class="cv-req-text" style="color:var(--cv-text-muted);font-size:10px;text-align:center;padding:4px">Cargando...</div>
+      </div>
       <div class="cv-port cv-port--top"    data-node="${n.id}" data-port="top"></div>
       <div class="cv-port cv-port--right"  data-node="${n.id}" data-port="right"></div>
       <div class="cv-port cv-port--bottom" data-node="${n.id}" data-port="bottom"></div>
