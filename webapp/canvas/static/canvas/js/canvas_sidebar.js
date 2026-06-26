@@ -180,17 +180,33 @@ async function loadPropiedades(agenteId) {
       chip.dataset.propData = JSON.stringify(p);
 
       // Marcar si ya esta en el canvas
-      if (isPropOnCanvas(p._source_id)) {
+      const alreadyOnCanvas = isPropOnCanvas(p._source_id);
+      if (alreadyOnCanvas) {
         chip.classList.add('cv-prop-chip--on-canvas');
       }
 
       const title = p.title || p.direction || `Prop #${p._source_id}`;
       const price = formatPrice(p.price, p.currency) || '';
       chip.innerHTML = `
+        <input type="checkbox" class="cv-prop-chip__check" ${alreadyOnCanvas ? 'checked' : ''}>
         <span class="cv-prop-chip__icon">🏠</span>
         <span class="cv-prop-chip__name">${escHtml(title)}</span>
         <span class="cv-prop-chip__badge">${escHtml(price)}</span>
       `;
+
+      // Checkbox change -> toggle en canvas
+      const chk = chip.querySelector('.cv-prop-chip__check');
+      chk.addEventListener('change', (e) => {
+        e.stopPropagation();
+        if (chk.checked) {
+          addPropToCanvas(p._source_id, p);
+          chip.classList.add('cv-prop-chip--selected');
+          chip.classList.remove('cv-prop-chip--on-canvas');
+        } else {
+          removePropFromCanvas(p._source_id);
+          chip.classList.remove('cv-prop-chip--selected', 'cv-prop-chip--on-canvas');
+        }
+      });
 
       // Drag & drop (existente)
       chip.addEventListener('dragstart', e => {
@@ -200,13 +216,6 @@ async function loadPropiedades(agenteId) {
       });
       chip.addEventListener('dragend', () => {
         chip.style.opacity = '1';
-      });
-
-      // Click para agregar/quitar del lienzo
-      chip.addEventListener('click', e => {
-        // No hacer toggle si se esta arrastrando
-        if (chip.style.opacity === '0.5') return;
-        togglePropOnCanvas(p._source_id, p, chip);
       });
 
       list.appendChild(chip);
@@ -231,6 +240,8 @@ function setupSelectAllButtons() {
           const propData = JSON.parse(chip.dataset.propData);
           addPropToCanvas(chip.dataset.sourceId, propData);
           chip.classList.add('cv-prop-chip--selected');
+          const chk = chip.querySelector('.cv-prop-chip__check');
+          if (chk) chk.checked = true;
           addedCount++;
         } catch (e) {
           console.warn('Error adding prop', chip.dataset.sourceId, e);
@@ -249,6 +260,8 @@ function setupSelectAllButtons() {
         if (isPropOnCanvas(chip.dataset.sourceId)) {
           removePropFromCanvas(chip.dataset.sourceId);
           chip.classList.remove('cv-prop-chip--selected', 'cv-prop-chip--on-canvas');
+          const chk = chip.querySelector('.cv-prop-chip__check');
+          if (chk) chk.checked = false;
           removedCount++;
         }
       });

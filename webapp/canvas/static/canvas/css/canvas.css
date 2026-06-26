@@ -223,6 +223,40 @@
   background: rgba(92, 107, 192, 0.1);
 }
 
+/* Checkbox dentro del chip */
+.cv-prop-chip__check {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--cv-text-muted);
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin: 0;
+  position: relative;
+  transition: border-color 0.15s, background 0.15s;
+}
+.cv-prop-chip__check:checked {
+  border-color: var(--cv-done);
+  background: var(--cv-done);
+}
+.cv-prop-chip__check:checked::after {
+  content: '';
+  position: absolute;
+  left: 3.5px;
+  top: 0.5px;
+  width: 5px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.cv-prop-chip__check:hover {
+  border-color: var(--cv-text-sec);
+}
+
 /* Boton small para sidebar */
 .cv-btn--small {
   font-size: 10px;
