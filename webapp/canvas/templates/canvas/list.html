@@ -1,0 +1,153 @@
+{% extends "propifai_base.html" %}
+{% load static %}
+
+{% block title %}Mis Lienzos — PropFlow Canvas — Propifai{% endblock %}
+
+{% block extra_css %}
+<style>
+  .canvas-list-wrap {
+    padding: 24px;
+    max-width: 960px;
+    margin: 0 auto;
+  }
+  .canvas-list-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+  }
+  .canvas-list-header h2 {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .canvas-list-header h2 small {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--text-secondary);
+  }
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 18px;
+    background: #238636;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.2s;
+  }
+  .btn-primary:hover { background: #2ea043; }
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.2s;
+  }
+  .btn-secondary:hover { background: var(--bg-secondary); }
+  .canvas-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+  }
+  .canvas-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 18px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    cursor: pointer;
+    text-decoration: none;
+    display: block;
+    color: inherit;
+  }
+  .canvas-card:hover {
+    border-color: var(--accent-blue);
+    box-shadow: 0 4px 20px rgba(88, 166, 255, 0.1);
+  }
+  .canvas-card__title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .canvas-card__meta {
+    font-size: 12px;
+    color: var(--text-secondary);
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .canvas-card__meta span {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .canvas-card__estado {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 500;
+    margin-top: 8px;
+  }
+  .estado-activo { background: rgba(35, 134, 54, 0.2); color: #3fb950; }
+  .estado-archivado { background: rgba(240, 246, 252, 0.1); color: var(--text-secondary); }
+  .canvas-empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-secondary);
+  }
+  .canvas-empty p { margin-bottom: 16px; font-size: 15px; }
+</style>
+{% endblock %}
+
+{% block header_title_area %}
+<div class="header-title">Canvas <span>— PropFlow Visual</span></div>
+{% endblock %}
+
+{% block content %}
+<div class="canvas-list-wrap">
+  <div class="canvas-list-header">
+    <h2>Mis Lienzos <small>({{ lienzos|length }})</small></h2>
+    <a href="{% url 'canvas:nuevo' %}" class="btn-primary">+ Nuevo lienzo</a>
+  </div>
+
+  {% if lienzos %}
+  <div class="canvas-grid">
+    {% for item in lienzos %}
+    {% with lienzo=item.lienzo %}
+    <a href="{% url 'canvas:editor' pk=lienzo.pk %}" class="canvas-card">
+      <div class="canvas-card__title">{{ lienzo.nombre }}</div>
+      <div class="canvas-card__meta">
+        <span>📅 {{ lienzo.actualizado_en|date:"d/m/Y H:i" }}</span>
+        <span>🏠 {{ item.num_props }} propiedades · 📋 {{ item.num_reqs }} requerimientos</span>
+      </div>
+      <span class="canvas-card__estado estado-{{ lienzo.estado }}">{{ lienzo.get_estado_display }}</span>
+    </a>
+    {% endwith %}
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="canvas-empty">
+    <p>No tienes lienzos aún. Crea uno para empezar a visualizar propiedades y requerimientos.</p>
+    <a href="{% url 'canvas:nuevo' %}" class="btn-primary">+ Crear primer lienzo</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

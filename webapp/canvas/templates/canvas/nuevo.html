@@ -1,0 +1,98 @@
+{% extends "propifai_base.html" %}
+{% load static %}
+
+{% block title %}Nuevo Lienzo — PropFlow Canvas — Propifai{% endblock %}
+
+{% block extra_css %}
+<style>
+  .nuevo-wrap {
+    max-width: 520px;
+    margin: 48px auto;
+    padding: 0 20px;
+  }
+  .nuevo-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 32px;
+  }
+  .nuevo-card h2 {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .nuevo-card .sub {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin-bottom: 24px;
+  }
+  .nuevo-card label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+  }
+  .nuevo-card input[type=text],
+  .nuevo-card select,
+  .nuevo-card textarea {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+    margin-bottom: 18px;
+  }
+  .nuevo-card input[type=text]:focus,
+  .nuevo-card select:focus {
+    border-color: var(--accent-blue);
+  }
+  .form-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 8px;
+  }
+</style>
+{% endblock %}
+
+{% block header_title_area %}
+<div class="header-title">Canvas <span>— Nuevo lienzo</span></div>
+{% endblock %}
+
+{% block header_actions %}
+<a href="{% url 'canvas:list' %}" class="header-btn" title="Volver">← Volver</a>
+{{ block.super }}
+{% endblock %}
+
+{% block content %}
+<div class="nuevo-wrap">
+  <div class="nuevo-card">
+    <h2>Nuevo Lienzo</h2>
+    <p class="sub">Crea un lienzo para visualizar propiedades y sus matches con requerimientos.</p>
+
+    <form method="POST">
+      {% csrf_token %}
+      <label for="id_nombre">Nombre del lienzo</label>
+      <input type="text" name="nombre" id="id_nombre" placeholder="Ej: Seguimiento Cayma — Juan Pérez" required autofocus>
+
+      <label for="id_template">Plantilla de campos (opcional)</label>
+      <select name="template_id" id="id_template">
+        <option value="">— Sin plantilla —</option>
+        {% for tpl in templates %}
+        <option value="{{ tpl.pk }}">{{ tpl.nombre }} ({{ tpl.campos|length }} campos)</option>
+        {% endfor %}
+      </select>
+
+      <div class="form-actions">
+        <a href="{% url 'canvas:list' %}" class="btn-secondary" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:var(--bg-tertiary);color:var(--text-primary);border:1px solid var(--border-color);border-radius:8px;font-size:13px;cursor:pointer;text-decoration:none;">Cancelar</a>
+        <button type="submit" class="btn-primary" style="display:inline-flex;align-items:center;gap:6px;padding:8px 18px;background:#238636;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;">Crear lienzo</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

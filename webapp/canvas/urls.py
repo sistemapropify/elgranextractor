@@ -1,0 +1,20 @@
+from django.urls import path
+from . import views
+
+app_name = 'canvas'
+
+urlpatterns = [
+    # Vistas principales
+    path('',                          views.lienzo_list,       name='list'),
+    path('nuevo/',                    views.lienzo_nuevo,      name='nuevo'),
+    path('<int:pk>/',                 views.lienzo_editor,     name='editor'),
+
+    # API JSON (llamadas desde JS)
+    path('api/lienzo/<int:pk>/save/', views.api_lienzo_save,   name='api_save'),
+    path('api/lienzo/<int:pk>/load/', views.api_lienzo_load,   name='api_load'),
+    path('api/propiedades/',          views.api_propiedades,   name='api_props'),
+    path('api/agentes/',              views.api_agentes,       name='api_agentes'),
+    path('api/reqs/<int:prop_id>/',   views.api_reqs_match,    name='api_reqs'),
+    path('api/template/save/',        views.api_template_save, name='api_tpl_save'),
+    path('api/template/list/',        views.api_template_list, name='api_tpl_list'),
+]

@@ -1,0 +1,143 @@
+{% extends "propifai_base.html" %}
+{% load static %}
+
+{% block title %}Canvas — {{ lienzo.nombre }} — Propifai{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'canvas/css/canvas.css' %}">
+<style>
+  .cv-page .content-area {
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+</style>
+{% endblock %}
+
+{% block header_title_area %}
+<div class="header-title">Canvas <span>— {{ lienzo.nombre }}</span></div>
+{% endblock %}
+
+{% block header_actions %}
+<a href="{% url 'canvas:list' %}" class="header-btn" title="Volver a lienzos">← Volver</a>
+{{ block.super }}
+{% endblock %}
+
+{% block content %}
+<div class="cv-wrap cv-page">
+
+  <!-- CANVAS TOPBAR -->
+  <div class="cv-topbar">
+    <input class="cv-topbar__title" id="cv-lienzo-nombre" value="{{ lienzo.nombre }}" spellcheck="false">
+    <div class="cv-topbar__sep"></div>
+    <button class="cv-btn" id="btn-add-nota">+ Nota</button>
+    <button class="cv-btn" id="btn-fit">Encuadrar</button>
+    <div class="cv-topbar__sep"></div>
+    <button class="cv-btn cv-btn--pri" id="btn-save">Guardar</button>
+    <div class="cv-status">
+      <span class="cv-status__dot" id="status-dot"></span>
+      <span id="status-text">Guardado</span>
+    </div>
+  </div>
+
+  <!-- CANVAS BODY: sidebar funcional + stage -->
+  <div class="cv-body">
+
+    <!-- CANVAS SIDEBAR (funcional, NO es la sidebar del sistema) -->
+    <div class="cv-sidebar">
+      <div class="cv-sidebar__tabs">
+        <div class="cv-sidebar__tab active" data-tab="agente">Agente</div>
+        <div class="cv-sidebar__tab" data-tab="campos">Campos</div>
+        <div class="cv-sidebar__tab" data-tab="lienzo">Lienzo</div>
+      </div>
+
+      <!-- Pestaña Agente -->
+      <div class="cv-sidebar__panel active" id="tab-agente">
+        <div class="cv-label">Seleccionar agente</div>
+        <select class="cv-select" id="agente-select">
+          <option value="">— todos —</option>
+        </select>
+        <div class="cv-label" style="margin-top:8px">Propiedades</div>
+        <div class="cv-prop-list" id="prop-list">
+          <div style="color:var(--cv-text-muted);font-size:12px">Selecciona un agente</div>
+        </div>
+      </div>
+
+      <!-- Pestaña Campos -->
+      <div class="cv-sidebar__panel" id="tab-campos">
+        <div class="cv-label">Plantilla activa</div>
+        <select class="cv-select" id="template-select">
+          <option value="">Sin plantilla</option>
+          {% for tpl in templates %}
+          <option value="{{ tpl.pk }}" {% if lienzo.card_template_id == tpl.pk %}selected{% endif %}>{{ tpl.nombre }}</option>
+          {% endfor %}
+        </select>
+        <div class="cv-label" style="margin-top:8px">Campos visibles</div>
+        <div id="campos-list">
+          {% for campo in campos_disponibles %}
+          <label class="cv-field-check">
+            <input type="checkbox" value="{{ campo }}" class="campo-check"> <span>{{ campo }}</span>
+          </label>
+          {% endfor %}
+        </div>
+        <button class="cv-btn cv-btn--pri" id="btn-save-template" style="margin-top:8px">Guardar plantilla</button>
+      </div>
+
+      <!-- Pestaña Lienzo -->
+      <div class="cv-sidebar__panel" id="tab-lienzo">
+        <div class="cv-label">Descripción</div>
+        <textarea class="cv-select" rows="3" id="lienzo-desc" style="resize:vertical">{{ lienzo.descripcion }}</textarea>
+        <div class="cv-label" style="margin-top:8px">Creado</div>
+        <div style="color:var(--cv-text-muted);font-size:12px">{{ lienzo.creado_en|date:"d/m/Y H:i" }}</div>
+        <button class="cv-btn" style="margin-top:auto;color:var(--cv-block)" id="btn-archive">Archivar lienzo</button>
+      </div>
+    </div>
+
+    <!-- CANVAS STAGE (pizarra) -->
+    <div class="cv-stage" id="cv-stage">
+      <canvas id="cv-grid"></canvas>
+      <svg id="cv-edges" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arrow-blue"  markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#5c6bc0"/>
+          </marker>
+          <marker id="arrow-green" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#1d9e75"/>
+          </marker>
+          <marker id="arrow-red"   markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#a32d2d"/>
+          </marker>
+        </defs>
+      </svg>
+      <div id="cv-nodes"></div>
+
+      <!-- Minimapa -->
+      <div class="cv-minimap" id="cv-minimap">
+        <canvas id="minimap-canvas" width="140" height="90"></canvas>
+        <div class="cv-minimap__viewport" id="minimap-vp"></div>
+      </div>
+
+      <!-- Zoom controls -->
+      <div class="cv-zoom-controls">
+        <button class="cv-zoom-btn" id="btn-zoom-in">+</button>
+        <button class="cv-zoom-btn" id="btn-zoom-reset">1:1</button>
+        <button class="cv-zoom-btn" id="btn-zoom-out">−</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="cv-toast" id="cv-toast"></div>
+
+<script>
+  const LIENZO_ID = {{ lienzo.pk }};
+  const CSRF      = '{{ csrf_token }}';
+  const SNAPSHOT  = {{ snapshot_json|safe }};
+</script>
+<script src="{% static 'canvas/js/canvas_engine.js' %}"></script>
+<script src="{% static 'canvas/js/canvas_nodes.js' %}"></script>
+<script src="{% static 'canvas/js/canvas_edges.js' %}"></script>
+<script src="{% static 'canvas/js/canvas_sidebar.js' %}"></script>
+<script src="{% static 'canvas/js/canvas_save.js' %}"></script>
+{% endblock %}
