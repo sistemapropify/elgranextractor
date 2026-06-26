@@ -195,9 +195,9 @@ function createReqNode(reqId, data, x, y) {
 }
 
 /**
- * Crea un nodo Nota (sticky).
+ * Crea un nodo Nota (sticky) con título editable + resize.
  */
-function createNotaNode(x, y, contenido, color) {
+function createNotaNode(x, y, contenido, color, titulo) {
   const id = 'nota_' + Date.now();
   if (typeof captureState === 'function') captureState();
   const node = document.createElement('div');
@@ -208,9 +208,17 @@ function createNotaNode(x, y, contenido, color) {
   if (color) node.style.setProperty('--nota-color', color);
 
   node.innerHTML = `
-    <div class="cv-nota__handle">&#10022; nota</div>
-    <div class="cv-nota__body" contenteditable="true">${escHtml(contenido || 'Escribe aquí...')}</div>
-    <div class="cv-port cv-port--out" data-node="${id}"></div>
+    <div class="cv-nota__header">
+      <span class="cv-nota__icon">&#10022;</span>
+      <input class="cv-nota__title" value="${escHtml(titulo || 'Nota')}" readonly>
+      <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
+    </div>
+    <div class="cv-nota__body" contenteditable="true">${escHtml(contenido || '')}</div>
+    <div class="cv-nota__resize" title="Redimensionar"></div>
+    <div class="cv-port cv-port--top"    data-node="${id}" data-port="top"></div>
+    <div class="cv-port cv-port--right"  data-node="${id}" data-port="right"></div>
+    <div class="cv-port cv-port--bottom" data-node="${id}" data-port="bottom"></div>
+    <div class="cv-port cv-port--left"   data-node="${id}" data-port="left"></div>
   `;
 
   dom.nodes.appendChild(node);
@@ -218,7 +226,7 @@ function createNotaNode(x, y, contenido, color) {
 
   STATE.nodos[id] = {
     id, tipo: 'nota', ref_id: null,
-    x: x || 150, y: y || 150, width: 200, height: node.offsetHeight || 100,
+    x: x || 150, y: y || 150, width: 200, height: node.offsetHeight || 120,
     collapsed: false, color: color || null, el: node,
   };
   registerNodeEvents(id, node);
@@ -229,19 +237,28 @@ function createNotaNode(x, y, contenido, color) {
 /* ── EVENTOS DE NODO ── */
 
 function registerNodeEvents(id, el) {
-  // Drag
-  el.querySelector('.cv-node__header, .cv-nota__handle').addEventListener('mousedown', e => {
-    startNodeDrag(e, id);
-  });
-  // In prop nodes, also drag on the whole node body (but not on buttons/ports)
-  el.addEventListener('mousedown', e => {
-    if (e.target.closest('.cv-node__header') || e.target.closest('.cv-nota__handle')) return;
-    if (e.target.closest('.cv-btn') || e.target.closest('.cv-port')) return;
-    selectNode(id);
-    startNodeDrag(e, id);
-  });
+  const isNota = el.classList.contains('cv-node--nota');
 
-  // Connection ports — ahora 4 direcciones (top, right, bottom, left)
+  // Drag: para notas usar .cv-nota__header; para props usar .cv-node__header
+  const dragHandle = el.querySelector('.cv-nota__header') || el.querySelector('.cv-node__header');
+  if (dragHandle) {
+    dragHandle.addEventListener('mousedown', e => {
+      // Si el clic es en un input o botón dentro del header, no arrastrar
+      if (e.target.closest('input') || e.target.closest('.cv-btn')) return;
+      startNodeDrag(e, id);
+    });
+  }
+  // En nodos propiedad, también arrastrar desde el body (no en ports/botones)
+  if (!isNota) {
+    el.addEventListener('mousedown', e => {
+      if (e.target.closest('.cv-node__header') || e.target.closest('.cv-nota__header')) return;
+      if (e.target.closest('.cv-btn') || e.target.closest('.cv-port')) return;
+      selectNode(id);
+      startNodeDrag(e, id);
+    });
+  }
+
+  // Connection ports — 4 direcciones (top, right, bottom, left)
   el.querySelectorAll('.cv-port').forEach(port => {
     port.addEventListener('mousedown', e => {
       const portDir = port.dataset.port || 'right';
@@ -249,7 +266,7 @@ function registerNodeEvents(id, el) {
     });
   });
 
-  // Collapse button
+  // Collapse button (solo para nodos propiedad/requerimiento)
   const collapseBtn = el.querySelector('.cv-node__collapse');
   if (collapseBtn) {
     collapseBtn.addEventListener('click', e => {
@@ -258,16 +275,20 @@ function registerNodeEvents(id, el) {
     });
   }
 
-  // Delete button
+  // Delete button — con modal de confirmación
   const deleteBtn = el.querySelector('.cv-node__delete');
   if (deleteBtn) {
     deleteBtn.addEventListener('click', e => {
       e.stopPropagation();
-      deleteNode(id);
+      if (typeof showConfirmModal === 'function') {
+        showConfirmModal('¿Eliminar este nodo del lienzo?', () => deleteNode(id));
+      } else {
+        deleteNode(id);
+      }
     });
   }
 
-  // Matches button
+  // Matches button (solo para nodos propiedad)
   const matchesBtn = el.querySelector('.cv-btn--matches');
   if (matchesBtn) {
     matchesBtn.addEventListener('click', e => {
@@ -277,10 +298,83 @@ function registerNodeEvents(id, el) {
     });
   }
 
-  // Nota content editable
+  // ── NOTA: título editable con doble clic ──
+  const titleInput = el.querySelector('.cv-nota__title');
+  if (titleInput) {
+    // Doble clic → activar edición
+    titleInput.addEventListener('dblclick', e => {
+      e.stopPropagation();
+      titleInput.readOnly = false;
+      titleInput.focus();
+      titleInput.select();
+    });
+    // Enter → desactivar edición
+    titleInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        titleInput.readOnly = true;
+        titleInput.blur();
+      }
+    });
+    // Blur → guardar
+    titleInput.addEventListener('blur', () => {
+      titleInput.readOnly = true;
+      markDirty();
+    });
+    // Evitar que el mousedown en el input inicie drag
+    titleInput.addEventListener('mousedown', e => e.stopPropagation());
+  }
+
+  // ── NOTA: resize desde esquina ──
+  const resizeHandle = el.querySelector('.cv-nota__resize');
+  if (resizeHandle) {
+    resizeHandle.addEventListener('mousedown', e => {
+      e.stopPropagation();
+      e.preventDefault();
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const startW = el.offsetWidth;
+      const startH = el.offsetHeight;
+      const nodo = STATE.nodos[id];
+
+      const onMouseMove = (ev) => {
+        const vp = STATE.viewport;
+        const newW = Math.max(160, startW + (ev.clientX - startX) / vp.zoom);
+        const newH = Math.max(80, startH + (ev.clientY - startY) / vp.zoom);
+        el.style.width = newW + 'px';
+        el.style.height = newH + 'px';
+        if (nodo) {
+          nodo.width = newW;
+          nodo.height = newH;
+        }
+      };
+
+      const onMouseUp = () => {
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        updateEdges();
+        markDirty();
+      };
+
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    });
+  }
+
+  // ── NOTA: body contenteditable ──
   const notaBody = el.querySelector('.cv-nota__body');
   if (notaBody) {
     notaBody.addEventListener('input', () => { markDirty(); });
+    // Doble clic en body → focus para edición (ya es contenteditable)
+    notaBody.addEventListener('dblclick', e => {
+      e.stopPropagation();
+      // Ya es contenteditable, solo aseguramos focus
+      const sel = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(notaBody);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    });
   }
 }
 

@@ -132,6 +132,19 @@
 
 <div class="cv-toast" id="cv-toast"></div>
 
+<!-- Modal de confirmación personalizado -->
+<div class="cv-modal" id="cv-modal" style="display:none">
+  <div class="cv-modal__overlay"></div>
+  <div class="cv-modal__box">
+    <div class="cv-modal__title">Eliminar nodo</div>
+    <div class="cv-modal__msg"></div>
+    <div class="cv-modal__actions">
+      <button class="cv-btn" id="modal-cancel">Cancelar</button>
+      <button class="cv-btn cv-btn--danger" id="modal-confirm">Eliminar</button>
+    </div>
+  </div>
+</div>
+
 <script>
   const LIENZO_ID = {{ lienzo.pk }};
   const CSRF      = '{{ csrf_token }}';
@@ -143,4 +156,5 @@
 <script src="{% static 'canvas/js/canvas_sidebar.js' %}"></script>
 <script src="{% static 'canvas/js/canvas_save.js' %}"></script>
 <script src="{% static 'canvas/js/canvas_history.js' %}"></script>
+<script src="{% static 'canvas/js/canvas_modal.js' %}"></script>
 {% endblock %}

@@ -329,13 +329,6 @@ function initKeyboard() {
       e.preventDefault();
       saveCanvas();
     }
-    // Delete/Backspace = delete selected node
-    if ((e.key === 'Delete' || e.key === 'Backspace') && STATE.selected) {
-      e.preventDefault();
-      if (confirm('¿Eliminar este nodo del lienzo?')) {
-        deleteNode(STATE.selected);
-      }
-    }
   });
 }
 
