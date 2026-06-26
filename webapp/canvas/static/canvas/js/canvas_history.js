@@ -282,9 +282,18 @@ function renderSinglePlaceholder(n) {
       <div class="cv-port cv-port--left"   data-node="${n.id}" data-port="left"></div>
     `;
   } else {
+    // NOTA: nueva estructura con header, título editable y botón lápiz
     node.innerHTML = `
-      <div class="cv-nota__handle">&#10022; nota</div>
-      <div class="cv-nota__body" contenteditable="true">Nota</div>
+      <div class="cv-nota__header">
+        <span class="cv-nota__icon">&#10022;</span>
+        <span class="cv-nota__title-display">Nota</span>
+        <input class="cv-nota__title-input" value="Nota" style="display:none">
+        <button class="cv-nota__edit-title" title="Editar título">&#9998;</button>
+        <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
+      </div>
+      <div class="cv-nota__body" contenteditable="false">Nota</div>
+      <button class="cv-nota__edit-body" title="Editar contenido">&#9998; Editar</button>
+      <div class="cv-nota__resize" title="Redimensionar"></div>
       <div class="cv-port cv-port--top"    data-node="${n.id}" data-port="top"></div>
       <div class="cv-port cv-port--right"  data-node="${n.id}" data-port="right"></div>
       <div class="cv-port cv-port--bottom" data-node="${n.id}" data-port="bottom"></div>
