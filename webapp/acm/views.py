@@ -738,7 +738,7 @@ def ver_pdf_acm(request, uuid):
     # Crear respuesta HTTP con el PDF
     nombre_archivo = f"ACM_Propifai_{acm_link.short_id}.pdf"
     response = HttpResponse(pdf_content, content_type='application/pdf')
-    response['Content-Disposition'] = f'inline; filename="{nombre_archivo}"'
+    response['Content-Disposition'] = f'attachment; filename="{nombre_archivo}"'
     response['Content-Length'] = len(pdf_content)
     
     return response
