@@ -109,6 +109,9 @@ path('whatsapp-extractor/', include('whatsapp_extractor.urls')),
 # Agentes e Inmobiliarias - Gestión de agentes inmobiliarios
 path('agentes/', include('agentes.urls')),
 
+# Canvas - PropFlow Visual Canvas (lienzos interactivos)
+path('canvas/', include('canvas.urls')),
+
 # Redirect: /inmobiliarias/ → /agentes/inmobiliarias/ (acceso directo amigable)
 path('inmobiliarias/', RedirectView.as_view(url='/agentes/inmobiliarias/', permanent=True)),
 ]

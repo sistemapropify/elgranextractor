@@ -640,6 +640,11 @@
             <div class="header-subtitle">
                 Cruce inteligente de requerimientos vs propiedades disponibles
             </div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:8px;">
+                <span style="display:inline-flex;align-items:center;gap:4px;background-color:rgba(63,185,80,0.15);color:#3fb950;padding:4px 12px;border-radius:12px;font-size:12px;font-weight:500;">
+                    ✅ Mostrando solo requerimientos verificados
+                </span>
+            </div>
         </div>
         <div class="header-actions">
             <a href="{% url 'matching:dashboard' %}" class="btn btn-secondary">← Dashboard Individual</a>
@@ -736,6 +741,9 @@
             <div>Distritos / Tipo</div>
             <div>Presupuesto</div>
             <div>% Match</div>
+            <div title="Score semántico de FAISS (0-1)">🧠 Sem.</div>
+            <div title="Score estructural de filtros+pesos (0-100)">📊 Estructural</div>
+            <div title="Tipo de match predominante">🏷️ Tipo</div>
             <div>Mejor Propiedad</div>
             <div>Precio</div>
             <div>Compatibles</div>
@@ -785,6 +793,59 @@
                         </div>
                     </td>
 
+                    <!-- Score semántico (FAISS) -->
+                    <td>
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            {% if item.score_semantico > 0 %}
+                            <div class="progress-match" style="flex:1;max-width:60px;">
+                                <div class="progress-bar match-medium"
+                                     style="width:{{ item.score_semantico|floatformat:0|default:0 }}%;"></div>
+                            </div>
+                            <span style="font-size:11px;color:var(--text-secondary);white-space:nowrap;">
+                                {{ item.score_semantico|floatformat:2 }}
+                            </span>
+                            {% else %}
+                            <span style="font-size:11px;color:var(--text-muted);">—</span>
+                            {% endif %}
+                        </div>
+                    </td>
+
+                    <!-- Score estructural -->
+                    <td>
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            {% if item.score_structural > 0 %}
+                            <div class="progress-match" style="flex:1;max-width:60px;">
+                                <div class="progress-bar match-high"
+                                     style="width:{{ item.score_structural|floatformat:0|default:0 }}%;"></div>
+                            </div>
+                            <span style="font-size:11px;color:var(--text-secondary);white-space:nowrap;">
+                                {{ item.score_structural|floatformat:1 }}
+                            </span>
+                            {% else %}
+                            <span style="font-size:11px;color:var(--text-muted);">—</span>
+                            {% endif %}
+                        </div>
+                    </td>
+
+                    <!-- Tipo de match predominante -->
+                    <td>
+                        {% if item.match_tipo == 'semantico' %}
+                        <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;background:rgba(88,166,255,0.15);color:#58a6ff;border:1px solid rgba(88,166,255,0.3);">
+                            🧠 Sem.
+                        </span>
+                        {% elif item.match_tipo == 'estructural' %}
+                        <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;background:rgba(63,185,80,0.15);color:#3fb950;border:1px solid rgba(63,185,80,0.3);">
+                            📊 Estructural
+                        </span>
+                        {% elif item.match_tipo == 'legacy' %}
+                        <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;background:rgba(139,148,158,0.15);color:#8b949e;border:1px solid rgba(139,148,158,0.3);">
+                            🔄 Legacy
+                        </span>
+                        {% else %}
+                        <span style="font-size:11px;color:var(--text-muted);">—</span>
+                        {% endif %}
+                    </td>
+
                     <td>
                         {% if item.tiene_propiedad_match %}
                             <div class="prop-match-info">
@@ -799,7 +860,7 @@
                     <td>
                         {% if item.mejor_propiedad_precio %}
                             <span class="prop-match-price">
-                                S/ {{ item.mejor_propiedad_precio|floatformat:0 }}
+                                {% if item.mejor_propiedad_moneda_id == 2 %}S/{% else %}${% endif %} {{ item.mejor_propiedad_precio|floatformat:0 }}
                             </span>
                         {% else %}
                             <span class="req-detail">—</span>
@@ -814,9 +875,9 @@
 
                     <td>
                         <div class="actions">
-                            <a href="{% url 'matching:dashboard' %}?requerimiento_id={{ req.id }}"
+                            <a href="{% url 'matching:hibrido-detalle' req.id %}"
                                class="btn btn-primary btn-sm"
-                               title="Ver detalle de matching">
+                               title="Ver detalle híbrido (semántico + estructural)">
                                 📊 Ver
                             </a>
                             <button class="btn btn-outline btn-sm btn-ejecutar-individual"
@@ -878,6 +939,25 @@
             </nav>
         </div>
         {% endif %}
+    </div>
+
+    <!-- LEYENDA DE TIPOS DE MATCH -->
+    <div class="info-panel" style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:12px;padding:8px 12px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:8px;">
+        <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-secondary);">
+            <span style="font-weight:600;margin-right:4px;">Leyenda:</span>
+            <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 6px;border-radius:6px;background:rgba(88,166,255,0.1);color:#58a6ff;font-weight:500;font-size:10px;">
+                🧠 Semántico
+            </span>
+            <span style="font-size:10px;color:var(--text-muted);">FAISS/embeddings tienen más peso</span>
+            <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 6px;border-radius:6px;background:rgba(63,185,80,0.1);color:#3fb950;font-weight:500;font-size:10px;">
+                📊 Estructural
+            </span>
+            <span style="font-size:10px;color:var(--text-muted);">Filtros duros + 10 factores ponderados</span>
+            <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 6px;border-radius:6px;background:rgba(139,148,158,0.1);color:#8b949e;font-weight:500;font-size:10px;">
+                🔄 Legacy
+            </span>
+            <span style="font-size:10px;color:var(--text-muted);">Motor de matching anterior</span>
+        </div>
     </div>
 
     <!-- PANEL DE CONTROL -->

@@ -118,15 +118,20 @@ def _convertir_moneda(monto: Decimal, moneda_origen: str, moneda_destino: str) -
     return monto
 
 
-def _fetch_properties(is_active_only=True, limit=1000) -> List[Dict]:
+def _fetch_property_by_id(property_id: int) -> Optional[Dict]:
     """
-    Obtiene propiedades con JOIN a property_specs usando raw SQL.
-    Solo propiedades visibles y disponibles (property_status_id = 3).
+    Obtiene una propiedad específica desde dbpropify_be con todos sus datos
+    (specs, tipo, operación, imagen). El nombre del distrito se resuelve con _get_district_name().
+    
+    Args:
+        property_id: ID de la propiedad en dbpropify_be.property
+        
+    Returns:
+        Dict con todos los campos de property + property_specs + nombres, o None
     """
     try:
-        where_clause = "WHERE p.is_visible = 1 AND p.property_status_id = 3" if is_active_only else ""
-        query = f"""
-            SELECT 
+        query = """
+            SELECT
                 p.id, p.code, p.title, p.description,
                 p.price, p.maintenance_fee,
                 p.map_address, p.display_address,
@@ -150,8 +155,67 @@ def _fetch_properties(is_active_only=True, limit=1000) -> List[Dict]:
                 s.has_air_conditioning, s.has_laundry_area, s.has_service_room, s.pet_friendly,
                 s.floors_total, s.unit_location,
                 -- Primera imagen de property_media
-                (SELECT TOP 1 pm2.[file] FROM property_media pm2 
-                 WHERE pm2.property_id = p.id AND pm2.media_type = 'image' 
+                (SELECT TOP 1 pm2.[file] FROM property_media pm2
+                 WHERE pm2.property_id = p.id AND pm2.media_type = 'image'
+                 ORDER BY pm2.[order]) AS [file],
+                -- Nombres de tipo y operación
+                pt.name AS property_type_name,
+                ot.name AS operation_type_name
+            FROM property p
+            LEFT JOIN property_specs s ON s.property_id = p.id
+            LEFT JOIN property_type pt ON pt.id = p.property_type_id
+            LEFT JOIN operation_type ot ON ot.id = p.operation_type_id
+            WHERE p.id = %s
+        """
+        with connections['propifai'].cursor() as cursor:
+            cursor.execute(query, [property_id])
+            columns = [desc[0] for desc in cursor.description]
+            row = cursor.fetchone()
+            if row:
+                prop_dict = dict(zip(columns, row))
+                # Resolver nombre del distrito usando la función existente
+                prop_dict['district_name'] = _get_district_name(prop_dict.get('district_id'))
+                return prop_dict
+            return None
+    except Exception as e:
+        logger.error(f"Error al obtener propiedad {property_id} desde dbpropify_be: {e}")
+        return None
+
+
+def _fetch_properties(is_active_only=True, limit=1000) -> List[Dict]:
+    """
+    Obtiene propiedades con JOIN a property_specs usando raw SQL.
+    Solo propiedades visibles y disponibles (property_status_id = 3).
+    """
+    try:
+        where_clause = "WHERE p.is_visible = 1 AND p.property_status_id = 3" if is_active_only else ""
+        query = f"""
+            SELECT
+                p.id, p.code, p.title, p.description,
+                p.price, p.maintenance_fee,
+                p.map_address, p.display_address,
+                p.latitude, p.longitude,
+                p.is_project, p.is_visible, p.project_name,
+                p.currency_id, p.district_id, p.operation_type_id,
+                p.property_type_id, p.property_condition_id,
+                p.property_status_id, p.contact_id, p.responsible_id,
+                p.created_at, p.updated_at,
+                p.uuid, p.video_url, p.registry_number,
+                p.payment_method_id, p.property_subtype_id,
+                p.urbanization_id, p.parent_project_id,
+                p.created_by_id, p.updated_by_id,
+                p.wp_post_id, p.wp_slug, p.wp_last_sync,
+                s.bedrooms, s.bathrooms, s.half_bathrooms,
+                s.has_elevator, s.land_area, s.built_area,
+                s.front_measure, s.depth_measure, s.area_unit, s.linear_unit,
+                s.garage_spaces, s.garage_type, s.parking_cost_included, s.parking_cost,
+                s.antiquity_years, s.delivery_date,
+                s.has_security, s.has_pool, s.has_garden, s.has_bbq, s.has_terrace,
+                s.has_air_conditioning, s.has_laundry_area, s.has_service_room, s.pet_friendly,
+                s.floors_total, s.unit_location,
+                -- Primera imagen de property_media
+                (SELECT TOP 1 pm2.[file] FROM property_media pm2
+                 WHERE pm2.property_id = p.id AND pm2.media_type = 'image'
                  ORDER BY pm2.[order]) AS [file],
                 -- Nombres de tipo y operación
                 pt.name AS property_type_name,
@@ -208,17 +272,18 @@ class MatchingEngine:
     """
     
     # Pesos para campos de scoring (suman 100)
+    # OPTIMIZADO: Los 3 factores principales (distrito, tipo, precio) suman 90%
+    # para que matches obvios como "Casa en Sachaca a $220k" contra
+    # "Busco Casa en Cayma/Yanahuara/Sachaca hasta $380k" den score alto.
     PESOS = {
-        'precio': 20,
-        'area': 12,
-        'habitaciones': 10,
-        'banos': 7,
-        'antiguedad': 5,
-        'estacionamiento': 5,
-        'distrito': 15,
-        'amenities': 10,
-        'ascensor': 4,
-        'tipo_propiedad': 12,
+        'distrito': 30,
+        'tipo_propiedad': 30,
+        'precio': 30,
+        'habitaciones': 3,
+        'banos': 2,
+        'area': 2,
+        'amenities': 2,
+        'ascensor': 1,
     }
     
     TOLERANCIA_NUMERICA = 0.10  # 10%
@@ -432,10 +497,6 @@ class MatchingEngine:
         score_banos = self._calcular_score_banos(prop_dict)
         score_detalle['banos'] = score_banos
         score_total += score_banos * Decimal(str(self.PESOS['banos'])) / 100
-        
-        score_antiguedad = self._calcular_score_antiguedad(prop_dict)
-        score_detalle['antiguedad'] = score_antiguedad
-        score_total += score_antiguedad * Decimal(str(self.PESOS['antiguedad'])) / 100
         
         score_distrito = self._calcular_score_distrito(prop_dict)
         score_detalle['distrito'] = score_distrito
@@ -842,7 +903,7 @@ def obtener_resumen_matching_masivo(limite=500):
         if not req_ids:
             return []
 
-        reqs_map = {r.id: r for r in Requerimiento.objects.filter(id__in=req_ids)}
+        reqs_map = {r.id: r for r in Requerimiento.objects.filter(id__in=req_ids, verificado=True)}
 
         mejores = {}
         for mr in MatchResult.objects.filter(requerimiento_id__in=req_ids).order_by('requerimiento_id', '-score_total'):
@@ -857,19 +918,88 @@ def obtener_resumen_matching_masivo(limite=500):
                 continue
             mejor = mejores.get(req_id)
             if mejor:
+                # Extraer scores semantico y estructural del score_detalle (híbrido)
+                sd = mejor.score_detalle or {}
+                score_semantico = float(sd.get('semantico', 0))
+                score_structural = float(sd.get('score_structural', mejor.score_total))
+                alpha = float(sd.get('alpha', 0.6))
+                
+                # Determinar tipo de match predominante
+                if score_semantico > 0 and score_structural > 0:
+                    if alpha >= 0.6:
+                        match_tipo = 'estructural'
+                        match_tipo_label = 'Estructural'
+                    else:
+                        match_tipo = 'semantico'
+                        match_tipo_label = 'Semántico'
+                elif score_semantico > 0:
+                    match_tipo = 'semantico'
+                    match_tipo_label = 'Semántico'
+                elif score_structural > 0:
+                    match_tipo = 'estructural'
+                    match_tipo_label = 'Estructural'
+                else:
+                    match_tipo = 'legacy'
+                    match_tipo_label = 'Legacy'
+                
+                # Enriquecer con datos reales de la propiedad desde dbpropify_be
+                prop_data = _fetch_property_by_id(mejor.propiedad_id)
+                if prop_data:
+                    prop_code = prop_data.get('code')
+                    prop_title = prop_data.get('title')
+                    prop_distrito = prop_data.get('district_name')
+                    prop_precio = float(prop_data['price']) if prop_data.get('price') else None
+                    prop_moneda = prop_data.get('currency_id')
+                    prop_tipo = prop_data.get('property_type_name')
+                else:
+                    prop_code = None
+                    prop_title = None
+                    prop_distrito = None
+                    prop_precio = None
+                    prop_moneda = None
+                    prop_tipo = None
+
+                # Calcular score semantico REAL desde embeddings (si estan disponibles)
+                real_semantic = score_semantico
+                try:
+                    from intelligence.models import IntelligenceDocument
+                    import numpy as np
+                    req_doc = IntelligenceDocument.objects.filter(
+                        collection__name='requerimientos_enbedados',
+                        source_id=str(req_id)
+                    ).first()
+                    prop_doc = IntelligenceDocument.objects.filter(
+                        collection__name='propiedadespropify',
+                        source_id=str(mejor.propiedad_id)
+                    ).first()
+                    if req_doc and prop_doc and req_doc.embedding and prop_doc.embedding:
+                        qv = np.frombuffer(req_doc.embedding, dtype=np.float32)
+                        pv = np.frombuffer(prop_doc.embedding, dtype=np.float32)
+                        qn = np.linalg.norm(qv)
+                        pn = np.linalg.norm(pv)
+                        if qn > 0 and pn > 0:
+                            real_semantic = round(float(np.dot(qv, pv) / (qn * pn)), 4)
+                except Exception:
+                    pass
+
                 resumen.append({
                     'requerimiento_id': req_id,
                     'requerimiento_nombre': str(req),
                     'porcentaje_match': float(mejor.score_total),
+                    'score_semantico': real_semantic,
+                    'score_structural': score_structural,
+                    'match_tipo': match_tipo,
+                    'match_tipo_label': match_tipo_label,
+                    'alpha': alpha,
                     'score_promedio': float(item.get('max_score', 0)),
                     'total_compatibles': 1,
                     'mejor_propiedad_id': mejor.propiedad_id,
-                    'mejor_propiedad_codigo': None,
-                    'mejor_propiedad_titulo': None,
-                    'mejor_propiedad_distrito': None,
-                    'mejor_propiedad_precio': None,
-                    'mejor_propiedad_moneda_id': None,
-                    'mejor_propiedad_tipo': None,
+                    'mejor_propiedad_codigo': prop_code,
+                    'mejor_propiedad_titulo': prop_title,
+                    'mejor_propiedad_distrito': prop_distrito,
+                    'mejor_propiedad_precio': prop_precio,
+                    'mejor_propiedad_moneda_id': prop_moneda,
+                    'mejor_propiedad_tipo': prop_tipo,
                 })
 
         return resumen[:limite]

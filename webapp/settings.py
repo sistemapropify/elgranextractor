@@ -85,6 +85,7 @@ INSTALLED_APPS = [
     'prospects',  # Captura de prospectos inmobiliarios desde el celular
     'whatsapp_extractor',  # Extracción automática de requerimientos desde WhatsApp
     'agentes',  # Gestión de agentes e inmobiliarias
+    'canvas',   # PropFlow Visual Canvas — lienzos interactivos
 ]
 
 MIDDLEWARE = [

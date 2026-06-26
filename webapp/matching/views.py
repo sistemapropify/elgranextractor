@@ -879,18 +879,48 @@ class MatchingMasivoView(TemplateView):
         }
         context['porcentajes_por_requerimiento'] = porcentajes_por_requerimiento
         
-        # ── Filtro por agente ──
+        # ── Filtros ──
+        search_filter = self.request.GET.get('search', '').strip()
         agente_filter = self.request.GET.get('agente', '').strip()
+        match_filter = self.request.GET.get('match_filter', '').strip()
+        sort_option = self.request.GET.get('sort', '-fecha').strip()
+        
+        context['search_filter'] = search_filter
         context['agente_filter'] = agente_filter
+        context['match_filter'] = match_filter
+        context['sort_option'] = sort_option
         
-        # Obtener requerimientos paginados (solo los más recientes)
-        requerimientos_qs = Requerimiento.objects.all().order_by('-fecha', '-hora')
+        # Query base: solo verificados
+        requerimientos_qs = Requerimiento.objects.filter(verificado=True)
         
-        # Aplicar filtro por agente si está presente
+        # Aplicar filtro por búsqueda de texto (nombre, agente, distritos)
+        if search_filter:
+            from django.db.models import Q
+            requerimientos_qs = requerimientos_qs.filter(
+                Q(agente__icontains=search_filter) |
+                Q(distritos__icontains=search_filter) |
+                Q(tipo_propiedad__icontains=search_filter) |
+                Q(requerimiento__icontains=search_filter)
+            )
+        
+        # Aplicar filtro por agente
         if agente_filter:
             requerimientos_qs = requerimientos_qs.filter(agente__icontains=agente_filter)
         
-        # Paginación directa sobre QuerySet (más eficiente)
+        # Aplicar ordenamiento
+        sort_map = {
+            '-fecha': '-fecha', '-fecha': '-fecha, -hora',
+            'fecha': 'fecha',
+            '-match': '-match',  # se ordena en Python después
+            'match': 'match',
+        }
+        if sort_option in ('-fecha', 'fecha'):
+            if sort_option == '-fecha':
+                requerimientos_qs = requerimientos_qs.order_by('-fecha', '-hora')
+            else:
+                requerimientos_qs = requerimientos_qs.order_by('fecha', 'hora')
+        
+        # Paginación
         paginator = Paginator(requerimientos_qs, 50)
         page_number = self.request.GET.get('page')
         page_obj = paginator.get_page(page_number)
@@ -917,6 +947,10 @@ class MatchingMasivoView(TemplateView):
             info_resumen = resumen_por_requerimiento.get(req.id)
             if info_resumen:
                 porcentaje = info_resumen['porcentaje_match']
+                score_semantico = info_resumen.get('score_semantico', 0)
+                score_structural = info_resumen.get('score_structural', 0)
+                match_tipo = info_resumen.get('match_tipo', 'legacy')
+                match_tipo_label = info_resumen.get('match_tipo_label', 'Legacy')
                 mejor_propiedad_id = info_resumen.get('mejor_propiedad_id')
                 mejor_propiedad_codigo = info_resumen.get('mejor_propiedad_codigo')
                 mejor_propiedad_distrito = info_resumen.get('mejor_propiedad_distrito')
@@ -924,6 +958,10 @@ class MatchingMasivoView(TemplateView):
                 total_compatibles = info_resumen.get('total_compatibles', 0)
             else:
                 porcentaje = 0.0
+                score_semantico = 0
+                score_structural = 0
+                match_tipo = 'sin_match'
+                match_tipo_label = 'Sin Match'
                 mejor_propiedad_id = None
                 mejor_propiedad_codigo = None
                 mejor_propiedad_distrito = None
@@ -950,6 +988,10 @@ class MatchingMasivoView(TemplateView):
             requerimientos_con_porcentajes.append({
                 'requerimiento': req,
                 'porcentaje': porcentaje,
+                'score_semantico': score_semantico,
+                'score_structural': score_structural,
+                'match_tipo': match_tipo,
+                'match_tipo_label': match_tipo_label,
                 'row_class': row_class,
                 'badge_class': badge_class,
                 'progress_class': progress_class,
@@ -961,6 +1003,33 @@ class MatchingMasivoView(TemplateView):
                 'total_compatibles': total_compatibles,
                 'tiene_propiedad_match': mejor_propiedad_id is not None,
             })
+        
+        # ── Aplicar filtro por match % ──
+        if match_filter:
+            if match_filter == 'high':
+                requerimientos_con_porcentajes = [
+                    r for r in requerimientos_con_porcentajes if r['porcentaje'] >= 80
+                ]
+            elif match_filter == 'medium':
+                requerimientos_con_porcentajes = [
+                    r for r in requerimientos_con_porcentajes if 50 <= r['porcentaje'] < 80
+                ]
+            elif match_filter == 'low':
+                requerimientos_con_porcentajes = [
+                    r for r in requerimientos_con_porcentajes if 0 < r['porcentaje'] < 50
+                ]
+            elif match_filter == 'none':
+                requerimientos_con_porcentajes = [
+                    r for r in requerimientos_con_porcentajes if r['porcentaje'] == 0
+                ]
+        
+        # ── Aplicar ordenamiento por match % ──
+        if sort_option in ('-match', 'match'):
+            reverse = sort_option == '-match'
+            requerimientos_con_porcentajes.sort(
+                key=lambda r: r['porcentaje'],
+                reverse=reverse
+            )
         
         context['page_obj'] = page_obj
         context['requerimientos_con_porcentajes'] = requerimientos_con_porcentajes
@@ -1499,35 +1568,172 @@ class MatchingCalendarView(TemplateView):
 class EjecutarMatchingMasivoView(TemplateView):
     """
     Vista para ejecutar matching masivo (AJAX).
+    Ahora usa HybridMatchingSkill (FAISS + field_values + scoring) en lugar del MatchingEngine legacy.
     """
     template_name = 'matching/masivo.html'
     
     def post(self, request, *args, **kwargs):
         """
-        Ejecuta matching masivo y retorna resultados en JSON.
+        Ejecuta matching masivo usando HybridMatchingSkill y retorna resultados en JSON.
+        Solo procesa requerimientos verificados.
         """
         try:
+            from requerimientos.models import Requerimiento
+            from intelligence.skills.registry import SkillRegistry
+            from intelligence.skills.orchestrator import SkillOrchestrator, ExecutionContext
+            from intelligence.skills.cache import SkillCache
+            
             # Parámetros opcionales
             limite_por_requerimiento = int(request.POST.get('limite_por_requerimiento', 10))
+            alpha = float(request.POST.get('alpha', 0.6))
             
-            # Ejecutar matching masivo
-            resultados = ejecutar_matching_masivo(
-                limite_por_requerimiento=limite_por_requerimiento
-            )
+            # Obtener solo requerimientos verificados
+            requerimientos = list(Requerimiento.objects.filter(verificado=True)[:500])
+            
+            if not requerimientos:
+                return JsonResponse({
+                    'success': True,
+                    'message': 'No hay requerimientos verificados para procesar.',
+                    'resultados': {},
+                    'total_procesados': 0
+                })
+            
+            # Configurar SkillOrchestrator
+            registry = SkillRegistry()
+            orchestrator = SkillOrchestrator(registry, SkillCache())
+            
+            resultados_masivo = {}
+            total_procesados = 0
+            
+            for req in requerimientos:
+                try:
+                    # Ejecutar HybridMatchingSkill para este requerimiento
+                    context = ExecutionContext()
+                    result = orchestrator.execute_skill('matching_hibrido', {
+                        'requerimiento_id': req.id,
+                        'alpha': alpha,
+                        'top_n': limite_por_requerimiento,
+                        'umbral_minimo': 0.0,
+                    }, context)
+                    
+                    if not result.success or not result.data:
+                        logger.warning(f"HybridMatchingSkill falló para req {req.id}: {result.message}")
+                        continue
+                    
+                    matches = result.data.get('matches', [])
+                    if not matches:
+                        continue
+                    
+                    # Guardar resultados en MatchResult
+                    self._guardar_hybrid_results(req.id, matches)
+                    
+                    # Construir respuesta en el mismo formato que el engine legacy
+                    mejor_match = matches[0]
+                    mejor_score = mejor_match['score_total']
+                    scores = [m['score_total'] for m in matches]
+                    score_promedio = sum(scores) / len(scores) if scores else 0.0
+                    
+                    fv = mejor_match.get('field_values', {})
+                    mejor_propiedad = {
+                        'id': mejor_match['property_id'],
+                        'code': fv.get('code') or fv.get('code_number', ''),
+                        'title': fv.get('title') or fv.get('name', ''),
+                        'district': fv.get('district_name', ''),
+                        'district_name': fv.get('district_name', ''),
+                        'price': float(fv['price']) if fv.get('price') else None,
+                        'currency_id': fv.get('currency_id'),
+                        'property_type': fv.get('property_type_name', ''),
+                    }
+                    
+                    resultados_masivo[req.id] = {
+                        'requerimiento_id': req.id,
+                        'requerimiento_nombre': str(req),
+                        'mejor_score': mejor_score,
+                        'score_promedio': round(score_promedio, 2),
+                        'total_compatibles': len(matches),
+                        'mejor_propiedad': mejor_propiedad,
+                    }
+                    total_procesados += 1
+                    
+                except Exception as e:
+                    logger.error(f"Error en HybridMatchingSkill para req {req.id}: {e}")
+                    continue
             
             return JsonResponse({
                 'success': True,
-                'message': f'Matching masivo ejecutado exitosamente. Se procesaron {len(resultados)} requerimientos.',
-                'resultados': resultados,
-                'total_procesados': len(resultados)
+                'message': (
+                    f'Matching híbrido ejecutado exitosamente. '
+                    f'Se procesaron {total_procesados} requerimientos con HybridMatchingSkill.'
+                ),
+                'resultados': resultados_masivo,
+                'total_procesados': total_procesados,
+                'modo': 'hibrido',
             })
             
         except Exception as e:
-            logger.error(f"Error en matching masivo: {e}")
+            logger.error(f"Error en matching masivo híbrido: {e}")
             return JsonResponse({
                 'success': False,
                 'error': str(e)
             }, status=500)
+    
+    @staticmethod
+    def _guardar_hybrid_results(requerimiento_id: int, matches: list) -> None:
+        """
+        Guarda resultados del HybridMatchingSkill en MatchResult.
+        
+        Args:
+            requerimiento_id: ID del requerimiento
+            matches: Lista de matches de HybridMatchingSkill
+        """
+        from decimal import Decimal
+        from requerimientos.models import Requerimiento
+        from .models import MatchResult
+        from propifai.models import PropifaiProperty
+        
+        try:
+            requerimiento = Requerimiento.objects.get(id=requerimiento_id)
+        except Requerimiento.DoesNotExist:
+            logger.warning(f"Requerimiento {requerimiento_id} no encontrado al guardar resultados")
+            return
+        
+        # Eliminar resultados anteriores para este requerimiento
+        MatchResult.objects.filter(requerimiento=requerimiento).delete()
+        
+        for match in matches:
+            property_id = match.get('property_id')
+            if not property_id:
+                continue
+            
+            try:
+                propiedad = PropifaiProperty.objects.get(id=property_id)
+            except PropifaiProperty.DoesNotExist:
+                logger.warning(f"Propiedad {property_id} no encontrada en MatchResult")
+                continue
+            
+            score_detalle = match.get('score_detalle', {})
+            # Asegurar que score_detalle tenga valores serializables
+            score_detalle_clean = {
+                k: float(v) if not isinstance(v, (int, float, str, bool)) else v
+                for k, v in score_detalle.items()
+            }
+            
+            score_total = Decimal(str(match.get('score_total', 0)))
+            
+            MatchResult.objects.create(
+                requerimiento=requerimiento,
+                propiedad=propiedad,
+                score_total=score_total,
+                score_detalle=score_detalle_clean,
+                fase_eliminada=None,
+                porcentaje_compatibilidad=score_total,
+                ranking=match.get('ranking'),
+            )
+            
+        logger.info(
+            f"Resultados HybridMatchingSkill guardados: "
+            f"{len(matches)} matches para req {requerimiento_id}"
+        )
 
 
 # ===================================================================
@@ -2276,3 +2482,335 @@ class PropiedadesMatchesDashboardView(TemplateView):
         context['has_prev'] = has_prev
 
         return context
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Vista de detalle híbrido: muestra scores semántico + estructural por requerimiento
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class DetalleHibridoView(TemplateView):
+    """
+    Vista profesional de detalle de matching híbrido.
+    
+    Muestra:
+    - Requerimiento completo (arriba)
+    - Score semántico (FAISS) y estructural (10 factores) del mejor match
+    - Tabla con todos los matches y scores desglosados
+    """
+    template_name = 'matching/detalle_hibrido.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        requerimiento_id = kwargs.get('requerimiento_id')
+
+        try:
+            from .models import MatchResult
+            from requerimientos.models import Requerimiento
+            from propifai.models import PropifaiProperty
+
+            req = Requerimiento.objects.get(id=requerimiento_id)
+            context['requerimiento'] = req
+
+            # Obtener todos los matches
+            match_qs = MatchResult.objects.filter(
+                requerimiento=req
+            ).order_by('-score_total')
+
+            # Deduplicar: mantener solo el mejor score por propiedad_id
+            mejores_por_prop = {}
+            for m in match_qs:
+                pid = m.propiedad_id
+                if pid not in mejores_por_prop or float(m.score_total) > float(mejores_por_prop[pid].score_total):
+                    mejores_por_prop[pid] = m
+
+            matches = []
+            mejor_match = None
+
+            # Re-ordenar por score descendente
+            ordenados = sorted(mejores_por_prop.values(), key=lambda x: float(x.score_total), reverse=True)
+            for rank, m in enumerate(ordenados, 1):
+                sd = m.score_detalle or {}
+                score_semantico = float(sd.get('semantico', 0))
+                score_structural = float(sd.get('score_structural', float(m.score_total)))
+                alpha = float(sd.get('alpha', 0.6))
+
+                # Determinar tipo de match
+                if score_semantico > 0 and score_structural > 0:
+                    match_tipo = 'semantico' if alpha < 0.5 else 'estructural'
+                elif score_semantico > 0:
+                    match_tipo = 'semantico'
+                elif score_structural > 0:
+                    match_tipo = 'estructural'
+                else:
+                    match_tipo = 'legacy'
+
+                # Obtener contenido semántico y score REAL del IntelligenceDocument
+                prop_embedding_content = None
+                prop_semantic_score = None
+                try:
+                    from intelligence.models import IntelligenceDocument
+                    import numpy as np
+                    prop_doc = IntelligenceDocument.objects.filter(
+                        collection__name='propiedadespropify',
+                        source_id=str(m.propiedad_id)
+                    ).first()
+                    if prop_doc and prop_doc.content:
+                        prop_embedding_content = prop_doc.content
+                        # Calcular similitud coseno REAL entre embeddings
+                        if prop_doc.embedding:
+                            req_doc = IntelligenceDocument.objects.filter(
+                                collection__name='requerimientos_enbedados',
+                                source_id=str(requerimiento_id)
+                            ).first()
+                            if req_doc and req_doc.embedding:
+                                qv = np.frombuffer(req_doc.embedding, dtype=np.float32)
+                                pv = np.frombuffer(prop_doc.embedding, dtype=np.float32)
+                                cos_sim = float(np.dot(qv, pv) / (np.linalg.norm(qv) * np.linalg.norm(pv)))
+                                prop_semantic_score = round(cos_sim, 4)
+                except Exception:
+                    pass
+                
+                # Obtener contenido semántico del requerimiento (solo una vez)
+                req_embedding_content = None
+                if rank == 1 and not context.get('req_embedding_content'):
+                    try:
+                        from intelligence.models import IntelligenceDocument
+                        req_doc = IntelligenceDocument.objects.filter(
+                            collection__name='requerimientos_enbedados',
+                            source_id=str(requerimiento_id)
+                        ).first()
+                        if req_doc and req_doc.content:
+                            req_embedding_content = req_doc.content
+                            context['req_embedding_content'] = req_embedding_content
+                    except Exception:
+                        pass
+                
+                # Obtener datos de la propiedad desde dbpropify_be con _fetch_property_by_id
+                prop_info = {}
+                try:
+                    from .engine import _fetch_property_by_id
+                    prop_dict = _fetch_property_by_id(m.propiedad_id)
+                    if prop_dict:
+                        # Build image URL
+                        image_url = None
+                        file_path = prop_dict.get('file')
+                        if file_path:
+                            base_url = "https://propifymedia01.blob.core.windows.net/media"
+                            if file_path.startswith('/'):
+                                file_path = file_path[1:]
+                            image_url = f"{base_url}/{file_path}"
+                        if not image_url and prop_dict.get('code'):
+                            base_url = "https://propifymedia01.blob.core.windows.net/media"
+                            image_url = f"{base_url}/{prop_dict['code']}.jpg"
+                        
+                        # Obtener nombre del contacto/responsable
+                        contact_name = None
+                        contact_phone = None
+                        responsible_id = prop_dict.get('responsible_id')
+                        contact_id = prop_dict.get('contact_id')
+                        try:
+                            from django.db import connections
+                            with connections['propifai'].cursor() as cursor:
+                                if responsible_id:
+                                    cursor.execute("SELECT name, phone FROM contact WHERE id = %s", [responsible_id])
+                                    row = cursor.fetchone()
+                                    if row:
+                                        contact_name = row[0]
+                                        contact_phone = row[1]
+                                elif contact_id:
+                                    cursor.execute("SELECT name, phone FROM contact WHERE id = %s", [contact_id])
+                                    row = cursor.fetchone()
+                                    if row:
+                                        contact_name = row[0]
+                                        contact_phone = row[1]
+                        except Exception:
+                            pass
+                        
+                        prop_info = {
+                            'code': prop_dict.get('code'),
+                            'title': prop_dict.get('title'),
+                            'description': prop_dict.get('description'),
+                            'district_name': prop_dict.get('district_name'),
+                            'property_type': prop_dict.get('property_type_name'),
+                            'operation_type': prop_dict.get('operation_type_name'),
+                            'price': float(prop_dict['price']) if prop_dict.get('price') else None,
+                            'currency_id': prop_dict.get('currency_id'),
+                            'bedrooms': prop_dict.get('bedrooms'),
+                            'bathrooms': prop_dict.get('bathrooms'),
+                            'half_bathrooms': prop_dict.get('half_bathrooms'),
+                            'built_area': float(prop_dict['built_area']) if prop_dict.get('built_area') else None,
+                            'land_area': float(prop_dict['land_area']) if prop_dict.get('land_area') else None,
+                            'garage_spaces': prop_dict.get('garage_spaces'),
+                            'antiquity_years': prop_dict.get('antiquity_years'),
+                            'has_elevator': prop_dict.get('has_elevator'),
+                            'has_garden': prop_dict.get('has_garden'),
+                            'has_pool': prop_dict.get('has_pool'),
+                            'has_bbq': prop_dict.get('has_bbq'),
+                            'has_terrace': prop_dict.get('has_terrace'),
+                            'real_address': prop_dict.get('display_address') or prop_dict.get('map_address'),
+                            'latitude': float(prop_dict['latitude']) if prop_dict.get('latitude') else None,
+                            'longitude': float(prop_dict['longitude']) if prop_dict.get('longitude') else None,
+                            'imagen_url': image_url,
+                            'contact_name': contact_name,
+                            'contact_phone': contact_phone,
+                            'is_project': prop_dict.get('is_project'),
+                            'project_name': prop_dict.get('project_name'),
+                            'embedding_content': prop_embedding_content,
+                            'semantic_score_real': prop_semantic_score,
+                        }
+                    else:
+                        # Fallback a PropifaiProperty si no se encuentra en dbpropify_be
+                        prop = PropifaiProperty.objects.get(id=m.propiedad_id)
+                        prop_info = {
+                            'code': prop.code,
+                            'title': prop.title,
+                            'district_name': prop.distrito_nombre if hasattr(prop, 'distrito_nombre') else str(prop.district_id) if prop.district_id else None,
+                            'property_type': prop.tipo_propiedad if hasattr(prop, 'tipo_propiedad') else None,
+                            'price': float(prop.price) if prop.price else None,
+                            'currency_id': prop.currency_id,
+                            'bedrooms': prop.bedrooms,
+                            'bathrooms': prop.bathrooms,
+                            'built_area': float(prop.built_area) if prop.built_area else None,
+                            'garage_spaces': prop.garage_spaces,
+                            'antiquity_years': prop.antiquity_years,
+                            'real_address': prop.real_address,
+                            'has_elevator': prop.has_elevator,
+                            'imagen_url': None,
+                        }
+                except PropifaiProperty.DoesNotExist:
+                    prop_info = {}
+                except Exception as e:
+                    logger.warning(f"Error fetching property {m.propiedad_id} for match detail: {e}")
+                    prop_info = {}
+
+                match_data = {
+                    'match_id': m.id,
+                    'propiedad_id': m.propiedad_id,
+                    'score_total': float(m.score_total),
+                    'score_semantico': score_semantico,
+                    'score_structural': score_structural,
+                    'match_tipo': match_tipo,
+                    'alpha': alpha,
+                    'ranking': rank,
+                    'score_detalle': sd,
+                    **prop_info,
+                }
+                matches.append(match_data)
+
+                if mejor_match is None:
+                    mejor_match = match_data
+                    match_data['ranking'] = 1
+
+            context['matches'] = matches
+            context['mejor_match'] = mejor_match
+            context['mejor_propiedad_info'] = mejor_match if mejor_match else None
+            context['total_matches'] = len(matches)
+
+        except Requerimiento.DoesNotExist:
+            context['requerimiento'] = None
+            context['matches'] = []
+            context['mejor_match'] = None
+            context['mejor_propiedad_info'] = None
+            context['total_matches'] = 0
+        except Exception as e:
+            logger.error(f"Error en DetalleHibridoView: {e}")
+            context['requerimiento'] = None
+            context['matches'] = []
+            context['mejor_match'] = None
+            context['mejor_propiedad_info'] = None
+            context['total_matches'] = 0
+
+        return context
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# JSON Endpoint: Detalle de matches híbridos de un requerimiento
+# ═══════════════════════════════════════════════════════════════════════════════
+
+from django.http import JsonResponse
+
+def detalle_matches_hibrido(request, requerimiento_id):
+    """
+    GET /matching/api/hibrido/detalle/<requerimiento_id>/
+    
+    Retorna JSON con todos los matches de un requerimiento,
+    incluyendo score_semantico, score_structural y desglose completo.
+    """
+    try:
+        from .models import MatchResult
+        from requerimientos.models import Requerimiento
+        
+        req = Requerimiento.objects.get(id=requerimiento_id)
+        matches = MatchResult.objects.filter(
+            requerimiento=req
+        ).order_by('-score_total')
+        
+        if not matches.exists():
+            return JsonResponse({
+                'success': True,
+                'requerimiento_id': requerimiento_id,
+                'requerimiento': str(req),
+                'matches': [],
+                'total': 0,
+            })
+        
+        matches_data = []
+        for m in matches:
+            sd = m.score_detalle or {}
+            score_semantico = float(sd.get('semantico', 0))
+            score_structural = float(sd.get('score_structural', float(m.score_total)))
+            alpha = float(sd.get('alpha', 0.6))
+            
+            # Determinar tipo de match
+            if score_semantico > 0 and score_structural > 0:
+                if alpha >= 0.6:
+                    match_tipo = 'estructural'
+                else:
+                    match_tipo = 'semantico'
+            elif score_semantico > 0:
+                match_tipo = 'semantico'
+            elif score_structural > 0:
+                match_tipo = 'estructural'
+            else:
+                match_tipo = 'legacy'
+            
+            matches_data.append({
+                'match_id': m.id,
+                'propiedad_id': m.propiedad_id,
+                'score_total': float(m.score_total),
+                'score_semantico': score_semantico,
+                'score_structural': score_structural,
+                'match_tipo': match_tipo,
+                'alpha': alpha,
+                'ranking': m.ranking,
+                'fase_eliminada': m.fase_eliminada,
+                'score_detalle': sd,
+                'ejecutado_en': m.ejecutado_en.isoformat() if m.ejecutado_en else None,
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'requerimiento_id': requerimiento_id,
+            'requerimiento': str(req),
+            'requerimiento_condicion': req.condicion,
+            'requerimiento_tipo': req.tipo_propiedad,
+            'requerimiento_distritos': req.distritos,
+            'requerimiento_presupuesto': float(req.presupuesto_monto) if req.presupuesto_monto else None,
+            'requerimiento_presupuesto_moneda': req.presupuesto_moneda,
+            'requerimiento_habitaciones': req.habitaciones,
+            'requerimiento_banos': req.banos,
+            'matches': matches_data,
+            'total': len(matches_data),
+        })
+        
+    except Requerimiento.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': f'Requerimiento {requerimiento_id} no encontrado',
+        }, status=404)
+    except Exception as e:
+        logger.error(f"Error en detalle_matches_hibrido: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+        }, status=500)

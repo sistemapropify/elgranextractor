@@ -1,0 +1,630 @@
+{% extends "propifai_base.html" %}
+{% load static %}
+
+{% block title %}Detalle Híbrido • Requerimiento #{{ requerimiento.id }}{% endblock %}
+
+{% block extra_css %}
+<style>
+:root {
+    --bg-primary: #0d1117;
+    --bg-secondary: #161b22;
+    --bg-tertiary: #21262d;
+    --border-color: #30363d;
+    --text-primary: #e6edf3;
+    --text-secondary: #8b949e;
+    --text-muted: #6e7681;
+    --accent-blue: #58a6ff;
+    --accent-green: #3fb950;
+    --accent-orange: #d29922;
+    --accent-red: #f85149;
+    --accent-purple: #bc8cff;
+}
+
+body { background: var(--bg-primary); color: var(--text-primary); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+
+.detalle-container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+
+/* ── Header ── */
+.header-detalle { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+.header-detalle h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px 0; color: var(--text-primary); }
+.header-detalle .requerimiento-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.header-detalle .meta-tag { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 500; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-secondary); }
+.header-detalle .meta-tag .label { color: var(--text-muted); }
+.header-detalle .meta-tag .value { color: var(--text-primary); font-weight: 600; }
+.header-detalle .requerimiento-texto { margin-top: 12px; padding: 12px 16px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 8px; font-size: 13px; line-height: 1.6; color: var(--text-secondary); max-height: 100px; overflow-y: auto; }
+
+/* ── Score general ── */
+.score-general { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 12px; padding: 20px 24px; margin-bottom: 20px; display: flex; align-items: center; gap: 32px; flex-wrap: wrap; }
+.score-general .score-ring { width: 80px; height: 80px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 700; flex-shrink: 0; }
+.score-general .score-ring.high { background: conic-gradient(var(--accent-green) 0% 100%, var(--bg-tertiary) 100%); color: var(--accent-green); }
+.score-general .score-ring.medium { background: conic-gradient(var(--accent-orange) 0% 100%, var(--bg-tertiary) 100%); color: var(--accent-orange); }
+.score-general .score-ring.low { background: conic-gradient(var(--accent-red) 0% 100%, var(--bg-tertiary) 100%); color: var(--accent-red); }
+.score-general .score-ring.none { background: var(--bg-tertiary); color: var(--text-muted); }
+.score-general .score-ring-inner { width: 60px; height: 60px; border-radius: 50%; background: var(--bg-secondary); display: flex; align-items: center; justify-content: center; }
+.score-breakdown { flex: 1; display: flex; gap: 24px; flex-wrap: wrap; }
+.score-breakdown .score-item { display: flex; flex-direction: column; gap: 4px; }
+.score-breakdown .score-item .score-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.score-breakdown .score-item .score-value { font-size: 18px; font-weight: 600; color: var(--text-primary); }
+.score-breakdown .score-item .score-sub { font-size: 11px; color: var(--text-secondary); }
+.score-breakdown .score-bar { width: 120px; height: 6px; background: var(--bg-tertiary); border-radius: 3px; overflow: hidden; margin-top: 4px; }
+.score-breakdown .score-bar .fill { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
+.score-breakdown .score-bar .fill.semantico { background: var(--accent-blue); }
+.score-breakdown .score-bar .fill.estructural { background: var(--accent-green); }
+
+/* ── Tabla de matches ── */
+.matches-section { margin-bottom: 20px; }
+.matches-section h2 { font-size: 16px; font-weight: 600; color: var(--text-primary); margin: 0 0 12px 0; display: flex; align-items: center; gap: 8px; }
+.matches-table { width: 100%; border-collapse: collapse; }
+.matches-table th { text-align: left; padding: 10px 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); border-bottom: 2px solid var(--border-color); background: var(--bg-secondary); }
+.matches-table td { padding: 12px; font-size: 13px; color: var(--text-primary); border-bottom: 1px solid var(--border-color); vertical-align: middle; }
+.matches-table tr:hover td { background: rgba(88,166,255,0.04); }
+.matches-table .ranking-badge { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; font-size: 11px; font-weight: 700; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-secondary); }
+.matches-table .ranking-badge.top1 { background: rgba(210,153,34,0.15); border-color: rgba(210,153,34,0.3); color: var(--accent-orange); }
+.matches-table .ranking-badge.top3 { background: rgba(88,166,255,0.1); border-color: rgba(88,166,255,0.2); color: var(--accent-blue); }
+.matches-table .prop-code { font-weight: 600; color: var(--accent-blue); }
+.matches-table .prop-detail { font-size: 11px; color: var(--text-muted); display: block; margin-top: 2px; }
+
+.matches-table .score-col { display: flex; align-items: center; gap: 8px; }
+.matches-table .score-col .mini-bar { width: 60px; height: 4px; background: var(--bg-tertiary); border-radius: 2px; overflow: hidden; }
+.matches-table .score-col .mini-bar .fill { height: 100%; border-radius: 2px; }
+.matches-table .score-col .mini-bar .fill.semantico { background: var(--accent-blue); }
+.matches-table .score-col .mini-bar .fill.estructural { background: var(--accent-green); }
+.matches-table .score-col .score-num { font-size: 12px; font-weight: 600; min-width: 40px; text-align: right; font-variant-numeric: tabular-nums; }
+.matches-table .score-col .score-num.semantico { color: var(--accent-blue); }
+.matches-table .score-col .score-num.estructural { color: var(--accent-green); }
+.matches-table .tipo-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; }
+.matches-table .tipo-badge.semantico { background: rgba(88,166,255,0.12); color: var(--accent-blue); border: 1px solid rgba(88,166,255,0.25); }
+.matches-table .tipo-badge.estructural { background: rgba(63,185,80,0.12); color: var(--accent-green); border: 1px solid rgba(63,185,80,0.25); }
+.matches-table .tipo-badge.legacy { background: rgba(139,148,158,0.12); color: var(--text-secondary); border: 1px solid rgba(139,148,158,0.25); }
+
+/* ── Score detalle expandible ── */
+.score-detalle-toggle { color: var(--accent-blue); font-size: 11px; cursor: pointer; text-decoration: none; }
+.score-detalle-toggle:hover { text-decoration: underline; }
+.score-detalle-panel { display: none; margin-top: 4px; padding: 8px 12px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; font-size: 11px; }
+.score-detalle-panel.visible { display: block; }
+.score-detalle-panel .detalle-row { display: flex; justify-content: space-between; padding: 2px 0; color: var(--text-secondary); }
+.score-detalle-panel .detalle-row .detalle-label { color: var(--text-muted); }
+.score-detalle-panel .detalle-row .detalle-value { font-weight: 500; }
+
+/* ── Info panel ── */
+.info-panel { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px 20px; margin-bottom: 20px; }
+.info-panel h3 { font-size: 13px; font-weight: 600; color: var(--text-secondary); margin: 0 0 8px 0; display: flex; align-items: center; gap: 6px; }
+.info-panel .leyenda-grid { display: flex; flex-wrap: wrap; gap: 16px; }
+.info-panel .leyenda-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
+.info-panel .leyenda-item .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.info-panel .leyenda-item .dot.semantico { background: var(--accent-blue); }
+.info-panel .leyenda-item .dot.estructural { background: var(--accent-green); }
+
+/* ── Property cards ── */
+.prop-card { background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
+.prop-card-img { width: 100%; height: 180px; object-fit: cover; background: var(--bg-secondary); }
+.prop-card-body { padding: 12px; }
+.prop-card-body .prop-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.prop-card-body .prop-subtitle { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+.prop-card-body .prop-detail-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; border-bottom: 1px solid var(--border-color); }
+.prop-card-body .prop-detail-row:last-child { border-bottom: none; }
+.prop-card-body .prop-detail-label { color: var(--text-muted); }
+.prop-card-body .prop-detail-value { color: var(--text-primary); font-weight: 500; }
+
+/* ── Comparación ── */
+.compare-card { background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 8px; padding: 16px; }
+.compare-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border-color); font-size: 13px; }
+.compare-row:last-child { border-bottom: none; }
+.compare-label { color: var(--text-muted); flex: 0 0 120px; }
+.compare-req { color: var(--accent-blue); font-weight: 500; text-align: center; flex: 1; }
+.compare-vs { color: var(--text-muted); font-size: 11px; text-align: center; flex: 0 0 30px; }
+.compare-prop { font-weight: 600; text-align: center; flex: 1; }
+.compare-check { color: var(--accent-green); }
+.compare-cross { color: var(--accent-red); }
+.compare-partial { color: var(--accent-orange); }
+
+/* ── Navegación ── */
+.nav-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.nav-bar a { display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 500; color: var(--text-secondary); background: var(--bg-secondary); border: 1px solid var(--border-color); text-decoration: none; transition: all 0.15s; }
+.nav-bar a:hover { color: var(--text-primary); border-color: var(--accent-blue); background: rgba(88,166,255,0.08); }
+
+.no-matches { text-align: center; padding: 48px; color: var(--text-muted); font-size: 14px; }
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+    .detalle-container { padding: 12px; }
+    .score-general { flex-direction: column; align-items: flex-start; gap: 16px; }
+    .score-breakdown { width: 100%; }
+    .matches-table { font-size: 12px; }
+    .matches-table th, .matches-table td { padding: 8px 6px; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="detalle-container">
+    <!-- Navegación -->
+    <div class="nav-bar">
+        <a href="{% url 'matching:masivo' %}">← Volver a Matching Masivo</a>
+        <a href="{% url 'matching:hibrido-detalle-api' view.kwargs.requerimiento_id %}" target="_blank">📡 Ver JSON</a>
+    </div>
+
+    <!-- Header: Requerimiento -->
+    <div class="header-detalle">
+        <h1>📋 Requerimiento #{{ requerimiento.id }}</h1>
+        <div style="color: var(--text-secondary); font-size: 14px; margin-top: 2px;">
+            {{ requerimiento.agente|default:"Sin agente" }}
+            {% if requerimiento.fecha %} · {{ requerimiento.fecha|date:"d/m/Y" }}{% endif %}
+        </div>
+
+        <div class="requerimiento-meta">
+            <span class="meta-tag">
+                <span class="label">Tipo:</span>
+                <span class="value">{{ requerimiento.tipo_propiedad|default:"No especificado"|capfirst }}</span>
+            </span>
+            <span class="meta-tag">
+                <span class="label">Condición:</span>
+                <span class="value">{{ requerimiento.condicion|default:"No especificado"|capfirst }}</span>
+            </span>
+            <span class="meta-tag">
+                <span class="label">Distritos:</span>
+                <span class="value">{{ requerimiento.distritos|default:"Sin distritos"|truncatechars:40 }}</span>
+            </span>
+            {% if requerimiento.presupuesto_monto %}
+            <span class="meta-tag">
+                <span class="label">Presupuesto:</span>
+                <span class="value">${{ requerimiento.presupuesto_monto|floatformat:0 }} {{ requerimiento.presupuesto_moneda|default:"USD" }}</span>
+            </span>
+            {% endif %}
+            {% if requerimiento.habitaciones %}
+            <span class="meta-tag">
+                <span class="label">Habitaciones:</span>
+                <span class="value">{{ requerimiento.habitaciones }}</span>
+            </span>
+            {% endif %}
+            {% if requerimiento.banos %}
+            <span class="meta-tag">
+                <span class="label">Baños:</span>
+                <span class="value">{{ requerimiento.banos }}</span>
+            </span>
+            {% endif %}
+            {% if requerimiento.area_m2 %}
+            <span class="meta-tag">
+                <span class="label">Área:</span>
+                <span class="value">{{ requerimiento.area_m2 }} m²</span>
+            </span>
+            {% endif %}
+            {% if requerimiento.caracteristicas_extra %}
+            <span class="meta-tag">
+                <span class="label">Extras:</span>
+                <span class="value">{{ requerimiento.caracteristicas_extra|truncatechars:40 }}</span>
+            </span>
+            {% endif %}
+        </div>
+
+        {% if requerimiento.requerimiento %}
+        <div class="requerimiento-texto">{{ requerimiento.requerimiento|truncatechars:300 }}</div>
+        {% endif %}
+    </div>
+
+    <!-- Score General -->
+    {% if mejor_match %}
+    {% with mejor_match.score_total|stringformat:"d" as score_str %}
+    {% with mejor_match.score_total as score_val %}
+    <div class="score-general">
+        <div class="score-ring {% if score_val >= 80 %}high{% elif score_val >= 50 %}medium{% elif score_val >= 1 %}low{% else %}none{% endif %}">
+            <div class="score-ring-inner">{{ score_val|floatformat:0 }}%</div>
+        </div>
+
+        <div class="score-breakdown">
+            <div class="score-item">
+                <span class="score-label">🧠 Score Semántico (FAISS)</span>
+                <span class="score-value" style="color:var(--accent-blue);">{{ mejor_match.semantic_score_real|default:mejor_match.score_semantico|floatformat:4 }}</span>
+                <span class="score-sub">Similitud coseno del embedding vs propiedades</span>
+                <div class="score-bar">
+                    <div class="fill semantico" style="width:{{ mejor_match.semantic_score_real|default:mejor_match.score_semantico|floatformat:0|default:0 }}%;"></div>
+                </div>
+            </div>
+
+            <div class="score-item">
+                <span class="score-label">📊 Score Estructural (10 factores)</span>
+                <span class="score-value" style="color:var(--accent-green);">{{ mejor_match.score_structural|floatformat:1 }} / 100</span>
+                <span class="score-sub">Filtros duros + precio, área, habitaciones, baños...</span>
+                <div class="score-bar">
+                    <div class="fill estructural" style="width:{{ mejor_match.score_structural|floatformat:0|default:0 }}%;"></div>
+                </div>
+            </div>
+
+            <div class="score-item">
+                <span class="score-label">🏷️ Tipo de Match</span>
+                <span class="score-value" style="font-size:14px;">
+                    <span class="tipo-badge {{ mejor_match.match_tipo }}">
+                        {% if mejor_match.match_tipo == 'semantico' %}🧠 Semántico{% elif mejor_match.match_tipo == 'estructural' %}📊 Estructural{% else %}🔄 Legacy{% endif %}
+                    </span>
+                </span>
+                <span class="score-sub">α = {{ mejor_match.alpha|floatformat:1 }} (peso del score estructural)</span>
+            </div>
+        </div>
+    </div>
+    {% endwith %}
+    {% endwith %}
+    {% endif %}
+
+    <!-- Mejor propiedad: DESTACADA con foto + comparación -->
+    {% if mejor_propiedad_info %}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+        <!-- Columna izquierda: Foto + datos de la propiedad -->
+        <div class="prop-card">
+            {% if mejor_propiedad_info.imagen_url %}
+            <img class="prop-card-img" src="{{ mejor_propiedad_info.imagen_url }}" alt="{{ mejor_propiedad_info.code }}" onerror="this.style.display='none'">
+            {% endif %}
+            <div class="prop-card-body">
+                <div class="prop-title">{{ mejor_propiedad_info.title|default:"Sin título" }}</div>
+                <div class="prop-subtitle">{{ mejor_propiedad_info.code|default:"Sin código" }}</div>
+                <div style="margin-top:8px;">
+                    <div class="prop-detail-row">
+                        <span class="prop-detail-label">📍 Distrito</span>
+                        <span class="prop-detail-value">{{ mejor_propiedad_info.district_name|default:"No especificado" }}</span>
+                    </div>
+                    <div class="prop-detail-row">
+                        <span class="prop-detail-label">🏠 Tipo</span>
+                        <span class="prop-detail-value">{{ mejor_propiedad_info.property_type|default:"No especificado" }}</span>
+                    </div>
+                    <div class="prop-detail-row">
+                        <span class="prop-detail-label">💰 Precio</span>
+                        <span class="prop-detail-value" style="font-weight:700;color:var(--accent-green);">
+                            {% if mejor_propiedad_info.currency_id == 1 %}${% else %}S/{% endif %}
+                            {{ mejor_propiedad_info.price|floatformat:0|default:"—" }}
+                        </span>
+                    </div>
+                    <div class="prop-detail-row">
+                        <span class="prop-detail-label">🛏️ Habitaciones</span>
+                        <span class="prop-detail-value">{{ mejor_propiedad_info.bedrooms|default:"—" }}</span>
+                    </div>
+                    <div class="prop-detail-row">
+                        <span class="prop-detail-label">🚿 Baños</span>
+                        <span class="prop-detail-value">{{ mejor_propiedad_info.bathrooms|default:"—" }}</span>
+                    </div>
+                    <div class="prop-detail-row">
+                        <span class="prop-detail-label">📐 Área construida</span>
+                        <span class="prop-detail-value">{{ mejor_propiedad_info.built_area|floatformat:0|default:"—" }} m²</span>
+                    </div>
+                    {% if mejor_propiedad_info.land_area %}
+                    <div class="prop-detail-row">
+                        <span class="prop-detail-label">🌳 Área terreno</span>
+                        <span class="prop-detail-value">{{ mejor_propiedad_info.land_area|floatformat:0 }} m²</span>
+                    </div>
+                    {% endif %}
+                    <div class="prop-detail-row">
+                        <span class="prop-detail-label">🚗 Estacionamiento</span>
+                        <span class="prop-detail-value">{{ mejor_propiedad_info.garage_spaces|default:"0" }}</span>
+                    </div>
+                    <div class="prop-detail-row">
+                        <span class="prop-detail-label">📅 Antigüedad</span>
+                        <span class="prop-detail-value">{% if mejor_propiedad_info.antiquity_years %}{{ mejor_propiedad_info.antiquity_years }} años{% else %}—{% endif %}</span>
+                    </div>
+                    <div class="prop-detail-row">
+                        <span class="prop-detail-label">🪜 Ascensor</span>
+                        <span class="prop-detail-value">{% if mejor_propiedad_info.has_elevator %}Sí{% else %}No{% endif %}</span>
+                    </div>
+                    {% if mejor_propiedad_info.real_address %}
+                    <div class="prop-detail-row">
+                        <span class="prop-detail-label">📍 Dirección</span>
+                        <span class="prop-detail-value" style="font-size:11px;">{{ mejor_propiedad_info.real_address|truncatechars:40 }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Amenities -->
+                <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px;">
+                    {% if mejor_propiedad_info.has_pool %}<span class="amenity-tag yes">🏊 Piscina</span>{% endif %}
+                    {% if mejor_propiedad_info.has_garden %}<span class="amenity-tag yes">🌿 Jardín</span>{% endif %}
+                    {% if mejor_propiedad_info.has_bbq %}<span class="amenity-tag yes">🔥 BBQ</span>{% endif %}
+                    {% if mejor_propiedad_info.has_terrace %}<span class="amenity-tag yes">🏗️ Terraza</span>{% endif %}
+                </div>
+
+                <!-- Contacto -->
+                <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border-color);">
+                    <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">👤 Contacto</div>
+                    {% if mejor_propiedad_info.contact_name %}
+                    <div style="font-size:13px;color:var(--text-primary);">{{ mejor_propiedad_info.contact_name }}</div>
+                    {% if mejor_propiedad_info.contact_phone %}
+                    <div style="font-size:12px;color:var(--accent-blue);">{{ mejor_propiedad_info.contact_phone }}</div>
+                    {% endif %}
+                    {% else %}
+                    <div style="font-size:12px;color:var(--text-muted);">Sin información de contacto</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Columna derecha: Comparación Requerimiento vs Propiedad -->
+        <div class="compare-card">
+            <h3 style="margin:0 0 12px 0;font-size:14px;color:var(--text-secondary);display:flex;align-items:center;gap:6px;">
+                ⚖️ Comparación: Requerimiento vs Propiedad
+            </h3>
+
+            <!-- Encabezados de columna -->
+            <div class="compare-row" style="border-bottom:2px solid var(--border-color);padding-bottom:8px;margin-bottom:4px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">
+                <span class="compare-label" style="flex:0 0 90px;">Campo</span>
+                <span style="flex:1;text-align:center;color:var(--accent-blue);">📋 Requerimiento</span>
+                <span style="flex:0 0 30px;text-align:center;color:var(--text-muted);">🤝</span>
+                <span style="flex:1;text-align:center;color:var(--accent-green);">🏠 Propiedad</span>
+                <span style="flex:0 0 36px;text-align:center;">✅</span>
+            </div>
+
+            <div class="compare-row">
+                <span class="compare-label">📍 Distrito</span>
+                <span class="compare-req">{{ requerimiento.distritos|default:"Cualquiera"|truncatechars:25 }}</span>
+                <span class="compare-vs">vs</span>
+                <span class="compare-prop">{{ mejor_propiedad_info.district_name|default:"—" }}</span>
+                <span style="flex:0 0 36px;text-align:center;font-size:16px;">
+                    {% if mejor_propiedad_info.district_name and mejor_propiedad_info.district_name in requerimiento.distritos %}✅{% else %}⚠️{% endif %}
+                </span>
+            </div>
+
+            <div class="compare-row">
+                <span class="compare-label">🏠 Tipo</span>
+                <span class="compare-req">{{ requerimiento.tipo_propiedad|default:"Cualquiera"|capfirst }}</span>
+                <span class="compare-vs">vs</span>
+                <span class="compare-prop">{{ mejor_propiedad_info.property_type|default:"—" }}</span>
+                <span style="flex:0 0 36px;text-align:center;font-size:16px;">
+                    {% if mejor_propiedad_info.property_type|lower == requerimiento.tipo_propiedad|lower %}✅{% else %}⚠️{% endif %}
+                </span>
+            </div>
+
+            <div class="compare-row">
+                <span class="compare-label">💰 Precio</span>
+                <span class="compare-req">
+                    {% if requerimiento.presupuesto_monto %}
+                        {% if requerimiento.presupuesto_moneda == 'USD' %}${% else %}S/{% endif %}
+                        {{ requerimiento.presupuesto_monto|floatformat:0 }}
+                    {% else %}Sin límite{% endif %}
+                </span>
+                <span class="compare-vs">vs</span>
+                <span class="compare-prop">
+                    {% if mejor_propiedad_info.currency_id == 1 %}${% else %}S/{% endif %}
+                    {{ mejor_propiedad_info.price|floatformat:0|default:"—" }}
+                </span>
+                <span style="flex:0 0 36px;text-align:center;font-size:16px;">
+                    {% if mejor_propiedad_info.price and mejor_propiedad_info.price <= requerimiento.presupuesto_monto %}✅{% else %}❌{% endif %}
+                </span>
+            </div>
+
+            <div class="compare-row">
+                <span class="compare-label">🛏️ Habs</span>
+                <span class="compare-req">{{ requerimiento.habitaciones|default:"Cualquiera" }}</span>
+                <span class="compare-vs">vs</span>
+                <span class="compare-prop">{{ mejor_propiedad_info.bedrooms|default:"—" }}</span>
+                <span style="flex:0 0 36px;text-align:center;font-size:16px;">
+                    {% if mejor_propiedad_info.bedrooms and mejor_propiedad_info.bedrooms >= requerimiento.habitaciones %}✅{% elif mejor_propiedad_info.bedrooms %}⚠️{% else %}❌{% endif %}
+                </span>
+            </div>
+
+            <div class="compare-row">
+                <span class="compare-label">🚿 Baños</span>
+                <span class="compare-req">{{ requerimiento.banos|default:"Cualquiera" }}</span>
+                <span class="compare-vs">vs</span>
+                <span class="compare-prop">{{ mejor_propiedad_info.bathrooms|default:"—" }}</span>
+                <span style="flex:0 0 36px;text-align:center;font-size:16px;">
+                    {% if mejor_propiedad_info.bathrooms and mejor_propiedad_info.bathrooms >= requerimiento.banos %}✅{% elif mejor_propiedad_info.bathrooms %}⚠️{% else %}❌{% endif %}
+                </span>
+            </div>
+
+            <div class="compare-row">
+                <span class="compare-label">📐 Área</span>
+                <span class="compare-req">{{ requerimiento.area_m2|default:"—" }} m²</span>
+                <span class="compare-vs">vs</span>
+                <span class="compare-prop">{{ mejor_propiedad_info.built_area|floatformat:0|default:"—" }} m²</span>
+                <span style="flex:0 0 36px;text-align:center;font-size:16px;">
+                    {% if mejor_propiedad_info.built_area and mejor_propiedad_info.built_area >= requerimiento.area_m2 %}✅{% else %}⚠️{% endif %}
+                </span>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Análisis Semántico: qué textos se compararon -->
+    {% if req_embedding_content and mejor_propiedad_info.embedding_content %}
+    <div class="card" style="margin-bottom:20px;">
+        <div class="card-header">🧠 Análisis Semántico — Textos usados para el embedding</div>
+        <div class="card-body">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">
+                <div style="background:var(--bg-tertiary);padding:12px;border-radius:8px;border:1px solid var(--border-color);">
+                    <div style="font-size:11px;color:var(--accent-blue);font-weight:600;text-transform:uppercase;margin-bottom:8px;">📋 Texto del Requerimiento</div>
+                    <div style="font-size:12px;color:var(--text-secondary);line-height:1.6;max-height:200px;overflow-y:auto;white-space:pre-wrap;word-break:break-word;">{{ req_embedding_content }}</div>
+                </div>
+                <div style="background:var(--bg-tertiary);padding:12px;border-radius:8px;border:1px solid var(--border-color);">
+                    <div style="font-size:11px;color:var(--accent-green);font-weight:600;text-transform:uppercase;margin-bottom:8px;">🏠 Texto de la Propiedad (mejor match)</div>
+                    <div style="font-size:12px;color:var(--text-secondary);line-height:1.6;max-height:200px;overflow-y:auto;white-space:pre-wrap;word-break:break-word;">{{ mejor_propiedad_info.embedding_content }}</div>
+                </div>
+            </div>
+            <div style="padding:12px;background:var(--bg-tertiary);border-radius:8px;border:1px solid var(--border-color);">
+                <div style="font-size:11px;color:var(--accent-purple);font-weight:600;text-transform:uppercase;margin-bottom:8px;">🔑 Palabras que aparecen en AMBOS textos</div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                    {% with req_lower=req_embedding_content|lower prop_lower=mejor_propiedad_info.embedding_content|lower %}
+                    {% for p in "casa departamento terreno local oficina compra alquiler venta jardin piscina terraza cochera garage ascensor amoblado amplio luminoso moderno estreno 4 dormitorios 3 dormitorios 2 dormitorios"|cut:","|cut:"."|cut:"!"|cut:"?" %}
+                        {% if p|length > 2 %}
+                            {% if p in req_lower and p in prop_lower %}
+                            <span style="display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:500;background:rgba(188,140,255,0.15);color:var(--accent-purple);border:1px solid rgba(188,140,255,0.3);">
+                                {{ p }}
+                            </span>
+                            {% endif %}
+                        {% endif %}
+                    {% endfor %}
+                    {% endwith %}
+                </div>
+                <div style="margin-top:8px;font-size:11px;color:var(--text-muted);line-height:1.5;">
+                    ⚡ El score semántico (<strong>{{ mejor_match.semantic_score_real|default:mejor_match.score_semantico|floatformat:4 }}</strong>) se calcula comparando <strong>vectores numéricos</strong> (embeddings de 1024 dimensiones) de ambos textos usando el modelo <code>multilingual-e5-large</code>. Las palabras son las que aparecen textualmente en ambos lados.
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Tabla de matches -->
+    <div class="matches-section">
+        <h2>📊 Matches encontrados <span style="font-size:12px;color:var(--text-muted);font-weight:400;">({{ matches|length }} propiedades)</span></h2>
+
+        {% if matches %}
+        <table class="matches-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Propiedad</th>
+                    <th>Distrito</th>
+                    <th>Tipo</th>
+                    <th>Habs</th>
+                    <th>Baños</th>
+                    <th>Precio</th>
+                    <th>🧠 Semántico</th>
+                    <th>📊 Estructural</th>
+                    <th>Total</th>
+                    <th>🏷️</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in matches %}
+                <tr>
+                    <td>
+                        <span class="ranking-badge {% if m.ranking == 1 %}top1{% elif m.ranking <= 3 %}top3{% endif %}">
+                            {{ m.ranking|default:"?" }}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="prop-code">{{ m.code|default:m.propiedad_id }}</span>
+                        <span class="prop-detail">{{ m.title|default:"Sin título"|truncatechars:30 }}</span>
+                    </td>
+                    <td style="color:var(--text-secondary);font-size:12px;">
+                        {{ m.district_name|default:"—" }}
+                    </td>
+                    <td style="font-size:12px;color:var(--text-secondary);">
+                        {{ m.property_type|default:"—" }}
+                    </td>
+                    <td style="text-align:center;">{{ m.bedrooms|default:"—" }}</td>
+                    <td style="text-align:center;">{{ m.bathrooms|default:"—" }}</td>
+                    <td style="font-variant-numeric:tabular-nums;">
+                        {% if m.price %}
+                        <span style="font-weight:500;">
+                            {% if m.currency_id == 1 %}${% else %}S/{% endif %}{{ m.price|floatformat:0 }}
+                        </span>
+                        {% else %}
+                        <span style="color:var(--text-muted);">—</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="score-col">
+                            <div class="mini-bar">
+                                <div class="fill semantico" style="width:{{ m.score_semantico|floatformat:0|default:0 }}%;"></div>
+                            </div>
+                            <span class="score-num semantico">{{ m.score_semantico|floatformat:2 }}</span>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="score-col">
+                            <div class="mini-bar">
+                                <div class="fill estructural" style="width:{{ m.score_structural|floatformat:0|default:0 }}%;"></div>
+                            </div>
+                            <span class="score-num estructural">{{ m.score_structural|floatformat:1 }}</span>
+                        </div>
+                    </td>
+                    <td>
+                        <span style="font-weight:700;font-size:14px;">{{ m.score_total|floatformat:1 }}</span>
+                    </td>
+                    <td>
+                        <span class="tipo-badge {{ m.match_tipo }}">
+                            {% if m.match_tipo == 'semantico' %}🧠{% elif m.match_tipo == 'estructural' %}📊{% else %}🔄{% endif %}
+                        </span>
+                    </td>
+                    <td>
+                        <a class="score-detalle-toggle" onclick="toggleDetalle(this, 'detalle-{{ forloop.counter }}')">
+                            📋 Detalle
+                        </a>
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="12" style="padding: 0;">
+                        <div id="detalle-{{ forloop.counter }}" class="score-detalle-panel">
+                            <!-- ====== COPY EXACTA de la card #1 ====== -->
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                                <div class="prop-card">
+                                    {% if m.imagen_url %}
+                                    <img class="prop-card-img" src="{{ m.imagen_url }}" onerror="this.style.display='none'">
+                                    {% endif %}
+                                    <div class="prop-card-body">
+                                        <div class="prop-title">{{ m.title|default:"Sin título" }}</div>
+                                        <div class="prop-subtitle">{{ m.code|default:m.propiedad_id }}</div>
+                                        <div style="margin-top:8px;">
+                                            <div class="prop-detail-row"><span class="prop-detail-label">📍 Distrito</span><span class="prop-detail-value">{{ m.district_name|default:"—" }}</span></div>
+                                            <div class="prop-detail-row"><span class="prop-detail-label">🏠 Tipo</span><span class="prop-detail-value">{{ m.property_type|default:"—" }}</span></div>
+                                            <div class="prop-detail-row"><span class="prop-detail-label">💰 Precio</span><span class="prop-detail-value" style="font-weight:700;color:var(--accent-green);">{% if m.currency_id == 1 %}${% else %}S/{% endif %}{{ m.price|floatformat:0|default:"—" }}</span></div>
+                                            <div class="prop-detail-row"><span class="prop-detail-label">🛏️ Habitaciones</span><span class="prop-detail-value">{{ m.bedrooms|default:"—" }}</span></div>
+                                            <div class="prop-detail-row"><span class="prop-detail-label">🚿 Baños</span><span class="prop-detail-value">{{ m.bathrooms|default:"—" }}</span></div>
+                                            <div class="prop-detail-row"><span class="prop-detail-label">📐 Área construida</span><span class="prop-detail-value">{{ m.built_area|floatformat:0|default:"—" }} m²</span></div>
+                                            {% if m.land_area %}<div class="prop-detail-row"><span class="prop-detail-label">🌳 Área terreno</span><span class="prop-detail-value">{{ m.land_area|floatformat:0 }} m²</span></div>{% endif %}
+                                            <div class="prop-detail-row"><span class="prop-detail-label">🚗 Estacionamiento</span><span class="prop-detail-value">{{ m.garage_spaces|default:"0" }}</span></div>
+                                            <div class="prop-detail-row"><span class="prop-detail-label">📅 Antigüedad</span><span class="prop-detail-value">{% if m.antiquity_years %}{{ m.antiquity_years }} años{% else %}—{% endif %}</span></div>
+                                            <div class="prop-detail-row"><span class="prop-detail-label">🪜 Ascensor</span><span class="prop-detail-value">{% if m.has_elevator %}Sí{% else %}No{% endif %}</span></div>
+                                            {% if m.real_address %}<div class="prop-detail-row"><span class="prop-detail-label">📍 Dirección</span><span class="prop-detail-value" style="font-size:11px;">{{ m.real_address|truncatechars:40 }}</span></div>{% endif %}
+                                            <div class="prop-detail-row"><span class="prop-detail-label">👤 Contacto</span><span class="prop-detail-value">{{ m.contact_name|default:"—" }}</span></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="compare-card">
+                                    <div style="font-weight:600;margin-bottom:8px;color:var(--text-secondary);font-size:13px;">⚖️ vs Requerimiento</div>
+                                    <div class="compare-row"><span class="compare-label">📍 Distrito</span><span class="compare-req">{{ requerimiento.distritos|truncatechars:25 }}</span><span class="compare-vs">→</span><span class="compare-prop">{{ m.district_name|default:"—" }}</span><span style="flex:0 0 30px;text-align:center;">{% if m.district_name and m.district_name in requerimiento.distritos %}✅{% else %}⚠️{% endif %}</span></div>
+                                    <div class="compare-row"><span class="compare-label">🏠 Tipo</span><span class="compare-req">{{ requerimiento.tipo_propiedad|capfirst }}</span><span class="compare-vs">→</span><span class="compare-prop">{{ m.property_type|default:"—" }}</span><span style="flex:0 0 30px;text-align:center;">{% if m.property_type|lower == requerimiento.tipo_propiedad|lower %}✅{% else %}⚠️{% endif %}</span></div>
+                                    <div class="compare-row"><span class="compare-label">💰 Precio</span><span class="compare-req">{% if requerimiento.presupuesto_monto %}${% endif %}{{ requerimiento.presupuesto_monto|floatformat:0|default:"Sin límite" }}</span><span class="compare-vs">→</span><span class="compare-prop">{% if m.currency_id == 1 %}${% else %}S/{% endif %}{{ m.price|floatformat:0|default:"—" }}</span><span style="flex:0 0 30px;text-align:center;">{% if m.price and requerimiento.presupuesto_monto and m.price <= requerimiento.presupuesto_monto %}✅{% else %}❌{% endif %}</span></div>
+                                    <div class="compare-row"><span class="compare-label">🛏️ Habs</span><span class="compare-req">{{ requerimiento.habitaciones|default:"—" }}</span><span class="compare-vs">→</span><span class="compare-prop">{{ m.bedrooms|default:"—" }}</span><span style="flex:0 0 30px;text-align:center;">{% if m.bedrooms and m.bedrooms >= requerimiento.habitaciones %}✅{% else %}⚠️{% endif %}</span></div>
+                                    <div class="compare-row"><span class="compare-label">🚿 Baños</span><span class="compare-req">{{ requerimiento.banos|default:"—" }}</span><span class="compare-vs">→</span><span class="compare-prop">{{ m.bathrooms|default:"—" }}</span><span style="flex:0 0 30px;text-align:center;">{% if m.bathrooms and m.bathrooms >= requerimiento.banos %}✅{% else %}⚠️{% endif %}</span></div>
+                                </div>
+                            </div>
+                            {% if m.embedding_content and req_embedding_content %}
+                            <div style="margin-top:10px;background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:8px;padding:12px;">
+                                <div style="font-size:11px;color:var(--accent-purple);font-weight:600;text-transform:uppercase;margin-bottom:8px;">🧠 Análisis Semántico</div>
+                                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                                    <div style="font-size:11px;color:var(--text-secondary);line-height:1.5;max-height:120px;overflow-y:auto;white-space:pre-wrap;word-break:break-word;padding:8px;background:var(--bg-primary);border-radius:4px;">📋 {{ req_embedding_content|truncatechars:300 }}</div>
+                                    <div style="font-size:11px;color:var(--text-secondary);line-height:1.5;max-height:120px;overflow-y:auto;white-space:pre-wrap;word-break:break-word;padding:8px;background:var(--bg-primary);border-radius:4px;">🏠 {{ m.embedding_content|truncatechars:300 }}</div>
+                                </div>
+                                <div style="margin-top:6px;font-size:10px;color:var(--text-muted);">Score semántico: <strong>{{ m.semantic_score_real|default:m.score_semantico|floatformat:4 }}</strong></div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="no-matches">
+            <div style="font-size:40px;margin-bottom:12px;">📭</div>
+            <div>No hay matches para este requerimiento.</div>
+            <div style="font-size:12px;margin-top:8px;color:var(--text-muted);">
+                Ejecuta Matching Masivo primero desde la página principal.
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Leyenda -->
+    <div class="info-panel">
+        <h3>📖 Leyenda</h3>
+        <div class="leyenda-grid">
+            <div class="leyenda-item">
+                <span class="dot semantico"></span>
+                <span><strong>Score Semántico</strong> (0-1): Similitud del embedding FAISS entre el requerimiento y la propiedad usando el modelo multilingual-e5-large. Mide qué tan similares son los textos en significado, no solo palabras exactas.</span>
+            </div>
+            <div class="leyenda-item">
+                <span class="dot estructural"></span>
+                <span><strong>Score Estructural</strong> (0-100): Evaluación de 10 factores ponderados: distrito(30%), tipo propiedad(30%), precio(30%), área(2%), habitaciones(2%), amenities(2%), baños(1%), antigüedad(1%), estacionamiento(1%), ascensor(1%).</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleDetalle(link, panelId) {
+    const panel = document.getElementById(panelId);
+    if (panel) {
+        panel.classList.toggle('visible');
+        link.textContent = panel.classList.contains('visible') ? '📋 Ocultar' : '📋 Detalle';
+    }
+}
+</script>
+{% endblock %}

@@ -489,9 +489,8 @@
         .app-sidebar.collapsed .nav-item.has-submenu .nav-link.submenu-toggle span:not(.nav-icon) {
             display: none;
         }
-
-        {% block extra_css %}{% endblock %}
     </style>
+    {% block extra_css %}{% endblock %}
 </head>
 <body>
     <!-- Overlay for mobile -->
@@ -583,6 +582,10 @@
                         <a href="/matching/matches-por-propiedad/" class="submenu-item {% if '/matching/matches-por-propiedad/' in request.path %}active{% endif %}">
                             <span class="submenu-icon">&#x1F3E0;</span>
                             <span>Matches x Prop</span>
+                        </a>
+                        <a href="/canvas/" class="submenu-item {% if '/canvas/' in request.path %}active{% endif %}">
+                            <span class="submenu-icon">&#x1F3A8;</span>
+                            <span>Canvas Visual</span>
                         </a>
                     </div>
                 </div>

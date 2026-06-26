@@ -5,7 +5,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('requerimientos', '0013_texto_hash'),
+        ('requerimientos', '0013_add_texto_hash'),
     ]
 
     operations = [

@@ -43,6 +43,9 @@ urlpatterns = [
     path('masivo/', views.MatchingMasivoView.as_view(), name='masivo'),
     path('ejecutar-masivo/', views.EjecutarMatchingMasivoView.as_view(), name='ejecutar_masivo'),
     
+    # Detalle híbrido (HTML)
+    path('hibrido/detalle/<int:requerimiento_id>/', views.DetalleHibridoView.as_view(), name='hibrido-detalle'),
+
     # Vista calendario
     path('calendar/', views.MatchingCalendarView.as_view(), name='calendar'),
 
@@ -61,4 +64,7 @@ urlpatterns = [
     path('api/matching/<int:pk>/pipeline-requerimientos/',
          views.MatchingViewSet.as_view({'get': 'pipeline_requerimientos'}),
          name='matching-pipeline-requerimientos'),
+
+    # JSON endpoint: detalle de matches de un requerimiento
+    path('api/hibrido/detalle/<int:requerimiento_id>/', views.detalle_matches_hibrido, name='hibrido-detalle-api'),
 ]

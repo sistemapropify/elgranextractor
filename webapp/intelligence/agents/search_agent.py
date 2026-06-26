@@ -45,6 +45,9 @@ class SearchAgent:
         """
         Ejecuta búsqueda RAG según la skill detectada.
 
+        Para skill 'matching_hibrido', delega en HybridMatchingSkill via SkillOrchestrator.
+        Para las demás, usa RAGService.search_dynamic() con filtros SQL.
+
         Args:
             state: Dict con message, skill_detectada, params_extraidos
 
@@ -57,21 +60,21 @@ class SearchAgent:
         params = state.get('params_extraidos', {})
 
         try:
+            # ── Skill híbrida: delegar en HybridMatchingSkill ──────────
+            if skill_name == 'matching_hibrido':
+                return cls._run_hybrid_matching(state, params, start)
+
+            # ── Skills tradicionales: RAG + filtros SQL ────────────────
             from ..services.rag import RAGService
 
             # Determinar colecciones según la skill
             collections = cls._get_collections_for_skill(skill_name)
 
             # Extraer parámetros del mensaje para construir filtros SQL.
-            # Anteriormente solo se extraían si NO había skill detectada,
-            # lo que causaba que filtros como distrito NUNCA se aplicaran
-            # cuando el RouterAgent ya había clasificado la skill.
-            # Ahora se extraen SIEMPRE y se combinan con params existentes.
             params_from_message = cls._extract_basic_intent(message)
             if params_from_message:
                 params.update(params_from_message)
                 state['params_extraidos'] = params
-                # Asignar skill si no se había detectado una
                 if not skill_name:
                     state['skill_detectada'] = 'busqueda_propiedades'
                     skill_name = 'busqueda_propiedades'
@@ -80,8 +83,6 @@ class SearchAgent:
             filters = cls._build_filters(params, skill_name)
 
             # Ejecutar búsqueda semántica con pre-filtrado SQL
-            # Sin límite de resultados para encontrar TODAS las propiedades
-            # que coincidan con los filtros (distrito, tipo, etc.)
             results = RAGService.search_dynamic(
                 query=message,
                 collection_names=collections,
@@ -101,6 +102,89 @@ class SearchAgent:
 
         except Exception as e:
             logger.error(f"[F2-001] SearchAgent error: {e}")
+            state['resultados_busqueda'] = []
+            state['filtros_aplicados'] = {}
+            state['total_resultados'] = 0
+
+        return state
+
+    @classmethod
+    def _run_hybrid_matching(
+        cls, state: Dict[str, Any], params: Dict[str, Any], start: float
+    ) -> Dict[str, Any]:
+        """
+        Ejecuta matching híbrido delegando en HybridMatchingSkill.
+
+        Args:
+            state: Estado actual del agente
+            params: Parámetros extraídos (puede contener requerimiento_id)
+            start: Timestamp de inicio para medir latencia
+
+        Returns:
+            state actualizado con resultados_busqueda desde HybridMatchingSkill
+        """
+        try:
+            from ..skills.registry import SkillRegistry
+            from ..skills.orchestrator import SkillOrchestrator, ExecutionContext
+            from ..skills.cache import SkillCache
+
+            # Obtener requerimiento_id desde params o desde el mensaje
+            requerimiento_id = params.get('requerimiento_id')
+            if not requerimiento_id:
+                # Intentar extraer del mensaje
+                message = state.get('message', '')
+                import re
+                match = re.search(r'(?:requerimiento|id|#)\s*(\d+)', message, re.IGNORECASE)
+                if match:
+                    requerimiento_id = int(match.group(1))
+                else:
+                    logger.warning("[SearchAgent] matching_hibrido sin requerimiento_id")
+                    state['resultados_busqueda'] = []
+                    state['filtros_aplicados'] = {}
+                    state['total_resultados'] = 0
+                    return state
+
+            # Ejecutar skill via SkillOrchestrator
+            registry = SkillRegistry()
+            cache = SkillCache()  # usa defaults (cache local, sin Redis)
+            orchestrator = SkillOrchestrator(registry, cache)
+
+            skill_params = {
+                'requerimiento_id': int(requerimiento_id),
+                'alpha': params.get('alpha', 0.6),
+                'top_n': params.get('top_n', 20),
+                'umbral_minimo': params.get('umbral_minimo', 0.0),
+            }
+
+            context = ExecutionContext(
+                user_id=state.get('user_id'),
+                session_id=state.get('conversation_id'),
+            )
+
+            result = orchestrator.execute_skill('matching_hibrido', skill_params, context)
+
+            if result.success and result.data:
+                matches = result.data.get('matches', [])
+                state['resultados_busqueda'] = matches
+                state['filtros_aplicados'] = {'modo': 'hybrid', 'alpha': skill_params['alpha']}
+                state['total_resultados'] = result.data.get('total', len(matches))
+
+                elapsed = (time.time() - start) * 1000
+                logger.info(
+                    f"[F2-001] SearchAgent: matching_hibrido | "
+                    f"requerimiento_id={requerimiento_id} | "
+                    f"resultados={state['total_resultados']} | latencia={elapsed:.1f}ms"
+                )
+            else:
+                logger.warning(
+                    f"[SearchAgent] matching_hibrido falló: {result.message}"
+                )
+                state['resultados_busqueda'] = []
+                state['filtros_aplicados'] = {}
+                state['total_resultados'] = 0
+
+        except Exception as e:
+            logger.error(f"[SearchAgent] Error en matching_hibrido: {e}")
             state['resultados_busqueda'] = []
             state['filtros_aplicados'] = {}
             state['total_resultados'] = 0
@@ -141,6 +225,7 @@ class SearchAgent:
             'acm_analisis': ['propiedadespropify'],
             'reporte_precios_zona': ['propiedadespropify'],
             'matching_oferta_demanda': ['propiedadespropify', 'requerimientos'],
+            'matching_hibrido': ['propiedadespropify', 'requerimientos_enbedados'],
         }
         return collection_map.get(skill_name, ['propiedadespropify'])
 

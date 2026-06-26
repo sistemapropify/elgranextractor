@@ -200,8 +200,12 @@ class FAISSIndexManager:
 
             doc_id = self.id_map.get(int(idx))
             if doc_id:
-                # Con vectores normalizados, Inner Product = similitud coseno
-                similarity = float(dist)
+                # FAISS IndexHNSWFlat usa distancia L2, no similitud coseno.
+                # Para vectores L2-normalizados: cos_sim = 1 - L2²/2
+                l2_dist = float(dist)
+                similarity = 1.0 - (l2_dist * l2_dist) / 2.0
+                if similarity < 0:
+                    similarity = 0.0
                 results.append({
                     'document_id': doc_id,
                     'similarity': similarity,

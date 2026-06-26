@@ -59,6 +59,7 @@ class IntelligenceConfig(AppConfig):
             from .skills.acm_analisis import ACMAnalisisSkill
             from .skills.reporte_precios import ReportePreciosZonaSkill
             from .skills.matching import MatchingOfertaDemandaSkill
+            from .skills.matching_hybrid import HybridMatchingSkill
             from .skills.busqueda_exacta import BusquedaExactaSkill
             from .skills.formatear_propiedades import FormatearPropiedadesSkill
             from .skills.clasificar_intencion_whatsapp import ClasificarIntencionWhatsAppSkill
@@ -77,6 +78,7 @@ class IntelligenceConfig(AppConfig):
             registry.register(ACMAnalisisSkill)
             registry.register(ReportePreciosZonaSkill)
             registry.register(MatchingOfertaDemandaSkill)
+            registry.register(HybridMatchingSkill)
             registry.register(BusquedaExactaSkill)
             registry.register(FormatearPropiedadesSkill)
             registry.register(ClasificarIntencionWhatsAppSkill)
