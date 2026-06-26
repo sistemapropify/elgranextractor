@@ -593,7 +593,13 @@ async function loadMatchesForProp(propId, nodeId) {
     const data = await res.json();
     if (cnt) cnt.textContent = data.total + ' reqs';
 
-    // Create req nodes connected to this property
+    // ── Limpiar aristas match PREVIAS desde este nodo propiedad ──
+    const prevEdgeIds = Object.keys(STATE.aristas).filter(
+      eid => STATE.aristas[eid].origen === nodeId && STATE.aristas[eid].tipo === 'match'
+    );
+    prevEdgeIds.forEach(eid => delete STATE.aristas[eid]);
+
+    // ── Crear nodos req y aristas match ──
     if (data.matches && data.matches.length > 0) {
       const prop = STATE.nodos[nodeId];
       const baseX = prop.x + 280;
@@ -601,15 +607,20 @@ async function loadMatchesForProp(propId, nodeId) {
       data.matches.forEach((req, i) => {
         const reqId = req.id;
         const reqNodeId = createReqNode(reqId, req, baseX, baseY + i * 220);
-        // Create edge
-        const edgeId = 'e' + (++STATE.edgeIdCounter);
-        STATE.aristas[edgeId] = {
-          id: edgeId,
-          origen: nodeId,
-          destino: reqNodeId,
-          tipo: 'match',
-          label: (req.score_estructural || 0) + '%',
-        };
+        // Solo crear arista si no existe ya una entre origen y destino
+        const edgeExists = Object.values(STATE.aristas).some(
+          e => e.origen === nodeId && e.destino === reqNodeId
+        );
+        if (!edgeExists) {
+          const edgeId = 'e' + (++STATE.edgeIdCounter);
+          STATE.aristas[edgeId] = {
+            id: edgeId,
+            origen: nodeId,
+            destino: reqNodeId,
+            tipo: 'match',
+            label: (req.score_estructural || 0) + '%',
+          };
+        }
       });
       updateEdges();
       markDirty();

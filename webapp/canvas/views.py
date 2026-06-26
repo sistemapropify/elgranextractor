@@ -370,120 +370,46 @@ def api_agentes(request):
 
 
 def api_reqs_match(request, prop_id):
+    """
+    Retorna los requerimientos que tienen match REAL con una propiedad.
+    En lugar de calcular matches nuevos con embeddings (impreciso),
+    consulta los resultados ya ejecutados por el motor de matching en MatchResult.
+    """
     user = _get_current_user(request)
     if not user:
         return JsonResponse({'error': 'No autenticado'}, status=401)
 
     try:
-        matches = _get_matches_by_embedding(prop_id)
-        if matches is not None:
-            return JsonResponse({'matches': matches, 'total': len(matches)})
-    except Exception as e:
-        logger.warning(f"Embedding match failed for prop {prop_id}: {e}")
+        from matching.models import MatchResult
 
-    # Fallback: usar matching estructural
-    try:
-        from matching.engine import ejecutar_matching_requerimiento
-        reqs_con_match = ejecutar_matching_requerimiento(prop_id)
+        # Buscar matches REALES ya calculados para esta propiedad
+        # Solo matches compatibles (fase_eliminada IS NULL = pasaron filtros duros)
+        match_results = MatchResult.objects.filter(
+            propiedad_id=prop_id,
+            fase_eliminada__isnull=True,
+        ).select_related('requerimiento').order_by('-score_total')[:20]
+
         matches = []
-        for req_data in (reqs_con_match or []):
+        for mr in match_results:
+            req = mr.requerimiento
             matches.append({
-                'id': str(req_data.get('requerimiento_id', '')),
-                'titulo': req_data.get('titulo', req_data.get('cliente', 'Requerimiento')),
-                'score_estructural': req_data.get('score', 0),
-                'score_semantico': req_data.get('score_semantico', 0),
-                'fecha': str(req_data.get('fecha', '')),
+                'id': str(req.id),
+                'titulo': getattr(req, 'cliente', None) or getattr(req, 'nombre', None) or f'Req #{req.id}',
+                'presupuesto': float(mr.score_total) if mr.score_total else 0,
+                'moneda': '',
+                'distritos': getattr(req, 'distritos', '') or '',
+                'tipo_propiedad': '',
+                'score_semantico': 0,
+                'score_estructural': float(mr.score_total) if mr.score_total else 0,
+                'fecha': str(req.fecha) if hasattr(req, 'fecha') and req.fecha else '',
                 'tipo': 'estructural',
             })
+
         return JsonResponse({'matches': matches, 'total': len(matches)})
+
     except Exception as e:
-        logger.error(f"Fallback match also failed for prop {prop_id}: {e}")
+        logger.error(f"Error fetching MatchResult for prop {prop_id}: {e}")
         return JsonResponse({'matches': [], 'total': 0})
-
-
-def _get_matches_by_embedding(prop_id: int):
-    """
-    Busca matches por cosine similarity de embeddings entre
-    la propiedad (propiedadespropify) y los requerimientos (requerimientos_enbedados).
-    Filtra por tipo de operación: propiedades en venta solo matchean con requerimientos de compra,
-    propiedades en alquiler solo con requerimientos de alquiler.
-    """
-    coleccion_props = IntelligenceCollection.objects.filter(name='propiedadespropify').first()
-    coleccion_reqs = IntelligenceCollection.objects.filter(name='requerimientos_enbedados').first()
-
-    if not coleccion_props or not coleccion_reqs:
-        return None
-
-    # Obtener embedding de la propiedad y su tipo de operación
-    prop_doc = IntelligenceDocument.objects.filter(
-        collection=coleccion_props,
-        source_id=str(prop_id),
-    ).exclude(embedding__isnull=True).first()
-
-    if not prop_doc or not prop_doc.embedding:
-        return None
-
-    prop_fv = prop_doc.field_values or {}
-    prop_operation = (prop_fv.get('operation_type_name') or '').lower().strip()
-    # Mapear: venta/compra → compra, alquiler → alquiler
-    if prop_operation in ('venta', 'compra', 'permuta'):
-        req_condicion_valida = ('compra', 'venta')
-    elif prop_operation in ('alquiler', 'renta', 'anticresis'):
-        req_condicion_valida = ('alquiler', 'anticresis', 'renta')
-    else:
-        req_condicion_valida = None  # sin filtro si no se puede determinar
-
-    import struct
-    import math
-
-    prop_vec = struct.unpack('f' * 1024, prop_doc.embedding)
-
-    matches = []
-    req_docs = IntelligenceDocument.objects.filter(
-        collection=coleccion_reqs,
-    ).exclude(embedding__isnull=True).iterator()
-
-    for req_doc in req_docs:
-        try:
-            req_fv = req_doc.field_values or {}
-            
-            # Filtrar por tipo de operación (compra vs alquiler)
-            if req_condicion_valida:
-                req_condicion = (req_fv.get('condicion') or '').lower().strip()
-                if req_condicion and req_condicion not in req_condicion_valida:
-                    continue
-            
-            req_vec = struct.unpack('f' * 1024, req_doc.embedding)
-            similarity = _cosine_similarity(prop_vec, req_vec)
-            if similarity > 0.5:
-                matches.append({
-                    'id': req_doc.source_id,
-                    'titulo': req_fv.get('cliente', req_fv.get('nombre', f'Req #{req_doc.source_id}')),
-                    'presupuesto': req_fv.get('presupuesto_monto'),
-                    'moneda': req_fv.get('presupuesto_moneda', ''),
-                    'distritos': req_fv.get('distritos', ''),
-                    'tipo_propiedad': req_fv.get('tipo_propiedad', ''),
-                    'score_semantico': round(similarity, 4),
-                    'score_estructural': round(similarity * 100),
-                    'fecha': str(req_doc.created_at.date()) if hasattr(req_doc.created_at, 'date') else '',
-                    'tipo': 'semantico',
-                })
-        except Exception:
-            continue
-
-    matches.sort(key=lambda m: m['score_semantico'], reverse=True)
-    return matches[:20]
-
-
-def _cosine_similarity(a, b):
-    """Calcula cosine similarity entre dos vectores."""
-    import math
-    dot = sum(av * bv for av, bv in zip(a, b))
-    na = math.sqrt(sum(av * av for av in a))
-    nb = math.sqrt(sum(bv * bv for bv in b))
-    if na == 0 or nb == 0:
-        return 0.0
-    return dot / (na * nb)
 
 
 # ── API: TEMPLATES ─────────────────────────────────────────────
