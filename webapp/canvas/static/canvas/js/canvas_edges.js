@@ -94,48 +94,44 @@ function updateEdges() {
       const midX = (from.x + to.x) / 2;
       const midY = (from.y + to.y) / 2;
 
-      // Obtener score: score_total (nuevo) o label (legacy)
+      // Obtener score
       let scoreVal = edge.score_total;
       if (scoreVal == null && edge.label) {
         scoreVal = parseFloat(edge.label);
       }
       const score = !isNaN(scoreVal) ? Math.round(parseFloat(scoreVal)) : 0;
-      const fecha = edge.ejecutado_en || '';
 
       // Grupo SVG contenedor
       const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
       g.classList.add('cv-edge__badge-group');
-      g.style.cursor = 'pointer';
+      g.style.cssText = 'cursor:pointer;pointer-events:all;';
       if (edge.match_id) g.dataset.matchId = edge.match_id;
 
-      // Círculo de fondo con borde amarillo parpadeante
+      // Círculo de fondo más grande
       const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
       circle.setAttribute('cx', midX);
       circle.setAttribute('cy', midY);
-      circle.setAttribute('r', '18');
+      circle.setAttribute('r', '26');
       circle.classList.add('cv-edge__badge-circle');
       g.appendChild(circle);
 
-      // Texto del score
+      // Texto "MATCH" arriba
+      const labelText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      labelText.setAttribute('x', midX);
+      labelText.setAttribute('y', midY - 5);
+      labelText.setAttribute('text-anchor', 'middle');
+      labelText.classList.add('cv-edge__badge-label');
+      labelText.textContent = 'MATCH';
+      g.appendChild(labelText);
+
+      // Texto del score abajo
       const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
       text.setAttribute('x', midX);
-      text.setAttribute('y', midY - (fecha ? 3 : 0));
+      text.setAttribute('y', midY + 11);
       text.setAttribute('text-anchor', 'middle');
-      text.setAttribute('dominant-baseline', 'central');
       text.classList.add('cv-edge__badge-text');
       text.textContent = score + '%';
       g.appendChild(text);
-
-      // Fecha debajo del score
-      if (fecha && fecha.length >= 10) {
-        const dateText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        dateText.setAttribute('x', midX);
-        dateText.setAttribute('y', midY + 13);
-        dateText.setAttribute('text-anchor', 'middle');
-        dateText.classList.add('cv-edge__badge-date');
-        dateText.textContent = fecha.substring(0, 10);
-        g.appendChild(dateText);
-      }
 
       // Click handler
       g.addEventListener('click', function(e) {

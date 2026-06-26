@@ -574,44 +574,46 @@
 .cv-node--req.collapsed .cv-node__req-footer { display: none; }
 
 /* ── EDGE BADGE CIRCULAR (match score) ── */
+/* Permitir clics en badges dentro de #cv-edges (que tiene pointer-events:none) */
+#cv-edges .cv-edge__badge-group {
+  pointer-events: all !important;
+}
+
 @keyframes cv-badge-pulse {
-  0%, 100% { opacity: 1; stroke-opacity: 1; }
-  50% { opacity: 0.5; stroke-opacity: 0.3; }
+  0%, 100% { opacity: 1; stroke-opacity: 1; filter: drop-shadow(0 0 8px rgba(255, 221, 0, 0.7)); }
+  50% { opacity: 0.5; stroke-opacity: 0.3; filter: drop-shadow(0 0 3px rgba(255, 221, 0, 0.2)); }
 }
 .cv-edge__badge-circle {
-  fill: #1a1c24;
+  fill: #0f1117;
   stroke: #ffdd00;
-  stroke-width: 2.5;
-  filter: drop-shadow(0 0 6px rgba(255, 221, 0, 0.6));
+  stroke-width: 3;
   animation: cv-badge-pulse 1.5s ease-in-out infinite;
-  cursor: pointer;
   transition: filter 0.3s;
 }
-.cv-edge__badge-circle:hover {
-  filter: drop-shadow(0 0 12px rgba(255, 221, 0, 0.9));
-}
-.cv-edge__badge-text {
+.cv-edge__badge-label {
   fill: #ffdd00;
-  font-size: 11px;
+  font-size: 8px;
   font-weight: 700;
   text-anchor: middle;
-  dominant-baseline: central;
-  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
   pointer-events: none;
+  user-select: none;
 }
-.cv-edge__badge-date {
-  fill: #8b90a7;
-  font-size: 7px;
+.cv-edge__badge-text {
+  fill: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
   text-anchor: middle;
-  cursor: pointer;
   pointer-events: none;
+  user-select: none;
 }
 .cv-edge__badge-group {
   cursor: pointer;
 }
 .cv-edge__badge-group:hover .cv-edge__badge-circle {
-  filter: drop-shadow(0 0 12px rgba(255, 221, 0, 0.9));
-  stroke-opacity: 1;
+  stroke-width: 4;
+  filter: drop-shadow(0 0 16px rgba(255, 221, 0, 1));
 }
 
 /* ── MATCH COMPARISON MODAL ── */
