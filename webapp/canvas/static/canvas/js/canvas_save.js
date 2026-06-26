@@ -18,18 +18,31 @@ function markDirty() {
 /* ── BUILD SNAPSHOT ── */
 
 function buildSnapshot() {
-  const nodos = Object.values(STATE.nodos).map(n => ({
-    id: n.id,
-    tipo: n.tipo,
-    ref_id: n.ref_id,
-    x: Math.round(n.x),
-    y: Math.round(n.y),
-    width: n.width,
-    height: n.height,
-    collapsed: n.collapsed || false,
-    color: n.color || null,
-    field_data: n.field_data || null,
-  }));
+  const nodos = Object.values(STATE.nodos).map(n => {
+    // Usar dimensiones reales del DOM si están disponibles (el STATE puede tener valores
+    // capturados antes de que carguen imágenes/iframes asíncronos)
+    let w = n.width;
+    let h = n.height;
+    if (n.el) {
+      // offsetHeight/offsetWidth son 0 si el elemento no está renderizado
+      const actualW = n.el.offsetWidth;
+      const actualH = n.el.offsetHeight;
+      if (actualW > 0) w = actualW;
+      if (actualH > 0) h = actualH;
+    }
+    return {
+      id: n.id,
+      tipo: n.tipo,
+      ref_id: n.ref_id,
+      x: Math.round(n.x),
+      y: Math.round(n.y),
+      width: w,
+      height: h,
+      collapsed: n.collapsed || false,
+      color: n.color || null,
+      field_data: n.field_data || null,
+    };
+  });
 
   const aristas = Object.values(STATE.aristas).map(e => ({
     id: e.id,
