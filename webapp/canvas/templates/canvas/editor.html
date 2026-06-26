@@ -34,6 +34,8 @@
     <button class="cv-btn" id="btn-add-nota">+ Nota</button>
     <button class="cv-btn" id="btn-fit">Encuadrar</button>
     <div class="cv-topbar__sep"></div>
+    <button class="cv-btn" id="btn-undo" title="Deshacer (Ctrl+Z)">↩</button>
+    <button class="cv-btn" id="btn-redo" title="Rehacer (Ctrl+Shift+Z)">↪</button>
     <button class="cv-btn cv-btn--pri" id="btn-save">Guardar</button>
     <div class="cv-status">
       <span class="cv-status__dot" id="status-dot"></span>
@@ -140,4 +142,5 @@
 <script src="{% static 'canvas/js/canvas_edges.js' %}"></script>
 <script src="{% static 'canvas/js/canvas_sidebar.js' %}"></script>
 <script src="{% static 'canvas/js/canvas_save.js' %}"></script>
+<script src="{% static 'canvas/js/canvas_history.js' %}"></script>
 {% endblock %}

@@ -187,6 +187,8 @@ function doNodeDrag(e) {
 
 function endNodeDrag() {
   if (!STATE.dragging) return;
+  // Capturar estado después del drag (la posición ya se actualizó en doNodeDrag)
+  if (typeof captureState === 'function') captureState();
   STATE.dragging = null;
 }
 
@@ -212,6 +214,7 @@ function endConnection(e) {
     const targetId = targetPort.dataset.node;
     const targetPortDir = targetPort.dataset.port || 'left';
     if (targetId !== STATE.connecting.origen) {
+      if (typeof captureState === 'function') captureState();
       const edgeId = 'e' + (++STATE.edgeIdCounter);
       STATE.aristas[edgeId] = {
         id: edgeId,

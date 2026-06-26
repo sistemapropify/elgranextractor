@@ -22,6 +22,8 @@ function createPropNode(sourceId, data, x, y, campos) {
     reRenderPropBody(id, campos || getActiveCampos());
     return id;
   }
+  // Capturar estado antes de crear nuevo nodo
+  if (typeof captureState === 'function') captureState();
 
   const node = document.createElement('div');
   node.className = 'cv-node cv-node--prop';
@@ -138,6 +140,7 @@ function getActiveCampos() {
 function createReqNode(reqId, data, x, y) {
   const id = 'req_' + reqId;
   if (STATE.nodos[id]) return id;
+  if (typeof captureState === 'function') captureState();
 
   const node = document.createElement('div');
   node.className = 'cv-node cv-node--req';
@@ -196,6 +199,7 @@ function createReqNode(reqId, data, x, y) {
  */
 function createNotaNode(x, y, contenido, color) {
   const id = 'nota_' + Date.now();
+  if (typeof captureState === 'function') captureState();
   const node = document.createElement('div');
   node.className = 'cv-node cv-node--nota';
   node.dataset.id = id;
@@ -288,6 +292,7 @@ function positionNode(id, el, x, y) {
 function toggleCollapse(id) {
   const nodo = STATE.nodos[id];
   if (!nodo || !nodo.el) return;
+  if (typeof captureState === 'function') captureState();
   nodo.collapsed = !nodo.collapsed;
   nodo.el.classList.toggle('collapsed', nodo.collapsed);
   const btn = nodo.el.querySelector('.cv-node__collapse');
@@ -298,6 +303,7 @@ function toggleCollapse(id) {
 function deleteNode(id) {
   const nodo = STATE.nodos[id];
   if (!nodo) return;
+  if (typeof captureState === 'function') captureState();
   if (nodo.el && nodo.el.parentNode) nodo.el.parentNode.removeChild(nodo.el);
   delete STATE.nodos[id];
   // Remove connected edges
