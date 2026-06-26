@@ -415,7 +415,7 @@
 .cv-btn--matches:hover { background: rgba(92,107,192,0.25); }
 .cv-match-count { font-size: 11px; color: var(--cv-text-muted); }
 
-/* ── PUERTOS ── */
+/* ── PUERTOS (4 direcciones) ── */
 .cv-port {
   position: absolute;
   width: 10px;
@@ -428,10 +428,18 @@
   z-index: 3;
 }
 .cv-port:hover  { border-color: var(--cv-border-act); background: #5c6bc0; transform: scale(1.3); }
-.cv-port--out   { right: -5px; top: 50%; transform: translateY(-50%); }
-.cv-port--in    { left: -5px;  top: 50%; transform: translateY(-50%); }
-.cv-port--out:hover { transform: translateY(-50%) scale(1.3); }
-.cv-port--in:hover  { transform: translateY(-50%) scale(1.3); }
+/* Position: right side */
+.cv-port--right { right: -5px; top: 50%; transform: translateY(-50%); }
+.cv-port--right:hover { transform: translateY(-50%) scale(1.3); }
+/* Position: left side */
+.cv-port--left  { left: -5px;  top: 50%; transform: translateY(-50%); }
+.cv-port--left:hover  { transform: translateY(-50%) scale(1.3); }
+/* Position: top side */
+.cv-port--top   { top: -5px;  left: 50%; transform: translateX(-50%); }
+.cv-port--top:hover   { transform: translateX(-50%) scale(1.3); }
+/* Position: bottom side */
+.cv-port--bottom { bottom: -5px; left: 50%; transform: translateX(-50%); }
+.cv-port--bottom:hover { transform: translateX(-50%) scale(1.3); }
 
 /* ── NODO NOTA ── */
 .cv-node--nota {

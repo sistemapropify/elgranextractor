@@ -56,7 +56,11 @@ function createPropNode(sourceId, data, x, y, campos) {
       <button class="cv-btn--matches" data-prop-id="${sourceId}">Ver matches &rarr;</button>
       <span class="cv-match-count">— reqs</span>
     </div>
-    <div class="cv-port cv-port--out" data-node="${id}"></div>
+    <!-- 4 puertos direccionales -->
+    <div class="cv-port cv-port--top"    data-node="${id}" data-port="top"></div>
+    <div class="cv-port cv-port--right"  data-node="${id}" data-port="right"></div>
+    <div class="cv-port cv-port--bottom" data-node="${id}" data-port="bottom"></div>
+    <div class="cv-port cv-port--left"   data-node="${id}" data-port="left"></div>
   `;
 
   dom.nodes.appendChild(node);
@@ -167,8 +171,11 @@ function createReqNode(reqId, data, x, y) {
         <span class="cv-score" style="background:color-mix(in srgb, #5c6bc0 15%, transparent);color:#8896f0;border:1px solid color-mix(in srgb, #5c6bc0 30%, transparent);">${scoreSemantico}</span>
       </div>
     </div>
-    <div class="cv-port cv-port--in"  data-node="${id}"></div>
-    <div class="cv-port cv-port--out" data-node="${id}"></div>
+    <!-- 4 puertos direccionales -->
+    <div class="cv-port cv-port--top"    data-node="${id}" data-port="top"></div>
+    <div class="cv-port cv-port--right"  data-node="${id}" data-port="right"></div>
+    <div class="cv-port cv-port--bottom" data-node="${id}" data-port="bottom"></div>
+    <div class="cv-port cv-port--left"   data-node="${id}" data-port="left"></div>
   `;
 
   dom.nodes.appendChild(node);
@@ -230,11 +237,11 @@ function registerNodeEvents(id, el) {
     startNodeDrag(e, id);
   });
 
-  // Connection ports
+  // Connection ports — ahora 4 direcciones (top, right, bottom, left)
   el.querySelectorAll('.cv-port').forEach(port => {
     port.addEventListener('mousedown', e => {
-      const portType = port.classList.contains('cv-port--out') ? 'out' : 'in';
-      startConnection(e, id, portType);
+      const portDir = port.dataset.port || 'right';
+      startConnection(e, id, portDir);
     });
   });
 
@@ -472,7 +479,10 @@ function renderPlaceholderNodes(nodos) {
           <button class="cv-btn--matches" data-prop-id="${n.ref_id}">Ver matches &rarr;</button>
           <span class="cv-match-count">— reqs</span>
         </div>
-        <div class="cv-port cv-port--out" data-node="${n.id}"></div>
+        <div class="cv-port cv-port--top"    data-node="${n.id}" data-port="top"></div>
+        <div class="cv-port cv-port--right"  data-node="${n.id}" data-port="right"></div>
+        <div class="cv-port cv-port--bottom" data-node="${n.id}" data-port="bottom"></div>
+        <div class="cv-port cv-port--left"   data-node="${n.id}" data-port="left"></div>
       `;
     } else if (n.tipo === 'requerimiento') {
       node.innerHTML = `
@@ -481,14 +491,19 @@ function renderPlaceholderNodes(nodos) {
           <span class="cv-node__title">Req #${n.ref_id}</span>
         </div>
         <div class="cv-node__body"><div style="color:var(--cv-text-muted);font-size:11px;text-align:center;padding:8px">Cargando...</div></div>
-        <div class="cv-port cv-port--in" data-node="${n.id}"></div>
-        <div class="cv-port cv-port--out" data-node="${n.id}"></div>
+        <div class="cv-port cv-port--top"    data-node="${n.id}" data-port="top"></div>
+        <div class="cv-port cv-port--right"  data-node="${n.id}" data-port="right"></div>
+        <div class="cv-port cv-port--bottom" data-node="${n.id}" data-port="bottom"></div>
+        <div class="cv-port cv-port--left"   data-node="${n.id}" data-port="left"></div>
       `;
     } else {
       node.innerHTML = `
         <div class="cv-nota__handle">&#10022; nota</div>
         <div class="cv-nota__body" contenteditable="true">Nota</div>
-        <div class="cv-port cv-port--out" data-node="${n.id}"></div>
+        <div class="cv-port cv-port--top"    data-node="${n.id}" data-port="top"></div>
+        <div class="cv-port cv-port--right"  data-node="${n.id}" data-port="right"></div>
+        <div class="cv-port cv-port--bottom" data-node="${n.id}" data-port="bottom"></div>
+        <div class="cv-port cv-port--left"   data-node="${n.id}" data-port="left"></div>
       `;
     }
 

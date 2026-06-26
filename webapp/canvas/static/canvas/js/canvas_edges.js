@@ -2,32 +2,71 @@
  * canvas_edges.js — PropFlow Canvas Edges
  *
  * Renderizado de aristas SVG con curvas Bezier entre nodos.
- * Soporta tipos: match, dependencia, block, nota.
+ * Soporta 4 puertos direccionales: top, right, bottom, left.
+ * La curva se adapta según la dirección de los puertos de origen y destino.
  */
 
 let tempEdgeEl = null;
 
-/* ── EDGE PATH ── */
+/* ── EDGE PATH con curvas adaptativas ── */
 
-function edgePath(x1, y1, x2, y2) {
-  const dx = Math.abs(x2 - x1) * 0.5;
-  return `M${x1},${y1} C${x1+dx},${y1} ${x2-dx},${y2} ${x2},${y2}`;
+function edgePath(x1, y1, x2, y2, portFrom, portTo) {
+  // Calcular puntos de control según direcciones de los puertos
+  const dx = Math.abs(x2 - x1);
+  const dy = Math.abs(y2 - y1);
+  const midX = (x1 + x2) / 2;
+  const midY = (y1 + y2) / 2;
+  
+  // Control point offset: usar distancia proporcional para curvas suaves
+  const cpx1 = portFrom === 'right' ? x1 + dx * 0.5
+             : portFrom === 'left'  ? x1 - dx * 0.5
+             : portFrom === 'top'   ? x1
+             : portFrom === 'bottom'? x1
+             : x1 + dx * 0.5;
+  
+  const cpy1 = portFrom === 'right' ? y1
+             : portFrom === 'left'  ? y1
+             : portFrom === 'top'   ? y1 - dy * 0.5
+             : portFrom === 'bottom'? y1 + dy * 0.5
+             : y1;
+  
+  const cpx2 = portTo === 'right' ? x2 + dx * 0.5
+             : portTo === 'left'  ? x2 - dx * 0.5
+             : portTo === 'top'   ? x2
+             : portTo === 'bottom'? x2
+             : x2 - dx * 0.5;
+  
+  const cpy2 = portTo === 'right' ? y2
+             : portTo === 'left'  ? y2
+             : portTo === 'top'   ? y2 - dy * 0.5
+             : portTo === 'bottom'? y2 + dy * 0.5
+             : y2;
+  
+  return `M${x1},${y1} C${cpx1},${cpy1} ${cpx2},${cpy2} ${x2},${y2}`;
 }
 
-function getNodeCenter(id, portType) {
+
+/**
+ * Obtiene la posición de un puerto específico en un nodo.
+ * @param {string} id - ID del nodo
+ * @param {string} portDir - dirección: 'top'|'right'|'bottom'|'left'
+ * @returns {{x, y}}
+ */
+function getNodePortPos(id, portDir) {
   const nodo = STATE.nodos[id];
   if (!nodo) return { x: 0, y: 0 };
   const w = nodo.width || 220;
   const h = nodo.height || 160;
-  if (portType === 'out') {
-    return { x: nodo.x + w, y: nodo.y + h / 2 };
+  
+  switch (portDir) {
+    case 'top':    return { x: nodo.x + w / 2, y: nodo.y };
+    case 'right':  return { x: nodo.x + w,     y: nodo.y + h / 2 };
+    case 'bottom': return { x: nodo.x + w / 2, y: nodo.y + h };
+    case 'left':   return { x: nodo.x,         y: nodo.y + h / 2 };
+    default:       return { x: nodo.x + w,     y: nodo.y + h / 2 }; // fallback a right
   }
-  return { x: nodo.x, y: nodo.y + h / 2 };
 }
 
-function getNodePortPos(id, portType) {
-  return getNodeCenter(id, portType);
-}
 
 /* ── UPDATE ALL EDGES ── */
 
@@ -38,9 +77,9 @@ function updateEdges() {
   });
 
   Object.values(STATE.aristas).forEach(edge => {
-    const from = getNodePortPos(edge.origen, 'out');
-    const to   = getNodePortPos(edge.destino, 'in');
-    const path = edgePath(from.x, from.y, to.x, to.y);
+    const from     = getNodePortPos(edge.origen, edge.port_from || 'right');
+    const to       = getNodePortPos(edge.destino, edge.port_to || 'left');
+    const path     = edgePath(from.x, from.y, to.x, to.y, edge.port_from || 'right', edge.port_to || 'left');
 
     const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     pathEl.setAttribute('d', path);
@@ -65,6 +104,7 @@ function updateEdges() {
   });
 }
 
+
 /* ── TEMPORARY EDGE (durante conexión) ── */
 
 function updateTempEdge(e) {
@@ -77,12 +117,12 @@ function updateTempEdge(e) {
   }
   const conn = STATE.connecting;
   if (!conn) return;
-  const from = getNodePortPos(conn.origen, 'out');
+  const from = getNodePortPos(conn.origen, conn.port_dir || 'right');
   const rect = dom.stage.getBoundingClientRect();
   const vp = STATE.viewport;
   const mx = (e.clientX - rect.left - vp.x) / vp.zoom;
   const my = (e.clientY - rect.top - vp.y) / vp.zoom;
-  const path = edgePath(from.x, from.y, mx, my);
+  const path = edgePath(from.x, from.y, mx, my, conn.port_dir || 'right', 'left');
   tempEdgeEl.setAttribute('d', path);
 }
 

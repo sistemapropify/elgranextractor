@@ -192,10 +192,10 @@ function endNodeDrag() {
 
 /* ── CONNECTION DRAG ── */
 
-function startConnection(e, nodeId, portType) {
+function startConnection(e, nodeId, portDir) {
   e.preventDefault();
   e.stopPropagation();
-  STATE.connecting = { origen: nodeId, port: portType };
+  STATE.connecting = { origen: nodeId, port_dir: portDir || 'right' };
   dom.stage.style.cursor = 'crosshair';
 }
 
@@ -210,13 +210,15 @@ function endConnection(e) {
   const targetPort = e.target.closest('.cv-port');
   if (targetPort && targetPort.dataset.node) {
     const targetId = targetPort.dataset.node;
-    const isIn = targetPort.classList.contains('cv-port--in');
-    if (targetId !== STATE.connecting.origen && isIn) {
+    const targetPortDir = targetPort.dataset.port || 'left';
+    if (targetId !== STATE.connecting.origen) {
       const edgeId = 'e' + (++STATE.edgeIdCounter);
       STATE.aristas[edgeId] = {
         id: edgeId,
         origen: STATE.connecting.origen,
+        port_from: STATE.connecting.port_dir || 'right',
         destino: targetId,
+        port_to: targetPortDir,
         tipo: 'match',
         label: '',
       };
