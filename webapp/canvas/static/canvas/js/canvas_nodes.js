@@ -35,12 +35,17 @@ function createPropNode(sourceId, data, x, y, campos) {
   const price = formatPrice(data.price, data.currency);
   const district = data.district_name || data.district || '';
 
+  const imgUrl = getPropertyImageUrl(data);
+
   node.innerHTML = `
     <div class="cv-node__header">
       <span class="cv-node__badge cv-badge--prop">PROP</span>
       <span class="cv-node__title">${escHtml(title)}</span>
       <button class="cv-node__collapse" title="Colapsar">−</button>
       <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
+    </div>
+    <div class="cv-node__thumb${imgUrl ? '' : ' cv-node__thumb--empty'}">
+      ${imgUrl ? `<img src="${escHtml(imgUrl)}" loading="lazy" onerror="this.parentElement.classList.add('cv-node__thumb--empty')" alt="">` : ''}
     </div>
     <div class="cv-node__body">
       <div class="cv-field"><span class="cv-field__key">Precio</span><span class="cv-field__val">${price || '—'}</span></div>
@@ -63,14 +68,9 @@ function createPropNode(sourceId, data, x, y, campos) {
   dom.nodes.appendChild(node);
   positionNode(id, node, x, y);
 
-  const propW = 220;
-  const propH = node.offsetHeight || 160;
-  node.style.width  = propW + 'px';
-  node.style.height = propH + 'px';
-
   const nodoData = {
     id, tipo: 'propiedad', ref_id: sourceId,
-    x, y, width: propW, height: propH,
+    x, y, width: 220, height: node.offsetHeight || 160,
     collapsed: false, color: null, el: node,
     field_data: data,
   };
@@ -115,25 +115,14 @@ function reRenderPropBody(id, campos) {
   const price = formatPrice(data.price, data.currency);
   const district = data.district_name || data.district || '';
 
-  const imgUrl = getPropertyImageUrl(data);
-
-  // Reconstruir el body manteniendo los campos fijos (Precio, Distrito) + dinámicos
+  // Solo actualizar los campos en el body (el thumbnail está fuera del body en createPropNode / renderPlaceholderNodes)
   body.innerHTML = `
-    <div class="cv-node__thumb${imgUrl ? '' : ' cv-node__thumb--empty'}">
-      ${imgUrl ? `<img src="${escHtml(imgUrl)}" loading="lazy" onerror="this.parentElement.classList.add('cv-node__thumb--empty')" alt="">` : ''}
-    </div>
     <div class="cv-field"><span class="cv-field__key">Precio</span><span class="cv-field__val">${price || '—'}</span></div>
     <div class="cv-field"><span class="cv-field__key">Distrito</span><span class="cv-field__val">${escHtml(district) || '—'}</span></div>
     ${campos && campos.length ? campos.filter(c => !['title','price','district_name','id', 'code', 'file'].includes(c)).map(c => `
       <div class="cv-field"><span class="cv-field__key">${escHtml(c)}</span><span class="cv-field__val">${escHtml(formatField(data[c]))}</span></div>
     `).join('') : ''}
   `;
-
-  // Actualizar altura en STATE después de re-renderizar el body
-  // (sin style.height fijo, el DOM se auto-dimensiona; sincronizamos para edge placement)
-  if (!nodo.el.style.height) {
-    nodo.height = nodo.el.offsetHeight;
-  }
 }
 
 
@@ -194,14 +183,9 @@ function createReqNode(reqId, data, x, y) {
   dom.nodes.appendChild(node);
   positionNode(id, node, x, y);
 
-  const reqW = 220;
-  const reqH = node.offsetHeight || 200;
-  node.style.width  = reqW + 'px';
-  node.style.height = reqH + 'px';
-
   STATE.nodos[id] = {
     id, tipo: 'requerimiento', ref_id: reqId,
-    x, y, width: reqW, height: reqH,
+    x, y, width: 220, height: node.offsetHeight || 200,
     collapsed: false, color: null, el: node,
   };
   registerNodeEvents(id, node);
@@ -504,14 +488,9 @@ function createArchivoNode(data, x, y) {
     renderPdfPreview(data.id, `/canvas/api/media/${data.id}/`);
   }
 
-  const initialW = 220;
-  const initialH = Math.max(node.offsetHeight || 220, 220);
-  node.style.width  = initialW + 'px';
-  node.style.height = initialH + 'px';
-
   STATE.nodos[id] = {
     id, tipo: 'archivo', ref_id: data.id,
-    x: x || 100, y: y || 100, width: initialW, height: initialH,
+    x: x || 100, y: y || 100, width: 220, height: node.offsetHeight || 90,
     collapsed: false, color: null, el: node,
     field_data: {
       file_url: data.blob_url,
@@ -678,7 +657,7 @@ function restoreSnapshot(snapshot) {
     } else if (n.tipo === 'archivo') {
       STATE.nodos[n.id] = {
         id: n.id, tipo: 'archivo', ref_id: n.ref_id,
-        x: n.x, y: n.y, width: n.width || 220, height: n.height || 220,
+        x: n.x, y: n.y, width: n.width || 220, height: n.height || 90,
         collapsed: false, color: null, el: null,
         field_data: n.field_data || null,
       };
@@ -778,12 +757,16 @@ function renderPlaceholderNodes(nodos) {
       // Usar título guardado en field_data si existe (fallback a "Prop #id")
       const savedFd = n.field_data || {};
       const savedTitle = savedFd.title || savedFd.direction || `Prop #${n.ref_id}`;
+      const savedImgUrl = getPropertyImageUrl(savedFd);
       node.innerHTML = `
         <div class="cv-node__header">
           <span class="cv-node__badge cv-badge--prop">PROP</span>
           <span class="cv-node__title">${escHtml(savedTitle)}</span>
           <button class="cv-node__collapse">${n.collapsed ? '+' : '−'}</button>
           <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
+        </div>
+        <div class="cv-node__thumb${savedImgUrl ? '' : ' cv-node__thumb--empty'}">
+          ${savedImgUrl ? `<img src="${escHtml(savedImgUrl)}" loading="lazy" onerror="this.parentElement.classList.add('cv-node__thumb--empty')" alt="">` : ''}
         </div>
         <div class="cv-node__body"><div style="color:var(--cv-text-muted);font-size:11px;text-align:center;padding:8px">Cargando datos...</div></div>
         <div class="cv-node__footer">
@@ -876,11 +859,8 @@ function renderPlaceholderNodes(nodos) {
     STATE.nodos[n.id].el = node;
     if (n.collapsed) node.classList.add('collapsed');
     // Restaurar dimensiones guardadas (width/height) al DOM
-    // Siempre establecer explícitamente para evitar auto-dimensionado por contenido async
-    const dimW = n.width || STATE.nodos[n.id].width || 220;
-    const dimH = n.height || STATE.nodos[n.id].height || 100;
-    node.style.width  = dimW + 'px';
-    node.style.height = dimH + 'px';
+    if (n.width) node.style.width = n.width + 'px';
+    if (n.height) node.style.height = n.height + 'px';
     registerNodeEvents(n.id, node);
   });
   // Renderizar PDFs después de restaurar todos los nodos
