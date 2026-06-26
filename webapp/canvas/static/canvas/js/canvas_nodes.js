@@ -30,6 +30,9 @@ function createPropNode(sourceId, data, x, y, campos) {
   node.dataset.id = id;
   node.style.left = x + 'px';
   node.style.top  = y + 'px';
+  node.style.width = '220px';
+  node.style.minWidth = '220px';
+  node.style.minHeight = '60px';
 
   const title = data.title || data.direction || `Prop #${sourceId}`;
   const price = formatPrice(data.price, data.currency);
@@ -63,6 +66,7 @@ function createPropNode(sourceId, data, x, y, campos) {
     <div class="cv-port cv-port--right"  data-node="${id}" data-port="right"></div>
     <div class="cv-port cv-port--bottom" data-node="${id}" data-port="bottom"></div>
     <div class="cv-port cv-port--left"   data-node="${id}" data-port="left"></div>
+    <div class="cv-resize-handle" data-node="${id}"></div>
   `;
 
   dom.nodes.appendChild(node);
@@ -697,50 +701,59 @@ function restoreSnapshot(snapshot) {
  * cuyo ref_id coincida con el source_id de la propiedad.
  */
 async function populatePlaceholderProps() {
-  try {
-    const res = await fetch('/canvas/api/propiedades/');
-    const data = await res.json();
-    if (!data.propiedades) return;
+  // Máximo 3 intentos con retry
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await fetch('/canvas/api/propiedades/');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (!data.propiedades) return;
 
-    // Indexar propiedades por source_id
-    const propsBySourceId = {};
-    data.propiedades.forEach(p => {
-      propsBySourceId[p._source_id] = p;
-    });
+      // Indexar propiedades por source_id
+      const propsBySourceId = {};
+      data.propiedades.forEach(p => {
+        propsBySourceId[p._source_id] = p;
+      });
 
-    // Refrescar field_data desde la API (sobrescribe datos del snapshot con datos frescos)
-    Object.values(STATE.nodos).forEach(n => {
-      if (n.tipo === 'propiedad' && n.ref_id) {
-        const propData = propsBySourceId[n.ref_id];
-        if (propData) {
-          n.field_data = propData;
+      // Refrescar field_data desde la API (sobrescribe datos del snapshot con datos frescos)
+      Object.values(STATE.nodos).forEach(n => {
+        if (n.tipo === 'propiedad' && n.ref_id) {
+          const propData = propsBySourceId[n.ref_id];
+          if (propData) {
+            n.field_data = propData;
+          }
+          // Si no se encuentra en la API, conserva el field_data del snapshot (no se pierde el título)
         }
-        // Si no se encuentra en la API, conserva el field_data del snapshot (ya no se pierde el título)
-      }
-    });
+      });
 
-    // Re-renderizar placeholders con datos reales
-    const campos = getActiveCampos();
-    Object.values(STATE.nodos).forEach(n => {
-      if (n.tipo === 'propiedad' && n.field_data && n.el) {
-        // Actualizar título
-        const titleEl = n.el.querySelector('.cv-node__title');
-        if (titleEl) {
-          const title = n.field_data.title || n.field_data.direction || `Prop #${n.ref_id}`;
-          titleEl.textContent = title;
+      // Re-renderizar placeholders con datos reales
+      const campos = getActiveCampos();
+      Object.values(STATE.nodos).forEach(n => {
+        if (n.tipo === 'propiedad' && n.field_data && n.el) {
+          // Actualizar título
+          const titleEl = n.el.querySelector('.cv-node__title');
+          if (titleEl) {
+            const title = n.field_data.title || n.field_data.direction || `Prop #${n.ref_id}`;
+            titleEl.textContent = title;
+          }
+          // Re-renderizar body
+          reRenderPropBody(n.id, campos);
         }
-        // Re-renderizar body
-        reRenderPropBody(n.id, campos);
-      }
-    });
+      });
 
-    // Re-dibujar aristas después de re-renderizar nodos,
-    // para que las posiciones de los puertos reflejen las alturas reales
-    if (typeof updateEdges === 'function') {
-      updateEdges();
+      // Re-dibujar aristas después de re-renderizar nodos
+      if (typeof updateEdges === 'function') {
+        updateEdges();
+      }
+      return; // Éxito, salir del bucle
+    } catch (err) {
+      console.warn(`Error populating placeholder props (intento ${attempt}/3):`, err);
+      if (attempt < 3) {
+        await new Promise(r => setTimeout(r, 1000 * attempt)); // Esperar 1s, 2s, ...
+      } else {
+        console.error('Error definitivo al poblar propiedades:', err);
+      }
     }
-  } catch (err) {
-    console.error('Error populating placeholder props:', err);
   }
 }
 
@@ -777,6 +790,7 @@ function renderPlaceholderNodes(nodos) {
         <div class="cv-port cv-port--right"  data-node="${n.id}" data-port="right"></div>
         <div class="cv-port cv-port--bottom" data-node="${n.id}" data-port="bottom"></div>
         <div class="cv-port cv-port--left"   data-node="${n.id}" data-port="left"></div>
+        <div class="cv-resize-handle" data-node="${n.id}"></div>
       `;
     } else if (n.tipo === 'requerimiento') {
       node.innerHTML = `
