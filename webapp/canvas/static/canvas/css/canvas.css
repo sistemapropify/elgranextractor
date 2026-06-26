@@ -890,12 +890,10 @@
 .cv-node--archivo .cv-node__body .cv-archivo-img {
   width: 100%;
   flex: 1 1 auto;
-  object-fit: contain;
+  object-fit: cover;
   min-height: 60px;
-  max-height: 200px;
   border-radius: 4px;
   cursor: pointer;
-  background: var(--cv-surface-2);
 }
 .cv-node--archivo .cv-node__body .cv-pdf-preview {
   flex: 1 1 auto;

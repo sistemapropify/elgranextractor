@@ -505,7 +505,7 @@ function createArchivoNode(data, x, y) {
   }
 
   const initialW = 220;
-  const initialH = node.offsetHeight || 90;
+  const initialH = Math.max(node.offsetHeight || 220, 220);
   node.style.width  = initialW + 'px';
   node.style.height = initialH + 'px';
 
@@ -678,7 +678,7 @@ function restoreSnapshot(snapshot) {
     } else if (n.tipo === 'archivo') {
       STATE.nodos[n.id] = {
         id: n.id, tipo: 'archivo', ref_id: n.ref_id,
-        x: n.x, y: n.y, width: n.width || 220, height: n.height || 90,
+        x: n.x, y: n.y, width: n.width || 220, height: n.height || 220,
         collapsed: false, color: null, el: null,
         field_data: n.field_data || null,
       };
