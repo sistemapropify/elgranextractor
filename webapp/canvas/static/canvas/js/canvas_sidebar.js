@@ -14,6 +14,7 @@ async function initSidebar() {
   setupLienzoTab();
   setupNoteButton();
   setupArchiveButton();
+  setupSelectAllButtons();
 
   // 1. Cargar agentes y restaurar selección guardada
   await loadAgentes();
@@ -97,9 +98,56 @@ async function loadAgentes() {
   }
 }
 
+function isPropOnCanvas(sourceId) {
+  return Object.values(STATE.nodos).some(
+    n => n.tipo === 'propiedad' && String(n.ref_id) === String(sourceId)
+  );
+}
+
+function addPropToCanvas(sourceId, propData) {
+  const vp = STATE.viewport;
+  const stageRect = dom.stage.getBoundingClientRect();
+  const campos = Array.from(document.querySelectorAll('.campo-check:checked')).map(c => c.value);
+
+  // Calcular posicion: en cascada para no superponer
+  const existingProps = Object.values(STATE.nodos).filter(n => n.tipo === 'propiedad');
+  const offsetX = 50 + (existingProps.length % 4) * 240;
+  const offsetY = 60 + Math.floor(existingProps.length / 4) * 200;
+  const x = (offsetX - vp.x) / vp.zoom;
+  const y = (offsetY - vp.y) / vp.zoom;
+
+  const nodeId = createPropNode(sourceId, propData, x, y, campos);
+  return nodeId;
+}
+
+function removePropFromCanvas(sourceId) {
+  const nodeToRemove = Object.values(STATE.nodos).find(
+    n => n.tipo === 'propiedad' && String(n.ref_id) === String(sourceId)
+  );
+  if (nodeToRemove) {
+    deleteNode(nodeToRemove.id);
+  }
+}
+
+function togglePropOnCanvas(sourceId, propData, chipEl) {
+  if (isPropOnCanvas(sourceId)) {
+    removePropFromCanvas(sourceId);
+    chipEl.classList.remove('cv-prop-chip--selected', 'cv-prop-chip--on-canvas');
+  } else {
+    addPropToCanvas(sourceId, propData);
+    chipEl.classList.add('cv-prop-chip--selected');
+  }
+}
+
 async function loadPropiedades(agenteId) {
   const list = document.getElementById('prop-list');
   list.innerHTML = '<div style="color:var(--cv-text-muted);font-size:12px">Cargando...</div>';
+
+  // Ocultar botones hasta que se carguen
+  const btnSelectAll = document.getElementById('btn-select-all');
+  const btnDeselectAll = document.getElementById('btn-deselect-all');
+  if (btnSelectAll) btnSelectAll.style.display = 'none';
+  if (btnDeselectAll) btnDeselectAll.style.display = 'none';
 
   // Get selected campos
   const checkedCampos = Array.from(document.querySelectorAll('.campo-check:checked')).map(c => c.value);
@@ -118,12 +166,23 @@ async function loadPropiedades(agenteId) {
       return;
     }
 
+    // Mostrar botones
+    if (btnSelectAll) btnSelectAll.style.display = '';
+    if (btnDeselectAll && data.propiedades.some(p => isPropOnCanvas(p._source_id))) {
+      btnDeselectAll.style.display = '';
+    }
+
     data.propiedades.forEach(p => {
       const chip = document.createElement('div');
       chip.className = 'cv-prop-chip';
       chip.draggable = true;
       chip.dataset.sourceId = p._source_id;
       chip.dataset.propData = JSON.stringify(p);
+
+      // Marcar si ya esta en el canvas
+      if (isPropOnCanvas(p._source_id)) {
+        chip.classList.add('cv-prop-chip--on-canvas');
+      }
 
       const title = p.title || p.direction || `Prop #${p._source_id}`;
       const price = formatPrice(p.price, p.currency) || '';
@@ -133,6 +192,7 @@ async function loadPropiedades(agenteId) {
         <span class="cv-prop-chip__badge">${escHtml(price)}</span>
       `;
 
+      // Drag & drop (existente)
       chip.addEventListener('dragstart', e => {
         e.dataTransfer.setData('text/plain', chip.dataset.sourceId);
         e.dataTransfer.setData('application/json', chip.dataset.propData);
@@ -142,11 +202,59 @@ async function loadPropiedades(agenteId) {
         chip.style.opacity = '1';
       });
 
+      // Click para agregar/quitar del lienzo
+      chip.addEventListener('click', e => {
+        // No hacer toggle si se esta arrastrando
+        if (chip.style.opacity === '0.5') return;
+        togglePropOnCanvas(p._source_id, p, chip);
+      });
+
       list.appendChild(chip);
     });
   } catch (err) {
     console.error('Error loading propiedades:', err);
     list.innerHTML = '<div style="color:var(--cv-block);font-size:12px">Error al cargar</div>';
+  }
+}
+
+function setupSelectAllButtons() {
+  const btnSelectAll = document.getElementById('btn-select-all');
+  const btnDeselectAll = document.getElementById('btn-deselect-all');
+  if (!btnSelectAll) return;
+
+  btnSelectAll.addEventListener('click', () => {
+    const chips = document.querySelectorAll('#prop-list .cv-prop-chip');
+    let addedCount = 0;
+    chips.forEach(chip => {
+      if (!isPropOnCanvas(chip.dataset.sourceId)) {
+        try {
+          const propData = JSON.parse(chip.dataset.propData);
+          addPropToCanvas(chip.dataset.sourceId, propData);
+          chip.classList.add('cv-prop-chip--selected');
+          addedCount++;
+        } catch (e) {
+          console.warn('Error adding prop', chip.dataset.sourceId, e);
+        }
+      }
+    });
+    if (addedCount > 0 && typeof markDirty === 'function') markDirty();
+    if (btnDeselectAll) btnDeselectAll.style.display = '';
+  });
+
+  if (btnDeselectAll) {
+    btnDeselectAll.addEventListener('click', () => {
+      const chips = document.querySelectorAll('#prop-list .cv-prop-chip');
+      let removedCount = 0;
+      chips.forEach(chip => {
+        if (isPropOnCanvas(chip.dataset.sourceId)) {
+          removePropFromCanvas(chip.dataset.sourceId);
+          chip.classList.remove('cv-prop-chip--selected', 'cv-prop-chip--on-canvas');
+          removedCount++;
+        }
+      });
+      if (removedCount > 0 && typeof markDirty === 'function') markDirty();
+      btnDeselectAll.style.display = 'none';
+    });
   }
 }
 
@@ -317,6 +425,12 @@ function initDragDrop() {
 
     const checkedCampos = Array.from(document.querySelectorAll('.campo-check:checked')).map(c => c.value);
     createPropNode(sourceId, propData, x - 110, y - 40, checkedCampos);
+
+    // Marcar chip en la sidebar como "en el canvas"
+    const chip = document.querySelector(`#prop-list .cv-prop-chip[data-sourceid="${sourceId}"]`);
+    if (chip) {
+      chip.classList.add('cv-prop-chip--on-canvas');
+    }
   });
 }
 

@@ -209,6 +209,29 @@
   background: var(--cv-surface-2);
   color: var(--cv-text-muted);
 }
+.cv-prop-chip--selected {
+  border-color: var(--cv-done);
+  background: rgba(29, 158, 117, 0.12);
+  cursor: pointer;
+}
+.cv-prop-chip--selected:hover {
+  border-color: var(--cv-done);
+  background: rgba(29, 158, 117, 0.18);
+}
+.cv-prop-chip--on-canvas {
+  border-color: var(--cv-border-act);
+  background: rgba(92, 107, 192, 0.1);
+}
+
+/* Boton small para sidebar */
+.cv-btn--small {
+  font-size: 10px;
+  padding: 4px 8px;
+  height: auto;
+  min-height: 0;
+  border-radius: 4px;
+  white-space: nowrap;
+}
 
 /* Checkboxes de campos */
 .cv-field-check {
