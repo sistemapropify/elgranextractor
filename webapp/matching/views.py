@@ -14,6 +14,7 @@ from rest_framework.pagination import PageNumberPagination
 from requerimientos.models import Requerimiento
 from propifai.models import PropifaiProperty
 from .models import MatchResult
+from .scoring import UMBRAL_MINIMO_SCORE
 from .serializers import (
     MatchResultSerializer,
     MatchingResultSerializer,
@@ -1613,7 +1614,7 @@ class EjecutarMatchingMasivoView(TemplateView):
                         'requerimiento_id': req.id,
                         'alpha': alpha,
                         'top_n': limite_por_requerimiento,
-                        'umbral_minimo': 0.0,
+                        'umbral_minimo': UMBRAL_MINIMO_SCORE,
                     }, context)
                     
                     if not result.success or not result.data:
@@ -1697,8 +1698,9 @@ class EjecutarMatchingMasivoView(TemplateView):
             logger.warning(f"Requerimiento {requerimiento_id} no encontrado al guardar resultados")
             return
         
-        # Eliminar resultados anteriores para este requerimiento
-        MatchResult.objects.filter(requerimiento=requerimiento).delete()
+        # NOTA: Ya no se eliminan resultados anteriores para preservar histórico.
+        # unique_together = (requerimiento, propiedad, ejecutado_en) permite
+        # duplicados con diferentes timestamps.
         
         for match in matches:
             property_id = match.get('property_id')
