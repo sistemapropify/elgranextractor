@@ -1642,7 +1642,13 @@ async function generarPDF_ACM() {
         const data = await response.json();
 
         if (data.status === 'ok') {
-            window.location.href = data.enlace_publico;
+            var a = document.createElement('a');
+            a.href = data.enlace_publico;
+            a.download = 'ACM_' + (data.codigo || 'informe') + '.pdf';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            mostrarToast('success', 'PDF descargado correctamente (' + (data.codigo || '') + ').');
         } else {
             throw new Error(data.message || 'Error al guardar análisis');
         }
