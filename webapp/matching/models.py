@@ -118,6 +118,19 @@ class MatchResult(models.Model):
         help_text='Posición que ocupó esta propiedad en el matching específico'
     )
     
+    # Flags para detección de cambios entre ejecuciones
+    es_nuevo = models.BooleanField(
+        default=True,
+        verbose_name='Match nuevo',
+        help_text='True si este match apareció en la última ejecución de matching'
+    )
+    score_anterior = models.DecimalField(
+        max_digits=5, decimal_places=2,
+        null=True, blank=True,
+        verbose_name='Score anterior',
+        help_text='Score previo si este match fue actualizado en una ejecución posterior'
+    )
+    
     class Meta:
         db_table = 'matching_matchresult'
         verbose_name = 'Resultado de Matching'

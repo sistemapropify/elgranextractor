@@ -1603,6 +1603,13 @@ class EjecutarMatchingMasivoView(TemplateView):
             registry = SkillRegistry()
             orchestrator = SkillOrchestrator(registry, SkillCache())
             
+            # Limpiar flag es_nuevo de ejecuciones anteriores
+            # Solo los matches creados en ESTA ejecución tendrán es_nuevo=True
+            from .models import MatchResult
+            limpiados = MatchResult.objects.filter(es_nuevo=True).update(es_nuevo=False)
+            if limpiados:
+                logger.info(f"es_nuevo limpiado de {limpiados} matches de ejecuciones anteriores")
+            
             resultados_masivo = {}
             total_procesados = 0
             
@@ -1682,6 +1689,10 @@ class EjecutarMatchingMasivoView(TemplateView):
     def _guardar_hybrid_results(requerimiento_id: int, matches: list) -> None:
         """
         Guarda resultados del HybridMatchingSkill en MatchResult.
+        Usa upsert para evitar duplicados:
+        - Mismo req + prop + score → skip (duplicado exacto)
+        - Mismo req + prop, distinto score → actualizar (guardar score_anterior)
+        - Par nuevo → crear con es_nuevo=True
         
         Args:
             requerimiento_id: ID del requerimiento
@@ -1702,15 +1713,19 @@ class EjecutarMatchingMasivoView(TemplateView):
         # unique_together = (requerimiento, propiedad, ejecutado_en) permite
         # duplicados con diferentes timestamps.
         
+        upsert_stats = {'creados': 0, 'actualizados': 0, 'saltados': 0}
+        
         for match in matches:
             property_id = match.get('property_id')
             if not property_id:
+                upsert_stats['saltados'] += 1
                 continue
             
             try:
                 propiedad = PropifaiProperty.objects.get(id=property_id)
             except PropifaiProperty.DoesNotExist:
                 logger.warning(f"Propiedad {property_id} no encontrada en MatchResult")
+                upsert_stats['saltados'] += 1
                 continue
             
             score_detalle = match.get('score_detalle', {})
@@ -1734,19 +1749,45 @@ class EjecutarMatchingMasivoView(TemplateView):
             
             score_total = Decimal(str(match.get('score_total', 0)))
             
-            MatchResult.objects.create(
+            # --- UPSERT: buscar existente para este par (req + prop) ---
+            existente = MatchResult.objects.filter(
                 requerimiento=requerimiento,
                 propiedad=propiedad,
-                score_total=score_total,
-                score_detalle=score_detalle_clean,
-                fase_eliminada=None,
-                porcentaje_compatibilidad=score_total,
-                ranking=match.get('ranking'),
-            )
+            ).order_by('-ejecutado_en').first()
             
+            if existente:
+                if existente.score_total == score_total:
+                    # Caso 1: DUPLICADO EXACTO (mismo req + prop + score) → skip
+                    upsert_stats['saltados'] += 1
+                    continue
+                else:
+                    # Caso 2: MISMO PAR, SCORE DIFERENTE → actualizar
+                    existente.score_anterior = existente.score_total
+                    existente.score_total = score_total
+                    existente.score_detalle = score_detalle_clean
+                    existente.es_nuevo = False
+                    existente.save(update_fields=[
+                        'score_total', 'score_detalle', 'score_anterior', 'es_nuevo'
+                    ])
+                    upsert_stats['actualizados'] += 1
+            else:
+                # Caso 3: PAR NUEVO → crear con es_nuevo=True (default del campo)
+                MatchResult.objects.create(
+                    requerimiento=requerimiento,
+                    propiedad=propiedad,
+                    score_total=score_total,
+                    score_detalle=score_detalle_clean,
+                    fase_eliminada=None,
+                    porcentaje_compatibilidad=score_total,
+                    ranking=match.get('ranking'),
+                )
+                upsert_stats['creados'] += 1
+        
         logger.info(
-            f"Resultados HybridMatchingSkill guardados: "
-            f"{len(matches)} matches para req {requerimiento_id}"
+            f"Resultados HybridMatchingSkill guardados para req {requerimiento_id}: "
+            f"{upsert_stats['creados']} creados, "
+            f"{upsert_stats['actualizados']} actualizados, "
+            f"{upsert_stats['saltados']} saltados (duplicados)"
         )
 
 
