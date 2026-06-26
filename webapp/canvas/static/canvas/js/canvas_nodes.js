@@ -31,6 +31,7 @@ function createPropNode(sourceId, data, x, y, campos) {
   node.style.left = x + 'px';
   node.style.top  = y + 'px';
   node.style.width = '220px';
+  node.style.minWidth = '220px';
   node.style.minHeight = '60px';
 
   const title = data.title || data.direction || `Prop #${sourceId}`;
