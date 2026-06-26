@@ -290,6 +290,25 @@ def api_propiedades(request):
         entry['_tipo'] = 'propiedad'
         entry['_source_id'] = doc.source_id
         
+        # Asegurar que 'title' tenga un valor significativo para el sidebar
+        if not entry.get('title'):
+            entry['title'] = (
+                fv.get('title')
+                or fv.get('name')
+                or ''
+            )
+        
+        # El sidebar espera 'direction' pero field_values usa nombres reales de columna
+        # Mapear desde los campos de dirección disponibles
+        if 'direction' not in entry or not entry.get('direction'):
+            entry['direction'] = (
+                fv.get('map_address')
+                or fv.get('display_address')
+                or fv.get('real_address')
+                or fv.get('address')
+                or ''
+            )
+        
         # Construir URL de imagen
         img_url = None
         try:
