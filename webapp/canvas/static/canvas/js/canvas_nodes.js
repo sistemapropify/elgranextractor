@@ -31,7 +31,6 @@ function createPropNode(sourceId, data, x, y, campos) {
   node.style.left = x + 'px';
   node.style.top  = y + 'px';
   node.style.width = '220px';
-  node.style.minWidth = '220px';
   node.style.minHeight = '60px';
 
   const title = data.title || data.direction || `Prop #${sourceId}`;
@@ -127,11 +126,6 @@ function reRenderPropBody(id, campos) {
       <div class="cv-field"><span class="cv-field__key">${escHtml(c)}</span><span class="cv-field__val">${escHtml(formatField(data[c]))}</span></div>
     `).join('') : ''}
   `;
-
-  // Forzar width fijo después de re-renderizar (evita que el contenido expanda la tarjeta)
-  nodo.el.style.width = '220px';
-  nodo.el.style.minWidth = '220px';
-  nodo.el.style.maxWidth = '220px';
 }
 
 
