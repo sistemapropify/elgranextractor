@@ -1,142 +1,167 @@
-# Sistema de Matching Inmobiliario
+# Sistema de Matching Inmobiliario v4
 
 ## Descripción
-Sistema completo de matching entre requerimientos de clientes y propiedades disponibles. Implementa un motor de scoring ponderado con dashboard visual integrado.
+Sistema completo de matching entre requerimientos de clientes y propiedades disponibles. Implementa un motor híbrido de 3 fases con scoring semántico (FAISS) y estructural.
 
-## Características
+## Arquitectura v4
 
-### 1. Motor de Matching
-- **Fase 1: Filtros discriminatorios** (eliminación inmediata)
-  - Tipo de propiedad
-  - Método de pago
-  - Distrito (lista de distritos aceptados)
-  - Presupuesto (con tolerancia del 10% hacia arriba)
+### Flujo General
+```
+FASE 1: FILTROS DUROS (10 discriminadores)
+    ↓  Propiedades que pasan
+FASE 2: SCORING BLANDO (8 factores ponderados)
+    ↓  Score 0-100 por propiedad
+FASE 3: FILTRADO FINAL (umbral 70% + top-10 + ranking)
+    ↓  Resultados finales
+```
 
-- **Fase 2: Scoring ponderado** (0-100 puntos)
-  - Campos numéricos: proximidad al valor ideal
-  - Campos cualitativos: coincidencia exacta/parcial
-  - Pesos configurables por campo
+### FASE 1: Filtros Duros
+10 filtros en orden de menor a mayor costo computacional:
 
-### 2. Modelos de Datos
-- `MatchResult`: Almacena resultados de matching con score y detalles
-- Relaciones con `Requerimiento` y `PropifaiProperty`
+| # | Filtro | Lógica | fase_eliminada |
+|---|--------|--------|----------------|
+| 1 | Condición | propiedad.condición == requerimiento.condición | `condicion` |
+| 2 | Tipo propiedad | propiedad.tipo == requerimiento.tipo | `tipo_propiedad` |
+| 3 | Forma de pago | Si req=crédito y prop=solo_efectivo → eliminar | `forma_pago` |
+| 4 | Presupuesto máximo | precio ≤ presupuesto × 1.05 | `presupuesto_maximo` |
+| 5 | Presupuesto mínimo | precio ≥ presupuesto × 0.50 | `presupuesto_minimo` |
+| 6 | Ascensor | Si req=si y prop no tiene → eliminar | `ascensor` |
+| 7 | Cocheras | Si req=si y prop no tiene → eliminar | `cocheras` |
+| 8 | Habitaciones mínimas | prop.hab ≥ req.hab_min | `habitaciones` |
+| 9 | Baños mínimos | prop.baños ≥ req.baños_min | `banos` |
+| 10 | Distrito obligatorio | Si req.distrito_obligatorio y prop no está en lista → eliminar | `distrito` |
 
-### 3. API REST
-- `GET /api/matching/{id}/ejecutar/` - Ejecuta matching y retorna resultados
-- `GET /api/matching/{id}/resumen/` - Estadísticas del matching
-- `POST /api/matching/{id}/guardar/` - Guarda resultados en BD
-- `GET /api/matching/historial/{id}/` - Historial de matchings anteriores
+**Importante:** El análisis semántico **NUNCA** es filtro duro.
 
-### 4. Dashboard Visual
-- Selector de requerimiento con resumen visual
-- Panel de estadísticas generales
-- Gráficos interactivos (Chart.js)
-- Tabla de resultados con ranking
-- Modal de detalle por propiedad
-- Sección de propiedades descartadas
-- Acciones finales (guardar, exportar, enviar correo)
+### FASE 2: Scoring Blando (8 factores)
 
-## Instalación
+| Factor | Peso Máx | Fórmula | Descripción |
+|--------|----------|---------|-------------|
+| Distrito | 15 | Rank * (1 - pos × 0.10) | Penaliza según orden de preferencia |
+| Precio | 20 | Gaussiana(σ=10%) | Penaliza progresivamente según distancia al presupuesto |
+| Habitaciones | 15 | Distancia (10%/extra) | Penaliza exceso de habitaciones |
+| Baños | 10 | Distancia (15%/extra) | Penaliza exceso de baños |
+| Área | 10 | Distancia (50%/exceso) | Penaliza área muy superior |
+| Amenities | 10 | Jaccard Similarity | Proporción de amenities en común |
+| Antigüedad | 5 | Distancia lineal | Score máximo en antigüedad máxima permitida |
+| Semántico | 15 | Escalonada (4 umbrales) | Similaridad FAISS → score escalonado |
+| **TOTAL** | **100** | | |
 
-1. La app ya está registrada en `settings.py`
-2. Migraciones creadas: ejecutar `python manage.py migrate`
-3. URLs incluidas en el proyecto principal
+#### Scoring Semántico (función escalonada)
+| Similaridad | Calificación | Score |
+|-------------|-------------|-------|
+| ≥ 0.85 | Excelente | 15 |
+| ≥ 0.70 | Bueno | 12 |
+| ≥ 0.55 | Aceptable | 9 |
+| ≥ 0.40 | Débil | 4.5 |
+| < 0.40 | Muy débil | 0 |
+| Sin FAISS | - | 7.5 (neutro) |
 
-## Uso
+### FASE 3: Filtrado Final
+1. **Umbral mínimo**: Solo matches con score_total ≥ 70%
+2. **Top-K**: Máximo 10 matches por requerimiento
+3. **Ranking**: Asignación 1..N según score descendente
 
-### Acceso al Dashboard
-- URL: `/matching/dashboard/`
-- Seleccionar requerimiento del dropdown
-- Click en "Ejecutar Matching"
-- Explorar resultados y gráficos
+## Componentes
 
-### API Endpoints
-- Todos los endpoints están bajo `/api/matching/`
-- Autenticación: IsAuthenticatedOrReadOnly
-- Paginación: 20 resultados por página
+### [`scoring.py`](scoring.py)
+Módulo compartido con toda la lógica:
+- Constantes globales (UMBRAL_MINIMO_SCORE=70, TOP_K_MATCHES=10, etc.)
+- `aplicar_filtros_duros(prop_dict, req_data)` → fase_eliminada o None
+- `calcular_scoring_total(prop_dict, req_data)` → (score_total, score_detalle)
+- `filtrar_resultados_finales(resultados, umbral, top_k)` → resultados filtrados
+- `preparar_req_data(requerimiento)` → dict estandarizado
 
-## Personalización
+### [`engine.py`](engine.py)
+`MatchingEngine` para matching desde BD (SQL directo a dbpropify_be):
+- Usa `scoring.py` para las 3 fases
+- `ejecutar_matching(propiedades)` → resultados
+- `ejecutar_matching_masivo(requerimientos)` → resultados por req
+- `guardar_resultados_matching(req_id, resultados)` → guarda en MatchResult
 
-### Pesos del Scoring
-Modificar el diccionario `PESOS` en `engine.py`:
+### [`matching_hybrid.py`](../intelligence/skills/matching_hybrid.py)
+`HybridMatchingSkill` para matching desde FAISS + IntelligenceDocument:
+- Búsqueda FAISS top-K=500
+- Post-filtrado con `scoring.aplicar_filtros_duros`
+- Scoring con `scoring.calcular_scoring_total`
+- Similaridad FAISS → scoring semántico escalonado
+- Filtrado final con `scoring.filtrar_resultados_finales`
 
-```python
-PESOS = {
-    'precio': 15,
-    'area': 10,
-    'habitaciones': 8,
-    'banos': 5,
-    'antiguedad': 5,
-    'distrito': 12,
-    # ... otros campos
+## Modelos
+
+### `MatchResult`
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| requerimiento | FK | Requerimiento evaluado |
+| propiedad | FK | Propiedad evaluada |
+| score_total | Decimal(5,2) | Score 0-100 |
+| score_detalle | JSONField | `{factor: {score, peso_maximo, detalle}}` |
+| fase_eliminada | CharField | Por qué filtro fue eliminada (si aplica) |
+| ejecutado_en | DateTime | Fecha/hora de ejecución (auto_now_add) |
+| ranking | PositiveInteger | Posición en lista ordenada |
+| unique_together | (requerimiento, propiedad, ejecutado_en) | Permite histórico |
+
+### Formato score_detalle
+```json
+{
+    "distrito": {"score": 15.0, "peso_maximo": 15, "detalle": "Primer distrito: Miraflores"},
+    "precio": {"score": 17.64, "peso_maximo": 20, "detalle": "Precio: 190,000, Presupuesto: 200,000"},
+    "habitaciones": {"score": 15.0, "peso_maximo": 15, "detalle": "Hab: 3, Req: 3"},
+    "banos": {"score": 10.0, "peso_maximo": 10, "detalle": "Baños: 2, Req: 2"},
+    "area": {"score": 10.0, "peso_maximo": 10, "detalle": "Área: 100m2, Req: 100m2"},
+    "amenities": {"score": 10.0, "peso_maximo": 10, "detalle": "Amenities: 2/2"},
+    "antiguedad": {"score": 2.5, "peso_maximo": 5, "detalle": "Antigüedad: 5 años"},
+    "semantico": {"score": 15.0, "peso_maximo": 15, "detalle": "Similaridad: 0.90"}
 }
 ```
 
-### Campos a considerar
-El motor analiza automáticamente los campos disponibles en:
-- `Requerimiento` (requerimientos/models.py)
-- `PropifaiProperty` (propifai/models.py)
+## API Endpoints
+- `GET /api/matching/{id}/ejecutar/` — Ejecuta matching v4
+- `GET /api/matching/{id}/resumen/` — Estadísticas
+- `POST /api/matching/{id}/guardar/` — Guarda resultados
+- `GET /api/matching/historial/{id}/` — Historial
+- `POST /matching/ejecutar_masivo/` — Matching masivo (usa HybridMatchingSkill)
 
-## Sugerencias de Mejora
+## Dashboard
+- URL: `/matching/dashboard/`
+- Selector de requerimiento
+- Panel de estadísticas
+- Tabla de resultados con ranking
+- Modal de detalle por propiedad
+- Propiedades descartadas con filtro
 
-### 1. Campos faltantes para mejor matching
-- **Coordenadas geográficas**: Para calcular distancia entre propiedad y distritos preferidos
-- **Tipo de propiedad explícito**: En PropifaiProperty falta campo `tipo_propiedad`
-- **Metros cuadrados de terreno**: Solo hay `built_area`, falta `land_area`
-- **Estado de la propiedad**: Nueva, usada, en construcción
-- **Características adicionales**: Piscina, jardín, seguridad 24/7
-
-### 2. Mejoras al motor
-- **Aprendizaje automático**: Usar historial de matches exitosos para ajustar pesos
-- **Factor de ubicación**: Considerar distancia a servicios (colegios, centros comerciales)
-- **Tendencias de mercado**: Ajustar scoring según oferta/demanda en la zona
-- **Preferencias del agente**: Historial de matches aceptados por cada agente
-
-### 3. Integraciones
-- **Notificaciones**: Webhooks para Slack/Teams cuando hay matches con score alto
-- **Sincronización automática**: Ejecutar matching periódico para requerimientos urgentes
-- **Exportación avanzada**: PDF con análisis detallado, Excel con todas las propiedades
-- **API externa**: Integración con portales inmobiliarios (Urbania, Adondevivir)
-
-### 4. Performance
-- **Indexación**: Agregar índices a campos frecuentemente usados en matching
-- **Caching**: Cachear resultados de matching por 24 horas para requerimientos no urgentes
-- **Procesamiento asíncrono**: Usar Celery para matching de grandes volúmenes
-- **Limitación de propiedades**: Filtrar por antigüedad (ej: solo propiedades activas en últimos 30 días)
-
-## Estructura de Archivos
-
-```
-matching/
-├── __init__.py
-├── admin.py
-├── apps.py
-├── engine.py              # Motor principal de matching
-├── models.py              # Modelo MatchResult
-├── serializers.py         # Serializers DRF
-├── urls.py                # URLs de la app
-├── views.py               # Views API y dashboard
-├── tests.py
-├── migrations/
-├── templates/matching/
-│   ├── dashboard.html     # Template principal
-│   └── partials/          # Templates parciales
-└── static/matching/
-    └── matching.js        # Lógica JavaScript del dashboard
+## Testing
+```bash
+cd webapp/
+python manage.py test matching.tests
 ```
 
-## Próximos Pasos
+Las pruebas cubren:
+- 10 filtros duros (cada uno con caso pasa/falla)
+- 8 factores de scoring (fórmulas correctas)
+- Filtrado final (umbral 70%, top-10, ranking)
+- Casos borde (sin amenities, sin presupuesto, sin FAISS)
 
-1. **Ejecutar migraciones**: `python manage.py migrate matching`
-2. **Probar con datos reales**: Crear algunos MatchResult de prueba
-3. **Personalizar estilos**: Ajustar CSS para integrarse mejor con el proyecto
-4. **Agregar permisos**: Definir qué usuarios pueden ejecutar/guardar matches
-5. **Monitorear performance**: Verificar tiempos de ejecución con volumen real de propiedades
+## Constantes configurables
+En [`scoring.py`](scoring.py):
+```python
+UMBRAL_MINIMO_SCORE = 70
+TOP_K_MATCHES = 10
+TOLERANCIA_PRECIO = 0.10
+TOLERANCIA_PRESUPUESTO_MAX = 0.05
+TOLERANCIA_PRESUPUESTO_MIN = 0.50
+PENALIZACION_HABITACIONES = 0.10
+PENALIZACION_BANOS = 0.15
+PENALIZACION_AREA = 0.50
+PESOS = {
+    'distrito': 15, 'precio': 20, 'habitaciones': 15,
+    'banos': 10, 'area': 10, 'amenities': 10,
+    'antiguedad': 5, 'semantico': 15,
+}
+```
 
-## Notas Técnicas
-
-- El motor usa `Decimal` para cálculos precisos de scores
-- Los resultados se ordenan por score descendente
-- Se puede filtrar por score mínimo via query parameter
-- El dashboard usa AJAX para no recargar la página
-- Chart.js se carga desde CDN para gráficos interactivos
+## Referencias
+- Basado en: ESPECIFICACION_MATCHING_v3.md
+- Módulo compartido: `matching/scoring.py`
+- Motor legacy: `matching/engine.py` (MatchingEngine)
+- Motor híbrido: `intelligence/skills/matching_hybrid.py` (HybridMatchingSkill)
