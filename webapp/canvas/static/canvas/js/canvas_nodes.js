@@ -68,9 +68,14 @@ function createPropNode(sourceId, data, x, y, campos) {
   dom.nodes.appendChild(node);
   positionNode(id, node, x, y);
 
+  const propW = 220;
+  const propH = node.offsetHeight || 160;
+  node.style.width  = propW + 'px';
+  node.style.height = propH + 'px';
+
   const nodoData = {
     id, tipo: 'propiedad', ref_id: sourceId,
-    x, y, width: 220, height: node.offsetHeight || 160,
+    x, y, width: propW, height: propH,
     collapsed: false, color: null, el: node,
     field_data: data,
   };
@@ -194,9 +199,14 @@ function createReqNode(reqId, data, x, y) {
   dom.nodes.appendChild(node);
   positionNode(id, node, x, y);
 
+  const reqW = 220;
+  const reqH = node.offsetHeight || 200;
+  node.style.width  = reqW + 'px';
+  node.style.height = reqH + 'px';
+
   STATE.nodos[id] = {
     id, tipo: 'requerimiento', ref_id: reqId,
-    x, y, width: 220, height: node.offsetHeight || 200,
+    x, y, width: reqW, height: reqH,
     collapsed: false, color: null, el: node,
   };
   registerNodeEvents(id, node);
@@ -499,9 +509,14 @@ function createArchivoNode(data, x, y) {
     renderPdfPreview(data.id, `/canvas/api/media/${data.id}/`);
   }
 
+  const initialW = 220;
+  const initialH = node.offsetHeight || 90;
+  node.style.width  = initialW + 'px';
+  node.style.height = initialH + 'px';
+
   STATE.nodos[id] = {
     id, tipo: 'archivo', ref_id: data.id,
-    x: x || 100, y: y || 100, width: 220, height: node.offsetHeight || 90,
+    x: x || 100, y: y || 100, width: initialW, height: initialH,
     collapsed: false, color: null, el: node,
     field_data: {
       file_url: data.blob_url,
@@ -866,8 +881,11 @@ function renderPlaceholderNodes(nodos) {
     STATE.nodos[n.id].el = node;
     if (n.collapsed) node.classList.add('collapsed');
     // Restaurar dimensiones guardadas (width/height) al DOM
-    if (n.width) node.style.width = n.width + 'px';
-    if (n.height) node.style.height = n.height + 'px';
+    // Siempre establecer explícitamente para evitar auto-dimensionado por contenido async
+    const dimW = n.width || STATE.nodos[n.id].width || 220;
+    const dimH = n.height || STATE.nodos[n.id].height || 100;
+    node.style.width  = dimW + 'px';
+    node.style.height = dimH + 'px';
     registerNodeEvents(n.id, node);
   });
   // Renderizar PDFs después de restaurar todos los nodos
