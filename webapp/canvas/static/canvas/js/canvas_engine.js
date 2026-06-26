@@ -273,6 +273,7 @@ function drawMinimap() {
   Object.values(STATE.nodos).forEach(n => {
     if (n.tipo === 'propiedad') ctx.fillStyle = '#1d9e75';
     else if (n.tipo === 'requerimiento') ctx.fillStyle = '#8896f0';
+    else if (n.tipo === 'match') ctx.fillStyle = '#ffdd00';
     else ctx.fillStyle = '#c9b44a';
     ctx.beginPath();
     ctx.arc(n.x * scaleX, n.y * scaleY, 2, 0, Math.PI * 2);

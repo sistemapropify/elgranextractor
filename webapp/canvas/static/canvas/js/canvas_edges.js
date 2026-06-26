@@ -133,11 +133,12 @@ function updateEdges() {
       text.textContent = score + '%';
       g.appendChild(text);
 
-      // Click handler
+      // Click handler → crea nodo comparativo en el canvas
       g.addEventListener('click', function(e) {
         e.stopPropagation();
-        if (edge.match_id && typeof showMatchModal === 'function') {
-          showMatchModal(edge.match_id, midX, midY);
+        if (edge.match_id && typeof createMatchNode === 'function') {
+          // Posicionar el nodo cerca del badge
+          createMatchNode(edge.match_id, midX - 140, midY - 80);
         }
       });
 

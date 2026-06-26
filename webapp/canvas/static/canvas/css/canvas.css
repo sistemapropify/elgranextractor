@@ -353,6 +353,7 @@
 .cv-badge--prop { background: #1a3a2e; color: var(--cv-done); }
 .cv-badge--req  { background: #1a1e3a; color: #8896f0; }
 .cv-badge--nota { background: var(--cv-note-bg); color: #c9b44a; border: 1px solid var(--cv-note-border); }
+.cv-badge--match { background: #1a1a0a; color: #ffdd00; border: 1px solid rgba(255,221,0,0.3); }
 
 .cv-node__title {
   flex: 1;
@@ -572,6 +573,91 @@
 .cv-node--req.collapsed .cv-node__req-info,
 .cv-node--req.collapsed .cv-node__req-body,
 .cv-node--req.collapsed .cv-node__req-footer { display: none; }
+
+/* ── MATCH COMPARISON NODE ── */
+.cv-node--match {
+  width: 380px;
+  min-width: 280px;
+}
+.cv-node--match .cv-node__body {
+  padding: 0;
+  overflow: visible;
+  max-height: none;
+}
+.cv-node--match .cv-node__title {
+  font-size: 11px;
+  color: #ffdd00;
+}
+.cv-node--match.collapsed .cv-node__body { display: none; }
+
+/* Match table */
+.cv-match-table {
+  font-size: 11px;
+}
+.cv-match-table__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: rgba(255,221,0,0.04);
+  border-bottom: 1px solid var(--cv-border);
+  font-size: 12px;
+}
+.cv-match-table__grid {
+  width: 100%;
+  border-collapse: collapse;
+}
+.cv-match-table__grid th {
+  padding: 6px 8px;
+  font-size: 9px;
+  font-weight: 600;
+  color: #8b90a7;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-align: left;
+  border-bottom: 1px solid var(--cv-border);
+  background: rgba(255,255,255,0.015);
+  position: sticky;
+  top: 0;
+}
+.cv-match-table__grid td {
+  padding: 5px 8px;
+  border-bottom: 1px solid rgba(46,48,68,0.3);
+  vertical-align: top;
+  font-size: 10px;
+}
+.cv-match-table__grid tr:hover td {
+  background: rgba(255,255,255,0.02);
+}
+.cv-match-td-label {
+  font-weight: 600;
+  color: #8b90a7;
+  white-space: nowrap;
+  width: 80px;
+  font-size: 9px;
+}
+.cv-match-td-prop {
+  color: #5c6bc0;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cv-match-td-req {
+  color: #8896f0;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cv-match-td-status {
+  text-align: center;
+  width: 28px;
+  font-size: 13px;
+}
+.cv-match-tr-filter td {
+  background: rgba(163,45,45,0.04);
+}
 
 /* ── EDGE BADGE CIRCULAR (match score) ── */
 /* Permitir clics en badges dentro de #cv-edges (que tiene pointer-events:none) */

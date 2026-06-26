@@ -583,6 +583,134 @@ function createEnlaceNode(url, titulo, x, y) {
 }
 
 
+/* ── NODO MATCH COMPARATIVO ── */
+
+/**
+ * Crea un nodo de tipo Match (comparativo) en el canvas.
+ * Al hacer clic en el badge circular de una arista match, se consulta
+ * la API y se crea este nodo con tabla comparativa propiedad vs requerimiento.
+ * @param {number} matchId - ID del MatchResult
+ * @param {number} x, y - posición inicial
+ */
+async function createMatchNode(matchId, x, y) {
+  const id = 'match_' + matchId;
+  if (STATE.nodos[id]) return id; // ya existe
+  if (typeof captureState === 'function') captureState();
+
+  // Crear nodo placeholder inmediatamente
+  const node = document.createElement('div');
+  node.className = 'cv-node cv-node--match';
+  node.dataset.id = id;
+  node.style.left = (x || 100) + 'px';
+  node.style.top  = (y || 100) + 'px';
+  node.style.width = '380px';
+  node.style.minWidth = '300px';
+
+  node.innerHTML = `
+    <div class="cv-node__header">
+      <span class="cv-node__badge cv-badge--match">MATCH</span>
+      <span class="cv-node__title">Cargando...</span>
+      <button class="cv-node__collapse" title="Colapsar">−</button>
+      <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
+    </div>
+    <div class="cv-node__body" style="text-align:center;padding:16px;color:var(--cv-text-muted);">
+      Cargando comparativa...
+    </div>
+    <div class="cv-port cv-port--top"    data-node="${id}" data-port="top"></div>
+    <div class="cv-port cv-port--right"  data-node="${id}" data-port="right"></div>
+    <div class="cv-port cv-port--bottom" data-node="${id}" data-port="bottom"></div>
+    <div class="cv-port cv-port--left"   data-node="${id}" data-port="left"></div>
+    <div class="cv-resize-handle" data-node="${id}"></div>
+  `;
+
+  dom.nodes.appendChild(node);
+  positionNode(id, node, x || 100, y || 100);
+
+  STATE.nodos[id] = {
+    id, tipo: 'match', ref_id: matchId,
+    x: x || 100, y: y || 100, width: 380, height: node.offsetHeight || 300,
+    collapsed: false, color: null, el: node,
+    field_data: { match_id: matchId },
+  };
+  registerNodeEvents(id, node);
+  markDirty();
+
+  // Cargar datos de la API
+  try {
+    const res = await fetch(`/canvas/api/match-detail/${matchId}/`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    renderMatchNodeBody(id, data);
+  } catch (err) {
+    console.error('Error loading match detail:', err);
+    const body = node.querySelector('.cv-node__body');
+    if (body) body.innerHTML = '<div style="color:var(--cv-block);padding:12px;text-align:center;">Error al cargar comparativa</div>';
+  }
+
+  return id;
+}
+
+
+/**
+ * Renderiza el body de un nodo match con los datos comparativos.
+ */
+function renderMatchNodeBody(nodeId, data) {
+  const nodo = STATE.nodos[nodeId];
+  if (!nodo || !nodo.el) return;
+
+  const score = Math.round(parseFloat(data.score_total) || 0);
+  const fecha = data.ejecutado_en || '';
+  const campos = data.campos || [];
+
+  // Actualizar título
+  const titleEl = nodo.el.querySelector('.cv-node__title');
+  if (titleEl) {
+    titleEl.textContent = `Match ${score}%`;
+  }
+
+  // Construir body
+  let html = `<div class="cv-match-table">`;
+
+  // Cabecera compacta: score + fecha
+  html += `<div class="cv-match-table__header">
+    <span class="cv-match-table__score" style="color:#ffdd00;font-weight:700;">${score}%</span>
+    ${fecha ? `<span style="color:var(--cv-text-muted);font-size:10px;">${fecha}</span>` : ''}
+  </div>`;
+
+  // Tabla de comparación
+  html += `<table class="cv-match-table__grid">
+    <thead><tr>
+      <th>Campo</th><th>Propiedad</th><th>Requerimiento</th><th style="text-align:center;">Ok</th>
+    </tr></thead><tbody>`;
+
+  campos.forEach(c => {
+    const propVal = escHtml(String(c.propiedad || '—').substring(0, 60));
+    const reqVal = escHtml(String(c.requerimiento || '—').substring(0, 60));
+    let icono, cls;
+    if (c.compatible === true) { icono = '✓'; cls = 'cv-mm-ok'; }
+    else if (c.compatible === false) { icono = '✗'; cls = 'cv-mm-fail'; }
+    else { icono = '—'; cls = 'cv-mm-neutral'; }
+    const isFilter = c.peso === -1;
+    html += `<tr${isFilter ? ' class="cv-match-tr-filter"' : ''}>
+      <td class="cv-match-td-label">${escHtml(c.label || c.nombre || '')}</td>
+      <td class="cv-match-td-prop">${propVal || '—'}</td>
+      <td class="cv-match-td-req">${reqVal || '—'}</td>
+      <td class="cv-match-td-status"><span class="${cls}">${icono}</span></td>
+    </tr>`;
+  });
+
+  html += `</tbody></table></div>`;
+
+  const body = nodo.el.querySelector('.cv-node__body');
+  if (body) {
+    body.innerHTML = html;
+    // Actualizar altura en state
+    nodo.height = nodo.el.offsetHeight || 300;
+  }
+  markDirty();
+}
+
+
 /* ── FORMAT FILE SIZE ── */
 
 function formatFileSize(bytes) {
@@ -702,6 +830,12 @@ function restoreSnapshot(snapshot) {
         x: n.x, y: n.y, width: n.width || 220, height: n.height || 80,
         collapsed: false, color: null, el: null,
         field_data: n.field_data || null,
+      };
+    } else if (n.tipo === 'match') {
+      STATE.nodos[n.id] = {
+        id: n.id, tipo: 'match', ref_id: n.ref_id,
+        x: n.x, y: n.y, width: n.width || 380, height: n.height || 300,
+        collapsed: n.collapsed || false, color: null, el: null,
       };
     }
   });
@@ -895,6 +1029,21 @@ function renderPlaceholderNodes(nodos) {
         <div class="cv-port cv-port--bottom" data-node="${n.id}" data-port="bottom"></div>
         <div class="cv-port cv-port--left"   data-node="${n.id}" data-port="left"></div>
       `;
+    } else if (n.tipo === 'match') {
+      node.innerHTML = `
+        <div class="cv-node__header">
+          <span class="cv-node__badge cv-badge--match">MATCH</span>
+          <span class="cv-node__title">Match #${n.ref_id || ''}</span>
+          <button class="cv-node__collapse" title="Colapsar">−</button>
+          <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
+        </div>
+        <div class="cv-node__body"><div style="color:var(--cv-text-muted);font-size:11px;text-align:center;padding:16px">Cargando comparativa...</div></div>
+        <div class="cv-port cv-port--top"    data-node="${n.id}" data-port="top"></div>
+        <div class="cv-port cv-port--right"  data-node="${n.id}" data-port="right"></div>
+        <div class="cv-port cv-port--bottom" data-node="${n.id}" data-port="bottom"></div>
+        <div class="cv-port cv-port--left"   data-node="${n.id}" data-port="left"></div>
+        <div class="cv-resize-handle" data-node="${n.id}"></div>
+      `;
     } else {
       node.innerHTML = `
         <div class="cv-nota__handle">&#10022; nota</div>
@@ -917,6 +1066,17 @@ function renderPlaceholderNodes(nodos) {
   Object.values(STATE.nodos).forEach(function(n) {
     if (n.tipo === 'archivo' && n.field_data && n.field_data.file_type === 'pdf' && n.ref_id) {
       setTimeout(function(id){ renderPdfPreview(id, '/canvas/api/media/'+id+'/'); }, 200, n.ref_id);
+    }
+  });
+  // Refrescar nodos match (cargar datos desde API)
+  Object.values(STATE.nodos).forEach(function(n) {
+    if (n.tipo === 'match' && n.ref_id && n.el) {
+      setTimeout(function(matchId, nodeId) {
+        fetch('/canvas/api/match-detail/' + matchId + '/')
+          .then(function(r) { return r.json(); })
+          .then(function(data) { renderMatchNodeBody(nodeId, data); })
+          .catch(function() {});
+      }, 300, n.ref_id, n.id);
     }
   });
 }
