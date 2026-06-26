@@ -35,17 +35,12 @@ function createPropNode(sourceId, data, x, y, campos) {
   const price = formatPrice(data.price, data.currency);
   const district = data.district_name || data.district || '';
 
-  const imgUrl = getPropertyImageUrl(data);
-
   node.innerHTML = `
     <div class="cv-node__header">
       <span class="cv-node__badge cv-badge--prop">PROP</span>
       <span class="cv-node__title">${escHtml(title)}</span>
       <button class="cv-node__collapse" title="Colapsar">−</button>
       <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
-    </div>
-    <div class="cv-node__thumb${imgUrl ? '' : ' cv-node__thumb--empty'}">
-      ${imgUrl ? `<img src="${escHtml(imgUrl)}" loading="lazy" onerror="this.parentElement.classList.add('cv-node__thumb--empty')" alt="">` : ''}
     </div>
     <div class="cv-node__body">
       <div class="cv-field"><span class="cv-field__key">Precio</span><span class="cv-field__val">${price || '—'}</span></div>
