@@ -460,6 +460,7 @@ function createArchivoNode(data, x, y) {
     </div>
     <div class="cv-node__body">
       ${data.tipo === 'image' ? `<img src="/canvas/api/media/${data.id}/" style="width:100%;max-height:180px;object-fit:cover;border-radius:4px;margin-bottom:6px;cursor:pointer;" onclick="window.open('/canvas/api/media/${data.id}/','_blank')" onerror="this.style.display='none'">` : ''}
+      ${data.tipo === 'pdf' ? `<div class="cv-pdf-preview" data-pdf-id="${data.id}" style="width:100%;height:120px;background:var(--cv-surface-2);border-radius:4px;margin-bottom:6px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--cv-text-muted);overflow:hidden;"><span>Cargando PDF...</span></div>` : ''}
       <div class="cv-file-info">
         <span class="cv-file-info__size">${tamanoStr}</span>
         <div style="display:flex;gap:6px;margin-top:4px;">
@@ -476,6 +477,11 @@ function createArchivoNode(data, x, y) {
 
   dom.nodes.appendChild(node);
   positionNode(id, node, x || 100, y || 100);
+  
+  // Renderizar preview PDF si aplica
+  if (data.tipo === 'pdf' && data.id) {
+    renderPdfPreview(data.id, `/canvas/api/media/${data.id}/`);
+  }
 
   STATE.nodos[id] = {
     id, tipo: 'archivo', ref_id: data.id,
@@ -781,6 +787,7 @@ function renderPlaceholderNodes(nodos) {
         </div>
         <div class="cv-node__body">
           ${fd.file_type === 'image' && data.ref_id ? `<img src="/canvas/api/media/${data.ref_id}/" style="width:100%;max-height:180px;object-fit:cover;border-radius:4px;margin-bottom:6px;cursor:pointer;" onclick="window.open('/canvas/api/media/${data.ref_id}/','_blank')" onerror="this.style.display='none'">` : fd.file_type === 'image' ? `<img src="${escHtml(fd.file_url)}" style="width:100%;max-height:180px;object-fit:cover;border-radius:4px;margin-bottom:6px;cursor:pointer;" onclick="window.open('${escHtml(fd.file_url)}','_blank')" onerror="this.style.display='none'">` : ''}
+          ${fd.file_type === 'pdf' && data.ref_id ? `<div class="cv-pdf-preview" data-pdf-id="${data.ref_id}" style="width:100%;height:120px;background:var(--cv-surface-2);border-radius:4px;margin-bottom:6px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--cv-text-muted);overflow:hidden;"><span>Cargando PDF...</span></div>` : ''}
           <div class="cv-file-info">
             <span class="cv-file-info__size">${tamanoStr}</span>
             <div style="display:flex;gap:6px;margin-top:4px;">
@@ -828,6 +835,12 @@ function renderPlaceholderNodes(nodos) {
     STATE.nodos[n.id].el = node;
     if (n.collapsed) node.classList.add('collapsed');
     registerNodeEvents(n.id, node);
+  });
+  // Renderizar PDFs después de restaurar todos los nodos
+  Object.values(STATE.nodos).forEach(function(n) {
+    if (n.tipo === 'archivo' && n.field_data && n.field_data.file_type === 'pdf' && n.ref_id) {
+      setTimeout(function(id){ renderPdfPreview(id, '/canvas/api/media/'+id+'/'); }, 200, n.ref_id);
+    }
   });
 }
 
@@ -882,4 +895,52 @@ function escHtml(str) {
   const div = document.createElement('div');
   div.textContent = String(str);
   return div.innerHTML;
+}
+
+/* ── PDF PREVIEW ── */
+
+/**
+ * Renderiza la primera página de un PDF como thumbnail usando PDF.js.
+ * @param {number|string} archivoId - ID del ArchivoLienzo
+ * @param {string} pdfUrl - URL del PDF (proxy /canvas/api/media/{id}/)
+ */
+function renderPdfPreview(archivoId, pdfUrl) {
+  const container = document.querySelector(`.cv-pdf-preview[data-pdf-id="${archivoId}"]`);
+  if (!container) return;
+
+  // Cargar PDF.js desde CDN si no está disponible
+  if (typeof pdfjsLib === 'undefined') {
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    script.onload = function() {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      doRenderPdf(container, pdfUrl);
+    };
+    script.onerror = function() {
+      container.innerHTML = '<span style="font-size:10px;color:var(--cv-text-muted);">PDF no disponible</span>';
+    };
+    document.head.appendChild(script);
+  } else {
+    doRenderPdf(container, pdfUrl);
+  }
+}
+
+function doRenderPdf(container, pdfUrl) {
+  pdfjsLib.getDocument(pdfUrl).promise.then(function(pdf) {
+    return pdf.getPage(1);
+  }).then(function(page) {
+    const scale = 0.5;
+    const viewport = page.getViewport({ scale: scale });
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    canvas.style.objectFit = 'contain';
+    container.innerHTML = '';
+    container.appendChild(canvas);
+    return page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise;
+  }).catch(function() {
+    container.innerHTML = '<span style="font-size:10px;color:var(--cv-text-muted);">Vista previa no disponible</span>';
+  });
 }

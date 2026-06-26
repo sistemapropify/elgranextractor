@@ -301,6 +301,7 @@ function renderSinglePlaceholder(n) {
       </div>
       <div class="cv-node__body">
         ${fd.file_type === 'image' ? `<img src="/canvas/api/media/${n.ref_id}/" style="width:100%;max-height:180px;object-fit:cover;border-radius:4px;margin-bottom:6px;cursor:pointer;" onclick="window.open('/canvas/api/media/${n.ref_id}/','_blank')" onerror="this.style.display='none'">` : ''}
+        ${fd.file_type === 'pdf' && n.ref_id ? `<div class="cv-pdf-preview" data-pdf-id="${n.ref_id}" style="width:100%;height:120px;background:var(--cv-surface-2);border-radius:4px;margin-bottom:6px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--cv-text-muted);overflow:hidden;"><span>Cargando PDF...</span></div>` : ''}
         <div class="cv-file-info">
           <span class="cv-file-info__size">${tamanoStr}</span>
           <div style="display:flex;gap:6px;margin-top:4px;">
