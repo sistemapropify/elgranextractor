@@ -72,7 +72,7 @@ function getNodePortPos(id, portDir) {
 
 function updateEdges() {
   // Remove old edges
-  dom.edges.querySelectorAll('.cv-edge, .cv-edge__label').forEach(el => {
+  dom.edges.querySelectorAll('.cv-edge, .cv-edge__label, .cv-edge__badge-group').forEach(el => {
     if (el !== tempEdgeEl) el.remove();
   });
 
@@ -89,17 +89,56 @@ function updateEdges() {
     else if (edge.tipo === 'block') pathEl.setAttribute('marker-end', 'url(#arrow-red)');
     dom.edges.appendChild(pathEl);
 
-    // Label at midpoint
-    if (edge.label) {
+    // ── BADGE CIRCULAR (solo para edges match con score) ──
+    if (edge.tipo === 'match' && edge.match_id && edge.score_total != null) {
       const midX = (from.x + to.x) / 2;
-      const midY = (from.y + to.y) / 2 - 8;
-      const labelEl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      labelEl.setAttribute('x', midX);
-      labelEl.setAttribute('y', midY);
-      labelEl.setAttribute('text-anchor', 'middle');
-      labelEl.classList.add('cv-edge__label');
-      labelEl.textContent = edge.label;
-      dom.edges.appendChild(labelEl);
+      const midY = (from.y + to.y) / 2;
+      const score = Math.round(parseFloat(edge.score_total));
+      const fecha = edge.ejecutado_en || '';
+
+      // Grupo SVG contenedor
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.classList.add('cv-edge__badge-group');
+      g.style.cursor = 'pointer';
+      g.dataset.matchId = edge.match_id;
+
+      // Círculo de fondo
+      const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      circle.setAttribute('cx', midX);
+      circle.setAttribute('cy', midY);
+      circle.setAttribute('r', '18');
+      circle.classList.add('cv-edge__badge-circle');
+      g.appendChild(circle);
+
+      // Texto del score
+      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      text.setAttribute('x', midX);
+      text.setAttribute('y', midY - (fecha ? 3 : 0));
+      text.setAttribute('text-anchor', 'middle');
+      text.classList.add('cv-edge__badge-text');
+      text.textContent = score + '%';
+      g.appendChild(text);
+
+      // Fecha debajo del score (si existe)
+      if (fecha && fecha.length >= 10) {
+        const dateText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        dateText.setAttribute('x', midX);
+        dateText.setAttribute('y', midY + 12);
+        dateText.setAttribute('text-anchor', 'middle');
+        dateText.classList.add('cv-edge__badge-date');
+        dateText.textContent = fecha.substring(0, 10); // solo YYYY-MM-DD
+        g.appendChild(dateText);
+      }
+
+      // Click handler → abrir modal comparativo
+      g.addEventListener('click', function(e) {
+        e.stopPropagation();
+        if (typeof showMatchModal === 'function') {
+          showMatchModal(edge.match_id, midX, midY);
+        }
+      });
+
+      dom.edges.appendChild(g);
     }
   });
 }

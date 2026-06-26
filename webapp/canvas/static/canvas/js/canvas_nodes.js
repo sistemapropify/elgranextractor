@@ -635,6 +635,9 @@ async function loadMatchesForProp(propId, nodeId) {
             origen: nodeId,
             destino: reqNodeId,
             tipo: 'match',
+            match_id: req.match_id || null,
+            score_total: req.score_total || req.score_estructural || 0,
+            ejecutado_en: req.ejecutado_en || '',
             label: (req.score_estructural || 0) + '%',
           };
         }

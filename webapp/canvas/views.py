@@ -408,8 +408,18 @@ def api_reqs_match(request, prop_id):
                 except Exception:
                     presupuesto_monto = None
 
+            # Formatear fecha de ejecución del match
+            ejecutado_str = ''
+            if mr.ejecutado_en:
+                try:
+                    ejecutado_str = mr.ejecutado_en.strftime('%Y-%m-%d %H:%M')
+                except Exception:
+                    ejecutado_str = str(mr.ejecutado_en)
+
             matches.append({
                 'id': str(req.id),
+                'match_id': mr.id,
+                'ejecutado_en': ejecutado_str,
                 # Dueño / Agente
                 'agente': getattr(req, 'agente', '') or '',
                 'agente_telefono': getattr(req, 'agente_telefono', '') or '',
@@ -434,6 +444,9 @@ def api_reqs_match(request, prop_id):
                 # Scores
                 'score_semantico': 0,
                 'score_estructural': float(mr.score_total) if mr.score_total else 0,
+                'score_total': float(mr.score_total) if mr.score_total else 0,
+                'score_detalle': mr.score_detalle or {},
+                'fase_eliminada': mr.fase_eliminada,
                 'tipo': 'estructural',
             })
 
@@ -442,6 +455,218 @@ def api_reqs_match(request, prop_id):
     except Exception as e:
         logger.error(f"Error fetching MatchResult for prop {prop_id}: {e}")
         return JsonResponse({'matches': [], 'total': 0})
+
+
+def api_match_detail(request, match_id):
+    """
+    GET /canvas/api/match-detail/<match_id>/
+
+    Retorna detalle comparativo de un match: propiedad vs requerimiento
+    con los 11 campos ordenados por peso/importancia.
+    """
+    user = _get_current_user(request)
+    if not user:
+        return JsonResponse({'error': 'No autenticado'}, status=401)
+
+    try:
+        from matching.models import MatchResult
+        from requerimientos.models import Requerimiento
+
+        mr = MatchResult.objects.select_related('requerimiento').get(id=match_id)
+        req = mr.requerimiento
+
+        # Obtener datos de la propiedad desde la BD propifai
+        prop_data = {}
+        try:
+            from django.db import connections
+            with connections['propifai'].cursor() as cursor:
+                cursor.execute("""
+                    SELECT p.id, p.code, p.title, p.price, p.currency_id,
+                           p.bedrooms, p.bathrooms, p.built_area,
+                           p.has_elevator, p.garage_spaces,
+                           p.operation_type_name, p.property_type_name,
+                           p.district_name, p.year_built,
+                           p.description, p.map_address
+                    FROM propiedadespropify p
+                    WHERE p.id = %s
+                """, [mr.propiedad_id])
+                row = cursor.fetchone()
+                if row:
+                    col_names = [
+                        'id','code','title','price','currency_id',
+                        'bedrooms','bathrooms','built_area',
+                        'has_elevator','garage_spaces',
+                        'operation_type_name','property_type_name',
+                        'district_name','year_built',
+                        'description','map_address'
+                    ]
+                    for i, name in enumerate(col_names):
+                        prop_data[name] = row[i]
+        except Exception as e:
+            logger.warning(f"No se pudo obtener propiedad {mr.propiedad_id}: {e}")
+
+        # Helper para formatear valores
+        def _val(v, default='—'):
+            if v is None or v == '':
+                return default
+            return str(v)
+
+        def _bool(v, yes='Sí', no='No'):
+            if v is True or str(v).lower() in ('1', 'true', 'si', 'sí'):
+                return yes
+            if v is False or str(v).lower() in ('0', 'false', 'no'):
+                return no
+            return _val(v)
+
+        def _is_compatible(score_val, peso_maximo):
+            """Determina si un campo es compatible basado en su score."""
+            if score_val is None:
+                return None
+            try:
+                return float(score_val) >= (float(peso_maximo) * 0.5)
+            except (ValueError, TypeError):
+                return None
+
+        sd = mr.score_detalle or {}
+        ejecutado_str = ''
+        if mr.ejecutado_en:
+            try:
+                ejecutado_str = mr.ejecutado_en.strftime('%Y-%m-%d %H:%M')
+            except Exception:
+                ejecutado_str = str(mr.ejecutado_en)
+
+        # Los 11 campos ordenados por peso/importancia
+        # Cada campo: nombre, label, valor_propiedad, valor_requerimiento, compatible
+        campos = []
+
+        # 1. PRECIO (20pts)
+        s = sd.get('precio', {})
+        campos.append({
+            'nombre': 'precio', 'label': '💰 Presupuesto', 'peso': 20,
+            'propiedad': _val(prop_data.get('price')),
+            'requerimiento': _val(req.presupuesto_monto) + ' ' + _val(req.get_presupuesto_moneda_display() if hasattr(req, 'get_presupuesto_moneda_display') else req.presupuesto_moneda, ''),
+            'compatible': _is_compatible(s.get('score'), s.get('peso_maximo', 20)),
+            'detalle': s.get('detalle', ''),
+        })
+
+        # 2. DISTRITO (15pts)
+        s = sd.get('distrito', {})
+        campos.append({
+            'nombre': 'distrito', 'label': '📍 Distrito', 'peso': 15,
+            'propiedad': _val(prop_data.get('district_name')),
+            'requerimiento': _val(req.distritos),
+            'compatible': _is_compatible(s.get('score'), s.get('peso_maximo', 15)),
+            'detalle': s.get('detalle', ''),
+        })
+
+        # 3. HABITACIONES (15pts)
+        s = sd.get('habitaciones', {})
+        campos.append({
+            'nombre': 'habitaciones', 'label': '🛏️ Habitaciones', 'peso': 15,
+            'propiedad': _val(prop_data.get('bedrooms')),
+            'requerimiento': _val(req.habitaciones),
+            'compatible': _is_compatible(s.get('score'), s.get('peso_maximo', 15)),
+            'detalle': s.get('detalle', ''),
+        })
+
+        # 4. SEMÁNTICO (15pts)
+        s = sd.get('semantico', {})
+        campos.append({
+            'nombre': 'semantico', 'label': '🧠 Coincidencia', 'peso': 15,
+            'propiedad': _val(prop_data.get('description', '')[:80]),
+            'requerimiento': _val(req.requerimiento[:80]),
+            'compatible': _is_compatible(s.get('score'), s.get('peso_maximo', 15)),
+            'detalle': s.get('detalle', ''),
+        })
+
+        # 5. CONDICIÓN (filtro duro)
+        compatible_cond = mr.fase_eliminada != 'condicion'
+        campos.append({
+            'nombre': 'condicion', 'label': '🔴 Condición', 'peso': -1,
+            'propiedad': _val(prop_data.get('operation_type_name')),
+            'requerimiento': _val(req.get_condicion_display() if hasattr(req, 'get_condicion_display') else req.condicion),
+            'compatible': compatible_cond,
+            'detalle': 'Filtro duro' if not compatible_cond else '',
+        })
+
+        # 6. TIPO PROPIEDAD (filtro duro)
+        compatible_tipo = mr.fase_eliminada != 'tipo_propiedad'
+        campos.append({
+            'nombre': 'tipo_propiedad', 'label': '🏠 Tipo Propiedad', 'peso': -1,
+            'propiedad': _val(prop_data.get('property_type_name')),
+            'requerimiento': _val(req.get_tipo_propiedad_display() if hasattr(req, 'get_tipo_propiedad_display') else req.tipo_propiedad),
+            'compatible': compatible_tipo,
+            'detalle': 'Filtro duro' if not compatible_tipo else '',
+        })
+
+        # 7. BAÑOS (10pts)
+        s = sd.get('banos', {})
+        campos.append({
+            'nombre': 'banos', 'label': '🚿 Baños', 'peso': 10,
+            'propiedad': _val(prop_data.get('bathrooms')),
+            'requerimiento': _val(req.banos),
+            'compatible': _is_compatible(s.get('score'), s.get('peso_maximo', 10)),
+            'detalle': s.get('detalle', ''),
+        })
+
+        # 8. ÁREA (10pts)
+        s = sd.get('area', {})
+        campos.append({
+            'nombre': 'area', 'label': '📐 Área m²', 'peso': 10,
+            'propiedad': _val(prop_data.get('built_area')),
+            'requerimiento': _val(req.area_m2),
+            'compatible': _is_compatible(s.get('score'), s.get('peso_maximo', 10)),
+            'detalle': s.get('detalle', ''),
+        })
+
+        # 9. AMENITIES - Ascensor + Cochera (10pts)
+        s = sd.get('amenities', {})
+        ascensor_str = _bool(prop_data.get('has_elevator'))
+        cochera_str = _val(prop_data.get('garage_spaces'))
+        campos.append({
+            'nombre': 'amenities', 'label': '🛗 Ascensor + 🚗 Cochera', 'peso': 10,
+            'propiedad': f"Asc:{ascensor_str} / Cochera:{cochera_str}",
+            'requerimiento': f"Asc:{_val(req.ascensor)} / Cochera:{_val(req.cochera)}",
+            'compatible': _is_compatible(s.get('score'), s.get('peso_maximo', 10)),
+            'detalle': s.get('detalle', ''),
+        })
+
+        # 10. ANTIGÜEDAD (5pts)
+        s = sd.get('antiguedad', {})
+        anio = prop_data.get('year_built')
+        antiguedad_str = str(anio) if anio else '—'
+        campos.append({
+            'nombre': 'antiguedad', 'label': '📅 Antigüedad', 'peso': 5,
+            'propiedad': antiguedad_str,
+            'requerimiento': _val(getattr(req, 'antiguedad_max', None)),
+            'compatible': _is_compatible(s.get('score'), s.get('peso_maximo', 5)),
+            'detalle': s.get('detalle', ''),
+        })
+
+        # 11. FORMA DE PAGO (filtro duro)
+        compatible_pago = mr.fase_eliminada != 'forma_pago'
+        campos.append({
+            'nombre': 'forma_pago', 'label': '💳 Forma Pago', 'peso': -1,
+            'propiedad': _val(prop_data.get('forma_pago')),
+            'requerimiento': _val(req.get_presupuesto_forma_pago_display() if hasattr(req, 'get_presupuesto_forma_pago_display') else req.presupuesto_forma_pago),
+            'compatible': compatible_pago,
+            'detalle': 'Filtro duro' if not compatible_pago else '',
+        })
+
+        return JsonResponse({
+            'match_id': mr.id,
+            'score_total': float(mr.score_total),
+            'ejecutado_en': ejecutado_str,
+            'fase_eliminada': mr.fase_eliminada,
+            'score_detalle': sd,
+            'campos': campos,
+        })
+
+    except MatchResult.DoesNotExist:
+        return JsonResponse({'error': 'Match no encontrado'}, status=404)
+    except Exception as e:
+        logger.error(f"Error en api_match_detail({match_id}): {e}")
+        return JsonResponse({'error': str(e)}, status=500)
 
 
 # ── API: TEMPLATES ─────────────────────────────────────────────

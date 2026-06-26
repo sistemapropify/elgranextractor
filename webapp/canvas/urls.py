@@ -15,6 +15,7 @@ urlpatterns = [
     path('api/propiedades/',          views.api_propiedades,   name='api_props'),
     path('api/agentes/',              views.api_agentes,       name='api_agentes'),
     path('api/reqs/<int:prop_id>/',   views.api_reqs_match,    name='api_reqs'),
+    path('api/match-detail/<int:match_id>/', views.api_match_detail, name='api_match_detail'),
     path('api/template/save/',        views.api_template_save, name='api_tpl_save'),
     path('api/template/list/',        views.api_template_list, name='api_tpl_list'),
 
