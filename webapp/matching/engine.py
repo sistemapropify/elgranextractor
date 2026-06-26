@@ -1,12 +1,17 @@
 """
-Motor de matching inmobiliario v3 — ADAPTADO PARA dbpropify_be.
+Motor de matching inmobiliario v4 — REFACTORIZADO con módulo scoring.py compartido.
 
-Cambios respecto a v2:
-1. Usa raw SQL con JOIN entre property y property_specs (dbpropify_be)
-2. No depende de campos ORM que no existen en la tabla `property`
-3. Los specs (bedrooms, bathrooms, areas, amenities) vienen de property_specs
-4. Los lookup values (district name, property type name) se resuelven con SQL
-5. MatchResult guarda property_id como entero (no ForeignKey a PropifaiProperty)
+Cambios v4 (basado en ESPECIFICACION_MATCHING_v3.md):
+1. Usa scoring.py para filtros duros (10), scoring blando (8 factores) y filtrado final
+2. Ascensor y cocheras ahora son FILTROS DUROS (no scoring)
+3. Precio usa función GAUSSIANA (no binaria)
+4. Habitaciones/baños/área usan función de DISTANCIA (penalizan exceso)
+5. Amenities usa JACCARD similarity
+6. Nuevo factor semántico escalonado (peso 15)
+7. Nuevo factor antigüedad (peso 5)
+8. Umbral mínimo de score: 70%
+9. Top-K limit: 10 matches por requerimiento
+10. score_detalle con nuevo formato {factor: {score, peso_maximo, detalle}}
 """
 
 import logging
@@ -17,62 +22,15 @@ from django.conf import settings
 
 from requerimientos.models import Requerimiento
 from propifai.mapeo_ubicaciones import DISTRITOS
+from . import scoring
 
 logger = logging.getLogger(__name__)
-
-# Cache global de PropertyTypes (se carga una vez)
-_PROPERTY_TYPES_CACHE = None
-_PROPERTY_TYPES_NAME_TO_ID = None
 
 # Cache de nombres de distrito (id → nombre)
 _DISTRICT_CACHE = {}
 
-# Tipo de cambio configurable (PEN por USD)
+# Tipo de cambio (mantener aquí para compatibilidad con funciones existentes)
 TIPO_CAMBIO_USD_PEN = Decimal('3.75')
-
-
-def _recargar_cache_property_types():
-    """Recarga el cache de PropertyTypes desde la BD propifai."""
-    global _PROPERTY_TYPES_CACHE, _PROPERTY_TYPES_NAME_TO_ID
-    try:
-        with connections['propifai'].cursor() as cursor:
-            cursor.execute("SELECT id, name FROM property_type WHERE is_active = 1")
-            rows = cursor.fetchall()
-            _PROPERTY_TYPES_CACHE = {row[0]: row[1] for row in rows}
-            _PROPERTY_TYPES_NAME_TO_ID = {}
-            for pt_id, pt_name in _PROPERTY_TYPES_CACHE.items():
-                nombre_key = pt_name.lower().strip()
-                _PROPERTY_TYPES_NAME_TO_ID[nombre_key] = pt_id
-                # Variantes comunes
-                if nombre_key == 'departamento':
-                    _PROPERTY_TYPES_NAME_TO_ID['depto'] = pt_id
-                    _PROPERTY_TYPES_NAME_TO_ID['deptos'] = pt_id
-                    _PROPERTY_TYPES_NAME_TO_ID['dpto'] = pt_id
-                elif nombre_key == 'casa':
-                    _PROPERTY_TYPES_NAME_TO_ID['casas'] = pt_id
-                elif nombre_key == 'terreno':
-                    _PROPERTY_TYPES_NAME_TO_ID['terrenos'] = pt_id
-                elif nombre_key == 'local':
-                    _PROPERTY_TYPES_NAME_TO_ID['local_comercial'] = pt_id
-                    _PROPERTY_TYPES_NAME_TO_ID['local comercial'] = pt_id
-                    _PROPERTY_TYPES_NAME_TO_ID['locales'] = pt_id
-                    _PROPERTY_TYPES_NAME_TO_ID['locales comerciales'] = pt_id
-                elif nombre_key == 'oficina':
-                    _PROPERTY_TYPES_NAME_TO_ID['oficinas'] = pt_id
-        logger.debug(f"Cache de PropertyTypes recargado: {_PROPERTY_TYPES_CACHE}")
-    except Exception as e:
-        logger.error(f"Error al cargar PropertyTypes: {e}")
-        _PROPERTY_TYPES_CACHE = {}
-        _PROPERTY_TYPES_NAME_TO_ID = {}
-
-
-def _get_property_type_id(nombre_tipo: str) -> Optional[int]:
-    """Resuelve un nombre de tipo de propiedad a un ID de property_type."""
-    global _PROPERTY_TYPES_NAME_TO_ID
-    if _PROPERTY_TYPES_NAME_TO_ID is None:
-        _recargar_cache_property_types()
-    nombre_limpio = nombre_tipo.lower().strip()
-    return _PROPERTY_TYPES_NAME_TO_ID.get(nombre_limpio)
 
 
 def _get_distrito_id(nombre_distrito: str) -> Optional[str]:
@@ -105,17 +63,6 @@ def _get_district_name(district_id) -> Optional[str]:
     except Exception as e:
         logger.error(f"Error al obtener nombre de distrito {district_id}: {e}")
         return None
-
-
-def _convertir_moneda(monto: Decimal, moneda_origen: str, moneda_destino: str) -> Decimal:
-    """Convierte un monto entre USD y PEN."""
-    if moneda_origen == moneda_destino:
-        return monto
-    if moneda_origen == 'USD' and moneda_destino == 'PEN':
-        return monto * TIPO_CAMBIO_USD_PEN
-    elif moneda_origen == 'PEN' and moneda_destino == 'USD':
-        return monto / TIPO_CAMBIO_USD_PEN
-    return monto
 
 
 def _fetch_property_by_id(property_id: int) -> Optional[Dict]:
@@ -254,83 +201,82 @@ def _get_moneda_propiedad(prop_dict: Dict) -> str:
 
 
 def _get_property_type_name(property_type_id) -> Optional[str]:
-    """Obtiene el nombre del tipo de propiedad."""
+    """Obtiene el nombre del tipo de propiedad usando el cache de scoring.py."""
     if not property_type_id:
         return None
-    global _PROPERTY_TYPES_CACHE
-    if _PROPERTY_TYPES_CACHE is None:
-        _recargar_cache_property_types()
-    return _PROPERTY_TYPES_CACHE.get(property_type_id)
+    # Usar el cache de scoring.py para resolver nombres de tipos
+    property_type_id_int = int(property_type_id) if property_type_id else None
+    if property_type_id_int is None:
+        return None
+    # Cargar cache si no está cargado
+    from . import scoring as scoring_mod
+    # Forzar carga del cache de tipo en scoring module
+    scoring_mod._tipo_propiedad_name_to_id('')  # Inicializa el cache
+    # Invertir el cache para buscar por ID
+    if scoring_mod._TIPO_CACHE:
+        for name, tid in scoring_mod._TIPO_CACHE.items():
+            if tid == property_type_id_int:
+                return name.capitalize()
+    return None
 
 
 class MatchingEngine:
     """
-    Motor principal de matching v3 — adaptado para dbpropify_be.
+    Motor principal de matching v4 — REFACTORIZADO con scoring.py.
     
-    Usa raw SQL con JOIN entre property y property_specs.
-    Todas las propiedades se cargan como diccionarios al inicio.
+    Basado en ESPECIFICACION_MATCHING_v3.md:
+    - FASE 1: 10 filtros duros (via scoring.aplicar_filtros_duros)
+    - FASE 2: 8 factores de scoring (via scoring.calcular_scoring_total)
+    - FASE 3: Umbral 70% + top-10 + ranking (via scoring.filtrar_resultados_finales)
     """
-    
-    # Pesos para campos de scoring (suman 100)
-    # OPTIMIZADO: Los 3 factores principales (distrito, tipo, precio) suman 90%
-    # para que matches obvios como "Casa en Sachaca a $220k" contra
-    # "Busco Casa en Cayma/Yanahuara/Sachaca hasta $380k" den score alto.
-    PESOS = {
-        'distrito': 30,
-        'tipo_propiedad': 30,
-        'precio': 30,
-        'habitaciones': 3,
-        'banos': 2,
-        'area': 2,
-        'amenities': 2,
-        'ascensor': 1,
-    }
-    
-    TOLERANCIA_NUMERICA = 0.10  # 10%
     
     def __init__(self, requerimiento: Requerimiento):
         self.requerimiento = requerimiento
+        self.req_data = scoring.preparar_req_data(requerimiento)
         self.propiedades_evaluadas = 0
+        # Todos los 10 filtros duros posibles
         self.propiedades_descartadas = {
-            'tipo_propiedad': 0,
             'condicion': 0,
+            'tipo_propiedad': 0,
+            'forma_pago': 0,
+            'presupuesto_maximo': 0,
+            'presupuesto_minimo': 0,
+            'ascensor': 0,
+            'cocheras': 0,
+            'habitaciones': 0,
+            'banos': 0,
             'distrito': 0,
-            'presupuesto': 0,
         }
         self.propiedades_compatibles = []
-        
-        # Cargar cache de PropertyTypes si no está cargado
-        global _PROPERTY_TYPES_NAME_TO_ID
-        if _PROPERTY_TYPES_NAME_TO_ID is None:
-            _recargar_cache_property_types()
     
     def ejecutar_matching(self, propiedades: List[Dict] = None) -> List[Dict]:
         """
-        Ejecuta el matching completo para el requerimiento.
+        Ejecuta el matching completo v4 para el requerimiento.
         
         Args:
             propiedades: Lista de diccionarios con datos de propiedades.
                          Si es None, se cargan desde la BD.
                          
         Returns:
-            Lista de diccionarios con resultados.
+            Lista de diccionarios con resultados (filtrados por umbral 70%, top-10).
         """
         if propiedades is None:
             propiedades = _fetch_properties(is_active_only=True)
         
-        resultados = []
+        resultados_parciales = []
         
         for prop_dict in propiedades:
             self.propiedades_evaluadas += 1
             
-            # FASE 1: Filtros discriminatorios
-            fase_eliminada = self._aplicar_filtros_discriminatorios(prop_dict)
+            # ── FASE 1: Filtros duros ────────────────────────────────
+            fase_eliminada = scoring.aplicar_filtros_duros(prop_dict, self.req_data)
             if fase_eliminada:
-                self.propiedades_descartadas[fase_eliminada] += 1
+                if fase_eliminada in self.propiedades_descartadas:
+                    self.propiedades_descartadas[fase_eliminada] += 1
                 continue
             
-            # FASE 2: Scoring ponderado
-            score_total, score_detalle = self._calcular_scoring(prop_dict)
+            # ── FASE 2: Scoring blando ───────────────────────────────
+            score_total, score_detalle = scoring.calcular_scoring_total(prop_dict, self.req_data)
             
             resultado = {
                 'propiedad_dict': prop_dict,
@@ -339,405 +285,54 @@ class MatchingEngine:
                 'score_detalle': score_detalle,
                 'fase_eliminada': None,
                 'porcentaje_compatibilidad': score_total,
+                'ranking': None,
             }
             
-            resultados.append(resultado)
+            resultados_parciales.append(resultado)
             self.propiedades_compatibles.append(resultado)
         
-        # Ordenar por score descendente
-        resultados.sort(key=lambda x: x['score_total'], reverse=True)
-        
-        # Asignar ranking
-        for i, resultado in enumerate(resultados, 1):
-            resultado['ranking'] = i
+        # ── FASE 3: Filtrado final (umbral + top-K + ranking) ─────
+        resultados = scoring.filtrar_resultados_finales(
+            resultados_parciales,
+            umbral_minimo=scoring.UMBRAL_MINIMO_SCORE,
+            top_k=scoring.TOP_K_MATCHES,
+        )
         
         logger.info(
-            f"Matching v3 completado para requerimiento {self.requerimiento.id}. "
+            f"Matching v4 completado para requerimiento {self.requerimiento.id}. "
             f"Evaluadas: {self.propiedades_evaluadas}, "
-            f"Compatibles: {len(resultados)}, "
-            f"Descartadas: {sum(self.propiedades_descartadas.values())}"
+            f"Pasaron filtros: {len(resultados_parciales)}, "
+            f"Top-{scoring.TOP_K_MATCHES} finales: {len(resultados)}, "
+            f"Descartadas por filtro: {sum(self.propiedades_descartadas.values())}"
         )
         
         return resultados
     
-    def _aplicar_filtros_discriminatorios(self, prop_dict: Dict) -> Optional[str]:
-        """Aplica los filtros discriminatorios."""
-        if not self._coincide_tipo_propiedad(prop_dict):
-            return 'tipo_propiedad'
-        if not self._coincide_condicion(prop_dict):
-            return 'condicion'
-        if not self._coincide_distrito(prop_dict):
-            return 'distrito'
-        if not self._dentro_de_presupuesto(prop_dict):
-            return 'presupuesto'
-        return None
-    
-    def _coincide_tipo_propiedad(self, prop_dict: Dict) -> bool:
-        """Verifica si el tipo de propiedad coincide."""
-        tipo_req = self.requerimiento.tipo_propiedad
-        if not tipo_req:
-            return True
-        
-        valores_sin_filtro = {'no_especificado', 'no especificado', 'todos', 'cualquiera', ''}
-        if tipo_req.lower().strip() in valores_sin_filtro:
-            return True
-        
-        property_type_id = prop_dict.get('property_type_id')
-        if not property_type_id:
-            return False
-        
-        tipo_id_esperado = _get_property_type_id(tipo_req)
-        if tipo_id_esperado is None:
-            logger.warning(
-                f"No se pudo resolver tipo_propiedad '{tipo_req}' del requerimiento "
-                f"{self.requerimiento.id}. Aceptando propiedad."
-            )
-            return True
-        
-        return property_type_id == tipo_id_esperado
-    
-    def _coincide_condicion(self, prop_dict: Dict) -> bool:
-        """Verifica si la condición (compra/alquiler) coincide."""
-        condicion_req = self.requerimiento.condicion
-        if not condicion_req:
-            return True
-        
-        operation_type_id = prop_dict.get('operation_type_id')
-        if not operation_type_id:
-            return True
-        
-        condicion = condicion_req.lower().strip()
-        
-        if condicion in ('compra',):
-            return operation_type_id in (1, 2)
-        elif condicion in ('alquiler', 'anticresis'):
-            return operation_type_id == 3
-        
-        return True
-    
-    def _coincide_distrito(self, prop_dict: Dict) -> bool:
-        """Verifica si el distrito de la propiedad está en la lista del requerimiento."""
-        if not self.requerimiento.distritos:
-            return True
-        
-        distritos_str = str(self.requerimiento.distritos).lower().strip()
-        if distritos_str == 'nan' or distritos_str == '':
-            return True
-        
-        distritos_requerimiento = self.requerimiento.distritos_lista
-        district_id = prop_dict.get('district_id')
-        
-        if not district_id:
-            return False
-        
-        district_id_str = str(district_id).strip()
-        
-        for distrito_req in distritos_requerimiento:
-            distrito_req_limpio = distrito_req.strip().lower()
-            
-            # 1. Coincidencia directa
-            if distrito_req_limpio == district_id_str:
-                return True
-            
-            # 2. Resolver nombre del requerimiento a ID
-            id_resuelto = _get_distrito_id(distrito_req_limpio)
-            if id_resuelto and id_resuelto == district_id_str:
-                return True
-            
-            # 3. Resolver ID de la propiedad a nombre y comparar
-            nombre_prop = _get_district_name(district_id)
-            if nombre_prop:
-                nombre_prop_norm = nombre_prop.lower().strip()
-                if distrito_req_limpio == nombre_prop_norm:
-                    return True
-                if distrito_req_limpio in nombre_prop_norm or nombre_prop_norm in distrito_req_limpio:
-                    return True
-        
-        return False
-    
-    def _dentro_de_presupuesto(self, prop_dict: Dict) -> bool:
-        """Verifica si el precio está dentro del presupuesto."""
-        if not self.requerimiento.presupuesto_monto:
-            return True
-        
-        price = prop_dict.get('price')
-        if not price:
-            return False
-        
-        presupuesto = Decimal(str(self.requerimiento.presupuesto_monto))
-        precio = Decimal(str(price))
-        
-        moneda_req = (self.requerimiento.presupuesto_moneda or 'PEN').upper()
-        moneda_prop = _get_moneda_propiedad(prop_dict)
-        
-        presupuesto_en_pen = _convertir_moneda(presupuesto, moneda_req, 'PEN')
-        precio_en_pen = _convertir_moneda(precio, moneda_prop, 'PEN')
-        
-        limite_maximo = presupuesto_en_pen * Decimal('1.10')
-        
-        return precio_en_pen <= limite_maximo
-    
-    def _calcular_scoring(self, prop_dict: Dict) -> Tuple[Decimal, Dict[str, Decimal]]:
-        """Calcula el score ponderado para una propiedad."""
-        score_detalle = {}
-        score_total = Decimal('0.0')
-        
-        score_precio = self._calcular_score_precio(prop_dict)
-        score_detalle['precio'] = score_precio
-        score_total += score_precio * Decimal(str(self.PESOS['precio'])) / 100
-        
-        score_area = self._calcular_score_area(prop_dict)
-        score_detalle['area'] = score_area
-        score_total += score_area * Decimal(str(self.PESOS['area'])) / 100
-        
-        score_habitaciones = self._calcular_score_habitaciones(prop_dict)
-        score_detalle['habitaciones'] = score_habitaciones
-        score_total += score_habitaciones * Decimal(str(self.PESOS['habitaciones'])) / 100
-        
-        score_banos = self._calcular_score_banos(prop_dict)
-        score_detalle['banos'] = score_banos
-        score_total += score_banos * Decimal(str(self.PESOS['banos'])) / 100
-        
-        score_distrito = self._calcular_score_distrito(prop_dict)
-        score_detalle['distrito'] = score_distrito
-        score_total += score_distrito * Decimal(str(self.PESOS['distrito'])) / 100
-        
-        score_amenities = self._calcular_score_amenities(prop_dict)
-        score_detalle['amenities'] = score_amenities
-        score_total += score_amenities * Decimal(str(self.PESOS['amenities'])) / 100
-        
-        score_ascensor = self._calcular_score_ascensor(prop_dict)
-        score_detalle['ascensor'] = score_ascensor
-        score_total += score_ascensor * Decimal(str(self.PESOS['ascensor'])) / 100
-        
-        score_tipo = self._calcular_score_tipo_propiedad(prop_dict)
-        score_detalle['tipo_propiedad'] = score_tipo
-        score_total += score_tipo * Decimal(str(self.PESOS['tipo_propiedad'])) / 100
-        
-        score_total = score_total * Decimal('100.0')
-        score_total = max(Decimal('0.0'), min(Decimal('100.0'), score_total))
-        
-        return score_total, score_detalle
-    
-    def _calcular_score_precio(self, prop_dict: Dict) -> Decimal:
-        """Calcula score para precio vs presupuesto."""
-        if not self.requerimiento.presupuesto_monto or not prop_dict.get('price'):
-            return Decimal('0.5')
-        
-        presupuesto = Decimal(str(self.requerimiento.presupuesto_monto))
-        precio = Decimal(str(prop_dict['price']))
-        
-        moneda_req = (self.requerimiento.presupuesto_moneda or 'PEN').upper()
-        moneda_prop = _get_moneda_propiedad(prop_dict)
-        
-        presupuesto_pen = _convertir_moneda(presupuesto, moneda_req, 'PEN')
-        precio_pen = _convertir_moneda(precio, moneda_prop, 'PEN')
-        
-        if precio_pen <= presupuesto_pen:
-            return Decimal('1.0')
-        else:
-            limite_maximo = presupuesto_pen * Decimal('1.10')
-            if precio_pen > limite_maximo:
-                return Decimal('0.0')
-            
-            diferencia = precio_pen - presupuesto_pen
-            rango_tolerancia = limite_maximo - presupuesto_pen
-            if rango_tolerancia > 0:
-                penalizacion = diferencia / rango_tolerancia
-                return Decimal('1.0') - penalizacion
-            return Decimal('0.0')
-    
-    def _calcular_score_area(self, prop_dict: Dict) -> Decimal:
-        """Calcula score para área construida."""
-        if not self.requerimiento.area_m2 or not prop_dict.get('built_area'):
-            return Decimal('0.5')
-        
-        area_deseada = Decimal(str(self.requerimiento.area_m2))
-        area_propiedad = Decimal(str(prop_dict['built_area']))
-        
-        if area_propiedad == 0:
-            return Decimal('0.0')
-        
-        diferencia_porcentual = abs(area_propiedad - area_deseada) / area_deseada
-        
-        if diferencia_porcentual <= self.TOLERANCIA_NUMERICA:
-            return Decimal('1.0')
-        if diferencia_porcentual > 0.5:
-            return Decimal('0.0')
-        
-        tolerancia_decimal = Decimal(str(self.TOLERANCIA_NUMERICA))
-        return Decimal('1.0') - (diferencia_porcentual - tolerancia_decimal) / Decimal('0.4')
-    
-    def _calcular_score_habitaciones(self, prop_dict: Dict) -> Decimal:
-        """Calcula score para número de habitaciones."""
-        if not self.requerimiento.habitaciones or not prop_dict.get('bedrooms'):
-            return Decimal('0.5')
-        
-        habitaciones_deseadas = self.requerimiento.habitaciones
-        habitaciones_propiedad = prop_dict['bedrooms']
-        
-        if habitaciones_propiedad >= habitaciones_deseadas:
-            return Decimal('1.0')
-        else:
-            diferencia = habitaciones_deseadas - habitaciones_propiedad
-            if diferencia >= 3:
-                return Decimal('0.0')
-            return Decimal('1.0') - Decimal(str(diferencia)) / Decimal('3.0')
-    
-    def _calcular_score_banos(self, prop_dict: Dict) -> Decimal:
-        """Calcula score para número de baños."""
-        if not self.requerimiento.banos or not prop_dict.get('bathrooms'):
-            return Decimal('0.5')
-        
-        banos_deseados = self.requerimiento.banos
-        banos_propiedad = prop_dict['bathrooms']
-        
-        if banos_propiedad >= banos_deseados:
-            return Decimal('1.0')
-        else:
-            diferencia = banos_deseados - banos_propiedad
-            if diferencia >= 2:
-                return Decimal('0.0')
-            return Decimal('1.0') - Decimal(str(diferencia)) / Decimal('2.0')
-    
-    def _calcular_score_antiguedad(self, prop_dict: Dict) -> Decimal:
-        """Calcula score para antigüedad."""
-        antiguedad = prop_dict.get('antiquity_years')
-        if not antiguedad:
-            return Decimal('0.5')
-        
-        if antiguedad <= 5:
-            return Decimal('1.0')
-        elif antiguedad <= 15:
-            return Decimal('0.7')
-        elif antiguedad <= 30:
-            return Decimal('0.4')
-        else:
-            return Decimal('0.1')
-    
-    def _calcular_score_distrito(self, prop_dict: Dict) -> Decimal:
-        """Calcula score adicional para distrito."""
-        if not self.requerimiento.distritos or not prop_dict.get('district_id'):
-            return Decimal('0.5')
-        
-        distritos_requerimiento = self.requerimiento.distritos_lista
-        district_id_str = str(prop_dict['district_id']).strip()
-        
-        if distritos_requerimiento:
-            primer_distrito = distritos_requerimiento[0].strip().lower()
-            id_primer_distrito = _get_distrito_id(primer_distrito)
-            if id_primer_distrito and id_primer_distrito == district_id_str:
-                return Decimal('1.0')
-        
-        return Decimal('0.8')
-    
-    def _calcular_score_amenities(self, prop_dict: Dict) -> Decimal:
-        """Calcula score para amenities basado en booleanos de property_specs."""
-        score = Decimal('0.5')
-        
-        if not self.requerimiento.caracteristicas_extra:
-            return score
-        
-        extras_req = self.requerimiento.caracteristicas_extra.lower()
-        
-        # Mapear palabras clave del requerimiento a campos booleanos de property_specs
-        amenity_map = {
-            'piscina': 'has_pool',
-            'pileta': 'has_pool',
-            'jardin': 'has_garden',
-            'jardín': 'has_garden',
-            'bbq': 'has_bbq',
-            'parrilla': 'has_bbq',
-            'terraza': 'has_terrace',
-            'azotea': 'has_terrace',
-            'aire acondicionado': 'has_air_conditioning',
-            'aa': 'has_air_conditioning',
-            'lavandería': 'has_laundry_area',
-            'lavanderia': 'has_laundry_area',
-            'cuarto de servicio': 'has_service_room',
-            'servicio': 'has_service_room',
-            'ascensor': 'has_elevator',
-            'elevador': 'has_elevator',
-            'seguridad': 'has_security',
-            'mascotas': 'pet_friendly',
-            'pet friendly': 'pet_friendly',
-            'estacionamiento': 'garage_spaces',
-            'cochera': 'garage_spaces',
-            'garage': 'garage_spaces',
-        }
-        
-        palabras_clave = extras_req.replace(',', ' ').split()
-        palabras_clave = [p.strip() for p in palabras_clave if len(p.strip()) > 2]
-        
-        if not palabras_clave:
-            return score
-        
-        coincidencias = 0
-        total_buscadas = 0
-        
-        for palabra in palabras_clave:
-            campo = amenity_map.get(palabra)
-            if campo:
-                total_buscadas += 1
-                if campo == 'garage_spaces':
-                    if prop_dict.get('garage_spaces') and prop_dict['garage_spaces'] > 0:
-                        coincidencias += 1
-                else:
-                    if prop_dict.get(campo) is True:
-                        coincidencias += 1
-        
-        if total_buscadas > 0:
-            ratio = coincidencias / total_buscadas
-            return Decimal('0.5') + Decimal(str(ratio)) * Decimal('0.5')
-        
-        return score
-    
-    def _calcular_score_ascensor(self, prop_dict: Dict) -> Decimal:
-        """Calcula score para ascensor."""
-        if self.requerimiento.ascensor == 'indiferente' or not self.requerimiento.ascensor:
-            return Decimal('0.5')
-        
-        has_elevator = prop_dict.get('has_elevator')
-        
-        if self.requerimiento.ascensor == 'si':
-            if has_elevator is True:
-                return Decimal('1.0')
-            return Decimal('0.0')
-        elif self.requerimiento.ascensor == 'no':
-            if has_elevator is False or has_elevator is None:
-                return Decimal('1.0')
-            return Decimal('0.0')
-        
-        return Decimal('0.5')
-    
-    def _calcular_score_tipo_propiedad(self, prop_dict: Dict) -> Decimal:
-        """Score extra si el tipo de propiedad coincide exactamente."""
-        if not self.requerimiento.tipo_propiedad or not prop_dict.get('property_type_id'):
-            return Decimal('0.5')
-        
-        tipo_id_esperado = _get_property_type_id(self.requerimiento.tipo_propiedad)
-        if tipo_id_esperado and prop_dict['property_type_id'] == tipo_id_esperado:
-            return Decimal('1.0')
-        
-        return Decimal('0.5')
+    def _obtener_fase_eliminada_como_en_lista(self, prop_dict: Dict) -> Optional[str]:
+        """
+        Versión simplificada que solo verifica si una propiedad pasa los filtros
+        (usada internamente para estadísticas).
+        """
+        return scoring.aplicar_filtros_duros(prop_dict, self.req_data)
     
     def obtener_estadisticas(self) -> Dict[str, Any]:
         """Devuelve estadísticas del matching ejecutado."""
         total_descartadas = sum(self.propiedades_descartadas.values())
+        descartadas_con_data = {k: v for k, v in self.propiedades_descartadas.items() if v > 0}
         return {
             'total_evaluadas': self.propiedades_evaluadas,
             'total_descartadas': total_descartadas,
             'total_compatibles': len(self.propiedades_compatibles),
-            'descartadas_por_campo': self.propiedades_descartadas,
+            'descartadas_por_campo': descartadas_con_data,
             'score_promedio': self._calcular_score_promedio(),
             'propiedad_top': self._obtener_propiedad_top(),
         }
     
-    def _calcular_score_promedio(self) -> Decimal:
+    def _calcular_score_promedio(self) -> float:
         if not self.propiedades_compatibles:
-            return Decimal('0.0')
-        total = sum(Decimal(str(r['score_total'])) for r in self.propiedades_compatibles)
-        return total / len(self.propiedades_compatibles)
+            return 0.0
+        total = sum(r['score_total'] for r in self.propiedades_compatibles)
+        return round(total / len(self.propiedades_compatibles), 2)
     
     def _obtener_propiedad_top(self) -> Optional[Dict]:
         if not self.propiedades_compatibles:
@@ -777,7 +372,10 @@ def ejecutar_matching_requerimiento(requerimiento_id: int, propiedades=None) -> 
 
 def guardar_resultados_matching(requerimiento_id: int, resultados: List[Dict]) -> List[Any]:
     """
-    Guarda los resultados del matching en MatchResult.
+    Guarda los resultados del matching en MatchResult (v4).
+    
+    Compatible con el nuevo formato score_detalle:
+    {factor: {score: float, peso_maximo: int, detalle: str}}
     
     Args:
         requerimiento_id: ID del requerimiento.
@@ -793,20 +391,34 @@ def guardar_resultados_matching(requerimiento_id: int, resultados: List[Dict]) -
     objetos_creados = []
     
     for resultado in resultados:
-        score_detalle = resultado['score_detalle']
+        score_detalle = resultado.get('score_detalle', {})
         if isinstance(score_detalle, dict):
-            score_detalle = {
-                k: float(v) if isinstance(v, Decimal) else v
-                for k, v in score_detalle.items()
-            }
+            score_detalle_clean = {}
+            for k, v in score_detalle.items():
+                if isinstance(v, dict) and 'score' in v:
+                    # Nuevo formato: {score, peso_maximo, detalle}
+                    score_detalle_clean[k] = {
+                        'score': float(v.get('score', 0)),
+                        'peso_maximo': v.get('peso_maximo', 0),
+                        'detalle': v.get('detalle', ''),
+                    }
+                elif isinstance(v, Decimal):
+                    score_detalle_clean[k] = float(v)
+                else:
+                    score_detalle_clean[k] = v
+            score_detalle = score_detalle_clean
+        
+        score_total = resultado.get('score_total', 0)
+        if isinstance(score_total, Decimal):
+            score_total = float(score_total)
         
         match_result = MatchResult(
             requerimiento=requerimiento,
-            propiedad_id=resultado['propiedad_id'],
-            score_total=resultado['score_total'],
+            propiedad_id=resultado.get('propiedad_id'),
+            score_total=score_total,
             score_detalle=score_detalle,
-            fase_eliminada=resultado['fase_eliminada'],
-            porcentaje_compatibilidad=resultado['porcentaje_compatibilidad'],
+            fase_eliminada=resultado.get('fase_eliminada'),
+            porcentaje_compatibilidad=resultado.get('porcentaje_compatibilidad', score_total),
             ranking=resultado.get('ranking'),
         )
         match_result.save()
@@ -918,11 +530,19 @@ def obtener_resumen_matching_masivo(limite=500):
                 continue
             mejor = mejores.get(req_id)
             if mejor:
-                # Extraer scores semantico y estructural del score_detalle (híbrido)
+                # Extraer scores semántico y estructural del score_detalle
+                # Compatible con formatos: nuevo {factor: {score, peso_maximo, detalle}} y antiguo {factor: score}
                 sd = mejor.score_detalle or {}
-                score_semantico = float(sd.get('semantico', 0))
-                score_structural = float(sd.get('score_structural', mejor.score_total))
-                alpha = float(sd.get('alpha', 0.6))
+                
+                def _extraer_score(d, key, default=0):
+                    val = d.get(key, default)
+                    if isinstance(val, dict):
+                        return float(val.get('score', default))
+                    return float(val) if val else default
+                
+                score_semantico = _extraer_score(sd, 'semantico')
+                score_structural = _extraer_score(sd, 'score_structural', mejor.score_total)
+                alpha = float(sd.get('alpha', 0.6)) if not isinstance(sd.get('alpha'), dict) else 0.6
                 
                 # Determinar tipo de match predominante
                 if score_semantico > 0 and score_structural > 0:

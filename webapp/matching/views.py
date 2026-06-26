@@ -1713,10 +1713,22 @@ class EjecutarMatchingMasivoView(TemplateView):
             
             score_detalle = match.get('score_detalle', {})
             # Asegurar que score_detalle tenga valores serializables
-            score_detalle_clean = {
-                k: float(v) if not isinstance(v, (int, float, str, bool)) else v
-                for k, v in score_detalle.items()
-            }
+            # Nuevo formato: {factor: {score, peso_maximo, detalle}} o {factor: valor_simple}
+            score_detalle_clean = {}
+            for k, v in score_detalle.items():
+                if isinstance(v, dict) and 'score' in v:
+                    score_detalle_clean[k] = {
+                        'score': float(v.get('score', 0)),
+                        'peso_maximo': v.get('peso_maximo', 0),
+                        'detalle': v.get('detalle', ''),
+                    }
+                elif isinstance(v, (int, float, str, bool)):
+                    score_detalle_clean[k] = v
+                else:
+                    try:
+                        score_detalle_clean[k] = float(v)
+                    except (ValueError, TypeError):
+                        score_detalle_clean[k] = str(v)
             
             score_total = Decimal(str(match.get('score_total', 0)))
             

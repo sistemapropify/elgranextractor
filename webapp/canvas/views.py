@@ -731,10 +731,11 @@ def api_lienzo_eliminar(request, pk):
     Elimina un lienzo con confirmación.
     """
     user = _get_current_user(request)
-    if not user:
-        return JsonResponse({'error': 'No autenticado'}, status=401)
-    lienzo = get_object_or_404(Lienzo, pk=pk, user=user)
+    lienzo = get_object_or_404(Lienzo, pk=pk)
+    if user and lienzo.user != user:
+        return JsonResponse({'error': 'No autorizado'}, status=403)
     nombre = lienzo.nombre
     lienzo.delete()
     from django.shortcuts import redirect
     return redirect('canvas:list')
+

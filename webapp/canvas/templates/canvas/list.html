@@ -114,7 +114,59 @@
     color: var(--text-secondary);
   }
   .canvas-empty p { margin-bottom: 16px; font-size: 15px; }
+  .canvas-card { position:relative; }
+  .canvas-card .btn-eliminar {
+    position:absolute; top:8px; right:8px;
+    width:40px; height:40px;
+    display:none;
+    align-items:center; justify-content:center;
+    background:transparent; border:none;
+    color:#ff6b6b; font-size:22px; font-weight:bold;
+    cursor:pointer; border-radius:8px;
+    z-index:5;
+    padding:0; line-height:1;
+  }
+  .canvas-card:hover .btn-eliminar { display:flex; }
+  .canvas-card .btn-eliminar:hover { background:rgba(200,50,50,0.25); color:#ff3333; }
 </style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function confirmarEliminar(nombre, url) {
+  document.getElementById('modal-eliminar-nombre').textContent = nombre;
+  document.getElementById('modal-eliminar-btn').onclick = function() {
+    var f = document.createElement('form');
+    f.method = 'POST';
+    f.action = url;
+    var i = document.createElement('input');
+    i.type = 'hidden';
+    i.name = 'csrfmiddlewaretoken';
+    i.value = '{{ csrf_token }}';
+    f.appendChild(i);
+    document.body.appendChild(f);
+    f.submit();
+  };
+  document.getElementById('modal-eliminar').style.display = 'flex';
+}
+function cerrarModalEliminar() {
+  document.getElementById('modal-eliminar').style.display = 'none';
+}
+</script>
+
+<div id="modal-eliminar" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;justify-content:center;align-items:center;">
+  <div style="background:#161b22;border:1px solid #30363d;border-radius:12px;padding:28px;max-width:420px;width:90%;text-align:center;">
+    <div style="font-size:48px;margin-bottom:12px;">🗑️</div>
+    <h3 style="color:#e6edf3;margin:0 0 8px 0;font-size:18px;">Eliminar lienzo</h3>
+    <p style="color:#8b949e;margin:0 0 4px 0;font-size:14px;">¿Estás seguro de eliminar</p>
+    <p id="modal-eliminar-nombre" style="color:#e6edf3;font-weight:600;font-size:16px;margin:0 0 16px 0;"></p>
+    <p style="color:#f85149;font-size:12px;margin:0 0 20px 0;">⚠️ Esta acción no se puede deshacer</p>
+    <div style="display:flex;gap:10px;justify-content:center;">
+      <button onclick="cerrarModalEliminar()" style="padding:8px 20px;border-radius:8px;border:1px solid #30363d;background:transparent;color:#e6edf3;font-size:14px;cursor:pointer;">Cancelar</button>
+      <button id="modal-eliminar-btn" style="padding:8px 20px;border-radius:8px;border:none;background:#f85149;color:#fff;font-size:14px;cursor:pointer;font-weight:500;">Eliminar</button>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block header_title_area %}
@@ -132,7 +184,7 @@
   <div class="canvas-grid">
     {% for item in lienzos %}
     {% with lienzo=item.lienzo %}
-    <div class="canvas-card" style="position:relative;">
+    <div class="canvas-card">
       <a href="{% url 'canvas:editor' pk=lienzo.pk %}" style="text-decoration:none;color:inherit;display:block;">
         <div class="canvas-card__title">{{ lienzo.nombre }}</div>
         <div class="canvas-card__meta">
@@ -141,7 +193,7 @@
         </div>
         <span class="canvas-card__estado estado-{{ lienzo.estado }}">{{ lienzo.get_estado_display }}</span>
       </a>
-      <button onclick="if(confirm('Eliminar lienzo «{{ lienzo.nombre }}»? Esta acci\u00f3n no se puede deshacer.')){var f=document.createElement('form');f.method='POST';f.action='{% url 'canvas:api_eliminar' pk=lienzo.pk %}';var i=document.createElement('input');i.type='hidden';i.name='csrfmiddlewaretoken';i.value='{{ csrf_token }}';f.appendChild(i);document.body.appendChild(f);f.submit();}" style="position:absolute;top:10px;right:10px;background:none;border:none;color:#ff6b6b;font-size:20px;cursor:pointer;width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:6px;font-weight:bold;" title="Eliminar lienzo">✕</button>
+      <button class="btn-eliminar" onclick="confirmarEliminar('{{ lienzo.nombre|escapejs }}','{% url 'canvas:api_eliminar' pk=lienzo.pk %}')" title="Eliminar lienzo">✕</button>
     </div>
     {% endwith %}
     {% endfor %}
