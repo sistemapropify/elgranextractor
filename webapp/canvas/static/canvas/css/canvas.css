@@ -266,7 +266,6 @@
   box-shadow: var(--cv-shadow);
   width: 220px;
   min-width: 200px;
-  overflow: hidden;
   transition: border-color 0.15s;
 }
 .cv-node:hover    { border-color: #404460; }
@@ -369,7 +368,7 @@
 }
 
 /* Body del nodo */
-.cv-node__body { padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; }
+.cv-node__body { padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
 .cv-node.collapsed .cv-node__body,
 .cv-node.collapsed .cv-node__footer { display: none; }
 
@@ -410,7 +409,7 @@
 }
 .cv-field:last-child { border-bottom: none; }
 .cv-field__key { font-size: 11px; color: var(--cv-text-muted); flex-shrink: 0; }
-.cv-field__val { font-size: 12px; color: var(--cv-text-sec); text-align: right; word-break: break-word; }
+.cv-field__val { font-size: 12px; color: var(--cv-text-sec); text-align: right; word-break: break-word; flex: 1; min-width: 0; }
 
 /* Score badge */
 .cv-score {
