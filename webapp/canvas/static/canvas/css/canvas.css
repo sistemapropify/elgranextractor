@@ -266,6 +266,7 @@
   box-shadow: var(--cv-shadow);
   width: 220px;
   min-width: 200px;
+  overflow: hidden;
   transition: border-color 0.15s;
 }
 .cv-node:hover    { border-color: #404460; }
@@ -368,7 +369,7 @@
 }
 
 /* Body del nodo */
-.cv-node__body { padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
+.cv-node__body { padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; }
 .cv-node.collapsed .cv-node__body,
 .cv-node.collapsed .cv-node__footer { display: none; }
 

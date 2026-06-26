@@ -872,9 +872,8 @@ function renderPlaceholderNodes(nodos) {
     dom.nodes.appendChild(node);
     STATE.nodos[n.id].el = node;
     if (n.collapsed) node.classList.add('collapsed');
-    // Restaurar dimensiones guardadas (width/height) al DOM
+    // Restaurar ancho guardado; NO restaurar altura fija (que el contenido determine la altura)
     if (n.width) node.style.width = n.width + 'px';
-    if (n.height) node.style.height = n.height + 'px';
     registerNodeEvents(n.id, node);
   });
   // Renderizar PDFs después de restaurar todos los nodos
