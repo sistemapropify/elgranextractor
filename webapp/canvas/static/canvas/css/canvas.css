@@ -484,8 +484,8 @@
 .cv-nota__header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 8px;
+  gap: 4px;
+  padding: 5px 6px;
   border-bottom: 1px solid var(--cv-note-border);
   cursor: grab;
 }
@@ -494,40 +494,85 @@
   font-size: 11px;
   color: #c9b44a;
   flex-shrink: 0;
-  opacity: 0.6;
+  opacity: 0.5;
 }
-.cv-nota__title {
+.cv-nota__title-display {
   flex: 1;
-  background: transparent;
-  border: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: #c9b44a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 2px 4px;
+  min-width: 0;
+  cursor: grab;
+}
+.cv-nota__title-input {
+  flex: 1;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid var(--cv-border-act);
   color: #c9b44a;
   font-size: 12px;
   font-weight: 600;
   outline: none;
-  cursor: grab;
   padding: 2px 4px;
   border-radius: 3px;
   min-width: 0;
 }
-.cv-nota__title:not([readonly]) {
-  background: rgba(255,255,255,0.06);
-  cursor: text;
+.cv-nota__edit-title {
+  background: none;
+  border: none;
+  color: var(--cv-text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  opacity: 0.4;
+  transition: opacity 0.15s, color 0.15s;
+  flex-shrink: 0;
 }
-.cv-nota__title[readonly]:hover {
-  background: rgba(255,255,255,0.03);
+.cv-nota__edit-title:hover {
+  opacity: 1;
+  color: #5c6bc0;
+  background: rgba(255,255,255,0.05);
 }
+
 .cv-nota__body {
-  padding: 10px;
-  min-height: 50px;
+  padding: 8px 10px;
+  min-height: 40px;
   font-size: 12px;
   color: #d4c78e;
-  line-height: 1.6;
+  line-height: 1.5;
   outline: none;
   white-space: pre-wrap;
   word-break: break-word;
-  cursor: text;
+  cursor: grab;
 }
-.cv-nota__body:focus { background: rgba(255,255,255,0.03); }
+.cv-nota__body[contenteditable="true"] {
+  cursor: text;
+  background: rgba(255,255,255,0.03);
+}
+
+.cv-nota__edit-body {
+  display: block;
+  width: 100%;
+  background: none;
+  border: none;
+  border-top: 1px solid var(--cv-note-border);
+  color: var(--cv-text-muted);
+  font-size: 10px;
+  padding: 4px;
+  cursor: pointer;
+  opacity: 0.4;
+  transition: opacity 0.15s, color 0.15s;
+  text-align: center;
+}
+.cv-nota__edit-body:hover {
+  opacity: 1;
+  color: #5c6bc0;
+  background: rgba(255,255,255,0.03);
+}
 
 /* Resize handle esquina inferior derecha */
 .cv-nota__resize {

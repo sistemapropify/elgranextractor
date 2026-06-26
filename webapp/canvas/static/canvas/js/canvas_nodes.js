@@ -195,7 +195,7 @@ function createReqNode(reqId, data, x, y) {
 }
 
 /**
- * Crea un nodo Nota (sticky) con título editable + resize.
+ * Crea un nodo Nota (sticky) con título editable + resize + botón lápiz.
  */
 function createNotaNode(x, y, contenido, color, titulo) {
   const id = 'nota_' + Date.now();
@@ -210,10 +210,13 @@ function createNotaNode(x, y, contenido, color, titulo) {
   node.innerHTML = `
     <div class="cv-nota__header">
       <span class="cv-nota__icon">&#10022;</span>
-      <input class="cv-nota__title" value="${escHtml(titulo || 'Nota')}" readonly>
+      <span class="cv-nota__title-display">${escHtml(titulo || 'Nota')}</span>
+      <input class="cv-nota__title-input" value="${escHtml(titulo || 'Nota')}" style="display:none">
+      <button class="cv-nota__edit-title" title="Editar título">&#9998;</button>
       <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
     </div>
-    <div class="cv-nota__body" contenteditable="true">${escHtml(contenido || '')}</div>
+    <div class="cv-nota__body" contenteditable="false">${escHtml(contenido || '')}</div>
+    <button class="cv-nota__edit-body" title="Editar contenido">&#9998; Editar</button>
     <div class="cv-nota__resize" title="Redimensionar"></div>
     <div class="cv-port cv-port--top"    data-node="${id}" data-port="top"></div>
     <div class="cv-port cv-port--right"  data-node="${id}" data-port="right"></div>
@@ -298,31 +301,57 @@ function registerNodeEvents(id, el) {
     });
   }
 
-  // ── NOTA: título editable con doble clic ──
-  const titleInput = el.querySelector('.cv-nota__title');
-  if (titleInput) {
-    // Doble clic → activar edición
-    titleInput.addEventListener('dblclick', e => {
+  // ── NOTA: botón editar título (lápiz) ──
+  const editTitleBtn = el.querySelector('.cv-nota__edit-title');
+  const titleDisplay = el.querySelector('.cv-nota__title-display');
+  const titleInput = el.querySelector('.cv-nota__title-input');
+  if (editTitleBtn && titleDisplay && titleInput) {
+    editTitleBtn.addEventListener('click', e => {
       e.stopPropagation();
-      titleInput.readOnly = false;
+      // Mostrar input, ocultar span
+      titleDisplay.style.display = 'none';
+      titleInput.style.display = '';
+      titleInput.value = titleDisplay.textContent;
       titleInput.focus();
       titleInput.select();
     });
-    // Enter → desactivar edición
+    // Enter en input → guardar
     titleInput.addEventListener('keydown', e => {
       if (e.key === 'Enter') {
         e.preventDefault();
-        titleInput.readOnly = true;
         titleInput.blur();
       }
     });
-    // Blur → guardar
+    // Blur → guardar y mostrar span
     titleInput.addEventListener('blur', () => {
-      titleInput.readOnly = true;
+      titleDisplay.textContent = titleInput.value || 'Nota';
+      titleInput.style.display = 'none';
+      titleDisplay.style.display = '';
       markDirty();
     });
-    // Evitar que el mousedown en el input inicie drag
-    titleInput.addEventListener('mousedown', e => e.stopPropagation());
+  }
+
+  // ── NOTA: botón editar contenido (lápiz) ──
+  const editBodyBtn = el.querySelector('.cv-nota__edit-body');
+  const notaBody = el.querySelector('.cv-nota__body');
+  if (editBodyBtn && notaBody) {
+    editBodyBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      const isEditing = notaBody.getAttribute('contenteditable') === 'true';
+      if (isEditing) {
+        // Desactivar edición
+        notaBody.setAttribute('contenteditable', 'false');
+        editBodyBtn.textContent = '\u270E Editar';
+        notaBody.blur();
+        markDirty();
+      } else {
+        // Activar edición
+        notaBody.setAttribute('contenteditable', 'true');
+        editBodyBtn.textContent = '\u2714 Listo';
+        notaBody.focus();
+      }
+    });
+    notaBody.addEventListener('input', () => { markDirty(); });
   }
 
   // ── NOTA: resize desde esquina ──
@@ -358,22 +387,6 @@ function registerNodeEvents(id, el) {
 
       document.addEventListener('mousemove', onMouseMove);
       document.addEventListener('mouseup', onMouseUp);
-    });
-  }
-
-  // ── NOTA: body contenteditable ──
-  const notaBody = el.querySelector('.cv-nota__body');
-  if (notaBody) {
-    notaBody.addEventListener('input', () => { markDirty(); });
-    // Doble clic en body → focus para edición (ya es contenteditable)
-    notaBody.addEventListener('dblclick', e => {
-      e.stopPropagation();
-      // Ya es contenteditable, solo aseguramos focus
-      const sel = window.getSelection();
-      const range = document.createRange();
-      range.selectNodeContents(notaBody);
-      sel.removeAllRanges();
-      sel.addRange(range);
     });
   }
 }
