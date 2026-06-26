@@ -64,12 +64,21 @@ El sistema de matching tiene **tres capas** que coexisten:
 El motor principal funciona en **dos fases**:
 
 #### Fase 1: Filtros Discriminatorios (eliminación inmediata)
-1. **Tipo de propiedad** — Coincide nombre del tipo usando cache de `property_type`
-2. **Condición** — Compra (operation_type_id 1,2) vs Alquiler (operation_type_id 3)
-3. **Distrito** — Coincidencia por ID o nombre contra `DISTRITOS` de `mapeo_ubicaciones`
-4. **Presupuesto** — Convierte monedas y aplica 10% de tolerancia hacia arriba
+
+1. **Tipo de propiedad**
+   - Coincide nombre del tipo usando cache de `property_type`
+
+2. **Condición**
+   - Compra (operation_type_id 1,2) vs Alquiler (operation_type_id 3)
+
+3. **Distrito**
+   - Coincidencia por ID o nombre contra `DISTRITOS` de `mapeo_ubicaciones`
+
+4. **Presupuesto**
+   - Convierte monedas y aplica 10% de tolerancia hacia arriba
 
 #### Fase 2: Scoring Ponderado (0-100)
+
 | Factor | Peso | Descripción |
 |--------|------|-------------|
 | distrito | 30 | Primer distrito del requerimiento da score 1.0, otros 0.8 |
@@ -84,12 +93,14 @@ El motor principal funciona en **dos fases**:
 **Total:** 100 puntos
 
 #### Fuente de Datos
+
 - Consulta raw SQL a `dbpropify_be` (`connections['propifai']`)
 - JOIN entre `property` y `property_specs`
 - Cache global de `property_type` y `district`
 - Tipo de cambio fijo: `1 USD = 3.75 PEN`
 
 #### Funciones clave
+
 - `ejecutar_matching_requerimiento()` — Matching individual
 - `ejecutar_matching_masivo()` — Matching batch (hasta 2000 requerimientos)
 - `guardar_resultados_matching()` — Persiste en `MatchResult`
@@ -101,12 +112,23 @@ El motor principal funciona en **dos fases**:
 
 Pipeline de 6 pasos:
 
-1. **Obtener requerimiento** desde `IntelligenceDocument` (colección `requerimientos_enbedados`)
-2. **Extraer embedding** precomputado del requerimiento
-3. **Búsqueda FAISS** en `propiedadespropify` (top-K=500)
-4. **Post-filtrado** por `field_values` (tipo, condicion, distrito, presupuesto)
-5. **Scoring estructural** desde `field_values` (10 factores ponderados)
-6. **Combinación**: `score = alpha * struct + (1-alpha) * sem`
+1. **Obtener requerimiento**
+   - Desde `IntelligenceDocument` (colección `requerimientos_enbedados`)
+
+2. **Extraer embedding**
+   - Precomputado del requerimiento
+
+3. **Búsqueda FAISS**
+   - En `propiedadespropify` (top-K=500)
+
+4. **Post-filtrado**
+   - Por `field_values` (tipo, condicion, distrito, presupuesto)
+
+5. **Scoring estructural**
+   - Desde `field_values` (10 factores ponderados)
+
+6. **Combinación**
+   - `score = alpha * struct + (1-alpha) * sem`
 
 #### Diferencias clave vs MatchingEngine
 
@@ -124,6 +146,7 @@ Pipeline de 6 pasos:
 ### 1.4. Modelos de Datos
 
 #### MatchResult ([`webapp/matching/models.py:52`](../webapp/matching/models.py:52))
+
 - `requerimiento` → FK a `Requerimiento` (db_constraint=False)
 - `propiedad` → FK a `PropifaiProperty` (db_constraint=False)
 - `score_total` → Decimal(5,2) — Score 0-100
@@ -134,11 +157,13 @@ Pipeline de 6 pasos:
 - **unique_together:** (requerimiento, propiedad, ejecutado_en)
 
 #### PropuestaWhatsApp ([`webapp/matching/models.py:6`](../webapp/matching/models.py:6))
+
 - Tracking de propuestas enviadas por WhatsApp
 - Status: enviada → respondida → interesado/rechazado/visita_agendada/cerrada
 - Almacena datos de propiedad por si la propiedad se elimina
 
 #### Requerimiento ([`webapp/requerimientos/models.py:73`](../webapp/requerimientos/models.py:73))
+
 - ~30 campos: fuente, agente, condicion, tipo, distritos, presupuesto, specs
 - Quality Score: `quality_score`, `quality_nivel`, `quality_detalle` (JSON)
 - Hash SHA256 para deduplicación
@@ -164,6 +189,7 @@ Pipeline de 6 pasos:
 ### 1.6. Propify API Client ([`webapp/matching/propify_api.py`](../webapp/matching/propify_api.py))
 
 Cliente HTTP para `api.propify.pe` con autenticación JWT. Expone:
+
 - `get_matches()` — Matches del CRM externo
 - `get_requirements()` — Requerimientos del CRM externo
 - `get_properties()` — Propiedades del CRM externo
@@ -298,9 +324,10 @@ flowchart LR
 ```
 
 Cada etapa registra:
-- Fecha/hora del evento
-- Lapso desde la etapa anterior (días, horas, minutos)
-- Detalle específico (score del match, status de propuesta, etc.)
+
+- **Fecha/hora** del evento
+- **Lapso** desde la etapa anterior (días, horas, minutos)
+- **Detalle** específico (score del match, status de propuesta, etc.)
 
 ---
 
@@ -310,20 +337,20 @@ Cada etapa registra:
 
 | # | Problema | Archivo | Línea | Severidad | Impacto |
 |---|----------|---------|-------|-----------|---------|
-| 1 | **Dos motores de matching incompatibles** | `engine.py` + `matching_hybrid.py` | — | 🔴 Crítico | Resultados inconsistentes según qué motor se ejecute. Legacy usa raw SQL dbpropify_be, Hybrid usa FAISS. Scores no son comparables. |
-| 2 | **Raw SQL con SQL injection potencial** | `engine.py` | 192 | 🔴 Crítico | Uso de f-string en query SQL (`f"""{where_clause}"""`). Aunque `where_clause` es controlada, el patrón es riesgoso. |
-| 3 | **Sin deduplicación de MatchResult** | `views.py` | 1701 | 🔴 Crítico | `MatchResult.objects.filter(requerimiento=requerimiento).delete()` se ejecuta antes de guardar nuevos resultados. Esto elimina histórico de matches. |
-| 4 | **Unique constraint frágil** | `models.py` | 131 | 🔴 Crítico | `unique_together = [requerimiento, propiedad, ejecutado_en]`. Si dos ejecuciones caen en el mismo microsegundo, hay duplicados. |
-| 5 | **Hardcode de tipo de cambio** | `engine.py:31`, `matching_hybrid.py:798` | 31 | 🔴 Crítico | `TIPO_CAMBIO_USD_PEN = 3.75`. Debería ser configurable vía BD o settings. |
+| 1 | **Dos motores de matching incompatibles** | `engine.py` + `matching_hybrid.py` | — | 🔴 Crítico | Resultados inconsistentes según qué motor se ejecute.<br>Legacy usa raw SQL dbpropify_be, Hybrid usa FAISS.<br>Scores no son comparables. |
+| 2 | **Raw SQL con SQL injection potencial** | `engine.py` | 192 | 🔴 Crítico | Uso de f-string en query SQL (`f"""{where_clause}"""`).<br>Aunque `where_clause` es controlada, el patrón es riesgoso. |
+| 3 | **Sin deduplicación de MatchResult** | `views.py` | 1701 | 🔴 Crítico | `MatchResult.objects.filter(...).delete()` se ejecuta antes de guardar nuevos resultados.<br>Esto elimina histórico de matches. |
+| 4 | **Unique constraint frágil** | `models.py` | 131 | 🔴 Crítico | `unique_together = [requerimiento, propiedad, ejecutado_en]`.<br>Si dos ejecuciones caen en el mismo microsegundo, hay duplicados. |
+| 5 | **Hardcode de tipo de cambio** | `engine.py:31`, `matching_hybrid.py:798` | 31 | 🔴 Crítico | `TIPO_CAMBIO_USD_PEN = 3.75`.<br>Debería ser configurable vía BD o settings. |
 
 ### 3.2. ALTOS — Deuda Técnica Significativa
 
 | # | Problema | Archivo | Línea | Severidad | Impacto |
 |---|----------|---------|-------|-----------|---------|
-| 6 | **views.py de 2817 líneas** | `views.py` | 1-2817 | 🟠 Alto | Monstruo de una sola clase. Viola SRP. Difícil de testear, mantener, debuggear. |
-| 7 | **Cache en memoria global** | `views.py` | 29-59 | 🟠 Alto | `_all_matches_cache` es volátil. Se invalida si cambia el cliente, no si cambian los datos. No escala horizontalmente. |
-| 8 | **Múltiples queries N+1 en dashboards** | `views.py` | 2144-2155 | 🟠 Alto | Paginación en memoria sin offset DB. Fetch de TODAS las páginas de requerimientos y propiedades. |
-| 9 | **Hardcode de credenciales Propify** | `propify_api.py` | 17-18 | 🟠 Alto | `PROPIFY_USERNAME` y `PROPIFY_PASSWORD` hardcodeados. Deberían ir en `.env`. |
+| 6 | **views.py de 2817 líneas** | `views.py` | 1-2817 | 🟠 Alto | Monstruo de una sola clase. Viola SRP.<br>Difícil de testear, mantener, debuggear. |
+| 7 | **Cache en memoria global** | `views.py` | 29-59 | 🟠 Alto | `_all_matches_cache` es volátil.<br>Se invalida si cambia el cliente, no si cambian los datos.<br>No escala horizontalmente. |
+| 8 | **Múltiples queries N+1 en dashboards** | `views.py` | 2144-2155 | 🟠 Alto | Paginación en memoria sin offset DB.<br>Fetch de TODAS las páginas de requerimientos y propiedades. |
+| 9 | **Hardcode de credenciales Propify** | `propify_api.py` | 17-18 | 🟠 Alto | `PROPIFY_USERNAME` y `PROPIFY_PASSWORD` hardcodeados.<br>Deberían ir en `.env`. |
 | 10 | **Sin tests unitarios** | `tests.py` | — | 🟠 Alto | El archivo tests.py está vacío o no cubre la lógica de matching. |
 | 11 | **Lógica duplicada en ambos motores** | `engine.py` + `matching_hybrid.py` | — | 🟠 Alto | Los mismos scorers (precio, área, habitaciones, baños, amenities, ascensor, tipo) están implementados dos veces con lógica casi idéntica. |
 
@@ -331,23 +358,23 @@ Cada etapa registra:
 
 | # | Problema | Archivo | Línea | Severidad | Impacto |
 |---|----------|---------|-------|-----------|---------|
-| 12 | **Tipo de cambio obsoleto** | `engine.py:31` | 31 | 🟡 Medio | 3.75 no refleja el tipo de cambio real del mercado peruano actual (~3.60-3.70). Mejor usar API de SUNAT o BCRP. |
-| 13 | **Caché de PropertyTypes global mutable** | `engine.py:24-25` | 24 | 🟡 Medio | Variables globales mutables en módulo. Si hay concurrencia, pueden haber race conditions. |
-| 14 | **Score de amenities frágil** | `engine.py:644-667` | 644 | 🟡 Medio | Mapeo hardcodeado de palabras clave a campos booleanos. No extensible sin modificar código. |
-| 15 | **Distritos de Arequipa hardcodeados** | `propifai/mapeo_ubicaciones.py` | — | 🟡 Medio | `DISTRITOS` en archivo Python en vez de en BD. Si se agrega un distrito nuevo, hay que modificar código. |
-| 16 | **MatchResult sin FK constraint** | `models.py:62,69` | 62 | 🟡 Medio | `db_constraint=False` permite orphans. Si se elimina un Requerimiento o PropifaiProperty, los MatchResult quedan huérfanos. |
+| 12 | **Tipo de cambio obsoleto** | `engine.py:31` | 31 | 🟡 Medio | 3.75 no refleja el tipo de cambio real del mercado peruano actual (~3.60-3.70).<br>Mejor usar API de SUNAT o BCRP. |
+| 13 | **Caché de PropertyTypes global mutable** | `engine.py:24-25` | 24 | 🟡 Medio | Variables globales mutables en módulo.<br>Si hay concurrencia, pueden haber race conditions. |
+| 14 | **Score de amenities frágil** | `engine.py:644-667` | 644 | 🟡 Medio | Mapeo hardcodeado de palabras clave a campos booleanos.<br>No extensible sin modificar código. |
+| 15 | **Distritos de Arequipa hardcodeados** | `propifai/mapeo_ubicaciones.py` | — | 🟡 Medio | `DISTRITOS` en archivo Python en vez de en BD.<br>Si se agrega un distrito nuevo, hay que modificar código. |
+| 16 | **MatchResult sin FK constraint** | `models.py:62,69` | 62 | 🟡 Medio | `db_constraint=False` permite orphans.<br>Si se elimina un Requerimiento o PropifaiProperty, los MatchResult quedan huérfanos. |
 | 17 | **Pipeline con queries repetitivas** | `pipeline_requerimiento.py:158-177` | 158 | 🟡 Medio | Hace 3 queries separadas a MatchResult cuando podría hacer 1 con annotate. |
-| 18 | **Filtro "solo verificados" inconsistente** | `views.py:832-836` | 832 | 🟡 Medio | En algunos endpoints se filtran, en otros no. El dashboard masivo los requiere, pero el individual no. |
-| 19 | **Sin logging estructurado** | Todo el módulo | — | 🟡 Medio | Uso de `logger.warning` sin request-id ni contexto de sesión. Dificulta debugging en producción. |
+| 18 | **Filtro "solo verificados" inconsistente** | `views.py:832-836` | 832 | 🟡 Medio | En algunos endpoints se filtran, en otros no.<br>El dashboard masivo los requiere, pero el individual no. |
+| 19 | **Sin logging estructurado** | Todo el módulo | — | 🟡 Medio | Uso de `logger.warning` sin request-id ni contexto de sesión.<br>Dificulta debugging en producción. |
 
 ### 3.4. BAJOS — Mejoras Cosméticas
 
 | # | Problema | Archivo | Línea | Severidad | Impacto |
 |---|----------|---------|-------|-----------|---------|
 | 20 | **HTML/CSS/JS inline en templates** | `dashboard.html` | 1-1451 | 🟢 Bajo | Todo el CSS y JS está inline. No usa archivos estáticos externos. |
-| 21 | **Chart.js cargado desde CDN** | `dashboard.html` | 929 | 🟢 Bajo | Dependencia externa sin fallback. Si el CDN falla, el dashboard no funciona. |
+| 21 | **Chart.js cargado desde CDN** | `dashboard.html` | 929 | 🟢 Bajo | Dependencia externa sin fallback.<br>Si el CDN falla, el dashboard no funciona. |
 | 22 | **Nombres de variables en español e inglés mezclados** | Todo el módulo | — | 🟢 Bajo | `propiedad_id`, `score_total`, `fase_eliminada`, `computed_at` mezclan idiomas. |
-| 23 | **Fechas sin timezone consistente** | `pipeline_requerimiento.py:101-107` | 101 | 🟢 Bajo | Conversión manual aware/naive. Podría usar `django.utils.timezone` siempre. |
+| 23 | **Fechas sin timezone consistente** | `pipeline_requerimiento.py:101-107` | 101 | 🟢 Bajo | Conversión manual aware/naive.<br>Podría usar `django.utils.timezone` siempre. |
 
 ---
 
@@ -357,10 +384,10 @@ Cada etapa registra:
 
 | # | Mejora | Esfuerzo | Beneficio | Dependencias |
 |---|--------|----------|-----------|-------------|
-| A1 | **Unificar los dos motores en uno solo** | 2-3 semanas | Elimina inconsistencia de resultados; reduce código duplicado; unifica pipeline de datos | Requiere definir arquitectura del motor unificado |
-| A2 | **Mover credenciales Propify a .env** | 1 hora | Seguridad; facilita rotación de credenciales; evita exposición en git | Ninguna |
-| A3 | **Eliminar el delete de MatchResult antes de guardar** | 30 min | Preserva histórico de matching; permite auditoría | Ninguna |
-| A4 | **Agregar tests unitarios para MatchingEngine** | 3-4 días | Previene regresiones; documenta comportamiento esperado | Mock de conexión propifai |
+| A1 | **Unificar los dos motores en uno solo** | 2-3 semanas | Elimina inconsistencia de resultados.<br>Reduce código duplicado.<br>Unifica pipeline de datos. | Requiere definir arquitectura del motor unificado |
+| A2 | **Mover credenciales Propify a .env** | 1 hora | Seguridad; facilita rotación de credenciales.<br>Evita exposición en git. | Ninguna |
+| A3 | **Eliminar el delete de MatchResult antes de guardar** | 30 min | Preserva histórico de matching.<br>Permite auditoría. | Ninguna |
+| A4 | **Agregar tests unitarios para MatchingEngine** | 3-4 días | Previene regresiones.<br>Documenta comportamiento esperado. | Mock de conexión propifai |
 
 #### A1 — Unificación de Motores (Detalle)
 
@@ -390,20 +417,21 @@ flowchart TD
 ```
 
 **Criterios:**
-- Si FAISS está disponible → pipeline híbrido
-- Si no → pipeline legacy (fallback)
-- Misma estructura de `score_detalle` en ambos casos
-- Alpha y pesos configurables por tenant/config
+
+- **Si FAISS está disponible** → pipeline híbrido
+- **Si no** → pipeline legacy (fallback)
+- **Misma estructura** de `score_detalle` en ambos casos
+- **Alpha y pesos** configurables por tenant/config
 
 ### 4.2. Prioridad Media (Siguiente Sprint)
 
 | # | Mejora | Esfuerzo | Beneficio | Dependencias |
 |---|--------|----------|-----------|-------------|
-| B1 | **Refactorizar views.py en múltiples archivos** | 1 semana | Mantenibilidad; cada vista en su propio archivo | Ninguna |
-| B2 | **Agregar paginación real en DB (no en memoria)** | 2-3 días | Performance en dashboards con grandes volúmenes | Conocimiento de SQL Server |
-| B3 | **Reemplazar cache en memoria por Redis** | 2-3 días | Escalabilidad horizontal; persistencia de cache | Redis ya configurado para Celery |
-| B4 | **Mover distritos y tipos de propiedad a BD** | 3-4 días | Configurable desde UI; sin necesidad de deploy | Crear modelos nuevos |
-| B5 | **Agregar tipo de cambio dinámico** | 1-2 días | Precisión en conversiones; configurable | API de SUNAT/BCRP o tabla en BD |
+| B1 | **Refactorizar views.py en múltiples archivos** | 1 semana | Mantenibilidad.<br>Cada vista en su propio archivo. | Ninguna |
+| B2 | **Agregar paginación real en DB (no en memoria)** | 2-3 días | Performance en dashboards con grandes volúmenes. | Conocimiento de SQL Server |
+| B3 | **Reemplazar cache en memoria por Redis** | 2-3 días | Escalabilidad horizontal.<br>Persistencia de cache. | Redis ya configurado para Celery |
+| B4 | **Mover distritos y tipos de propiedad a BD** | 3-4 días | Configurable desde UI.<br>Sin necesidad de deploy. | Crear modelos nuevos |
+| B5 | **Agregar tipo de cambio dinámico** | 1-2 días | Precisión en conversiones.<br>Configurable. | API de SUNAT/BCRP o tabla en BD |
 
 ### 4.3. Prioridad Baja (Backlog Técnico)
 
@@ -484,12 +512,26 @@ webapp/matching/
 
 ## 6. Conclusiones
 
-1. **El sistema funciona** pero tiene dos motores de matching que compiten entre sí, generando resultados inconsistentes. La prioridad #1 es unificarlos.
+1. **El sistema funciona pero tiene dos motores de matching que compiten entre sí, generando resultados inconsistentes.**
 
-2. **La deuda técnica es alta**: `views.py` (2817 líneas), lógica duplicada entre engine.py y matching_hybrid.py, credenciales hardcodeadas, sin tests.
+   - La prioridad #1 es unificarlos en un solo motor con fallback legacy.
 
-3. **La arquitectura de datos es frágil**: `db_constraint=False` en MatchResult permite datos huérfanos, y la deduplicación se hace borrando todo el historial antes de guardar.
+2. **La deuda técnica es alta.**
 
-4. **El matching semántico (HybridMatchingSkill)** es un paso adelante significativo, pero su dependencia de FAISS + IntelligenceDocument lo hace frágil. Si FAISS no está cargado o los documentos no tienen embeddings, el matching simplemente no funciona.
+   - `views.py` (2817 líneas) es un monstruo que viola SRP.
+   - Lógica duplicada entre `engine.py` y `matching_hybrid.py`.
+   - Credenciales hardcodeadas.
+   - Sin tests unitarios.
 
-5. **Oportunidades claras**: con ~3-4 sprints enfocados, el sistema puede pasar de "funciona pero duele" a "sólido, testeable y configurable".
+3. **La arquitectura de datos es frágil.**
+
+   - `db_constraint=False` en MatchResult permite datos huérfanos.
+   - La deduplicación se hace borrando todo el historial antes de guardar.
+
+4. **El matching semántico (HybridMatchingSkill) es un paso adelante significativo, pero su dependencia de FAISS + IntelligenceDocument lo hace frágil.**
+
+   - Si FAISS no está cargado o los documentos no tienen embeddings, el matching simplemente no funciona.
+
+5. **Oportunidades claras.**
+
+   - Con ~3-4 sprints enfocados, el sistema puede pasar de "funciona pero duele" a "sólido, testeable y configurable".
