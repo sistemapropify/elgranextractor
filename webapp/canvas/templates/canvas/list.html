@@ -132,14 +132,17 @@
   <div class="canvas-grid">
     {% for item in lienzos %}
     {% with lienzo=item.lienzo %}
-    <a href="{% url 'canvas:editor' pk=lienzo.pk %}" class="canvas-card">
-      <div class="canvas-card__title">{{ lienzo.nombre }}</div>
-      <div class="canvas-card__meta">
-        <span>📅 {{ lienzo.actualizado_en|date:"d/m/Y H:i" }}</span>
-        <span>🏠 {{ item.num_props }} propiedades · 📋 {{ item.num_reqs }} requerimientos</span>
-      </div>
-      <span class="canvas-card__estado estado-{{ lienzo.estado }}">{{ lienzo.get_estado_display }}</span>
-    </a>
+    <div class="canvas-card" style="position:relative;">
+      <a href="{% url 'canvas:editor' pk=lienzo.pk %}" style="text-decoration:none;color:inherit;display:block;">
+        <div class="canvas-card__title">{{ lienzo.nombre }}</div>
+        <div class="canvas-card__meta">
+          <span>📅 {{ lienzo.actualizado_en|date:"d/m/Y H:i" }}</span>
+          <span>🏠 {{ item.num_props }} propiedades · 📋 {{ item.num_reqs }} requerimientos</span>
+        </div>
+        <span class="canvas-card__estado estado-{{ lienzo.estado }}">{{ lienzo.get_estado_display }}</span>
+      </a>
+      <button onclick="if(confirm('Eliminar lienzo «{{ lienzo.nombre }}»? Esta acci\u00f3n no se puede deshacer.')){var f=document.createElement('form');f.method='POST';f.action='{% url 'canvas:api_eliminar' pk=lienzo.pk %}';var i=document.createElement('input');i.type='hidden';i.name='csrfmiddlewaretoken';i.value='{{ csrf_token }}';f.appendChild(i);document.body.appendChild(f);f.submit();}" style="position:absolute;top:10px;right:10px;background:none;border:none;color:#ff6b6b;font-size:20px;cursor:pointer;width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:6px;font-weight:bold;" title="Eliminar lienzo">✕</button>
+    </div>
     {% endwith %}
     {% endfor %}
   </div>

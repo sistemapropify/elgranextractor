@@ -723,3 +723,18 @@ def api_archivos_list(request, lienzo_pk):
         'id', 'nombre', 'tipo', 'blob_url', 'blob_name', 'tamano', 'x', 'y'
     )
     return JsonResponse({'archivos': list(archivos)})
+
+
+def api_lienzo_eliminar(request, pk):
+    """
+    POST /canvas/api/eliminar/<pk>/
+    Elimina un lienzo con confirmación.
+    """
+    user = _get_current_user(request)
+    if not user:
+        return JsonResponse({'error': 'No autenticado'}, status=401)
+    lienzo = get_object_or_404(Lienzo, pk=pk, user=user)
+    nombre = lienzo.nombre
+    lienzo.delete()
+    from django.shortcuts import redirect
+    return redirect('canvas:list')

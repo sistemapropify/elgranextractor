@@ -319,19 +319,48 @@
 .cv-node__collapse:hover { color: var(--cv-text-pri); }
 
 .cv-node__delete {
-  background: none;
+  background: transparent;
   border: none;
-  color: var(--cv-text-muted);
-  font-size: 10px;
+  color: #ffffff !important;
+  font-size: 28px;
   cursor: pointer;
-  line-height: 1;
-  padding: 0 3px;
+  width: 50px;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
-  opacity: 0;
-  transition: opacity 0.15s, color 0.15s;
+  font-weight: bold;
+  margin-left: auto;
+  line-height: 1;
+  padding: 0;
+  opacity: 1;
 }
-.cv-node:hover .cv-node__delete { opacity: 0.6; }
-.cv-node .cv-node__delete:hover { opacity: 1; color: var(--cv-block); }
+
+/* ── RESIZE HANDLE ── */
+.cv-resize-handle {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+  z-index: 10;
+  background: transparent;
+}
+.cv-resize-handle::after {
+  content: '';
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid rgba(255,255,255,0.4);
+  border-bottom: 2px solid rgba(255,255,255,0.4);
+}
+.cv-node:hover .cv-resize-handle::after {
+  border-color: rgba(255,255,255,0.8);
+}
 
 /* Body del nodo */
 .cv-node__body { padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; }

@@ -23,4 +23,5 @@ urlpatterns = [
     path('api/link/',                 views.api_link,          name='api_link'),
     path('api/archivos/<int:lienzo_pk>/', views.api_archivos_list, name='api_archivos'),
     path('api/media/<int:archivo_id>/',   views.api_lienzo_media,  name='api_media'),
+    path('api/eliminar/<int:pk>/',        views.api_lienzo_eliminar, name='api_eliminar'),
 ]

@@ -473,6 +473,7 @@ function createArchivoNode(data, x, y) {
     <div class="cv-port cv-port--right"  data-node="${id}" data-port="right"></div>
     <div class="cv-port cv-port--bottom" data-node="${id}" data-port="bottom"></div>
     <div class="cv-port cv-port--left"   data-node="${id}" data-port="left"></div>
+    <div class="cv-resize-handle" data-node="${id}"></div>
   `;
 
   dom.nodes.appendChild(node);
@@ -800,6 +801,7 @@ function renderPlaceholderNodes(nodos) {
         <div class="cv-port cv-port--right"  data-node="${n.id}" data-port="right"></div>
         <div class="cv-port cv-port--bottom" data-node="${n.id}" data-port="bottom"></div>
         <div class="cv-port cv-port--left"   data-node="${n.id}" data-port="left"></div>
+        <div class="cv-resize-handle" data-node="${n.id}"></div>
       `;
     } else if (n.tipo === 'enlace') {
       const fd = n.field_data || {};

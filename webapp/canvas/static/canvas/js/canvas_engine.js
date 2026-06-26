@@ -311,6 +311,47 @@ function fitToScreen() {
   updateTransform();
 }
 
+/* ── RESIZE ── */
+
+var _resize = null; // { nodeId, startX, startY, startW, startH }
+
+function startResize(e, handle) {
+  var nodeId = handle.dataset.node;
+  var nodo = STATE.nodos[nodeId];
+  if (!nodo) return;
+  e.preventDefault();
+  e.stopPropagation();
+  _resize = {
+    nodeId: nodeId,
+    startX: e.clientX,
+    startY: e.clientY,
+    startW: nodo.width || 220,
+    startH: nodo.height || 100,
+  };
+}
+
+function doResize(e) {
+  if (!_resize) return;
+  var dx = (e.clientX - _resize.startX) / STATE.viewport.zoom;
+  var dy = (e.clientY - _resize.startY) / STATE.viewport.zoom;
+  var newW = Math.max(180, _resize.startW + dx);
+  var newH = Math.max(60, _resize.startH + dy);
+  var nodo = STATE.nodos[_resize.nodeId];
+  if (!nodo || !nodo.el) return;
+  nodo.width = newW;
+  nodo.height = newH;
+  nodo.el.style.width = newW + 'px';
+  nodo.el.style.height = newH + 'px';
+  markDirty();
+  if (typeof drawEdges === 'function') drawEdges();
+}
+
+function endResize() {
+  if (_resize) {
+    _resize = null;
+  }
+}
+
 /* ── INIT ── */
 
 function initCanvas() {
@@ -320,10 +361,17 @@ function initCanvas() {
 
   // Stage events
   dom.stage.addEventListener('contextmenu', e => e.preventDefault());
-  dom.stage.addEventListener('mousedown', startPan);
-  dom.stage.addEventListener('mousemove', e => { doPan(e); doNodeDrag(e); doConnectionMove(e); });
-  dom.stage.addEventListener('mouseup', e => { endPan(); endNodeDrag(); endConnection(e); });
-  dom.stage.addEventListener('mouseleave', () => { endPan(); endNodeDrag(); endConnection({ target: null }); });
+  dom.stage.addEventListener('mousedown', function(e) {
+    var handle = e.target.closest('.cv-resize-handle');
+    if (handle) {
+      startResize(e, handle);
+      return;
+    }
+    startPan(e);
+  });
+  dom.stage.addEventListener('mousemove', e => { doPan(e); doNodeDrag(e); doConnectionMove(e); doResize(e); });
+  dom.stage.addEventListener('mouseup', e => { endPan(); endNodeDrag(); endConnection(e); endResize(); });
+  dom.stage.addEventListener('mouseleave', () => { endPan(); endNodeDrag(); endConnection({ target: null }); endResize(); });
   dom.stage.addEventListener('wheel', doZoom, { passive: false });
   dom.stage.addEventListener('click', deselectAll);
 
