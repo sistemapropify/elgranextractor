@@ -92,6 +92,10 @@ function refreshAllPropNodes() {
       reRenderPropBody(n.id, campos);
     }
   });
+  // Re-dibujar aristas después de cambiar campos visibles
+  if (typeof updateEdges === 'function') {
+    updateEdges();
+  }
 }
 
 
@@ -124,6 +128,12 @@ function reRenderPropBody(id, campos) {
       <div class="cv-field"><span class="cv-field__key">${escHtml(c)}</span><span class="cv-field__val">${escHtml(formatField(data[c]))}</span></div>
     `).join('') : ''}
   `;
+
+  // Actualizar altura en STATE después de re-renderizar el body
+  // (sin style.height fijo, el DOM se auto-dimensiona; sincronizamos para edge placement)
+  if (!nodo.el.style.height) {
+    nodo.height = nodo.el.offsetHeight;
+  }
 }
 
 
@@ -452,6 +462,10 @@ function createArchivoNode(data, x, y) {
   // Tamaño formateado
   const tamanoStr = formatFileSize(data.tamano);
 
+  const officeEmbedUrl = ['excel','word'].includes(data.tipo)
+    ? `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(data.blob_url)}`
+    : '';
+
   node.innerHTML = `
     <div class="cv-node__header">
       <span class="cv-node__badge cv-badge--archivo ${badgeClass}">${icon} ${label}</span>
@@ -459,13 +473,14 @@ function createArchivoNode(data, x, y) {
       <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
     </div>
     <div class="cv-node__body">
-      ${data.tipo === 'image' ? `<img src="/canvas/api/media/${data.id}/" style="width:100%;max-height:180px;object-fit:cover;border-radius:4px;margin-bottom:6px;cursor:pointer;" onclick="window.open('/canvas/api/media/${data.id}/','_blank')" onerror="this.style.display='none'">` : ''}
-      ${data.tipo === 'pdf' ? `<div class="cv-pdf-preview" data-pdf-id="${data.id}" style="width:100%;height:120px;background:var(--cv-surface-2);border-radius:4px;margin-bottom:6px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--cv-text-muted);overflow:hidden;"><span>Cargando PDF...</span></div>` : ''}
+      ${data.tipo === 'image' ? `<img class="cv-archivo-img" src="/canvas/api/media/${data.id}/" ondblclick="window.open('/canvas/api/media/${data.id}/','_blank')" onerror="this.style.display='none'">` : ''}
+      ${data.tipo === 'pdf' ? `<div class="cv-pdf-preview" data-pdf-id="${data.id}"><span>Cargando PDF...</span></div>` : ''}
+      ${officeEmbedUrl ? `<iframe class="cv-office-preview" src="${officeEmbedUrl}" loading="lazy"></iframe>` : ''}
       <div class="cv-file-info">
         <span class="cv-file-info__size">${tamanoStr}</span>
         <div style="display:flex;gap:6px;margin-top:4px;">
           <a class="cv-file-info__link" href="${escHtml(data.blob_url)}" download="${escHtml(data.nombre)}" style="font-size:11px;">⬇ Descargar</a>
-          ${['excel','word'].includes(data.tipo) ? `<a class="cv-file-info__link" href="https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(data.blob_url)}" target="_blank" rel="noopener" style="font-size:11px;">👁 Ver online</a>` : ''}
+          ${['excel','word'].includes(data.tipo) ? `<a class="cv-file-info__link" href="https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(data.blob_url)}" target="_blank" rel="noopener" style="font-size:11px;">👁 Abrir en grande</a>` : ''}
         </div>
       </div>
     </div>
@@ -636,7 +651,7 @@ function restoreSnapshot(snapshot) {
         id: n.id, tipo: 'propiedad', ref_id: n.ref_id,
         x: n.x, y: n.y, width: n.width || 220, height: n.height || 160,
         collapsed: n.collapsed || false, color: n.color || null, el: null,
-        field_data: null, // se llenará cuando se carguen propiedades
+        field_data: n.field_data || null, // snapshot guardado; populatePlaceholderProps lo refresca si puede
       };
     } else if (n.tipo === 'requerimiento') {
       STATE.nodos[n.id] = {
@@ -704,13 +719,14 @@ async function populatePlaceholderProps() {
       propsBySourceId[p._source_id] = p;
     });
 
-    // Asignar field_data a nodos placeholder
+    // Refrescar field_data desde la API (sobrescribe datos del snapshot con datos frescos)
     Object.values(STATE.nodos).forEach(n => {
-      if (n.tipo === 'propiedad' && !n.field_data && n.ref_id) {
+      if (n.tipo === 'propiedad' && n.ref_id) {
         const propData = propsBySourceId[n.ref_id];
         if (propData) {
           n.field_data = propData;
         }
+        // Si no se encuentra en la API, conserva el field_data del snapshot (ya no se pierde el título)
       }
     });
 
@@ -728,6 +744,12 @@ async function populatePlaceholderProps() {
         reRenderPropBody(n.id, campos);
       }
     });
+
+    // Re-dibujar aristas después de re-renderizar nodos,
+    // para que las posiciones de los puertos reflejen las alturas reales
+    if (typeof updateEdges === 'function') {
+      updateEdges();
+    }
   } catch (err) {
     console.error('Error populating placeholder props:', err);
   }
@@ -743,10 +765,13 @@ function renderPlaceholderNodes(nodos) {
     node.style.top  = n.y + 'px';
 
     if (n.tipo === 'propiedad') {
+      // Usar título guardado en field_data si existe (fallback a "Prop #id")
+      const savedFd = n.field_data || {};
+      const savedTitle = savedFd.title || savedFd.direction || `Prop #${n.ref_id}`;
       node.innerHTML = `
         <div class="cv-node__header">
           <span class="cv-node__badge cv-badge--prop">PROP</span>
-          <span class="cv-node__title">Prop #${n.ref_id}</span>
+          <span class="cv-node__title">${escHtml(savedTitle)}</span>
           <button class="cv-node__collapse">${n.collapsed ? '+' : '−'}</button>
           <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
         </div>
@@ -780,6 +805,9 @@ function renderPlaceholderNodes(nodos) {
       const label = tipoLabel[fd.file_type] || 'ARCHIVO';
       const badgeClass = 'cv-badge--' + (fd.file_type || 'other');
       const tamanoStr = formatFileSize(fd.file_size);
+      const officeEmbedUrl = ['excel','word'].includes(fd.file_type)
+        ? `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fd.file_url)}`
+        : '';
       node.innerHTML = `
         <div class="cv-node__header">
           <span class="cv-node__badge cv-badge--archivo ${badgeClass}">${icon} ${label}</span>
@@ -787,13 +815,14 @@ function renderPlaceholderNodes(nodos) {
           <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
         </div>
         <div class="cv-node__body">
-          ${fd.file_type === 'image' && data.ref_id ? `<img src="/canvas/api/media/${data.ref_id}/" style="width:100%;max-height:180px;object-fit:cover;border-radius:4px;margin-bottom:6px;cursor:pointer;" onclick="window.open('/canvas/api/media/${data.ref_id}/','_blank')" onerror="this.style.display='none'">` : fd.file_type === 'image' ? `<img src="${escHtml(fd.file_url)}" style="width:100%;max-height:180px;object-fit:cover;border-radius:4px;margin-bottom:6px;cursor:pointer;" onclick="window.open('${escHtml(fd.file_url)}','_blank')" onerror="this.style.display='none'">` : ''}
-          ${fd.file_type === 'pdf' && data.ref_id ? `<div class="cv-pdf-preview" data-pdf-id="${data.ref_id}" style="width:100%;height:120px;background:var(--cv-surface-2);border-radius:4px;margin-bottom:6px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--cv-text-muted);overflow:hidden;"><span>Cargando PDF...</span></div>` : ''}
+          ${fd.file_type === 'image' && n.ref_id ? `<img class="cv-archivo-img" src="/canvas/api/media/${n.ref_id}/" ondblclick="window.open('/canvas/api/media/${n.ref_id}/','_blank')" onerror="this.style.display='none'">` : fd.file_type === 'image' ? `<img class="cv-archivo-img" src="${escHtml(fd.file_url)}" ondblclick="window.open('${escHtml(fd.file_url)}','_blank')" onerror="this.style.display='none'">` : ''}
+          ${fd.file_type === 'pdf' && n.ref_id ? `<div class="cv-pdf-preview" data-pdf-id="${n.ref_id}"><span>Cargando PDF...</span></div>` : ''}
+          ${officeEmbedUrl ? `<iframe class="cv-office-preview" src="${officeEmbedUrl}" loading="lazy"></iframe>` : ''}
           <div class="cv-file-info">
             <span class="cv-file-info__size">${tamanoStr}</span>
             <div style="display:flex;gap:6px;margin-top:4px;">
               <a class="cv-file-info__link" href="${escHtml(fd.file_url)}" download="${escHtml(fd.file_name || 'archivo')}" style="font-size:11px;">⬇ Descargar</a>
-              ${['excel','word'].includes(fd.file_type) ? `<a class="cv-file-info__link" href="https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(fd.file_url)}" target="_blank" rel="noopener" style="font-size:11px;">👁 Ver online</a>` : ''}
+              ${['excel','word'].includes(fd.file_type) ? `<a class="cv-file-info__link" href="https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(fd.file_url)}" target="_blank" rel="noopener" style="font-size:11px;">👁 Abrir en grande</a>` : ''}
             </div>
           </div>
         </div>
@@ -836,6 +865,9 @@ function renderPlaceholderNodes(nodos) {
     dom.nodes.appendChild(node);
     STATE.nodos[n.id].el = node;
     if (n.collapsed) node.classList.add('collapsed');
+    // Restaurar dimensiones guardadas (width/height) al DOM
+    if (n.width) node.style.width = n.width + 'px';
+    if (n.height) node.style.height = n.height + 'px';
     registerNodeEvents(n.id, node);
   });
   // Renderizar PDFs después de restaurar todos los nodos
@@ -936,9 +968,7 @@ function doRenderPdf(container, pdfUrl) {
     const canvas = document.createElement('canvas');
     canvas.width = viewport.width;
     canvas.height = viewport.height;
-    canvas.style.width = '100%';
-    canvas.style.height = '100%';
-    canvas.style.objectFit = 'contain';
+    // No setear inline width/height — el CSS con max-width/max-height lo contiene
     container.innerHTML = '';
     container.appendChild(canvas);
     return page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise;
