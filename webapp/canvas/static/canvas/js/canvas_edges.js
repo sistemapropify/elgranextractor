@@ -71,7 +71,7 @@ function getNodePortPos(id, portDir) {
 /* ── UPDATE ALL EDGES ── */
 
 function updateEdges() {
-  // Remove old edges
+  // Remove old edges and badges
   dom.edges.querySelectorAll('.cv-edge, .cv-edge__label, .cv-edge__badge-group').forEach(el => {
     if (el !== tempEdgeEl) el.remove();
   });
@@ -89,20 +89,26 @@ function updateEdges() {
     else if (edge.tipo === 'block') pathEl.setAttribute('marker-end', 'url(#arrow-red)');
     dom.edges.appendChild(pathEl);
 
-    // ── BADGE CIRCULAR (solo para edges match con score) ──
-    if (edge.tipo === 'match' && edge.match_id && edge.score_total != null) {
+    // ── BADGE CIRCULAR AMARILLO (solo para edges match) ──
+    if (edge.tipo === 'match') {
       const midX = (from.x + to.x) / 2;
       const midY = (from.y + to.y) / 2;
-      const score = Math.round(parseFloat(edge.score_total));
+
+      // Obtener score: score_total (nuevo) o label (legacy)
+      let scoreVal = edge.score_total;
+      if (scoreVal == null && edge.label) {
+        scoreVal = parseFloat(edge.label);
+      }
+      const score = !isNaN(scoreVal) ? Math.round(parseFloat(scoreVal)) : 0;
       const fecha = edge.ejecutado_en || '';
 
       // Grupo SVG contenedor
       const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
       g.classList.add('cv-edge__badge-group');
       g.style.cursor = 'pointer';
-      g.dataset.matchId = edge.match_id;
+      if (edge.match_id) g.dataset.matchId = edge.match_id;
 
-      // Círculo de fondo
+      // Círculo de fondo con borde amarillo parpadeante
       const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
       circle.setAttribute('cx', midX);
       circle.setAttribute('cy', midY);
@@ -115,25 +121,26 @@ function updateEdges() {
       text.setAttribute('x', midX);
       text.setAttribute('y', midY - (fecha ? 3 : 0));
       text.setAttribute('text-anchor', 'middle');
+      text.setAttribute('dominant-baseline', 'central');
       text.classList.add('cv-edge__badge-text');
       text.textContent = score + '%';
       g.appendChild(text);
 
-      // Fecha debajo del score (si existe)
+      // Fecha debajo del score
       if (fecha && fecha.length >= 10) {
         const dateText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         dateText.setAttribute('x', midX);
-        dateText.setAttribute('y', midY + 12);
+        dateText.setAttribute('y', midY + 13);
         dateText.setAttribute('text-anchor', 'middle');
         dateText.classList.add('cv-edge__badge-date');
-        dateText.textContent = fecha.substring(0, 10); // solo YYYY-MM-DD
+        dateText.textContent = fecha.substring(0, 10);
         g.appendChild(dateText);
       }
 
-      // Click handler → abrir modal comparativo
+      // Click handler
       g.addEventListener('click', function(e) {
         e.stopPropagation();
-        if (typeof showMatchModal === 'function') {
+        if (edge.match_id && typeof showMatchModal === 'function') {
           showMatchModal(edge.match_id, midX, midY);
         }
       });

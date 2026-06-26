@@ -4,7 +4,7 @@
 {% block title %}Canvas — {{ lienzo.nombre }} — Propifai{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'canvas/css/canvas.css' %}">
+<link rel="stylesheet" href="{% static 'canvas/css/canvas.css' %}?v=3">
 <style>
   .cv-page .content-area {
     padding: 0;
@@ -185,13 +185,13 @@
   const CSRF      = '{{ csrf_token }}';
   const SNAPSHOT  = {{ snapshot_json|safe }};
 </script>
-<script src="{% static 'canvas/js/canvas_engine.js' %}?v=2"></script>
-<script src="{% static 'canvas/js/canvas_nodes.js' %}?v=2"></script>
-<script src="{% static 'canvas/js/canvas_edges.js' %}?v=2"></script>
-<script src="{% static 'canvas/js/canvas_sidebar.js' %}?v=2"></script>
-<script src="{% static 'canvas/js/canvas_match_modal.js' %}?v=2"></script>
-<script src="{% static 'canvas/js/canvas_save.js' %}?v=2"></script>
-<script src="{% static 'canvas/js/canvas_history.js' %}?v=2"></script>
-<script src="{% static 'canvas/js/canvas_modal.js' %}?v=2"></script>
-<script src="{% static 'canvas/js/canvas_insert.js' %}?v=2"></script>
+<script src="{% static 'canvas/js/canvas_engine.js' %}?v=3"></script>
+<script src="{% static 'canvas/js/canvas_nodes.js' %}?v=3"></script>
+<script src="{% static 'canvas/js/canvas_edges.js' %}?v=3"></script>
+<script src="{% static 'canvas/js/canvas_sidebar.js' %}?v=3"></script>
+<script src="{% static 'canvas/js/canvas_match_modal.js' %}?v=3"></script>
+<script src="{% static 'canvas/js/canvas_save.js' %}?v=3"></script>
+<script src="{% static 'canvas/js/canvas_history.js' %}?v=3"></script>
+<script src="{% static 'canvas/js/canvas_modal.js' %}?v=3"></script>
+<script src="{% static 'canvas/js/canvas_insert.js' %}?v=3"></script>
 {% endblock %}
