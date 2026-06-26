@@ -28,6 +28,7 @@ function buildSnapshot() {
     height: n.height,
     collapsed: n.collapsed || false,
     color: n.color || null,
+    field_data: n.field_data || null,
   }));
 
   const aristas = Object.values(STATE.aristas).map(e => ({

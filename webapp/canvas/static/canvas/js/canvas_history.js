@@ -300,6 +300,7 @@ function renderSinglePlaceholder(n) {
         <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
       </div>
       <div class="cv-node__body">
+        ${fd.file_type === 'image' ? `<img src="/canvas/api/media/${n.ref_id}/" style="width:100%;max-height:180px;object-fit:cover;border-radius:4px;margin-bottom:6px;cursor:pointer;" onclick="window.open('/canvas/api/media/${n.ref_id}/','_blank')" onerror="this.style.display='none'">` : ''}
         <div class="cv-file-info">
           <span class="cv-file-info__size">${tamanoStr}</span>
           <div style="display:flex;gap:6px;margin-top:4px;">

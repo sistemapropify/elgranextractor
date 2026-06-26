@@ -459,6 +459,7 @@ function createArchivoNode(data, x, y) {
       <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
     </div>
     <div class="cv-node__body">
+      ${data.tipo === 'image' ? `<img src="/canvas/api/media/${data.id}/" style="width:100%;max-height:180px;object-fit:cover;border-radius:4px;margin-bottom:6px;cursor:pointer;" onclick="window.open('/canvas/api/media/${data.id}/','_blank')" onerror="this.style.display='none'">` : ''}
       <div class="cv-file-info">
         <span class="cv-file-info__size">${tamanoStr}</span>
         <div style="display:flex;gap:6px;margin-top:4px;">
@@ -779,6 +780,7 @@ function renderPlaceholderNodes(nodos) {
           <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
         </div>
         <div class="cv-node__body">
+          ${fd.file_type === 'image' && data.ref_id ? `<img src="/canvas/api/media/${data.ref_id}/" style="width:100%;max-height:180px;object-fit:cover;border-radius:4px;margin-bottom:6px;cursor:pointer;" onclick="window.open('/canvas/api/media/${data.ref_id}/','_blank')" onerror="this.style.display='none'">` : fd.file_type === 'image' ? `<img src="${escHtml(fd.file_url)}" style="width:100%;max-height:180px;object-fit:cover;border-radius:4px;margin-bottom:6px;cursor:pointer;" onclick="window.open('${escHtml(fd.file_url)}','_blank')" onerror="this.style.display='none'">` : ''}
           <div class="cv-file-info">
             <span class="cv-file-info__size">${tamanoStr}</span>
             <div style="display:flex;gap:6px;margin-top:4px;">

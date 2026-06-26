@@ -167,8 +167,49 @@ def api_lienzo_load(request, pk):
     notas_qs = NotaLienzo.objects.filter(lienzo=lienzo).values(
         'id', 'contenido', 'color', 'x', 'y'
     )
+
+    # Refrescar SAS tokens para nodos de archivo (imágenes, excels, etc.)
+    snapshot = lienzo.snapshot or {}
+    nodos = snapshot.get('nodos', [])
+    if nodos and isinstance(nodos, list):
+        from .models import ArchivoLienzo
+        from datetime import datetime, timedelta
+        from azure.storage.blob import BlobSasPermissions, generate_blob_sas
+        from django.conf import settings
+        account_key = getattr(settings, 'AZURE_STORAGE_ACCOUNT_KEY', '') or ''
+        
+        for nodo in nodos:
+            if nodo.get('tipo') != 'archivo':
+                continue
+            ref_id = nodo.get('ref_id')
+            if not ref_id:
+                continue
+            archivo = ArchivoLienzo.objects.filter(pk=ref_id).first()
+            if not archivo or not archivo.blob_name:
+                continue
+            if not account_key:
+                continue
+            try:
+                from captura.azure_storage import get_blob_service_client
+                bsc = get_blob_service_client()
+                container_client = bsc.get_container_client(settings.LIENZO_STORAGE_CONTAINER)
+                blob_client = container_client.get_blob_client(archivo.blob_name)
+                sas = generate_blob_sas(
+                    account_name=blob_client.account_name,
+                    container_name=blob_client.container_name,
+                    blob_name=blob_client.blob_name,
+                    account_key=account_key,
+                    permission=BlobSasPermissions(read=True),
+                    expiry=datetime.utcnow() + timedelta(hours=24),
+                )
+                new_url = f"{blob_client.url}?{sas}"
+                nodo['field_data'] = nodo.get('field_data', {})
+                nodo['field_data']['file_url'] = new_url
+            except Exception as e:
+                logger.warning(f"Error refrescando SAS para archivo {ref_id}: {e}")
+
     return JsonResponse({
-        'snapshot': lienzo.snapshot,
+        'snapshot': snapshot,
         'nombre':   lienzo.nombre,
         'template': lienzo.card_template_id,
         'notas':    list(notas_qs),
@@ -588,6 +629,43 @@ def api_upload(request):
             'tamano': archivo.tamano,
         }
     })
+
+
+# ── PROXY: Servir imágenes/archivos del lienzo ─────────────────
+
+
+def api_lienzo_media(request, archivo_id):
+    """
+    GET /canvas/api/media/<archivo_id>/
+    Sirve un archivo del lienzo directamente desde Azure Blob Storage
+    usando autenticación del servidor (no requiere SAS ni acceso público).
+    """
+    user = _get_current_user(request)
+    if not user:
+        return JsonResponse({'error': 'No autenticado'}, status=401)
+
+    from .models import ArchivoLienzo
+    archivo = get_object_or_404(ArchivoLienzo, pk=archivo_id, lienzo__user=user)
+
+    from django.http import HttpResponse
+    from django.conf import settings
+    from captura.azure_storage import get_blob_service_client
+
+    try:
+        bsc = get_blob_service_client()
+        container_client = bsc.get_container_client(settings.LIENZO_STORAGE_CONTAINER)
+        blob_client = container_client.get_blob_client(archivo.blob_name)
+        stream = blob_client.download_blob()
+        props = blob_client.get_blob_properties()
+        ct = props.content_settings.content_type if props.content_settings else 'application/octet-stream'
+        data = stream.readall()
+        resp = HttpResponse(data, content_type=ct)
+        resp['Content-Disposition'] = f'inline; filename="{archivo.nombre}"'
+        resp['Cache-Control'] = 'public, max-age=3600'
+        return resp
+    except Exception as e:
+        logger.error(f"Error sirviendo archivo {archivo_id}: {e}")
+        return HttpResponse(status=502)
 
 
 # ── API: CREATE LINK ─────────────────────────────────────────────
