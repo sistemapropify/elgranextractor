@@ -208,6 +208,7 @@ function createReqNode(reqId, data, x, y) {
     id, tipo: 'requerimiento', ref_id: reqId,
     x, y, width: 220, height: node.offsetHeight || 200,
     collapsed: false, color: null, el: node,
+    field_data: data,
   };
   registerNodeEvents(id, node);
   markDirty();
@@ -251,6 +252,7 @@ function createNotaNode(x, y, contenido, color, titulo) {
     id, tipo: 'nota', ref_id: null,
     x: x || 150, y: y || 150, width: 200, height: node.offsetHeight || 120,
     collapsed: false, color: color || null, el: node,
+    field_data: { titulo: titulo || 'Nota', contenido: contenido || '' },
   };
   registerNodeEvents(id, node);
   markDirty();
@@ -958,17 +960,43 @@ function renderPlaceholderNodes(nodos) {
         <div class="cv-resize-handle" data-node="${n.id}"></div>
       `;
     } else if (n.tipo === 'requerimiento') {
+      const fd = n.field_data || {};
+      const agente      = fd.agente || fd.titulo || `Req #${n.ref_id}`;
+      const telefono    = fd.agente_telefono || '';
+      const fecha       = fd.fecha || '';
+      const hora        = fd.hora || '';
+      const tipoOrig    = fd.tipo_original || fd.condicion || '';
+      const reqTexto    = fd.requerimiento || '';
+      const tipoProp    = fd.tipo_propiedad || '';
+      const presupuesto = fd.presupuesto_monto != null
+        ? formatPrice(fd.presupuesto_monto, fd.presupuesto_moneda)
+        : (fd.presupuesto ? formatPrice(fd.presupuesto, fd.moneda) : '');
+      const distritos   = fd.distritos || '';
+      const urbanizacion = fd.urbanizacion || '';
+      const zona        = fd.zona || '';
+      const formaPago   = fd.presupuesto_forma_pago || '';
+      const tipoLabel   = formatTipoRequerimiento(tipoOrig);
       node.innerHTML = `
         <div class="cv-node__header">
           <span class="cv-node__badge cv-badge--req">REQ</span>
-          <span class="cv-node__title">Req #${n.ref_id}</span>
+          <span class="cv-node__title">${escHtml(agente)}</span>
           <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
         </div>
         <div class="cv-node__req-info">
-          <span class="cv-req-info__item" style="color:var(--cv-text-muted);font-size:10px;">Cargando datos...</span>
+          ${telefono ? `<span class="cv-req-info__item">📞 ${escHtml(telefono)}</span>` : ''}
+          ${fecha ? `<span class="cv-req-info__item">📅 ${escHtml(fecha)}${hora ? ' ' + escHtml(hora) : ''}</span>` : ''}
+          ${tipoLabel ? `<span class="cv-req-info__item">📋 ${escHtml(tipoLabel)}</span>` : ''}
         </div>
         <div class="cv-node__req-body">
-          <div class="cv-req-text" style="color:var(--cv-text-muted);font-size:10px;text-align:center;padding:4px">Cargando...</div>
+          <div class="cv-req-text">${escHtml(reqTexto)}</div>
+        </div>
+        <div class="cv-node__req-footer">
+          ${tipoProp ? `<div class="cv-field"><span class="cv-field__key">🏠 Tipo</span><span class="cv-field__val">${escHtml(tipoProp)}</span></div>` : ''}
+          ${presupuesto ? `<div class="cv-field"><span class="cv-field__key">💰 Presup.</span><span class="cv-field__val">${escHtml(presupuesto)}</span></div>` : ''}
+          ${distritos ? `<div class="cv-field"><span class="cv-field__key">📍 Distritos</span><span class="cv-field__val">${escHtml(distritos)}</span></div>` : ''}
+          ${urbanizacion ? `<div class="cv-field"><span class="cv-field__key">🏘️ Urb.</span><span class="cv-field__val">${escHtml(urbanizacion)}</span></div>` : ''}
+          ${zona ? `<div class="cv-field"><span class="cv-field__key">📌 Zona</span><span class="cv-field__val">${escHtml(zona)}</span></div>` : ''}
+          ${formaPago ? `<div class="cv-field"><span class="cv-field__key">💳 Pago</span><span class="cv-field__val">${escHtml(formaPago)}</span></div>` : ''}
         </div>
         <div class="cv-port cv-port--top"    data-node="${n.id}" data-port="top"></div>
         <div class="cv-port cv-port--right"  data-node="${n.id}" data-port="right"></div>
@@ -1044,6 +1072,27 @@ function renderPlaceholderNodes(nodos) {
         <div class="cv-port cv-port--left"   data-node="${n.id}" data-port="left"></div>
         <div class="cv-resize-handle" data-node="${n.id}"></div>
       `;
+    } else if (n.tipo === 'nota') {
+      const fd = n.field_data || {};
+      const savedContent = fd.contenido || fd.content || '';
+      const savedTitle = fd.titulo || fd.title || 'Nota';
+      if (n.color) node.style.setProperty('--nota-color', n.color);
+      node.innerHTML = `
+        <div class="cv-nota__header">
+          <span class="cv-nota__icon">&#10022;</span>
+          <span class="cv-nota__title-display">${escHtml(savedTitle)}</span>
+          <input class="cv-nota__title-input" value="${escHtml(savedTitle)}" style="display:none">
+          <button class="cv-nota__edit-title" title="Editar título">&#9998;</button>
+          <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
+        </div>
+        <div class="cv-nota__body" contenteditable="false">${escHtml(savedContent)}</div>
+        <button class="cv-nota__edit-body" title="Editar contenido">&#9998; Editar</button>
+        <div class="cv-nota__resize" title="Redimensionar"></div>
+        <div class="cv-port cv-port--top"    data-node="${n.id}" data-port="top"></div>
+        <div class="cv-port cv-port--right"  data-node="${n.id}" data-port="right"></div>
+        <div class="cv-port cv-port--bottom" data-node="${n.id}" data-port="bottom"></div>
+        <div class="cv-port cv-port--left"   data-node="${n.id}" data-port="left"></div>
+      `;
     } else {
       node.innerHTML = `
         <div class="cv-nota__handle">&#10022; nota</div>
@@ -1058,8 +1107,9 @@ function renderPlaceholderNodes(nodos) {
     dom.nodes.appendChild(node);
     STATE.nodos[n.id].el = node;
     if (n.collapsed) node.classList.add('collapsed');
-    // Restaurar ancho guardado; NO restaurar altura fija (que el contenido determine la altura)
+    // Restaurar dimensiones guardadas
     if (n.width) node.style.width = n.width + 'px';
+    if (n.height) node.style.minHeight = n.height + 'px';
     registerNodeEvents(n.id, node);
   });
   // Renderizar PDFs después de restaurar todos los nodos
