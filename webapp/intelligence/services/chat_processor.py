@@ -185,13 +185,14 @@ class ChatProcessor:
                 # Ahora: LangGraph corre sincrónicamente. Si falla o devuelve respuesta vacía,
                 # se cae al pipeline secuencial como fallback. Nunca ambos al mismo tiempo.
                 # Deshabilitar LangGraph para mensajes del canvas (usa pipeline secuencial
-                # que tiene contexto del lienzo via _orquestar)
+                # que tiene el contexto del lienzo via _orquestar y construye acciones add_nodes)
+                # BUG ANTERIOR: La condición chequeaba canvas_ctx.get('propiedades') lo cual
+                # falla cuando el canvas está vacío porque [] es falsy en Python.
+                # Ahora: si el source es 'canvas', SIEMPRE usamos pipeline secuencial.
                 usar_lg = cls.USE_LANGGRAPH
                 if usar_lg and ctx.metadata and ctx.metadata.get('source') == 'canvas':
-                    canvas_ctx = ctx.metadata.get('canvas_context', {})
-                    if canvas_ctx and (canvas_ctx.get('propiedades') or canvas_ctx.get('requerimientos')):
-                        log.info("[Canvas] Mensaje del canvas con contexto. Usando pipeline secuencial.")
-                        usar_lg = False
+                    log.info("[Canvas] Mensaje del canvas. Usando pipeline secuencial (orquestacion canvas).")
+                    usar_lg = False
 
                 if usar_lg:
                     try:
@@ -263,6 +264,11 @@ class ChatProcessor:
                     trace_id=timer.trace_id,
                 )
 
+                # NUEVO: extraer action de los resultados si existe
+                action_data = None
+                if resultados and isinstance(resultados, dict):
+                    action_data = resultados.get('action')
+                
                 result = ChatResult(
                     success=True,
                     response_text=response_text,
@@ -272,6 +278,7 @@ class ChatProcessor:
                         'response': response_text,
                         'skill_executed': skill_ejecutada,
                         'had_skill_results': bool(resultados),
+                        'action': action_data,  # Puede ser None o dict
                     },
                     context_summary={
                         'orchestration_mode': 'deepseek_v2',
@@ -590,35 +597,55 @@ class ChatProcessor:
         """
         PASO 1: Decide qué habilidad ejecutar según el origen y contexto.
         
-        - Si el mensaje viene del canvas (metadata.source === 'canvas') y el usuario
-          pregunta por propiedades/requerimientos del lienzo, usa el canvas_context
-          directamente sin buscar en la base de datos.
+        - Si el mensaje viene del canvas (metadata.source === 'canvas') con
+          canvas_context, detecta si el usuario quiere AGREGAR propiedades al
+          lienzo (busca en BD y devuelve acción) o solo conversar.
         - En cualquier otro caso, ejecuta busqueda_propiedades como antes.
         """
-        mensaje_lower = ctx.message.lower().strip()
-        
-        # Detectar si viene del canvas con contexto
         canvas_ctx = (ctx.metadata or {}).get('canvas_context', {})
         es_canvas = (ctx.metadata or {}).get('source') == 'canvas'
+        mensaje_lower = ctx.message.lower().strip()
         
-        # Palabras clave que indican pregunta sobre el lienzo actual
-        keywords_lienzo = ['lienzo', 'canvas', 'mi lienzo', 'mi canvas', 'en mi',
-                          'tengo en mi', 'mis propiedades', 'mis requerimientos',
-                          'que propiedades', 'que requerimientos', 'del lienzo',
-                          'en el canvas', 'en el lienzo', 'actual']
+        # Detectar intención de agregar propiedades al canvas
+        # Soporta todas las formas verbales: tú (agrega), usted (agregue),
+        # infinitivo (agregar), y variantes regionales
+        INTENCION_AGREGAR = [
+            'agrega', 'agregue', 'agregar', 'agrégalo', 'agrégueme',
+            'añade', 'añada', 'añadir',
+            'pon', 'ponlo', 'ponlos', 'poner en el lienzo', 'poner',
+            'mételo', 'métalos',
+            'trae', 'traiga', 'traer',
+            'cargar', 'carga', 'colocar', 'coloca',
+            'agrega al lienzo', 'agregue al lienzo',
+        ]
+        quiere_agregar = any(p in mensaje_lower for p in INTENCION_AGREGAR)
         
-        pregunta_sobre_lienzo = es_canvas and any(
-            kw in mensaje_lower for kw in keywords_lienzo
-        )
-        
-        if pregunta_sobre_lienzo and canvas_ctx:
-            props = canvas_ctx.get('propiedades', [])
-            reqs = canvas_ctx.get('requerimientos', [])
+        # Siempre verificar source == 'canvas' independientemente de si canvas_ctx esta vacio.
+        # Cuando el lienzo está vacío, canvas_ctx puede ser {} (falsy en Python),
+        # pero aun así debemos detectar la intención de agregar propiedades.
+        if es_canvas:
+            props = (canvas_ctx or {}).get('propiedades', [])
+            reqs = (canvas_ctx or {}).get('requerimientos', [])
+            
+            if quiere_agregar:
+                log.info(
+                    f"Orquestacion canvas con intención de AGREGAR: "
+                    f"{len(props)} props, {len(reqs)} reqs en el lienzo. "
+                    f"Buscando en BD para agregar.",
+                    mensaje=ctx.message[:100],
+                )
+                return OrchestrationDecision(
+                    skill='busqueda_propiedades',
+                    params={
+                        'semantic_query': ctx.message,
+                        'modo_retorno': 'accion_agregar',
+                    },
+                )
+            
             log.info(
-                f"Orquestacion canvas: {len(props)} props, {len(reqs)} reqs en el lienzo.",
+                f"Orquestacion canvas (solo conversar): {len(props)} props, {len(reqs)} reqs en el lienzo.",
                 mensaje=ctx.message[:100],
             )
-            # Devolver decision especial para que _ejecutar_skill use el contexto
             return OrchestrationDecision(
                 skill='usar_contexto_canvas',
                 params={
@@ -783,6 +810,53 @@ class ChatProcessor:
                             f"Pipeline: error formateando propiedades: {fmt_e}",
                             trace_id=trace_id,
                         )
+                    
+                    # NUEVO: Si el modo de retorno es 'accion_agregar',
+                    # construir estructura de acción para que el frontend
+                    # agregue nodos al canvas
+                    if params.get('modo_retorno') == 'accion_agregar':
+                        action_nodes = []
+                        # Usar skill_result.data (la lista original de busqueda_propiedades)
+                        # en lugar de resultado['data'] que puede haber sido sobrescrito
+                        # por formatear_propiedades (que retorna un dict sin 'propiedades').
+                        propiedades_data = skill_result.data
+                        props_list = []
+                        if isinstance(propiedades_data, list):
+                            props_list = propiedades_data
+                        elif isinstance(propiedades_data, dict):
+                            props_list = propiedades_data.get('propiedades', [])
+                        
+                        for prop in props_list[:10]:  # Máximo 10 nodos
+                            fv = prop.get('field_values', prop)
+                            source_id = prop.get('source_id') or fv.get('_source_id')
+                            if not source_id:
+                                continue
+                            action_nodes.append({
+                                'node_type': 'propiedad',
+                                'source_id': int(source_id) if str(source_id).isdigit() else source_id,
+                                'data': {
+                                    'title': fv.get('title', ''),
+                                    'price': fv.get('price'),
+                                    'currency': fv.get('currency'),
+                                    'district_name': fv.get('district_name'),
+                                    'tipo_propiedad': fv.get('property_type_name') or fv.get('tipo_propiedad', ''),
+                                    'direction': fv.get('map_address') or fv.get('display_address') or fv.get('direction', ''),
+                                    'area_construida': fv.get('area_construida') or fv.get('area', ''),
+                                    'dormitorios': fv.get('bedrooms'),
+                                    'banos': fv.get('bathrooms'),
+                                },
+                            })
+                        
+                        if action_nodes:
+                            resultado['action'] = {
+                                'type': 'add_nodes',
+                                'nodes': action_nodes,
+                                'position_strategy': 'cascade',
+                            }
+                            log.info(
+                                f"Acción add_nodes construida: {len(action_nodes)} propiedades",
+                                trace_id=trace_id,
+                            )
 
                 return resultado
 

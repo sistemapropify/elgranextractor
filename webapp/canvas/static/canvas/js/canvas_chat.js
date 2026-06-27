@@ -58,10 +58,23 @@ function initCanvasChat() {
 /* ── CONTEXTO DEL LIENZO ── */
 
 function buildCanvasContext() {
-  if (typeof STATE === 'undefined' || !STATE.nodos) return {};
+  // NUNCA retornar {} (objeto vacío) porque en el backend Python
+  // bool({}) es False y eso impide detectar el contexto del canvas.
+  // Siempre retornar al menos {propiedades_count: 0, ...} que es truthy.
+  if (typeof STATE === 'undefined' || !STATE.nodos) {
+    return {
+      propiedades_count: 0,
+      requerimientos_count: 0,
+      matches_count: 0,
+      propiedades: [],
+      requerimientos: [],
+      matches: [],
+    };
+  }
 
   const propiedades = [];
   const requerimientos = [];
+  const matches = [];
 
   Object.values(STATE.nodos).forEach(function(n) {
     if (n.tipo === 'propiedad' && n.field_data) {
@@ -74,16 +87,34 @@ function buildCanvasContext() {
         tipo: n.field_data.tipo_propiedad || n.field_data.property_type || '',
         area: n.field_data.area_construida || n.field_data.area || '',
         dormitorios: n.field_data.dormitorios || n.field_data.bedrooms || '',
+        direccion: n.field_data.direction || n.field_data.map_address || '',
       });
     } else if (n.tipo === 'requerimiento' && n.field_data) {
       requerimientos.push({
         id: n.ref_id,
         agente: n.field_data.agente || '',
+        telefono: n.field_data.agente_telefono || '',
+        fecha: n.field_data.fecha || '',
         tipo: n.field_data.tipo_original || '',
+        texto: n.field_data.requerimiento || '',
         presupuesto: n.field_data.presupuesto_monto || n.field_data.presupuesto || '',
         moneda: n.field_data.presupuesto_moneda || n.field_data.moneda || '',
         distritos: n.field_data.distritos || '',
         tipo_propiedad: n.field_data.tipo_propiedad || '',
+        urbanizacion: n.field_data.urbanizacion || '',
+        zona: n.field_data.zona || '',
+      });
+    }
+  });
+
+  // Recopilar aristas (matches) para que el AI entienda conexiones existentes
+  Object.values(STATE.aristas).forEach(function(e) {
+    if (e.tipo === 'match') {
+      matches.push({
+        origen: e.origen,
+        destino: e.destino,
+        score: e.score_total,
+        label: e.label,
       });
     }
   });
@@ -91,8 +122,10 @@ function buildCanvasContext() {
   return {
     propiedades_count: propiedades.length,
     requerimientos_count: requerimientos.length,
+    matches_count: matches.length,
     propiedades: propiedades,
     requerimientos: requerimientos,
+    matches: matches,
   };
 }
 
@@ -150,7 +183,14 @@ async function sendChatMessage() {
 
     if (data.success) {
       canvasChatState.conversationId = data.conversation_id;
-      addChatMessage('assistant', data.response || data.html || '');
+
+      // NUEVO: detectar acción de agregar nodos al canvas
+      if (data.action && data.action.type === 'add_nodes') {
+        executeAddNodesAction(data.action, data.response || data.html);
+      } else {
+        // Flujo normal: mostrar como texto/HTML
+        addChatMessage('assistant', data.response || data.html || '');
+      }
     } else {
       addChatMessage('assistant', 'Error: ' + (data.error || 'No se pudo obtener respuesta'));
     }
@@ -162,6 +202,52 @@ async function sendChatMessage() {
     canvasChatState.loading = false;
     sendBtn.disabled = false;
     input.focus();
+  }
+}
+
+/* ── ACCIÓN: AGREGAR NODOS AL LIENZO ── */
+
+/**
+ * Ejecuta una acción de tipo add_nodes recibida desde el backend.
+ * Crea nodos en el canvas usando createPropNode() y marca dirty.
+ * No duplica nodos ya existentes. Respeta la plantilla de campos activa.
+ */
+function executeAddNodesAction(action, mensaje) {
+  if (!action.nodes || action.nodes.length === 0) {
+    addChatMessage('assistant', mensaje || 'No se encontraron propiedades para agregar.');
+    return;
+  }
+
+  // Capturar estado para undo antes de modificar
+  if (typeof captureState === 'function') captureState();
+
+  const campos = (typeof getActiveCampos === 'function') ? getActiveCampos() : [];
+  let addedCount = 0;
+
+  action.nodes.forEach(function(nodeData, index) {
+    if (nodeData.node_type === 'propiedad' && nodeData.source_id) {
+      const existingId = 'prop_' + nodeData.source_id;
+      if (STATE.nodos[existingId]) return; // ya está en el canvas, no duplicar
+
+      // Posición en cascada (misma lógica que sidebar.js:addPropToCanvas)
+      const vp = STATE.viewport;
+      const existingProps = Object.values(STATE.nodos).filter(n => n.tipo === 'propiedad');
+      const offsetX = 50 + (existingProps.length + addedCount) % 4 * 240;
+      const offsetY = 60 + Math.floor((existingProps.length + addedCount) / 4) * 200;
+      const x = (offsetX - vp.x) / vp.zoom;
+      const y = (offsetY - vp.y) / vp.zoom;
+
+      createPropNode(nodeData.source_id, nodeData.data, x, y, campos);
+      addedCount++;
+    }
+  });
+
+  if (addedCount > 0) {
+    if (typeof markDirty === 'function') markDirty();
+    const confirmMsg = '✅ Agregué ' + addedCount + ' propiedad' + (addedCount > 1 ? 'es' : '') + ' al lienzo. ' + (mensaje || '');
+    addChatMessage('assistant', confirmMsg);
+  } else {
+    addChatMessage('assistant', mensaje || 'Todas las propiedades ya están en el lienzo.');
   }
 }
 
