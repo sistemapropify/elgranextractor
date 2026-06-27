@@ -133,56 +133,55 @@ function updateEdges() {
       text.textContent = score + '%';
       g.appendChild(text);
 
-      // ── PUERTOS EN EL BADGE (4 direcciones) ──
-      var pR = 6;
-      var bR = 32;
-      var portDirs = ['top', 'right', 'bottom', 'left'];
-      var portOffsets = {
-        top:    { dx: 0, dy: -bR },
-        right:  { dx: bR, dy: 0 },
-        bottom: { dx: 0, dy: bR },
-        left:   { dx: -bR, dy: 0 },
-      };
-      portDirs.forEach(function(dir) {
-        var off = portOffsets[dir];
-        var port = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        port.setAttribute('cx', midX + off.dx);
-        port.setAttribute('cy', midY + off.dy);
-        port.setAttribute('r', pR);
-        port.setAttribute('data-port-dir', dir);
-        port.classList.add('cv-badge-port');
-        g.appendChild(port);
-      });
-
-      // Click en badge (no en puerto) → crear nodo match
+      // Click en badge → crear nodo match
       g.addEventListener('click', function(e) {
-        if (e.target.classList.contains('cv-badge-port')) return;
         e.stopPropagation();
         if (edge.match_id && typeof createMatchNode === 'function') {
           createMatchNode(edge.match_id, midX - 140, midY - 80);
         }
       });
 
-      // Mousedown en puertos → iniciar conexión
-      g.querySelectorAll('.cv-badge-port').forEach(function(port) {
-        port.addEventListener('mousedown', function(e) {
-          e.stopPropagation();
-          e.preventDefault();
-          var virtualId = 'match_badge_' + (edge.match_id || Math.random().toString(36).substr(2,6));
+      dom.edges.appendChild(g);
+
+      // ── PUERTOS HTML ENCIMA DEL BADGE (para que no se corten) ──
+      var virtualId = 'match_badge_' + (edge.match_id || Math.random().toString(36).substr(2,6));
+      var portSize = 14;
+      var offset = 32;
+      var portPositions = [
+        { dir:'top',    l:midX - portSize/2, t:midY - offset - portSize/2 },
+        { dir:'right',  l:midX + offset - portSize/2, t:midY - portSize/2 },
+        { dir:'bottom', l:midX - portSize/2, t:midY + offset - portSize/2 },
+        { dir:'left',   l:midX - offset - portSize/2, t:midY - portSize/2 },
+      ];
+      portPositions.forEach(function(p) {
+        var portEl = document.createElement('div');
+        portEl.className = 'cv-badge-port';
+        portEl.style.cssText = 'position:absolute;left:' + p.l + 'px;top:' + p.t + 'px;' +
+          'width:' + portSize + 'px;height:' + portSize + 'px;border-radius:50%;' +
+          'background:#3a3e58;border:2px solid #ffdd00;cursor:crosshair;' +
+          'z-index:10;pointer-events:all;';
+        portEl.dataset.portDir = p.dir;
+        portEl.dataset.virtualNode = virtualId;
+        portEl.dataset.matchId = edge.match_id || '';
+        // Mousedown en puerto → iniciar conexión
+        portEl.addEventListener('mousedown', function(ev) {
+          ev.stopPropagation();
+          ev.preventDefault();
+          // Registrar nodo virtual
           if (!STATE.nodos[virtualId]) {
             STATE.nodos[virtualId] = {
               id: virtualId, tipo: 'match_badge',
               ref_id: edge.match_id || null,
-              x: midX - 26, y: midY - 26,
-              width: 52, height: 52,
+              x: midX - 26, y: midY - 26, width: 52, height: 52,
               collapsed: false, color: null, el: null, _virtual: true,
             };
           }
-          startConnection(e, virtualId, port.getAttribute('data-port-dir') || 'right');
+          if (typeof startConnection === 'function') {
+            startConnection(ev, virtualId, p.dir);
+          }
         });
+        dom.nodes.appendChild(portEl);
       });
-
-      dom.edges.appendChild(g);
     }
   });
 }
