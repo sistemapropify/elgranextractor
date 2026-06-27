@@ -228,9 +228,7 @@ function canvasSendChat() {
   input.value = '';
   input.style.height = 'auto';
   // Msg usuario
-  var userDiv = document.createElement('div');
-  userDiv.className = 'cv-chat-msg cv-chat-msg--user';
-  userDiv.textContent = text;
+  var userDiv = createChatMsg('user', text);
   msgEl.appendChild(userDiv);
   // Loading
   var loadDiv = document.createElement('div');
@@ -277,15 +275,10 @@ function canvasSendChat() {
     if (ld) ld.remove();
     if (data.success) {
       _canvasConvId = data.conversation_id;
-      var aDiv = document.createElement('div');
-      aDiv.className = 'cv-chat-msg cv-chat-msg--assistant';
-      aDiv.textContent = data.response || data.html || '';
+      var aDiv = createChatMsg('assistant', data.response || data.html || '');
       msgEl.appendChild(aDiv);
     } else {
-      var eDiv = document.createElement('div');
-      eDiv.className = 'cv-chat-msg cv-chat-msg--assistant';
-      var details = data.details ? JSON.stringify(data.details) : '';
-      eDiv.textContent = 'Error: ' + (data.error || 'Sin respuesta') + (details ? ' (' + details + ')' : '');
+      var eDiv = createChatMsg('assistant', 'Error: ' + (data.error || 'Sin respuesta') + (data.details ? ' (' + JSON.stringify(data.details) + ')' : ''));
       console.log('Chat API error:', data);
       msgEl.appendChild(eDiv);
     }
@@ -293,9 +286,7 @@ function canvasSendChat() {
   }).catch(function(err) {
     var ld = document.getElementById('_chat_loading');
     if (ld) ld.remove();
-    var eDiv = document.createElement('div');
-    eDiv.className = 'cv-chat-msg cv-chat-msg--assistant';
-    eDiv.textContent = 'Error de conexi\u00f3n';
+    var eDiv = createChatMsg('assistant', 'Error de conexi\u00f3n');
     msgEl.appendChild(eDiv);
     console.error('Chat error:', err);
   }).then(function() {
@@ -303,6 +294,38 @@ function canvasSendChat() {
     sendBtn.disabled = false;
     input.focus();
   });
+}
+}
+
+function createChatMsg(role, text) {
+  var wrapper = document.createElement('div');
+  wrapper.className = 'cv-chat-msg cv-chat-msg--' + role;
+  // Texto del mensaje
+  var textSpan = document.createElement('span');
+  textSpan.className = 'cv-chat-msg__text';
+  textSpan.textContent = text;
+  wrapper.appendChild(textSpan);
+  // Boton copiar
+  var copyBtn = document.createElement('button');
+  copyBtn.className = 'cv-chat-msg__copy';
+  copyBtn.title = 'Copiar';
+  copyBtn.textContent = '\uD83D\uDCCB';
+  copyBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    navigator.clipboard.writeText(text).then(function() {
+      copyBtn.textContent = '\u2713';
+      setTimeout(function() { copyBtn.textContent = '\uD83D\uDCCB'; }, 1500);
+    }).catch(function() {
+      // Fallback seleccionando texto
+      var range = document.createRange();
+      range.selectNodeContents(textSpan);
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    });
+  });
+  wrapper.appendChild(copyBtn);
+  return wrapper;
 }
 </script>
 {% endblock %}
