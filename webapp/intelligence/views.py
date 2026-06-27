@@ -1815,6 +1815,11 @@ def chat_web_api(request):
             flow_params=data.get('flow_params', {}) or {},
         )
 
+        # Pasar metadata de origen (canvas, etc.) al ChatContext
+        metadata_ctx = data.get('metadata', {})
+        if metadata_ctx:
+            ctx.metadata = metadata_ctx
+
         result = ChatProcessor.process_message(ctx)
 
         if not result.success:

@@ -89,6 +89,8 @@ class ChatContext:
     # Campos de compatibilidad con vistas legacy (no usados en v2)
     flow_name: Optional[str] = None
     flow_params: Dict[str, Any] = field(default_factory=dict)
+    # Contexto de origen (canvas, chat-web, etc.)
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -568,13 +570,46 @@ class ChatProcessor:
     @classmethod
     def _orquestar(cls, ctx: ChatContext) -> OrchestrationDecision:
         """
-        PASO 1 simplificado: siempre ejecuta busqueda_propiedades.
-        DeepSeek NO se usa para decidir qué hacer (evita fallos por API key, timeouts, etc.).
-        DeepSeek solo se usa en PASO 3 para generar respuesta natural a partir de datos reales.
+        PASO 1: Decide qué habilidad ejecutar según el origen y contexto.
         
-        El skill analiza internamente el mensaje y extrae filtros automaticamente
-        (distritos, tipos, condiciones) via _analizar_intencion().
+        - Si el mensaje viene del canvas (metadata.source === 'canvas') y el usuario
+          pregunta por propiedades/requerimientos del lienzo, usa el canvas_context
+          directamente sin buscar en la base de datos.
+        - En cualquier otro caso, ejecuta busqueda_propiedades como antes.
         """
+        mensaje_lower = ctx.message.lower().strip()
+        
+        # Detectar si viene del canvas con contexto
+        canvas_ctx = (ctx.metadata or {}).get('canvas_context', {})
+        es_canvas = (ctx.metadata or {}).get('source') == 'canvas'
+        
+        # Palabras clave que indican pregunta sobre el lienzo actual
+        keywords_lienzo = ['lienzo', 'canvas', 'mi lienzo', 'mi canvas', 'en mi',
+                          'tengo en mi', 'mis propiedades', 'mis requerimientos',
+                          'que propiedades', 'que requerimientos', 'del lienzo',
+                          'en el canvas', 'en el lienzo', 'actual']
+        
+        pregunta_sobre_lienzo = es_canvas and any(
+            kw in mensaje_lower for kw in keywords_lienzo
+        )
+        
+        if pregunta_sobre_lienzo and canvas_ctx:
+            props = canvas_ctx.get('propiedades', [])
+            reqs = canvas_ctx.get('requerimientos', [])
+            log.info(
+                f"Orquestacion canvas: {len(props)} props, {len(reqs)} reqs en el lienzo.",
+                mensaje=ctx.message[:100],
+            )
+            # Devolver decision especial para que _ejecutar_skill use el contexto
+            return OrchestrationDecision(
+                skill='usar_contexto_canvas',
+                params={
+                    'canvas_propiedades': props,
+                    'canvas_requerimientos': reqs,
+                    'semantic_query': ctx.message,
+                },
+            )
+        
         log.info(
             "Orquestacion directa: busqueda_propiedades con mensaje completo.",
             mensaje=ctx.message[:100],
@@ -622,6 +657,30 @@ class ChatProcessor:
         Returns:
             Dict con resultado de la skill.
         """
+        # Skill virtual: usar contexto del canvas directamente
+        if skill_name == 'usar_contexto_canvas':
+            canvas_props = (params or {}).get('canvas_propiedades', [])
+            canvas_reqs = (params or {}).get('canvas_requerimientos', [])
+            log.info(
+                f"Usando contexto canvas: {len(canvas_props)} props, {len(canvas_reqs)} reqs",
+                trace_id=trace_id,
+            )
+            # Formatear como si fuera resultado de busqueda_propiedades
+            data = {
+                'total_propiedades': len(canvas_props),
+                'total_requerimientos': len(canvas_reqs),
+                'propiedades': canvas_props,
+                'requerimientos': canvas_reqs,
+                'origen': 'canvas_context',
+            }
+            return {
+                'success': True,
+                'data': data,
+                'message': f'Se encontraron {len(canvas_props)} propiedades y {len(canvas_reqs)} requerimientos en el lienzo.',
+                'skill_name': 'usar_contexto_canvas',
+                'params': params,
+            }
+
         if not skill_name:
             return {'success': True, 'data': None, 'message': 'Sin skill necesaria'}
 
