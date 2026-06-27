@@ -12,10 +12,13 @@ async function initSidebar() {
   setupAgentTab();
   setupCamposTab();
   setupLienzoTab();
-  setupChatTabLazy();
   setupNoteButton();
   setupArchiveButton();
   setupSelectAllButtons();
+  // Inicializar chat (no lazy, se inicializa al cargar)
+  if (typeof initCanvasChat === 'function') {
+    setTimeout(initCanvasChat, 200);
+  }
 
   // 1. Cargar agentes y restaurar selección guardada
   await loadAgentes();
@@ -373,21 +376,6 @@ function setupLienzoTab() {
   }
 }
 
-/* ── CHAT TAB (lazy init) ── */
-
-function setupChatTabLazy() {
-  var chatTab = document.querySelector('.cv-sidebar__tab[data-tab="chat"]');
-  if (!chatTab) return;
-  var chatInitialized = false;
-  chatTab.addEventListener('click', function() {
-    if (!chatInitialized) {
-      chatInitialized = true;
-      if (typeof initCanvasChat === 'function') {
-        setTimeout(initCanvasChat, 50);
-      }
-    }
-  });
-}
 
 /* ── ARCHIVE BUTTON ── */
 

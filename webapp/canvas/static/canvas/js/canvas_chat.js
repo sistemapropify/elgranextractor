@@ -17,12 +17,17 @@ let canvasChatState = {
 /* ── INICIALIZACIÓN ── */
 
 function initCanvasChat() {
+  console.log('[CanvasChat] Inicializando...');
   const input = document.getElementById('chat-input');
   const sendBtn = document.getElementById('chat-send');
   const clearBtn = document.getElementById('chat-clear');
   const messages = document.getElementById('chat-messages');
 
-  if (!input || !sendBtn) return;
+  if (!input || !sendBtn) {
+    console.warn('[CanvasChat] No se encontraron elementos del chat');
+    return;
+  }
+  console.log('[CanvasChat] Inicializado correctamente');
 
   // Enviar con Enter (Shift+Enter para nueva línea)
   input.addEventListener('keydown', function(e) {
@@ -94,12 +99,16 @@ function buildCanvasContext() {
 /* ── ENVIAR MENSAJE ── */
 
 async function sendChatMessage() {
+  console.log('[CanvasChat] Enviando mensaje...');
   const input = document.getElementById('chat-input');
   const sendBtn = document.getElementById('chat-send');
   const messages = document.getElementById('chat-messages');
   const text = input.value.trim();
 
-  if (!text || canvasChatState.loading) return;
+  if (!text || canvasChatState.loading) {
+    console.log('[CanvasChat] No se envia: text=' + !!text + ' loading=' + canvasChatState.loading);
+    return;
+  }
 
   // Limpiar input y reset altura
   input.value = '';
