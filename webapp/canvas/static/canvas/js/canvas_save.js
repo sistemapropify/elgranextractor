@@ -54,6 +54,10 @@ function buildSnapshot() {
     port_to: e.port_to || 'left',
     tipo: e.tipo,
     label: e.label || '',
+    // Campos adicionales para aristas match (necesarios para recrear badge al recargar)
+    match_id: e.match_id || null,
+    score_total: e.score_total != null ? e.score_total : null,
+    ejecutado_en: e.ejecutado_en || '',
   }));
 
   const agenteSelect = document.getElementById('agente-select');
