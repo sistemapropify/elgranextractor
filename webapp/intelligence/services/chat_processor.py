@@ -184,7 +184,16 @@ class ChatProcessor:
                 #
                 # Ahora: LangGraph corre sincrónicamente. Si falla o devuelve respuesta vacía,
                 # se cae al pipeline secuencial como fallback. Nunca ambos al mismo tiempo.
-                if cls.USE_LANGGRAPH:
+                # Deshabilitar LangGraph para mensajes del canvas (usa pipeline secuencial
+                # que tiene contexto del lienzo via _orquestar)
+                usar_lg = cls.USE_LANGGRAPH
+                if usar_lg and ctx.metadata and ctx.metadata.get('source') == 'canvas':
+                    canvas_ctx = ctx.metadata.get('canvas_context', {})
+                    if canvas_ctx and (canvas_ctx.get('propiedades') or canvas_ctx.get('requerimientos')):
+                        log.info("[Canvas] Mensaje del canvas con contexto. Usando pipeline secuencial.")
+                        usar_lg = False
+
+                if usar_lg:
                     try:
                         lg_result = cls._process_with_langgraph(ctx, timer)
                         if lg_result and lg_result.response_text:
@@ -352,6 +361,15 @@ class ChatProcessor:
                 contexto_activo = meta['ultimo_contexto']
         except Exception:
             pass
+
+        # Inyectar canvas_context si viene del lienzo
+        if ctx.metadata and ctx.metadata.get('source') == 'canvas':
+            canvas_ctx = ctx.metadata.get('canvas_context', {})
+            if canvas_ctx:
+                if not isinstance(contexto_activo, dict):
+                    contexto_activo = {}
+                contexto_activo['canvas_context'] = canvas_ctx
+                contexto_activo['source'] = 'canvas'
 
         # Ejecutar orquestador LangGraph
         orchestrator = PILOrchestrator()
