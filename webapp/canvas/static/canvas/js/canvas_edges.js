@@ -133,13 +133,60 @@ function updateEdges() {
       text.textContent = score + '%';
       g.appendChild(text);
 
-      // Click handler → crea nodo comparativo en el canvas
+      // ── PUERTOS EN EL BADGE (4 direcciones) ──
+      var pR = 6; // port radius
+      var bR = 26; // badge radius
+      var ports = [
+        { dir:'top',    x:midX,           y:midY - bR },
+        { dir:'right',  x:midX + bR,      y:midY },
+        { dir:'bottom', x:midX,           y:midY + bR },
+        { dir:'left',   x:midX - bR,      y:midY },
+      ];
+      ports.forEach(function(p) {
+        var port = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        port.setAttribute('cx', p.x);
+        port.setAttribute('cy', p.y);
+        port.setAttribute('r', pR);
+        port.setAttribute('data-port-dir', p.dir);
+        port.classList.add('cv-badge-port');
+        g.appendChild(port);
+      });
+
+      // Click en badge (no en puerto) → crear nodo match
       g.addEventListener('click', function(e) {
+        if (e.target.classList.contains('cv-badge-port')) return;
         e.stopPropagation();
         if (edge.match_id && typeof createMatchNode === 'function') {
-          // Posicionar el nodo cerca del badge
           createMatchNode(edge.match_id, midX - 140, midY - 80);
         }
+      });
+
+      // Mousedown en puertos → iniciar conexión
+      g.querySelectorAll('.cv-badge-port').forEach(function(port) {
+        port.addEventListener('mousedown', function(e) {
+          e.stopPropagation();
+          e.preventDefault();
+          var virtualId = 'match_badge_' + (edge.match_id || Math.random().toString(36).substr(2,6));
+          // Registrar nodo virtual temporal para que getNodePortPos lo encuentre
+          if (!STATE.nodos[virtualId]) {
+            STATE.nodos[virtualId] = {
+              id: virtualId,
+              tipo: 'match_badge',
+              ref_id: edge.match_id || null,
+              x: midX - 26,
+              y: midY - 26,
+              width: 52,
+              height: 52,
+              collapsed: false,
+              color: null,
+              el: null,
+              _virtual: true,
+            };
+          }
+          if (typeof startConnection === 'function') {
+            startConnection(e, virtualId, port.getAttribute('data-port-dir') || 'right');
+          }
+        });
       });
 
       dom.edges.appendChild(g);

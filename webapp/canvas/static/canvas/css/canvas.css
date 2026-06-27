@@ -702,6 +702,20 @@
   filter: drop-shadow(0 0 16px rgba(255, 221, 0, 1));
 }
 
+/* Badge ports (conexiones en el círculo match) */
+.cv-badge-port {
+  fill: #3a3e58;
+  stroke: #ffdd00;
+  stroke-width: 1.5;
+  cursor: crosshair;
+  transition: fill 0.15s, stroke-width 0.15s;
+  pointer-events: all;
+}
+.cv-badge-port:hover {
+  fill: #5c6bc0;
+  stroke-width: 2.5;
+}
+
 /* ── MATCH COMPARISON MODAL ── */
 .cv-match-modal {
   position: fixed;
