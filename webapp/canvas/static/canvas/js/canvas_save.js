@@ -18,7 +18,9 @@ function markDirty() {
 /* ── BUILD SNAPSHOT ── */
 
 function buildSnapshot() {
-  const nodos = Object.values(STATE.nodos).map(n => {
+  const nodos = Object.values(STATE.nodos)
+    .filter(n => !n._virtual) // Omitir nodos virtuales (match badge ports, etc.)
+    .map(n => {
     // Usar dimensiones reales del DOM si están disponibles (el STATE puede tener valores
     // capturados antes de que carguen imágenes/iframes asíncronos)
     let w = n.width;
