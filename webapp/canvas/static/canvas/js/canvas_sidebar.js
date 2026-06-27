@@ -15,10 +15,6 @@ async function initSidebar() {
   setupNoteButton();
   setupArchiveButton();
   setupSelectAllButtons();
-  // Inicializar chat (no lazy, se inicializa al cargar)
-  if (typeof initCanvasChat === 'function') {
-    setTimeout(initCanvasChat, 200);
-  }
 
   // 1. Cargar agentes y restaurar selección guardada
   await loadAgentes();

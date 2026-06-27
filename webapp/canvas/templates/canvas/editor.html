@@ -124,8 +124,8 @@
           </div>
         </div>
         <div class="cv-chat-input-area">
-          <textarea class="cv-chat-input" id="chat-input" rows="2" placeholder="Escribe un mensaje..."></textarea>
-          <button class="cv-chat-send" id="chat-send" title="Enviar" aria-label="Enviar">&#10148;</button>
+          <textarea class="cv-chat-input" id="chat-input" rows="2" placeholder="Escribe un mensaje..." onkeydown="if(event.key=='Enter'&&!event.shiftKey){event.preventDefault();canvasSendChat()}"></textarea>
+          <button class="cv-chat-send" id="chat-send" title="Enviar" aria-label="Enviar" onclick="canvasSendChat()">&#10148;</button>
         </div>
       </div>
     </div>
@@ -213,5 +213,76 @@
 <script src="{% static 'canvas/js/canvas_history.js' %}?v=4"></script>
 <script src="{% static 'canvas/js/canvas_modal.js' %}?v=4"></script>
 <script src="{% static 'canvas/js/canvas_insert.js' %}?v=4"></script>
-<script src="{% static 'canvas/js/canvas_chat.js' %}?v=4"></script>
+<script>
+/* ── CHAT CANVAS ── */
+var _canvasConvId = null;
+var _canvasLoading = false;
+
+function canvasSendChat() {
+  var input = document.getElementById('chat-input');
+  var sendBtn = document.getElementById('chat-send');
+  var msgEl = document.getElementById('chat-messages');
+  var text = (input.value || '').trim();
+  if (!text || _canvasLoading) return;
+  input.value = '';
+  input.style.height = 'auto';
+  // Msg usuario
+  var userDiv = document.createElement('div');
+  userDiv.className = 'cv-chat-msg cv-chat-msg--user';
+  userDiv.textContent = text;
+  msgEl.appendChild(userDiv);
+  // Loading
+  var loadDiv = document.createElement('div');
+  loadDiv.className = 'cv-chat-msg cv-chat-msg--loading';
+  loadDiv.id = '_chat_loading';
+  loadDiv.textContent = 'Escribiendo...';
+  msgEl.appendChild(loadDiv);
+  msgEl.scrollTop = msgEl.scrollHeight;
+  _canvasLoading = true;
+  sendBtn.disabled = true;
+  var ctx = { propiedades: [], requerimientos: [] };
+  if (typeof STATE !== 'undefined' && STATE.nodos) {
+    Object.values(STATE.nodos).forEach(function(n) {
+      if (n.tipo === 'propiedad' && n.field_data) {
+        ctx.propiedades.push({ titulo: n.field_data.title||n.field_data.direction||'', precio: n.field_data.price, distrito: n.field_data.district_name||n.field_data.district||'' });
+      } else if (n.tipo === 'requerimiento' && n.field_data) {
+        ctx.requerimientos.push({ agente: n.field_data.agente||'', tipo: n.field_data.tipo_original||'' });
+      }
+    });
+  }
+  fetch('/api/v1/intelligence/chat-web/api/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': typeof CSRF !== 'undefined' ? CSRF : '' },
+    body: JSON.stringify({ message: text, conversation_id: _canvasConvId, use_memory: true, use_rag: true, metadata: { source: 'canvas', lienzo_id: typeof LIENZO_ID !== 'undefined' ? LIENZO_ID : null, canvas_context: ctx } }),
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    var ld = document.getElementById('_chat_loading');
+    if (ld) ld.remove();
+    if (data.success) {
+      _canvasConvId = data.conversation_id;
+      var aDiv = document.createElement('div');
+      aDiv.className = 'cv-chat-msg cv-chat-msg--assistant';
+      aDiv.textContent = data.response || data.html || '';
+      msgEl.appendChild(aDiv);
+    } else {
+      var eDiv = document.createElement('div');
+      eDiv.className = 'cv-chat-msg cv-chat-msg--assistant';
+      eDiv.textContent = 'Error: ' + (data.error || 'Sin respuesta');
+      msgEl.appendChild(eDiv);
+    }
+    msgEl.scrollTop = msgEl.scrollHeight;
+  }).catch(function(err) {
+    var ld = document.getElementById('_chat_loading');
+    if (ld) ld.remove();
+    var eDiv = document.createElement('div');
+    eDiv.className = 'cv-chat-msg cv-chat-msg--assistant';
+    eDiv.textContent = 'Error de conexi\u00f3n';
+    msgEl.appendChild(eDiv);
+    console.error('Chat error:', err);
+  }).then(function() {
+    _canvasLoading = false;
+    sendBtn.disabled = false;
+    input.focus();
+  });
+}
+</script>
 {% endblock %}
