@@ -240,20 +240,12 @@ function canvasSendChat() {
   msgEl.scrollTop = msgEl.scrollHeight;
   _canvasLoading = true;
   sendBtn.disabled = true;
-  var ctx = { propiedades: [], requerimientos: [] };
-  if (typeof STATE !== 'undefined' && STATE.nodos) {
-    Object.values(STATE.nodos).forEach(function(n) {
-      if (n.tipo === 'propiedad' && n.field_data) {
-        ctx.propiedades.push({ titulo: n.field_data.title||n.field_data.direction||'', precio: n.field_data.price, distrito: n.field_data.district_name||n.field_data.district||'' });
-      } else if (n.tipo === 'requerimiento' && n.field_data) {
-        ctx.requerimientos.push({ agente: n.field_data.agente||'', tipo: n.field_data.tipo_original||'' });
-      }
-    });
-  }
+  var payload = { message: text, use_memory: true, use_rag: true };
+  if (_canvasConvId) payload.conversation_id = _canvasConvId;
   fetch('/api/v1/intelligence/chat-web/api/', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': typeof CSRF !== 'undefined' ? CSRF : '' },
-    body: JSON.stringify({ message: text, conversation_id: _canvasConvId, use_memory: true, use_rag: true, metadata: { source: 'canvas', lienzo_id: typeof LIENZO_ID !== 'undefined' ? LIENZO_ID : null, canvas_context: ctx } }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
   }).then(function(r) { return r.json(); }).then(function(data) {
     var ld = document.getElementById('_chat_loading');
     if (ld) ld.remove();
