@@ -607,8 +607,6 @@ class ChatProcessor:
         mensaje_lower = ctx.message.lower().strip()
         
         # Detectar intención de agregar propiedades al canvas
-        # Soporta todas las formas verbales: tú (agrega), usted (agregue),
-        # infinitivo (agregar), y variantes regionales
         INTENCION_AGREGAR = [
             'agrega', 'agregue', 'agregar', 'agrégalo', 'agrégueme',
             'añade', 'añada', 'añadir',
@@ -620,9 +618,21 @@ class ChatProcessor:
         ]
         quiere_agregar = any(p in mensaje_lower for p in INTENCION_AGREGAR)
         
-        # Siempre verificar source == 'canvas' independientemente de si canvas_ctx esta vacio.
-        # Cuando el lienzo está vacío, canvas_ctx puede ser {} (falsy en Python),
-        # pero aun así debemos detectar la intención de agregar propiedades.
+        # Detectar intención de reordenar/organizar propiedades en el canvas
+        INTENCION_REORDENAR = [
+            'ordena', 'ordenar', 'reordena', 'reordenar',
+            'agrupa', 'agrupar', 'organiza', 'organizar',
+            'distribuye', 'distribuir',
+            'pon en columna', 'poner en columna', 'columnas',
+            'acomoda', 'acomodar',
+            'mueve', 'mover',
+            'pon a la izquierda', 'pon a la derecha',
+            'pon arriba', 'pon abajo',
+            'separado', 'separados', 'junto', 'juntos',
+        ]
+        quiere_reordenar = any(p in mensaje_lower for p in INTENCION_REORDENAR)
+        
+        # Siempre verificar source == 'canvas'
         if es_canvas:
             props = (canvas_ctx or {}).get('propiedades', [])
             reqs = (canvas_ctx or {}).get('requerimientos', [])
@@ -630,8 +640,7 @@ class ChatProcessor:
             if quiere_agregar:
                 log.info(
                     f"Orquestacion canvas con intención de AGREGAR: "
-                    f"{len(props)} props, {len(reqs)} reqs en el lienzo. "
-                    f"Buscando en BD para agregar.",
+                    f"{len(props)} props, {len(reqs)} reqs en el lienzo.",
                     mensaje=ctx.message[:100],
                 )
                 return OrchestrationDecision(
@@ -639,6 +648,19 @@ class ChatProcessor:
                     params={
                         'semantic_query': ctx.message,
                         'modo_retorno': 'accion_agregar',
+                    },
+                )
+            
+            if quiere_reordenar:
+                log.info(
+                    f"Orquestacion canvas con intención de REORDENAR: "
+                    f"{len(props)} props, {len(reqs)} reqs en el lienzo.",
+                    mensaje=ctx.message[:100],
+                )
+                return OrchestrationDecision(
+                    skill='reordenar_canvas',
+                    params={
+                        'message': ctx.message,
                     },
                 )
             
@@ -724,6 +746,89 @@ class ChatProcessor:
                 'message': f'Se encontraron {len(canvas_props)} propiedades y {len(canvas_reqs)} requerimientos en el lienzo.',
                 'skill_name': 'usar_contexto_canvas',
                 'params': params,
+            }
+
+        # Skill virtual: reordenar nodos en el canvas
+        if skill_name == 'reordenar_canvas':
+            mensaje = (params or {}).get('message', '').lower()
+            log.info(f"Reordenando canvas segun: {mensaje}", trace_id=trace_id)
+            
+            # Analizar el mensaje para extraer parámetros de ordenamiento
+            strategy = 'grid'  # default
+            columns = 4
+            sort_by = None
+            sort_order = 'asc'
+            group_by = None
+            
+            # Detectar número de columnas
+            import re
+            col_match = re.search(r'(\d+)\s*columna', mensaje)
+            if col_match:
+                columns = int(col_match.group(1))
+            
+            # Detectar estrategia: agrupar
+            if any(p in mensaje for p in ['agrupa', 'agrupar', 'separado', 'separados', 'junto', 'juntos', 'grupo']):
+                strategy = 'group'
+                if 'distrito' in mensaje or 'zona' in mensaje:
+                    group_by = 'district_name'
+                elif 'tipo' in mensaje or 'propiedad' in mensaje:
+                    group_by = 'property_type_name'
+                elif 'precio' in mensaje:
+                    group_by = 'price'
+                elif 'estado' in mensaje or 'condicion' in mensaje:
+                    group_by = 'property_status_name'
+                elif 'agente' in mensaje:
+                    group_by = 'responsible_name'
+            
+            # Detectar ordenamiento
+            if any(p in mensaje for p in ['ordena', 'ordenar', 'reordena', 'reordenar']):
+                strategy = 'sort'
+                if 'precio' in mensaje:
+                    sort_by = 'price'
+                elif 'titulo' in mensaje or 'título' in mensaje or 'nombre' in mensaje:
+                    sort_by = 'title'
+                elif 'distrito' in mensaje or 'zona' in mensaje:
+                    sort_by = 'district_name'
+                elif 'tipo' in mensaje:
+                    sort_by = 'property_type_name'
+                elif 'area' in mensaje or 'área' in mensaje or 'tamaño' in mensaje or 'tamano' in mensaje:
+                    sort_by = 'built_area'
+                elif 'hab' in mensaje or 'dormitorio' in mensaje or 'cuarto' in mensaje:
+                    sort_by = 'bedrooms'
+                # Detectar orden ascendente/descendente
+                if any(p in mensaje for p in ['mayor', 'descendente', 'mas caro', 'más caro', 'grande']):
+                    sort_order = 'desc'
+                elif any(p in mensaje for p in ['menor', 'ascendente', 'mas barato', 'más barato', 'pequeño']):
+                    sort_order = 'asc'
+            
+            # Detectar disposición en grilla explícita
+            if 'columna' in mensaje or 'grilla' in mensaje or 'cuadricula' in mensaje or 'distribuye' in mensaje or 'distribuir' in mensaje:
+                strategy = 'grid'
+            
+            action = {
+                'type': 'rearrange_nodes',
+                'strategy': strategy,
+                'columns': columns,
+            }
+            if sort_by:
+                action['sort_by'] = sort_by
+                action['sort_order'] = sort_order
+            if group_by:
+                action['group_by'] = group_by
+            
+            log.info(
+                f"Accion rearrange_nodes construida: strategy={strategy}, "
+                f"columns={columns}, sort_by={sort_by}, group_by={group_by}",
+                trace_id=trace_id,
+            )
+            
+            return {
+                'success': True,
+                'data': {'mensaje_original': mensaje},
+                'message': f"Reordenando propiedades en {strategy}...",
+                'skill_name': 'reordenar_canvas',
+                'params': params,
+                'action': action,
             }
 
         if not skill_name:

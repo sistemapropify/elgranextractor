@@ -291,6 +291,8 @@ function canvasSendChat() {
       // Detectar accion de agregar nodos al canvas
       if (data.action && data.action.type === 'add_nodes') {
         executeAddNodesAction(data.action, data.response || data.html || '');
+      } else if (data.action && data.action.type === 'rearrange_nodes') {
+        executeRearrangeNodesAction(data.action);
       } else {
         var aDiv = createChatMsg('assistant', data.response || data.html || '');
         msgEl.appendChild(aDiv);
@@ -351,6 +353,85 @@ function executeAddNodesAction(action, mensaje) {
     var alreadyDiv = createChatMsg('assistant', mensaje || 'Todas las propiedades ya est\u00e1n en el lienzo.');
     msgEl.appendChild(alreadyDiv);
   }
+}
+
+/* ── ACCIÓN: REORDENAR NODOS EN EL LIENZO ── */
+function executeRearrangeNodesAction(action) {
+  var propNodes = Object.values(STATE.nodos).filter(function(n) { return n.tipo === 'propiedad'; });
+  if (propNodes.length === 0) {
+    var noProps = createChatMsg('assistant', 'No hay propiedades en el lienzo para reordenar.');
+    document.getElementById('chat-messages').appendChild(noProps);
+    return;
+  }
+  // Capturar estado para undo
+  if (typeof captureState === 'function') captureState();
+  var vp = STATE.viewport;
+  var columns = action.columns || 4;
+  var startX = 30;
+  var startY = 30;
+  var cardW = 240;
+  var cardH = 200;
+  var gap = 16;
+
+  // ORDENAR nodos segun sort_by/sort_order
+  if (action.sort_by) {
+    propNodes.sort(function(a, b) {
+      var va = a.field_data ? a.field_data[action.sort_by] : null;
+      var vb = b.field_data ? b.field_data[action.sort_by] : null;
+      if (va == null) va = '';
+      if (vb == null) vb = '';
+      // Comparar como numero si ambos son numericos
+      if (!isNaN(va) && !isNaN(vb)) {
+        return action.sort_order === 'desc' ? Number(vb) - Number(va) : Number(va) - Number(vb);
+      }
+      // Comparar como string
+      var sa = String(va).toLowerCase();
+      var sb = String(vb).toLowerCase();
+      if (sa < sb) return action.sort_order === 'desc' ? 1 : -1;
+      if (sa > sb) return action.sort_order === 'desc' ? -1 : 1;
+      return 0;
+    });
+  }
+
+  // AGRUPAR nodos
+  if (action.group_by) {
+    // Agrupar por campo y ordenar grupos
+    var groups = {};
+    propNodes.forEach(function(n) {
+      var key = n.field_data ? String(n.field_data[action.group_by] || 'Sin ' + action.group_by) : 'Desconocido';
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(n);
+    });
+    var sortedKeys = Object.keys(groups).sort();
+    var idx = 0;
+    sortedKeys.forEach(function(key) {
+      groups[key].forEach(function(n) {
+        var col = idx % columns;
+        var row = Math.floor(idx / columns);
+        var x = (startX + col * (cardW + gap) - vp.x) / vp.zoom;
+        var y = (startY + row * (cardH + gap) - vp.y) / vp.zoom;
+        positionNode(n.id, n.el, x, y);
+        n.x = x; n.y = y;
+        idx++;
+      });
+    });
+  } else {
+    // DISPOSICIÓN EN GRILLA
+    propNodes.forEach(function(n, idx) {
+      var col = idx % columns;
+      var row = Math.floor(idx / columns);
+      var x = (startX + col * (cardW + gap) - vp.x) / vp.zoom;
+      var y = (startY + row * (cardH + gap) - vp.y) / vp.zoom;
+      positionNode(n.id, n.el, x, y);
+      n.x = x; n.y = y;
+    });
+  }
+
+  if (typeof markDirty === 'function') markDirty();
+  var strategyLabel = action.group_by ? ('agrupadas por ' + action.group_by) : (action.sort_by ? ('ordenadas por ' + action.sort_by) : 'en grilla');
+  var confirmMsg = '\uD83D\uDD04 Reorden\u00e9 ' + propNodes.length + ' propiedades ' + strategyLabel + '.';
+  var okDiv = createChatMsg('assistant', confirmMsg);
+  document.getElementById('chat-messages').appendChild(okDiv);
 }
 
 function createChatMsg(role, text) {
