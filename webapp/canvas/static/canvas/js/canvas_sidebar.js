@@ -12,6 +12,7 @@ async function initSidebar() {
   setupAgentTab();
   setupCamposTab();
   setupLienzoTab();
+  setupChatTabLazy();
   setupNoteButton();
   setupArchiveButton();
   setupSelectAllButtons();
@@ -370,6 +371,22 @@ function setupLienzoTab() {
   if (desc) {
     desc.addEventListener('input', () => { markDirty(); });
   }
+}
+
+/* ── CHAT TAB (lazy init) ── */
+
+function setupChatTabLazy() {
+  var chatTab = document.querySelector('.cv-sidebar__tab[data-tab="chat"]');
+  if (!chatTab) return;
+  var chatInitialized = false;
+  chatTab.addEventListener('click', function() {
+    if (!chatInitialized) {
+      chatInitialized = true;
+      if (typeof initCanvasChat === 'function') {
+        setTimeout(initCanvasChat, 50);
+      }
+    }
+  });
 }
 
 /* ── ARCHIVE BUTTON ── */

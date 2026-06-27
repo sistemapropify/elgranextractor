@@ -63,6 +63,7 @@
         <div class="cv-sidebar__tab active" data-tab="agente">Agente</div>
         <div class="cv-sidebar__tab" data-tab="campos">Campos</div>
         <div class="cv-sidebar__tab" data-tab="lienzo">Lienzo</div>
+        <div class="cv-sidebar__tab" data-tab="chat">Chat</div>
       </div>
 
       <!-- Pestaña Agente -->
@@ -108,6 +109,24 @@
         <div class="cv-label" style="margin-top:8px">Creado</div>
         <div style="color:var(--cv-text-muted);font-size:12px">{{ lienzo.creado_en|date:"d/m/Y H:i" }}</div>
         <button class="cv-btn" style="margin-top:auto;color:var(--cv-block)" id="btn-archive">Archivar lienzo</button>
+      </div>
+
+      <!-- Pestaña Chat -->
+      <div class="cv-sidebar__panel" id="tab-chat">
+        <div class="cv-chat-header">
+          <span class="cv-chat-title">Asistente IA</span>
+          <button class="cv-chat-clear" id="chat-clear" title="Nueva conversaci&oacute;n">+ Nuevo</button>
+        </div>
+        <div class="cv-chat-messages" id="chat-messages">
+          <div class="cv-chat-msg cv-chat-msg--system">
+            Hola! Soy tu asistente. Preg&uacute;ntame sobre las propiedades,
+            requerimientos o el mercado inmobiliario.
+          </div>
+        </div>
+        <div class="cv-chat-input-area">
+          <textarea class="cv-chat-input" id="chat-input" rows="2" placeholder="Escribe un mensaje..."></textarea>
+          <button class="cv-chat-send" id="chat-send" title="Enviar">></button>
+        </div>
       </div>
     </div>
 
@@ -194,4 +213,5 @@
 <script src="{% static 'canvas/js/canvas_history.js' %}?v=4"></script>
 <script src="{% static 'canvas/js/canvas_modal.js' %}?v=4"></script>
 <script src="{% static 'canvas/js/canvas_insert.js' %}?v=4"></script>
+<script src="{% static 'canvas/js/canvas_chat.js' %}?v=4"></script>
 {% endblock %}
