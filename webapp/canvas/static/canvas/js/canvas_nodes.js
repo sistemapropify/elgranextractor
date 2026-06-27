@@ -176,7 +176,7 @@ function createReqNode(reqId, data, x, y) {
     <div class="cv-node__header">
       <span class="cv-node__badge cv-badge--req">REQ</span>
       <span class="cv-node__title">${escHtml(agente)}</span>
-      <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
+      <button class="cv-node__delete cv-node__delete--req" title="Eliminar">&#x2715;</button>
     </div>
     <div class="cv-node__req-info">
       ${telefono ? `<span class="cv-req-info__item">📞 ${escHtml(telefono)}</span>` : ''}
@@ -300,12 +300,16 @@ function registerNodeEvents(id, el) {
     });
   }
 
-  // Delete button — con modal de confirmación
+  // Delete button — requerimientos: eliminar directo sin confirmación
   const deleteBtn = el.querySelector('.cv-node__delete');
   if (deleteBtn) {
     deleteBtn.addEventListener('click', e => {
       e.stopPropagation();
-      if (typeof showConfirmModal === 'function') {
+      const isReq = el.classList.contains('cv-node--req');
+      if (isReq) {
+        // Requerimientos: eliminar directamente sin modal
+        deleteNode(id);
+      } else if (typeof showConfirmModal === 'function') {
         showConfirmModal('¿Eliminar este nodo del lienzo?', () => deleteNode(id));
       } else {
         deleteNode(id);
@@ -812,6 +816,7 @@ function restoreSnapshot(snapshot) {
         id: n.id, tipo: 'requerimiento', ref_id: n.ref_id,
         x: n.x, y: n.y, width: n.width || 220, height: n.height || 200,
         collapsed: n.collapsed || false, color: n.color || null, el: null,
+        field_data: n.field_data || null,
       };
     } else if (n.tipo === 'nota') {
       STATE.nodos[n.id] = {
@@ -980,7 +985,7 @@ function renderPlaceholderNodes(nodos) {
         <div class="cv-node__header">
           <span class="cv-node__badge cv-badge--req">REQ</span>
           <span class="cv-node__title">${escHtml(agente)}</span>
-          <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
+          <button class="cv-node__delete cv-node__delete--req" title="Eliminar">&#x2715;</button>
         </div>
         <div class="cv-node__req-info">
           ${telefono ? `<span class="cv-req-info__item">📞 ${escHtml(telefono)}</span>` : ''}
