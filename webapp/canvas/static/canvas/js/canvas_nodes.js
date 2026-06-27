@@ -935,6 +935,8 @@ async function populatePlaceholderProps() {
 
 function renderPlaceholderNodes(nodos) {
   nodos.forEach(n => {
+    // Seguridad: nunca renderizar nodos virtuales como tarjetas
+    if (n.tipo === 'match_badge') return;
     if (STATE.nodos[n.id] && STATE.nodos[n.id].el) return; // already rendered
     const node = document.createElement('div');
     node.className = `cv-node cv-node--${n.tipo}`;
