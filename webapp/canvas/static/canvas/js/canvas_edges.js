@@ -71,10 +71,11 @@ function getNodePortPos(id, portDir) {
 /* ── UPDATE ALL EDGES ── */
 
 function updateEdges() {
-  // Remove old edges and badges
+  // Remove old edges, badges, and badge port HTML elements
   dom.edges.querySelectorAll('.cv-edge, .cv-edge__label, .cv-edge__badge-group').forEach(el => {
     if (el !== tempEdgeEl) el.remove();
   });
+  dom.nodes.querySelectorAll('.cv-badge-port').forEach(function(el) { el.remove(); });
 
   Object.values(STATE.aristas).forEach(edge => {
     const from     = getNodePortPos(edge.origen, edge.port_from || 'right');
@@ -143,44 +144,44 @@ function updateEdges() {
 
       dom.edges.appendChild(g);
 
-      // ── PUERTOS HTML ENCIMA DEL BADGE (para que no se corten) ──
+      // ── PUERTOS HTML (usando clase .cv-port estándar) ──
       var virtualId = 'match_badge_' + (edge.match_id || Math.random().toString(36).substr(2,6));
       var portSize = 14;
       var offset = 32;
-      var portPositions = [
-        { dir:'top',    l:midX - portSize/2, t:midY - offset - portSize/2 },
-        { dir:'right',  l:midX + offset - portSize/2, t:midY - portSize/2 },
-        { dir:'bottom', l:midX - portSize/2, t:midY + offset - portSize/2 },
-        { dir:'left',   l:midX - offset - portSize/2, t:midY - portSize/2 },
-      ];
-      portPositions.forEach(function(p) {
-        var portEl = document.createElement('div');
-        portEl.className = 'cv-badge-port';
-        portEl.style.cssText = 'position:absolute;left:' + p.l + 'px;top:' + p.t + 'px;' +
+      var portDirs = ['top', 'right', 'bottom', 'left'];
+      var portOffsets = {
+        top:    { l: midX - 7, t: midY - offset - 7 },
+        right:  { l: midX + offset - 7, t: midY - 7 },
+        bottom: { l: midX - 7, t: midY + offset - 7 },
+        left:   { l: midX - offset - 7, t: midY - 7 },
+      };
+      portDirs.forEach(function(dir) {
+        var pos = portOffsets[dir];
+        var el = document.createElement('div');
+        el.className = 'cv-port cv-badge-port';
+        el.style.cssText = 'position:absolute;left:' + pos.l + 'px;top:' + pos.t + 'px;' +
           'width:' + portSize + 'px;height:' + portSize + 'px;border-radius:50%;' +
           'background:#3a3e58;border:2px solid #ffdd00;cursor:crosshair;' +
           'z-index:10;pointer-events:all;';
-        portEl.dataset.portDir = p.dir;
-        portEl.dataset.virtualNode = virtualId;
-        portEl.dataset.matchId = edge.match_id || '';
-        // Mousedown en puerto → iniciar conexión
-        portEl.addEventListener('mousedown', function(ev) {
+        el.dataset.node = virtualId;
+        el.dataset.port = dir;
+        // Registrar nodo virtual
+        if (!STATE.nodos[virtualId]) {
+          STATE.nodos[virtualId] = {
+            id: virtualId, tipo: 'match_badge',
+            ref_id: edge.match_id || null,
+            x: midX - 26, y: midY - 26, width: 52, height: 52,
+            collapsed: false, color: null, el: null, _virtual: true,
+          };
+        }
+        // Mousedown → iniciar conexión (igual que los puertos regulares)
+        el.addEventListener('mousedown', function(ev) {
           ev.stopPropagation();
-          ev.preventDefault();
-          // Registrar nodo virtual
-          if (!STATE.nodos[virtualId]) {
-            STATE.nodos[virtualId] = {
-              id: virtualId, tipo: 'match_badge',
-              ref_id: edge.match_id || null,
-              x: midX - 26, y: midY - 26, width: 52, height: 52,
-              collapsed: false, color: null, el: null, _virtual: true,
-            };
-          }
           if (typeof startConnection === 'function') {
-            startConnection(ev, virtualId, p.dir);
+            startConnection(ev, virtualId, dir);
           }
         });
-        dom.nodes.appendChild(portEl);
+        dom.nodes.appendChild(el);
       });
     }
   });

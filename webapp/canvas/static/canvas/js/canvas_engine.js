@@ -209,27 +209,25 @@ function doConnectionMove(e) {
 
 function endConnection(e) {
   if (!STATE.connecting) return;
-  var targetPort = e.target ? e.target.closest('.cv-port, .cv-badge-port') : null;
-  if (!targetPort) { STATE.connecting = null; dom.stage.style.cursor = 'default'; removeTempEdge(); return; }
-  var targetId, targetPortDir;
-  if (targetPort.classList.contains('cv-badge-port')) {
-    targetId = targetPort.dataset.virtualNode || 'match_badge_anon';
-    targetPortDir = targetPort.dataset.portDir || 'left';
-  } else {
-    targetId = targetPort.dataset.node;
-    targetPortDir = targetPort.dataset.port || 'left';
-  }
-  if (targetId !== STATE.connecting.origen) {
-    if (typeof captureState === 'function') captureState();
-    const edgeId = 'e' + (++STATE.edgeIdCounter);
-    STATE.aristas[edgeId] = {
-      id: edgeId, origen: STATE.connecting.origen,
-      port_from: STATE.connecting.port_dir || 'right',
-      destino: targetId, port_to: targetPortDir,
-      tipo: 'manual', label: '',
-    };
-    updateEdges();
-    markDirty();
+  const targetPort = e.target.closest('.cv-port');
+  if (targetPort && targetPort.dataset.node) {
+    const targetId = targetPort.dataset.node;
+    const targetPortDir = targetPort.dataset.port || 'left';
+    if (targetId !== STATE.connecting.origen) {
+      if (typeof captureState === 'function') captureState();
+      const edgeId = 'e' + (++STATE.edgeIdCounter);
+      STATE.aristas[edgeId] = {
+        id: edgeId,
+        origen: STATE.connecting.origen,
+        port_from: STATE.connecting.port_dir || 'right',
+        destino: targetId,
+        port_to: targetPortDir,
+        tipo: 'manual',
+        label: '',
+      };
+      updateEdges();
+      markDirty();
+    }
   }
   STATE.connecting = null;
   dom.stage.style.cursor = 'default';
