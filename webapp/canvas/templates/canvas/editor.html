@@ -258,7 +258,9 @@ function canvasSendChat() {
     } else {
       var eDiv = document.createElement('div');
       eDiv.className = 'cv-chat-msg cv-chat-msg--assistant';
-      eDiv.textContent = 'Error: ' + (data.error || 'Sin respuesta');
+      var details = data.details ? JSON.stringify(data.details) : '';
+      eDiv.textContent = 'Error: ' + (data.error || 'Sin respuesta') + (details ? ' (' + details + ')' : '');
+      console.log('Chat API error:', data);
       msgEl.appendChild(eDiv);
     }
     msgEl.scrollTop = msgEl.scrollHeight;
