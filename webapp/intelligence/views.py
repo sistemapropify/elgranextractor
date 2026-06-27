@@ -1837,7 +1837,11 @@ def chat_web_api(request):
             html_content = response_text[8:-8]  # Quitar marcadores
             response_text = ''  # El HTML se envía aparte
 
-        return Response({
+        # NUEVO: extraer action del metadata (para que el frontend del canvas
+        # pueda agregar nodos automáticamente)
+        action_data = result.metadata.get('action') if isinstance(result.metadata, dict) else None
+
+        response_payload = {
             'success': True,
             'conversation_id': result.conversation_id,
             'message_id': result.message_id,
@@ -1845,8 +1849,14 @@ def chat_web_api(request):
             'html': html_content,
             'metadata': result.metadata,
             'context_summary': result.context_summary,
-            'timestamp': result.timestamp
-        })
+            'timestamp': result.timestamp,
+        }
+
+        # Incluir action solo si existe (no enviar None para no contaminar respuestas normales)
+        if action_data:
+            response_payload['action'] = action_data
+
+        return Response(response_payload)
 
     except Exception as e:
         import traceback

@@ -827,7 +827,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
-from .engine import obtener_resumen_matching_masivo, ejecutar_matching_masivo
+from .engine import obtener_resumen_matching_masivo
 
 
 class MatchingDashboardView(TemplateView):

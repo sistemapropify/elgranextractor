@@ -166,6 +166,7 @@ async function sendChatMessage() {
       body: JSON.stringify({
         message: text,
         conversation_id: canvasChatState.conversationId,
+        user_id: typeof USER_ID !== 'undefined' ? USER_ID : null,
         use_memory: true,
         use_rag: true,
         metadata: {
