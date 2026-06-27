@@ -134,20 +134,22 @@ function updateEdges() {
       g.appendChild(text);
 
       // ── PUERTOS EN EL BADGE (4 direcciones) ──
-      var pR = 6; // port radius
-      var bR = 26; // badge radius
-      var ports = [
-        { dir:'top',    x:midX,           y:midY - bR },
-        { dir:'right',  x:midX + bR,      y:midY },
-        { dir:'bottom', x:midX,           y:midY + bR },
-        { dir:'left',   x:midX - bR,      y:midY },
-      ];
-      ports.forEach(function(p) {
+      var pR = 6;
+      var bR = 32;
+      var portDirs = ['top', 'right', 'bottom', 'left'];
+      var portOffsets = {
+        top:    { dx: 0, dy: -bR },
+        right:  { dx: bR, dy: 0 },
+        bottom: { dx: 0, dy: bR },
+        left:   { dx: -bR, dy: 0 },
+      };
+      portDirs.forEach(function(dir) {
+        var off = portOffsets[dir];
         var port = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        port.setAttribute('cx', p.x);
-        port.setAttribute('cy', p.y);
+        port.setAttribute('cx', midX + off.dx);
+        port.setAttribute('cy', midY + off.dy);
         port.setAttribute('r', pR);
-        port.setAttribute('data-port-dir', p.dir);
+        port.setAttribute('data-port-dir', dir);
         port.classList.add('cv-badge-port');
         g.appendChild(port);
       });
@@ -167,25 +169,16 @@ function updateEdges() {
           e.stopPropagation();
           e.preventDefault();
           var virtualId = 'match_badge_' + (edge.match_id || Math.random().toString(36).substr(2,6));
-          // Registrar nodo virtual temporal para que getNodePortPos lo encuentre
           if (!STATE.nodos[virtualId]) {
             STATE.nodos[virtualId] = {
-              id: virtualId,
-              tipo: 'match_badge',
+              id: virtualId, tipo: 'match_badge',
               ref_id: edge.match_id || null,
-              x: midX - 26,
-              y: midY - 26,
-              width: 52,
-              height: 52,
-              collapsed: false,
-              color: null,
-              el: null,
-              _virtual: true,
+              x: midX - 26, y: midY - 26,
+              width: 52, height: 52,
+              collapsed: false, color: null, el: null, _virtual: true,
             };
           }
-          if (typeof startConnection === 'function') {
-            startConnection(e, virtualId, port.getAttribute('data-port-dir') || 'right');
-          }
+          startConnection(e, virtualId, port.getAttribute('data-port-dir') || 'right');
         });
       });
 

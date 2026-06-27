@@ -323,7 +323,7 @@
   box-shadow: var(--cv-shadow);
   width: 220px;
   min-width: 200px;
-  overflow: hidden;
+  overflow: visible;
   transition: border-color 0.15s;
 }
 .cv-node:hover    { border-color: #404460; }
