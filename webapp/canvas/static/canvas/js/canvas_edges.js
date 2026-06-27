@@ -196,6 +196,7 @@ function updateTempEdge(e) {
     tempEdgeEl.classList.add('cv-edge', 'cv-edge--match');
     tempEdgeEl.style.strokeDasharray = '5 3';
     tempEdgeEl.style.opacity = '0.5';
+    tempEdgeEl.style.pointerEvents = 'none'; // Permite que mouseup/mousemove lleguen a los puertos debajo
     dom.edges.appendChild(tempEdgeEl);
   }
   const conn = STATE.connecting;

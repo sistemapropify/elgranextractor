@@ -209,6 +209,13 @@ function doConnectionMove(e) {
 
 function endConnection(e) {
   if (!STATE.connecting) return;
+  if (!e || !e.target) {
+    // mouseleave u otro evento sin target válido — limpiar estado y salir
+    STATE.connecting = null;
+    dom.stage.style.cursor = 'default';
+    removeTempEdge();
+    return;
+  }
   const targetPort = e.target.closest('.cv-port');
   if (targetPort && targetPort.dataset.node) {
     const targetId = targetPort.dataset.node;
