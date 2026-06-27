@@ -239,15 +239,24 @@ function canvasSendChat() {
   msgEl.scrollTop = msgEl.scrollHeight;
   _canvasLoading = true;
   sendBtn.disabled = true;
-  // Construir contexto del lienzo
+  // Construir contexto del lienzo (NUNCA retornar objeto vacio, siempre incluir todas las claves)
   var canvasProps = [];
   var canvasReqs = [];
+  var canvasMatches = [];
   if (typeof STATE !== 'undefined' && STATE.nodos) {
     Object.values(STATE.nodos).forEach(function(n) {
       if (n.tipo === 'propiedad' && n.field_data) {
         canvasProps.push({ titulo: n.field_data.title||n.field_data.direction||'', precio: n.field_data.price, distrito: n.field_data.district_name||n.field_data.district||'', tipo: n.field_data.tipo_propiedad||'' });
       } else if (n.tipo === 'requerimiento' && n.field_data) {
         canvasReqs.push({ agente: n.field_data.agente||'', tipo: n.field_data.tipo_original||'', presupuesto: n.field_data.presupuesto_monto||n.field_data.presupuesto||'' });
+      }
+    });
+  }
+  // Recopilar matches existentes
+  if (typeof STATE !== 'undefined' && STATE.aristas) {
+    Object.values(STATE.aristas).forEach(function(e) {
+      if (e.tipo === 'match') {
+        canvasMatches.push({ origen: e.origen, destino: e.destino, score: e.score_total });
       }
     });
   }
@@ -260,8 +269,12 @@ function canvasSendChat() {
       source: 'canvas',
       lienzo_id: LIENZO_ID,
       canvas_context: {
+        propiedades_count: canvasProps.length,
+        requerimientos_count: canvasReqs.length,
+        matches_count: canvasMatches.length,
         propiedades: canvasProps,
-        requerimientos: canvasReqs
+        requerimientos: canvasReqs,
+        matches: canvasMatches
       }
     }
   };
@@ -275,8 +288,13 @@ function canvasSendChat() {
     if (ld) ld.remove();
     if (data.success) {
       _canvasConvId = data.conversation_id;
-      var aDiv = createChatMsg('assistant', data.response || data.html || '');
-      msgEl.appendChild(aDiv);
+      // Detectar accion de agregar nodos al canvas
+      if (data.action && data.action.type === 'add_nodes') {
+        executeAddNodesAction(data.action, data.response || data.html || '');
+      } else {
+        var aDiv = createChatMsg('assistant', data.response || data.html || '');
+        msgEl.appendChild(aDiv);
+      }
     } else {
       var eDiv = createChatMsg('assistant', 'Error: ' + (data.error || 'Sin respuesta') + (data.details ? ' (' + JSON.stringify(data.details) + ')' : ''));
       console.log('Chat API error:', data);
@@ -294,6 +312,45 @@ function canvasSendChat() {
     sendBtn.disabled = false;
     input.focus();
   });
+}
+
+/* ── ACCIÓN: AGREGAR NODOS AL LIENZO ── */
+function executeAddNodesAction(action, mensaje) {
+  if (!action.nodes || action.nodes.length === 0) {
+    var emptyDiv = createChatMsg('assistant', mensaje || 'No se encontraron propiedades para agregar.');
+    document.getElementById('chat-messages').appendChild(emptyDiv);
+    return;
+  }
+  // Capturar estado para undo
+  if (typeof captureState === 'function') captureState();
+  // Obtener campos activos
+  var campos = (typeof getActiveCampos === 'function') ? getActiveCampos() : [];
+  var addedCount = 0;
+  var msgEl = document.getElementById('chat-messages');
+  action.nodes.forEach(function(nodeData) {
+    if (nodeData.node_type === 'propiedad' && nodeData.source_id) {
+      var existingId = 'prop_' + nodeData.source_id;
+      if (STATE.nodos[existingId]) return; // ya existe
+      // Posicion en cascada
+      var vp = STATE.viewport;
+      var existingProps = Object.values(STATE.nodos).filter(function(n) { return n.tipo === 'propiedad'; });
+      var offsetX = 50 + (existingProps.length + addedCount) % 4 * 240;
+      var offsetY = 60 + Math.floor((existingProps.length + addedCount) / 4) * 200;
+      var x = (offsetX - vp.x) / vp.zoom;
+      var y = (offsetY - vp.y) / vp.zoom;
+      createPropNode(nodeData.source_id, nodeData.data, x, y, campos);
+      addedCount++;
+    }
+  });
+  if (addedCount > 0) {
+    if (typeof markDirty === 'function') markDirty();
+    var confirmMsg = '✅ Agregu\u00e9 ' + addedCount + ' propieda' + (addedCount > 1 ? 'des' : 'd') + ' al lienzo. ' + (mensaje || '');
+    var okDiv = createChatMsg('assistant', confirmMsg);
+    msgEl.appendChild(okDiv);
+  } else {
+    var alreadyDiv = createChatMsg('assistant', mensaje || 'Todas las propiedades ya est\u00e1n en el lienzo.');
+    msgEl.appendChild(alreadyDiv);
+  }
 }
 
 function createChatMsg(role, text) {
