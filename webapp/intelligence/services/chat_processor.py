@@ -831,27 +831,28 @@ class ChatProcessor:
                             source_id = prop.get('source_id') or fv.get('_source_id')
                             if not source_id:
                                 continue
-                            # Los nombres de campo reales en field_values de la BD
-                            # (tabla property en dbpropify_be):
+                            # Pasar TODOS los field_values como data del nodo.
+                            # createPropNode() usa:
+                            #   - data.title, data.direction, data.price, data.currency
+                            #   - data._imagen_url o data.code para la imagen
+                            #   - data[campo] para cada campo personalizado
+                            # Los field_values reales de la BD incluyen:
                             #   title, price, map_address, currency_name, district_name,
-                            #   property_type_name, operation_type_name, property_status_name,
-                            #   code, description
-                            # NOTA: bedrooms, bathrooms, built_area NO estan en field_values,
-                            # estan en property_specs (tabla separada).
+                            #   property_type_name, code, description, etc.
+                            # Incluir 'code' es CRITICO para que getPropertyImageUrl()
+                            # construya la URL de la imagen desde Azure Blob Storage.
+                            node_data = dict(fv) if isinstance(fv, dict) else {'title': str(fv)}
+                            # Normalizar currency para formatPrice (espera USD/PEN)
+                            if node_data.get('currency_name') == 'Soles':
+                                node_data['currency'] = 'PEN'
+                            elif node_data.get('currency_name') == 'Dólares':
+                                node_data['currency'] = 'USD'
+                            elif not node_data.get('currency'):
+                                node_data['currency'] = node_data.get('currency_name', '')
                             action_nodes.append({
                                 'node_type': 'propiedad',
                                 'source_id': int(source_id) if str(source_id).isdigit() else source_id,
-                                'data': {
-                                    'title': fv.get('title', ''),
-                                    'price': fv.get('price'),
-                                    'currency': fv.get('currency_name') or fv.get('currency'),
-                                    'district_name': fv.get('district_name'),
-                                    'tipo_propiedad': fv.get('property_type_name') or fv.get('tipo_propiedad', ''),
-                                    'direction': fv.get('map_address') or fv.get('display_address') or fv.get('direction', ''),
-                                    'area_construida': fv.get('built_area') or fv.get('area_construida') or fv.get('area', ''),
-                                    'dormitorios': fv.get('bedrooms'),
-                                    'banos': fv.get('bathrooms'),
-                                },
+                                'data': node_data,
                             })
                         
                         if action_nodes:
