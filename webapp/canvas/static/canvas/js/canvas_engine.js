@@ -210,7 +210,6 @@ function doConnectionMove(e) {
 function endConnection(e) {
   if (!STATE.connecting) return;
   if (!e || !e.target) {
-    // mouseleave u otro evento sin target válido — limpiar estado y salir
     STATE.connecting = null;
     dom.stage.style.cursor = 'default';
     removeTempEdge();

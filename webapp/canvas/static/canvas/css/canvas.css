@@ -1116,6 +1116,7 @@
 .cv-edge--match { stroke: var(--cv-edge-match); }
 .cv-edge--dep   { stroke: var(--cv-edge-dep); }
 .cv-edge--block { stroke: var(--cv-edge-block); stroke-dasharray: 6 3; }
+.cv-edge--manual { stroke: var(--cv-edge-dep); }
 .cv-edge--nota  { stroke: #c9b44a; stroke-dasharray: 3 3; }
 
 .cv-edge__label {
