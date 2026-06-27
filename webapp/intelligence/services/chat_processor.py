@@ -836,22 +836,54 @@ class ChatProcessor:
                             #   - data.title, data.direction, data.price, data.currency
                             #   - data._imagen_url o data.code para la imagen
                             #   - data[campo] para cada campo personalizado
-                            # Los field_values reales de la BD incluyen:
-                            #   title, price, map_address, currency_name, district_name,
-                            #   property_type_name, code, description, etc.
-                            # Incluir 'code' es CRITICO para que getPropertyImageUrl()
-                            # construya la URL de la imagen desde Azure Blob Storage.
                             node_data = dict(fv) if isinstance(fv, dict) else {'title': str(fv)}
+                            
                             # Normalizar currency para formatPrice (espera USD/PEN)
-                            if node_data.get('currency_name') == 'Soles':
+                            cur_name = node_data.get('currency_name', '')
+                            if cur_name in ('Soles', 'PEN'):
                                 node_data['currency'] = 'PEN'
-                            elif node_data.get('currency_name') == 'Dólares':
+                            elif cur_name in ('Dólares', 'Dolares', 'USD'):
                                 node_data['currency'] = 'USD'
                             elif not node_data.get('currency'):
-                                node_data['currency'] = node_data.get('currency_name', '')
+                                node_data['currency'] = cur_name
+                            
+                            # Construir _imagen_url (misma lógica que canvas/views.py:api_propiedades)
+                            # 1. Query a property_media para primera imagen
+                            # 2. Fallback: code-based URL en Azure Blob
+                            MEDIA_BASE = "https://propifymedia01.blob.core.windows.net/media"
+                            img_url = None
+                            code = node_data.get('code')
+                            try:
+                                sid_int = int(source_id)
+                                from django.db import connections
+                                with connections['propifai'].cursor() as cursor:
+                                    cursor.execute(
+                                        "SELECT MIN(pm.[file]) FROM property_media pm "
+                                        "WHERE pm.property_id = %s AND pm.media_type = 'image'",
+                                        [sid_int]
+                                    )
+                                    row = cursor.fetchone()
+                                    if row and row[0]:
+                                        file_path = row[0]
+                                        if file_path.startswith('/'):
+                                            file_path = file_path[1:]
+                                        img_url = f"{MEDIA_BASE}/{file_path}"
+                            except Exception:
+                                pass
+                            
+                            # Fallback: construir desde code
+                            if not img_url and code:
+                                code_str = str(code)
+                                if any(code_str.lower().endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.webp']):
+                                    img_url = f"{MEDIA_BASE}/{code_str}"
+                                else:
+                                    img_url = f"{MEDIA_BASE}/{code_str}.jpg"
+                            
+                            node_data['_imagen_url'] = img_url
+                            
                             action_nodes.append({
                                 'node_type': 'propiedad',
-                                'source_id': int(source_id) if str(source_id).isdigit() else source_id,
+                                'source_id': sid_int if isinstance(source_id, (int, str)) and str(source_id).isdigit() else source_id,
                                 'data': node_data,
                             })
                         
