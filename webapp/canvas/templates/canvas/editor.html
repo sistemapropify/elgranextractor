@@ -203,6 +203,7 @@
   const LIENZO_ID = {{ lienzo.pk }};
   const CSRF      = '{{ csrf_token }}';
   const SNAPSHOT  = {{ snapshot_json|safe }};
+  const USER_ID   = '{{ user_id }}';
 </script>
 <script src="{% static 'canvas/js/canvas_engine.js' %}?v=4"></script>
 <script src="{% static 'canvas/js/canvas_nodes.js' %}?v=4"></script>
@@ -240,7 +241,7 @@ function canvasSendChat() {
   msgEl.scrollTop = msgEl.scrollHeight;
   _canvasLoading = true;
   sendBtn.disabled = true;
-  var payload = { message: text, use_memory: true, use_rag: true };
+  var payload = { message: text, use_memory: true, use_rag: true, user_id: USER_ID || null };
   if (_canvasConvId) payload.conversation_id = _canvasConvId;
   fetch('/api/v1/intelligence/chat-web/api/', {
     method: 'POST',

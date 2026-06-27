@@ -118,6 +118,8 @@ def lienzo_editor(request, pk):
         'templates':          templates,
         'campos_disponibles': campos_disponibles,
         'snapshot_json':      snapshot_json,
+        'user_id':            str(user.id) if hasattr(user, 'id') and user.id else '',
+        'user_email':         user.email if hasattr(user, 'email') else '',
     }
     return render(request, 'canvas/editor.html', ctx)
 
