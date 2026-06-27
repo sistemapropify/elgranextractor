@@ -222,7 +222,7 @@ function endConnection(e) {
         port_from: STATE.connecting.port_dir || 'right',
         destino: targetId,
         port_to: targetPortDir,
-        tipo: 'match',
+        tipo: 'manual',
         label: '',
       };
       updateEdges();
