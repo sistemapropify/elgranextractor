@@ -241,7 +241,32 @@ function canvasSendChat() {
   msgEl.scrollTop = msgEl.scrollHeight;
   _canvasLoading = true;
   sendBtn.disabled = true;
-  var payload = { message: text, use_memory: true, use_rag: true, user_id: USER_ID || null };
+  // Construir contexto del lienzo
+  var canvasProps = [];
+  var canvasReqs = [];
+  if (typeof STATE !== 'undefined' && STATE.nodos) {
+    Object.values(STATE.nodos).forEach(function(n) {
+      if (n.tipo === 'propiedad' && n.field_data) {
+        canvasProps.push({ titulo: n.field_data.title||n.field_data.direction||'', precio: n.field_data.price, distrito: n.field_data.district_name||n.field_data.district||'', tipo: n.field_data.tipo_propiedad||'' });
+      } else if (n.tipo === 'requerimiento' && n.field_data) {
+        canvasReqs.push({ agente: n.field_data.agente||'', tipo: n.field_data.tipo_original||'', presupuesto: n.field_data.presupuesto_monto||n.field_data.presupuesto||'' });
+      }
+    });
+  }
+  var payload = {
+    message: text,
+    use_memory: true,
+    use_rag: true,
+    user_id: USER_ID || null,
+    metadata: {
+      source: 'canvas',
+      lienzo_id: LIENZO_ID,
+      canvas_context: {
+        propiedades: canvasProps,
+        requerimientos: canvasReqs
+      }
+    }
+  };
   if (_canvasConvId) payload.conversation_id = _canvasConvId;
   fetch('/api/v1/intelligence/chat-web/api/', {
     method: 'POST',
