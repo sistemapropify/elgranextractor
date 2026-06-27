@@ -831,17 +831,24 @@ class ChatProcessor:
                             source_id = prop.get('source_id') or fv.get('_source_id')
                             if not source_id:
                                 continue
+                            # Los nombres de campo reales en field_values de la BD
+                            # (tabla property en dbpropify_be):
+                            #   title, price, map_address, currency_name, district_name,
+                            #   property_type_name, operation_type_name, property_status_name,
+                            #   code, description
+                            # NOTA: bedrooms, bathrooms, built_area NO estan en field_values,
+                            # estan en property_specs (tabla separada).
                             action_nodes.append({
                                 'node_type': 'propiedad',
                                 'source_id': int(source_id) if str(source_id).isdigit() else source_id,
                                 'data': {
                                     'title': fv.get('title', ''),
                                     'price': fv.get('price'),
-                                    'currency': fv.get('currency'),
+                                    'currency': fv.get('currency_name') or fv.get('currency'),
                                     'district_name': fv.get('district_name'),
                                     'tipo_propiedad': fv.get('property_type_name') or fv.get('tipo_propiedad', ''),
                                     'direction': fv.get('map_address') or fv.get('display_address') or fv.get('direction', ''),
-                                    'area_construida': fv.get('area_construida') or fv.get('area', ''),
+                                    'area_construida': fv.get('built_area') or fv.get('area_construida') or fv.get('area', ''),
                                     'dormitorios': fv.get('bedrooms'),
                                     'banos': fv.get('bathrooms'),
                                 },
