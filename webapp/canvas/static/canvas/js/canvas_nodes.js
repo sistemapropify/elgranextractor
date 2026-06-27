@@ -804,6 +804,9 @@ function restoreSnapshot(snapshot) {
   STATE._restoreAgenteId = snapshot.agente_id || '';
 
   snapshot.nodos.forEach(n => {
+    // Saltar nodos virtuales (match_badge) guardados por error en snapshots viejos
+    if (n.tipo === 'match_badge') return;
+
     if (n.tipo === 'propiedad') {
       STATE.nodos[n.id] = {
         id: n.id, tipo: 'propiedad', ref_id: n.ref_id,
@@ -848,7 +851,8 @@ function restoreSnapshot(snapshot) {
   });
 
   // Renderizar placeholders hasta que se carguen datos
-  renderPlaceholderNodes(snapshot.nodos);
+  // Filtrar nodos virtuales que no deben renderizarse como tarjetas
+  renderPlaceholderNodes(snapshot.nodos.filter(n => n.tipo !== 'match_badge'));
 
   // Restore edges
   if (snapshot.aristas) {
