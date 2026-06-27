@@ -209,25 +209,40 @@ function doConnectionMove(e) {
 
 function endConnection(e) {
   if (!STATE.connecting) return;
-  const targetPort = e.target.closest('.cv-port');
-  if (targetPort && targetPort.dataset.node) {
-    const targetId = targetPort.dataset.node;
-    const targetPortDir = targetPort.dataset.port || 'left';
-    if (targetId !== STATE.connecting.origen) {
-      if (typeof captureState === 'function') captureState();
-      const edgeId = 'e' + (++STATE.edgeIdCounter);
-      STATE.aristas[edgeId] = {
-        id: edgeId,
-        origen: STATE.connecting.origen,
-        port_from: STATE.connecting.port_dir || 'right',
-        destino: targetId,
-        port_to: targetPortDir,
-        tipo: 'manual',
-        label: '',
+  // Aceptar .cv-port (nodos regulares) o .cv-badge-port (badge match)
+  var targetPort = e.target.closest('.cv-port, .cv-badge-port');
+  if (!targetPort) return;
+  var targetId, targetPortDir;
+  if (targetPort.classList.contains('cv-badge-port')) {
+    // Puerto de badge match → crear nodo virtual
+    var badgeGroup = targetPort.closest('.cv-edge__badge-group');
+    targetId = 'match_badge_' + (badgeGroup ? (badgeGroup.dataset.matchId || 'anon') : 'anon');
+    targetPortDir = targetPort.getAttribute('data-port-dir') || 'left';
+    if (!STATE.nodos[targetId]) {
+      STATE.nodos[targetId] = {
+        id: targetId, tipo: 'match_badge', ref_id: null,
+        x: 0, y: 0, width: 52, height: 52,
+        collapsed: false, color: null, el: null, _virtual: true,
       };
-      updateEdges();
-      markDirty();
     }
+  } else {
+    targetId = targetPort.dataset.node;
+    targetPortDir = targetPort.dataset.port || 'left';
+  }
+  if (targetId !== STATE.connecting.origen) {
+    if (typeof captureState === 'function') captureState();
+    const edgeId = 'e' + (++STATE.edgeIdCounter);
+    STATE.aristas[edgeId] = {
+      id: edgeId,
+      origen: STATE.connecting.origen,
+      port_from: STATE.connecting.port_dir || 'right',
+      destino: targetId,
+      port_to: targetPortDir,
+      tipo: 'manual',
+      label: '',
+    };
+    updateEdges();
+    markDirty();
   }
   STATE.connecting = null;
   dom.stage.style.cursor = 'default';
