@@ -72,6 +72,29 @@ class IntelligenceConfig(AppConfig):
                 ContarPalabrasSkill, FiltrarListaSkill,
                 OrdenarListaSkill, ResumirTextoSkill,
             )
+            # ── Skills del Sistema Experto Multi-Rol (SPEC v2.0) ──
+            from .skills.nuevas import (
+                MetricasGlobalesSkill,
+                ReporteVentasSkill,
+                AnalisisRendimientoSkill,
+                ConsultarNormativaSkill,
+                RevisarContratoSkill,
+                AspectosLegalesSkill,
+                CampanasActivasSkill,
+                LeadsGeneradosSkill,
+                MetricasMarketingSkill,
+                MisPropiedadesSkill,
+                MisRequerimientosSkill,
+                MisMatchesSkill,
+                PortafolioAgenteSkill,
+                AnalizarOportunidadSkill,
+                EquipoACargoSkill,
+                DesempenoAgentesSkill,
+                ReporteEquipoSkill,
+                LogsSistemaSkill,
+                ErroresRecientesSkill,
+                EstadoServiciosSkill,
+            )
 
             registry = SkillRegistry()
             registry.register(BusquedaPropiedadesSkill)
@@ -96,7 +119,28 @@ class IntelligenceConfig(AppConfig):
             registry.register(FiltrarListaSkill)
             registry.register(OrdenarListaSkill)
             registry.register(ResumirTextoSkill)
-            logger.info("Skills registradas en SkillRegistry al iniciar Django")
+            # ── Skills del Sistema Experto Multi-Rol (SPEC v2.0) ──
+            registry.register(MetricasGlobalesSkill)
+            registry.register(ReporteVentasSkill)
+            registry.register(AnalisisRendimientoSkill)
+            registry.register(ConsultarNormativaSkill)
+            registry.register(RevisarContratoSkill)
+            registry.register(AspectosLegalesSkill)
+            registry.register(CampanasActivasSkill)
+            registry.register(LeadsGeneradosSkill)
+            registry.register(MetricasMarketingSkill)
+            registry.register(MisPropiedadesSkill)
+            registry.register(MisRequerimientosSkill)
+            registry.register(MisMatchesSkill)
+            registry.register(PortafolioAgenteSkill)
+            registry.register(AnalizarOportunidadSkill)
+            registry.register(EquipoACargoSkill)
+            registry.register(DesempenoAgentesSkill)
+            registry.register(ReporteEquipoSkill)
+            registry.register(LogsSistemaSkill)
+            registry.register(ErroresRecientesSkill)
+            registry.register(EstadoServiciosSkill)
+            logger.info(f"Skills registradas en SkillRegistry al iniciar Django (incluye {20} nuevas skills multi-rol)")
         except Exception as e:
             logger.warning(f"No se pudieron registrar skills en startup: {e}")
 

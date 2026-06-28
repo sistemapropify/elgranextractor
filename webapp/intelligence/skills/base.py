@@ -96,9 +96,12 @@ class BaseSkill(ABC):
         name (str): Identificador único en snake_case. Ej: 'busqueda_propiedades'
         description (str): Descripción en lenguaje natural para que el agente elija la skill
         category (str): Categoría: busqueda | crm | reporte | notificacion | template | custom
-        access_level (int): Nivel mínimo de acceso (1, 2 o 3)
+        access_level (int): Nivel mínimo de acceso (1 a 5)
         is_active (bool): Si la skill está disponible para el agente
         parameters_schema (dict): Schema de parámetros que acepta la skill
+        required_domain (str, opcional): Dominio requerido. Ej: 'legal', 'marketing', 'ti', 'gerencia'
+        required_collection (str, opcional): Colección RAG requerida. Ej: 'normativas_legales'
+        accepts_previous_results (bool): Si puede recibir resultados de skill anterior (multi-skill)
     """
 
     # ── Atributos de clase (sobrescribir en subclases) ──
@@ -108,6 +111,11 @@ class BaseSkill(ABC):
     access_level: int = 1
     is_active: bool = True
     parameters_schema: Dict[str, Dict[str, Any]] = {}
+    # ── Control de acceso extendido ──
+    required_domain: Optional[str] = None
+    required_collection: Optional[str] = None
+    # ── Soporte multi-skill (SPEC v2.1) ──
+    accepts_previous_results: bool = False
 
     def __init_subclass__(cls, **kwargs):
         """Validación automática al definir subclases."""

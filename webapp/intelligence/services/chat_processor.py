@@ -110,6 +110,8 @@ HISTORIAL DE CONVERSACIÓN:
 CONSULTA DEL USUARIO:
 "{mensaje}"
 
+ORIGEN DE LA CONSULTA: {origen}
+
 RESULTADOS DEL SISTEMA:
 {resultados_skill}
 
@@ -130,7 +132,13 @@ INSTRUCCIONES:
 9. NO inventes propiedades ni datos que no estén en los resultados del sistema.
 10. Usa un tono profesional pero cercano, como un asesor inmobiliario de confianza.
 11. NO devuelvas JSON ni datos técnicos. Solo texto legible.
-12. Responde en español."""
+12. Responde en español.
+13. ORIGEN: El usuario está en {origen}.
+    - Si origen es "chat-web" o "chat-web-stream": NO menciones el Canvas Visual,
+      ni el lienzo, ni sugerencias de "revisar en tu canvas". El usuario está en
+      el chat conversacional estándar. Responde solo con texto.
+    - Si origen es "canvas": puedes referirte al lienzo visual y sugerir acciones
+      como agregar/quitar propiedades del canvas."""
 
 
 # ── ChatProcessor ────────────────────────────────────────────────────
@@ -218,36 +226,68 @@ class ChatProcessor:
                     resultados = None
                     skill_ejecutada = None
                 else:
-                    # PASO 2: EJECUCIÓN DE SKILL
-                    skill_ejecutada = decision.skill
-                    resultados = cls._ejecutar_skill(
-                        skill_name=decision.skill,
-                        params=decision.params,
-                        ctx=ctx,
-                        trace_id=timer.trace_id,
-                    )
+                    # ── DETECCIÓN MULTI-SKILL (SPEC v2.1) ──
+                    # Verificar si la consulta requiere múltiples skills
+                    multi_result = None
+                    try:
+                        from .semantic_router import get_router
+                        router = get_router()
+                        user_context = cls._build_user_context(ctx)
+                        multi_plan = router.classify_multi(ctx.message, user_context)
+                        
+                        if multi_plan.get('is_multi') and len(multi_plan.get('skills', [])) > 1:
+                            log.info(
+                                f"[MultiSkill] Consulta compuesta detectada: "
+                                f"{len(multi_plan['skills'])} skills en modo "
+                                f"{multi_plan['execution_mode']}"
+                            )
+                            from .multi_skill_orchestrator import get_multi_orchestrator
+                            multi_orch = get_multi_orchestrator()
+                            execution_context = cls._build_execution_context(ctx)
+                            multi_result = multi_orch.execute_multi(multi_plan, execution_context)
+                    except Exception as e:
+                        log.warning(f"[MultiSkill] Error en detección: {e}. Usando single skill.")
 
-                    # Guardar resultados de busqueda_propiedades en la conversacion
-                    if (resultados and resultados.get('success')
-                        and decision.skill == 'busqueda_propiedades'
-                        and resultados.get('data')):
-                        try:
-                            meta = ctx.conversation.metadata or {}
-                            meta['ultima_busqueda'] = {
-                                'resultados': resultados['data'][:50],
-                                'total': len(resultados['data']),
-                                'params': decision.params,
-                            }
-                            ctx.conversation.metadata = meta
-                            ctx.conversation.save(update_fields=['metadata'])
-                        except Exception as e:
-                            log.warning(f"No se pudo guardar ultima busqueda: {e}")
+                    if multi_result and multi_result.get('success'):
+                        # PASO 2b: RESULTADO MULTI-SKILL
+                        resultados = multi_result
+                        skill_ejecutada = '+'.join(multi_result.get('skills_executed', []))
+                        
+                        log.info(
+                            f"[MultiSkill] Ejecutadas {len(multi_result.get('skills_executed', []))} "
+                            f"skills: {skill_ejecutada}"
+                        )
+                    else:
+                        # PASO 2a: EJECUCIÓN DE SKILL (single)
+                        skill_ejecutada = decision.skill
+                        resultados = cls._ejecutar_skill(
+                            skill_name=decision.skill,
+                            params=decision.params,
+                            ctx=ctx,
+                            trace_id=timer.trace_id,
+                        )
+
+                        # Guardar resultados de busqueda_propiedades en la conversacion
+                        if (resultados and resultados.get('success')
+                            and decision.skill == 'busqueda_propiedades'
+                            and resultados.get('data')):
+                            try:
+                                meta = ctx.conversation.metadata or {}
+                                meta['ultima_busqueda'] = {
+                                    'resultados': resultados['data'][:50],
+                                    'total': len(resultados['data']),
+                                    'params': decision.params,
+                                }
+                                ctx.conversation.metadata = meta
+                                ctx.conversation.save(update_fields=['metadata'])
+                            except Exception as e:
+                                log.warning(f"No se pudo guardar ultima busqueda: {e}")
 
                     # PASO 3: RESPUESTA NATURAL
                     response_text = cls._generar_respuesta(
                         ctx=ctx,
                         resultados=resultados,
-                        skill_name=decision.skill,
+                        skill_name=skill_ejecutada,
                         trace_id=timer.trace_id,
                     )
 
@@ -378,6 +418,17 @@ class ChatProcessor:
                 contexto_activo['canvas_context'] = canvas_ctx
                 contexto_activo['source'] = 'canvas'
 
+        # Construir user_context para adaptación multi-rol (SPEC v2.0)
+        user_context = None
+        if ctx.user:
+            user_context = {
+                'user_id': str(ctx.user.id),
+                'level': cls._get_user_level(ctx.user),
+                'role': ctx.user.role.name.lower() if ctx.user.role else 'agente',
+                'nombre_rol': ctx.user.role.name if ctx.user.role else 'Agente',
+                'domains': ctx.user.role.default_domains if ctx.user.role else [],
+            }
+
         # Ejecutar orquestador LangGraph
         orchestrator = PILOrchestrator()
         state = orchestrator.run(
@@ -385,6 +436,7 @@ class ChatProcessor:
             conversation_id=str(ctx.conversation.id),
             user_id=str(ctx.user.id) if ctx.user else None,
             contexto_activo=contexto_activo,
+            user_context=user_context,
         )
 
         response_text = state.get('respuesta_generada', '')
@@ -1050,6 +1102,23 @@ class ChatProcessor:
         if not resultados.get('success'):
             return resultados.get('error', 'Lo siento, no pude completar la búsqueda.')
 
+        # ── RESPUESTA MULTI-SKILL (SPEC v2.1) ──
+        if resultados.get('is_multi'):
+            log.info(
+                f"[MultiSkill] Generando respuesta multi-skill: "
+                f"{resultados.get('skills_executed', [])}",
+                trace_id=trace_id,
+            )
+            prompt = cls._construir_prompt_multi_respuesta(ctx, resultados)
+            system_prompt = PromptManager.get_deepseek_system_prompt(ctx.app_id)
+            success, message, response_data = LLMService._call_deepseek_api(
+                messages=[{"role": "user", "content": prompt}],
+                system_prompt=system_prompt,
+            )
+            if success and isinstance(response_data, dict):
+                return response_data.get('content', resultados.get('combined', {}).get('combined_summary', ''))
+            return resultados.get('combined', {}).get('combined_summary', 'Multi-skill completado.')
+
         # Si el skill generó HTML (formatear_propiedades), retornarlo directamente
         data = resultados.get('data')
         if isinstance(data, dict) and data.get('html'):
@@ -1097,13 +1166,88 @@ class ChatProcessor:
         historial = cls._get_historial_mensajes(ctx.conversation)
         historial_str = "\n".join(historial) if historial else "(sin historial previo)"
 
+        # Determinar origen (chat-web, canvas, etc.)
+        origen = "chat-web"
+        if ctx.metadata:
+            origen = ctx.metadata.get('source', ctx.app_id)
+        elif ctx.app_id:
+            origen = ctx.app_id
+
         # Formatear resultados de skill para el prompt
         resultados_str = cls._formatear_resultados_skill(resultados, skill_name)
 
         return RESPONSE_SYSTEM_PROMPT.format(
             historial=historial_str,
             mensaje=ctx.message,
+            origen=origen,
             resultados_skill=resultados_str,
+        )
+
+    @classmethod
+    def _construir_prompt_multi_respuesta(
+        cls,
+        ctx: ChatContext,
+        resultados: Dict[str, Any],
+    ) -> str:
+        """
+        Construye el prompt para respuesta multi-skill.
+
+        SPEC v2.1: Integra resultados de múltiples skills en un prompt
+        que DeepSeek usará para generar una respuesta coherente.
+        """
+        historial = cls._get_historial_mensajes(ctx.conversation)
+        historial_str = "\n".join(historial) if historial else "(sin historial previo)"
+
+        skills = resultados.get('skills_executed', [])
+        modo = resultados.get('execution_mode', 'single')
+        combined = resultados.get('combined', {})
+        summaries = combined.get('summaries', [])
+        results = resultados.get('results', {})
+
+        # Construir sección de resultados por skill
+        resultados_por_skill = ""
+        for skill_name in skills:
+            skill_result = results.get(skill_name, {})
+            if skill_result.get('success'):
+                data = skill_result.get('data', {})
+                message = skill_result.get('message', '')
+                resultados_por_skill += (
+                    f"\n=== {skill_name} ===\n"
+                    f"Mensaje: {message}\n"
+                    f"Datos: {json.dumps(data, ensure_ascii=False, default=str)[:1000]}\n"
+                )
+            else:
+                resultados_por_skill += (
+                    f"\n=== {skill_name} ===\n"
+                    f"ERROR: {skill_result.get('error', 'Falló')}\n"
+                )
+
+        # Determinar origen
+        origen = "chat-web"
+        if ctx.metadata:
+            origen = ctx.metadata.get('source', ctx.app_id)
+        elif ctx.app_id:
+            origen = ctx.app_id
+
+        return (
+            f"MULTI-SKILL RESPONSE PROMPT\n"
+            f"===========================\n"
+            f"CONSULTA DEL USUARIO: \"{ctx.message}\"\n"
+            f"ORIGEN: {origen}\n"
+            f"HISTORIAL: {historial_str}\n"
+            f"SKILLS EJECUTADAS: {', '.join(skills)} (modo: {modo})\n"
+            f"RESULTADOS POR SKILL:\n{resultados_por_skill}\n"
+            f"RESUMEN COMBINADO:\n{chr(10).join(summaries)}\n\n"
+            f"INSTRUCCIONES:\n"
+            f"1. Integra los resultados de todas las skills en una respuesta coherente.\n"
+            f"2. Organiza con secciones claras usando emojis como separadores.\n"
+            f"3. Incluye un breve resumen ejecutivo al inicio.\n"
+            f"4. Si alguna skill falló, menciónalo brevemente.\n"
+            f"5. No repitas información entre secciones.\n"
+            f"6. ORIGEN: El usuario está en {origen}.\n"
+            f"   - Si origen es 'chat-web': NO menciones el Canvas Visual ni el lienzo.\n"
+            f"   - Si origen es 'canvas': puedes referirte al lienzo.\n"
+            f"7. Responde en español, máximo 500 palabras."
         )
 
     @classmethod
@@ -1257,6 +1401,44 @@ class ChatProcessor:
             if user.role:
                 return user.role.default_level
             return 1
+
+    @classmethod
+    def _build_user_context(cls, ctx: ChatContext) -> Dict[str, Any]:
+        """
+        Construye el contexto del usuario para multi-skill orchestration.
+        
+        SPEC v2.1: Incluye rol, nivel, dominios y nombre del rol.
+        """
+        if not ctx.user:
+            return {'level': 0, 'role': 'anonymous', 'domains': []}
+        
+        return {
+            'user_id': str(ctx.user.id),
+            'level': cls._get_user_level(ctx.user),
+            'role': ctx.user.role.name.lower() if ctx.user.role else 'agente',
+            'nombre_rol': ctx.user.role.name if ctx.user.role else 'Agente',
+            'domains': ctx.user.role.default_domains if ctx.user.role else [],
+        }
+
+    @classmethod
+    def _build_execution_context(cls, ctx: ChatContext) -> Any:
+        """
+        Construye ExecutionContext para el MultiSkillOrchestrator.
+        """
+        from ..skills.orchestrator import ExecutionContext
+        
+        return ExecutionContext(
+            user_id=str(ctx.user.id) if ctx.user else None,
+            session_id=ctx.conversation.session_id if ctx.conversation else '',
+            conversation_id=str(ctx.conversation.id) if ctx.conversation else '',
+            permissions=(ctx.user.role.capabilities.keys()
+                         if ctx.user.role and ctx.user.role.capabilities else []),
+            environment='production',
+            metadata={
+                'app_id': ctx.app_id,
+                'message': ctx.message,
+            },
+        )
 
     @classmethod
     def _get_user_name(cls, user: User) -> str:

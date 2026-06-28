@@ -57,6 +57,9 @@ class PILAgentState(TypedDict):
     hechos_usuario: List[Dict[str, Any]]
     params_extraidos: Dict[str, Any]
 
+    # ── User Context (SPEC v2.0 - Multi-Rol) ──
+    user_context: Optional[Dict[str, Any]]
+
     # ── Search ──
     resultados_busqueda: List[Dict[str, Any]]
     filtros_aplicados: Dict[str, Any]
@@ -79,8 +82,17 @@ def create_initial_state(
     conversation_id: str,
     user_id: Optional[str] = None,
     contexto_activo: Optional[Dict[str, Any]] = None,
+    user_context: Optional[Dict[str, Any]] = None,
 ) -> PILAgentState:
-    """Crea un estado inicial para el grafo."""
+    """Crea un estado inicial para el grafo.
+
+    Args:
+        message: Mensaje del usuario
+        conversation_id: ID de la conversación
+        user_id: ID del usuario (opcional)
+        contexto_activo: Contexto activo de la conversación (opcional)
+        user_context: Contexto del usuario para adaptación multi-rol (SPEC v2.0)
+    """
     return PILAgentState(
         # Input
         message=message,
@@ -98,6 +110,8 @@ def create_initial_state(
         contexto_resuelto=False,
         hechos_usuario=[],
         params_extraidos={},
+        # User Context (SPEC v2.0)
+        user_context=user_context,
         # Search
         resultados_busqueda=[],
         filtros_aplicados={},
@@ -302,6 +316,7 @@ class PILOrchestrator:
         conversation_id: str,
         user_id: Optional[str] = None,
         contexto_activo: Optional[Dict[str, Any]] = None,
+        user_context: Optional[Dict[str, Any]] = None,
     ) -> PILAgentState:
         """
         Ejecuta el grafo completo.
@@ -311,6 +326,7 @@ class PILOrchestrator:
             conversation_id: ID de la conversación
             user_id: ID del usuario (opcional)
             contexto_activo: Contexto del turno anterior (opcional)
+            user_context: Contexto del usuario para adaptación multi-rol (SPEC v2.0)
 
         Returns:
             PILAgentState con todos los resultados
@@ -323,6 +339,7 @@ class PILOrchestrator:
             conversation_id=conversation_id,
             user_id=user_id,
             contexto_activo=contexto_activo,
+            user_context=user_context,
         )
         state['_start_time'] = start * 1000
 

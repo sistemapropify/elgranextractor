@@ -507,14 +507,73 @@ class SkillOrchestrator:
         log.info(f"Cache invalidado: {invalidated} keys", pattern=pattern)
         return invalidated
 
-    def _check_permissions(self, skill, context: ExecutionContext) -> bool:
-        """Verifica si el contexto tiene permisos para ejecutar la skill."""
-        # Por ahora, permisos básicos. Se puede extender con lógica compleja
-        required_permissions = getattr(skill, 'required_permissions', [])
-        if not required_permissions:
-            return True
-
-        return all(perm in context.permissions for perm in required_permissions)
+    def _check_permissions(self, skill, context: ExecutionContext) -> Tuple[bool, str]:
+        """
+        Verifica permisos del usuario para ejecutar la skill.
+        
+        Evalúa:
+        1. access_level del skill vs level del usuario
+        2. required_domain del skill vs dominios del usuario
+        3. required_collection del skill vs acceso a colección del usuario
+        
+        Returns:
+            Tuple[bool, str]: (acceso_concedido, mensaje_error)
+        """
+        from ..models import User, UserIntelligenceProfile, IntelligenceCollection
+        
+        # 1. Skill pública (access_level = 0)
+        skill_level = getattr(skill, 'access_level', 1)
+        if skill_level is None or skill_level == 0:
+            return True, ""
+        
+        # 2. Obtener datos del usuario desde el context
+        user_obj = None
+        user_level = 0
+        user_domains = []
+        
+        if context.user_id:
+            try:
+                user_obj = User.objects.get(id=context.user_id)
+                if user_obj.role:
+                    user_level = user_obj.role.default_level or 1
+                    user_domains = user_obj.role.default_domains or []
+            except User.DoesNotExist:
+                pass
+        
+        # 3. Verificar level de acceso
+        if user_level < skill_level:
+            return False, (
+                f"No tienes permisos para acceder a '{getattr(skill, 'name', 'desconocida')}'. "
+                f"Nivel requerido: {skill_level}. Tu nivel: {user_level}."
+            )
+        
+        # 4. Verificar dominio (si required_domain está definido)
+        required_domain = getattr(skill, 'required_domain', None)
+        if required_domain:
+            if required_domain not in user_domains:
+                return False, (
+                    f"No tienes permisos para acceder a '{getattr(skill, 'name', 'desconocida')}'. "
+                    f"Requiere dominio: {required_domain}. "
+                    f"Tus dominios: {', '.join(user_domains) or 'ninguno'}."
+                )
+        
+        # 5. Verificar acceso a colección (si required_collection está definido)
+        required_collection = getattr(skill, 'required_collection', None)
+        if required_collection:
+            try:
+                collection = IntelligenceCollection.objects.get(name=required_collection)
+                if not collection.is_public:
+                    if user_obj:
+                        profile = UserIntelligenceProfile.objects.filter(user=user_obj).first()
+                        if profile and not profile.can_access_collection(collection):
+                            return False, (
+                                f"No tienes acceso a la colección '{required_collection}'. "
+                                f"Contacta a tu supervisor para solicitar acceso."
+                            )
+            except IntelligenceCollection.DoesNotExist:
+                pass  # Colección no existe, permitir acceso
+        
+        return True, ""
 
     def _check_permissions_for_info(self, skill_info: Dict[str, Any], context: ExecutionContext) -> bool:
         """Verifica permisos para mostrar información de skill."""

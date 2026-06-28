@@ -9,9 +9,85 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ROLE PROMPTS — Sistema Experto Multi-Rol (SPEC v2.0)
+# ═══════════════════════════════════════════════════════════════════════════════
+# El FormatterAgent adapta el LENGUAJE de la respuesta según el rol del usuario,
+# pero NO limita la funcionalidad. Un CEO puede buscar propiedades y un agente
+# puede consultar normativas, pero cada uno recibe la respuesta en su estilo.
+#
+# Cada rol tiene una instrucción de personalización que se inyecta en el
+# system prompt de DeepSeek. Esto asegura que la MISMA skill devuelva
+# resultados diferentes según quién pregunta.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+ROLE_SYSTEM_PROMPTS: Dict[str, str] = {
+    'ceo': (
+        "Eres un asistente de dirección ejecutiva para el CEO de Propifai.\n"
+        "ADAPTA TU LENGUAJE A: ejecutivo, estratégico, orientado a métricas.\n"
+        "- Enfócate en visión general, KPIs, tendencias y oportunidades de negocio.\n"
+        "- Usa un tono profesional con resúmenes ejecutivos.\n"
+        "- Destaca datos clave: ventas, crecimiento, eficiencia del equipo.\n"
+        "- Incluye recomendaciones estratégicas cuando sea relevante.\n"
+        "- Evita tecnicismos innecesarios, ve al grano."
+    ),
+    'abogado': (
+        "Eres un asistente legal especializado en derecho inmobiliario peruano.\n"
+        "ADAPTA TU LENGUAJE A: jurídico, preciso, basado en normativa.\n"
+        "- Usa terminología legal apropiada.\n"
+        "- Cita normativas y artículos relevantes cuando aplican.\n"
+        "- Sé preciso y cuidado con las palabras.\n"
+        "- Cuando sea relevante, menciona implicaciones legales.\n"
+        "- Mantén un tono formal pero accesible."
+    ),
+    'marketero': (
+        "Eres un asistente de marketing digital especializado en PropTech.\n"
+        "ADAPTA TU LENGUAJE A: marketing, enfocado en campañas y conversiones.\n"
+        "- Enfócate en métricas de campañas, ROI, alcance y conversiones.\n"
+        "- Usa terminología de marketing digital (CTR, CPC, ROI, leads).\n"
+        "- Destaca oportunidades de optimización de campañas.\n"
+        "- Da recomendaciones accionables para mejorar resultados.\n"
+        "- Incluye comparativas con períodos anteriores cuando sea relevante."
+    ),
+    'agente': (
+        "Eres un asistente inmobiliario de ventas para agentes de Propifai.\n"
+        "ADAPTA TU LENGUAJE A: comercial, cercano, orientado a propiedades.\n"
+        "- Enfócate en propiedades, precios, características y disponibilidad.\n"
+        "- Usa un tono amable y servicial.\n"
+        "- Destaca oportunidades de venta y propiedades destacadas.\n"
+        "- Incluye información práctica: visitas, contacto, documentos.\n"
+        "- Sé directo y orientado a ayudar al agente a cerrar ventas."
+    ),
+    'jefe': (
+        "Eres un asistente de gestión de equipos para supervisores de Propifai.\n"
+        "ADAPTA TU LENGUAJE A: gerencial, orientado a rendimiento de equipo.\n"
+        "- Enfócate en métricas de equipo, desempeño de agentes y gestión.\n"
+        "- Destaca logros del equipo y áreas de mejora.\n"
+        "- Incluye recomendaciones de gestión.\n"
+        "- Usa un tono profesional orientado a resultados.\n"
+        "- Compara rendimiento entre agentes cuando sea relevante."
+    ),
+    'ti': (
+        "Eres un asistente técnico para el equipo de TI de Propifai.\n"
+        "ADAPTA TU LENGUAJE A: técnico, preciso, orientado a debugging.\n"
+        "- Usa terminología técnica apropiada.\n"
+        "- Incluye detalles relevantes: códigos de error, stack traces, timestamps.\n"
+        "- Sé preciso en diagnósticos y recomendaciones.\n"
+        "- Prioriza información accionable para resolver incidencias.\n"
+        "- Mantén un tono profesional y técnico."
+    ),
+}
+
+# Prompt genérico para roles no definidos o usuarios sin rol
+DEFAULT_ROLE_PROMPT = (
+    "Eres un asistente inmobiliario experto en Arequipa, Perú.\n"
+    "Responde de forma natural, clara y útil.\n"
+    "Adapta tu lenguaje al contexto de la consulta."
+)
 
 
 class FormatterAgent:
@@ -181,6 +257,40 @@ class FormatterAgent:
         return ""
 
     @classmethod
+    def _get_role_system_prompt(cls, state: Dict[str, Any]) -> str:
+        """
+        Obtiene el system prompt adaptado al rol del usuario.
+
+        SPEC v2.0 — Sistema Experto Multi-Rol:
+        El FormatterAgent adapta el LENGUAJE según el rol, pero NO limita
+        la funcionalidad. La misma skill se ejecuta para todos los roles,
+        pero la respuesta se personaliza.
+
+        Args:
+            state: Dict del estado que contiene user_context (rol, level, etc.)
+
+        Returns:
+            System prompt con instrucciones de lenguaje según el rol
+        """
+        user_context = state.get('user_context', {}) if isinstance(state, dict) else {}
+        rol = user_context.get('rol') or user_context.get('role', '').lower()
+        nombre_rol = user_context.get('nombre_rol', '').lower()
+        role_key = rol or nombre_rol
+
+        if role_key in ROLE_SYSTEM_PROMPTS:
+            return ROLE_SYSTEM_PROMPTS[role_key]
+
+        level = user_context.get('level', 1)
+        if level >= 5:
+            return ROLE_SYSTEM_PROMPTS['ceo']
+        elif level >= 4:
+            return ROLE_SYSTEM_PROMPTS['ti']
+        elif level >= 3:
+            return ROLE_SYSTEM_PROMPTS['jefe']
+
+        return ROLE_SYSTEM_PROMPTS.get('agente', DEFAULT_ROLE_PROMPT)
+
+    @classmethod
     def _format_skill_response(
         cls, skill_name: str, resultados: list, state: Dict[str, Any]
     ) -> str:
@@ -195,13 +305,13 @@ class FormatterAgent:
             prompt = cls._build_generic_skill_prompt(skill_name, resultados, state)
 
         memory_context = cls._build_memory_context(state)
+        role_prompt = cls._get_role_system_prompt(state)
 
         try:
             success, api_message, api_response = LLMService._call_deepseek_api(
                 messages=[{"role": "user", "content": prompt}],
                 system_prompt=(
-                    "Eres un asistente inmobiliario especializado en el mercado "
-                    "de Arequipa, Perú. Responde de forma natural y amigable.\n\n"
+                    f"{role_prompt}\n\n"
                     f"{memory_context}\n\n"
                     "INSTRUCCIONES:\n"
                     "- Si el usuario pregunta quién es o cómo se llama, revisa la "
@@ -235,8 +345,9 @@ class FormatterAgent:
         from ..services.llm import LLMService
         from ..services.prompts import format_rag_context
 
-        # Agregar contexto de memoria del usuario
+        # Agregar contexto de memoria del usuario y prompt de rol
         memory_context = cls._build_memory_context(state)
+        role_prompt = cls._get_role_system_prompt(state)
 
         # Construir contexto RAG si hay resultados
         rag_context = ""
@@ -261,8 +372,7 @@ class FormatterAgent:
             success, api_message, api_response = LLMService._call_deepseek_api(
                 messages=[{"role": "user", "content": prompt}],
                 system_prompt=(
-                    "Eres un asistente inmobiliario especializado en el mercado "
-                    "de Arequipa, Perú. Responde de forma natural y amigable.\n\n"
+                    f"{role_prompt}\n\n"
                     f"{memory_context}\n\n"
                     "INSTRUCCIONES:\n"
                     "- Si el usuario te pregunta quién es o datos personales, "

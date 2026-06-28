@@ -47,6 +47,7 @@ class RoutingResult:
     n_templates_evaluated: int      # Total de templates evaluados
     latency_ms: float               # Tiempo de clasificación
     fallback_used: bool             # True si se usó fallback por keywords
+    user_context: Optional[Dict[str, Any]] = None  # Contexto del usuario (rol, level, domains)
     timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
 
     def to_log(self) -> Dict[str, Any]:
@@ -150,6 +151,191 @@ _DEFAULT_SKILL_TEMPLATES: Dict[str, List[str]] = {
         'recibí un mensaje de un cliente interesado en terrenos',
         'quiero guardar el requerimiento de un cliente',
         'un cliente me contactó buscando alquiler',
+    ],
+    # ── NUEVAS SKILLS DEL SISTEMA EXPERTO MULTI-ROL ──
+    'metricas_globales': [
+        'cómo van las ventas este mes',
+        'cuántas propiedades se vendieron este mes',
+        'dame los KPIs del mes',
+        'resumen ejecutivo de ventas',
+        'cuál es el rendimiento del mes',
+        'métricas globales del sistema',
+        'cómo le está yendo a la empresa',
+        'reporte de ventas semanal',
+        'cuántos matches se generaron hoy',
+        'estadísticas generales de la plataforma',
+    ],
+    'reporte_ventas': [
+        'genera un reporte de ventas',
+        'cuánto se ha vendido esta semana',
+        'ventas del último trimestre',
+        'comparativa de ventas mes a mes',
+        'reporte detallado de transacciones',
+        'cuántas propiedades se vendieron en junio',
+        'ventas por distrito este mes',
+        'evolución de ventas en el año',
+    ],
+    'analisis_rendimiento': [
+        'cómo está el rendimiento de la plataforma',
+        'análisis de rendimiento de agentes',
+        'qué agente vendió más este mes',
+        'ranking de agentes por ventas',
+        'rendimiento comparativo entre agentes',
+        'quién está generando más matches',
+        'top agentes del mes',
+    ],
+    'consultar_normativa': [
+        'qué dice la ley sobre alquileres',
+        'normativa de zonificación comercial',
+        'requisitos legales para alquilar',
+        'cuál es la ley de inquilinato en Perú',
+        'normas de construcción en Arequipa',
+        'qué dice el reglamento de propiedad horizontal',
+        'aspectos legales de un contrato de alquiler',
+        'consulta la normativa peruana de bienes raíces',
+        'derechos del inquilino según la ley',
+        'marco legal para compra venta de inmuebles',
+    ],
+    'revisar_contrato': [
+        'revisa este contrato de alquiler',
+        'analiza las cláusulas de este contrato',
+        'el contrato tiene alguna cláusula abusiva',
+        'revisión legal de contrato de compraventa',
+        'verifica este acuerdo de arrendamiento',
+        'qué dice este contrato en la cláusula de penalidades',
+        'revisa aspectos legales de este documento',
+    ],
+    'aspectos_legales': [
+        'qué aspectos legales debo considerar',
+        'consejos legales para comprar propiedad',
+        'qué papeles necesita una propiedad en venta',
+        'documentación necesaria para transferir',
+        'aspectos notariales de la compra',
+        'qué impuestos se pagan al comprar inmueble',
+        'costos legales de una transacción inmobiliaria',
+    ],
+    'campanas_activas': [
+        'qué campañas de Facebook están activas',
+        'cómo están rindiendo los anuncios',
+        'muéstrame las campañas de marketing activas',
+        'estado de las campañas publicitarias',
+        'campañas de Meta Ads en ejecución',
+        'qué anuncios están corriendo ahora',
+        'inversión actual en campañas digitales',
+    ],
+    'leads_generados': [
+        'cuántos leads generamos este mes',
+        'leads de las campañas de Facebook',
+        'qué campaña está generando más leads',
+        'calidad de los leads de marketing',
+        'conversión de leads a clientes',
+        'costo por lead en las campañas activas',
+        'leads por distrito y campaña',
+    ],
+    'metricas_marketing': [
+        'métricas de marketing del mes',
+        'rendimiento de las campañas publicitarias',
+        'ROI de las campañas de Meta Ads',
+        'estadísticas de Facebook Ads',
+        'alcance e impresiones de los anuncios',
+        'clic y conversiones de campañas',
+        'costo por resultado en publicidad',
+    ],
+    'mis_propiedades': [
+        'qué propiedades tengo asignadas',
+        'muéstrame mis propiedades',
+        'cuáles son mis propiedades en cartera',
+        'lista de mis propiedades activas',
+        'propiedades que tengo a mi cargo',
+        'ver mi portafolio de propiedades',
+        'mis inmuebles publicados',
+    ],
+    'mis_requerimientos': [
+        'qué requerimientos tengo pendientes',
+        'muéstrame mis clientes buscando propiedad',
+        'requerimientos que he registrado',
+        'mis leads activos',
+        'clientes que me han contactado',
+        'lista de mis requerimientos',
+    ],
+    'mis_matches': [
+        'qué matches tengo pendientes',
+        'muéstrame mis matches',
+        'cruza mis propiedades con requerimientos',
+        'tengo matches nuevos',
+        'propiedades que match con mis clientes',
+        'clientes compatibles con mis propiedades',
+        'ver mis matches del día',
+    ],
+    'portafolio_agente': [
+        'qué propiedades tiene Valery',
+        'portafolio del agente Juan Pérez',
+        'cuántas propiedades tiene cada agente',
+        'propiedades a cargo de María',
+        'portafolio de propiedades por agente',
+        'qué agentes tienen más propiedades',
+        'distribución de propiedades entre agentes',
+    ],
+    'analizar_oportunidad': [
+        'analiza esta propiedad como inversión',
+        'es buena oportunidad esta propiedad',
+        'qué rentabilidad tiene esta propiedad',
+        'análisis de inversión para este inmueble',
+        'conviene comprar esta propiedad',
+        'potencial de plusvalía de esta zona',
+        'evaluación de oportunidad inmobiliaria',
+    ],
+    'equipo_a_cargo': [
+        'cómo está mi equipo',
+        'qué agentes tengo a cargo',
+        'rendimiento de mi equipo',
+        'mis agentes están cumpliendo metas',
+        'estado del equipo de ventas',
+        'reporte de mi equipo de agentes',
+    ],
+    'desempeño_agentes': [
+        'cómo están rindiendo los agentes',
+        'desempeño del equipo comercial',
+        'qué agente necesita apoyo',
+        'evaluación de rendimiento de agentes',
+        'métricas de desempeño del equipo',
+        'agentes con bajo rendimiento este mes',
+        'top y bottom agentes del período',
+    ],
+    'reporte_equipo': [
+        'genera reporte del equipo',
+        'reporte de gestión de agentes',
+        'informe mensual del equipo',
+        'resumen de actividad del equipo',
+        'reporte consolidado de agentes',
+        'estadísticas del equipo de ventas',
+    ],
+    'logs_sistema': [
+        'muéstrame los logs del sistema',
+        'logs de actividad reciente',
+        'historial de eventos del sistema',
+        'bitácora de operaciones',
+        'registro de accesos al sistema',
+        'logs de ejecución de skills',
+        'actividad del sistema de inteligencia',
+    ],
+    'errores_recientes': [
+        'hubo errores en el sistema',
+        'errores recientes en la plataforma',
+        'fallos en ejecución de skills',
+        'errores de conexión con DeepSeek',
+        'excepciones en el sistema',
+        'problemas técnicos reportados',
+        'tracebacks y errores de hoy',
+    ],
+    'estado_servicios': [
+        'cómo está funcionando el sistema',
+        'estado de los servicios',
+        'servicios activos y su estado',
+        'health check del sistema',
+        'qué servicios están caídos',
+        'monitoreo de servicios en tiempo real',
+        'estado de celery y redis',
     ],
     '_saludo': [
         'hola',
@@ -327,22 +513,26 @@ class SemanticSkillRouter:
 
     # ── Clasificación ─────────────────────────────────────────────────────
 
-    def classify(self, message: str) -> RoutingResult:
+    def classify(self, message: str, user_context: Optional[Dict[str, Any]] = None) -> RoutingResult:
         """
         Clasifica un mensaje de usuario contra templates de skills.
 
-        Estrategia:
+        Estrategia (SPEC v2.0 - Sistema Experto Multi-Rol):
         1. Generar embedding del mensaje (mode='query')
-        2. Calcular similitud coseno contra todos los templates cacheados
+        2. Calcular similitud coseno contra TODOS los templates (sin filtrar por rol)
         3. Tomar el mejor score
         4. Si supera threshold, retornar skill
         5. Si no, retornar None (RAG puro)
+        6. user_context se incluye en el resultado para que el SkillOrchestrator
+           verifique permisos después (no se filtra aquí)
 
         Args:
             message: Mensaje del usuario en lenguaje natural
+            user_context: Dict opcional con datos del usuario (rol, level, domains).
+                          NO se usa para filtrar, solo se propaga al resultado.
 
         Returns:
-            RoutingResult con la skill detectada (o None) y métricas
+            RoutingResult con la skill detectada (o None), métricas y user_context
         """
         import time
         start = time.time()
@@ -354,6 +544,7 @@ class SemanticSkillRouter:
                 skill_name=None, score=0.0, threshold=self.threshold,
                 accepted=False, matched_template='',
                 n_templates_evaluated=0, latency_ms=0.0, fallback_used=False,
+                user_context=user_context,
             )
 
         # ── 1. Generar embedding del mensaje ──
@@ -367,7 +558,7 @@ class SemanticSkillRouter:
                 f"No se pudo generar embedding para mensaje. "
                 f"Usando fallback keyword. message='{message[:80]}'"
             )
-            return self._keyword_fallback(message, start)
+            return self._keyword_fallback(message, start, user_context)
 
         # Normalizar query embedding
         query_embedding = np.frombuffer(query_embedding_bytes, dtype=np.float32)
@@ -375,9 +566,10 @@ class SemanticSkillRouter:
         if query_norm > 0:
             query_embedding = query_embedding / query_norm
         else:
-            return self._keyword_fallback(message, start)
+            return self._keyword_fallback(message, start, user_context)
 
         # ── 2. Calcular similitud coseno contra todos los templates ──
+        # SPEC v2.0: NO filtrar por rol. Usar TODOS los templates.
         best_score = 0.0
         best_skill = None
         best_template = ''
@@ -413,6 +605,7 @@ class SemanticSkillRouter:
             n_templates_evaluated=n_evaluated,
             latency_ms=elapsed,
             fallback_used=False,
+            user_context=user_context,
         )
 
         if accepted:
@@ -432,7 +625,8 @@ class SemanticSkillRouter:
 
     # ── Fallback a keywords ──────────────────────────────────────────────
 
-    def _keyword_fallback(self, message: str, start: float) -> RoutingResult:
+    def _keyword_fallback(self, message: str, start: float,
+                          user_context: Optional[Dict[str, Any]] = None) -> RoutingResult:
         """
         Fallback a keyword matching cuando no hay embedding disponible.
 
@@ -491,6 +685,7 @@ class SemanticSkillRouter:
             n_templates_evaluated=sum(len(v) for v in keywords.values()),
             latency_ms=elapsed,
             fallback_used=True,
+            user_context=user_context,
         )
 
     # ── Propiedades ──────────────────────────────────────────────────────
@@ -510,10 +705,213 @@ class SemanticSkillRouter:
             'n_skills': len(self.templates),
             'threshold': self.threshold,
         }
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Singleton global
+    
+        # ── Multi-Skill Orchestration (SPEC v2.1) ────────────────────────────
+    
+        # Conectores que indican consulta compuesta
+        _MULTI_CONNECTORS = [
+            ' y ', ' además ', ' también ', ' y además ', ' y luego ',
+            ' y también ', ' , ', ';',
+        ]
+    
+        # Verbos que indican acción independiente
+        _MULTI_VERBS = [
+            'muestra', 'muestrame', 'busca', 'analiza', 'compara',
+            'listame', 'dime', 'quiero ver', 'necesito',
+        ]
+    
+        def _es_consulta_compuesta(self, query: str) -> bool:
+            """Detecta si una consulta requiere múltiples skills."""
+            if not query:
+                return False
+            q = query.lower().strip()
+    
+            # 1. Detectar conectores compuestos
+            for conn in self._MULTI_CONNECTORS:
+                if conn in q:
+                    return True
+    
+            # 2. Detectar múltiples verbos de acción
+            verbos_encontrados = 0
+            for v in self._MULTI_VERBS:
+                if v in q:
+                    verbos_encontrados += 1
+                    if verbos_encontrados >= 2:
+                        return True
+    
+            return False
+    
+        def _descomponer_consulta(self, query: str) -> List[str]:
+            """
+            Descompone una consulta compuesta en sub-consultas usando heurísticas.
+    
+            OPCIÓN A (por defecto): Reglas heurísticas rápidas
+            OPCIÓN B: Fallback a LLM si la heurística no es suficiente
+            """
+            q = query.strip()
+    
+            # Intentar dividir por conectores principales
+            for conn in [' y además ', ' y también ', ' y luego ', ' y ']:
+                if conn in q.lower():
+                    parts = q.lower().split(conn, 1)  # Solo primera división
+                    if len(parts) == 2 and len(parts[0]) > 5 and len(parts[1]) > 5:
+                        return [parts[0].strip(), parts[1].strip()]
+    
+            # Dividir por punto y coma
+            if ';' in q:
+                parts = [p.strip() for p in q.split(';') if len(p.strip()) > 5]
+                if len(parts) >= 2:
+                    return parts
+    
+            # Dividir por coma si hay verbos múltiples
+            if ',' in q:
+                verbos_en_primera = sum(1 for v in self._MULTI_VERBS if v in q.split(',')[0])
+                if verbos_en_primera >= 1:
+                    parts = [p.strip() for p in q.split(',') if len(p.strip()) > 5]
+                    if len(parts) >= 2:
+                        return parts
+    
+            # No se pudo descomponer — retornar la consulta completa
+            return [q]
+    
+        def classify_multi(
+            self,
+            message: str,
+            user_context: Optional[Dict[str, Any]] = None,
+        ) -> Dict[str, Any]:
+            """
+            Clasifica una consulta que puede requerir múltiples skills.
+    
+            SPEC v2.1 — Multi-Skill Orchestration:
+            Detecta consultas compuestas, las descompone en sub-consultas,
+            clasifica cada una independientemente, y construye un plan
+            de ejecución con dependencias.
+    
+            Args:
+                message: Mensaje del usuario en lenguaje natural
+                user_context: Contexto del usuario (rol, level, domains)
+    
+            Returns:
+                Dict con plan de ejecución:
+                {
+                    'is_multi': bool,
+                    'execution_mode': 'sequential' | 'parallel',
+                    'skills': [
+                        {
+                            'skill': str,
+                            'order': int,
+                            'params': dict,
+                            'depends_on': Optional[str],
+                            'sub_query': str,
+                            'score': float,
+                        }
+                    ],
+                    'original_query': str
+                }
+            """
+            # Paso 1: Detectar si es consulta compuesta
+            if not self._es_consulta_compuesta(message):
+                # Consulta simple: clasificar normalmente
+                result = self.classify(message, user_context)
+                return {
+                    'is_multi': False,
+                    'execution_mode': 'single',
+                    'skills': [{
+                        'skill': result.skill_name,
+                        'order': 1,
+                        'params': {},
+                        'depends_on': None,
+                        'sub_query': message,
+                        'score': result.score,
+                    }] if result.accepted else [],
+                    'original_query': message,
+                }
+    
+            # Paso 2: Descomponer en sub-consultas
+            sub_queries = self._descomponer_consulta(message)
+    
+            # Paso 3: Clasificar cada sub-consulta
+            skills_plan = []
+            for i, sub_q in enumerate(sub_queries):
+                result = self.classify(sub_q, user_context)
+                if result.accepted and result.skill_name:
+                    skills_plan.append({
+                        'skill': result.skill_name,
+                        'order': i + 1,
+                        'params': {'semantic_query': sub_q},
+                        'depends_on': None,  # Se determina después
+                        'sub_query': sub_q,
+                        'score': result.score,
+                    })
+    
+            # Paso 4: Determinar modo de ejecución y dependencias
+            if len(skills_plan) <= 1:
+                # Solo una skill válida
+                return {
+                    'is_multi': False,
+                    'execution_mode': 'single',
+                    'skills': skills_plan,
+                    'original_query': message,
+                }
+    
+            # Detectar si hay dependencias entre skills
+            # Regla: si hay skills del mismo tipo (busqueda+analisis) → secuencial
+            categories_used = set()
+            for s in skills_plan:
+                skill_obj = None
+                try:
+                    from .registry import SkillRegistry
+                    skill_obj = SkillRegistry().get_by_name(s['skill'])
+                except Exception:
+                    pass
+                cat = getattr(skill_obj, 'category', 'custom') if skill_obj else 'custom'
+                categories_used.add(cat)
+    
+            # Si todas son reportes → paralelo
+            # Si hay mix de búsqueda + análisis → secuencial
+            has_search = any(
+                getattr(SkillRegistry().get_by_name(s['skill']), 'category', '') == 'busqueda'
+                for s in skills_plan
+            ) if skills_plan else False
+    
+            has_analysis = any(
+                getattr(SkillRegistry().get_by_name(s['skill']), 'category', '') == 'reporte'
+                for s in skills_plan
+            ) if skills_plan else False
+    
+            if has_search and has_analysis:
+                # Modo secuencial: búsqueda genera datos para análisis
+                execution_mode = 'sequential'
+                # El primer skill de búsqueda no depende de nadie
+                # Los skills de análisis dependen del último de búsqueda
+                last_search = None
+                for s in skills_plan:
+                    skill_obj = SkillRegistry().get_by_name(s['skill'])
+                    cat = getattr(skill_obj, 'category', '') if skill_obj else ''
+                    if cat == 'busqueda':
+                        last_search = s['skill']
+                    elif cat == 'reporte' and last_search:
+                        s['depends_on'] = last_search
+            else:
+                # Skills independientes → paralelo
+                execution_mode = 'parallel'
+    
+            logger.info(
+                f"[SemanticRouter] Multi-skill detectado: "
+                f"{len(skills_plan)} skills, modo={execution_mode}, "
+                f"skills={[s['skill'] for s in skills_plan]}"
+            )
+    
+            return {
+                'is_multi': True,
+                'execution_mode': execution_mode,
+                'skills': skills_plan,
+                'original_query': message,
+            }
+    
+    
+    # ═══════════════════════════════════════════════════════════════════════════════
+    # Singleton global
 # ═══════════════════════════════════════════════════════════════════════════════
 
 _router_instance: Optional[SemanticSkillRouter] = None
