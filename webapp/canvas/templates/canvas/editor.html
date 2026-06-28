@@ -288,6 +288,13 @@ function canvasSendChat() {
     if (ld) ld.remove();
     if (data.success) {
       _canvasConvId = data.conversation_id;
+      console.log('[CanvasChat] API response:', JSON.stringify({
+        hasAction: !!data.action,
+        actionType: data.action?.type,
+        nodesCount: data.action?.nodes?.length,
+        hasHtml: !!data.html,
+        responseLen: (data.response || '').length
+      }));
       // Detectar accion de agregar nodos al canvas
       if (data.action && data.action.type === 'add_nodes') {
         executeAddNodesAction(data.action, data.response || data.html || '');
