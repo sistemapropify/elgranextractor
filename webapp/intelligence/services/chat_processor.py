@@ -675,12 +675,17 @@ class ChatProcessor:
             'ordena', 'ordenar', 'reordena', 'reordenar',
             'agrupa', 'agrupar', 'organiza', 'organizar',
             'distribuye', 'distribuir',
-            'pon en columna', 'poner en columna', 'columnas',
+            'pon en columna', 'poner en columna', 'columna', 'columnas',
             'acomoda', 'acomodar',
             'mueve', 'mover',
             'pon a la izquierda', 'pon a la derecha',
             'pon arriba', 'pon abajo',
-            'separado', 'separados', 'junto', 'juntos',
+            'separado', 'separada', 'separados', 'separadas',
+            'junto', 'junta', 'juntos', 'juntas',
+            'fila', 'vertical', 'horizontal',
+            'en circulo', 'en círculo', 'circulo', 'círculo',
+            'grilla', 'cuadricula', 'cuadrícula',
+            'esquina', 'esquinas',
         ]
         quiere_reordenar = any(p in mensaje_lower for p in INTENCION_REORDENAR)
         
@@ -688,6 +693,22 @@ class ChatProcessor:
         if es_canvas:
             props = (canvas_ctx or {}).get('propiedades', [])
             reqs = (canvas_ctx or {}).get('requerimientos', [])
+            
+            # Detectar COMBINACIÓN: agregar propiedades Y reordenarlas
+            if quiere_agregar and quiere_reordenar:
+                log.info(
+                    f"Orquestacion canvas con intención COMBINADA (agregar + reordenar): "
+                    f"{len(props)} props, {len(reqs)} reqs en el lienzo.",
+                    mensaje=ctx.message[:100],
+                )
+                return OrchestrationDecision(
+                    skill='busqueda_propiedades',
+                    params={
+                        'semantic_query': ctx.message,
+                        'modo_retorno': 'accion_agregar_y_reordenar',
+                        'reordenar_message': ctx.message,
+                    },
+                )
             
             if quiere_agregar:
                 log.info(
@@ -780,10 +801,36 @@ class ChatProcessor:
         if skill_name == 'usar_contexto_canvas':
             canvas_props = (params or {}).get('canvas_propiedades', [])
             canvas_reqs = (params or {}).get('canvas_requerimientos', [])
+            semantic_query = (params or {}).get('semantic_query', '')
             log.info(
                 f"Usando contexto canvas: {len(canvas_props)} props, {len(canvas_reqs)} reqs",
                 trace_id=trace_id,
             )
+            
+            # Buscar tambien en colecciones RAG (normativas, skills, etc.)
+            rag_results = None
+            if semantic_query:
+                try:
+                    from .rag import RAGService
+                    # Buscar en todas las colecciones activas EXCEPTO las de propiedades
+                    # (el contexto del canvas ya tiene las propiedades)
+                    colecciones_extra = [
+                        'normativas_legales',
+                    ]
+                    rag_results = RAGService.search_dynamic(
+                        query=semantic_query,
+                        collection_names=colecciones_extra,
+                        top_k=5,
+                    )
+                    if rag_results:
+                        log.info(
+                            f"RAG extra encontrado: {len(rag_results)} docs de "
+                            f"{set(r.get('collection_name','') for r in rag_results)}",
+                            trace_id=trace_id,
+                        )
+                except Exception as e:
+                    log.warning(f"Error en RAG extra para canvas: {e}", trace_id=trace_id)
+            
             # Formatear como si fuera resultado de busqueda_propiedades
             data = {
                 'total_propiedades': len(canvas_props),
@@ -791,6 +838,7 @@ class ChatProcessor:
                 'propiedades': canvas_props,
                 'requerimientos': canvas_reqs,
                 'origen': 'canvas_context',
+                'rag_extras': rag_results or [],
             }
             return {
                 'success': True,
@@ -798,6 +846,7 @@ class ChatProcessor:
                 'message': f'Se encontraron {len(canvas_props)} propiedades y {len(canvas_reqs)} requerimientos en el lienzo.',
                 'skill_name': 'usar_contexto_canvas',
                 'params': params,
+                'rag_results': rag_results,
             }
 
         # Skill virtual: reordenar nodos en el canvas
@@ -814,12 +863,25 @@ class ChatProcessor:
             
             # Detectar número de columnas
             import re
+            
+            # Detectar "una columna", "sola columna", "fila vertical", "vertical" → 1 columna
+            if any(p in mensaje for p in ['fila vertical', 'una columna', 'una fila', 'sola fila', 'sola columna', 'vertical']):
+                columns = 1
+                strategy = 'vertical'
+            
+            # Detectar número explícito de columnas: "3 columnas", "5 columnas"
             col_match = re.search(r'(\d+)\s*columna', mensaje)
             if col_match:
                 columns = int(col_match.group(1))
             
+            # Detectar separación entre tarjetas (para ambos modos: reordenar y combinado)
+            sep_match_restore = re.search(r'(\d+)\s*centimetr', mensaje)
+            gap_value = None
+            if sep_match_restore:
+                gap_value = int(sep_match_restore.group(1))
+            
             # Detectar estrategia: agrupar
-            if any(p in mensaje for p in ['agrupa', 'agrupar', 'separado', 'separados', 'junto', 'juntos', 'grupo']):
+            if any(p in mensaje for p in ['agrupa', 'agrupar', 'separado', 'separada', 'separados', 'separadas', 'junto', 'junta', 'juntos', 'juntas', 'grupo']):
                 strategy = 'group'
                 if 'distrito' in mensaje or 'zona' in mensaje:
                     group_by = 'district_name'
@@ -854,8 +916,13 @@ class ChatProcessor:
                     sort_order = 'asc'
             
             # Detectar disposición en grilla explícita
-            if 'columna' in mensaje or 'grilla' in mensaje or 'cuadricula' in mensaje or 'distribuye' in mensaje or 'distribuir' in mensaje:
-                strategy = 'grid'
+            # (no sobreescribir 'vertical' si ya se detectó arriba)
+            if strategy != 'vertical':
+                if 'columna' in mensaje or 'grilla' in mensaje or 'cuadricula' in mensaje or 'distribuye' in mensaje or 'distribuir' in mensaje or 'circulo' in mensaje or 'círculo' in mensaje:
+                    if any(p in mensaje for p in ['circulo', 'círculo', 'en circulo', 'en círculo']):
+                        strategy = 'circle'
+                    else:
+                        strategy = 'grid'
             
             action = {
                 'type': 'rearrange_nodes',
@@ -867,6 +934,8 @@ class ChatProcessor:
                 action['sort_order'] = sort_order
             if group_by:
                 action['group_by'] = group_by
+            if gap_value:
+                action['gap'] = gap_value
             
             log.info(
                 f"Accion rearrange_nodes construida: strategy={strategy}, "
@@ -968,92 +1037,172 @@ class ChatProcessor:
                             trace_id=trace_id,
                         )
                     
-                    # NUEVO: Si el modo de retorno es 'accion_agregar',
+                    # NUEVO: Si el modo de retorno requiere agregar nodos al canvas,
                     # construir estructura de acción para que el frontend
-                    # agregue nodos al canvas
-                    if params.get('modo_retorno') == 'accion_agregar':
-                        action_nodes = []
-                        # Usar skill_result.data (la lista original de busqueda_propiedades)
-                        # en lugar de resultado['data'] que puede haber sido sobrescrito
-                        # por formatear_propiedades (que retorna un dict sin 'propiedades').
-                        propiedades_data = skill_result.data
-                        props_list = []
-                        if isinstance(propiedades_data, list):
-                            props_list = propiedades_data
-                        elif isinstance(propiedades_data, dict):
-                            props_list = propiedades_data.get('propiedades', [])
-                        
-                        for prop in props_list[:10]:  # Máximo 10 nodos
-                            fv = prop.get('field_values', prop)
-                            source_id = prop.get('source_id') or fv.get('_source_id')
-                            if not source_id:
-                                continue
-                            # Pasar TODOS los field_values como data del nodo.
-                            # createPropNode() usa:
-                            #   - data.title, data.direction, data.price, data.currency
-                            #   - data._imagen_url o data.code para la imagen
-                            #   - data[campo] para cada campo personalizado
-                            node_data = dict(fv) if isinstance(fv, dict) else {'title': str(fv)}
-                            
-                            # Normalizar currency para formatPrice (espera USD/PEN)
-                            cur_name = node_data.get('currency_name', '')
-                            if cur_name in ('Soles', 'PEN'):
-                                node_data['currency'] = 'PEN'
-                            elif cur_name in ('Dólares', 'Dolares', 'USD'):
-                                node_data['currency'] = 'USD'
-                            elif not node_data.get('currency'):
-                                node_data['currency'] = cur_name
-                            
-                            # Construir _imagen_url (misma lógica que canvas/views.py:api_propiedades)
-                            # 1. Query a property_media para primera imagen
-                            # 2. Fallback: code-based URL en Azure Blob
-                            MEDIA_BASE = "https://propifymedia01.blob.core.windows.net/media"
-                            img_url = None
-                            code = node_data.get('code')
-                            try:
-                                sid_int = int(source_id)
-                                from django.db import connections
-                                with connections['propifai'].cursor() as cursor:
-                                    cursor.execute(
-                                        "SELECT MIN(pm.[file]) FROM property_media pm "
-                                        "WHERE pm.property_id = %s AND pm.media_type = 'image'",
-                                        [sid_int]
-                                    )
-                                    row = cursor.fetchone()
-                                    if row and row[0]:
-                                        file_path = row[0]
-                                        if file_path.startswith('/'):
-                                            file_path = file_path[1:]
-                                        img_url = f"{MEDIA_BASE}/{file_path}"
-                            except Exception:
-                                pass
-                            
-                            # Fallback: construir desde code
-                            if not img_url and code:
-                                code_str = str(code)
-                                if any(code_str.lower().endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.webp']):
-                                    img_url = f"{MEDIA_BASE}/{code_str}"
-                                else:
-                                    img_url = f"{MEDIA_BASE}/{code_str}.jpg"
-                            
-                            node_data['_imagen_url'] = img_url
-                            
-                            action_nodes.append({
-                                'node_type': 'propiedad',
-                                'source_id': sid_int if isinstance(source_id, (int, str)) and str(source_id).isdigit() else source_id,
-                                'data': node_data,
-                            })
-                        
-                        if action_nodes:
-                            resultado['action'] = {
-                                'type': 'add_nodes',
-                                'nodes': action_nodes,
-                                'position_strategy': 'cascade',
-                            }
-                            log.info(
-                                f"Acción add_nodes construida: {len(action_nodes)} propiedades",
-                                trace_id=trace_id,
-                            )
+                    # agregue nodos automáticamente.
+                    # Aplica tanto para 'accion_agregar' como 'accion_agregar_y_reordenar'.
+                    MODO_AGREGAR = ('accion_agregar', 'accion_agregar_y_reordenar')
+                    if params.get('modo_retorno') in MODO_AGREGAR:
+                    	action_nodes = []
+                    	# Usar skill_result.data (la lista original de busqueda_propiedades)
+                    	# en lugar de resultado['data'] que puede haber sido sobrescrito
+                    	# por formatear_propiedades (que retorna un dict sin 'propiedades').
+                    	propiedades_data = skill_result.data
+                    	props_list = []
+                    	if isinstance(propiedades_data, list):
+                    		props_list = propiedades_data
+                    	elif isinstance(propiedades_data, dict):
+                    		props_list = propiedades_data.get('propiedades', [])
+                    	
+                    	for prop in props_list[:10]:  # Máximo 10 nodos
+                    		fv = prop.get('field_values', prop)
+                    		source_id = prop.get('source_id') or fv.get('_source_id')
+                    		if not source_id:
+                    			continue
+                    		# Pasar TODOS los field_values como data del nodo.
+                    		# createPropNode() usa:
+                    		#   - data.title, data.direction, data.price, data.currency
+                    		#   - data._imagen_url o data.code para la imagen
+                    		#   - data[campo] para cada campo personalizado
+                    		node_data = dict(fv) if isinstance(fv, dict) else {'title': str(fv)}
+                    		# ── Sanitizar valores no serializables a JSON ──
+                    		# Los field_values pueden contener Decimal, datetime, UUID, etc.
+                    		# que causan TypeError al serializar JSON en DRF Response.
+                    		# Si no se sanitizan, el backend devuelve error 500 con HTML
+                    		# en lugar de JSON, y el frontend muestra "Error de conexión".
+                    		from decimal import Decimal
+                    		from datetime import datetime, date
+                    		import uuid
+                    		for k, v in list(node_data.items()):
+                    			if isinstance(v, (Decimal,)):
+                    				node_data[k] = float(v) if v is not None else None
+                    			elif isinstance(v, (datetime, date)):
+                    				node_data[k] = v.isoformat() if v is not None else None
+                    			elif isinstance(v, uuid.UUID):
+                    				node_data[k] = str(v) if v is not None else None
+                    			elif v is not None and not isinstance(v, (str, int, float, bool, list, dict, type(None))):
+                    				# Cualquier otro tipo no serializable → convertir a string
+                    				try:
+                    					json.dumps(v)
+                    				except (TypeError, ValueError):
+                    					node_data[k] = str(v)
+                    		
+                    		# Normalizar currency para formatPrice (espera USD/PEN)
+                    		cur_name = node_data.get('currency_name', '')
+                    		if cur_name in ('Soles', 'PEN'):
+                    			node_data['currency'] = 'PEN'
+                    		elif cur_name in ('Dólares', 'Dolares', 'USD'):
+                    			node_data['currency'] = 'USD'
+                    		elif not node_data.get('currency'):
+                    			node_data['currency'] = cur_name
+                    		
+                    		# Construir _imagen_url (misma lógica que canvas/views.py:api_propiedades)
+                    		# 1. Query a property_media para primera imagen
+                    		# 2. Fallback: code-based URL en Azure Blob
+                    		MEDIA_BASE = "https://propifymedia01.blob.core.windows.net/media"
+                    		img_url = None
+                    		code = node_data.get('code')
+                    		try:
+                    			sid_int = int(source_id)
+                    			from django.db import connections
+                    			with connections['propifai'].cursor() as cursor:
+                    				cursor.execute(
+                    					"SELECT MIN(pm.[file]) FROM property_media pm "
+                    					"WHERE pm.property_id = %s AND pm.media_type = 'image'",
+                    					[sid_int]
+                    				)
+                    				row = cursor.fetchone()
+                    				if row and row[0]:
+                    					file_path = row[0]
+                    					if file_path.startswith('/'):
+                    						file_path = file_path[1:]
+                    					img_url = f"{MEDIA_BASE}/{file_path}"
+                    		except Exception:
+                    			pass
+                    		
+                    		# Fallback: construir desde code
+                    		if not img_url and code:
+                    			code_str = str(code)
+                    			if any(code_str.lower().endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.webp']):
+                    				img_url = f"{MEDIA_BASE}/{code_str}"
+                    			else:
+                    				img_url = f"{MEDIA_BASE}/{code_str}.jpg"
+                    		
+                    		node_data['_imagen_url'] = img_url
+                    		
+                    		action_nodes.append({
+                    			'node_type': 'propiedad',
+                    			'source_id': sid_int if isinstance(source_id, (int, str)) and str(source_id).isdigit() else source_id,
+                    			'data': node_data,
+                    		})
+                    	
+                    	if action_nodes:
+                    		resultado['action'] = {
+                    			'type': 'add_nodes',
+                    			'nodes': action_nodes,
+                    			'position_strategy': 'cascade',
+                    		}
+                    		log.info(
+                    			f"Acción add_nodes construida: {len(action_nodes)} propiedades",
+                    			trace_id=trace_id,
+                    		)
+               
+                    # NUEVO: Si el modo es 'accion_agregar_y_reordenar',
+                    # construir también una acción rearrange_nodes para que
+                    # el frontend reordene las propiedades después de agregarlas
+                    # (independiente del bloque add_nodes, al mismo nivel)
+                    if params.get('modo_retorno') == 'accion_agregar_y_reordenar':
+                    	mensaje_reordenar = params.get('reordenar_message', '').lower()
+                    	import re
+                    	
+                    	strategy = 'grid'
+                    	columns = 1  # Default: una sola columna (fila vertical)
+                    	
+                    	# Detectar número de columnas
+                    	col_match = re.search(r'(\d+)\s*columna', mensaje_reordenar)
+                    	if col_match:
+                    		columns = int(col_match.group(1))
+                    	
+                    	# Detectar "fila vertical" o "una columna" → 1 columna
+                    	if any(p in mensaje_reordenar for p in ['fila vertical', 'una columna', 'una fila', 'sola fila', 'sola columna', 'vertical']):
+                    		columns = 1
+                    	
+                    	# Detectar separación entre tarjetas
+                    	sep_match = re.search(r'(\d+)\s*centimetr', mensaje_reordenar)
+                    	separacion = 10  # default 10px si menciona separación
+                    	if sep_match:
+                    		separacion = int(sep_match.group(1))
+                    	
+                    	# Detectar estrategia: agrupar
+                    	if any(p in mensaje_reordenar for p in ['agrupa', 'agrupar', 'grupo']):
+                    		strategy = 'group'
+                    		if 'distrito' in mensaje_reordenar or 'zona' in mensaje_reordenar:
+                    			group_by = 'district_name'
+                    		elif 'tipo' in mensaje_reordenar:
+                    			group_by = 'property_type_name'
+                    	else:
+                    		strategy = 'grid'
+                    	
+                    	rearrange_action = {
+                    		'type': 'rearrange_nodes',
+                    		'strategy': strategy,
+                    		'columns': columns,
+                    	}
+                    	if separacion != 10:
+                    		rearrange_action['gap'] = separacion
+                    	
+                    	# Incluir la acción de reordenar en el resultado
+                    	# Como el frontend solo procesa data.action (una sola acción),
+                    	# guardamos rearrange como metadata para que el frontend
+                    	# la ejecute después de add_nodes
+                    	if resultado.get('action'):
+                    		resultado['action']['rearrange'] = rearrange_action
+                    	
+                    	log.info(
+                    		f"Acción rearrange_nodes construida (combinada): "
+                    		f"{columns} col(s), strategy={strategy}",
+                    		trace_id=trace_id,
+                    	)
 
                 return resultado
 
@@ -1316,6 +1465,17 @@ class ChatProcessor:
                     lines.append(f"  {key}: {value}")
         else:
             lines.append(f"  Datos: {str(data)}")
+
+        # ── Resultados RAG extra (normativas, skills, etc.) ──
+        rag_results = resultados.get('rag_results')
+        if rag_results:
+            lines.append(f"  Documentos de referencia ({len(rag_results)}):")
+            for i, doc in enumerate(rag_results[:10], 1):
+                content = doc.get('content', '')[:300]
+                collection = doc.get('collection_name', '')
+                similarity = doc.get('similarity', 0)
+                lines.append(f"    [{i}] [{collection}] (similitud: {similarity:.2f})")
+                lines.append(f"        {content}")
 
         return "\n".join(lines)
 

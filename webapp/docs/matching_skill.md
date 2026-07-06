@@ -13,6 +13,7 @@
 9. [Endpoints API y Vistas](#9-endpoints-api-y-vistas)
 10. [Constantes y Configuración Global](#10-constantes-y-configuración-global)
 
+
 ---
 
 ## 1. Arquitectura General

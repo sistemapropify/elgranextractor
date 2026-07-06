@@ -27,6 +27,7 @@ PUBLIC_PATHS = [
     r'^/market-analysis/',       # Market analysis (heatmap, dashboard) público
     r'^/whatsapp-extractor/',    # Extractor WhatsApp (upload, dashboard, logs)
     r'^/intelligence/skills/dashboard/',  # Dashboard de skills (público, tiene modal de login)
+    r'^/intelligence/skills/api/',        # API de skills (stats, logs, metrics) — público para el dashboard
     r'^/intelligence/chat-web/',    # Chat web API (público, autenticación por user_id)
     r'^/matching/',              # Matching dashboard y calendario (público)
 ]

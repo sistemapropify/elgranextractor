@@ -109,6 +109,7 @@
         <div class="cv-label" style="margin-top:8px">Creado</div>
         <div style="color:var(--cv-text-muted);font-size:12px">{{ lienzo.creado_en|date:"d/m/Y H:i" }}</div>
         <button class="cv-btn" style="margin-top:auto;color:var(--cv-block)" id="btn-archive">Archivar lienzo</button>
+        <button class="cv-btn" style="margin-top:4px;color:var(--cv-warning)" id="btn-clear-canvas">🧹 Limpiar lienzo</button>
       </div>
 
       <!-- Pestaña Chat -->
@@ -199,21 +200,41 @@
   </div>
 </div>
 
+<!-- Galería de imágenes (carrusel) -->
+<div class="cv-gallery" id="cv-gallery">
+  <div class="cv-gallery__header">
+    <span class="cv-gallery__title">Galería de imágenes</span>
+    <span class="cv-gallery__counter" id="cv-gallery-counter">0 / 0</span>
+    <button class="cv-gallery__close" onclick="closeGallery()">✕</button>
+  </div>
+  <div class="cv-gallery__body">
+    <div class="cv-gallery__thumbs" id="cv-gallery-thumbs"></div>
+    <div class="cv-gallery__main" id="cv-gallery-main">
+      <button class="cv-gallery__nav cv-gallery__nav--prev" onclick="galleryPrev()">‹</button>
+      <button class="cv-gallery__nav cv-gallery__nav--next" onclick="galleryNext()">›</button>
+    </div>
+  </div>
+</div>
+
+<!-- Pantalla completa -->
+<div class="cv-gallery__fullscreen" id="cv-gallery-fullscreen"></div>
+
 <script>
   const LIENZO_ID = {{ lienzo.pk }};
   const CSRF      = '{{ csrf_token }}';
   const SNAPSHOT  = {{ snapshot_json|safe }};
   const USER_ID   = '{{ user_id }}';
 </script>
-<script src="{% static 'canvas/js/canvas_engine.js' %}?v=4"></script>
-<script src="{% static 'canvas/js/canvas_nodes.js' %}?v=4"></script>
-<script src="{% static 'canvas/js/canvas_edges.js' %}?v=4"></script>
-<script src="{% static 'canvas/js/canvas_sidebar.js' %}?v=4"></script>
-<script src="{% static 'canvas/js/canvas_match_modal.js' %}?v=4"></script>
-<script src="{% static 'canvas/js/canvas_save.js' %}?v=4"></script>
-<script src="{% static 'canvas/js/canvas_history.js' %}?v=4"></script>
-<script src="{% static 'canvas/js/canvas_modal.js' %}?v=4"></script>
-<script src="{% static 'canvas/js/canvas_insert.js' %}?v=4"></script>
+<script src="{% static 'canvas/js/canvas_engine.js' %}?v=5"></script>
+<script src="{% static 'canvas/js/canvas_nodes.js' %}?v=5"></script>
+<script src="{% static 'canvas/js/canvas_edges.js' %}?v=5"></script>
+<script src="{% static 'canvas/js/canvas_sidebar.js' %}?v=5"></script>
+<script src="{% static 'canvas/js/canvas_match_modal.js' %}?v=5"></script>
+<script src="{% static 'canvas/js/canvas_save.js' %}?v=5"></script>
+<script src="{% static 'canvas/js/canvas_history.js' %}?v=5"></script>
+<script src="{% static 'canvas/js/canvas_modal.js' %}?v=5"></script>
+<script src="{% static 'canvas/js/canvas_insert.js' %}?v=5"></script>
+<script src="{% static 'canvas/js/canvas_gallery.js' %}?v=1"></script>
 <script>
 /* ── CHAT CANVAS ── */
 var _canvasConvId = null;
@@ -295,11 +316,19 @@ function canvasSendChat() {
         hasHtml: !!data.html,
         responseLen: (data.response || '').length
       }));
-      // Detectar accion de agregar nodos al canvas
+      // Detectar accion segun tipo
       if (data.action && data.action.type === 'add_nodes') {
         executeAddNodesAction(data.action, data.response || data.html || '');
+        // Si además hay una sub-acción de reordenar (combinado agregar+reordenar)
+        if (data.action.rearrange) {
+          executeRearrangeNodesAction(data.action.rearrange);
+        }
       } else if (data.action && data.action.type === 'rearrange_nodes') {
         executeRearrangeNodesAction(data.action);
+      } else if (data.action && data.action.type === 'clear_canvas') {
+        executeClearCanvasAction(data.action);
+        var clearDiv = createChatMsg('assistant', data.response || data.html || '✅ El lienzo ha sido limpiado exitosamente.');
+        msgEl.appendChild(clearDiv);
       } else {
         var aDiv = createChatMsg('assistant', data.response || data.html || '');
         msgEl.appendChild(aDiv);
@@ -440,6 +469,64 @@ function executeRearrangeNodesAction(action) {
   var okDiv = createChatMsg('assistant', confirmMsg);
   document.getElementById('chat-messages').appendChild(okDiv);
 }
+
+/* ── ACCIÓN: LIMPIAR LIENZO ── */
+
+/**
+ * Limpia completamente el lienzo eliminando todos los nodos y aristas.
+ * Deja el canvas vacío como nuevo.
+ */
+function clearCanvas() {
+  // Capturar estado para undo antes de limpiar
+  if (typeof captureState === 'function') captureState();
+  // Eliminar todos los nodos del DOM
+  var allNodes = STATE.nodos || {};
+  Object.values(allNodes).forEach(function(n) {
+    if (n.el && n.el.parentNode) {
+      n.el.parentNode.removeChild(n.el);
+    }
+  });
+  // Limpiar estado
+  STATE.nodos = {};
+  STATE.aristas = {};
+  // Actualizar visualizaciones
+  if (typeof updateEdges === 'function') updateEdges();
+  if (typeof markDirty === 'function') markDirty();
+  if (typeof updateTransform === 'function') updateTransform();
+  if (typeof zoomReset === 'function') zoomReset();
+  console.log('[Canvas] Lienzo limpiado completamente');
+}
+
+/**
+ * Ejecuta una accion clear_canvas desde el backend.
+ */
+function executeClearCanvasAction(action) {
+  var nodeCount = Object.keys(STATE.nodos || {}).length;
+  if (nodeCount === 0) return; // ya vacio
+  clearCanvas();
+  if (action && action.reset_chat !== false) {
+    _canvasConvId = null;
+  }
+}
+
+/* ── BOTÓN LIMPIAR LIENZO ── */
+
+document.addEventListener('DOMContentLoaded', function() {
+  var clearBtn = document.getElementById('btn-clear-canvas');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', function() {
+      var nodeCount = Object.keys(STATE.nodos || {}).length;
+      if (nodeCount === 0) {
+        showToast('El lienzo ya está vacío');
+        return;
+      }
+      if (confirm('¿Estás seguro de limpiar todo el lienzo? Se eliminarán todos los nodos y conexiones.')) {
+        clearCanvas();
+        showToast('Lienzo limpiado ✓');
+      }
+    });
+  }
+});
 
 function createChatMsg(role, text) {
   var wrapper = document.createElement('div');

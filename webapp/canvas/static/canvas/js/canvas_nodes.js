@@ -48,7 +48,8 @@ function createPropNode(sourceId, data, x, y, campos) {
       <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
     </div>
     <div class="cv-node__thumb${imgUrl ? '' : ' cv-node__thumb--empty'}">
-      ${imgUrl ? `<img src="${escHtml(imgUrl)}" loading="lazy" onerror="this.parentElement.classList.add('cv-node__thumb--empty')" alt="">` : ''}
+      ${imgUrl ? `<img src="${escHtml(imgUrl)}" loading="lazy" onerror="this.parentElement.classList.add('cv-node__thumb--empty')" alt="" data-prop-id="${sourceId}">` : ''}
+      ${!imgUrl ? `<div class="cv-node__thumb-placeholder" data-prop-id="${sourceId}" title="Ver galería">📷</div>` : ''}
     </div>
     <div class="cv-node__body">
       <div class="cv-field"><span class="cv-field__key">Precio</span><span class="cv-field__val">${price || '—'}</span></div>
@@ -413,6 +414,18 @@ function registerNodeEvents(id, el) {
 
       document.addEventListener('mousemove', onMouseMove);
       document.addEventListener('mouseup', onMouseUp);
+    });
+  // ── GALERÍA: clic en thumbnail abre galería ──
+  const thumb = el.querySelector('.cv-node__thumb');
+  if (thumb) {
+    thumb.addEventListener('click', function(e) {
+      e.stopPropagation();
+      const img = thumb.querySelector('img');
+      const placeholder = thumb.querySelector('.cv-node__thumb-placeholder');
+      const propId = (img && img.dataset.propId) || (placeholder && placeholder.dataset.propId);
+      if (propId && typeof openPropertyGallery === 'function') {
+        openPropertyGallery(parseInt(propId));
+      }
     });
   }
 }

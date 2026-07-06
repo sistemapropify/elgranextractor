@@ -875,6 +875,29 @@ class AIConsumptionLog(models.Model):
         blank=True, default='', verbose_name="Mensaje de error si falló"
     )
     
+    # Calidad de extracción (porcentaje) — añadido directamente a BD, campo sincronizado
+    calidad_extraccion_pct = models.FloatField(
+        null=True, blank=True, verbose_name="Calidad de extracción (%)"
+    )
+    
+    # Resumen del input — añadido directamente a BD, campo sincronizado
+    input_summary = models.TextField(
+        null=True, blank=True, default=None,
+        verbose_name="Resumen del prompt de entrada"
+    )
+    
+    # Skill que procesó la llamada — añadido directamente a BD, campo sincronizado
+    skill_name = models.CharField(
+        max_length=200, null=True, blank=True, default=None,
+        verbose_name="Nombre del skill ejecutado"
+    )
+    
+    # Campos faltantes detectados — añadido directamente a BD, campo sincronizado
+    campos_faltantes = models.TextField(
+        null=True, blank=True, default=None,
+        verbose_name="Campos faltantes detectados"
+    )
+    
     # Timestamps
     created_at = models.DateTimeField(
         auto_now_add=True, verbose_name="Fecha/hora de la llamada"

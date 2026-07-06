@@ -2646,28 +2646,36 @@ def login_view(request):
     if request.method == 'POST':
         username = request.POST.get('username', '')
         password = request.POST.get('password', '')
-        next_url = request.POST.get('next', '/intelligence/chat/')
+        next_url = request.POST.get('next', '/intelligence/skills/dashboard/')
 
         from .authentication import authenticate_user, login_user
         user = authenticate_user(username=username, password=password)
 
         if user:
             login_user(request, user)
-            messages.success(request, f'Bienvenido de nuevo, {username}!')
+            messages.success(request, f'¡Bienvenido de nuevo, {username}!')
             return redirect(next_url)
         else:
             messages.error(request, 'Usuario o contraseña incorrectos.')
-            # Redirigir de vuelta al dashboard de skills con el error
+            # Redirigir de vuelta al dashboard de skills con el error visible
+            # y el modal de login abierto (lo muestra el JS en skills_dashboard.html)
+            if 'text/html' in request.META.get('HTTP_ACCEPT', ''):
+                return redirect(f'{next_url}?login_error=1')
             return redirect(next_url)
 
     # GET: si el usuario ya está autenticado, redirigir al next
-    # Si no, redirigir al dashboard de skills (que tiene el modal de login)
-    # NOTA: /intelligence/skills/dashboard/ está en PUBLIC_PATHS del middleware
-    next_url = request.GET.get('next', '/intelligence/chat/')
+    next_url = request.GET.get('next', '/intelligence/skills/dashboard/')
     user = getattr(request, 'current_user', None)
     if user:
         return redirect(next_url)
-    return redirect('/intelligence/skills/dashboard/')
+    
+    # Renderizar formulario de login en lugar de redirigir al dashboard
+    # para que los usuarios puedan iniciar sesión incluso si acceden
+    # directamente a /login/ (ej: desde un redirect del middleware)
+    return render(request, 'intelligence/login.html', {
+        'next': next_url,
+        'messages': messages.get_messages(request),
+    })
 
 
 def logout_view(request):

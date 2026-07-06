@@ -1,0 +1,110 @@
+{% extends "intelligence/base/base.html" %}
+{% load static %}
+
+{% block title %}Iniciar Sesión — Propifai Intelligence{% endblock %}
+
+{% block extra_css %}
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    body { background-color: #0d1117; color: #c9d1d9; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    
+    .login-wrap {
+        width: 100%; max-width: 400px; padding: 20px;
+    }
+    
+    .login-card {
+        background-color: #161b22; border: 1px solid #30363d;
+        border-radius: 12px; padding: 32px;
+    }
+    
+    .login-logo {
+        text-align: center; margin-bottom: 28px;
+    }
+    .login-logo h1 {
+        font-size: 24px; color: #58a6ff; font-weight: 700;
+    }
+    .login-logo p {
+        font-size: 14px; color: #8b949e; margin-top: 4px;
+    }
+    
+    .login-form { display: flex; flex-direction: column; gap: 16px; }
+    
+    .login-field { display: flex; flex-direction: column; gap: 6px; }
+    .login-field label {
+        font-size: 13px; font-weight: 500; color: #c9d1d9;
+        text-transform: uppercase; letter-spacing: 0.3px;
+    }
+    .login-field input {
+        padding: 10px 14px; border-radius: 6px; border: 1px solid #30363d;
+        background-color: #0d1117; color: #c9d1d9; font-size: 14px;
+        outline: none; transition: border-color 0.2s;
+    }
+    .login-field input:focus { border-color: #58a6ff; }
+    .login-field input::placeholder { color: #484f58; }
+    
+    .login-submit {
+        padding: 12px; border: none; border-radius: 6px; cursor: pointer;
+        font-size: 15px; font-weight: 600; background-color: #238636;
+        color: white; transition: background-color 0.2s; margin-top: 4px;
+    }
+    .login-submit:hover { background-color: #2ea043; }
+    
+    .login-error {
+        background-color: rgba(218, 54, 51, 0.1); border: 1px solid rgba(218, 54, 51, 0.3);
+        color: #f85149; padding: 10px 14px; border-radius: 6px; font-size: 13px;
+    }
+    
+    .login-info {
+        background-color: rgba(88, 166, 255, 0.1); border: 1px solid rgba(88, 166, 255, 0.3);
+        color: #58a6ff; padding: 10px 14px; border-radius: 6px; font-size: 13px;
+    }
+    
+    .login-footer {
+        text-align: center; margin-top: 20px; font-size: 13px; color: #484f58;
+    }
+    .login-footer a { color: #58a6ff; text-decoration: none; }
+    .login-footer a:hover { text-decoration: underline; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="login-wrap">
+    <div class="login-card">
+        <div class="login-logo">
+            <h1>🔑 Propifai</h1>
+            <p>Intelligence Layer — Iniciar Sesión</p>
+        </div>
+        
+        {% if messages %}
+        <div style="margin-bottom:16px">
+            {% for message in messages %}
+            <div class="{% if message.tags == 'error' %}login-error{% else %}login-info{% endif %}">
+                {{ message }}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        
+        <form class="login-form" method="POST" action="{% url 'login' %}">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ next|default:'/intelligence/skills/dashboard/' }}">
+            
+            <div class="login-field">
+                <label for="username">Usuario</label>
+                <input type="text" id="username" name="username" placeholder="Nombre de usuario" required autofocus>
+            </div>
+            
+            <div class="login-field">
+                <label for="password">Contraseña</label>
+                <input type="password" id="password" name="password" placeholder="Contraseña" required>
+            </div>
+            
+            <button type="submit" class="login-submit">Ingresar</button>
+        </form>
+        
+        <div class="login-footer">
+            ¿No tienes cuenta? <a href="{% url 'register' %}">Registrarse</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

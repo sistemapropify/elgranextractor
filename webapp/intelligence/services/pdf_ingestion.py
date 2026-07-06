@@ -6,7 +6,15 @@ Chunking strategy:
 - Documentos estructurados (leyes, normas): chunk por ARTÍCULO, CAPÍTULO, TÍTULO
 - Documentos no estructurados: chunk por palabras (400 palabras, 50 overlap)
 
-Dependencia: pymupdf (instalar con: pip install pymupdf)
+Dependencias:
+  - pymupdf (fitz): extracción de texto de PDFs digitales
+  - pytesseract + Tesseract OCR: OCR para PDFs escaneados
+  - pdf2image: convierte páginas PDF a imágenes para OCR
+
+Instalación:
+  pip install pytesseract pdf2image
+  # Tesseract OCR: winget install UB-Mannheim.TesseractOCR
+  # Idioma español: descargar spa.traineddata a tessdata/
 """
 
 import os
@@ -18,6 +26,21 @@ from typing import List, Optional, Tuple, Dict, Any
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
+
+# ── Configuración de OCR ──
+TESSERACT_CMD = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+# Directorio tessdata: primero busca en la raíz del proyecto (d:\PROMETEO\tessdata),
+# luego en la carpeta del sistema donde instaló Tesseract
+TESSDATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "tessdata")
+TESSDATA_DIR = os.path.abspath(TESSDATA_DIR)
+if not os.path.isdir(TESSDATA_DIR):
+    TESSDATA_DIR = r"C:\Program Files\Tesseract-OCR\tessdata"
+
+# Umbral: si el texto extraído por pymupdf tiene menos de este % del peso del PDF,
+# se considera que el PDF es escaneado y se activa OCR.
+# Ej: PDF de 100KB con solo 2KB de texto extraído → 2% → se activa OCR
+OCR_TEXT_RATIO_THRESHOLD = 0.15  # 15%: si el texto extraído es < 15% del peso del PDF
+OCR_MAX_CHARS_WITHOUT_OCR = 2000  # Si hay menos de 2000 chars, activar OCR (texto muy corto)
 
 
 # Patrones de estructura para documentos legales peruanos
@@ -69,26 +92,155 @@ class PDFIngestionService:
 
             doc.close()
 
-            if not text_parts:
-                logger.warning(f"No se extrajo texto del PDF: {pdf_path}")
-                return None
+            full_text = "\n".join(text_parts) if text_parts else ""
+            pdf_size = os.path.getsize(pdf_path)
 
-            full_text = "\n".join(text_parts)
             logger.info(
                 f"PDF extraído: {os.path.basename(pdf_path)}, "
                 f"{len(text_parts)} páginas con texto, "
-                f"{len(full_text)} caracteres"
+                f"{len(full_text)} caracteres, "
+                f"tamaño={pdf_size} bytes"
             )
+
+            # ── Detectar si el PDF es escaneado y necesita OCR ──
+            needs_ocr = False
+            if not full_text.strip():
+                needs_ocr = True
+                logger.info("PDF sin texto extraíble. Activando OCR...")
+            elif len(full_text) < OCR_MAX_CHARS_WITHOUT_OCR:
+                # Muy poco texto extraído → probablemente escaneado
+                needs_ocr = True
+                logger.info(
+                    f"PDF con poco texto: {len(full_text)} chars "
+                    f"(umbral={OCR_MAX_CHARS_WITHOUT_OCR}). Activando OCR..."
+                )
+            elif pdf_size > 50000:
+                # PDF grande: verificar relación texto/peso
+                ratio = len(full_text) / max(pdf_size, 1)
+                if ratio < OCR_TEXT_RATIO_THRESHOLD:
+                    needs_ocr = True
+                    logger.info(
+                        f"PDF probablemente escaneado: {len(full_text)} chars "
+                        f"en {pdf_size} bytes (ratio={ratio:.2%} < {OCR_TEXT_RATIO_THRESHOLD:.0%}). "
+                        f"Activando OCR..."
+                    )
+
+            if needs_ocr:
+                ocr_text = cls._ocr_pdf(pdf_path)
+                if ocr_text and len(ocr_text) > len(full_text):
+                    logger.info(
+                        f"OCR exitoso: {len(ocr_text)} caracteres extraídos "
+                        f"({len(text_parts) if text_parts else 0} páginas pymupdf → OCR)"
+                    )
+                    return ocr_text
+                else:
+                    logger.warning(
+                        f"OCR no mejoró la extracción. "
+                        f"Usando texto de pymupdf ({len(full_text)} chars)."
+                    )
+
+            if not full_text.strip():
+                return None
+
             return full_text
 
-        except ImportError:
-            logger.error(
-                "pymupdf no está instalado. "
-                "Instala con: pip install pymupdf"
-            )
+        except ImportError as e:
+            if 'fitz' in str(e):
+                logger.error(
+                    "pymupdf no está instalado. "
+                    "Instala con: pip install pymupdf"
+                )
+            else:
+                logger.error(f"Error de importación: {e}")
             return None
         except Exception as e:
             logger.error(f"Error extrayendo PDF {pdf_path}: {e}")
+            return None
+
+    # ============================================================
+    # OCR (para PDFs escaneados)
+    # ============================================================
+
+    @classmethod
+    def _ocr_pdf(cls, pdf_path: str) -> Optional[str]:
+        """
+        Extrae texto de un PDF escaneado usando OCR (Tesseract).
+        Convierte cada página a imagen con pymupdf (fitz) — no necesita poppler.
+
+        Args:
+            pdf_path: Ruta al archivo PDF
+
+        Returns:
+            Texto completo extraído, o None si falla
+        """
+        try:
+            import fitz  # pymupdf (ya instalado)
+            import pytesseract
+            from PIL import Image
+            import io
+
+            # Configurar ruta de Tesseract
+            if os.path.exists(TESSERACT_CMD):
+                pytesseract.pytesseract.tesseract_cmd = TESSERACT_CMD
+
+            # Configurar ruta de tessdata (idiomas)
+            if os.path.isdir(TESSDATA_DIR):
+                os.environ['TESSDATA_PREFIX'] = TESSDATA_DIR
+
+            logger.info(
+                f"Iniciando OCR para: {os.path.basename(pdf_path)} "
+                f"(tesseract={TESSERACT_CMD}, tessdata={TESSDATA_DIR})"
+            )
+
+            # Abrir PDF con pymupdf
+            doc = fitz.open(pdf_path)
+            total_pages = len(doc)
+            ocr_text_parts = []
+
+            for idx in range(total_pages):
+                page = doc[idx]
+                logger.info(f"OCR página {idx + 1}/{total_pages}...")
+
+                # Renderizar página como PNG a 300 DPI
+                zoom = 300.0 / 72.0
+                mat = fitz.Matrix(zoom, zoom)
+                pix = page.get_pixmap(matrix=mat)
+
+                # Convertir a PIL Image
+                img_data = pix.tobytes("png")
+                img = Image.open(io.BytesIO(img_data))
+
+                # OCR en español + inglés
+                page_text = pytesseract.image_to_string(
+                    img,
+                    lang='spa+eng',
+                    config='--psm 6'
+                )
+
+                if page_text.strip():
+                    ocr_text_parts.append(page_text.strip())
+
+            doc.close()
+
+            if not ocr_text_parts:
+                logger.warning(f"OCR no extrajo texto de ninguna página")
+                return None
+
+            full_text = "\n\n".join(ocr_text_parts)
+            logger.info(
+                f"OCR completado: {len(ocr_text_parts)}/{total_pages} páginas "
+                f"con texto, {len(full_text)} caracteres"
+            )
+            return full_text
+
+        except ImportError as e:
+            logger.warning(
+                f"No se pudo usar OCR: {e}. "
+                f"Verifica que pymupdf y pytesseract estén instalados."
+            )
+            return None
+        except Exception as e:
+            logger.error(f"Error en OCR para {pdf_path}: {e}\n{traceback.format_exc()}")
             return None
 
     # ============================================================
@@ -243,25 +395,42 @@ class PDFIngestionService:
     def _chunk_plano(cls, text: str) -> List[Dict[str, Any]]:
         """
         Chunking por palabras con overlap (para texto no estructurado).
-        Detecta si tiene "Artículo" para respetar límites.
+        Detecta si tiene "Artículo" para respetar límites de artículos.
+        Incluye salvaguardas contra bucles infinitos y MemoryError.
         """
         is_legal_doc = "Artículo" in text
 
         words = text.split()
+        total_words = len(words)
         chunks = []
+        MAX_CHUNKS = 10000  # Límite de seguridad
 
         start = 0
         chunk_index = 0
+        iterations = 0
 
-        while start < len(words):
-            end = min(start + cls.CHUNK_SIZE, len(words))
+        while start < total_words and iterations < MAX_CHUNKS:
+            iterations += 1
+            end = min(start + cls.CHUNK_SIZE, total_words)
 
-            # Para docs con Artículo, ajustar al límite del Artículo anterior
-            if is_legal_doc and end < len(words):
-                for i in range(end - 1, start, -1):
-                    if i < len(words) and words[i].startswith('Artículo'):
+            # Si ya estamos al final del texto, salir después de procesar
+            reached_end = (end >= total_words)
+
+            # Para docs con Artículo, ajustar al límite del Artículo ANTERIOR
+            # (buscar hacia atrás para no cortar un artículo)
+            if is_legal_doc and end < total_words:
+                for i in range(end - 1, max(start, 0), -1):
+                    if i < total_words and words[i].startswith('Artículo'):
                         end = i
                         break
+
+            # Asegurar que end > start para evitar chunks vacíos o bucle infinito
+            if end <= start:
+                if reached_end:
+                    break
+                end = min(start + 1, total_words)
+                if end <= start:
+                    break
 
             chunk_words = words[start:end]
             chunk_text = ' '.join(chunk_words)
@@ -277,19 +446,23 @@ class PDFIngestionService:
 
             chunk_index += 1
 
+            # Salir si ya procesamos el último fragmento
+            if reached_end:
+                break
+
             # Avanzar ventana
             if is_legal_doc:
                 start = end  # Sin overlap para no mezclar artículos
             else:
-                start = end - cls.CHUNK_OVERLAP
-
-            if start >= len(words) or start >= end:
-                break
+                new_start = end - cls.CHUNK_OVERLAP
+                # Asegurar que start siempre avance (evitar bucle infinito)
+                start = max(new_start, start + 1)
 
         logger.info(
             f"Chunking plano: {len(chunks)} chunks "
             f"(legal_doc={is_legal_doc}, "
-            f"chunk_size={cls.CHUNK_SIZE}, overlap={cls.CHUNK_OVERLAP if not is_legal_doc else 0})"
+            f"chunk_size={cls.CHUNK_SIZE}, overlap={cls.CHUNK_OVERLAP if not is_legal_doc else 0}, "
+            f"iterations={iterations})"
         )
         return chunks
 
@@ -351,7 +524,12 @@ class PDFIngestionService:
             stats['secciones_detectadas'] = len(estructura)
 
             # Chunkificar
-            chunks = cls.chunk_text(text)
+            try:
+                chunks = cls.chunk_text(text)
+            except MemoryError:
+                logger.error(f"MemoryError al chunkificar texto de {os.path.basename(pdf_path)}. "
+                             f"Texto demasiado grande o bucle infinito.")
+                return False, "Error de memoria al procesar el texto del PDF. El archivo es demasiado grande o tiene un formato no soportado.", stats
             if not chunks:
                 return False, "No se generaron chunks del texto extraído", stats
 
