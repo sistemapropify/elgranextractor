@@ -24,6 +24,9 @@ class IntelligenceConfig(AppConfig):
         """
         # ── Verificar si estamos en proceso principal ──
         # Evitar precarga durante migraciones, collectstatic, shell, test
+        # CRITICO: Incluir gunicorn para evitar que workers carguen el modelo
+        # de embeddings (1GB+) en el hilo principal, lo que causa OOM/restarts
+        # en Azure App Service (tiers básicos con ~2GB RAM).
         _should_skip = any([
             'migrate' in sys.argv,
             'makemigrations' in sys.argv,
@@ -146,13 +149,18 @@ class IntelligenceConfig(AppConfig):
             logger.warning(f"No se pudieron registrar skills en startup: {e}")
 
         # 4. Pre-calcular embeddings del Semantic Router (F1-001)
-        try:
-            from .services.semantic_router import precompute_router_embeddings
-            n = precompute_router_embeddings()
-            if n > 0:
-                logger.info(f"Semantic Router: {n} templates embeddeados para routing semántico")
-        except Exception as e:
-            logger.warning(f"No se pudieron pre-calcular embeddings del Semantic Router: {e}")
+        # NOTA: Solo se ejecuta en procesos NO saltados (i.e. no gunicorn ni collectstatic).
+        # Esto evita que gunicorn workers carguen el modelo de embeddings (~1GB) en startup,
+        # lo que causaba OOM/restart loop en Azure App Service.
+        # El modelo se cargará lazy en la primera solicitud que requiera embeddings.
+        if not _should_skip:
+            try:
+                from .services.semantic_router import precompute_router_embeddings
+                n = precompute_router_embeddings()
+                if n > 0:
+                    logger.info(f"Semantic Router: {n} templates embeddeados para routing semántico")
+            except Exception as e:
+                logger.warning(f"No se pudieron pre-calcular embeddings del Semantic Router: {e}")
 
     def _preload_models(self):
         """
