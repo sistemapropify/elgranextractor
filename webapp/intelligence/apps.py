@@ -31,6 +31,7 @@ class IntelligenceConfig(AppConfig):
             'flush' in sys.argv,
             'test' in sys.argv,
             'shell' in sys.argv,
+            'gunicorn' in sys.argv,
             os.environ.get('RUN_MAIN') != 'true' and 'runserver' in sys.argv,
         ])
         if _should_skip:
