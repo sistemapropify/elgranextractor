@@ -11,8 +11,10 @@ OPTIMIZACIONES IMPLEMENTADAS (SPEC-013):
 3. Pre-carga opcional del modelo
 4. Monitoreo de estado del singleton
 
-MEJORAS IMPLEMENTADAS (2026-05):
-1. Modelo migrado a intfloat/multilingual-e5-large (1024 dimensiones)
+MEJORAS IMPLEMENTADAS (2026-07):
+1. Modelo migrado a intfloat/multilingual-e5-small (384 dimensiones, ~500MB RAM)
+   [FIX-OOM] Cambio desde multilingual-e5-large (1024d, ~2.5GB) para evitar OOM
+   en Azure App Service (tiers básicos con ~2GB RAM).
 2. Prefijos "query:" y "passage:" para el modelo E5
 3. FAISS HNSW index para búsqueda O(log n)
 4. Pre-filtrado en SQL para búsquedas con filtros
@@ -52,7 +54,7 @@ logger = logging.getLogger(__name__)
 class RAGService:
     """
     Servicio centralizado para operaciones RAG:
-    - Generación de embeddings (multilingual-e5-large, 1024 dimensiones)
+    - Generación de embeddings (multilingual-e5-small, 384 dimensiones)
     - Gestión de colecciones vectoriales
     - Sincronización de datos con resolución de FK
     - Búsqueda semántica con FAISS HNSW (O(log n))
@@ -68,12 +70,14 @@ class RAGService:
     - Batch encoding para múltiples textos
     """
     
-    # Modelo de embeddings (intfloat/multilingual-e5-large)
-    # Modelo multilingüe de 1024 dimensiones con soporte para español.
+    # Modelo de embeddings (intfloat/multilingual-e5-small)
+    # Modelo multilingüe de 384 dimensiones con soporte para español.
     # Requiere prefijos "query:" para búsquedas y "passage:" para documentos.
-    # Token máximo: 512 (vs 128 del modelo anterior).
-    EMBEDDING_MODEL = "intfloat/multilingual-e5-large"
-    EMBEDDING_DIMENSIONS = 1024
+    # Token máximo: 512.
+    # FIX-OOM: Migrado desde multilingual-e5-large (1024d, ~2.5GB RAM) a
+    # multilingual-e5-small (384d, ~500MB RAM) para evitar OOM en Azure App Service.
+    EMBEDDING_MODEL = "intfloat/multilingual-e5-small"
+    EMBEDDING_DIMENSIONS = 384
     
     # Configuración desde variables de entorno
     SIMILARITY_THRESHOLD = float(os.environ.get('RAG_SIMILARITY_THRESHOLD', 0.2))
@@ -96,6 +100,25 @@ class RAGService:
     _max_cache_size = int(os.environ.get('RAG_EMBEDDING_CACHE_SIZE', 100))
     
     @classmethod
+    def _get_available_memory_mb(cls) -> Optional[float]:
+        """
+        Obtiene la memoria RAM disponible en MB (solo Linux).
+        Útil para evitar OOM kills en Azure App Service.
+        
+        Returns:
+            MB disponibles, o None si no se puede determinar (Windows, etc.)
+        """
+        try:
+            import psutil
+            available = psutil.virtual_memory().available
+            return available / (1024 * 1024)
+        except ImportError:
+            logger.debug("psutil no disponible, no se puede verificar memoria")
+            return None
+        except Exception:
+            return None
+
+    @classmethod
     def initialize_embedder(cls, force: bool = False):
         """
         Inicializa el modelo de embeddings (sentence-transformers).
@@ -103,6 +126,9 @@ class RAGService:
         
         SPEC-014: Double-check locking pattern con threading.Lock(),
         device detection automático (cuda si torch.cuda.is_available()).
+        
+        FIX-OOM: Verifica memoria disponible antes de cargar el modelo
+        para evitar OOM kills en Azure App Service.
         
         Args:
             force: Forzar reinicialización incluso si ya está cargado
@@ -116,6 +142,18 @@ class RAGService:
                 # Segunda verificación dentro del lock
                 if cls._embedder is not None and not force:
                     return cls._embedder
+                
+                # ── FIX-OOM: Verificar memoria disponible ──
+                # multilingual-e5-small necesita ~500MB para cargarse.
+                # Si hay menos de 700MB disponibles, no intentar cargar.
+                available_mb = cls._get_available_memory_mb()
+                if available_mb is not None and available_mb < 700:
+                    logger.warning(
+                        f"Memoria disponible ({available_mb:.0f}MB) insuficiente para cargar "
+                        f"modelo de embeddings ({cls.EMBEDDING_MODEL}). "
+                        f"Se cargará cuando haya más memoria disponible."
+                    )
+                    return None
                     
                 try:
                     load_start = time.time()
@@ -140,7 +178,8 @@ class RAGService:
                     cls._model_load_time_ms = (time.time() - load_start) * 1000
                     logger.info(
                         f"Modelo de embeddings inicializado "
-                        f"({cls.EMBEDDING_DIMENSIONS} dimensiones, "
+                        f"({cls.EMBEDDING_MODEL}, "
+                        f"{cls.EMBEDDING_DIMENSIONS} dimensiones, "
                         f"device={cls._device}, "
                         f"carga={cls._model_load_time_ms:.0f}ms)"
                     )
@@ -231,7 +270,7 @@ class RAGService:
         SPEC-014: Optimizado con torch.no_grad() y normalize_embeddings=True
         para inferencia 2-3x más rápida.
         
-        El modelo multilingual-e5-large requiere prefijos específicos:
+        El modelo multilingual-e5-small requiere prefijos específicos:
         - "query: {text}" para textos de búsqueda
         - "passage: {text}" para documentos almacenados
         
@@ -241,12 +280,12 @@ class RAGService:
             mode: 'passage' para documentos, 'query' para búsquedas
             
         Returns:
-            Bytes del embedding (1024 dimensiones) o None si hay error
+            Bytes del embedding ({cls.EMBEDDING_DIMENSIONS} dimensiones) o None si hay error
         """
         if not text or not text.strip():
             return None
         
-        # Aplicar prefijo según modo (requerido por multilingual-e5-large)
+        # Aplicar prefijo según modo (requerido por modelo E5)
         if mode == 'query':
             prefixed_text = f"query: {text}"
         else:
@@ -731,7 +770,7 @@ class RAGService:
             return False, "Query vacía", []
         
         try:
-            # Generar embedding para la query (modo query para multilingual-e5-large)
+            # Generar embedding para la query (modo query para multilingual-e5-small)
             query_embedding = cls.generate_embedding(query, mode='query')
             if not query_embedding:
                 return False, "No se pudo generar embedding para la query", []
@@ -787,6 +826,17 @@ class RAGService:
                 try:
                     # Convertir embedding del documento a numpy
                     doc_vector = np.frombuffer(doc.embedding, dtype=np.float32)
+                    
+                    # ── FIX-OOM: Validar dimensionalidad del embedding ──
+                    # Los embeddings antiguos (1024d del modelo e5-large) tienen
+                    # dimensión diferente a la actual (384d del e5-small).
+                    # Saltar documentos con dimensionalidad incorrecta.
+                    if doc_vector.shape[0] != cls.EMBEDDING_DIMENSIONS:
+                        logger.debug(
+                            f"Documento {doc.id}: dimensión de embedding {doc_vector.shape[0]} "
+                            f"difiere de la esperada {cls.EMBEDDING_DIMENSIONS}. Saltando."
+                        )
+                        continue
                     
                     # Calcular similitud de coseno
                     similarity = np.dot(query_vector, doc_vector) / (
@@ -1864,7 +1914,7 @@ class RAGService:
             return []
         
         try:
-            # Generar embedding para la query (modo query para multilingual-e5-large)
+            # Generar embedding para la query (modo query para multilingual-e5-small)
             query_embedding = cls.generate_embedding(query, mode='query')
             if not query_embedding:
                 logger.error("No se pudo generar embedding para la query")

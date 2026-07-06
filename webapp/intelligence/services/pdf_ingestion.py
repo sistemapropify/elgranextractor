@@ -613,7 +613,7 @@ class PDFIngestionService:
                 return False, (
                     f"Error en ingesta: No se pudo generar embeddings para ningún chunk "
                     f"({stats['errors']} errores). Verifica que el modelo de embeddings "
-                    f"(intfloat/multilingual-e5-large) esté correctamente instalado."
+                    f"(intfloat/multilingual-e5-small) esté correctamente instalado."
                 ), stats
 
             # Actualizar estadísticas de la colección

@@ -169,10 +169,13 @@ class IntelligenceConfig(AppConfig):
         SPEC-014: Evita latencia de 10-20s en la primera consulta.
         Se ejecuta en el proceso principal de Django (RUN_MAIN=true).
         
+        FIX-OOM: El modelo se saltó durante startup por gunicorn/collectstatic.
+        Se carga lazy en la primera consulta real.
+        
         Logs esperados:
-            [INTEL] Pre-cargando modelo de embeddings: intfloat/multilingual-e5-large
-            [INTEL] GPU CUDA detectada — cargando modelo en GPU
-            [INTEL] Modelo de embeddings inicializado (1024 dimensiones, device=cuda, carga=5234ms)
+            [INTEL] Pre-cargando modelo de embeddings: intfloat/multilingual-e5-small
+            [INTEL] Sin GPU detectada — cargando modelo en CPU
+            [INTEL] Modelo de embeddings inicializado (384 dimensiones, device=cpu, carga=~5000ms)
             [INTEL] Modelo de embeddings pre-cargado exitosamente
             [INTEL] Pre-cálculo de templates completado en 320ms (78 templates)
         """

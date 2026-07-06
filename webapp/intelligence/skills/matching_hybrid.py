@@ -70,8 +70,10 @@ class HybridMatchingSkill(BaseSkill):
         },
     }
 
+    from ..services.rag import RAGService
+
     FAISS_TOP_K = 500
-    FAISS_DIMENSION = 1024
+    FAISS_DIMENSION = RAGService.EMBEDDING_DIMENSIONS  # 384 (multilingual-e5-small)
 
     # ── Validación ─────────────────────────────────────────────────────────
 

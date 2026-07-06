@@ -7,6 +7,7 @@ Estructura:
 - Persistencia en disco (carpeta data/faiss_indexes/)
 - Reconstrucción automática después de sync
 - Carga de todos los índices al iniciar la aplicación
+- Validación de dimensionalidad (FIX-OOM: 384d desde multilingual-e5-small)
 
 Dependencia: faiss-cpu (instalar con: pip install faiss-cpu)
 """
@@ -25,7 +26,7 @@ class FAISSIndexManager:
     Gestiona índices FAISS HNSW para búsqueda vectorial.
 
     HNSWFlat: Hierarchical Navigable Small World graph
-    - d = 1024 (dimensionalidad del embedding, configurable)
+    - d = 384 (dimensionalidad del embedding, configurable)
     - M = 32 (conexiones por nodo)
     - efConstruction = 200 (precisión vs velocidad en construcción)
     - efSearch = 50 (balance precisión/velocidad en búsqueda)
@@ -36,13 +37,13 @@ class FAISSIndexManager:
     _instances: Dict[str, 'FAISSIndexManager'] = {}
     _index_dir: Optional[str] = None
 
-    def __init__(self, collection_name: str, dimension: int = 1024):
+    def __init__(self, collection_name: str, dimension: int = 384):
         """
         Inicializa el manager para una colección.
 
         Args:
             collection_name: Nombre único de la colección
-            dimension: Dimensionalidad del embedding (1024 para multilingual-e5-large)
+            dimension: Dimensionalidad del embedding (384 para multilingual-e5-small)
         """
         self.collection_name = collection_name
         self.dimension = dimension
@@ -77,7 +78,7 @@ class FAISSIndexManager:
         return cls._index_dir
 
     @classmethod
-    def get_instance(cls, collection_name: str, dimension: int = 1024) -> 'FAISSIndexManager':
+    def get_instance(cls, collection_name: str, dimension: int = 384) -> 'FAISSIndexManager':
         """
         Obtiene o crea una instancia singleton para una colección.
 
@@ -239,6 +240,10 @@ class FAISSIndexManager:
     def load(self) -> bool:
         """
         Carga el índice FAISS desde disco.
+        
+        Valida que la dimensión del índice coincida con la esperada.
+        Si no coincide (ej: migración 1024→384), elimina el índice antiguo
+        para que sea reconstruido en el próximo sync.
 
         Returns:
             True si se cargó exitosamente, False si no existe o hay error
@@ -259,6 +264,29 @@ class FAISSIndexManager:
             self.index = faiss.read_index(faiss_path)
             with open(map_path, 'rb') as f:
                 self.id_map = pickle.load(f)
+            
+            # ── Validación de dimensionalidad (FIX-OOM) ──
+            # Si el índice fue creado con una dimensión diferente (ej: 1024 antigua),
+            # se descarta para que sea reconstruido con la dimensión actual (384).
+            index_dim = self.index.d
+            if index_dim != self.dimension:
+                logger.warning(
+                    f"Índice FAISS para '{self.collection_name}' tiene dimensión "
+                    f"{index_dim}, pero se espera {self.dimension}. "
+                    f"Descartando índice antiguo para reconstrucción..."
+                )
+                self.index = None
+                self.id_map = {}
+                self.is_loaded = False
+                # Eliminar archivos antiguos
+                try:
+                    os.remove(faiss_path)
+                    os.remove(map_path)
+                    logger.info(f"Índice FAISS antiguo eliminado para '{self.collection_name}'")
+                except OSError as rm_err:
+                    logger.warning(f"No se pudo eliminar índice antiguo: {rm_err}")
+                return False
+            
             self.is_loaded = True
             logger.info(
                 f"Índice FAISS cargado para '{self.collection_name}': "
@@ -292,7 +320,7 @@ class FAISSIndexManager:
             logger.info("No se cargaron índices FAISS (puede ser la primera ejecución)")
 
     @classmethod
-    def rebuild_for_collection(cls, collection_name: str, dimension: int = 1024) -> int:
+    def rebuild_for_collection(cls, collection_name: str, dimension: int = 384) -> int:
         """
         Reconstruye el índice FAISS para una colección desde los documentos en BD.
 
@@ -323,7 +351,7 @@ class FAISSIndexManager:
         return instance.build_index(embeddings, doc_ids)
 
     @classmethod
-    def rebuild_all(cls, dimension: int = 1024) -> Dict[str, int]:
+    def rebuild_all(cls, dimension: int = 384) -> Dict[str, int]:
         """
         Reconstruye índices FAISS para todas las colecciones que tengan documentos.
 

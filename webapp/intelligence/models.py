@@ -438,7 +438,7 @@ class IntelligenceDocument(models.Model):
         null=True,
         blank=True,
         verbose_name="Vector embedding",
-        help_text="Vector de 1024 dimensiones (multilingual-e5-large)"
+        help_text="Vector de 384 dimensiones (multilingual-e5-small)"
     )
     content_hash = models.CharField(
         max_length=64,
