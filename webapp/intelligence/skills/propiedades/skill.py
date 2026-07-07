@@ -390,6 +390,10 @@ class BusquedaPropiedadesSkill(BaseSkill):
             # 3. Si NO → ordenar por defecto
 
             # Paso 1: Obtener documentos con filtros SQL (si hay)
+            # NOTA: El filtrado SQL usa field_values, NO embeddings. Por lo tanto
+            # NO se debe validar la dimensión aquí. Los embeddings de 1024d antiguos
+            # se manejan en _reranking_semantico (Paso 2), que es donde se necesita
+            # la dimensión correcta para calcular similitud de coseno.
             if tiene_filtros_exactos:
                 documentos = self._filtrar_por_sql(params, colecciones)
                 if not documentos:
@@ -404,18 +408,12 @@ class BusquedaPropiedadesSkill(BaseSkill):
                         metadata={'filtros_aplicados': self._extract_filters(params)},
                         skill_name=self.name
                     )
-                # ── FIX-DIM: Filtrar documentos con dimensión incorrecta ──
-                # Los embeddings antiguos (1024d del modelo e5-large) causan error
-                # de dimensionalidad. Solo conservar los de 384d (e5-small actual).
-                documentos = self._validar_dimension_embedding(documentos)
             else:
                 # Sin filtros: todos los documentos con embedding
-                documentos_raw = IntelligenceDocument.objects.filter(
-                    collection__in=colecciones, embedding__isnull=False
-                ).select_related('collection')
-                documentos = [(doc, 0.5) for doc in documentos_raw]
-                # ── FIX-DIM: Filtrar documentos con dimensión incorrecta ──
-                documentos = self._validar_dimension_embedding(documentos)
+                documentos = [(doc, 0.5) for doc in
+                    IntelligenceDocument.objects.filter(
+                        collection__in=colecciones, embedding__isnull=False
+                    ).select_related('collection')]
 
             # Paso 2: Re-ranking semántico (si hay semantic_query)
             if tiene_semantica and documentos:
