@@ -32,6 +32,11 @@ from ..base import BaseSkill, SkillResult
 
 logger = logging.getLogger(__name__)
 
+# Dimensión esperada de embeddings (SPEC-014: multilingual-e5-small = 384d)
+# Los embeddings antiguos (multilingual-e5-large = 1024d) deben ser filtrados
+# para evitar errores de dimensionalidad al calcular similitud de coseno.
+EMBEDDING_DIMENSIONS = 384
+
 
 # ── MAPEO DE NOMBRES DE CAMPO ──────────────────────────────────────────────
 # La colección `propiedadespropify` usa la tabla `property` (dbpropify_be).
@@ -399,12 +404,18 @@ class BusquedaPropiedadesSkill(BaseSkill):
                         metadata={'filtros_aplicados': self._extract_filters(params)},
                         skill_name=self.name
                     )
+                # ── FIX-DIM: Filtrar documentos con dimensión incorrecta ──
+                # Los embeddings antiguos (1024d del modelo e5-large) causan error
+                # de dimensionalidad. Solo conservar los de 384d (e5-small actual).
+                documentos = self._validar_dimension_embedding(documentos)
             else:
                 # Sin filtros: todos los documentos con embedding
-                documentos = [(doc, 0.5) for doc in
-                    IntelligenceDocument.objects.filter(
-                        collection__in=colecciones, embedding__isnull=False
-                    ).select_related('collection')]
+                documentos_raw = IntelligenceDocument.objects.filter(
+                    collection__in=colecciones, embedding__isnull=False
+                ).select_related('collection')
+                documentos = [(doc, 0.5) for doc in documentos_raw]
+                # ── FIX-DIM: Filtrar documentos con dimensión incorrecta ──
+                documentos = self._validar_dimension_embedding(documentos)
 
             # Paso 2: Re-ranking semántico (si hay semantic_query)
             if tiene_semantica and documentos:
@@ -603,6 +614,50 @@ class BusquedaPropiedadesSkill(BaseSkill):
 
         return [(doc, 0.5) for doc in documentos]
 
+    # ── Helper: Validación de dimensión de embeddings ─────────────────────
+
+    @staticmethod
+    def _validar_dimension_embedding(
+        documentos: List[Tuple[IntelligenceDocument, float]]
+    ) -> List[Tuple[IntelligenceDocument, float]]:
+        """
+        Filtra documentos cuya dimensión de embedding no coincida con la esperada.
+
+        Los embeddings antiguos (1024d del modelo multilingual-e5-large) causan
+        errores de dimensionalidad al calcular similitud coseno con el modelo
+        actual (384d del multilingual-e5-small). Este método los descarta.
+
+        Args:
+            documentos: Lista de tuplas (documento, score)
+
+        Returns:
+            Lista filtrada solo con documentos de dimensión correcta
+        """
+        if not documentos:
+            return []
+
+        filtrados = []
+        descartados = 0
+        for doc, score in documentos:
+            if doc.embedding:
+                doc_vector = np.frombuffer(doc.embedding, dtype=np.float32)
+                if doc_vector.shape[0] == EMBEDDING_DIMENSIONS:
+                    filtrados.append((doc, score))
+                else:
+                    descartados += 1
+            else:
+                filtrados.append((doc, score))
+
+        if descartados > 0:
+            logger.warning(
+                f"FIX-DIM: Descartados {descartados} documentos con dimensión "
+                f"incorrecta (esperada: {EMBEDDING_DIMENSIONS}). "
+                f"Conservados: {len(filtrados)}. "
+                f"Ejecuta 'python manage.py regenerar_embeddings' para corregir."
+            )
+
+        return filtrados
+
     # ── Paso 3: Re-ranking semántico ──────────────────────────────────────
 
     def _reranking_semantico(
@@ -615,8 +670,17 @@ class BusquedaPropiedadesSkill(BaseSkill):
 
         Genera embedding de la semantic_query y calcula similitud coseno
         contra el embedding de cada documento.
+
+        FIX-DIM: Valida dimensionalidad antes de calcular similitud para
+        evitar errores con embeddings antiguos (1024d vs 384d actual).
         """
         if not documentos or not semantic_query:
+            return documentos
+
+        # FIX-DIM: Validar dimensionalidad antes de procesar
+        documentos = self._validar_dimension_embedding(documentos)
+        if not documentos:
+            logger.warning("Todos los documentos fueron descartados por dimensión incorrecta.")
             return documentos
 
         try:
@@ -637,6 +701,13 @@ class BusquedaPropiedadesSkill(BaseSkill):
                 try:
                     if doc.embedding:
                         doc_vector = np.frombuffer(doc.embedding, dtype=np.float32)
+                        # FIX-DIM: Verificar dimensionalidad antes del cálculo
+                        if doc_vector.shape[0] != query_vector.shape[0]:
+                            logger.debug(
+                                f"Documento {doc.id}: dimensión {doc_vector.shape[0]} "
+                                f"≠ {query_vector.shape[0]}. Saltando."
+                            )
+                            continue
                         similarity = float(np.dot(query_vector, doc_vector) / (
                             np.linalg.norm(query_vector) * np.linalg.norm(doc_vector)
                         ))
