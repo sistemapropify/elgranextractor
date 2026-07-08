@@ -651,7 +651,8 @@ class BusquedaPropiedadesSkill(BaseSkill):
                 f"FIX-DIM: Descartados {descartados} documentos con dimensión "
                 f"incorrecta (esperada: {EMBEDDING_DIMENSIONS}). "
                 f"Conservados: {len(filtrados)}. "
-                f"Ejecuta 'python manage.py regenerar_embeddings' para corregir."
+                f"Ejecuta 'python manage.py regenerar_embeddings --fix-dimensions' "
+                f"para corregir los embeddings antiguos."
             )
 
         return filtrados
@@ -669,17 +670,17 @@ class BusquedaPropiedadesSkill(BaseSkill):
         Genera embedding de la semantic_query y calcula similitud coseno
         contra el embedding de cada documento.
 
-        FIX-DIM: Valida dimensionalidad antes de calcular similitud para
-        evitar errores con embeddings antiguos (1024d vs 384d actual).
+        FIX-DIM: NO filtra documentos con dimensión incorrecta (para no perder
+        resultados). En su lugar, asigna similarity=SCORE_INICIAL (0.5) a los
+        documentos con dimensión antigua (1024d) para que conserven su posición
+        original. Los documentos con dimensión correcta (384d) se reordenan según
+        su similitud calculada.
         """
         if not documentos or not semantic_query:
             return documentos
 
-        # FIX-DIM: Validar dimensionalidad antes de procesar
-        documentos = self._validar_dimension_embedding(documentos)
-        if not documentos:
-            logger.warning("Todos los documentos fueron descartados por dimensión incorrecta.")
-            return documentos
+        # Score inicial de documentos que vienen del filtro SQL
+        SCORE_INICIAL = 0.5
 
         try:
             query_embedding = RAGService.generate_embedding(
@@ -693,31 +694,40 @@ class BusquedaPropiedadesSkill(BaseSkill):
                 return documentos
 
             query_vector = np.frombuffer(query_embedding, dtype=np.float32)
+            query_dim = query_vector.shape[0]
 
+            documentos_con_dimension_incorrecta = 0
             resultados_con_score = []
             for doc, _ in documentos:
                 try:
                     if doc.embedding:
                         doc_vector = np.frombuffer(doc.embedding, dtype=np.float32)
-                        # FIX-DIM: Verificar dimensionalidad antes del cálculo
-                        if doc_vector.shape[0] != query_vector.shape[0]:
-                            logger.debug(
-                                f"Documento {doc.id}: dimensión {doc_vector.shape[0]} "
-                                f"≠ {query_vector.shape[0]}. Saltando."
-                            )
-                            continue
-                        similarity = float(np.dot(query_vector, doc_vector) / (
-                            np.linalg.norm(query_vector) * np.linalg.norm(doc_vector)
-                        ))
+                        # FIX-DIM: Si la dimensión no coincide, conservar score inicial
+                        if doc_vector.shape[0] != query_dim:
+                            documentos_con_dimension_incorrecta += 1
+                            similarity = SCORE_INICIAL
+                        else:
+                            similarity = float(np.dot(query_vector, doc_vector) / (
+                                np.linalg.norm(query_vector) * np.linalg.norm(doc_vector)
+                            ))
                     else:
-                        similarity = 0.0
+                        similarity = SCORE_INICIAL
                 except Exception as e:
                     logger.warning(
                         f"Error calculando similitud para documento {doc.id}: {e}"
                     )
-                    similarity = 0.0
+                    similarity = SCORE_INICIAL
 
                 resultados_con_score.append((doc, similarity))
+
+            if documentos_con_dimension_incorrecta > 0:
+                logger.warning(
+                    f"FIX-DIM: {documentos_con_dimension_incorrecta} documentos "
+                    f"con dimensión incorrecta (esperada: {query_dim}). "
+                    f"Se mantienen con score={SCORE_INICIAL}. "
+                    f"Ejecuta 'python manage.py regenerar_embeddings --fix-dimensions' "
+                    f"para corregir."
+                )
 
             resultados_con_score.sort(key=lambda x: x[1], reverse=True)
             return resultados_con_score
