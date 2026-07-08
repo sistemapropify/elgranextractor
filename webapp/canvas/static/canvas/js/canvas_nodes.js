@@ -1279,3 +1279,4 @@ function doRenderPdf(container, pdfUrl) {
     container.innerHTML = '<span style="font-size:10px;color:var(--cv-text-muted);">Vista previa no disponible</span>';
   });
 }
+}
