@@ -364,15 +364,33 @@ function cargarScriptSiFalta(url, checkFn, callback) {
 
 function asegurarCanvasNodesJS(callback) {
   if (typeof createPropNode === 'function') { callback(); return; }
-  // Primero canvas_engine.js (dependencia: formatPrice, escHtml, STATE)
-  cargarScriptSiFalta('/static/canvas/js/canvas_engine.js', function() { return typeof formatPrice === 'function'; }, function() {
-    console.log('[CanvasChat] canvas_engine.js cargado');
-    // Luego canvas_nodes.js
-    cargarScriptSiFalta('/static/canvas/js/canvas_nodes.js', function() { return typeof createPropNode === 'function'; }, function() {
-      console.log('[CanvasChat] canvas_nodes.js cargado');
-      callback();
-    });
-  });
+  // canvas_engine.js define: STATE, escHtml, captureState, etc.
+  // canvas_nodes.js define: createPropNode, formatPrice, getPropertyImageUrl, etc.
+  // NOTA: formatPrice esta en canvas_nodes.js, NO en canvas_engine.js
+  var engineCargado = (typeof STATE !== 'undefined' && typeof escHtml === 'function');
+  var nodesCargado = (typeof createPropNode === 'function');
+  
+  if (engineCargado && nodesCargado) { callback(); return; }
+  
+  if (!engineCargado) {
+    // Cargar engine primero, luego nodes
+    cargarScriptSiFalta('/static/canvas/js/canvas_engine.js',
+      function() { return typeof escHtml === 'function'; },
+      function() {
+        console.log('[CanvasChat] canvas_engine.js cargado');
+        cargarScriptSiFalta('/static/canvas/js/canvas_nodes.js',
+          function() { return typeof createPropNode === 'function'; },
+          function() { console.log('[CanvasChat] canvas_nodes.js cargado'); callback(); }
+        );
+      }
+    );
+  } else {
+    // Solo cargar nodes
+    cargarScriptSiFalta('/static/canvas/js/canvas_nodes.js',
+      function() { return typeof createPropNode === 'function'; },
+      function() { console.log('[CanvasChat] canvas_nodes.js cargado'); callback(); }
+    );
+  }
 }
 
 /* ── ACCIÓN: AGREGAR NODOS AL LIENZO ── */
