@@ -359,6 +359,13 @@ function executeAddNodesAction(action, mensaje) {
     document.getElementById('chat-messages').appendChild(emptyDiv);
     return;
   }
+  // Safety: verificar que createPropNode existe (puede no estar si canvas_nodes.js no cargó)
+  if (typeof createPropNode !== 'function') {
+    console.error('createPropNode no está definido. Recarga la página con Ctrl+Shift+R.');
+    var errDiv = createChatMsg('assistant', 'Error al crear nodos. Recarga la página (Ctrl+Shift+R) y vuelve a intentar.');
+    document.getElementById('chat-messages').appendChild(errDiv);
+    return;
+  }
   // Capturar estado para undo
   if (typeof captureState === 'function') captureState();
   // Obtener campos activos
