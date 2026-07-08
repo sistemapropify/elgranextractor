@@ -352,21 +352,27 @@ function canvasSendChat() {
   });
 }
 
-/* ── CARGA DINÁMICA DE canvas_nodes.js ── */
+/* ── CARGA DINÁMICA DE SCRIPTS DEL CANVAS ── */
+function cargarScriptSiFalta(url, checkFn, callback) {
+  if (typeof checkFn === 'function' ? checkFn() : false) { if (callback) callback(); return; }
+  var s = document.createElement('script');
+  s.src = url + '?v=' + Date.now();
+  s.onload = callback || null;
+  s.onerror = function() { console.error('[CanvasChat] Error al cargar: ' + url); };
+  document.head.appendChild(s);
+}
+
 function asegurarCanvasNodesJS(callback) {
   if (typeof createPropNode === 'function') { callback(); return; }
-  var script = document.createElement('script');
-  script.src = '/static/canvas/js/canvas_nodes.js?v=' + Date.now();
-  script.onload = function() {
-    console.log('[CanvasChat] canvas_nodes.js cargado dinámicamente');
-    callback();
-  };
-  script.onerror = function() {
-    console.error('[CanvasChat] Error al cargar canvas_nodes.js');
-    var errDiv = createChatMsg('assistant', 'Error al cargar el módulo del canvas. Verifica que el servidor esté corriendo.');
-    document.getElementById('chat-messages').appendChild(errDiv);
-  };
-  document.head.appendChild(script);
+  // Primero canvas_engine.js (dependencia: formatPrice, escHtml, STATE)
+  cargarScriptSiFalta('/static/canvas/js/canvas_engine.js', function() { return typeof formatPrice === 'function'; }, function() {
+    console.log('[CanvasChat] canvas_engine.js cargado');
+    // Luego canvas_nodes.js
+    cargarScriptSiFalta('/static/canvas/js/canvas_nodes.js', function() { return typeof createPropNode === 'function'; }, function() {
+      console.log('[CanvasChat] canvas_nodes.js cargado');
+      callback();
+    });
+  });
 }
 
 /* ── ACCIÓN: AGREGAR NODOS AL LIENZO ── */
