@@ -352,6 +352,23 @@ function canvasSendChat() {
   });
 }
 
+/* ── CARGA DINÁMICA DE canvas_nodes.js ── */
+function asegurarCanvasNodesJS(callback) {
+  if (typeof createPropNode === 'function') { callback(); return; }
+  var script = document.createElement('script');
+  script.src = '/static/canvas/js/canvas_nodes.js?v=' + Date.now();
+  script.onload = function() {
+    console.log('[CanvasChat] canvas_nodes.js cargado dinámicamente');
+    callback();
+  };
+  script.onerror = function() {
+    console.error('[CanvasChat] Error al cargar canvas_nodes.js');
+    var errDiv = createChatMsg('assistant', 'Error al cargar el módulo del canvas. Verifica que el servidor esté corriendo.');
+    document.getElementById('chat-messages').appendChild(errDiv);
+  };
+  document.head.appendChild(script);
+}
+
 /* ── ACCIÓN: AGREGAR NODOS AL LIENZO ── */
 function executeAddNodesAction(action, mensaje) {
   if (!action.nodes || action.nodes.length === 0) {
@@ -359,11 +376,12 @@ function executeAddNodesAction(action, mensaje) {
     document.getElementById('chat-messages').appendChild(emptyDiv);
     return;
   }
-  // Safety: verificar que createPropNode existe (puede no estar si canvas_nodes.js no cargó)
+  // Si createPropNode no está disponible, cargar canvas_nodes.js dinámicamente
   if (typeof createPropNode !== 'function') {
-    console.error('createPropNode no está definido. Recarga la página con Ctrl+Shift+R.');
-    var errDiv = createChatMsg('assistant', 'Error al crear nodos. Recarga la página (Ctrl+Shift+R) y vuelve a intentar.');
-    document.getElementById('chat-messages').appendChild(errDiv);
+    console.warn('[CanvasChat] createPropNode no disponible, cargando canvas_nodes.js...');
+    asegurarCanvasNodesJS(function() {
+      executeAddNodesAction(action, mensaje);
+    });
     return;
   }
   // Capturar estado para undo
