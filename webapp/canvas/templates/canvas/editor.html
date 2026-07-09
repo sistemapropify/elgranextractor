@@ -4,7 +4,7 @@
 {% block title %}Canvas — {{ lienzo.nombre }} — Propifai{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'canvas/css/canvas.css' %}?v=4">
+<link rel="stylesheet" href="{% static 'canvas/css/canvas.css' %}?v=5">
 <style>
   .cv-page .content-area {
     padding: 0;
@@ -208,6 +208,7 @@
     <button class="cv-gallery__close" onclick="closeGallery()">✕</button>
   </div>
   <div class="cv-gallery__body">
+    <div class="cv-gallery__message" id="cv-gallery-message"></div>
     <div class="cv-gallery__thumbs" id="cv-gallery-thumbs"></div>
     <div class="cv-gallery__main" id="cv-gallery-main">
       <button class="cv-gallery__nav cv-gallery__nav--prev" onclick="galleryPrev()">‹</button>
@@ -226,7 +227,7 @@
   const USER_ID   = '{{ user_id }}';
 </script>
 <script src="{% static 'canvas/js/canvas_engine.js' %}?v=5"></script>
-<script src="{% static 'canvas/js/canvas_nodes.js' %}?v=9"></script>
+<script src="{% static 'canvas/js/canvas_nodes.js' %}?v=10"></script>
 <script src="{% static 'canvas/js/canvas_edges.js' %}?v=5"></script>
 <script src="{% static 'canvas/js/canvas_sidebar.js' %}?v=5"></script>
 <script src="{% static 'canvas/js/canvas_match_modal.js' %}?v=5"></script>

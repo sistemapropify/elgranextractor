@@ -276,10 +276,10 @@ function registerNodeEvents(id, el) {
     });
   } // ← cierre de if(resizeHandle)
 
-  // ── GALERÍA: clic en thumbnail abre galería ──
+  // ── GALERÍA: doble clic en thumbnail abre galería ──
   const thumb = el.querySelector('.cv-node__thumb');
   if (thumb) {
-    thumb.addEventListener('click', function(e) {
+    thumb.addEventListener('dblclick', function(e) {
       e.stopPropagation();
       const img = thumb.querySelector('img');
       const placeholder = thumb.querySelector('.cv-node__thumb-placeholder');
@@ -359,6 +359,7 @@ function createPropNode(sourceId, data, x, y, campos) {
     <div class="cv-node__footer">
       <button class="cv-btn--matches" data-prop-id="${sourceId}">Ver matches &rarr;</button>
       <span class="cv-match-count">— reqs</span>
+      <span class="cv-lead-count" title="Leads asociados">👤 <span class="cv-lead-count__num">0</span></span>
     </div>
     <div class="cv-port cv-port--top"    data-node="${id}" data-port="top"></div>
     <div class="cv-port cv-port--right"  data-node="${id}" data-port="right"></div>
@@ -992,6 +993,11 @@ async function populatePlaceholderProps() {
               thumb.innerHTML = `<div class="cv-node__thumb-placeholder" data-prop-id="${n.ref_id}" title="Ver galería">📷</div>`;
             }
           }
+          // Actualizar conteo de leads
+          const leadCountEl = n.el.querySelector('.cv-lead-count__num');
+          if (leadCountEl && n.field_data._lead_count !== undefined) {
+            leadCountEl.textContent = n.field_data._lead_count;
+          }
           reRenderPropBody(n.id, campos);
         }
       });
@@ -1040,6 +1046,7 @@ function renderPlaceholderNodes(nodos) {
         <div class="cv-node__footer">
           <button class="cv-btn--matches" data-prop-id="${n.ref_id}">Ver matches &rarr;</button>
           <span class="cv-match-count">— reqs</span>
+          <span class="cv-lead-count" title="Leads asociados">👤 <span class="cv-lead-count__num">0</span></span>
         </div>
         <div class="cv-port cv-port--top"    data-node="${n.id}" data-port="top"></div>
         <div class="cv-port cv-port--right"  data-node="${n.id}" data-port="right"></div>

@@ -524,6 +524,18 @@
 }
 .cv-btn--matches:hover { background: rgba(92,107,192,0.25); }
 .cv-match-count { font-size: 11px; color: var(--cv-text-muted); }
+.cv-lead-count {
+  font-size: 11px;
+  color: var(--cv-text-sec);
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.cv-lead-count__num {
+  font-weight: 700;
+  color: #5c6bc0;
+}
 
 /* ── REQUERIMIENTO NODE — info bar ── */
 .cv-node__req-info {
@@ -1685,6 +1697,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  padding: 0;
 }
 
 .cv-gallery__header {
@@ -1729,9 +1742,11 @@
   gap: 16px;
   width: 100%;
   max-width: 1000px;
-  height: calc(100vh - 140px);
-  padding: 0 20px;
-  align-items: flex-start;
+  height: 75vh;
+  min-height: 200px;
+  max-height: 600px;
+  padding: 0 20px 20px 20px;
+  align-items: stretch;
 }
 
 /* Tira de miniaturas (scroll vertical) */
@@ -1741,7 +1756,6 @@
   gap: 6px;
   width: 80px;
   min-width: 80px;
-  max-height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
   flex-shrink: 0;
@@ -1780,21 +1794,22 @@
   justify-content: center;
   background: rgba(0,0,0,0.3);
   border-radius: 8px;
-  min-height: 200px;
   position: relative;
   overflow: hidden;
 }
 
 .cv-gallery__main-img {
+  display: block;
   max-width: 100%;
-  max-height: 100%;
+  max-height: 70vh;
+  width: auto;
+  height: auto;
   object-fit: contain;
   cursor: zoom-in;
-  transition: transform 0.2s;
   border-radius: 4px;
 }
 .cv-gallery__main-img:hover {
-  transform: scale(1.02);
+  opacity: 0.9;
 }
 
 /* Navegación */
@@ -1820,6 +1835,23 @@
 .cv-gallery__nav:hover { background: rgba(92,107,192,0.7); opacity: 1; }
 .cv-gallery__nav--prev { left: 10px; }
 .cv-gallery__nav--next { right: 10px; }
+
+/* Mensaje del gallery (loading, empty, error) */
+.cv-gallery__message {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 200px;
+}
+.cv-gallery__message--loading .cv-gallery__loading,
+.cv-gallery__message--empty .cv-gallery__empty,
+.cv-gallery__message--error .cv-gallery__error {
+  display: block;
+}
+.cv-gallery__message:empty {
+  display: none;
+}
 
 /* Estados */
 .cv-gallery__loading,

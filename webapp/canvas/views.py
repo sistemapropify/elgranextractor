@@ -280,6 +280,25 @@ def api_propiedades(request):
         except Exception as e:
             logger.warning(f"Error querying property_media: {e}")
 
+    # Consulta batch: contar leads por propiedad desde lead_properties
+    lead_count_map = {}  # property_id -> count
+    if source_ids_int:
+        try:
+            with connections['propifai'].cursor() as cursor:
+                ids_str = ','.join(str(sid) for sid in source_ids_int)
+                lead_query = f"""
+                    SELECT lpp.property_id, COUNT(DISTINCT lpp.lead_id) AS lead_count
+                    FROM lead_properties lpp
+                    WHERE lpp.property_id IN ({ids_str})
+                    GROUP BY lpp.property_id
+                """
+                cursor.execute(lead_query)
+                for row in cursor.fetchall():
+                    prop_id, count = row
+                    lead_count_map[int(prop_id)] = count
+        except Exception as e:
+            logger.warning(f"Error querying lead_properties: {e}")
+
     result = []
     for doc in qs.iterator():
         fv = doc.field_values or {}
@@ -334,6 +353,12 @@ def api_propiedades(request):
                     img_url = f"{MEDIA_BASE}/{code_str}.jpg"
         
         entry['_imagen_url'] = img_url
+        # Conteo de leads desde lead_properties
+        try:
+            prop_id = int(doc.source_id)
+            entry['_lead_count'] = lead_count_map.get(prop_id, 0)
+        except (ValueError, TypeError):
+            entry['_lead_count'] = 0
         result.append(entry)
 
     return JsonResponse({'propiedades': result})
