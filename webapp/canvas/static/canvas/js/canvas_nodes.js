@@ -1,11 +1,311 @@
 /**
  * canvas_nodes.js — PropFlow Canvas Nodes
  *
- * Renderizado y lógica de nodos: Propiedad, Requerimiento, Nota.
+ * Renderizado y lógica de nodos: Propiedad, Requerimiento, Nota, Archivo, Enlace, Match.
  * Maneja creación, posicionamiento, colapso y eliminación.
  */
 
-/* ── CREAR NODOS ── */
+/* ═══════════════════════════════════════════════════════════════════════════
+ * UTILITIES
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+function formatPrice(val, currency) {
+  if (val === null || val === undefined) return '—';
+  const num = parseFloat(val);
+  if (isNaN(num)) return val;
+  const sym = currency === 'PEN' ? 'S/ ' : currency === 'USD' ? '$ ' : '$ ';
+  return sym + num.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+
+function formatField(val) {
+  if (val === null || val === undefined) return '—';
+  if (typeof val === 'object') return JSON.stringify(val);
+  return String(val);
+}
+
+function escHtml(str) {
+  if (str === null || str === undefined) return '';
+  const div = document.createElement('div');
+  div.textContent = String(str);
+  return div.innerHTML;
+}
+
+/**
+ * Obtiene la URL de imagen de una propiedad.
+ * Prioriza la URL calculada por el servidor (`_imagen_url`),
+ * que incluye la consulta a property_media para obtener la imagen real.
+ * @param {object} data - field_values de la propiedad (incluye _imagen_url)
+ * @returns {string|null} URL de imagen o null
+ */
+function getPropertyImageUrl(data) {
+  if (!data) return null;
+
+  // 1. URL calculada por el servidor (consulta property_media + fallback code)
+  if (data._imagen_url && typeof data._imagen_url === 'string') {
+    return data._imagen_url;
+  }
+
+  // 2. Fallback local: construir desde code si _imagen_url no está disponible
+  const baseUrl = 'https://propifymedia01.blob.core.windows.net/media';
+  if (data.code) {
+    const code = String(data.code);
+    if (/\.(jpg|jpeg|png|webp|gif)$/i.test(code)) {
+      return `${baseUrl}/${code}`;
+    }
+    return `${baseUrl}/${code}.jpg`;
+  }
+
+  return null;
+}
+
+/**
+ * Formatea el tipo de requerimiento para mostrar en la tarjeta.
+ * Traduce valores internos a etiquetas legibles.
+ */
+function formatTipoRequerimiento(val) {
+  if (!val) return '';
+  const map = {
+    'compra': 'Compra',
+    'alquiler': 'Alquiler',
+    'anticresis': 'Anticresis',
+    'ambos': 'Compra y Alquiler',
+    'compartido': 'Compartido',
+    'no_especificado': '',
+    'REQUERIMIENTO': 'Requerimiento',
+    'REQUERIMIENTO COMPRA': 'Req. Compra',
+    'REQUERIMIENTO ALQUILER': 'Req. Alquiler',
+    'REQUERIMIENTO COMPRA, REQUERIMIENTO ALQUILER': 'Compra + Alquiler',
+    'REQUERIMIENTO ALQUILER, REQUERIMIENTO COMPRA': 'Alquiler + Compra',
+    'PROPIEDAD VENTA': 'Prop. Venta',
+    'MIXTO': 'Mixto',
+    'BASURA': '',
+    'OTRO': 'Otro',
+  };
+  return map[val] || val;
+}
+
+/* ── window exports: utilities ── */
+window.formatPrice = formatPrice;
+window.formatField = formatField;
+window.escHtml = escHtml;
+window.getPropertyImageUrl = getPropertyImageUrl;
+window.formatTipoRequerimiento = formatTipoRequerimiento;
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * AUX FUNCTIONS
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Re-renderiza SOLO el body de un nodo propiedad (el contenido entre header y footer).
+ * Preserva header (título, botones) y footer (matches).
+ */
+function reRenderPropBody(id, campos) {
+  const nodo = STATE.nodos[id];
+  if (!nodo || !nodo.el || !nodo.field_data) return;
+  if (nodo.tipo !== 'propiedad') return;
+
+  const data = nodo.field_data;
+  const body = nodo.el.querySelector('.cv-node__body');
+  if (!body) return;
+
+  const price = formatPrice(data.price, data.currency);
+  const district = data.district_name || data.district || '';
+
+  body.innerHTML = `
+    <div class="cv-field"><span class="cv-field__key">Precio</span><span class="cv-field__val">${price || '—'}</span></div>
+    <div class="cv-field"><span class="cv-field__key">Distrito</span><span class="cv-field__val">${escHtml(district) || '—'}</span></div>
+    ${campos && campos.length ? campos.filter(c => !['title','price','district_name','id', 'code', 'file'].includes(c)).map(c => `
+      <div class="cv-field"><span class="cv-field__key">${escHtml(c)}</span><span class="cv-field__val">${escHtml(formatField(data[c]))}</span></div>
+    `).join('') : ''}
+  `;
+}
+
+/**
+ * Obtiene la lista actual de campos seleccionados en los checkboxes.
+ */
+function getActiveCampos() {
+  return Array.from(document.querySelectorAll('.campo-check:checked')).map(c => c.value);
+}
+
+function registerNodeEvents(id, el) {
+  const isNota = el.classList.contains('cv-node--nota');
+
+  // Drag: para notas usar .cv-nota__header; para props usar .cv-node__header
+  const dragHandle = el.querySelector('.cv-nota__header') || el.querySelector('.cv-node__header');
+  if (dragHandle) {
+    dragHandle.addEventListener('mousedown', e => {
+      if (e.target.closest('input') || e.target.closest('.cv-btn')) return;
+      startNodeDrag(e, id);
+    });
+  }
+  // En nodos propiedad, también arrastrar desde el body (no en ports/botones)
+  if (!isNota) {
+    el.addEventListener('mousedown', e => {
+      if (e.target.closest('.cv-node__header') || e.target.closest('.cv-nota__header')) return;
+      if (e.target.closest('.cv-btn') || e.target.closest('.cv-port')) return;
+      selectNode(id);
+      startNodeDrag(e, id);
+    });
+  }
+
+  // Connection ports — 4 direcciones (top, right, bottom, left)
+  el.querySelectorAll('.cv-port').forEach(port => {
+    port.addEventListener('mousedown', e => {
+      const portDir = port.dataset.port || 'right';
+      startConnection(e, id, portDir);
+    });
+  });
+
+  // Collapse button (solo para nodos propiedad/requerimiento)
+  const collapseBtn = el.querySelector('.cv-node__collapse');
+  if (collapseBtn) {
+    collapseBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      toggleCollapse(id);
+    });
+  }
+
+  // Delete button — requerimientos: eliminar directo sin confirmación
+  const deleteBtn = el.querySelector('.cv-node__delete');
+  if (deleteBtn) {
+    deleteBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      const isReq = el.classList.contains('cv-node--req');
+      if (isReq) {
+        deleteNode(id);
+      } else if (typeof showConfirmModal === 'function') {
+        showConfirmModal('¿Eliminar este nodo del lienzo?', () => deleteNode(id));
+      } else {
+        deleteNode(id);
+      }
+    });
+  }
+
+  // Matches button (solo para nodos propiedad)
+  const matchesBtn = el.querySelector('.cv-btn--matches');
+  if (matchesBtn) {
+    matchesBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      const propId = matchesBtn.dataset.propId;
+      loadMatchesForProp(propId, id);
+    });
+  }
+
+  // ── NOTA: botón editar título (lápiz) ──
+  const editTitleBtn = el.querySelector('.cv-nota__edit-title');
+  const titleDisplay = el.querySelector('.cv-nota__title-display');
+  const titleInput = el.querySelector('.cv-nota__title-input');
+  if (editTitleBtn && titleDisplay && titleInput) {
+    editTitleBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      titleDisplay.style.display = 'none';
+      titleInput.style.display = '';
+      titleInput.value = titleDisplay.textContent;
+      titleInput.focus();
+      titleInput.select();
+    });
+    titleInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        titleInput.blur();
+      }
+    });
+    titleInput.addEventListener('blur', () => {
+      titleDisplay.textContent = titleInput.value || 'Nota';
+      titleInput.style.display = 'none';
+      titleDisplay.style.display = '';
+      markDirty();
+    });
+  }
+
+  // ── NOTA: botón editar contenido (lápiz) ──
+  const editBodyBtn = el.querySelector('.cv-nota__edit-body');
+  const notaBody = el.querySelector('.cv-nota__body');
+  if (editBodyBtn && notaBody) {
+    editBodyBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      const isEditing = notaBody.getAttribute('contenteditable') === 'true';
+      if (isEditing) {
+        notaBody.setAttribute('contenteditable', 'false');
+        editBodyBtn.textContent = '\u270E Editar';
+        notaBody.blur();
+        markDirty();
+      } else {
+        notaBody.setAttribute('contenteditable', 'true');
+        editBodyBtn.textContent = '\u2714 Listo';
+        notaBody.focus();
+      }
+    });
+    notaBody.addEventListener('input', () => { markDirty(); });
+  }
+
+  // ── NOTA: resize desde esquina ──
+  const resizeHandle = el.querySelector('.cv-nota__resize');
+  if (resizeHandle) {
+    resizeHandle.addEventListener('mousedown', e => {
+      e.stopPropagation();
+      e.preventDefault();
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const startW = el.offsetWidth;
+      const startH = el.offsetHeight;
+      const nodo = STATE.nodos[id];
+
+      const onMouseMove = (ev) => {
+        const vp = STATE.viewport;
+        const newW = Math.max(160, startW + (ev.clientX - startX) / vp.zoom);
+        const newH = Math.max(80, startH + (ev.clientY - startY) / vp.zoom);
+        el.style.width = newW + 'px';
+        el.style.height = newH + 'px';
+        if (nodo) {
+          nodo.width = newW;
+          nodo.height = newH;
+        }
+      };
+
+      const onMouseUp = () => {
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        updateEdges();
+        markDirty();
+      };
+
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    });
+  } // ← cierre de if(resizeHandle)
+
+  // ── GALERÍA: clic en thumbnail abre galería ──
+  const thumb = el.querySelector('.cv-node__thumb');
+  if (thumb) {
+    thumb.addEventListener('click', function(e) {
+      e.stopPropagation();
+      const img = thumb.querySelector('img');
+      const placeholder = thumb.querySelector('.cv-node__thumb-placeholder');
+      const propId = (img && img.dataset.propId) || (placeholder && placeholder.dataset.propId);
+      if (propId && typeof openPropertyGallery === 'function') {
+        openPropertyGallery(parseInt(propId));
+      }
+    });
+  }
+}
+
+function positionNode(id, el, x, y) {
+  el.style.left = x + 'px';
+  el.style.top  = y + 'px';
+}
+
+/* ── window exports: aux functions ── */
+window.reRenderPropBody = reRenderPropBody;
+window.getActiveCampos = getActiveCampos;
+window.registerNodeEvents = registerNodeEvents;
+window.positionNode = positionNode;
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * CREAR NODOS
+ * ═══════════════════════════════════════════════════════════════════════════ */
 
 /**
  * Crea un nodo de tipo Propiedad en el canvas.
@@ -17,12 +317,10 @@
 function createPropNode(sourceId, data, x, y, campos) {
   const id = 'prop_' + sourceId;
   if (STATE.nodos[id]) {
-    // Si ya existe, actualizar field_data y re-renderizar
     STATE.nodos[id].field_data = data;
     reRenderPropBody(id, campos || getActiveCampos());
     return id;
   }
-  // Capturar estado antes de crear nuevo nodo
   if (typeof captureState === 'function') captureState();
 
   const node = document.createElement('div');
@@ -62,7 +360,6 @@ function createPropNode(sourceId, data, x, y, campos) {
       <button class="cv-btn--matches" data-prop-id="${sourceId}">Ver matches &rarr;</button>
       <span class="cv-match-count">— reqs</span>
     </div>
-    <!-- 4 puertos direccionales -->
     <div class="cv-port cv-port--top"    data-node="${id}" data-port="top"></div>
     <div class="cv-port cv-port--right"  data-node="${id}" data-port="right"></div>
     <div class="cv-port cv-port--bottom" data-node="${id}" data-port="bottom"></div>
@@ -85,7 +382,6 @@ function createPropNode(sourceId, data, x, y, campos) {
   return id;
 }
 
-
 /**
  * Re-renderiza el body de TODOS los nodos propiedad con los campos activos.
  * Se llama cuando el usuario cambia los checkboxes de campos.
@@ -97,45 +393,9 @@ function refreshAllPropNodes() {
       reRenderPropBody(n.id, campos);
     }
   });
-  // Re-dibujar aristas después de cambiar campos visibles
   if (typeof updateEdges === 'function') {
     updateEdges();
   }
-}
-
-
-/**
- * Re-renderiza SOLO el body de un nodo propiedad (el contenido entre header y footer).
- * Preserva header (título, botones) y footer (matches).
- */
-function reRenderPropBody(id, campos) {
-  const nodo = STATE.nodos[id];
-  if (!nodo || !nodo.el || !nodo.field_data) return;
-  if (nodo.tipo !== 'propiedad') return;
-
-  const data = nodo.field_data;
-  const body = nodo.el.querySelector('.cv-node__body');
-  if (!body) return;
-
-  const price = formatPrice(data.price, data.currency);
-  const district = data.district_name || data.district || '';
-
-  // Solo actualizar los campos en el body (el thumbnail está fuera del body en createPropNode / renderPlaceholderNodes)
-  body.innerHTML = `
-    <div class="cv-field"><span class="cv-field__key">Precio</span><span class="cv-field__val">${price || '—'}</span></div>
-    <div class="cv-field"><span class="cv-field__key">Distrito</span><span class="cv-field__val">${escHtml(district) || '—'}</span></div>
-    ${campos && campos.length ? campos.filter(c => !['title','price','district_name','id', 'code', 'file'].includes(c)).map(c => `
-      <div class="cv-field"><span class="cv-field__key">${escHtml(c)}</span><span class="cv-field__val">${escHtml(formatField(data[c]))}</span></div>
-    `).join('') : ''}
-  `;
-}
-
-
-/**
- * Obtiene la lista actual de campos seleccionados en los checkboxes.
- */
-function getActiveCampos() {
-  return Array.from(document.querySelectorAll('.campo-check:checked')).map(c => c.value);
 }
 
 /**
@@ -152,7 +412,6 @@ function createReqNode(reqId, data, x, y) {
   node.style.left = x + 'px';
   node.style.top  = y + 'px';
 
-  // ── Extraer datos con fallbacks ──
   const agente      = data.agente || data.titulo || `Req #${reqId}`;
   const telefono    = data.agente_telefono || '';
   const fecha       = data.fecha || '';
@@ -160,7 +419,6 @@ function createReqNode(reqId, data, x, y) {
   const tipoOrig    = data.tipo_original || data.condicion || '';
   const reqTexto    = data.requerimiento || '';
 
-  // Footer fields
   const tipoProp    = data.tipo_propiedad || '';
   const presupuesto = data.presupuesto_monto != null
     ? formatPrice(data.presupuesto_monto, data.presupuesto_moneda)
@@ -170,7 +428,6 @@ function createReqNode(reqId, data, x, y) {
   const zona        = data.zona || '';
   const formaPago   = data.presupuesto_forma_pago || '';
 
-  // Formatear tipo_original para mostrar
   const tipoLabel = formatTipoRequerimiento(tipoOrig);
 
   node.innerHTML = `
@@ -195,7 +452,6 @@ function createReqNode(reqId, data, x, y) {
       ${zona ? `<div class="cv-field"><span class="cv-field__key">📌 Zona</span><span class="cv-field__val">${escHtml(zona)}</span></div>` : ''}
       ${formaPago ? `<div class="cv-field"><span class="cv-field__key">💳 Pago</span><span class="cv-field__val">${escHtml(formaPago)}</span></div>` : ''}
     </div>
-    <!-- 4 puertos direccionales -->
     <div class="cv-port cv-port--top"    data-node="${id}" data-port="top"></div>
     <div class="cv-port cv-port--right"  data-node="${id}" data-port="right"></div>
     <div class="cv-port cv-port--bottom" data-node="${id}" data-port="bottom"></div>
@@ -260,180 +516,10 @@ function createNotaNode(x, y, contenido, color, titulo) {
   return id;
 }
 
-/* ── EVENTOS DE NODO ── */
 
-function registerNodeEvents(id, el) {
-  const isNota = el.classList.contains('cv-node--nota');
-
-  // Drag: para notas usar .cv-nota__header; para props usar .cv-node__header
-  const dragHandle = el.querySelector('.cv-nota__header') || el.querySelector('.cv-node__header');
-  if (dragHandle) {
-    dragHandle.addEventListener('mousedown', e => {
-      // Si el clic es en un input o botón dentro del header, no arrastrar
-      if (e.target.closest('input') || e.target.closest('.cv-btn')) return;
-      startNodeDrag(e, id);
-    });
-  }
-  // En nodos propiedad, también arrastrar desde el body (no en ports/botones)
-  if (!isNota) {
-    el.addEventListener('mousedown', e => {
-      if (e.target.closest('.cv-node__header') || e.target.closest('.cv-nota__header')) return;
-      if (e.target.closest('.cv-btn') || e.target.closest('.cv-port')) return;
-      selectNode(id);
-      startNodeDrag(e, id);
-    });
-  }
-
-  // Connection ports — 4 direcciones (top, right, bottom, left)
-  el.querySelectorAll('.cv-port').forEach(port => {
-    port.addEventListener('mousedown', e => {
-      const portDir = port.dataset.port || 'right';
-      startConnection(e, id, portDir);
-    });
-  });
-
-  // Collapse button (solo para nodos propiedad/requerimiento)
-  const collapseBtn = el.querySelector('.cv-node__collapse');
-  if (collapseBtn) {
-    collapseBtn.addEventListener('click', e => {
-      e.stopPropagation();
-      toggleCollapse(id);
-    });
-  }
-
-  // Delete button — requerimientos: eliminar directo sin confirmación
-  const deleteBtn = el.querySelector('.cv-node__delete');
-  if (deleteBtn) {
-    deleteBtn.addEventListener('click', e => {
-      e.stopPropagation();
-      const isReq = el.classList.contains('cv-node--req');
-      if (isReq) {
-        // Requerimientos: eliminar directamente sin modal
-        deleteNode(id);
-      } else if (typeof showConfirmModal === 'function') {
-        showConfirmModal('¿Eliminar este nodo del lienzo?', () => deleteNode(id));
-      } else {
-        deleteNode(id);
-      }
-    });
-  }
-
-  // Matches button (solo para nodos propiedad)
-  const matchesBtn = el.querySelector('.cv-btn--matches');
-  if (matchesBtn) {
-    matchesBtn.addEventListener('click', e => {
-      e.stopPropagation();
-      const propId = matchesBtn.dataset.propId;
-      loadMatchesForProp(propId, id);
-    });
-  }
-
-  // ── NOTA: botón editar título (lápiz) ──
-  const editTitleBtn = el.querySelector('.cv-nota__edit-title');
-  const titleDisplay = el.querySelector('.cv-nota__title-display');
-  const titleInput = el.querySelector('.cv-nota__title-input');
-  if (editTitleBtn && titleDisplay && titleInput) {
-    editTitleBtn.addEventListener('click', e => {
-      e.stopPropagation();
-      // Mostrar input, ocultar span
-      titleDisplay.style.display = 'none';
-      titleInput.style.display = '';
-      titleInput.value = titleDisplay.textContent;
-      titleInput.focus();
-      titleInput.select();
-    });
-    // Enter en input → guardar
-    titleInput.addEventListener('keydown', e => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        titleInput.blur();
-      }
-    });
-    // Blur → guardar y mostrar span
-    titleInput.addEventListener('blur', () => {
-      titleDisplay.textContent = titleInput.value || 'Nota';
-      titleInput.style.display = 'none';
-      titleDisplay.style.display = '';
-      markDirty();
-    });
-  }
-
-  // ── NOTA: botón editar contenido (lápiz) ──
-  const editBodyBtn = el.querySelector('.cv-nota__edit-body');
-  const notaBody = el.querySelector('.cv-nota__body');
-  if (editBodyBtn && notaBody) {
-    editBodyBtn.addEventListener('click', e => {
-      e.stopPropagation();
-      const isEditing = notaBody.getAttribute('contenteditable') === 'true';
-      if (isEditing) {
-        // Desactivar edición
-        notaBody.setAttribute('contenteditable', 'false');
-        editBodyBtn.textContent = '\u270E Editar';
-        notaBody.blur();
-        markDirty();
-      } else {
-        // Activar edición
-        notaBody.setAttribute('contenteditable', 'true');
-        editBodyBtn.textContent = '\u2714 Listo';
-        notaBody.focus();
-      }
-    });
-    notaBody.addEventListener('input', () => { markDirty(); });
-  }
-
-  // ── NOTA: resize desde esquina ──
-  const resizeHandle = el.querySelector('.cv-nota__resize');
-  if (resizeHandle) {
-    resizeHandle.addEventListener('mousedown', e => {
-      e.stopPropagation();
-      e.preventDefault();
-      const startX = e.clientX;
-      const startY = e.clientY;
-      const startW = el.offsetWidth;
-      const startH = el.offsetHeight;
-      const nodo = STATE.nodos[id];
-
-      const onMouseMove = (ev) => {
-        const vp = STATE.viewport;
-        const newW = Math.max(160, startW + (ev.clientX - startX) / vp.zoom);
-        const newH = Math.max(80, startH + (ev.clientY - startY) / vp.zoom);
-        el.style.width = newW + 'px';
-        el.style.height = newH + 'px';
-        if (nodo) {
-          nodo.width = newW;
-          nodo.height = newH;
-        }
-      };
-
-      const onMouseUp = () => {
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
-        updateEdges();
-        markDirty();
-      };
-
-      document.addEventListener('mousemove', onMouseMove);
-      document.addEventListener('mouseup', onMouseUp);
-    });
-  // ── GALERÍA: clic en thumbnail abre galería ──
-  const thumb = el.querySelector('.cv-node__thumb');
-  if (thumb) {
-    thumb.addEventListener('click', function(e) {
-      e.stopPropagation();
-      const img = thumb.querySelector('img');
-      const placeholder = thumb.querySelector('.cv-node__thumb-placeholder');
-      const propId = (img && img.dataset.propId) || (placeholder && placeholder.dataset.propId);
-      if (propId && typeof openPropertyGallery === 'function') {
-        openPropertyGallery(parseInt(propId));
-      }
-    });
-  }
-}
-
-function positionNode(id, el, x, y) {
-  el.style.left = x + 'px';
-  el.style.top  = y + 'px';
-}
+/* ═══════════════════════════════════════════════════════════════════════════
+ * REST OF FUNCTIONS
+ * ═══════════════════════════════════════════════════════════════════════════ */
 
 function toggleCollapse(id) {
   const nodo = STATE.nodos[id];
@@ -452,7 +538,6 @@ function deleteNode(id) {
   if (typeof captureState === 'function') captureState();
   if (nodo.el && nodo.el.parentNode) nodo.el.parentNode.removeChild(nodo.el);
   delete STATE.nodos[id];
-  // Remove connected edges
   Object.keys(STATE.aristas).forEach(eid => {
     const e = STATE.aristas[eid];
     if (e.origen === id || e.destino === id) {
@@ -481,14 +566,12 @@ function createArchivoNode(data, x, y) {
   node.style.left = (x || 100) + 'px';
   node.style.top  = (y || 100) + 'px';
 
-  // Icono según tipo
   const iconMap = { excel: '📊', word: '📝', pdf: '📄', image: '🖼️', other: '📎' };
   const icon = iconMap[data.tipo] || '📎';
   const badgeClass = 'cv-badge--' + (data.tipo || 'other');
   const tipoLabel = { excel: 'EXCEL', word: 'WORD', pdf: 'PDF', image: 'IMG', other: 'ARCHIVO' };
   const label = tipoLabel[data.tipo] || 'ARCHIVO';
 
-  // Tamaño formateado
   const tamanoStr = formatFileSize(data.tamano);
 
   const officeEmbedUrl = ['excel','word'].includes(data.tipo)
@@ -522,8 +605,7 @@ function createArchivoNode(data, x, y) {
 
   dom.nodes.appendChild(node);
   positionNode(id, node, x || 100, y || 100);
-  
-  // Renderizar preview PDF si aplica
+
   if (data.tipo === 'pdf' && data.id) {
     renderPdfPreview(data.id, `/canvas/api/media/${data.id}/`);
   }
@@ -543,7 +625,6 @@ function createArchivoNode(data, x, y) {
   markDirty();
   return id;
 }
-
 
 /* ── NODO ENLACE (URL) ── */
 
@@ -601,7 +682,6 @@ function createEnlaceNode(url, titulo, x, y) {
   return id;
 }
 
-
 /* ── NODO MATCH COMPARATIVO ── */
 
 /**
@@ -613,10 +693,9 @@ function createEnlaceNode(url, titulo, x, y) {
  */
 async function createMatchNode(matchId, x, y) {
   const id = 'match_' + matchId;
-  if (STATE.nodos[id]) return id; // ya existe
+  if (STATE.nodos[id]) return id;
   if (typeof captureState === 'function') captureState();
 
-  // Crear nodo placeholder inmediatamente
   const node = document.createElement('div');
   node.className = 'cv-node cv-node--match';
   node.dataset.id = id;
@@ -654,7 +733,6 @@ async function createMatchNode(matchId, x, y) {
   registerNodeEvents(id, node);
   markDirty();
 
-  // Cargar datos de la API
   try {
     const res = await fetch(`/canvas/api/match-detail/${matchId}/`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -669,7 +747,6 @@ async function createMatchNode(matchId, x, y) {
   return id;
 }
 
-
 /**
  * Renderiza el body de un nodo match con los datos comparativos.
  */
@@ -681,22 +758,18 @@ function renderMatchNodeBody(nodeId, data) {
   const fecha = data.ejecutado_en || '';
   const campos = data.campos || [];
 
-  // Actualizar título
   const titleEl = nodo.el.querySelector('.cv-node__title');
   if (titleEl) {
     titleEl.textContent = `Match ${score}%`;
   }
 
-  // Construir body
   let html = `<div class="cv-match-table">`;
 
-  // Cabecera compacta: score + fecha
   html += `<div class="cv-match-table__header">
     <span class="cv-match-table__score" style="color:#ffdd00;font-weight:700;">${score}%</span>
     ${fecha ? `<span style="color:var(--cv-text-muted);font-size:10px;">${fecha}</span>` : ''}
   </div>`;
 
-  // Tabla de comparación
   html += `<table class="cv-match-table__grid">
     <thead><tr>
       <th>Campo</th><th>Propiedad</th><th>Requerimiento</th><th style="text-align:center;">Ok</th>
@@ -723,12 +796,10 @@ function renderMatchNodeBody(nodeId, data) {
   const body = nodo.el.querySelector('.cv-node__body');
   if (body) {
     body.innerHTML = html;
-    // Actualizar altura en state
     nodo.height = nodo.el.offsetHeight || 300;
   }
   markDirty();
 }
-
 
 /* ── FORMAT FILE SIZE ── */
 
@@ -744,7 +815,6 @@ function formatFileSize(bytes) {
   return size.toFixed(i > 0 ? 1 : 0) + ' ' + units[i];
 }
 
-
 /* ── MATCHES ── */
 
 async function loadMatchesForProp(propId, nodeId) {
@@ -757,13 +827,11 @@ async function loadMatchesForProp(propId, nodeId) {
     const data = await res.json();
     if (cnt) cnt.textContent = data.total + ' reqs';
 
-    // ── Limpiar aristas match PREVIAS desde este nodo propiedad ──
     const prevEdgeIds = Object.keys(STATE.aristas).filter(
       eid => STATE.aristas[eid].origen === nodeId && STATE.aristas[eid].tipo === 'match'
     );
     prevEdgeIds.forEach(eid => delete STATE.aristas[eid]);
 
-    // ── Crear nodos req y aristas match ──
     if (data.matches && data.matches.length > 0) {
       const prop = STATE.nodos[nodeId];
       const baseX = prop.x + 280;
@@ -771,7 +839,6 @@ async function loadMatchesForProp(propId, nodeId) {
       data.matches.forEach((req, i) => {
         const reqId = req.id;
         const reqNodeId = createReqNode(reqId, req, baseX, baseY + i * 220);
-        // Solo crear arista si no existe ya una entre origen y destino
         const edgeExists = Object.values(STATE.aristas).some(
           e => e.origen === nodeId && e.destino === reqNodeId
         );
@@ -806,18 +873,15 @@ function restoreSnapshot(snapshot) {
   const vp = snapshot.viewport || { x: 0, y: 0, zoom: 1.0 };
   STATE.viewport = vp;
 
-  // Restaurar campos guardados en el snapshot
   if (snapshot.campos && snapshot.campos.length > 0) {
     document.querySelectorAll('.campo-check').forEach(c => {
       c.checked = snapshot.campos.includes(c.value);
     });
   }
 
-  // Guardar agente_id para restaurarlo después de cargar agentes
   STATE._restoreAgenteId = snapshot.agente_id || '';
 
   snapshot.nodos.forEach(n => {
-    // Saltar nodos virtuales (match_badge) guardados por error en snapshots viejos
     if (n.tipo === 'match_badge') return;
 
     if (n.tipo === 'propiedad') {
@@ -825,7 +889,7 @@ function restoreSnapshot(snapshot) {
         id: n.id, tipo: 'propiedad', ref_id: n.ref_id,
         x: n.x, y: n.y, width: n.width || 220, height: n.height || 160,
         collapsed: n.collapsed || false, color: n.color || null, el: null,
-        field_data: n.field_data || null, // snapshot guardado; populatePlaceholderProps lo refresca si puede
+        field_data: n.field_data || null,
       };
     } else if (n.tipo === 'requerimiento') {
       STATE.nodos[n.id] = {
@@ -863,11 +927,8 @@ function restoreSnapshot(snapshot) {
     }
   });
 
-  // Renderizar placeholders hasta que se carguen datos
-  // Filtrar nodos virtuales que no deben renderizarse como tarjetas
   renderPlaceholderNodes(snapshot.nodos.filter(n => n.tipo !== 'match_badge'));
 
-  // Restore edges
   if (snapshot.aristas) {
     snapshot.aristas.forEach(e => {
       STATE.aristas[e.id] = { ...e };
@@ -883,14 +944,12 @@ function restoreSnapshot(snapshot) {
   updateEdges();
 }
 
-
 /**
  * Puebla los nodos placeholder con datos reales desde la API.
  * Busca todas las propiedades visibles y asigna field_data a los nodos
  * cuyo ref_id coincida con el source_id de la propiedad.
  */
 async function populatePlaceholderProps() {
-  // Máximo 3 intentos con retry
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const res = await fetch('/canvas/api/propiedades/');
@@ -898,47 +957,40 @@ async function populatePlaceholderProps() {
       const data = await res.json();
       if (!data.propiedades) return;
 
-      // Indexar propiedades por source_id
       const propsBySourceId = {};
       data.propiedades.forEach(p => {
         propsBySourceId[p._source_id] = p;
       });
 
-      // Refrescar field_data desde la API (sobrescribe datos del snapshot con datos frescos)
       Object.values(STATE.nodos).forEach(n => {
         if (n.tipo === 'propiedad' && n.ref_id) {
           const propData = propsBySourceId[n.ref_id];
           if (propData) {
             n.field_data = propData;
           }
-          // Si no se encuentra en la API, conserva el field_data del snapshot (no se pierde el título)
         }
       });
 
-      // Re-renderizar placeholders con datos reales
       const campos = getActiveCampos();
       Object.values(STATE.nodos).forEach(n => {
         if (n.tipo === 'propiedad' && n.field_data && n.el) {
-          // Actualizar título
           const titleEl = n.el.querySelector('.cv-node__title');
           if (titleEl) {
             const title = n.field_data.title || n.field_data.direction || `Prop #${n.ref_id}`;
             titleEl.textContent = title;
           }
-          // Re-renderizar body
           reRenderPropBody(n.id, campos);
         }
       });
 
-      // Re-dibujar aristas después de re-renderizar nodos
       if (typeof updateEdges === 'function') {
         updateEdges();
       }
-      return; // Éxito, salir del bucle
+      return;
     } catch (err) {
       console.warn(`Error populating placeholder props (intento ${attempt}/3):`, err);
       if (attempt < 3) {
-        await new Promise(r => setTimeout(r, 1000 * attempt)); // Esperar 1s, 2s, ...
+        await new Promise(r => setTimeout(r, 1000 * attempt));
       } else {
         console.error('Error definitivo al poblar propiedades:', err);
       }
@@ -948,9 +1000,8 @@ async function populatePlaceholderProps() {
 
 function renderPlaceholderNodes(nodos) {
   nodos.forEach(n => {
-    // Seguridad: nunca renderizar nodos virtuales como tarjetas
     if (n.tipo === 'match_badge') return;
-    if (STATE.nodos[n.id] && STATE.nodos[n.id].el) return; // already rendered
+    if (STATE.nodos[n.id] && STATE.nodos[n.id].el) return;
     const node = document.createElement('div');
     node.className = `cv-node cv-node--${n.tipo}`;
     node.dataset.id = n.id;
@@ -958,7 +1009,6 @@ function renderPlaceholderNodes(nodos) {
     node.style.top  = n.y + 'px';
 
     if (n.tipo === 'propiedad') {
-      // Usar título guardado en field_data si existe (fallback a "Prop #id")
       const savedFd = n.field_data || {};
       const savedTitle = savedFd.title || savedFd.direction || `Prop #${n.ref_id}`;
       const savedImgUrl = getPropertyImageUrl(savedFd);
@@ -1131,7 +1181,6 @@ function renderPlaceholderNodes(nodos) {
     dom.nodes.appendChild(node);
     STATE.nodos[n.id].el = node;
     if (n.collapsed) node.classList.add('collapsed');
-    // Restaurar dimensiones guardadas
     if (n.width) node.style.width = n.width + 'px';
     if (n.height) node.style.minHeight = n.height + 'px';
     registerNodeEvents(n.id, node);
@@ -1155,86 +1204,10 @@ function renderPlaceholderNodes(nodos) {
   });
 }
 
-/* ── IMAGE HELPER ── */
 
-/**
- * Obtiene la URL de imagen de una propiedad.
- * Prioriza la URL calculada por el servidor (`_imagen_url`),
- * que incluye la consulta a property_media para obtener la imagen real.
- * @param {object} data - field_values de la propiedad (incluye _imagen_url)
- * @returns {string|null} URL de imagen o null
- */
-function getPropertyImageUrl(data) {
-  if (!data) return null;
-  
-  // 1. URL calculada por el servidor (consulta property_media + fallback code)
-  if (data._imagen_url && typeof data._imagen_url === 'string') {
-    return data._imagen_url;
-  }
-  
-  // 2. Fallback local: construir desde code si _imagen_url no está disponible
-  const baseUrl = 'https://propifymedia01.blob.core.windows.net/media';
-  if (data.code) {
-    const code = String(data.code);
-    if (/\.(jpg|jpeg|png|webp|gif)$/i.test(code)) {
-      return `${baseUrl}/${code}`;
-    }
-    return `${baseUrl}/${code}.jpg`;
-  }
-  
-  return null;
-}
-
-/* ── UTILITIES ── */
-
-function formatPrice(val, currency) {
-  if (val === null || val === undefined) return '—';
-  const num = parseFloat(val);
-  if (isNaN(num)) return val;
-  const sym = currency === 'PEN' ? 'S/ ' : currency === 'USD' ? '$ ' : '$ ';
-  return sym + num.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-}
-
-function formatField(val) {
-  if (val === null || val === undefined) return '—';
-  if (typeof val === 'object') return JSON.stringify(val);
-  return String(val);
-}
-
-function escHtml(str) {
-  if (str === null || str === undefined) return '';
-  const div = document.createElement('div');
-  div.textContent = String(str);
-  return div.innerHTML;
-}
-
-/**
- * Formatea el tipo de requerimiento para mostrar en la tarjeta.
- * Traduce valores internos a etiquetas legibles.
- */
-function formatTipoRequerimiento(val) {
-  if (!val) return '';
-  const map = {
-    'compra': 'Compra',
-    'alquiler': 'Alquiler',
-    'anticresis': 'Anticresis',
-    'ambos': 'Compra y Alquiler',
-    'compartido': 'Compartido',
-    'no_especificado': '',
-    'REQUERIMIENTO': 'Requerimiento',
-    'REQUERIMIENTO COMPRA': 'Req. Compra',
-    'REQUERIMIENTO ALQUILER': 'Req. Alquiler',
-    'REQUERIMIENTO COMPRA, REQUERIMIENTO ALQUILER': 'Compra + Alquiler',
-    'REQUERIMIENTO ALQUILER, REQUERIMIENTO COMPRA': 'Alquiler + Compra',
-    'PROPIEDAD VENTA': 'Prop. Venta',
-    'MIXTO': 'Mixto',
-    'BASURA': '',
-    'OTRO': 'Otro',
-  };
-  return map[val] || val;
-}
-
-/* ── PDF PREVIEW ── */
+/* ═══════════════════════════════════════════════════════════════════════════
+ * PDF PREVIEW
+ * ═══════════════════════════════════════════════════════════════════════════ */
 
 /**
  * Renderiza la primera página de un PDF como thumbnail usando PDF.js.
@@ -1245,7 +1218,6 @@ function renderPdfPreview(archivoId, pdfUrl) {
   const container = document.querySelector(`.cv-pdf-preview[data-pdf-id="${archivoId}"]`);
   if (!container) return;
 
-  // Cargar PDF.js desde CDN si no está disponible
   if (typeof pdfjsLib === 'undefined') {
     const script = document.createElement('script');
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
@@ -1271,12 +1243,10 @@ function doRenderPdf(container, pdfUrl) {
     const canvas = document.createElement('canvas');
     canvas.width = viewport.width;
     canvas.height = viewport.height;
-    // No setear inline width/height — el CSS con max-width/max-height lo contiene
     container.innerHTML = '';
     container.appendChild(canvas);
     return page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise;
   }).catch(function() {
     container.innerHTML = '<span style="font-size:10px;color:var(--cv-text-muted);">Vista previa no disponible</span>';
   });
-}
 }

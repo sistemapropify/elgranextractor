@@ -420,7 +420,7 @@ class BusquedaPropiedadesSkill(BaseSkill):
                 documentos = self._reranking_semantico(documentos, semantic_query)
 
             # Paso 3: Limitar resultados
-            top_k = params.get('top_k') or 50
+            top_k = params.get('top_k') or 999
             if len(documentos) > top_k:
                 documentos = documentos[:top_k]
 

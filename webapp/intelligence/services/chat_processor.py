@@ -667,6 +667,11 @@ class ChatProcessor:
             'trae', 'traiga', 'traer',
             'cargar', 'carga', 'colocar', 'coloca',
             'agrega al lienzo', 'agregue al lienzo',
+            'busca', 'buscar', 'busque', 'busquemos',
+            'encuentra', 'encontrar', 'encuentre',
+            'muestra', 'mostrar', 'muéstrame', 'muestrame',
+            'lista', 'listar', 'listame', 'listarme',
+            'quiero ver', 'quisiera ver', 'necesito',
         ]
         quiere_agregar = any(p in mensaje_lower for p in INTENCION_AGREGAR)
         
@@ -680,7 +685,7 @@ class ChatProcessor:
             'mueve', 'mover',
             'pon a la izquierda', 'pon a la derecha',
             'pon arriba', 'pon abajo',
-            'separado', 'separada', 'separados', 'separadas',
+            'separa', 'separar', 'separado', 'separada', 'separados', 'separadas',
             'junto', 'junta', 'juntos', 'juntas',
             'fila', 'vertical', 'horizontal',
             'en circulo', 'en círculo', 'circulo', 'círculo',
@@ -1054,7 +1059,7 @@ class ChatProcessor:
                     	elif isinstance(propiedades_data, dict):
                     		props_list = propiedades_data.get('propiedades', [])
                     	
-                    	for prop in props_list[:10]:  # Máximo 10 nodos
+                    	for prop in props_list:  # Sin límite - la skill ya controla top_k
                     		fv = prop.get('field_values', prop)
                     		source_id = prop.get('source_id') or fv.get('_source_id')
                     		if not source_id:
@@ -1168,10 +1173,11 @@ class ChatProcessor:
                     		columns = 1
                     	
                     	# Detectar separación entre tarjetas
-                    	sep_match = re.search(r'(\d+)\s*centimetr', mensaje_reordenar)
+                    	sep_match = re.search(r'(\d+)\s*(centimetr|cm|cm\.)', mensaje_reordenar)
                     	separacion = 10  # default 10px si menciona separación
                     	if sep_match:
-                    		separacion = int(sep_match.group(1))
+                    	    raw_val = int(sep_match.group(1))
+                    	    separacion = int(raw_val * 37.8)  # convertir cm a px (~37.8px/cm)
                     	
                     	# Detectar estrategia: agrupar
                     	if any(p in mensaje_reordenar for p in ['agrupa', 'agrupar', 'grupo']):
