@@ -226,7 +226,7 @@
   const USER_ID   = '{{ user_id }}';
 </script>
 <script src="{% static 'canvas/js/canvas_engine.js' %}?v=5"></script>
-<script src="{% static 'canvas/js/canvas_nodes.js' %}?v=6"></script>
+<script src="{% static 'canvas/js/canvas_nodes.js' %}?v=9"></script>
 <script src="{% static 'canvas/js/canvas_edges.js' %}?v=5"></script>
 <script src="{% static 'canvas/js/canvas_sidebar.js' %}?v=5"></script>
 <script src="{% static 'canvas/js/canvas_match_modal.js' %}?v=5"></script>
@@ -234,7 +234,7 @@
 <script src="{% static 'canvas/js/canvas_history.js' %}?v=5"></script>
 <script src="{% static 'canvas/js/canvas_modal.js' %}?v=5"></script>
 <script src="{% static 'canvas/js/canvas_insert.js' %}?v=5"></script>
-<script src="{% static 'canvas/js/canvas_gallery.js' %}?v=1"></script>
+<script src="{% static 'canvas/js/canvas_gallery.js' %}?v=2"></script>
 <script>
 /* ── CHAT CANVAS ── */
 var _canvasConvId = null;
@@ -363,12 +363,12 @@ function cargarScriptSiFalta(url, checkFn, callback) {
 }
 
 function asegurarCanvasNodesJS(callback) {
-  if (typeof createPropNode === 'function') { callback(); return; }
+  if (typeof createPropNode === 'function' && typeof formatPrice === 'function') { callback(); return; }
   // canvas_engine.js define: STATE, dom, positionNode, captureState, markDirty
   // canvas_nodes.js define: createPropNode, formatPrice, escHtml, getPropertyImageUrl
   // NOTA: escHtml y formatPrice estan en canvas_nodes.js, NO en canvas_engine.js
   var engineCargado = (typeof STATE !== 'undefined' && typeof dom !== 'undefined');
-  var nodesCargado = (typeof createPropNode === 'function');
+  var nodesCargado = (typeof createPropNode === 'function' && typeof formatPrice === 'function');
   
   if (engineCargado && nodesCargado) { callback(); return; }
   
@@ -378,14 +378,14 @@ function asegurarCanvasNodesJS(callback) {
       function() {
         console.log('[CanvasChat] canvas_engine.js cargado');
         cargarScriptSiFalta('/static/canvas/js/canvas_nodes.js',
-          function() { return typeof createPropNode === 'function'; },
+          function() { return typeof createPropNode === 'function' && typeof formatPrice === 'function'; },
           function() { console.log('[CanvasChat] canvas_nodes.js cargado'); callback(); }
         );
       }
     );
   } else {
     cargarScriptSiFalta('/static/canvas/js/canvas_nodes.js',
-      function() { return typeof createPropNode === 'function'; },
+      function() { return typeof createPropNode === 'function' && typeof formatPrice === 'function'; },
       function() { console.log('[CanvasChat] canvas_nodes.js cargado'); callback(); }
     );
   }
@@ -398,9 +398,9 @@ function executeAddNodesAction(action, mensaje) {
     document.getElementById('chat-messages').appendChild(emptyDiv);
     return;
   }
-  // Si createPropNode no está disponible, cargar canvas_nodes.js dinámicamente
-  if (typeof createPropNode !== 'function') {
-    console.warn('[CanvasChat] createPropNode no disponible, cargando canvas_nodes.js...');
+  // Verificar que las funciones necesarias están disponibles
+  if (typeof createPropNode !== 'function' || typeof formatPrice !== 'function') {
+    console.warn('[CanvasChat] createPropNode o formatPrice no disponible, cargando canvas_nodes.js...');
     asegurarCanvasNodesJS(function() {
       executeAddNodesAction(action, mensaje);
     });
