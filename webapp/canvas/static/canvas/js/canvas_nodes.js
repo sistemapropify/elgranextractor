@@ -979,6 +979,19 @@ async function populatePlaceholderProps() {
             const title = n.field_data.title || n.field_data.direction || `Prop #${n.ref_id}`;
             titleEl.textContent = title;
           }
+          // Actualizar thumbnail si hay nueva URL de imagen
+          const thumb = n.el.querySelector('.cv-node__thumb');
+          if (thumb) {
+            const newImgUrl = getPropertyImageUrl(n.field_data);
+            const existingImg = thumb.querySelector('img');
+            if (newImgUrl && (!existingImg || existingImg.src !== newImgUrl)) {
+              thumb.classList.remove('cv-node__thumb--empty');
+              thumb.innerHTML = `<img src="${escHtml(newImgUrl)}" loading="lazy" onerror="this.parentElement.classList.add('cv-node__thumb--empty')" alt="" data-prop-id="${n.ref_id}">`;
+            } else if (!newImgUrl && !existingImg) {
+              thumb.classList.add('cv-node__thumb--empty');
+              thumb.innerHTML = `<div class="cv-node__thumb-placeholder" data-prop-id="${n.ref_id}" title="Ver galería">📷</div>`;
+            }
+          }
           reRenderPropBody(n.id, campos);
         }
       });
@@ -1020,7 +1033,8 @@ function renderPlaceholderNodes(nodos) {
           <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
         </div>
         <div class="cv-node__thumb${savedImgUrl ? '' : ' cv-node__thumb--empty'}">
-          ${savedImgUrl ? `<img src="${escHtml(savedImgUrl)}" loading="lazy" onerror="this.parentElement.classList.add('cv-node__thumb--empty')" alt="">` : ''}
+          ${savedImgUrl ? `<img src="${escHtml(savedImgUrl)}" loading="lazy" onerror="this.parentElement.classList.add('cv-node__thumb--empty')" alt="" data-prop-id="${n.ref_id}">` : ''}
+          ${!savedImgUrl ? `<div class="cv-node__thumb-placeholder" data-prop-id="${n.ref_id}" title="Ver galería">📷</div>` : ''}
         </div>
         <div class="cv-node__body"><div style="color:var(--cv-text-muted);font-size:11px;text-align:center;padding:8px">Cargando datos...</div></div>
         <div class="cv-node__footer">
