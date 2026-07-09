@@ -358,15 +358,15 @@ def api_propiedad_imagenes(request, prop_id):
         from django.db import connections
         with connections['propifai'].cursor() as cursor:
             cursor.execute("""
-                SELECT pm.[file], pm.media_type, pm.sort_order
+                SELECT pm.[file], pm.media_type
                 FROM property_media pm
                 WHERE pm.property_id = %s
                   AND pm.media_type = 'image'
-                ORDER BY ISNULL(pm.sort_order, 999), pm.[file]
+                ORDER BY pm.[file]
             """, [prop_id])
             
             for row in cursor.fetchall():
-                file_path, media_type, sort_order = row
+                file_path, media_type = row
                 if file_path:
                     if file_path.startswith('/'):
                         file_path = file_path[1:]
@@ -375,12 +375,11 @@ def api_propiedad_imagenes(request, prop_id):
                         'url': url,
                         'file': file_path,
                         'type': media_type or 'image',
-                        'sort_order': sort_order or 999,
                     })
     except Exception as e:
         logger.warning(f"Error obteniendo imágenes para propiedad {prop_id}: {e}")
 
-    # Fallback: si no hay imágenes en property_media, intentar con code + numeracion
+    # Fallback: si no hay imágenes en property_media, intentar con code
     if not imagenes:
         try:
             col = IntelligenceCollection.objects.get(name='propiedadespropify')
@@ -391,12 +390,13 @@ def api_propiedad_imagenes(request, prop_id):
                 code = doc.field_values.get('code')
                 if code:
                     code_str = str(code)
-                    base = code_str if not any(code_str.lower().endswith(ext) for ext in ['.jpg','.jpeg','.png','.webp']) else code_str.rsplit('.', 1)[0]
+                    # Asegurar extensión de archivo
+                    if not any(code_str.lower().endswith(ext) for ext in ['.jpg','.jpeg','.png','.webp','.gif']):
+                        code_str += '.jpg'
                     imagenes.append({
                         'url': f"{MEDIA_BASE}/{code_str}",
                         'file': code_str,
                         'type': 'image',
-                        'sort_order': 0,
                     })
         except Exception:
             pass
