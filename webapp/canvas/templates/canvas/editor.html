@@ -234,7 +234,7 @@
 <script src="{% static 'canvas/js/canvas_history.js' %}?v=5"></script>
 <script src="{% static 'canvas/js/canvas_modal.js' %}?v=5"></script>
 <script src="{% static 'canvas/js/canvas_insert.js' %}?v=5"></script>
-<script src="{% static 'canvas/js/canvas_gallery.js' %}?v=2"></script>
+<script src="{% static 'canvas/js/canvas_gallery.js' %}?v={% now 'U' %}"></script>
 <script>
 /* ── CHAT CANVAS ── */
 var _canvasConvId = null;
