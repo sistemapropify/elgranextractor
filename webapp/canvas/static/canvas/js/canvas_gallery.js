@@ -31,8 +31,9 @@ async function openPropertyGallery(propId) {
   body.innerHTML = '<div class="cv-gallery__loading">Cargando imágenes...</div>';
   modal.style.display = 'flex';
 
+  let res = null;
   try {
-    const res = await fetch(`/canvas/api/propiedad-imagenes/${propId}/`);
+    res = await fetch(`/canvas/api/propiedad-imagenes/${propId}/`);
     const data = await res.json();
 
     if (!data.imagenes || data.imagenes.length === 0) {
@@ -50,8 +51,10 @@ async function openPropertyGallery(propId) {
     updateGalleryCounter();
 
   } catch (err) {
-    body.innerHTML = '<div class="cv-gallery__error">Error al cargar las imágenes</div>';
-    console.error('Gallery error:', err);
+    const statusInfo = res ? `HTTP ${res.status}` : 'sin respuesta';
+    const errMsg = err.message || String(err);
+    body.innerHTML = `<div class="cv-gallery__error">Error al cargar imágenes (${statusInfo})</div>`;
+    console.error(`Gallery error [propId=${propId}]:`, statusInfo, errMsg);
   }
 }
 
