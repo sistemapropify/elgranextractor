@@ -1629,7 +1629,7 @@ function renderLeadAnalysisBody(nodeId, data) {
     if (!bar) return;
     var propId = bar.getAttribute('data-prop-id');
     var date = bar.getAttribute('data-date');
-    if (propId && date) loadLeadNodes(propId, date, nodeId);
+    if (date) loadLeadNodes(propId, date, nodeId);
   };
   body.addEventListener('click', body._leadBarClick);
   nodo.height = nodo.el.offsetHeight || 280;
@@ -1641,7 +1641,7 @@ function renderLeadAnalysisBody(nodeId, data) {
  * Carga los leads de una propiedad en una fecha y crea nodos en el canvas.
  */
 async function loadLeadNodes(propId, dateStr, analysisNodeId) {
-  if (!propId || !dateStr) return;
+  if (!dateStr) return;
   if (typeof captureState === 'function') captureState();
 
   try {
