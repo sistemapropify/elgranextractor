@@ -1,0 +1,96 @@
+C:\Users\USUARIO\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\requests\__init__.py:113: RequestsDependencyWarning: urllib3 (2.6.3) or chardet (7.4.3)/charset_normalizer (3.4.4) doesn't match a supported version!
+  warnings.warn(
+INFO 2026-07-14 11:13:22,990 apps: === SPEC-014: Pre-carga de modelos de embeddings ===
+INFO 2026-07-14 11:13:33,754 rag: Sin GPU detectada — cargando modelo en CPU
+INFO 2026-07-14 11:13:33,754 rag: Inicializando modelo de embeddings: intfloat/multilingual-e5-small
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Monkey patch aplicado a django.template.context.__copy__
+Loading weights:   0%|          | 0/199 [00:00<?, ?it/s]Loading weights: 100%|##########| 199/199 [00:00<00:00, 5611.43it/s]
+INFO 2026-07-14 11:13:46,666 rag: Modelo de embeddings inicializado (intfloat/multilingual-e5-small, 384 dimensiones, device=cpu, carga=23662ms)
+INFO 2026-07-14 11:13:46,666 rag: Modelo de embeddings pre-cargado exitosamente
+INFO 2026-07-14 11:13:46,666 semantic_router: SemanticSkillRouter inicializado: 225 templates, 26 skills, threshold=0.45
+INFO 2026-07-14 11:13:47,678 semantic_router: Pre-calculados 225/225 embeddings de templates para 26 skills en 1012ms (batch encoding)
+INFO 2026-07-14 11:13:47,678 apps: [SPEC-014] Resumen de pre-carga: modelo=\u2705 | templates=225 | tiempo_total=24688ms
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Users\USUARIO\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\__init__.py", line 1154, in emit
+    stream.write(msg + self.terminator)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\USUARIO\AppData\Local\Python\pythoncore-3.14-64\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2705' in position 86: character maps to <undefined>
+Call stack:
+  File "<string>", line 1, in <module>
+    import os; os.environ['DJANGO_SETTINGS_MODULE']='settings'; import django; django.setup(); from django.conf import settings; print('DEBUG:', settings.DEBUG); print('WHITENOISE:', 'whitenoise' in settings.INSTALLED_APPS)
+  File "C:\Users\USUARIO\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\django\__init__.py", line 24, in setup
+    apps.populate(settings.INSTALLED_APPS)
+  File "C:\Users\USUARIO\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\django\apps\registry.py", line 124, in populate
+    app_config.ready()
+  File "d:\PROMETEO\webapp\intelligence\apps.py", line 43, in ready
+    self._preload_models()
+  File "d:\PROMETEO\webapp\intelligence\apps.py", line 209, in _preload_models
+    logger.info(
+Message: '[SPEC-014] Resumen de pre-carga: modelo=\u2705 | templates=225 | tiempo_total=24688ms'
+Arguments: ()
+INFO 2026-07-14 11:13:47,681 apps: === SPEC-014: Fin de pre-carga ===
+DEBUG 2026-07-14 11:13:47,682 apps: Signals de inteligencia registrados correctamente
+INFO 2026-07-14 11:13:47,684 faiss_index: Directorio de índices FAISS: d:\PROMETEO\webapp\intelligence\data\faiss_indexes
+INFO 2026-07-14 11:13:47,798 faiss_index: Índice FAISS cargado para 'propiedadespropify': 147 vectores, dimensión=384
+INFO 2026-07-14 11:13:47,802 faiss_index: Índice FAISS cargado para 'requerimientos_enbedados': 700 vectores, dimensión=384
+INFO 2026-07-14 11:13:47,802 faiss_index: Índices FAISS cargados: 2 colecciones
+WARNING 2026-07-14 11:13:47,816 base: Skill 'suma' tiene categoría 'ejemplos' no estándar. Usar: busqueda, crm, reporte, notificacion, template, custom
+WARNING 2026-07-14 11:13:47,817 base: Skill 'resta' tiene categoría 'ejemplos' no estándar. Usar: busqueda, crm, reporte, notificacion, template, custom
+WARNING 2026-07-14 11:13:47,817 base: Skill 'multiplicacion' tiene categoría 'ejemplos' no estándar. Usar: busqueda, crm, reporte, notificacion, template, custom
+WARNING 2026-07-14 11:13:47,817 base: Skill 'division' tiene categoría 'ejemplos' no estándar. Usar: busqueda, crm, reporte, notificacion, template, custom
+WARNING 2026-07-14 11:13:47,817 base: Skill 'potencia' tiene categoría 'ejemplos' no estándar. Usar: busqueda, crm, reporte, notificacion, template, custom
+WARNING 2026-07-14 11:13:47,817 base: Skill 'raiz_cuadrada' tiene categoría 'ejemplos' no estándar. Usar: busqueda, crm, reporte, notificacion, template, custom
+WARNING 2026-07-14 11:13:47,817 base: Skill 'estadisticas_basicas' tiene categoría 'ejemplos' no estándar. Usar: busqueda, crm, reporte, notificacion, template, custom
+WARNING 2026-07-14 11:13:47,818 base: Skill 'contar_palabras' tiene categoría 'ejemplos' no estándar. Usar: busqueda, crm, reporte, notificacion, template, custom
+WARNING 2026-07-14 11:13:47,818 base: Skill 'filtrar_lista' tiene categoría 'ejemplos' no estándar. Usar: busqueda, crm, reporte, notificacion, template, custom
+WARNING 2026-07-14 11:13:47,818 base: Skill 'ordenar_lista' tiene categoría 'ejemplos' no estándar. Usar: busqueda, crm, reporte, notificacion, template, custom
+WARNING 2026-07-14 11:13:47,818 base: Skill 'resumir_texto' tiene categoría 'ejemplos' no estándar. Usar: busqueda, crm, reporte, notificacion, template, custom
+INFO 2026-07-14 11:13:47,825 registry: Skill registrada: 'busqueda_propiedades' (categoría: busqueda, nivel: 1)
+INFO 2026-07-14 11:13:47,825 registry: Skill registrada: 'acm_analisis' (categoría: reporte, nivel: 1)
+INFO 2026-07-14 11:13:47,825 registry: Skill registrada: 'reporte_precios_zona' (categoría: reporte, nivel: 1)
+INFO 2026-07-14 11:13:47,825 registry: Skill registrada: 'matching_oferta_demanda' (categoría: crm, nivel: 1)
+INFO 2026-07-14 11:13:47,826 registry: Skill registrada: 'matching_hibrido' (categoría: crm, nivel: 1)
+INFO 2026-07-14 11:13:47,826 registry: Skill registrada: 'busqueda_exacta' (categoría: busqueda, nivel: 1)
+INFO 2026-07-14 11:13:47,826 registry: Skill registrada: 'formatear_propiedades' (categoría: busqueda, nivel: 1)
+INFO 2026-07-14 11:13:47,826 registry: Skill registrada: 'clasificar_intencion_whatsapp' (categoría: crm, nivel: 1)
+INFO 2026-07-14 11:13:47,826 registry: Skill registrada: 'suma' (categoría: ejemplos, nivel: 1)
+INFO 2026-07-14 11:13:47,826 registry: Skill registrada: 'resta' (categoría: ejemplos, nivel: 1)
+INFO 2026-07-14 11:13:47,826 registry: Skill registrada: 'multiplicacion' (categoría: ejemplos, nivel: 1)
+INFO 2026-07-14 11:13:47,826 registry: Skill registrada: 'division' (categoría: ejemplos, nivel: 1)
+INFO 2026-07-14 11:13:47,826 registry: Skill registrada: 'potencia' (categoría: ejemplos, nivel: 1)
+INFO 2026-07-14 11:13:47,826 registry: Skill registrada: 'raiz_cuadrada' (categoría: ejemplos, nivel: 1)
+INFO 2026-07-14 11:13:47,826 registry: Skill registrada: 'estadisticas_basicas' (categoría: ejemplos, nivel: 1)
+INFO 2026-07-14 11:13:47,826 registry: Skill registrada: 'contar_palabras' (categoría: ejemplos, nivel: 1)
+INFO 2026-07-14 11:13:47,826 registry: Skill registrada: 'filtrar_lista' (categoría: ejemplos, nivel: 1)
+INFO 2026-07-14 11:13:47,827 registry: Skill registrada: 'ordenar_lista' (categoría: ejemplos, nivel: 1)
+INFO 2026-07-14 11:13:47,827 registry: Skill registrada: 'resumir_texto' (categoría: ejemplos, nivel: 1)
+INFO 2026-07-14 11:13:47,827 registry: Skill registrada: 'metricas_globales' (categoría: reporte, nivel: 5)
+INFO 2026-07-14 11:13:47,827 registry: Skill registrada: 'reporte_ventas' (categoría: reporte, nivel: 5)
+INFO 2026-07-14 11:13:47,827 registry: Skill registrada: 'analisis_rendimiento' (categoría: reporte, nivel: 5)
+INFO 2026-07-14 11:13:47,827 registry: Skill registrada: 'consultar_normativa' (categoría: busqueda, nivel: 1)
+INFO 2026-07-14 11:13:47,827 registry: Skill registrada: 'revisar_contrato' (categoría: custom, nivel: 3)
+INFO 2026-07-14 11:13:47,827 registry: Skill registrada: 'aspectos_legales' (categoría: busqueda, nivel: 1)
+INFO 2026-07-14 11:13:47,827 registry: Skill registrada: 'campanas_activas' (categoría: reporte, nivel: 3)
+INFO 2026-07-14 11:13:47,827 registry: Skill registrada: 'leads_generados' (categoría: reporte, nivel: 3)
+INFO 2026-07-14 11:13:47,827 registry: Skill registrada: 'metricas_marketing' (categoría: reporte, nivel: 3)
+INFO 2026-07-14 11:13:47,827 registry: Skill registrada: 'mis_propiedades' (categoría: busqueda, nivel: 1)
+INFO 2026-07-14 11:13:47,827 registry: Skill registrada: 'mis_requerimientos' (categoría: crm, nivel: 1)
+INFO 2026-07-14 11:13:47,828 registry: Skill registrada: 'mis_matches' (categoría: crm, nivel: 1)
+INFO 2026-07-14 11:13:47,828 registry: Skill registrada: 'portafolio_agente' (categoría: busqueda, nivel: 1)
+INFO 2026-07-14 11:13:47,828 registry: Skill registrada: 'analizar_oportunidad' (categoría: reporte, nivel: 1)
+INFO 2026-07-14 11:13:47,828 registry: Skill registrada: 'equipo_a_cargo' (categoría: reporte, nivel: 3)
+INFO 2026-07-14 11:13:47,828 registry: Skill registrada: 'desempeno_agentes' (categoría: reporte, nivel: 3)
+INFO 2026-07-14 11:13:47,828 registry: Skill registrada: 'reporte_equipo' (categoría: reporte, nivel: 3)
+INFO 2026-07-14 11:13:47,828 registry: Skill registrada: 'logs_sistema' (categoría: reporte, nivel: 4)
+INFO 2026-07-14 11:13:47,828 registry: Skill registrada: 'errores_recientes' (categoría: reporte, nivel: 4)
+INFO 2026-07-14 11:13:47,828 registry: Skill registrada: 'estado_servicios' (categoría: reporte, nivel: 4)
+INFO 2026-07-14 11:13:47,828 apps: Skills registradas en SkillRegistry al iniciar Django (incluye 20 nuevas skills multi-rol)
+INFO 2026-07-14 11:13:48,718 semantic_router: Pre-calculados 225/225 embeddings de templates para 26 skills en 889ms (batch encoding)
+INFO 2026-07-14 11:13:48,718 apps: Semantic Router: 225 templates embeddeados para routing semántico
+DEBUG: True
+WHITENOISE: False

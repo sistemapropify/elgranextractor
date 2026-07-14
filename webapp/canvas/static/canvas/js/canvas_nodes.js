@@ -1,4 +1,9 @@
 /**
+ * canvas_nodes.js — PropFlow Canvas Nodes (v11 - granularity fix)
+ * DEBUG: Si ves este mensaje, el JS nuevo está cargado.
+ */
+console.log('[CanvasNodes] v11 cargado - formatLeadDate con string parsing');
+/**
  * canvas_nodes.js — PropFlow Canvas Nodes
  *
  * Renderizado y lógica de nodos: Propiedad, Requerimiento, Nota, Archivo, Enlace, Match.
