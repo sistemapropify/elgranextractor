@@ -1619,11 +1619,11 @@ async function loadLeadNodes(propId, dateStr, analysisNodeId) {
     if (!analysisNode) return;
 
     // Centrar los lead nodes verticalmente respecto al nodo de analisis
-    var nodeHeight = 160; // altura estimada por nodo lead
-    var spacing = 200;    // separacion entre nodos
-    var totalHeight = leads.length * spacing;
-    var startX = analysisNode.x + analysisNode.width + 60;
-    var startY = analysisNode.y + (analysisNode.height || 280) / 2 - totalHeight / 2;
+    var nodeHeight = 180; // altura por nodo lead
+    var spacing = 250;    // separacion entre nodos (mas separados)
+    var totalVisualHeight = (leads.length - 1) * spacing + nodeHeight;
+    var startX = analysisNode.x + analysisNode.width + 80;
+    var startY = analysisNode.y + (analysisNode.height || 280) / 2 - totalVisualHeight / 2;
     if (startY < 50) startY = 50;
 
     leads.forEach(function(lead, idx) {
