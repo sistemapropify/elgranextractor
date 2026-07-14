@@ -1520,12 +1520,18 @@ async function openLeadAnalysis(propId, propNodeId) {
 async function reloadLeadGranularity(nodeId, granularity) {
   const nodo = STATE.nodos[nodeId];
   if (!nodo || !nodo.el) return;
-  const propId = nodo.ref_id || (nodo.field_data && nodo.field_data.prop_id);
-  if (!propId) return;
   const body = nodo.el.querySelector('.cv-node__body');
   if (body) body.innerHTML = '<div style="text-align:center;padding:20px;color:var(--cv-text-muted);">Cargando...</div>';
   try {
-    const res = await fetch('/canvas/api/lead-analysis/' + propId + '/?granularity=' + granularity);
+    var url;
+    if (nodo.tipo === 'lead_global') {
+      url = '/canvas/api/lead-analysis-global/?granularity=' + granularity;
+    } else {
+      const propId = nodo.ref_id || (nodo.field_data && nodo.field_data.prop_id);
+      if (!propId) throw new Error('Sin propId');
+      url = '/canvas/api/lead-analysis/' + propId + '/?granularity=' + granularity;
+    }
+    const res = await fetch(url);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     nodo.field_data = nodo.field_data || {};
     nodo.field_data._granularity = granularity;
@@ -1589,7 +1595,8 @@ function renderLeadAnalysisBody(nodeId, data) {
       var barH = Math.max(4, (d.count / maxCount) * 80);
       var label = formatLeadDate(d.date, granularity);
       var dateKey = d.date ? d.date.split('T')[0] : '';
-      html += '<div class="cv-lead-bar" data-prop-id="' + nodo.ref_id + '" data-date="' + escHtml(dateKey) + '" style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:28px;cursor:pointer;" title="' + escHtml(d.date) + ': ' + d.count + ' leads — Click para ver leads">';
+      var propAttr = nodo.ref_id ? ' data-prop-id="' + nodo.ref_id + '"' : '';
+      html += '<div class="cv-lead-bar"' + propAttr + ' data-date="' + escHtml(dateKey) + '" style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:28px;cursor:pointer;" title="' + escHtml(d.date) + ': ' + d.count + ' leads — Click para ver leads">';
       html += '<span style="font-size:9px;color:var(--cv-text-muted);margin-bottom:2px;">' + d.count + '</span>';
       html += '<div style="width:20px;height:' + barH + 'px;background:#5c6bc0;border-radius:3px 3px 0 0;opacity:0.8;transition:opacity 0.15s;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.8"></div>';
       html += '<span style="font-size:7px;color:var(--cv-text-muted);margin-top:3px;writing-mode:vertical-lr;transform:rotate(180deg);">' + escHtml(label) + '</span>';
