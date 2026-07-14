@@ -1332,21 +1332,32 @@ function granularityLabel(gran) {
 
 function formatLeadDate(dateStr, granularity) {
   if (!dateStr) return '';
-  var d = new Date(dateStr + (dateStr.indexOf('T') === -1 ? 'T00:00:00' : ''));
-  if (isNaN(d.getTime())) return dateStr;
+  // Extraer año, mes, día del string ISO (ej: "2026-07-01" o "2026-07-01T00:00:00")
+  // Usamos string parsing para EVITAR timezone shifts de Date()
+  var isoParts = dateStr.split('T')[0].split('-');
+  if (isoParts.length < 3) return dateStr;
+  var year = parseInt(isoParts[0], 10);
+  var month = parseInt(isoParts[1], 10); // 1-12
+  var day = parseInt(isoParts[2], 10);
+
   if (granularity === 'month') {
     var months = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-    return months[d.getMonth()] + ' ' + d.getFullYear();
+    return months[month - 1] + ' ' + year;
   }
   if (granularity === 'week') {
-    var dow = d.getDay();
+    // Calcular lunes y domingo usando UTC para evitar timezone
+    var d = new Date(Date.UTC(year, month - 1, day));
+    var dow = d.getUTCDay(); // 0=Sun
     var diff = dow === 0 ? -6 : 1 - dow;
-    var mon = new Date(d); mon.setDate(d.getDate() + diff);
-    var sun = new Date(mon); sun.setDate(mon.getDate() + 6);
-    var f = function(dd) { return String(dd.getDate()).padStart(2,'0')+'/'+String(dd.getMonth()+1).padStart(2,'0'); };
-    return f(mon) + '-' + f(sun);
+    var mon = new Date(Date.UTC(year, month - 1, day + diff));
+    var sun = new Date(Date.UTC(year, month - 1, day + diff + 6));
+    var fmt = function(dd) {
+      return String(dd.getUTCDate()).padStart(2,'0')+'/'+String(dd.getUTCMonth()+1).padStart(2,'0');
+    };
+    return fmt(mon) + '-' + fmt(sun);
   }
-  return String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0');
+  // day: DD/MM
+  return String(day).padStart(2,'0') + '/' + String(month).padStart(2,'0');
 }
 
 /**
