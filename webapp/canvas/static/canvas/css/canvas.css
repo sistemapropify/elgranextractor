@@ -355,7 +355,8 @@
 .cv-badge--nota { background: var(--cv-note-bg); color: #c9b44a; border: 1px solid var(--cv-note-border); }
 .cv-badge--match { background: #1a1a0a; color: #ffdd00; border: 1px solid rgba(255,221,0,0.3); }
 .cv-badge--lead-analysis { background: #1a1a3a; color: #5c9ce6; border: 1px solid rgba(92,156,230,0.3); }
-
+.cv-node--lead,
+.cv-node--lead-analysis { background: var(--cv-bg-card); border: 1px solid var(--cv-border); border-radius: 8px; min-width: 220px; position: absolute; box-shadow: 0 2px 8px rgba(0,0,0,0.3); overflow: hidden; }
 .cv-node__title {
   flex: 1;
   font-size: 12px;

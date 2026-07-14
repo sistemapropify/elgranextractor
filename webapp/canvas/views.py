@@ -535,6 +535,57 @@ def api_lead_analysis(request, prop_id):
     })
 
 
+# ── API: LEADS POR FECHA ───────────────────────────────────────
+
+
+def api_lead_analysis_leads(request, prop_id):
+    """
+    GET /canvas/api/lead-analysis/<prop_id>/leads/?date=YYYY-MM-DD
+    Retorna los leads individuales para una propiedad en una fecha específica.
+    """
+    user = _get_current_user(request)
+    if not user:
+        return JsonResponse({'error': 'No autenticado'}, status=401)
+
+    date_str = request.GET.get('date', '')
+    if not date_str:
+        return JsonResponse({'error': 'Parámetro date requerido (YYYY-MM-DD)'}, status=400)
+
+    try:
+        from django.db import connections
+        with connections['propifai'].cursor() as cursor:
+            cursor.execute("""
+                SELECT l.id, l.username, l.source, l.source_detail,
+                       l.notes, l.score, l.last_message_text,
+                       l.created_at
+                FROM lead_properties lp
+                INNER JOIN lead l ON l.id = lp.lead_id
+                WHERE lp.property_id = %s
+                  AND CAST(l.created_at AS DATE) = %s
+                ORDER BY l.created_at DESC
+            """, [prop_id, date_str])
+
+            leads = []
+            for row in cursor.fetchall():
+                lead_id, username, source, source_detail, notes, score, last_msg, created_at = row
+                created_str = created_at.isoformat() if hasattr(created_at, 'isoformat') else str(created_at)
+                leads.append({
+                    'id': lead_id,
+                    'username': username or '',
+                    'source': source or '',
+                    'source_detail': source_detail or '',
+                    'notes': notes or '',
+                    'score': score,
+                    'last_message_text': (last_msg or '')[:200],
+                    'created_at': created_str,
+                })
+    except Exception as e:
+        logger.warning(f"Error en lead analysis leads for property {prop_id}, date {date_str}: {e}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+    return JsonResponse({'prop_id': prop_id, 'date': date_str, 'leads': leads})
+
+
 # ── API: AGENTES ───────────────────────────────────────────────
 
 

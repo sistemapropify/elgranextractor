@@ -1521,9 +1521,10 @@ function renderLeadAnalysisBody(nodeId, data) {
     daily.forEach(function(d) {
       var barH = Math.max(4, (d.count / maxCount) * 80);
       var label = formatLeadDate(d.date, granularity);
-      html += '<div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:28px;" title="' + escHtml(d.date) + ': ' + d.count + ' leads">';
+      var dateKey = d.date ? d.date.split('T')[0] : '';
+      html += '<div class="cv-lead-bar" data-prop-id="' + nodo.ref_id + '" data-date="' + escHtml(dateKey) + '" style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:28px;cursor:pointer;" title="' + escHtml(d.date) + ': ' + d.count + ' leads — Click para ver leads">';
       html += '<span style="font-size:9px;color:var(--cv-text-muted);margin-bottom:2px;">' + d.count + '</span>';
-      html += '<div style="width:20px;height:' + barH + 'px;background:#5c6bc0;border-radius:3px 3px 0 0;opacity:0.8;"></div>';
+      html += '<div style="width:20px;height:' + barH + 'px;background:#5c6bc0;border-radius:3px 3px 0 0;opacity:0.8;transition:opacity 0.15s;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.8"></div>';
       html += '<span style="font-size:7px;color:var(--cv-text-muted);margin-top:3px;writing-mode:vertical-lr;transform:rotate(180deg);">' + escHtml(label) + '</span>';
       html += '</div>';
     });
@@ -1532,9 +1533,126 @@ function renderLeadAnalysisBody(nodeId, data) {
     html += '<div style="text-align:center;padding:20px;color:var(--cv-text-muted);font-size:12px;">Sin datos de leads</div>';
   }
 
+  // Handler de clic en columnas del grafico
+  body.removeEventListener('click', body._leadBarClick);
+  body._leadBarClick = function(e) {
+    var bar = e.target.closest('.cv-lead-bar');
+    if (!bar) return;
+    var propId = bar.getAttribute('data-prop-id');
+    var date = bar.getAttribute('data-date');
+    if (propId && date) loadLeadNodes(propId, date, nodeId);
+  };
+  body.addEventListener('click', body._leadBarClick);
+
   body.innerHTML = html;
   nodo.height = nodo.el.offsetHeight || 280;
   markDirty();
+}
+
+
+/**
+ * Carga los leads de una propiedad en una fecha y crea nodos en el canvas.
+ */
+async function loadLeadNodes(propId, dateStr, analysisNodeId) {
+  if (!propId || !dateStr) return;
+  if (typeof captureState === 'function') captureState();
+
+  try {
+    const res = await fetch('/canvas/api/lead-analysis/' + propId + '/leads/?date=' + dateStr);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const leads = data.leads || [];
+    if (leads.length === 0) {
+      showToast('Sin leads para esta fecha');
+      return;
+    }
+
+    const analysisNode = STATE.nodos[analysisNodeId];
+    if (!analysisNode) return;
+    var startX = analysisNode.x + analysisNode.width + 40;
+    var startY = analysisNode.y;
+
+    leads.forEach(function(lead, idx) {
+      var leadId = 'lead_' + lead.id;
+      if (STATE.nodos[leadId]) return; // ya existe
+
+      var x = startX;
+      var y = startY + idx * 120;
+      createLeadNode(leadId, lead, x, y);
+
+      // Crear arista desde el nodo de analisis al nodo lead
+      var edgeId = 'e_la_' + analysisNodeId + '_' + leadId;
+      if (!STATE.aristas[edgeId]) {
+        STATE.aristas[edgeId] = {
+          id: edgeId, origen: analysisNodeId, destino: leadId,
+          tipo: 'lead', label: lead.username || 'lead',
+        };
+      }
+    });
+
+    if (typeof updateEdges === 'function') updateEdges();
+    markDirty();
+    showToast(leads.length + ' lead' + (leads.length > 1 ? 's' : '') + ' agregado' + (leads.length > 1 ? 's' : '') + ' al lienzo');
+  } catch (err) {
+    console.error('Error loading lead nodes:', err);
+    showToast('Error al cargar leads');
+  }
+}
+
+
+/**
+ * Crea un nodo lead en el canvas.
+ */
+function createLeadNode(nodeId, lead, x, y) {
+  if (STATE.nodos[nodeId]) return nodeId;
+  if (typeof captureState === 'function') captureState();
+
+  var node = document.createElement('div');
+  node.className = 'cv-node cv-node--lead';
+  node.dataset.id = nodeId;
+  node.style.left = x + 'px';
+  node.style.top = y + 'px';
+  node.style.width = '220px';
+
+  var username = lead.username || 'Lead #' + lead.id;
+  var source = lead.source || '';
+  var sourceDetail = lead.source_detail || '';
+  var notes = lead.notes || '';
+  var score = lead.score != null ? lead.score : '';
+  var lastMsg = lead.last_message_text || '';
+
+  node.innerHTML = `
+    <div class="cv-node__header">
+      <span class="cv-node__badge cv-badge--lead-analysis">👤 LEAD</span>
+      <span class="cv-node__title">${escHtml(username)}</span>
+      <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
+    </div>
+    <div class="cv-node__req-info">
+      ${source ? '<span class="cv-req-info__item">📡 ' + escHtml(source) + '</span>' : ''}
+      ${score !== '' ? '<span class="cv-req-info__item">⭐ ' + score + '</span>' : ''}
+    </div>
+    <div class="cv-node__req-body" style="font-size:11px;">
+      ${sourceDetail ? '<div style="color:var(--cv-text-muted);margin-bottom:4px;">' + escHtml(sourceDetail) + '</div>' : ''}
+      ${lastMsg ? '<div style="color:var(--cv-text-sec);font-style:italic;">"' + escHtml(lastMsg) + '"</div>' : ''}
+      ${notes ? '<div style="color:var(--cv-text-muted);margin-top:4px;">' + escHtml(notes) + '</div>' : ''}
+    </div>
+    <div class="cv-port cv-port--top"    data-node="${nodeId}" data-port="top"></div>
+    <div class="cv-port cv-port--right"  data-node="${nodeId}" data-port="right"></div>
+    <div class="cv-port cv-port--bottom" data-node="${nodeId}" data-port="bottom"></div>
+    <div class="cv-port cv-port--left"   data-node="${nodeId}" data-port="left"></div>
+  `;
+
+  dom.nodes.appendChild(node);
+  positionNode(nodeId, node, x, y);
+
+  STATE.nodos[nodeId] = {
+    id: nodeId, tipo: 'lead_nodo', ref_id: lead.id,
+    x: x, y: y, width: 220, height: node.offsetHeight || 160,
+    collapsed: false, color: null, el: node,
+    field_data: lead,
+  };
+  registerNodeEvents(nodeId, node);
+  return nodeId;
 }
 
 /**
