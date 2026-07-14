@@ -1645,7 +1645,10 @@ async function loadLeadNodes(propId, dateStr, analysisNodeId) {
   if (typeof captureState === 'function') captureState();
 
   try {
-    const res = await fetch('/canvas/api/lead-analysis/' + propId + '/leads/?date=' + dateStr);
+    var url = propId
+      ? '/canvas/api/lead-analysis/' + propId + '/leads/?date=' + dateStr
+      : '/canvas/api/leads-by-date/?date=' + dateStr;
+    const res = await fetch(url);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     const leads = data.leads || [];
