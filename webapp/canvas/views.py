@@ -498,6 +498,11 @@ def api_lead_analysis(request, prop_id):
         logger.warning(f"Error en lead analysis for property {prop_id}: {e}")
         return JsonResponse({'error': str(e)}, status=500)
 
+    # Log para debug
+    logger.info(f"LEAD_ANALYSIS prop={prop_id} granularity={granularity} total={total_leads} buckets={len(counts)} first={first_lead_date}")
+    if counts:
+        logger.info(f"LEAD_ANALYSIS sample buckets: {[c['date'][:10] + ':' + str(c['count']) for c in counts[:5]]}")
+
     return JsonResponse({
         'prop_id': prop_id,
         'total_leads': total_leads,
