@@ -557,9 +557,11 @@ def api_lead_analysis_leads(request, prop_id):
             cursor.execute("""
                 SELECT l.id, l.username, l.source, l.source_detail,
                        l.notes, l.score, l.last_message_text,
-                       l.created_at
+                       l.created_at,
+                       c.first_name, c.last_name, c.phone, c.email
                 FROM lead_properties lp
                 INNER JOIN lead l ON l.id = lp.lead_id
+                LEFT JOIN contact c ON c.id = l.contact_id
                 WHERE lp.property_id = %s
                   AND CAST(l.created_at AS DATE) = %s
                 ORDER BY l.created_at DESC
@@ -567,16 +569,21 @@ def api_lead_analysis_leads(request, prop_id):
 
             leads = []
             for row in cursor.fetchall():
-                lead_id, username, source, source_detail, notes, score, last_msg, created_at = row
+                lead_id, username, source, source_detail, notes, score, last_msg, created_at, first_name, last_name, phone, email = row
                 created_str = created_at.isoformat() if hasattr(created_at, 'isoformat') else str(created_at)
+                contact_name = (first_name or '') + (' ' + last_name if last_name else '')
+                contact_name = contact_name.strip() or username or ''
                 leads.append({
                     'id': lead_id,
                     'username': username or '',
+                    'contact_name': contact_name,
+                    'phone': phone or '',
+                    'email': email or '',
                     'source': source or '',
                     'source_detail': source_detail or '',
                     'notes': notes or '',
                     'score': score,
-                    'last_message_text': (last_msg or '')[:200],
+                    'last_message_text': (last_msg or ''),
                     'created_at': created_str,
                 })
     except Exception as e:
