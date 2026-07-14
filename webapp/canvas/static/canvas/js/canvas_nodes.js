@@ -1242,6 +1242,34 @@ function renderPlaceholderNodes(nodos) {
         <div class="cv-port cv-port--bottom" data-node="${n.id}" data-port="bottom"></div>
         <div class="cv-port cv-port--left"   data-node="${n.id}" data-port="left"></div>
       `;
+    } else if (n.tipo === 'lead_nodo') {
+      const fd = n.field_data || {};
+      var contactName = fd.contact_name || fd.username || 'Lead #' + (n.ref_id || '');
+      var phone = fd.phone || '';
+      var email = fd.email || '';
+      var source = fd.source || '';
+      var lastMsg = fd.last_message_text || '';
+      var notes = fd.notes || '';
+      node.innerHTML = `
+        <div class="cv-node__header">
+          <span class="cv-node__badge cv-badge--lead-analysis">👤 LEAD</span>
+          <span class="cv-node__title">${escHtml(contactName)}</span>
+          <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
+        </div>
+        <div class="cv-node__req-info">
+          ${phone ? '<span class="cv-req-info__item">📞 ' + escHtml(phone) + '</span>' : ''}
+          ${email ? '<span class="cv-req-info__item">✉ ' + escHtml(email) + '</span>' : ''}
+        </div>
+        <div class="cv-node__req-body" style="font-size:11px;max-height:200px;overflow-y:auto;">
+          ${source ? '<div style="color:var(--cv-text-muted);margin-bottom:4px;">📡 ' + escHtml(source) + '</div>' : ''}
+          ${lastMsg ? '<div style="background:rgba(92,156,230,0.08);border-radius:6px;padding:6px;margin-bottom:4px;border-left:2px solid #5c9ce6;"><strong style="font-size:10px;color:#5c9ce6;">💬 Conversaci\u00f3n</strong><div style="color:var(--cv-text);margin-top:2px;white-space:pre-wrap;">' + escHtml(lastMsg) + '</div></div>' : ''}
+          ${notes ? '<div style="background:rgba(255,221,0,0.06);border-radius:6px;padding:6px;border-left:2px solid #ffdd00;"><strong style="font-size:10px;color:#ffdd00;">📝 Notas</strong><div style="color:var(--cv-text-muted);margin-top:2px;white-space:pre-wrap;">' + escHtml(notes) + '</div></div>' : ''}
+        </div>
+        <div class="cv-port cv-port--top"    data-node="${n.id}" data-port="top"></div>
+        <div class="cv-port cv-port--right"  data-node="${n.id}" data-port="right"></div>
+        <div class="cv-port cv-port--bottom" data-node="${n.id}" data-port="bottom"></div>
+        <div class="cv-port cv-port--left"   data-node="${n.id}" data-port="left"></div>
+      `;
     } else {
       node.innerHTML = `
         <div class="cv-nota__handle">&#10022; nota</div>
