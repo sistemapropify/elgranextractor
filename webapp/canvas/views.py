@@ -436,12 +436,16 @@ def api_lead_analysis(request, prop_id):
     """
     GET /canvas/api/lead-analysis/<prop_id>/?granularity=day|week|month
     Retorna el conteo de leads agregado por día, semana o mes.
+
+    NOTA: El agrupamiento por semana/mes se hace en Python para evitar
+    problemas con DATEADD/DATEDIFF en columnas datetimeoffset de Azure SQL.
     """
     user = _get_current_user(request)
     if not user:
         return JsonResponse({'error': 'No autenticado'}, status=401)
 
     granularity = request.GET.get('granularity', 'day')
+    from datetime import date, timedelta
 
     counts = []
     total_leads = 0
@@ -450,55 +454,74 @@ def api_lead_analysis(request, prop_id):
     try:
         from django.db import connections
         with connections['propifai'].cursor() as cursor:
+            # Siempre traer datos por día (CAST a DATE evita problemas de datetimeoffset)
+            cursor.execute("""
+                SELECT CAST(l.created_at AS DATE) AS bucket_date,
+                       COUNT(DISTINCT l.id) AS count
+                FROM lead_properties lp
+                INNER JOIN lead l ON l.id = lp.lead_id
+                WHERE lp.property_id = %s
+                GROUP BY CAST(l.created_at AS DATE)
+                ORDER BY bucket_date
+            """, [prop_id])
 
-            if granularity == 'week':
-                cursor.execute("""
-                    SELECT
-                        DATEADD(WEEK, DATEDIFF(WEEK, 0, l.created_at), 0) AS bucket_date,
-                        COUNT(DISTINCT l.id) AS count
-                    FROM lead_properties lp
-                    INNER JOIN lead l ON l.id = lp.lead_id
-                    WHERE lp.property_id = %s
-                    GROUP BY DATEADD(WEEK, DATEDIFF(WEEK, 0, l.created_at), 0)
-                    ORDER BY bucket_date
-                """, [prop_id])
-            elif granularity == 'month':
-                cursor.execute("""
-                    SELECT
-                        DATEADD(MONTH, DATEDIFF(MONTH, 0, l.created_at), 0) AS bucket_date,
-                        COUNT(DISTINCT l.id) AS count
-                    FROM lead_properties lp
-                    INNER JOIN lead l ON l.id = lp.lead_id
-                    WHERE lp.property_id = %s
-                    GROUP BY DATEADD(MONTH, DATEDIFF(MONTH, 0, l.created_at), 0)
-                    ORDER BY bucket_date
-                """, [prop_id])
-            else:  # day
-                cursor.execute("""
-                    SELECT CAST(l.created_at AS DATE) AS bucket_date,
-                           COUNT(DISTINCT l.id) AS count
-                    FROM lead_properties lp
-                    INNER JOIN lead l ON l.id = lp.lead_id
-                    WHERE lp.property_id = %s
-                    GROUP BY CAST(l.created_at AS DATE)
-                    ORDER BY bucket_date
-                """, [prop_id])
-
+            # Cargar todos los días en un dict
+            day_counts = {}
             for row in cursor.fetchall():
-                bucket_date, count = row
-                date_str = bucket_date.isoformat() if hasattr(bucket_date, 'isoformat') else str(bucket_date)
-                counts.append({
-                    'date': date_str,
-                    'count': count,
-                })
-                total_leads += count
-                if first_lead_date is None:
-                    first_lead_date = date_str
+                d, cnt = row
+                if hasattr(d, 'isoformat'):
+                    day_counts[d] = cnt
+                else:
+                    day_counts[str(d)] = cnt
+                total_leads += cnt
+
+            if granularity == 'day':
+                # Devolver tal cual, ordenado por fecha
+                for d in sorted(day_counts.keys()):
+                    date_str = d.isoformat() if hasattr(d, 'isoformat') else str(d)
+                    counts.append({'date': date_str, 'count': day_counts[d]})
+                    if first_lead_date is None:
+                        first_lead_date = date_str
+
+            elif granularity == 'week':
+                # Agrupar por semana (lunes=0, domingo=6)
+                week_buckets = {}
+                for d in sorted(day_counts.keys()):
+                    # Calcular el lunes de la semana
+                    if isinstance(d, date):
+                        days_since_monday = d.weekday()  # 0=lunes
+                        monday = d - timedelta(days=days_since_monday)
+                        week_buckets[monday] = week_buckets.get(monday, 0) + day_counts[d]
+                    else:
+                        # Si es string, mantener raw
+                        week_buckets[d] = week_buckets.get(d, 0) + day_counts[d]
+
+                for d in sorted(week_buckets.keys()):
+                    date_str = d.isoformat() if hasattr(d, 'isoformat') else str(d)
+                    counts.append({'date': date_str, 'count': week_buckets[d]})
+                    if first_lead_date is None:
+                        first_lead_date = date_str
+
+            elif granularity == 'month':
+                # Agrupar por mes
+                month_buckets = {}
+                for d in sorted(day_counts.keys()):
+                    if isinstance(d, date):
+                        month_key = date(d.year, d.month, 1)
+                        month_buckets[month_key] = month_buckets.get(month_key, 0) + day_counts[d]
+                    else:
+                        month_buckets[d] = month_buckets.get(d, 0) + day_counts[d]
+
+                for d in sorted(month_buckets.keys()):
+                    date_str = d.isoformat() if hasattr(d, 'isoformat') else str(d)
+                    counts.append({'date': date_str, 'count': month_buckets[d]})
+                    if first_lead_date is None:
+                        first_lead_date = date_str
+
     except Exception as e:
         logger.warning(f"Error en lead analysis for property {prop_id}: {e}")
         return JsonResponse({'error': str(e)}, status=500)
 
-    # Log para debug
     logger.info(f"LEAD_ANALYSIS prop={prop_id} granularity={granularity} total={total_leads} buckets={len(counts)} first={first_lead_date}")
     if counts:
         logger.info(f"LEAD_ANALYSIS sample buckets: {[c['date'][:10] + ':' + str(c['count']) for c in counts[:5]]}")

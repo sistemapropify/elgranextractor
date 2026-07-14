@@ -1,8 +1,8 @@
 /**
- * canvas_nodes.js — PropFlow Canvas Nodes (v11 - granularity fix)
+ * canvas_nodes.js — PropFlow Canvas Nodes (v12 - dedup + snapshot refresh)
  * DEBUG: Si ves este mensaje, el JS nuevo está cargado.
  */
-console.log('[CanvasNodes] v11 cargado - formatLeadDate con string parsing');
+console.log('[CanvasNodes] v12 cargado - dedup + snapshot refresh');
 /**
  * canvas_nodes.js — PropFlow Canvas Nodes
  *
@@ -1270,6 +1270,19 @@ function renderPlaceholderNodes(nodos) {
       }, 300, n.ref_id, n.id);
     }
   });
+  // Refrescar nodos lead_analysis desde la API al cargar snapshot
+  Object.values(STATE.nodos).forEach(function(n) {
+    if (n.tipo === 'lead_analysis' && n.ref_id && n.el) {
+      var propId = n.ref_id;
+      var gran = (n.field_data && n.field_data._granularity) || 'day';
+      setTimeout(function(pid, nodeId, g) {
+        fetch('/canvas/api/lead-analysis/' + pid + '/?granularity=' + g)
+          .then(function(r) { return r.json(); })
+          .then(function(data) { renderLeadAnalysisBody(nodeId, data); })
+          .catch(function() {});
+      }, 500, propId, n.id, gran);
+    }
+  });
 }
 
 
@@ -1476,10 +1489,23 @@ function renderLeadAnalysisBody(nodeId, data) {
   if (!body) return;
 
   const granularity = (nodo.field_data && nodo.field_data._granularity) || 'day';
-  const daily = data.daily_counts || [];
+  // Deduplicar por fecha: si hay entradas con la misma fecha (ej: por timezone en datetimeoffset),
+  // sumamos sus conteos para evitar columnas duplicadas en el gráfico.
+  var rawCounts = data.daily_counts || [];
+  var dateMap = {};
+  rawCounts.forEach(function(d) {
+    var dateKey = d.date ? d.date.split('T')[0] : '';
+    if (!dateKey) return;
+    if (dateMap[dateKey]) {
+      dateMap[dateKey].count += (d.count || 0);
+    } else {
+      dateMap[dateKey] = { date: dateKey, count: d.count || 0 };
+    }
+  });
+  const daily = Object.keys(dateMap).sort().map(function(k) { return dateMap[k]; });
   const total = data.total_leads || 0;
   const firstDate = data.first_lead_date || '—';
-  const maxCount = daily.length > 0 ? Math.max(...daily.map(function(d) { return d.count; })) : 1;
+  const maxCount = daily.length > 0 ? Math.max.apply(null, daily.map(function(d) { return d.count; })) : 1;
 
   var granLabel = nodo.el.querySelector('.cv-lead-gran-label');
   if (granLabel) granLabel.textContent = '📅 ' + granularityLabel(granularity);
