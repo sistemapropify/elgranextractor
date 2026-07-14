@@ -1272,8 +1272,9 @@ function renderPlaceholderNodes(nodos) {
   });
   // Refrescar nodos lead_analysis desde la API al cargar snapshot
   Object.values(STATE.nodos).forEach(function(n) {
-    if (n.tipo === 'lead_analysis' && n.ref_id && n.el) {
-      var propId = n.ref_id;
+    if (n.tipo === 'lead_analysis' && n.el) {
+      var propId = n.ref_id || (n.field_data && n.field_data.prop_id);
+      if (!propId) return;
       var gran = (n.field_data && n.field_data._granularity) || 'day';
       setTimeout(function(pid, nodeId, g) {
         fetch('/canvas/api/lead-analysis/' + pid + '/?granularity=' + g)
