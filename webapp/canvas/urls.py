@@ -28,4 +28,5 @@ urlpatterns = [
     path('api/propiedad-imagenes/<int:prop_id>/', views.api_propiedad_imagenes, name='api_prop_imagenes'),
     path('api/lead-analysis/<int:prop_id>/',      views.api_lead_analysis,      name='api_lead_analysis'),
     path('api/lead-analysis/<int:prop_id>/leads/', views.api_lead_analysis_leads, name='api_lead_analysis_leads'),
+    path('api/lead-analysis-global/',               views.api_lead_analysis_global, name='api_lead_analysis_global'),
 ]

@@ -538,6 +538,90 @@ def api_lead_analysis(request, prop_id):
 # ── API: LEADS POR FECHA ───────────────────────────────────────
 
 
+def api_lead_analysis_global(request):
+    """
+    GET /canvas/api/lead-analysis-global/?granularity=day|week|month
+    Retorna el conteo de TODOS los leads agrupados por fecha de creacion.
+    """
+    user = _get_current_user(request)
+    if not user:
+        return JsonResponse({'error': 'No autenticado'}, status=401)
+
+    granularity = request.GET.get('granularity', 'day')
+    from datetime import date, timedelta
+
+    counts = []
+    total_leads = 0
+    first_lead_date = None
+
+    try:
+        from django.db import connections
+        with connections['propifai'].cursor() as cursor:
+            cursor.execute("""
+                SELECT CAST(created_at AS DATE) AS bucket_date,
+                       COUNT(DISTINCT id) AS count
+                FROM lead
+                GROUP BY CAST(created_at AS DATE)
+                ORDER BY bucket_date
+            """)
+
+            day_counts = {}
+            for row in cursor.fetchall():
+                d, cnt = row
+                if hasattr(d, 'isoformat'):
+                    day_counts[d] = cnt
+                else:
+                    day_counts[str(d)] = cnt
+                total_leads += cnt
+
+            if granularity == 'day':
+                for d in sorted(day_counts.keys()):
+                    date_str = d.isoformat() if hasattr(d, 'isoformat') else str(d)
+                    counts.append({'date': date_str, 'count': day_counts[d]})
+                    if first_lead_date is None:
+                        first_lead_date = date_str
+
+            elif granularity == 'week':
+                week_buckets = {}
+                for d in sorted(day_counts.keys()):
+                    if isinstance(d, date):
+                        days_since_monday = d.weekday()
+                        monday = d - timedelta(days=days_since_monday)
+                        week_buckets[monday] = week_buckets.get(monday, 0) + day_counts[d]
+                    else:
+                        week_buckets[d] = week_buckets.get(d, 0) + day_counts[d]
+                for d in sorted(week_buckets.keys()):
+                    date_str = d.isoformat() if hasattr(d, 'isoformat') else str(d)
+                    counts.append({'date': date_str, 'count': week_buckets[d]})
+                    if first_lead_date is None:
+                        first_lead_date = date_str
+
+            elif granularity == 'month':
+                month_buckets = {}
+                for d in sorted(day_counts.keys()):
+                    if isinstance(d, date):
+                        month_key = date(d.year, d.month, 1)
+                        month_buckets[month_key] = month_buckets.get(month_key, 0) + day_counts[d]
+                    else:
+                        month_buckets[d] = month_buckets.get(d, 0) + day_counts[d]
+                for d in sorted(month_buckets.keys()):
+                    date_str = d.isoformat() if hasattr(d, 'isoformat') else str(d)
+                    counts.append({'date': date_str, 'count': month_buckets[d]})
+                    if first_lead_date is None:
+                        first_lead_date = date_str
+
+    except Exception as e:
+        logger.warning(f"Error en lead analysis global: {e}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+    return JsonResponse({
+        'total_leads': total_leads,
+        'first_lead_date': first_lead_date,
+        'granularity': granularity,
+        'daily_counts': counts,
+    })
+
+
 def api_lead_analysis_leads(request, prop_id):
     """
     GET /canvas/api/lead-analysis/<prop_id>/leads/?date=YYYY-MM-DD

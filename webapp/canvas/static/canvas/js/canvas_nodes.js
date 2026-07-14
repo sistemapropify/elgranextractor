@@ -965,6 +965,13 @@ function restoreSnapshot(snapshot) {
         collapsed: false, color: null, el: null,
         field_data: n.field_data || null,
       };
+    } else if (n.tipo === 'lead_global') {
+      STATE.nodos[n.id] = {
+        id: n.id, tipo: 'lead_global', ref_id: null,
+        x: n.x, y: n.y, width: n.width || 340, height: n.height || 280,
+        collapsed: false, color: null, el: null,
+        field_data: n.field_data || null,
+      };
     }
   });
 
@@ -1329,6 +1336,18 @@ function renderPlaceholderNodes(nodos) {
             console.error('[LeadAnalysis] error al refrescar:', err);
           });
       }, 800, propId, n.id, gran);
+    }
+  });
+  // Refrescar nodos lead_global desde la API al cargar snapshot
+  Object.values(STATE.nodos).forEach(function(n) {
+    if (n.tipo === 'lead_global' && n.el) {
+      var gran = (n.field_data && n.field_data._granularity) || 'day';
+      setTimeout(function(nodeId, g) {
+        fetch('/canvas/api/lead-analysis-global/?granularity=' + g)
+          .then(function(r) { return r.json(); })
+          .then(function(data) { renderLeadAnalysisBody(nodeId, data); })
+          .catch(function() {});
+      }, 800, n.id, gran);
     }
   });
 }
@@ -1776,4 +1795,122 @@ function doRenderPdf(container, pdfUrl) {
   }).catch(function() {
     container.innerHTML = '<span style="font-size:10px;color:var(--cv-text-muted);">Vista previa no disponible</span>';
   });
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * GLOBAL LEAD ANALYSIS NODE (todos los leads)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Crea un nodo de analisis global de leads (todos los leads, sin filtro por propiedad).
+ * Se invoca desde el menu contextual del canvas.
+ */
+async function createGlobalLeadNode(x, y) {
+  if (typeof captureState === 'function') captureState();
+
+  const nodeId = 'lead_global_' + Date.now();
+  if (STATE.nodos[nodeId]) return;
+
+  const node = document.createElement('div');
+  node.className = 'cv-node cv-node--lead-analysis';
+  node.dataset.id = nodeId;
+  node.style.left = x + 'px';
+  node.style.top = y + 'px';
+  node.style.width = '340px';
+  node.style.minWidth = '280px';
+  node.innerHTML = `
+    <div class="cv-node__header">
+      <span class="cv-node__badge cv-badge--lead-analysis">📊 GLOBAL</span>
+      <span class="cv-node__title">Todos los Leads</span>
+      <span class="cv-lead-gran-label" title="Click derecho \u2192 cambiar vista">📅 D\u00eda</span>
+      <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
+    </div>
+    <div class="cv-node__body" style="text-align:center;padding:20px;color:var(--cv-text-muted);">
+      Cargando datos...
+    </div>
+    <div class="cv-port cv-port--top"    data-node="${nodeId}" data-port="top"></div>
+    <div class="cv-port cv-port--right"  data-node="${nodeId}" data-port="right"></div>
+    <div class="cv-port cv-port--bottom" data-node="${nodeId}" data-port="bottom"></div>
+    <div class="cv-port cv-port--left"   data-node="${nodeId}" data-port="left"></div>
+  `;
+
+  dom.nodes.appendChild(node);
+  positionNode(nodeId, node, x, y);
+
+  STATE.nodos[nodeId] = {
+    id: nodeId, tipo: 'lead_global', ref_id: null,
+    x: x, y: y, width: 340, height: node.offsetHeight || 280,
+    collapsed: false, color: null, el: node,
+    field_data: { _granularity: 'day' },
+  };
+  registerNodeEvents(nodeId, node);
+  markDirty();
+
+  // Context menu on right-click
+  node.addEventListener('contextmenu', function(e) { showLeadContextMenu(nodeId, e); });
+
+  try {
+    const res = await fetch('/canvas/api/lead-analysis-global/?granularity=day');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    renderLeadAnalysisBody(nodeId, await res.json());
+  } catch (err) {
+    console.error('Error loading global lead analysis:', err);
+    const body = node.querySelector('.cv-node__body');
+    if (body) body.innerHTML = '<div style="color:var(--cv-block);padding:12px;text-align:center;">Error al cargar datos</div>';
+  }
+}
+
+
+/**
+ * Inicializa el menu contextual del canvas (click derecho en el fondo).
+ */
+function initCanvasContextMenu() {
+  if (document.getElementById('cv-canvas-context-menu')) return;
+
+  var menu = document.createElement('div');
+  menu.id = 'cv-canvas-context-menu';
+  menu.className = 'cv-lead-context-menu';
+  menu.style.display = 'none';
+  menu.innerHTML = '<div class="cv-lead-context-menu__header">📊 Lienzo</div><div class="cv-lead-context-menu__item" data-action="create-global-leads">📊 Crear tarjeta de leads</div>';
+  document.body.appendChild(menu);
+
+  menu.addEventListener('click', function(e) {
+    var item = e.target.closest('.cv-lead-context-menu__item');
+    if (!item) return;
+    var action = item.getAttribute('data-action');
+    var x = parseFloat(menu.dataset.x || 200);
+    var y = parseFloat(menu.dataset.y || 200);
+    menu.style.display = 'none';
+    if (action === 'create-global-leads') {
+      if (typeof createGlobalLeadNode === 'function') {
+        createGlobalLeadNode(x, y);
+      }
+    }
+  });
+
+  // Mostrar menu en click derecho sobre el stage
+  document.addEventListener('contextmenu', function(e) {
+    // Solo si el click es directamente sobre el fondo (no sobre un nodo)
+    var target = e.target.closest('.cv-node, .cv-port');
+    if (target) return; // dejar que el nodo maneje su propio menu
+    e.preventDefault();
+    menu.style.left = e.clientX + 'px';
+    menu.style.top = e.clientY + 'px';
+    menu.dataset.x = e.clientX;
+    menu.dataset.y = e.clientY;
+    menu.style.display = 'block';
+  });
+
+  // Ocultar al hacer click
+  document.addEventListener('click', function() {
+    menu.style.display = 'none';
+  });
+}
+
+// Inicializar cuando el DOM este listo
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initCanvasContextMenu);
+} else {
+  initCanvasContextMenu();
 }
