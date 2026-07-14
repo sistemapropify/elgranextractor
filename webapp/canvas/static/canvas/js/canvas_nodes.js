@@ -1228,6 +1228,19 @@ function renderPlaceholderNodes(nodos) {
         <div class="cv-port cv-port--bottom" data-node="${n.id}" data-port="bottom"></div>
         <div class="cv-port cv-port--left"   data-node="${n.id}" data-port="left"></div>
       `;
+    } else if (n.tipo === 'lead_global') {
+      node.innerHTML = `
+        <div class="cv-node__header">
+          <span class="cv-node__badge cv-badge--lead-analysis">📊 GLOBAL</span>
+          <span class="cv-node__title">Todos los Leads</span>
+          <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
+        </div>
+        <div class="cv-node__body"><div style="color:var(--cv-text-muted);font-size:11px;text-align:center;padding:16px">Cargando datos...</div></div>
+        <div class="cv-port cv-port--top"    data-node="${n.id}" data-port="top"></div>
+        <div class="cv-port cv-port--right"  data-node="${n.id}" data-port="right"></div>
+        <div class="cv-port cv-port--bottom" data-node="${n.id}" data-port="bottom"></div>
+        <div class="cv-port cv-port--left"   data-node="${n.id}" data-port="left"></div>
+      `;
     } else if (n.tipo === 'nota') {
       const fd = n.field_data || {};
       const savedContent = fd.contenido || fd.content || '';
