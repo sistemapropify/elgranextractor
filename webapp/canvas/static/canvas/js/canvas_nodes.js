@@ -1274,14 +1274,26 @@ function renderPlaceholderNodes(nodos) {
   Object.values(STATE.nodos).forEach(function(n) {
     if (n.tipo === 'lead_analysis' && n.el) {
       var propId = n.ref_id || (n.field_data && n.field_data.prop_id);
-      if (!propId) return;
+      if (!propId) {
+        console.warn('[LeadAnalysis] snapshot lead_analysis node sin prop_id, reintentando con field_data', n.field_data);
+        return;
+      }
       var gran = (n.field_data && n.field_data._granularity) || 'day';
+      console.log('[LeadAnalysis] refrescando nodo', n.id, 'propId=', propId, 'gran=', gran);
       setTimeout(function(pid, nodeId, g) {
         fetch('/canvas/api/lead-analysis/' + pid + '/?granularity=' + g)
-          .then(function(r) { return r.json(); })
-          .then(function(data) { renderLeadAnalysisBody(nodeId, data); })
-          .catch(function() {});
-      }, 500, propId, n.id, gran);
+          .then(function(r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+          })
+          .then(function(data) {
+            console.log('[LeadAnalysis] datos recibidos para', nodeId, data.total_leads, 'leads');
+            renderLeadAnalysisBody(nodeId, data);
+          })
+          .catch(function(err) {
+            console.error('[LeadAnalysis] error al refrescar:', err);
+          });
+      }, 800, propId, n.id, gran);
     }
   });
 }
