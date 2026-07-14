@@ -1,0 +1,468 @@
+{% extends "propifai_base.html" %}
+{% load static %}
+
+{% block title %}Canvas — {{ lienzo.nombre }} — Propifai{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'canvas/css/canvas.css' %}?v=4">
+<style>
+  .cv-page .content-area {
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+</style>
+{% endblock %}
+
+{% block header_title_area %}
+<div class="header-title">Canvas <span>— {{ lienzo.nombre }}</span></div>
+{% endblock %}
+
+{% block header_actions %}
+<a href="{% url 'canvas:list' %}" class="header-btn" title="Volver a lienzos">← Volver</a>
+{{ block.super }}
+{% endblock %}
+
+{% block content %}
+<div class="cv-wrap cv-page">
+
+  <!-- CANVAS TOPBAR -->
+  <div class="cv-topbar">
+    <input class="cv-topbar__title" id="cv-lienzo-nombre" value="{{ lienzo.nombre }}" spellcheck="false">
+    <div class="cv-topbar__sep"></div>
+    <div class="cv-topbar__insert-wrap">
+      <button class="cv-btn" id="btn-insertar">+ Insertar</button>
+      <div class="cv-insert-menu" id="cv-insert-menu" style="display:none">
+        <div class="cv-insert-menu__item" data-tipo="excel">📊 Excel</div>
+        <div class="cv-insert-menu__item" data-tipo="word">📝 Word</div>
+        <div class="cv-insert-menu__item" data-tipo="pdf">📄 PDF</div>
+        <div class="cv-insert-menu__item" data-tipo="image">🖼️ Imagen</div>
+        <div class="cv-insert-menu__sep"></div>
+        <div class="cv-insert-menu__item" data-tipo="url">🔗 Enlace URL</div>
+      </div>
+    </div>
+    <button class="cv-btn" id="btn-add-nota">+ Nota</button>
+    <button class="cv-btn" id="btn-fit">Encuadrar</button>
+    <div class="cv-topbar__sep"></div>
+    <button class="cv-btn" id="btn-undo" title="Deshacer (Ctrl+Z)">↩</button>
+    <button class="cv-btn" id="btn-redo" title="Rehacer (Ctrl+Shift+Z)">↪</button>
+    <button class="cv-btn cv-btn--pri" id="btn-save">Guardar</button>
+    <div class="cv-status">
+      <span class="cv-status__dot" id="status-dot"></span>
+      <span id="status-text">Guardado</span>
+    </div>
+  </div>
+
+  <!-- CANVAS BODY: sidebar funcional + stage -->
+  <div class="cv-body">
+
+    <!-- CANVAS SIDEBAR (funcional, NO es la sidebar del sistema) -->
+    <div class="cv-sidebar">
+      <div class="cv-sidebar__tabs">
+        <div class="cv-sidebar__tab active" data-tab="agente">Agente</div>
+        <div class="cv-sidebar__tab" data-tab="campos">Campos</div>
+        <div class="cv-sidebar__tab" data-tab="lienzo">Lienzo</div>
+        <div class="cv-sidebar__tab" data-tab="chat">Chat</div>
+      </div>
+
+      <!-- Pestaña Agente -->
+      <div class="cv-sidebar__panel active" id="tab-agente">
+        <div class="cv-label">Seleccionar agente</div>
+        <select class="cv-select" id="agente-select">
+          <option value="">— todos —</option>
+        </select>
+        <div class="cv-label" style="margin-top:8px">Propiedades</div>
+        <div style="display:flex;gap:4px;margin-bottom:6px">
+          <button class="cv-btn cv-btn--small" id="btn-select-all" title="Agregar todas las propiedades al lienzo">Seleccionar todo</button>
+          <button class="cv-btn cv-btn--small" id="btn-deselect-all" title="Quitar todas las propiedades del lienzo" style="display:none">Deseleccionar todo</button>
+        </div>
+        <div class="cv-prop-list" id="prop-list">
+          <div style="color:var(--cv-text-muted);font-size:12px">Selecciona un agente</div>
+        </div>
+      </div>
+
+      <!-- Pestaña Campos -->
+      <div class="cv-sidebar__panel" id="tab-campos">
+        <div class="cv-label">Plantilla activa</div>
+        <select class="cv-select" id="template-select">
+          <option value="">Sin plantilla</option>
+          {% for tpl in templates %}
+          <option value="{{ tpl.pk }}" {% if lienzo.card_template_id == tpl.pk %}selected{% endif %}>{{ tpl.nombre }}</option>
+          {% endfor %}
+        </select>
+        <div class="cv-label" style="margin-top:8px">Campos visibles</div>
+        <div id="campos-list">
+          {% for campo in campos_disponibles %}
+          <label class="cv-field-check">
+            <input type="checkbox" value="{{ campo }}" class="campo-check"> <span>{{ campo }}</span>
+          </label>
+          {% endfor %}
+        </div>
+        <button class="cv-btn cv-btn--pri" id="btn-save-template" style="margin-top:8px">Guardar plantilla</button>
+      </div>
+
+      <!-- Pestaña Lienzo -->
+      <div class="cv-sidebar__panel" id="tab-lienzo">
+        <div class="cv-label">Descripción</div>
+        <textarea class="cv-select" rows="3" id="lienzo-desc" style="resize:vertical">{{ lienzo.descripcion }}</textarea>
+        <div class="cv-label" style="margin-top:8px">Creado</div>
+        <div style="color:var(--cv-text-muted);font-size:12px">{{ lienzo.creado_en|date:"d/m/Y H:i" }}</div>
+        <button class="cv-btn" style="margin-top:auto;color:var(--cv-block)" id="btn-archive">Archivar lienzo</button>
+      </div>
+
+      <!-- Pestaña Chat -->
+      <div class="cv-sidebar__panel" id="tab-chat">
+        <div class="cv-chat-header">
+          <span class="cv-chat-title">Asistente IA</span>
+          <button class="cv-chat-clear" id="chat-clear" title="Nueva conversaci&oacute;n">+ Nuevo</button>
+        </div>
+        <div class="cv-chat-messages" id="chat-messages">
+          <div class="cv-chat-msg cv-chat-msg--system">
+            Hola! Soy tu asistente. Preg&uacute;ntame sobre las propiedades,
+            requerimientos o el mercado inmobiliario.
+          </div>
+        </div>
+        <div class="cv-chat-input-area">
+          <textarea class="cv-chat-input" id="chat-input" rows="2" placeholder="Escribe un mensaje..." onkeydown="if(event.key=='Enter'&&!event.shiftKey){event.preventDefault();canvasSendChat()}"></textarea>
+          <button class="cv-chat-send" id="chat-send" title="Enviar" aria-label="Enviar" onclick="canvasSendChat()">&#10148;</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CANVAS STAGE (pizarra) -->
+    <div class="cv-stage" id="cv-stage">
+      <canvas id="cv-grid"></canvas>
+      <svg id="cv-edges" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arrow-blue"  markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#5c6bc0"/>
+          </marker>
+          <marker id="arrow-green" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#1d9e75"/>
+          </marker>
+          <marker id="arrow-red"   markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#a32d2d"/>
+          </marker>
+        </defs>
+      </svg>
+      <div id="cv-nodes"></div>
+
+      <!-- Minimapa -->
+      <div class="cv-minimap" id="cv-minimap">
+        <canvas id="minimap-canvas" width="140" height="90"></canvas>
+        <div class="cv-minimap__viewport" id="minimap-vp"></div>
+      </div>
+
+      <!-- Zoom controls -->
+      <div class="cv-zoom-controls">
+        <button class="cv-zoom-btn" id="btn-zoom-in">+</button>
+        <button class="cv-zoom-btn" id="btn-zoom-reset">1:1</button>
+        <button class="cv-zoom-btn" id="btn-zoom-out">−</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="cv-toast" id="cv-toast"></div>
+
+<!-- Modal de confirmación personalizado -->
+<div class="cv-modal" id="cv-modal" style="display:none">
+  <div class="cv-modal__overlay"></div>
+  <div class="cv-modal__box">
+    <div class="cv-modal__title">Eliminar nodo</div>
+    <div class="cv-modal__msg"></div>
+    <div class="cv-modal__actions">
+      <button class="cv-btn" id="modal-cancel">Cancelar</button>
+      <button class="cv-btn cv-btn--danger" id="modal-confirm">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal para insertar URL -->
+<div class="cv-url-modal" id="cv-url-modal" style="display:none">
+  <div class="cv-url-modal__overlay"></div>
+  <div class="cv-url-modal__box">
+    <div class="cv-url-modal__title">Insertar enlace URL</div>
+    <div class="cv-url-modal__field">
+      <label class="cv-url-modal__label">URL</label>
+      <input class="cv-url-modal__input" id="cv-url-input" type="url" placeholder="https://ejemplo.com" autofocus>
+    </div>
+    <div class="cv-url-modal__field">
+      <label class="cv-url-modal__label">Título (opcional)</label>
+      <input class="cv-url-modal__input" id="cv-url-title" type="text" placeholder="Mi sitio web">
+    </div>
+    <div class="cv-url-modal__actions">
+      <button class="cv-btn" id="cv-url-cancel">Cancelar</button>
+      <button class="cv-btn cv-btn--pri" id="cv-url-confirm">Insertar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const LIENZO_ID = {{ lienzo.pk }};
+  const CSRF      = '{{ csrf_token }}';
+  const SNAPSHOT  = {{ snapshot_json|safe }};
+  const USER_ID   = '{{ user_id }}';
+</script>
+<script src="{% static 'canvas/js/canvas_engine.js' %}?v=4"></script>
+<script src="{% static 'canvas/js/canvas_nodes.js' %}?v=4"></script>
+<script src="{% static 'canvas/js/canvas_edges.js' %}?v=4"></script>
+<script src="{% static 'canvas/js/canvas_sidebar.js' %}?v=4"></script>
+<script src="{% static 'canvas/js/canvas_match_modal.js' %}?v=4"></script>
+<script src="{% static 'canvas/js/canvas_save.js' %}?v=4"></script>
+<script src="{% static 'canvas/js/canvas_history.js' %}?v=4"></script>
+<script src="{% static 'canvas/js/canvas_modal.js' %}?v=4"></script>
+<script src="{% static 'canvas/js/canvas_insert.js' %}?v=4"></script>
+<script>
+/* ── CHAT CANVAS ── */
+var _canvasConvId = null;
+var _canvasLoading = false;
+
+function canvasSendChat() {
+  var input = document.getElementById('chat-input');
+  var sendBtn = document.getElementById('chat-send');
+  var msgEl = document.getElementById('chat-messages');
+  var text = (input.value || '').trim();
+  if (!text || _canvasLoading) return;
+  input.value = '';
+  input.style.height = 'auto';
+  // Msg usuario
+  var userDiv = createChatMsg('user', text);
+  msgEl.appendChild(userDiv);
+  // Loading
+  var loadDiv = document.createElement('div');
+  loadDiv.className = 'cv-chat-msg cv-chat-msg--loading';
+  loadDiv.id = '_chat_loading';
+  loadDiv.textContent = 'Escribiendo...';
+  msgEl.appendChild(loadDiv);
+  msgEl.scrollTop = msgEl.scrollHeight;
+  _canvasLoading = true;
+  sendBtn.disabled = true;
+  // Construir contexto del lienzo (NUNCA retornar objeto vacio, siempre incluir todas las claves)
+  var canvasProps = [];
+  var canvasReqs = [];
+  var canvasMatches = [];
+  if (typeof STATE !== 'undefined' && STATE.nodos) {
+    Object.values(STATE.nodos).forEach(function(n) {
+      if (n.tipo === 'propiedad' && n.field_data) {
+        canvasProps.push({ titulo: n.field_data.title||n.field_data.direction||'', precio: n.field_data.price, distrito: n.field_data.district_name||n.field_data.district||'', tipo: n.field_data.tipo_propiedad||'' });
+      } else if (n.tipo === 'requerimiento' && n.field_data) {
+        canvasReqs.push({ agente: n.field_data.agente||'', tipo: n.field_data.tipo_original||'', presupuesto: n.field_data.presupuesto_monto||n.field_data.presupuesto||'' });
+      }
+    });
+  }
+  // Recopilar matches existentes
+  if (typeof STATE !== 'undefined' && STATE.aristas) {
+    Object.values(STATE.aristas).forEach(function(e) {
+      if (e.tipo === 'match') {
+        canvasMatches.push({ origen: e.origen, destino: e.destino, score: e.score_total });
+      }
+    });
+  }
+  var payload = {
+    message: text,
+    use_memory: true,
+    use_rag: true,
+    user_id: USER_ID || null,
+    metadata: {
+      source: 'canvas',
+      lienzo_id: LIENZO_ID,
+      canvas_context: {
+        propiedades_count: canvasProps.length,
+        requerimientos_count: canvasReqs.length,
+        matches_count: canvasMatches.length,
+        propiedades: canvasProps,
+        requerimientos: canvasReqs,
+        matches: canvasMatches
+      }
+    }
+  };
+  if (_canvasConvId) payload.conversation_id = _canvasConvId;
+  fetch('/api/v1/intelligence/chat-web/api/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    var ld = document.getElementById('_chat_loading');
+    if (ld) ld.remove();
+    if (data.success) {
+      _canvasConvId = data.conversation_id;
+      // Detectar accion de agregar nodos al canvas
+      if (data.action && data.action.type === 'add_nodes') {
+        executeAddNodesAction(data.action, data.response || data.html || '');
+      } else if (data.action && data.action.type === 'rearrange_nodes') {
+        executeRearrangeNodesAction(data.action);
+      } else {
+        var aDiv = createChatMsg('assistant', data.response || data.html || '');
+        msgEl.appendChild(aDiv);
+      }
+    } else {
+      var eDiv = createChatMsg('assistant', 'Error: ' + (data.error || 'Sin respuesta') + (data.details ? ' (' + JSON.stringify(data.details) + ')' : ''));
+      console.log('Chat API error:', data);
+      msgEl.appendChild(eDiv);
+    }
+    msgEl.scrollTop = msgEl.scrollHeight;
+  }).catch(function(err) {
+    var ld = document.getElementById('_chat_loading');
+    if (ld) ld.remove();
+    var eDiv = createChatMsg('assistant', 'Error de conexi\u00f3n');
+    msgEl.appendChild(eDiv);
+    console.error('Chat error:', err);
+  }).then(function() {
+    _canvasLoading = false;
+    sendBtn.disabled = false;
+    input.focus();
+  });
+}
+
+/* ── ACCIÓN: AGREGAR NODOS AL LIENZO ── */
+function executeAddNodesAction(action, mensaje) {
+  if (!action.nodes || action.nodes.length === 0) {
+    var emptyDiv = createChatMsg('assistant', mensaje || 'No se encontraron propiedades para agregar.');
+    document.getElementById('chat-messages').appendChild(emptyDiv);
+    return;
+  }
+  // Capturar estado para undo
+  if (typeof captureState === 'function') captureState();
+  // Obtener campos activos
+  var campos = (typeof getActiveCampos === 'function') ? getActiveCampos() : [];
+  var addedCount = 0;
+  var msgEl = document.getElementById('chat-messages');
+  action.nodes.forEach(function(nodeData) {
+    if (nodeData.node_type === 'propiedad' && nodeData.source_id) {
+      var existingId = 'prop_' + nodeData.source_id;
+      if (STATE.nodos[existingId]) return; // ya existe
+      // Posicion en cascada
+      var vp = STATE.viewport;
+      var existingProps = Object.values(STATE.nodos).filter(function(n) { return n.tipo === 'propiedad'; });
+      var offsetX = 50 + (existingProps.length + addedCount) % 4 * 240;
+      var offsetY = 60 + Math.floor((existingProps.length + addedCount) / 4) * 200;
+      var x = (offsetX - vp.x) / vp.zoom;
+      var y = (offsetY - vp.y) / vp.zoom;
+      createPropNode(nodeData.source_id, nodeData.data, x, y, campos);
+      addedCount++;
+    }
+  });
+  if (addedCount > 0) {
+    if (typeof markDirty === 'function') markDirty();
+    var confirmMsg = '✅ Agregu\u00e9 ' + addedCount + ' propieda' + (addedCount > 1 ? 'des' : 'd') + ' al lienzo. ' + (mensaje || '');
+    var okDiv = createChatMsg('assistant', confirmMsg);
+    msgEl.appendChild(okDiv);
+  } else {
+    var alreadyDiv = createChatMsg('assistant', mensaje || 'Todas las propiedades ya est\u00e1n en el lienzo.');
+    msgEl.appendChild(alreadyDiv);
+  }
+}
+
+/* ── ACCIÓN: REORDENAR NODOS EN EL LIENZO ── */
+function executeRearrangeNodesAction(action) {
+  var propNodes = Object.values(STATE.nodos).filter(function(n) { return n.tipo === 'propiedad'; });
+  if (propNodes.length === 0) {
+    var noProps = createChatMsg('assistant', 'No hay propiedades en el lienzo para reordenar.');
+    document.getElementById('chat-messages').appendChild(noProps);
+    return;
+  }
+  // Capturar estado para undo
+  if (typeof captureState === 'function') captureState();
+  var vp = STATE.viewport;
+  var columns = action.columns || 4;
+  var startX = 30;
+  var startY = 30;
+  var cardW = 240;
+  var cardH = 200;
+  var gap = 16;
+
+  // ORDENAR nodos segun sort_by/sort_order
+  if (action.sort_by) {
+    propNodes.sort(function(a, b) {
+      var va = a.field_data ? a.field_data[action.sort_by] : null;
+      var vb = b.field_data ? b.field_data[action.sort_by] : null;
+      if (va == null) va = '';
+      if (vb == null) vb = '';
+      // Comparar como numero si ambos son numericos
+      if (!isNaN(va) && !isNaN(vb)) {
+        return action.sort_order === 'desc' ? Number(vb) - Number(va) : Number(va) - Number(vb);
+      }
+      // Comparar como string
+      var sa = String(va).toLowerCase();
+      var sb = String(vb).toLowerCase();
+      if (sa < sb) return action.sort_order === 'desc' ? 1 : -1;
+      if (sa > sb) return action.sort_order === 'desc' ? -1 : 1;
+      return 0;
+    });
+  }
+
+  // AGRUPAR nodos
+  if (action.group_by) {
+    // Agrupar por campo y ordenar grupos
+    var groups = {};
+    propNodes.forEach(function(n) {
+      var key = n.field_data ? String(n.field_data[action.group_by] || 'Sin ' + action.group_by) : 'Desconocido';
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(n);
+    });
+    var sortedKeys = Object.keys(groups).sort();
+    var idx = 0;
+    sortedKeys.forEach(function(key) {
+      groups[key].forEach(function(n) {
+        var col = idx % columns;
+        var row = Math.floor(idx / columns);
+        var x = (startX + col * (cardW + gap) - vp.x) / vp.zoom;
+        var y = (startY + row * (cardH + gap) - vp.y) / vp.zoom;
+        positionNode(n.id, n.el, x, y);
+        n.x = x; n.y = y;
+        idx++;
+      });
+    });
+  } else {
+    // DISPOSICIÓN EN GRILLA
+    propNodes.forEach(function(n, idx) {
+      var col = idx % columns;
+      var row = Math.floor(idx / columns);
+      var x = (startX + col * (cardW + gap) - vp.x) / vp.zoom;
+      var y = (startY + row * (cardH + gap) - vp.y) / vp.zoom;
+      positionNode(n.id, n.el, x, y);
+      n.x = x; n.y = y;
+    });
+  }
+
+  if (typeof markDirty === 'function') markDirty();
+  var strategyLabel = action.group_by ? ('agrupadas por ' + action.group_by) : (action.sort_by ? ('ordenadas por ' + action.sort_by) : 'en grilla');
+  var confirmMsg = '\uD83D\uDD04 Reorden\u00e9 ' + propNodes.length + ' propiedades ' + strategyLabel + '.';
+  var okDiv = createChatMsg('assistant', confirmMsg);
+  document.getElementById('chat-messages').appendChild(okDiv);
+}
+
+function createChatMsg(role, text) {
+  var wrapper = document.createElement('div');
+  wrapper.className = 'cv-chat-msg cv-chat-msg--' + role;
+  // Texto del mensaje
+  var textSpan = document.createElement('span');
+  textSpan.className = 'cv-chat-msg__text';
+  textSpan.textContent = text;
+  wrapper.appendChild(textSpan);
+  // Boton copiar
+  var copyBtn = document.createElement('button');
+  copyBtn.className = 'cv-chat-msg__copy';
+  copyBtn.title = 'Copiar';
+  copyBtn.textContent = '\uD83D\uDCCB';
+  copyBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    navigator.clipboard.writeText(text).then(function() {
+      copyBtn.textContent = '\u2713';
+      setTimeout(function() { copyBtn.textContent = '\uD83D\uDCCB'; }, 1500);
+    }).catch(function() {
+      // Fallback seleccionando texto
+      var range = document.createRange();
+      range.selectNodeContents(textSpan);
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    });
+  });
+  wrapper.appendChild(copyBtn);
+  return wrapper;
+}
+</script>
+{% endblock %}

@@ -669,6 +669,264 @@ def collection_sync(request, collection_id):
     return redirect('intelligence:collections_dashboard')
 
 
+# Almacén en memoria para tareas de sincronización en segundo plano (sin Celery)
+# { task_id: { state, meta, result, error, logs, ... } }
+_SYNC_TASKS = {}
+_SYNC_TASK_COUNTER = 0
+_SYNC_TASK_LOCK = None
+import threading as _threading
+_SYNC_TASK_LOCK = _threading.Lock()
+
+
+def collection_sync_all(request):
+    """
+    Sincroniza TODAS las colecciones activas con fuerza completa y reconstruye FAISS.
+    POST /intelligence/collections/sync-all/
+    
+    Si Celery está disponible → lanza tarea async.
+    Si no → lanza un thread en segundo plano.
+    
+    Retorna JSON con task_id para polling del frontend.
+    """
+    if request.method == 'POST':
+        from .tasks import sincronizar_todas_colecciones_rag
+        
+        # Verificar si Celery está disponible
+        celery_disponible = False
+        try:
+            from celery import current_app as celery_app
+            insp = celery_app.control.inspect()
+            workers = insp.ping() if hasattr(insp, 'ping') else None
+            celery_disponible = workers is not None and len(workers) > 0
+        except Exception:
+            celery_disponible = False
+        
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.headers.get('Accept', '').startswith('application/json')
+        
+        if celery_disponible:
+            # ── MODO CELERY ASYNC ──
+            task = sincronizar_todas_colecciones_rag.delay(force_full_sync=True)
+            
+            request.session['sync_task_id'] = task.id
+            request.session['sync_task_started_at'] = timezone.now().isoformat()
+            request.session.modified = True
+            
+            if is_ajax:
+                from django.http import JsonResponse
+                return JsonResponse({'success': True, 'task_id': task.id, 'mode': 'async'})
+            
+            messages.success(request, f'🔄 Tarea async iniciada (ID: {task.id[:12]}...).')
+        else:
+            # ── MODO THREAD (sin Celery) ──
+            # Ejecutar la tarea en un hilo en segundo plano
+            global _SYNC_TASK_COUNTER
+            with _SYNC_TASK_LOCK:
+                _SYNC_TASK_COUNTER += 1
+                local_task_id = f"sync_{_SYNC_TASK_COUNTER}_{int(timezone.now().timestamp())}"
+                _SYNC_TASKS[local_task_id] = {
+                    'state': 'PENDING',
+                    'meta': {
+                        'current': 0, 'total': 0, 'current_collection': 'Iniciando...',
+                        'pct': 0, 'logs': [{'level': 'info', 'message': 'Iniciando sincronización en segundo plano...', 'timestamp': timezone.now().isoformat()}],
+                    },
+                    'result': None,
+                    'error': None,
+                }
+            
+            def _run_sync(task_id):
+                """Ejecuta la sincronización en un hilo separado."""
+                import logging as _log
+                _log.info(f"[ThreadSync] Iniciando tarea {task_id}")
+                
+                try:
+                    import django
+                    django.db.close_old_connections()
+                    
+                    # La tarea actualiza _SYNC_TASKS por sí misma vía los parámetros
+                    sync_fn = sincronizar_todas_colecciones_rag.__wrapped__
+                    result = sync_fn(
+                        force_full_sync=True,
+                        _task_id=task_id,
+                        _task_store=_SYNC_TASKS,
+                        _task_lock=_SYNC_TASK_LOCK,
+                    )
+                    
+                    with _SYNC_TASK_LOCK:
+                        if task_id in _SYNC_TASKS:
+                            _SYNC_TASKS[task_id]['state'] = 'SUCCESS'
+                            _SYNC_TASKS[task_id]['result'] = result
+                    
+                    _log.info(f"[ThreadSync] Tarea {task_id} completada exitosamente")
+                    
+                except Exception as e:
+                    _log.error(f"[ThreadSync] Error en tarea {task_id}: {e}", exc_info=True)
+                    with _SYNC_TASK_LOCK:
+                        if task_id in _SYNC_TASKS:
+                            _SYNC_TASKS[task_id]['state'] = 'FAILURE'
+                            _SYNC_TASKS[task_id]['error'] = str(e)
+                finally:
+                    try:
+                        import django as _dj
+                        _dj.db.close_old_connections()
+                    except Exception:
+                        pass
+            
+            thread = _threading.Thread(target=_run_sync, args=(local_task_id,), daemon=True)
+            thread.start()
+            
+            request.session['sync_task_id'] = local_task_id
+            request.session['sync_task_started_at'] = timezone.now().isoformat()
+            request.session.modified = True
+            
+            if is_ajax:
+                from django.http import JsonResponse
+                return JsonResponse({'success': True, 'task_id': local_task_id, 'mode': 'async', 'note': 'thread'})
+            
+            messages.success(request, f'🔄 Tarea iniciada en segundo plano (ID: {local_task_id}).')
+    
+    return redirect('intelligence:collections_dashboard')
+
+
+def collection_sync_status(request, task_id):
+    """
+    GET /intelligence/collections/sync-status/<task_id>/
+    
+    Retorna el estado actual de una tarea de sincronización.
+    Soporta:
+    - Tareas Celery (task_id UUID)
+    - Tareas Thread (task_id empieza con "sync_")
+    
+    Returns:
+        JSON con state, meta (progress, logs, pct), result (si completó)
+    """
+    from django.http import JsonResponse
+    
+    # ── Tarea en hilo (sin Celery) ──
+    if task_id.startswith('sync_'):
+        with _SYNC_TASK_LOCK:
+            task_data = _SYNC_TASKS.get(task_id)
+        
+        if task_data is None:
+            return JsonResponse({
+                'state': 'UNKNOWN',
+                'task_id': task_id,
+                'meta': {'current': 0, 'total': 0, 'pct': 0, 'logs': [
+                    {'level': 'warn', 'message': 'Tarea no encontrada (posiblemente ya expiró)', 'timestamp': timezone.now().isoformat()}
+                ]},
+            })
+        
+        return JsonResponse({
+            'state': task_data['state'],
+            'task_id': task_id,
+            'meta': task_data.get('meta', {}),
+            'result': task_data.get('result'),
+            'error': task_data.get('error'),
+        })
+    
+    # ── Tarea Celery ──
+    from celery.result import AsyncResult
+    from celery import current_app as celery_app
+    
+    try:
+        async_result = AsyncResult(task_id, app=celery_app)
+        
+        response = {
+            'state': async_result.state,
+            'task_id': task_id,
+        }
+        
+        if async_result.state == 'PENDING':
+            response['meta'] = {
+                'current': 0,
+                'total': 0,
+                'current_collection': 'Esperando...',
+                'pct': 0,
+                'logs': [],
+            }
+        elif async_result.state == 'PROGRESS':
+            response['meta'] = async_result.result or {}
+        elif async_result.state == 'SUCCESS':
+            response['meta'] = async_result.result or {}
+            response['result'] = async_result.result
+        elif async_result.state == 'FAILURE':
+            response['meta'] = {
+                'current': 0,
+                'total': 0,
+                'current_collection': 'Error',
+                'pct': 0,
+                'logs': [{
+                    'level': 'error',
+                    'message': f'Error en tarea: {async_result.traceback or str(async_result.result)}',
+                    'timestamp': timezone.now().isoformat(),
+                }],
+            }
+            response['error'] = str(async_result.result)
+        else:
+            response['meta'] = {
+                'state': async_result.state,
+                'current': 0,
+                'total': 0,
+                'pct': 0,
+                'logs': [{
+                    'level': 'info',
+                    'message': f'Estado: {async_result.state}',
+                    'timestamp': timezone.now().isoformat(),
+                }],
+            }
+        
+        return JsonResponse(response)
+    
+    except Exception as e:
+        return JsonResponse({
+            'state': 'UNKNOWN',
+            'task_id': task_id,
+            'error': str(e),
+            'meta': {
+                'current': 0,
+                'total': 0,
+                'pct': 0,
+                'logs': [{
+                    'level': 'error',
+                    'message': f'Error consultando estado: {e}',
+                    'timestamp': timezone.now().isoformat(),
+                }],
+            },
+        })
+
+
+def collection_sync_revoke(request, task_id):
+    """
+    POST /intelligence/collections/sync-revoke/<task_id>/
+    Revoca (cancela) una tarea de sincronización en ejecución.
+    Soporta tareas Celery y tareas Thread.
+    """
+    from django.http import JsonResponse
+    
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    
+    # ── Tarea Thread ──
+    if task_id.startswith('sync_'):
+        with _SYNC_TASK_LOCK:
+            if task_id in _SYNC_TASKS:
+                _SYNC_TASKS[task_id]['state'] = 'REVOKED'
+                _SYNC_TASKS[task_id]['meta'] = {
+                    'pct': 0,
+                    'logs': [{'level': 'warn', 'message': '⛔ Tarea revocada por el usuario.', 'timestamp': timezone.now().isoformat()}],
+                }
+                return JsonResponse({'success': True, 'message': 'Tarea thread revocada'})
+            else:
+                return JsonResponse({'success': False, 'error': 'Tarea no encontrada'}, status=404)
+    
+    # ── Tarea Celery ──
+    try:
+        from celery.task.control import revoke
+        revoke(task_id, terminate=True)
+        return JsonResponse({'success': True, 'message': 'Tarea Celery revocada'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
 def collection_sync_api(request, collection_id):
     """
     API endpoint para sincronizar una colección vía JSON.

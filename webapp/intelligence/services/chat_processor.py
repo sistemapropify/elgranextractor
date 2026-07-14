@@ -712,6 +712,7 @@ class ChatProcessor:
                         'semantic_query': ctx.message,
                         'modo_retorno': 'accion_agregar_y_reordenar',
                         'reordenar_message': ctx.message,
+                        'top_k': 5,  # FASE 5: Limitado para canvas
                     },
                 )
             
@@ -726,6 +727,7 @@ class ChatProcessor:
                     params={
                         'semantic_query': ctx.message,
                         'modo_retorno': 'accion_agregar',
+                        'top_k': 5,  # FASE 5: Limitado para canvas
                     },
                 )
             

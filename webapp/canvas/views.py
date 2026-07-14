@@ -429,6 +429,84 @@ def api_propiedad_imagenes(request, prop_id):
     return JsonResponse({'imagenes': imagenes, 'total': len(imagenes), 'prop_id': prop_id})
 
 
+# ── API: LEAD ANALYSIS ─────────────────────────────────────────
+
+
+def api_lead_analysis(request, prop_id):
+    """
+    GET /canvas/api/lead-analysis/<prop_id>/?granularity=day|week|month
+    Retorna el conteo de leads agregado por día, semana o mes.
+    """
+    user = _get_current_user(request)
+    if not user:
+        return JsonResponse({'error': 'No autenticado'}, status=401)
+
+    granularity = request.GET.get('granularity', 'day')
+
+    counts = []
+    total_leads = 0
+    first_lead_date = None
+
+    try:
+        from django.db import connections
+        with connections['propifai'].cursor() as cursor:
+
+            if granularity == 'week':
+                cursor.execute("""
+                    SELECT
+                        DATEADD(WEEK, DATEDIFF(WEEK, 0, l.created_at), 0) AS bucket_date,
+                        COUNT(DISTINCT l.id) AS count
+                    FROM lead_properties lp
+                    INNER JOIN lead l ON l.id = lp.lead_id
+                    WHERE lp.property_id = %s
+                    GROUP BY DATEADD(WEEK, DATEDIFF(WEEK, 0, l.created_at), 0)
+                    ORDER BY bucket_date
+                """, [prop_id])
+            elif granularity == 'month':
+                cursor.execute("""
+                    SELECT
+                        DATEADD(MONTH, DATEDIFF(MONTH, 0, l.created_at), 0) AS bucket_date,
+                        COUNT(DISTINCT l.id) AS count
+                    FROM lead_properties lp
+                    INNER JOIN lead l ON l.id = lp.lead_id
+                    WHERE lp.property_id = %s
+                    GROUP BY DATEADD(MONTH, DATEDIFF(MONTH, 0, l.created_at), 0)
+                    ORDER BY bucket_date
+                """, [prop_id])
+            else:  # day
+                cursor.execute("""
+                    SELECT CAST(l.created_at AS DATE) AS bucket_date,
+                           COUNT(DISTINCT l.id) AS count
+                    FROM lead_properties lp
+                    INNER JOIN lead l ON l.id = lp.lead_id
+                    WHERE lp.property_id = %s
+                    GROUP BY CAST(l.created_at AS DATE)
+                    ORDER BY bucket_date
+                """, [prop_id])
+
+            for row in cursor.fetchall():
+                bucket_date, count = row
+                date_str = bucket_date.isoformat() if hasattr(bucket_date, 'isoformat') else str(bucket_date)
+                counts.append({
+                    'date': date_str,
+                    'count': count,
+                })
+                total_leads += count
+                if first_lead_date is None:
+                    first_lead_date = date_str
+    except Exception as e:
+        logger.warning(f"Error en lead analysis for property {prop_id}: {e}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+    return JsonResponse({
+        'prop_id': prop_id,
+        'total_leads': total_leads,
+        'first_lead_date': first_lead_date,
+        'granularity': granularity,
+        'daily_counts': counts,
+    })
+
+
 # ── API: AGENTES ───────────────────────────────────────────────
 
 

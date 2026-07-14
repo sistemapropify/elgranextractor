@@ -309,6 +309,13 @@ function executeAddNodesAction(action, mensaje) {
     return;
   }
 
+  // Verificar que las funciones necesarias estén disponibles
+  if (typeof createPropNode !== 'function' || typeof formatPrice !== 'function') {
+    console.warn('[CanvasChat] createPropNode o formatPrice no disponible, no se pueden agregar nodos.');
+    addChatMessage('assistant', 'Error interno: funciones del canvas no disponibles. Recarga la página e inténtalo de nuevo.');
+    return;
+  }
+
   if (typeof captureState === 'function') captureState();
 
   var campos = (typeof getActiveCampos === 'function') ? getActiveCampos() : [];

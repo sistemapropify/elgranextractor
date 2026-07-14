@@ -132,23 +132,82 @@
 {% endblock %}
 
 {% block extra_js %}
+<style>
+/* ── Spinner inline para botón eliminar ── */
+@keyframes cv-spin { to { transform: rotate(360deg); } }
+.cv-spinner {
+  display: inline-block;
+  width: 16px; height: 16px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: cv-spin 0.6s linear infinite;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+.btn-eliminar--loading {
+  pointer-events: none;
+  opacity: 0.7;
+  cursor: not-allowed !important;
+}
+</style>
+
 <script>
+var _eliminando = false;
+
 function confirmarEliminar(nombre, url) {
   document.getElementById('modal-eliminar-nombre').textContent = nombre;
   document.getElementById('modal-eliminar-btn').onclick = function() {
-    var f = document.createElement('form');
-    f.method = 'POST';
-    f.action = url;
-    var i = document.createElement('input');
-    i.type = 'hidden';
-    i.name = 'csrfmiddlewaretoken';
-    i.value = '{{ csrf_token }}';
-    f.appendChild(i);
-    document.body.appendChild(f);
-    f.submit();
+    if (_eliminando) return; // ya está en progreso
+    _eliminando = true;
+    
+    var btn = document.getElementById('modal-eliminar-btn');
+    var cancelBtn = document.getElementById('modal-eliminar-cancel');
+    
+    // Bloquear ambos botones
+    btn.disabled = true;
+    btn.classList.add('btn-eliminar--loading');
+    cancelBtn.disabled = true;
+    cancelBtn.style.opacity = '0.5';
+    cancelBtn.style.cursor = 'not-allowed';
+    
+    // Reemplazar texto con spinner
+    btn.innerHTML = '<span class="cv-spinner"></span> Eliminando...';
+    
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': '{{ csrf_token }}',
+      },
+    })
+    .then(function(resp) {
+      if (resp.redirected) {
+        // Redirección exitosa → ir a la lista
+        window.location.href = resp.url;
+        return;
+      }
+      if (!resp.ok) {
+        return resp.json().then(function(data) {
+          throw new Error(data.error || 'Error al eliminar');
+        });
+      }
+      // Si no hay redirect (éxito sin redirect), recargar la página
+      window.location.reload();
+    })
+    .catch(function(err) {
+      _eliminando = false;
+      btn.disabled = false;
+      btn.classList.remove('btn-eliminar--loading');
+      btn.innerHTML = 'Eliminar';
+      cancelBtn.disabled = false;
+      cancelBtn.style.opacity = '1';
+      cancelBtn.style.cursor = 'pointer';
+      alert('Error al eliminar: ' + err.message);
+    });
   };
   document.getElementById('modal-eliminar').style.display = 'flex';
 }
+
 function cerrarModalEliminar() {
   document.getElementById('modal-eliminar').style.display = 'none';
 }
@@ -162,8 +221,8 @@ function cerrarModalEliminar() {
     <p id="modal-eliminar-nombre" style="color:#e6edf3;font-weight:600;font-size:16px;margin:0 0 16px 0;"></p>
     <p style="color:#f85149;font-size:12px;margin:0 0 20px 0;">⚠️ Esta acción no se puede deshacer</p>
     <div style="display:flex;gap:10px;justify-content:center;">
-      <button onclick="cerrarModalEliminar()" style="padding:8px 20px;border-radius:8px;border:1px solid #30363d;background:transparent;color:#e6edf3;font-size:14px;cursor:pointer;">Cancelar</button>
-      <button id="modal-eliminar-btn" style="padding:8px 20px;border-radius:8px;border:none;background:#f85149;color:#fff;font-size:14px;cursor:pointer;font-weight:500;">Eliminar</button>
+      <button id="modal-eliminar-cancel" onclick="cerrarModalEliminar()" style="padding:8px 20px;border-radius:8px;border:1px solid #30363d;background:transparent;color:#e6edf3;font-size:14px;cursor:pointer;">Cancelar</button>
+      <button id="modal-eliminar-btn" style="padding:8px 20px;border-radius:8px;border:none;background:#f85149;color:#fff;font-size:14px;cursor:pointer;font-weight:500;display:inline-flex;align-items:center;gap:6px;">Eliminar</button>
     </div>
   </div>
 </div>

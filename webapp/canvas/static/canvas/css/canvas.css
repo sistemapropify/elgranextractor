@@ -354,6 +354,7 @@
 .cv-badge--req  { background: #1a1e3a; color: #8896f0; }
 .cv-badge--nota { background: var(--cv-note-bg); color: #c9b44a; border: 1px solid var(--cv-note-border); }
 .cv-badge--match { background: #1a1a0a; color: #ffdd00; border: 1px solid rgba(255,221,0,0.3); }
+.cv-badge--lead-analysis { background: #1a1a3a; color: #5c9ce6; border: 1px solid rgba(92,156,230,0.3); }
 
 .cv-node__title {
   flex: 1;
@@ -531,6 +532,10 @@
   display: flex;
   align-items: center;
   gap: 2px;
+  cursor: pointer;
+}
+.cv-lead-count:hover {
+  opacity: 0.8;
 }
 .cv-lead-count__num {
   font-weight: 700;
@@ -1147,6 +1152,7 @@
 .cv-edge--block { stroke: var(--cv-edge-block); stroke-dasharray: 6 3; }
 .cv-edge--manual { stroke: var(--cv-edge-dep); }
 .cv-edge--nota  { stroke: #c9b44a; stroke-dasharray: 3 3; }
+.cv-edge--lead_analysis { stroke: #5c9ce6; stroke-dasharray: 4 3; }
 
 .cv-edge__label {
   fill: var(--cv-text-muted);
@@ -1944,6 +1950,68 @@
   color: rgba(255,255,255,0.5);
   font-size: 12px;
   z-index: 10;
+}
+
+/* ── LEAD ANALYSIS: granularidad label en header ── */
+.cv-lead-gran-label {
+  font-size: 9px;
+  color: var(--cv-text-muted);
+  background: rgba(92, 156, 230, 0.1);
+  border: 1px solid rgba(92, 156, 230, 0.2);
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin-right: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.15s, border-color 0.15s;
+}
+.cv-lead-gran-label:hover {
+  background: rgba(92, 156, 230, 0.2);
+  border-color: rgba(92, 156, 230, 0.4);
+}
+
+/* ── LEAD ANALYSIS: contexto menu (click derecho) ── */
+.cv-lead-context-menu {
+  position: fixed;
+  z-index: 20000;
+  background: #1a1c24;
+  border: 1px solid var(--cv-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+  min-width: 140px;
+  padding: 4px 0;
+  font-family: 'Inter', system-ui, sans-serif;
+  user-select: none;
+}
+.cv-lead-context-menu__header {
+  padding: 6px 14px 4px 14px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--cv-text-muted);
+  border-bottom: 1px solid var(--cv-border);
+  margin-bottom: 2px;
+}
+.cv-lead-context-menu__item {
+  padding: 6px 14px;
+  font-size: 12px;
+  color: var(--cv-text-sec);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.cv-lead-context-menu__item:hover {
+  background: rgba(92, 107, 192, 0.15);
+  color: var(--cv-text-pri);
+}
+.cv-lead-context-menu__item.active {
+  color: #5c9ce6;
+  background: rgba(92, 156, 230, 0.1);
+}
+.cv-lead-context-menu__item.active::before {
+  content: '✓ ';
+  color: #5c9ce6;
 }
 
 /* ── Cursor pointer en thumbnail de nodo propiedad ── */

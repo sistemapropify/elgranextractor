@@ -35,6 +35,9 @@ urlpatterns = [
     path('collections/<uuid:collection_id>/delete/', views.collection_delete, name='collection_delete'),
     path('collections/<uuid:collection_id>/sync/', views.collection_sync, name='collection_sync'),
     path('collections/<uuid:collection_id>/sync/api/', views.collection_sync_api, name='collection_sync_api'),
+    path('collections/sync-all/', views.collection_sync_all, name='collection_sync_all'),
+    path('collections/sync-status/<str:task_id>/', views.collection_sync_status, name='collection_sync_status'),
+    path('collections/sync-revoke/<str:task_id>/', views.collection_sync_revoke, name='collection_sync_revoke'),
     path('collections/<uuid:collection_id>/stats/', views.collection_stats, name='collection_stats'),
     path('collections/<uuid:collection_id>/detail/', views.collection_detail, name='collection_detail'),
     

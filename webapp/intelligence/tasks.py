@@ -67,16 +67,31 @@ def sincronizar_coleccion_rag(self, collection_id: int, force_full_sync: bool = 
 
 
 @shared_task(bind=True, queue='analisis', name='intelligence.tasks.sincronizar_todas_colecciones_rag')
-def sincronizar_todas_colecciones_rag(self, force_full_sync: bool = False):
+def sincronizar_todas_colecciones_rag(self, force_full_sync: bool = False,
+                                      _task_id: str = None, _task_store: dict = None,
+                                      _task_lock=None):
     """
     Tarea Celery para sincronizar todas las colecciones RAG activas.
     
     Args:
         force_full_sync: Si True, regenera todos los embeddings
+        _task_id: Usado internamente para modo thread (sin Celery)
+        _task_store: Usado internamente para modo thread
+        _task_lock: Usado internamente para modo thread
     
     Returns:
         Dict con resultados de todas las sincronizaciones
     """
+    # Detectar modo de ejecución
+    es_sync = _task_id is not None
+    if not es_sync:
+        es_sync = not hasattr(self, 'request') or not self.request or not self.request.id
+    
+    if es_sync:
+        import logging
+        logging.getLogger(__name__).info(
+            f"Ejecutando en modo thread (task_id={_task_id or 'sync'})"
+        )
     logger.info(f"Iniciando sincronización de todas las colecciones RAG (force={force_full_sync})")
     
     # Obtener todas las colecciones activas
@@ -95,56 +110,180 @@ def sincronizar_todas_colecciones_rag(self, force_full_sync: bool = False):
     
     logger.info(f"Encontradas {total_collections} colección(es) activa(s)")
     
+    from .services.rag import RAGService
+    from .services.faiss_index import FAISSIndexManager
+    
     results = []
+    logs = []
     success_count = 0
     error_count = 0
+    faiss_count = 0
     
-    # Sincronizar cada colección
-    for collection in collections:
+    # Registrar inicio
+    logs.append({
+        'level': 'info',
+        'message': f'Iniciando sincronización de {total_collections} colecciones (force={force_full_sync})',
+        'timestamp': timezone.now().isoformat(),
+    })
+    
+    # Sincronizar cada colección y reconstruir FAISS
+    for idx, collection in enumerate(collections, 1):
         try:
-            # Ejecutar tarea de sincronización para esta colección
-            task_result = sincronizar_coleccion_rag.apply_async(
-                args=[collection.id, force_full_sync],
-                queue='analisis'
-            )
-            
-            # Esperar resultado (puede ser async, pero para batch esperamos)
-            result = task_result.get(timeout=300)  # 5 minutos timeout
-            
-            results.append({
-                'collection_id': collection.id,
-                'collection_name': collection.name,
-                'success': result.get('success', False),
-                'message': result.get('message', ''),
-                'stats': result.get('stats', {})
+            logs.append({
+                'level': 'info',
+                'message': f'[{idx}/{total_collections}] Sincronizando {collection.name}...',
+                'timestamp': timezone.now().isoformat(),
             })
             
-            if result.get('success'):
+            # Sync individual síncrona (no lanza sub-tarea)
+            if collection.table_name:
+                success, message, stats = RAGService.sync_collection_dynamic(
+                    collection_name=collection.name,
+                    force_full_sync=force_full_sync,
+                )
+            else:
+                success, message, stats = RAGService.sync_collection(
+                    collection_id=collection.id,
+                    force_full_sync=force_full_sync,
+                )
+            
+            if success:
+                logs.append({
+                    'level': 'success',
+                    'message': f'  ✓ Sync OK: {stats.get("created",0)} creados, {stats.get("updated",0)} actualizados',
+                    'timestamp': timezone.now().isoformat(),
+                })
+            else:
+                logs.append({
+                    'level': 'error',
+                    'message': f'  ✗ Sync falló: {message}',
+                    'timestamp': timezone.now().isoformat(),
+                })
+            
+            # Reconstruir FAISS después del sync
+            faiss_ok = False
+            try:
+                logs.append({
+                    'level': 'info',
+                    'message': f'  Reconstruyendo índice FAISS...',
+                    'timestamp': timezone.now().isoformat(),
+                })
+                indexed = FAISSIndexManager.rebuild_for_collection(
+                    collection.name,
+                    RAGService.EMBEDDING_DIMENSIONS
+                )
+                faiss_ok = indexed > 0
+                if faiss_ok:
+                    faiss_count += 1
+                    message_combined = message + f' | FAISS: {indexed} vectores'
+                    logs.append({
+                        'level': 'success',
+                        'message': f'  ✓ FAISS: {indexed} vectores indexados',
+                        'timestamp': timezone.now().isoformat(),
+                    })
+                else:
+                    message_combined = message + f' | FAISS: 0 vectores'
+                    logs.append({
+                        'level': 'warn',
+                        'message': f'  ⚠ FAISS: 0 vectores (sin datos para indexar)',
+                        'timestamp': timezone.now().isoformat(),
+                    })
+            except Exception as fe:
+                message_combined = message + f' | FAISS error: {fe}'
+                logs.append({
+                    'level': 'error',
+                    'message': f'  ✗ FAISS error: {fe}',
+                    'timestamp': timezone.now().isoformat(),
+                })
+            
+            results.append({
+                'collection_id': str(collection.id),
+                'collection_name': collection.name,
+                'success': success,
+                'message': message_combined,
+                'stats': stats,
+                'faiss_rebuilt': faiss_ok,
+            })
+            
+            if success:
                 success_count += 1
             else:
                 error_count += 1
                 
+            # Publicar progreso (Celery o Thread)
+            progress_meta = {
+                'current': success_count + error_count,
+                'total': total_collections,
+                'current_collection': collection.name,
+                'success': success_count,
+                'errors': error_count,
+                'faiss': faiss_count,
+                'logs': logs,
+                'pct': int((success_count + error_count) / total_collections * 100),
+            }
+            if _task_id and _task_store and _task_lock:
+                with _task_lock:
+                    if _task_id in _task_store:
+                        _task_store[_task_id]['state'] = 'PROGRESS'
+                        _task_store[_task_id]['meta'] = progress_meta
+            if not es_sync:
+                self.update_state(state='PROGRESS', meta=progress_meta)
+                
         except Exception as e:
             logger.error(f"Error sincronizando colección {collection.id} ({collection.name}): {e}")
+            logs.append({
+                'level': 'error',
+                'message': f'  ✗ Error inesperado: {e}',
+                'timestamp': timezone.now().isoformat(),
+            })
             results.append({
-                'collection_id': collection.id,
+                'collection_id': str(collection.id),
                 'collection_name': collection.name,
                 'success': False,
                 'message': str(e),
-                'stats': {'errors': 1}
+                'stats': {'errors': 1},
+                'faiss_rebuilt': False,
             })
             error_count += 1
+            
+            progress_meta = {
+                'current': success_count + error_count,
+                'total': total_collections,
+                'current_collection': collection.name,
+                'success': success_count,
+                'errors': error_count,
+                'faiss': faiss_count,
+                'logs': logs,
+                'pct': int((success_count + error_count) / total_collections * 100),
+            }
+            if _task_id and _task_store and _task_lock:
+                with _task_lock:
+                    if _task_id in _task_store:
+                        _task_store[_task_id]['state'] = 'PROGRESS'
+                        _task_store[_task_id]['meta'] = progress_meta
+            if not es_sync:
+                self.update_state(state='PROGRESS', meta=progress_meta)
+    
+    # Log final
+    resumen_msg = f'Sincronizadas {success_count}/{total_collections} colecciones, {faiss_count} FAISS reconstruidos, {error_count} errores.'
+    logs.append({
+        'level': 'success' if error_count == 0 else 'warn',
+        'message': resumen_msg,
+        'timestamp': timezone.now().isoformat(),
+    })
     
     # Resumen
     summary = {
-        'success': error_count == 0,  # Éxito total si no hay errores
-        'message': f'Sincronizadas {success_count} de {total_collections} colecciones ({error_count} errores)',
+        'success': error_count == 0,
+        'message': resumen_msg,
         'total_collections': total_collections,
         'success_count': success_count,
         'error_count': error_count,
+        'faiss_count': faiss_count,
         'results': results,
+        'logs': logs,
         'timestamp': timezone.now().isoformat(),
-        'task_id': self.request.id
+        'task_id': self.request.id if hasattr(self, 'request') and self.request else None,
     }
     
     logger.info(f"Sincronización batch completada: {summary['message']}")

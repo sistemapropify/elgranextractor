@@ -26,4 +26,5 @@ urlpatterns = [
     path('api/media/<int:archivo_id>/',   views.api_lienzo_media,  name='api_media'),
     path('api/eliminar/<int:pk>/',        views.api_lienzo_eliminar, name='api_eliminar'),
     path('api/propiedad-imagenes/<int:prop_id>/', views.api_propiedad_imagenes, name='api_prop_imagenes'),
+    path('api/lead-analysis/<int:prop_id>/',      views.api_lead_analysis,      name='api_lead_analysis'),
 ]

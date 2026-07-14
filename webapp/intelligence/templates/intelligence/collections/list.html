@@ -367,19 +367,188 @@
             flex-direction: column;
         }
     }
+
+    /* ===== MODAL SYNC ALL ===== */
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.7);
+        z-index: 9999;
+        justify-content: center;
+        align-items: center;
+    }
+    .modal-overlay--visible {
+        display: flex;
+    }
+    .modal-content {
+        background: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 12px;
+        padding: 28px;
+        max-width: 500px;
+        width: 90%;
+        text-align: center;
+    }
+    .sync-spinner {
+        display: inline-block;
+        width: 40px;
+        height: 40px;
+        border: 4px solid rgba(88,166,255,0.2);
+        border-top-color: var(--accent-blue);
+        border-radius: 50%;
+        animation: sync-spin 0.8s linear infinite;
+        margin: 16px auto;
+    }
+    @keyframes sync-spin {
+        to { transform: rotate(360deg); }
+    }
+    .sync-status {
+        font-size: 14px;
+        color: var(--text-secondary);
+        margin: 12px 0;
+        line-height: 1.6;
+    }
+    .sync-status--active {
+        color: var(--accent-blue);
+    }
+    .sync-status--done {
+        color: var(--accent-green);
+    }
+    .sync-status--error {
+        color: var(--accent-red);
+    }
+    .btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        pointer-events: none;
+    }
+
+    /* ===== TERMINAL DE SINCRONIZACIÓN ===== */
+    .sync-terminal-wrap {
+        background: #0d1117;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        margin-top: 20px;
+        overflow: hidden;
+        display: none;
+    }
+    .sync-terminal-wrap--visible {
+        display: block;
+    }
+    .sync-terminal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 16px;
+        background: #161b22;
+        border-bottom: 1px solid #30363d;
+        font-size: 13px;
+        color: var(--text-secondary);
+    }
+    .sync-terminal-header strong {
+        color: var(--accent-blue);
+    }
+    .sync-terminal-body {
+        padding: 12px 16px;
+        max-height: 320px;
+        overflow-y: auto;
+        font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+        font-size: 12px;
+        line-height: 1.7;
+    }
+    .sync-terminal-body::-webkit-scrollbar {
+        width: 6px;
+    }
+    .sync-terminal-body::-webkit-scrollbar-track {
+        background: #0d1117;
+    }
+    .sync-terminal-body::-webkit-scrollbar-thumb {
+        background: #30363d;
+        border-radius: 3px;
+    }
+    .sync-log-line {
+        white-space: pre-wrap;
+        word-break: break-all;
+        padding: 1px 0;
+    }
+    .sync-log-line--info  { color: #8b949e; }
+    .sync-log-line--success { color: #3fb950; }
+    .sync-log-line--error  { color: #f85149; }
+    .sync-log-line--warn   { color: #d29922; }
+
+    /* ===== BARRA DE PROGRESO ===== */
+    .sync-progress-bar-wrap {
+        margin-top: 16px;
+        display: none;
+    }
+    .sync-progress-bar-wrap--visible {
+        display: block;
+    }
+    .sync-progress-bar {
+        width: 100%;
+        height: 8px;
+        background: #21262d;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    .sync-progress-bar-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #1f6feb, #58a6ff);
+        border-radius: 4px;
+        transition: width 0.5s ease;
+        width: 0%;
+    }
+    .sync-progress-text {
+        display: flex;
+        justify-content: space-between;
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin-top: 4px;
+    }
+    .sync-progress-text .pct {
+        font-weight: 600;
+        color: var(--accent-blue);
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="collections-container">
+    <!-- MODAL SYNC ALL -->
+    <div id="modal-sync-all" class="modal-overlay">
+        <div class="modal-content">
+            <div id="sync-modal-icon" style="font-size:48px;margin-bottom:8px;">🔄</div>
+            <div id="sync-spinner" class="sync-spinner" style="display:none;"></div>
+            <h3 id="sync-modal-title" style="color:#e6edf3;margin:0 0 8px 0;font-size:18px;">Sincronizar Todo</h3>
+            <p id="sync-modal-desc" class="sync-status">
+                ¿Estás seguro de sincronizar TODAS las colecciones activas?<br>
+                Esto regenerará todos los embeddings y reconstruirá los índices FAISS.<br>
+                <strong style="color:var(--accent-orange);">Puede tomar varios minutos.</strong>
+            </p>
+            <div id="sync-modal-progress" style="display:none;margin:12px 0;">
+                <div id="sync-modal-progress-text" class="sync-status sync-status--active">Iniciando sincronización...</div>
+            </div>
+            <div id="sync-modal-actions" style="display:flex;gap:10px;justify-content:center;margin-top:16px;">
+                <button id="btn-sync-cancel" onclick="cerrarModalSync()" class="btn" style="padding:8px 20px;">Cancelar</button>
+                <button id="btn-sync-confirm" onclick="ejecutarSyncAll()" class="btn btn-primary" style="padding:8px 20px;display:inline-flex;align-items:center;gap:6px;">✅ Sincronizar Todo</button>
+            </div>
+        </div>
+    </div>
+
     <!-- HEADER -->
     <div class="collections-header">
         <h1>📚 Colecciones RAG</h1>
         <div class="header-actions">
             <a href="{% url 'intelligence:dashboard' %}" class="btn">← Dashboard</a>
+            <button onclick="mostrarModalSync()" class="btn btn-primary" style="background:#1f6feb;border-color:rgba(31,111,235,0.3);">🔄 Sync All & Rebuild</button>
             <a href="{% url 'intelligence:collection_create' %}" class="btn btn-primary">➕ Nueva Colección</a>
         </div>
     </div>
+    <p style="color:var(--text-secondary);font-size:13px;margin:-16px 0 20px 0;">
+        ⚠️ Los embeddings actuales tienen dimensión incorrecta (1024d antigua vs 384d actual).
+        Usa <strong>"Sync All & Rebuild"</strong> para regenerarlos y reparar la búsqueda semántica.
+    </p>
 
     <!-- MENSAJES -->
     {% if messages %}
@@ -524,8 +693,348 @@
         {% endif %}
     </div>
 
+    <!-- TERMINAL DE SINCRONIZACIÓN -->
+    <div id="sync-terminal" class="sync-terminal-wrap">
+        <div class="sync-terminal-header">
+            <span>🖥️ <strong>Terminal de Sincronización</strong></span>
+            <div style="display:flex;gap:6px;align-items:center;">
+                <span id="sync-terminal-state" style="font-size:12px;">⏳ Inactivo</span>
+                <button id="btn-revoke-task" onclick="revocarTarea()" style="display:none;padding:3px 8px;font-size:11px;border:1px solid #f85149;background:transparent;color:#f85149;border-radius:4px;cursor:pointer;" title="Cancelar tarea">✕ Revocar</button>
+                <button id="btn-kill-worker" onclick="matarWorker()" style="display:none;padding:3px 8px;font-size:11px;border:1px solid #d29922;background:transparent;color:#d29922;border-radius:4px;cursor:pointer;" title="Detener worker Celery">⏹ Worker</button>
+            </div>
+        </div>
+        <div id="sync-progress-bar-wrap" class="sync-progress-bar-wrap">
+            <div class="sync-progress-bar">
+                <div id="sync-progress-fill" class="sync-progress-bar-fill"></div>
+            </div>
+            <div class="sync-progress-text">
+                <span id="sync-progress-label">Iniciando...</span>
+                <span class="pct" id="sync-progress-pct">0%</span>
+            </div>
+        </div>
+        <div id="sync-terminal-body" class="sync-terminal-body">
+            <div class="sync-log-line sync-log-line--info">💡 Esperando inicio de sincronización...</div>
+        </div>
+    </div>
+
     <div class="collections-footer">
         Propifai Intelligence Layer • Colecciones RAG • Total: {{ collections|length }} colección(es)
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   Sincronización Async con Terminal en Vivo
+   ═══════════════════════════════════════════════════════════════ */
+var SYNC_STATE = { polling: false, taskId: null, pollTimer: null };
+
+/* ── Inicializar al cargar: ver si hay tarea activa en localStorage ── */
+(function() {
+    var saved = localStorage.getItem('propifai_sync_task');
+    if (saved) {
+        try {
+            var data = JSON.parse(saved);
+            if (data.taskId && data.startedAt) {
+                var elapsed = Date.now() - data.startedAt;
+                // Si la tarea tiene menos de 30 segundos, reanudar polling
+                // Si tiene más, probablemente es una tarea PENDING sin worker → limpiar
+                if (elapsed < 30000) {
+                    SYNC_STATE.taskId = data.taskId;
+                    mostrarTerminal();
+                    agregarLog('info', '🔄 Reanudando monitoreo de tarea anterior...');
+                    iniciarPolling(data.taskId);
+                } else {
+                    // Tarea muy vieja → limpiar y mostrar botón de limpieza
+                    localStorage.removeItem('propifai_sync_task');
+                    mostrarTerminal();
+                    agregarLog('warn', '⏰ Tarea anterior no completada (probablemente sin worker Celery).');
+                    agregarLog('info', '💡 Haz click en "Sync All & Rebuild" para ejecutar en modo síncrono.');
+                    document.getElementById('btn-kill-worker').style.display = 'inline-block';
+                }
+            }
+        } catch(e) {
+            localStorage.removeItem('propifai_sync_task');
+        }
+    }
+})();
+
+/* ── Modal ── */
+var _syncEjecutando = false;
+
+function mostrarModalSync() {
+    document.getElementById('sync-modal-icon').style.display = 'block';
+    document.getElementById('sync-spinner').style.display = 'none';
+    document.getElementById('sync-modal-title').textContent = 'Sincronizar Todo';
+    document.getElementById('sync-modal-desc').innerHTML =
+        '¿Estás seguro de sincronizar TODAS las colecciones activas?<br>' +
+        'Esto regenerará todos los embeddings y reconstruirá los índices FAISS.<br>' +
+        '<strong style="color:var(--accent-orange);">Puede tomar varios minutos.</strong>';
+    document.getElementById('sync-modal-progress').style.display = 'none';
+    document.getElementById('sync-modal-actions').style.display = 'flex';
+    document.getElementById('btn-sync-confirm').disabled = false;
+    document.getElementById('btn-sync-confirm').innerHTML = '✅ Sincronizar Todo';
+    document.getElementById('btn-sync-cancel').disabled = false;
+    document.getElementById('modal-sync-all').classList.add('modal-overlay--visible');
+}
+
+function cerrarModalSync() {
+    document.getElementById('modal-sync-all').classList.remove('modal-overlay--visible');
+}
+
+/* ── Iniciar tarea ── */
+function ejecutarSyncAll() {
+    if (_syncEjecutando) return;
+    _syncEjecutando = true;
+    
+    document.getElementById('sync-modal-icon').style.display = 'none';
+    document.getElementById('sync-spinner').style.display = 'block';
+    document.getElementById('sync-modal-title').textContent = 'Iniciando tarea...';
+    document.getElementById('sync-modal-desc').innerHTML = 'Lanzando sincronización en segundo plano...';
+    document.getElementById('sync-modal-progress').style.display = 'block';
+    document.getElementById('sync-modal-actions').style.display = 'none';
+    document.getElementById('sync-modal-progress-text').textContent = 'Conectando con el servidor...';
+    document.getElementById('sync-modal-progress-text').className = 'sync-status sync-status--active';
+    
+    fetch('{% url "intelligence:collection_sync_all" %}', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+    })
+    .then(function(resp) {
+        if (!resp.ok) throw new Error('Error del servidor: ' + resp.status);
+        return resp.json();
+    })
+    .then(function(data) {
+        cerrarModalSync();
+        _syncEjecutando = false;
+        mostrarTerminal();
+        
+        if (data.mode === 'sync') {
+            // ── MODO SÍNCRONO (sin Celery) ──
+            // La tarea ya se ejecutó, mostrar resultados directamente
+            if (data.state === 'SUCCESS') {
+                procesarPoll(data);
+                agregarLog('success', '✅ Sincronización completada exitosamente.');
+                actualizarEstado('SUCCESS', 100, 'Completada');
+                document.getElementById('sync-progress-fill').style.width = '100%';
+                document.getElementById('sync-progress-pct').textContent = '100%';
+            } else {
+                agregarLog('error', '❌ Error: ' + (data.error || 'Error desconocido'));
+                actualizarEstado('FAILURE', 0, 'Error');
+            }
+        } else if (data.task_id) {
+            // ── MODO ASYNC (Celery disponible) ──
+            agregarLog('info', '⏳ Tarea lanzada, iniciando polling...');
+            iniciarPolling(data.task_id);
+        } else {
+            agregarLog('error', 'Respuesta inesperada del servidor');
+        }
+    })
+    .catch(function(err) {
+        document.getElementById('sync-spinner').style.display = 'none';
+        document.getElementById('sync-modal-icon').style.display = 'block';
+        document.getElementById('sync-modal-icon').textContent = '❌';
+        document.getElementById('sync-modal-title').textContent = 'Error';
+        document.getElementById('sync-modal-desc').innerHTML =
+            'No se pudo iniciar la tarea: ' + err.message + '<br>' +
+            'Verifica que Celery esté corriendo.';
+        document.getElementById('sync-modal-progress-text').textContent = '❌ Error';
+        document.getElementById('sync-modal-progress-text').className = 'sync-status sync-status--error';
+        setTimeout(function() {
+            _syncEjecutando = false;
+            cerrarModalSync();
+        }, 3000);
+    });
+}
+
+/* ── Terminal ── */
+function mostrarTerminal() {
+    document.getElementById('sync-terminal').classList.add('sync-terminal-wrap--visible');
+    document.getElementById('sync-progress-bar-wrap').classList.add('sync-progress-bar-wrap--visible');
+}
+
+function agregarLog(level, msg) {
+    var body = document.getElementById('sync-terminal-body');
+    var line = document.createElement('div');
+    line.className = 'sync-log-line sync-log-line--' + level;
+    line.textContent = msg;
+    body.appendChild(line);
+    body.scrollTop = body.scrollHeight;
+}
+
+function limpiarTerminal() {
+    var body = document.getElementById('sync-terminal-body');
+    body.innerHTML = '';
+}
+
+function actualizarEstado(state, pct, label) {
+    var el = document.getElementById('sync-terminal-state');
+    var icons = { 'PENDING': '⏳', 'PROGRESS': '🔄', 'SUCCESS': '✅', 'FAILURE': '❌', 'UNKNOWN': '❓' };
+    el.textContent = (icons[state] || '⏳') + ' ' + (label || state);
+    
+    document.getElementById('sync-progress-fill').style.width = (pct || 0) + '%';
+    document.getElementById('sync-progress-pct').textContent = (pct || 0) + '%';
+    document.getElementById('sync-progress-label').textContent = label || '';
+}
+
+/* ── Polling de estado ── */
+function iniciarPolling(taskId) {
+    if (SYNC_STATE.polling) return;
+    SYNC_STATE.polling = true;
+    
+    if (taskId) {
+        SYNC_STATE.taskId = taskId;
+        localStorage.setItem('propifai_sync_task', JSON.stringify({
+            taskId: taskId,
+            startedAt: Date.now(),
+        }));
+        // Mostrar botones de control
+        document.getElementById('btn-revoke-task').style.display = 'inline-block';
+        document.getElementById('btn-kill-worker').style.display = 'inline-block';
+    }
+    
+    var intentos = 0;
+    var MAX_INTENTOS = 180; // 6 minutos sin taskId conocido
+    
+    function poll() {
+        // Si tenemos taskId conocido, consultar directamente
+        if (SYNC_STATE.taskId) {
+            fetch('/intelligence/collections/sync-status/' + SYNC_STATE.taskId + '/')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                procesarPoll(data);
+                if (data.state === 'SUCCESS' || data.state === 'FAILURE') {
+                    detenerPolling();
+                    document.getElementById('btn-revoke-task').style.display = 'none';
+                    document.getElementById('btn-kill-worker').style.display = 'none';
+                    if (data.state === 'SUCCESS') {
+                        agregarLog('success', '✅ Sincronización completada exitosamente.');
+                    } else {
+                        agregarLog('error', '❌ Sincronización falló: ' + (data.error || 'Error desconocido'));
+                    }
+                    localStorage.removeItem('propifai_sync_task');
+                    return;
+                }
+                SYNC_STATE.pollTimer = setTimeout(poll, 2000);
+            })
+            .catch(function(err) {
+                agregarLog('error', 'Error de conexión: ' + err.message);
+                SYNC_STATE.pollTimer = setTimeout(poll, 5000);
+            });
+        } else {
+            // No tenemos taskId aún — intentar leer de session via endpoint
+            intentos++;
+            if (intentos > MAX_INTENTOS) {
+                agregarLog('error', '⏰ Tiempo de espera agotado. Recarga la página.');
+                detenerPolling();
+                return;
+            }
+            // Reintentar en 2s — el taskId se guardó en session
+            SYNC_STATE.pollTimer = setTimeout(function() {
+                // Recargar con un flag para obtener taskId
+                fetch(window.location.href + '?get_sync_task=1')
+                .then(function(r) { return r.text(); })
+                .then(function() {
+                    // No podemos leer session desde JS directamente
+                    // Reintentar polling con el mismo approach
+                    poll();
+                })
+                .catch(function() { poll(); });
+            }, 2000);
+        }
+    }
+    
+    poll();
+}
+
+function revocarTarea() {
+    if (!SYNC_STATE.taskId) return;
+    if (!confirm('¿Cancelar la tarea de sincronización en ejecución?')) return;
+    
+    fetch('/intelligence/collections/sync-revoke/' + SYNC_STATE.taskId + '/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': '{{ csrf_token }}' },
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (d.success) {
+            agregarLog('warn', '⛔ Tarea revocada por el usuario.');
+            detenerPolling();
+            actualizarEstado('FAILURE', 0, 'Revocada');
+            localStorage.removeItem('propifai_sync_task');
+            document.getElementById('btn-revoke-task').style.display = 'none';
+        } else {
+            agregarLog('error', 'Error al revocar: ' + (d.error || 'desconocido'));
+        }
+    })
+    .catch(function(e) {
+        agregarLog('error', 'Error de conexión al revocar: ' + e.message);
+    });
+}
+
+function matarWorker() {
+    if (!confirm('¿Detener el worker de Celery?\nEsto detendrá TODAS las tareas en ejecución.')) return;
+    
+    fetch('/intelligence/collections/sync-revoke/kill-worker/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': '{{ csrf_token }}' },
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (d.success) {
+            agregarLog('warn', '⏹ Señal de detención enviada al worker.');
+        } else {
+            agregarLog('error', 'Error: ' + (d.error || 'desconocido'));
+        }
+    })
+    .catch(function(e) {
+        agregarLog('warn', '⚠️ No se pudo conectar: ' + e.message + '. Detén el worker manualmente en la terminal.');
+    });
+}
+
+function procesarPoll(data) {
+    var meta = data.meta || {};
+    var logs = meta.logs || [];
+    var pct = meta.pct || 0;
+    var current = meta.current || 0;
+    var total = meta.total || 0;
+    var coleccion = meta.current_collection || '';
+    
+    // Actualizar barra de progreso
+    actualizarEstado(data.state, pct,
+        total > 0 ? '[' + current + '/' + total + '] ' + coleccion : coleccion || data.state);
+    
+    // Agregar nuevos logs (solo los que no están en el DOM todavía)
+    var body = document.getElementById('sync-terminal-body');
+    var existingLines = body.querySelectorAll('.sync-log-line').length;
+    var logStart = existingLines; // compensar líneas que no son logs (primer mensaje)
+    
+    for (var i = logStart; i < logs.length; i++) {
+        var l = logs[i];
+        agregarLog(l.level || 'info', l.message || '');
+    }
+    
+    // Si no hay logs en meta pero hay estado, mostrar estado básico
+    if (logs.length === 0 && data.state) {
+        if (data.state === 'PENDING') {
+            agregarLog('info', '⏳ Tarea en cola, esperando worker...');
+        } else if (data.state === 'PROGRESS') {
+            agregarLog('info', '🔄 Procesando: ' + coleccion + ' (' + current + '/' + total + ')');
+        }
+    }
+}
+
+function detenerPolling() {
+    SYNC_STATE.polling = false;
+    if (SYNC_STATE.pollTimer) {
+        clearTimeout(SYNC_STATE.pollTimer);
+        SYNC_STATE.pollTimer = null;
+    }
+}
+</script>
 {% endblock %}

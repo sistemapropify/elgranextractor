@@ -1,0 +1,172 @@
+C:\Users\USUARIO\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\requests\__init__.py:113: RequestsDependencyWarning: urllib3 (2.6.3) or chardet (7.4.3)/charset_normalizer (3.4.4) doesn't match a supported version!
+  warnings.warn(
+INFO 2026-07-13 15:41:33,128 apps: === SPEC-014: Pre-carga de modelos de embeddings ===
+INFO 2026-07-13 15:41:42,431 rag: Sin GPU detectada  cargando modelo en CPU
+INFO 2026-07-13 15:41:42,432 rag: Inicializando modelo de embeddings: intfloat/multilingual-e5-small
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Monkey patch aplicado a django.template.context.__copy__
+Loading weights:   0%|          | 0/199 [00:00<?, ?it/s]Loading weights: 100%|##########| 199/199 [00:00<00:00, 7696.18it/s]
+INFO 2026-07-13 15:41:54,241 rag: Modelo de embeddings inicializado (intfloat/multilingual-e5-small, 384 dimensiones, device=cpu, carga=21100ms)
+INFO 2026-07-13 15:41:54,241 rag: Modelo de embeddings pre-cargado exitosamente
+INFO 2026-07-13 15:41:54,241 semantic_router: SemanticSkillRouter inicializado: 225 templates, 26 skills, threshold=0.45
+INFO 2026-07-13 15:41:55,411 semantic_router: Pre-calculados 225/225 embeddings de templates para 26 skills en 1170ms (batch encoding)
+INFO 2026-07-13 15:41:55,411 apps: [SPEC-014] Resumen de pre-carga: modelo=\u2705 | templates=225 | tiempo_total=22284ms
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Users\USUARIO\AppData\Local\Python\pythoncore-3.14-64\Lib\logging\__init__.py", line 1154, in emit
+    stream.write(msg + self.terminator)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\USUARIO\AppData\Local\Python\pythoncore-3.14-64\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2705' in position 86: character maps to <undefined>
+Call stack:
+  File "d:\PROMETEO\scripts\diagnostico_embeddings.py", line 11, in <module>
+    django.setup()
+  File "C:\Users\USUARIO\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\django\__init__.py", line 24, in setup
+    apps.populate(settings.INSTALLED_APPS)
+  File "C:\Users\USUARIO\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\django\apps\registry.py", line 124, in populate
+    app_config.ready()
+  File "d:\PROMETEO\scripts\..\webapp\intelligence\apps.py", line 43, in ready
+    self._preload_models()
+  File "d:\PROMETEO\scripts\..\webapp\intelligence\apps.py", line 209, in _preload_models
+    logger.info(
+Message: '[SPEC-014] Resumen de pre-carga: modelo=\u2705 | templates=225 | tiempo_total=22284ms'
+Arguments: ()
+INFO 2026-07-13 15:41:55,414 apps: === SPEC-014: Fin de pre-carga ===
+DEBUG 2026-07-13 15:41:55,415 apps: Signals de inteligencia registrados correctamente
+INFO 2026-07-13 15:41:55,417 faiss_index: Directorio de ndices FAISS: d:\PROMETEO\webapp\intelligence\data\faiss_indexes
+INFO 2026-07-13 15:41:55,536 faiss_index: ndice FAISS cargado para 'propiedadespropify': 147 vectores, dimensin=384
+INFO 2026-07-13 15:41:55,538 faiss_index: ndice FAISS cargado para 'requerimientos_enbedados': 700 vectores, dimensin=384
+INFO 2026-07-13 15:41:55,538 faiss_index: ndices FAISS cargados: 2 colecciones
+WARNING 2026-07-13 15:41:55,555 base: Skill 'suma' tiene categora 'ejemplos' no estndar. Usar: busqueda, crm, reporte, notificacion, template, custom
+WARNING 2026-07-13 15:41:55,555 base: Skill 'resta' tiene categora 'ejemplos' no estndar. Usar: busqueda, crm, reporte, notificacion, template, custom
+WARNING 2026-07-13 15:41:55,555 base: Skill 'multiplicacion' tiene categora 'ejemplos' no estndar. Usar: busqueda, crm, reporte, notificacion, template, custom
+WARNING 2026-07-13 15:41:55,555 base: Skill 'division' tiene categora 'ejemplos' no estndar. Usar: busqueda, crm, reporte, notificacion, template, custom
+WARNING 2026-07-13 15:41:55,555 base: Skill 'potencia' tiene categora 'ejemplos' no estndar. Usar: busqueda, crm, reporte, notificacion, template, custom
+WARNING 2026-07-13 15:41:55,556 base: Skill 'raiz_cuadrada' tiene categora 'ejemplos' no estndar. Usar: busqueda, crm, reporte, notificacion, template, custom
+WARNING 2026-07-13 15:41:55,556 base: Skill 'estadisticas_basicas' tiene categora 'ejemplos' no estndar. Usar: busqueda, crm, reporte, notificacion, template, custom
+WARNING 2026-07-13 15:41:55,558 base: Skill 'contar_palabras' tiene categora 'ejemplos' no estndar. Usar: busqueda, crm, reporte, notificacion, template, custom
+WARNING 2026-07-13 15:41:55,559 base: Skill 'filtrar_lista' tiene categora 'ejemplos' no estndar. Usar: busqueda, crm, reporte, notificacion, template, custom
+WARNING 2026-07-13 15:41:55,559 base: Skill 'ordenar_lista' tiene categora 'ejemplos' no estndar. Usar: busqueda, crm, reporte, notificacion, template, custom
+WARNING 2026-07-13 15:41:55,559 base: Skill 'resumir_texto' tiene categora 'ejemplos' no estndar. Usar: busqueda, crm, reporte, notificacion, template, custom
+INFO 2026-07-13 15:41:55,567 registry: Skill registrada: 'busqueda_propiedades' (categora: busqueda, nivel: 1)
+INFO 2026-07-13 15:41:55,567 registry: Skill registrada: 'acm_analisis' (categora: reporte, nivel: 1)
+INFO 2026-07-13 15:41:55,568 registry: Skill registrada: 'reporte_precios_zona' (categora: reporte, nivel: 1)
+INFO 2026-07-13 15:41:55,568 registry: Skill registrada: 'matching_oferta_demanda' (categora: crm, nivel: 1)
+INFO 2026-07-13 15:41:55,568 registry: Skill registrada: 'matching_hibrido' (categora: crm, nivel: 1)
+INFO 2026-07-13 15:41:55,568 registry: Skill registrada: 'busqueda_exacta' (categora: busqueda, nivel: 1)
+INFO 2026-07-13 15:41:55,568 registry: Skill registrada: 'formatear_propiedades' (categora: busqueda, nivel: 1)
+INFO 2026-07-13 15:41:55,568 registry: Skill registrada: 'clasificar_intencion_whatsapp' (categora: crm, nivel: 1)
+INFO 2026-07-13 15:41:55,568 registry: Skill registrada: 'suma' (categora: ejemplos, nivel: 1)
+INFO 2026-07-13 15:41:55,568 registry: Skill registrada: 'resta' (categora: ejemplos, nivel: 1)
+INFO 2026-07-13 15:41:55,568 registry: Skill registrada: 'multiplicacion' (categora: ejemplos, nivel: 1)
+INFO 2026-07-13 15:41:55,568 registry: Skill registrada: 'division' (categora: ejemplos, nivel: 1)
+INFO 2026-07-13 15:41:55,568 registry: Skill registrada: 'potencia' (categora: ejemplos, nivel: 1)
+INFO 2026-07-13 15:41:55,568 registry: Skill registrada: 'raiz_cuadrada' (categora: ejemplos, nivel: 1)
+INFO 2026-07-13 15:41:55,568 registry: Skill registrada: 'estadisticas_basicas' (categora: ejemplos, nivel: 1)
+INFO 2026-07-13 15:41:55,569 registry: Skill registrada: 'contar_palabras' (categora: ejemplos, nivel: 1)
+INFO 2026-07-13 15:41:55,569 registry: Skill registrada: 'filtrar_lista' (categora: ejemplos, nivel: 1)
+INFO 2026-07-13 15:41:55,569 registry: Skill registrada: 'ordenar_lista' (categora: ejemplos, nivel: 1)
+INFO 2026-07-13 15:41:55,569 registry: Skill registrada: 'resumir_texto' (categora: ejemplos, nivel: 1)
+INFO 2026-07-13 15:41:55,569 registry: Skill registrada: 'metricas_globales' (categora: reporte, nivel: 5)
+INFO 2026-07-13 15:41:55,569 registry: Skill registrada: 'reporte_ventas' (categora: reporte, nivel: 5)
+INFO 2026-07-13 15:41:55,569 registry: Skill registrada: 'analisis_rendimiento' (categora: reporte, nivel: 5)
+INFO 2026-07-13 15:41:55,569 registry: Skill registrada: 'consultar_normativa' (categora: busqueda, nivel: 1)
+INFO 2026-07-13 15:41:55,569 registry: Skill registrada: 'revisar_contrato' (categora: custom, nivel: 3)
+INFO 2026-07-13 15:41:55,569 registry: Skill registrada: 'aspectos_legales' (categora: busqueda, nivel: 1)
+INFO 2026-07-13 15:41:55,569 registry: Skill registrada: 'campanas_activas' (categora: reporte, nivel: 3)
+INFO 2026-07-13 15:41:55,569 registry: Skill registrada: 'leads_generados' (categora: reporte, nivel: 3)
+INFO 2026-07-13 15:41:55,569 registry: Skill registrada: 'metricas_marketing' (categora: reporte, nivel: 3)
+INFO 2026-07-13 15:41:55,569 registry: Skill registrada: 'mis_propiedades' (categora: busqueda, nivel: 1)
+INFO 2026-07-13 15:41:55,569 registry: Skill registrada: 'mis_requerimientos' (categora: crm, nivel: 1)
+INFO 2026-07-13 15:41:55,569 registry: Skill registrada: 'mis_matches' (categora: crm, nivel: 1)
+INFO 2026-07-13 15:41:55,570 registry: Skill registrada: 'portafolio_agente' (categora: busqueda, nivel: 1)
+INFO 2026-07-13 15:41:55,570 registry: Skill registrada: 'analizar_oportunidad' (categora: reporte, nivel: 1)
+INFO 2026-07-13 15:41:55,570 registry: Skill registrada: 'equipo_a_cargo' (categora: reporte, nivel: 3)
+INFO 2026-07-13 15:41:55,570 registry: Skill registrada: 'desempeno_agentes' (categora: reporte, nivel: 3)
+INFO 2026-07-13 15:41:55,570 registry: Skill registrada: 'reporte_equipo' (categora: reporte, nivel: 3)
+INFO 2026-07-13 15:41:55,570 registry: Skill registrada: 'logs_sistema' (categora: reporte, nivel: 4)
+INFO 2026-07-13 15:41:55,570 registry: Skill registrada: 'errores_recientes' (categora: reporte, nivel: 4)
+INFO 2026-07-13 15:41:55,570 registry: Skill registrada: 'estado_servicios' (categora: reporte, nivel: 4)
+INFO 2026-07-13 15:41:55,570 apps: Skills registradas en SkillRegistry al iniciar Django (incluye 20 nuevas skills multi-rol)
+INFO 2026-07-13 15:41:56,546 semantic_router: Pre-calculados 225/225 embeddings de templates para 26 skills en 976ms (batch encoding)
+INFO 2026-07-13 15:41:56,546 apps: Semantic Router: 225 templates embeddeados para routing semntico
+DEBUG 2026-07-13 15:42:31,158 rag: Embedding almacenado en cach para: 'cabaa maria...'
+DEBUG 2026-07-13 15:42:31,200 rag: Embedding almacenado en cach para: 'las orquideas...'
+DEBUG 2026-07-13 15:42:31,263 rag: Embedding almacenado en cach para: 'agrega la propiedad de las orquideas...'
+DEBUG 2026-07-13 15:42:31,295 rag: Embedding almacenado en cach para: 'agrega las orquideas al lienzo...'
+DEBUG 2026-07-13 15:42:31,338 rag: Embedding almacenado en cach para: 'departamento en cayma...'
+Total documentos con embedding: 847
+Modelo: multilingual-e5-small (384d)
+Pooling ACTUAL: pooler_output (antes del fix)
+================================================================================
+
+QUERY: 'cabaa maria'  (esperado contiene: Cabaa Maria)
+------------------------------------------------------------
+  0.8627  [24422] source_id=24422
+  0.8613  [24269] source_id=24269
+  0.8554  [24917] source_id=24917
+  0.8387  [24638] source_id=24638
+  0.8378  [24751] source_id=24751
+  0.8367  [93] Dos casas en quinta privada de Cabaa Mara
+  0.8329  [24697] source_id=24697
+  0.8323  [24399] source_id=24399
+  0.8319  [19917] source_id=19917
+  0.8312  [24883] source_id=24883
+  >>> NO SE ENCONTRO el esperado en el ranking
+
+QUERY: 'las orquideas'  (esperado contiene: Orquideas)
+------------------------------------------------------------
+  0.8384  [24421] source_id=24421
+  0.8334  [194] Venta de departamento en urbanizacin las Orqudeas Arequipa
+  0.8332  [24411] source_id=24411
+  0.8328  [24393] source_id=24393
+  0.8319  [24409] source_id=24409
+  0.8319  [24368] source_id=24368
+  0.8313  [24367] source_id=24367
+  0.8311  [24405] source_id=24405
+  0.8307  [24384] source_id=24384
+  0.8304  [24401] source_id=24401
+  >>> NO SE ENCONTRO el esperado en el ranking
+
+QUERY: 'agrega la propiedad de las orquideas'  (esperado contiene: Orquideas)
+------------------------------------------------------------
+  0.8634  [24700] source_id=24700
+  0.8448  [24605] source_id=24605
+  0.8446  [24586] source_id=24586
+  0.8434  [194] Venta de departamento en urbanizacin las Orqudeas Arequipa
+  0.8428  [24421] source_id=24421
+  0.8402  [24390] source_id=24390
+  0.8396  [78] Terreno En Quinta Natura
+  0.8388  [24371] source_id=24371
+  0.8388  [24723] source_id=24723
+  0.8379  [24409] source_id=24409
+  >>> NO SE ENCONTRO el esperado en el ranking
+
+QUERY: 'agrega las orquideas al lienzo'  (esperado contiene: Orquideas)
+------------------------------------------------------------
+  0.8371  [24421] source_id=24421
+  0.8311  [24700] source_id=24700
+  0.8310  [24384] source_id=24384
+  0.8296  [24366] source_id=24366
+  0.8294  [24393] source_id=24393
+  0.8291  [24385] source_id=24385
+  0.8290  [24368] source_id=24368
+  0.8288  [24390] source_id=24390
+  0.8288  [24409] source_id=24409
+  0.8286  [24372] source_id=24372
+  >>> NO SE ENCONTRO el esperado en el ranking
+
+QUERY: 'departamento en cayma'  (esperado contiene: None)
+------------------------------------------------------------
+  0.9098  [34] Departamento con cochera en Cayma baja
+  0.9053  [20435] source_id=20435
+  0.9026  [229] Departamento amplio en Cayma Baja
+  0.9000  [172] Departamentos de lujo - Cayma
+  0.8992  [24908] source_id=24908
+  0.8991  [20035] source_id=20035
+  0.8990  [24899] source_id=24899
+  0.8988  [43] Departamentos De 2 Y 3 Habitaciones En Proyecto Ares - Av. Cayma
+  0.8981  [24426] source_id=24426
+  0.8980  [248] VENTA O ALQUILER DE DEPARTAMENTO DE LUJO EN CAYMA

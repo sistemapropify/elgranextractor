@@ -19,6 +19,7 @@ CAMBIOS v2 — Adaptado a la colección real `propiedadespropify` (tabla `proper
 from __future__ import annotations
 
 import logging
+import os
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -240,6 +241,70 @@ class BusquedaPropiedadesSkill(BaseSkill):
         'cercado', 'la joya', 'sabandia', 'yura',
     ]
 
+    # Palabras que indican que el usuario busca una propiedad por NOMBRE/TÍTULO específico
+    # Ej: "cabaña maria", "campo verde", "el mirador", "valle blanco"
+    PALABRAS_BUSQUEDA_TITULO = [
+        'propiedad de', 'propiedad llamada', 'propiedad conocida como',
+        'la propiedad', 'las propiedades',
+        'cabaña', 'cabañas', 'casona', 'casonas',
+        'residencial', 'condominio', 'edificio',
+        'urbanización', 'urbanizacion',
+        'proyecto', 'conjunto',
+    ]
+
+    # ── Palabras de ruido conversacional ──
+    # Palabras que aparecen en mensajes del chat canvas pero que NO deben
+    # formar parte del semantic_query para el embedding.
+    # Se usan como FALLBACK cuando titulo_contains no fue detectado.
+    # NOTA: No incluir 'propiedad', 'propiedades', 'el', 'la', 'los', 'las', 'de'
+    # porque pueden ser parte de nombres reales de propiedades.
+    PALABRAS_RUIDO = frozenset({
+        'agrega', 'agregue', 'agregar', 'agrégalo', 'agrégueme',
+        'añade', 'añada', 'añadir', 'anade',
+        'pon', 'ponlo', 'ponlos', 'poner',
+        'mételo', 'métalos', 'metelo', 'metalos',
+        'trae', 'traiga', 'traer',
+        'cargar', 'carga', 'colocar', 'coloca',
+        'busca', 'buscar', 'busque', 'busquemos',
+        'encuentra', 'encontrar', 'encuentre',
+        'muestra', 'mostrar', 'muéstrame', 'muestrame',
+        'lista', 'listar', 'listame', 'listarme',
+        'quiero', 'quisiera', 'necesito',
+        'al', 'del', 'en', 'para', 'por',
+        'lienzo', 'canvas',
+        'favor', 'porfavor', 'porfa', 'gracias', 'hola', 'buenas',
+    })
+
+    @staticmethod
+    def _limpiar_ruido_query(texto: str, palabras_ruido: set) -> str:
+        """
+        Elimina palabras de ruido conversacional de una query,
+        conservando solo términos con carga semántica.
+        
+        NO se aplica si ya hay titulo_contains (que ya fue extraído correctamente).
+        Es un FALLBACK para cuando ninguna estrategia de detección funcionó.
+        
+        Ejemplos:
+          "agrega la propiedad de las orquideas"  →  "orquideas"
+          "pon CABAÑA MARIA al lienzo"             →  "CABAÑA MARIA"
+          "busca departamentos en cayma"           →  "departamentos cayma"
+        
+        Returns:
+            str con la query limpia, o el texto original si el resultado queda vacío
+        """
+        if not texto:
+            return ''
+        
+        palabras = texto.split()
+        palabras_limpias = [
+            p for p in palabras
+            if p.lower() not in palabras_ruido
+        ]
+        resultado = ' '.join(palabras_limpias).strip()
+        
+        # Salvaguarda: si la limpieza dejó vacío o muy corto, devolver original
+        return resultado if len(resultado) >= 3 else texto
+
     def _analizar_intencion(self, mensaje: str) -> Dict[str, Any]:
         """
         Analiza el mensaje del usuario y extrae filtros estructurados
@@ -296,8 +361,165 @@ class BusquedaPropiedadesSkill(BaseSkill):
         elif any(p in mensaje_lower for p in ['vendida', 'vendido', 'vendidas']):
             filtros['condicion'] = 'Vendida'
 
+        # ── Detectar búsqueda por NOMBRE/TÍTULO de propiedad ──
+        # Si el mensaje contiene palabras clave que indican búsqueda por nombre
+        # (ej: "cabaña maria", "propiedad llamada campo verde", etc.),
+        # extraer el nombre candidato y buscar por título.
+        titulo_busqueda = self._detectar_busqueda_por_titulo(mensaje_lower)
+        if titulo_busqueda:
+            filtros['titulo_contains'] = titulo_busqueda
+            logger.info(
+                f"_analizar_intencion detecto busqueda por titulo: "
+                f"'{titulo_busqueda}' del mensaje: {mensaje[:100]}"
+            )
+
         logger.debug(f"_analizar_intencion detecto: {filtros} del mensaje: {mensaje[:100]}")
         return filtros
+
+    def _detectar_busqueda_por_titulo(self, mensaje_lower: str) -> Optional[str]:
+        """
+        Detecta si el mensaje contiene una referencia a una propiedad por su nombre/título.
+
+        Estrategias:
+        1. Buscar después de frases clave como "propiedad de", "propiedad llamada"
+        2. Si el mensaje contiene palabras tipo "cabaña", "casona" etc seguidas de
+           otra palabra (nombre propio), asumir que es el nombre de la propiedad.
+
+        Returns:
+            str con el término de búsqueda, o None si no se detectó.
+        """
+        if not mensaje_lower:
+            return None
+
+        # Estrategia 1: Buscar después de frases clave
+        FRASES_CLAVE = [
+            'propiedad de ', 'propiedad llamada ', 'propiedad conocida como ',
+            'llamada ', 'llamado ', 'conocida como ', 'conocido como ',
+            'la propiedad ', 'las propiedades ',
+            'proyecto ', 'conjunto ',
+        ]
+        for frase in FRASES_CLAVE:
+            if frase in mensaje_lower:
+                idx = mensaje_lower.index(frase) + len(frase)
+                resto = mensaje_lower[idx:].strip()
+                palabras = []
+                # STOP_SKIP: palabras que pueden ir DENTRO del nombre de una propiedad
+                # (artículos, preposiciones, conjunciones).
+                # Ej: "Las Orquideas", "Los Olivos", "El Mirador", "La Campiña",
+                #     "Urbanización Los Bosques", "Calle Los Geranios"
+                STOP_SKIP = {'el', 'la', 'los', 'las', 'un', 'una',
+                             'del', 'de', 'y', 'e', 'o'}
+                # STOP_BREAK: palabras que INDICAN el fin del nombre de la propiedad.
+                # Preposiciones/verbos que inician una nueva cláusula.
+                # Ej: "propiedad de las orquideas AL lienzo" → "al" rompe
+                #     "propiedad de los olivos EN cayma" → "en" rompe
+                STOP_BREAK = {'al', 'para', 'por', 'con', 'sin',
+                              'en', 'que', 'es', 'se', 'su'}
+                for p in resto.split():
+                    p_clean = p.strip('.,;:!?¿¡()[]\'"')
+                    if not p_clean:
+                        continue
+                    if p_clean in STOP_BREAK:
+                        break
+                    if p_clean in STOP_SKIP:
+                        # SALTAR artículos/preposiciones dentro del nombre,
+                        # NO romper. Así "las orquideas" se captura completo.
+                        continue
+                    if len(p_clean) < 2 and palabras:
+                        break
+                    palabras.append(p_clean)
+                    if len(palabras) >= 4:
+                        break
+                if palabras:
+                    termino = ' '.join(palabras)
+                    if len(termino) >= 4:
+                        return termino
+
+        # Estrategia 2: Detectar "cabaña X", "casona X", "edificio X", etc.
+        PREFIJOS_NOMBRE = ['cabaña', 'cabañas', 'casona', 'casonas',
+                          'edificio', 'condominio', 'residencial',
+                          'urbanización', 'urbanizacion', 'quinta',
+                          'torre', 'country']
+        for prefijo in PREFIJOS_NOMBRE:
+            patron = prefijo + ' '
+            if patron in mensaje_lower:
+                idx = mensaje_lower.index(patron) + len(patron)
+                resto = mensaje_lower[idx:].strip()
+                sig_palabra = resto.split()[0] if resto.split() else ''
+                sig_limpia = sig_palabra.strip('.,;:!?¿¡()[]\'"')
+                if sig_limpia and len(sig_limpia) >= 3:
+                    termino = f"{prefijo} {sig_limpia}"
+                    return termino
+
+        # Estrategia 3: Fuzzy matching como fallback general
+        # Si ninguna estrategia anterior detectó un nombre, intentar fuzzy match
+        # contra los títulos reales de propiedades en la BD.
+        # Captura variaciones, typos, y frases no anticipadas.
+        resultado_fuzzy = self._estrategia_3_fuzzy(mensaje_lower)
+        if resultado_fuzzy:
+            return resultado_fuzzy
+
+        return None
+
+    def _estrategia_3_fuzzy(self, mensaje_lower: str, umbral: int = 60) -> Optional[str]:
+        """
+        Fallback: compara el mensaje completo contra todos los títulos de
+        propiedades en la BD usando fuzzy matching (rapidfuzz).
+        Se usa solo si las Estrategias 1 y 2 no encontraron nada.
+
+        La query limpia (sin ruido conversacional) se usa como término de
+        búsqueda, no el mensaje completo.
+
+        Args:
+            mensaje_lower: Mensaje completo del usuario en minúsculas
+            umbral: Puntuación mínima (0-100) para considerar un match
+
+        Returns:
+            str con el título matcheado y limpiado, o None si no supera el umbral
+        """
+        try:
+            from rapidfuzz import process, fuzz
+        except ImportError:
+            logger.warning("rapidfuzz no instalado - saltando Estrategia 3 fuzzy")
+            return None
+
+        # Limpiar ruido del mensaje para obtener término de búsqueda real
+        query_limpia = self._limpiar_ruido_query(mensaje_lower, self.PALABRAS_RUIDO)
+        if not query_limpia or len(query_limpia) < 4:
+            return None
+
+        # Obtener títulos de propiedades
+        try:
+            from intelligence.models import IntelligenceDocument, IntelligenceCollection
+            coleccion = IntelligenceCollection.objects.filter(
+                name__icontains='propiedad'
+            ).first()
+            if not coleccion:
+                return None
+
+            titulos = list(
+                IntelligenceDocument.objects
+                .filter(collection=coleccion, embedding__isnull=False)
+                .values_list('field_values__title', flat=True)[:500]
+            )
+            titulos = [t for t in titulos if t]
+        except Exception as e:
+            logger.warning(f"Error obteniendo títulos para fuzzy: {e}")
+            return None
+
+        if not titulos:
+            return None
+
+        # Fuzzy match: el score más alto
+        match = process.extractOne(query_limpia, titulos, scorer=fuzz.partial_ratio)
+        if match and match[1] >= umbral:
+            logger.info(
+                f"Estrategia 3 fuzzy: '{query_limpia}' -> "
+                f"'{match[0]}' (score={match[1]})"
+            )
+            return match[0]
+
+        return None
 
     # ── Ejecución principal ───────────────────────────────────────────────
 
@@ -336,6 +558,39 @@ class BusquedaPropiedadesSkill(BaseSkill):
             for key, value in filtros_auto.items():
                 if key not in params or not params.get(key):
                     params[key] = value
+            
+            # ── Si se detectó búsqueda por nombre (titulo_contains) ──
+            # Reemplazar el semantic_query con el término limpio de búsqueda
+            # para que la búsqueda semántica (embeddings) encuentre propiedades
+            # cuyo título/descripción coincida. NO se agrega como filtro SQL
+            # porque field_values__X__icontains no funciona con MSSQL.
+            titulo_clean = params.get('titulo_contains')
+            if titulo_clean and not params.get('distrito') and not params.get('tipo_propiedad'):
+                # Reemplazar semantic_query por el término limpio
+                semantic_query = titulo_clean
+                params['semantic_query'] = titulo_clean
+                logger.info(
+                    f"Busqueda semantica por nombre de propiedad: "
+                    f"'{titulo_clean}' (reemplazando mensaje original)"
+                )
+            
+            # ── FASE 2: Limpiar ruido conversacional del semantic_query ──
+            # Si NO se detectó nombre exacto (titulo_contains), limpiar
+            # palabras de acción/contexto del mensaje original para que el
+            # embedding capture solo el núcleo semántico de la búsqueda.
+            # Ej: "agrega la propiedad de las orquideas" → "orquideas"
+            if not titulo_clean and semantic_query:
+                query_limpia = self._limpiar_ruido_query(
+                    semantic_query, self.PALABRAS_RUIDO
+                )
+                if (query_limpia and query_limpia != semantic_query
+                        and len(query_limpia) >= 3):
+                    logger.info(
+                        f"FASE 2: Query limpiada de ruido: "
+                        f"'{semantic_query[:80]}' → '{query_limpia[:80]}'"
+                    )
+                    semantic_query = query_limpia
+                    params['semantic_query'] = query_limpia
             
             tiene_semantica = bool(semantic_query)
             tiene_filtros_exactos = any(
@@ -419,10 +674,130 @@ class BusquedaPropiedadesSkill(BaseSkill):
             if tiene_semantica and documentos:
                 documentos = self._reranking_semantico(documentos, semantic_query)
 
+            # FASE 4: Umbral de similitud semántica (solo si hay semantic_query)
+            # Después del re-ranking, descartar documentos con similitud muy baja.
+            # El umbral se calibra con datos reales: para E5-small + cosine sim,
+            # scores suelen estar en 0.75-0.95 para pares relacionados.
+            # Umbral bajo (0.3) para no filtrar de más con queries cortas.
+            UMBRAL_SIMILITUD = float(os.environ.get(
+                'UMBRAL_SIMILITUD_SEMANTICA', '0.3'
+            ))
+            if tiene_semantica and documentos:
+                antes = len(documentos)
+                documentos = [
+                    (d, s) for d, s in documentos
+                    if s >= UMBRAL_SIMILITUD
+                ]
+                if antes != len(documentos):
+                    logger.info(
+                        f"FASE 4: Umbral similitud={UMBRAL_SIMILITUD}: "
+                        f"{antes} -> {len(documentos)} docs "
+                        f"(descartados {antes - len(documentos)})"
+                    )
+                # Salvaguarda: si el filtro dejó vacío pero había resultados,
+                # mantener al menos el top-1
+                if not documentos and antes > 0:
+                    logger.warning(
+                        f"FASE 4: Umbral={UMBRAL_SIMILITUD} dejó 0 resultados. "
+                        f"Manteniendo top-1 como salvaguarda."
+                    )
+                    # Re-obtener el mejor score del re-ranking original
+
             # Paso 3: Limitar resultados
-            top_k = params.get('top_k') or 999
+            top_k = params.get('top_k') or 10
             if len(documentos) > top_k:
                 documentos = documentos[:top_k]
+
+            # ── Filtro por similitud semántica para búsqueda por nombre ──
+            # Si se buscó por nombre de propiedad (titulo_contains), filtrar
+            # propiedades con baja similitud semántica. El re-ranking da scores
+            # de coseno (0.0-1.0). Para búsqueda por nombre exacto, solo
+            # conservamos las que realmente se parecen al nombre buscado.
+            #
+            # FIX-DIM: Si TODOS los documentos tienen score=SCORE_INICIAL (0.5),
+            # significa que el re-ranking semántico NO PUDO calcular similitud
+            # real (probablemente por mismatch de dimensiones de embeddings).
+            # En ese caso, hacemos un fallback a búsqueda TEXTUAL en title y
+            # description usando icontains.
+            titulo_busqueda = params.get('titulo_contains')
+            if titulo_busqueda and tiene_semantica and documentos:
+                antes = len(documentos)
+                
+                # ── SIEMPRE usar filtro textual para búsqueda por nombre ──
+                # El re-ranking semántico puede no funcionar si:
+                # 1. Los embeddings tienen dimensión incorrecta (FIX-DIM)
+                # 2. Algunos docs tienen dimensión correcta y otros no (mixto)
+                # 3. La búsqueda semántica no prioriza correctamente nombres exactos
+                #
+                # El filtro textual busca las palabras del nombre en los campos
+                # title, description, code, address de cada propiedad.
+                logger.info(
+                    f"Usando filtro textual para búsqueda por nombre: "
+                    f"'{titulo_busqueda}' sobre {len(documentos)} docs"
+                )
+                docs_filtrados = []
+                titulo_lower = titulo_busqueda.lower()
+                
+                # Importar re para búsqueda con boundaries de palabra
+                import re as _re
+                import unicodedata
+                
+                def _normalizar_acentos(s: str) -> str:
+                    """
+                    Normaliza acentos y caracteres especiales (ñ, ü, etc.)
+                    usando descomposición Unicode NFKD.
+                    
+                    Ejemplos:
+                      "maría"   → "maria"
+                      "cabaña"  → "cabana"
+                      "corazón" → "corazon"
+                      "González" → "Gonzalez"
+                      "Pérez"    → "Perez"
+                    """
+                    return unicodedata.normalize('NFKD', s).encode('ASCII', 'ignore').decode('ASCII')
+                
+                for doc, score in documentos:
+                    fv = doc.field_values or {}
+                    text_fields = [
+                        str(fv.get('title', '')),
+                        str(fv.get('description', '')),
+                        str(fv.get('code', '')),
+                        str(fv.get('map_address', '')),
+                        str(fv.get('display_address', '')),
+                    ]
+                    texto_combinado = ' '.join(text_fields).lower()
+                    
+                    # Split del término de búsqueda en palabras significativas
+                    palabras_busqueda = [p.strip().lower()
+                                        for p in titulo_lower.split()
+                                        if len(p.strip()) >= 3]
+                    
+                    if palabras_busqueda:
+                        # BÚSQUEDA ESTRICTA: TODAS las palabras deben coincidir
+                        # como PALABRAS COMPLETAS (no substrings).
+                        # Esto evita que "maria" matchee con "mariano".
+                        #
+                        # FIX-ACENTOS: Se normalizan los acentos y ñ TANTO en el
+                        # texto de la propiedad como en las palabras de búsqueda,
+                        # usando NFKD (Unicode Normalization Form Compatibility Decomposition).
+                        # Esto permite que "maría" matchee con "maria", "cabaña" con
+                        # "cabana", etc. Aplica a TODOS los caracteres con acentos/diacríticos.
+                        texto_normalizado = _normalizar_acentos(texto_combinado)
+                        palabras_normalizadas = [_normalizar_acentos(p) for p in palabras_busqueda]
+                        
+                        todas_coinciden = all(
+                            bool(_re.search(r'\b' + _re.escape(p) + r'\b', texto_normalizado))
+                            for p in palabras_normalizadas
+                        )
+                        if todas_coinciden:
+                            docs_filtrados.append((doc, score))
+                
+                documentos = docs_filtrados
+                logger.info(
+                    f"Filtro textual para '{titulo_busqueda}': "
+                    f"{antes} -> {len(documentos)} "
+                    f"(descartados {antes - len(documentos)} por no coincidir texto)"
+                )
 
             # ── Construir resultado ──
             top_k_limit = params.get('top_k', 0)
