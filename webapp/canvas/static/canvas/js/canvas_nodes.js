@@ -1569,15 +1569,21 @@ async function loadLeadNodes(propId, dateStr, analysisNodeId) {
 
     const analysisNode = STATE.nodos[analysisNodeId];
     if (!analysisNode) return;
-    var startX = analysisNode.x + analysisNode.width + 40;
-    var startY = analysisNode.y;
+
+    // Centrar los lead nodes verticalmente respecto al nodo de analisis
+    var nodeHeight = 160; // altura estimada por nodo lead
+    var spacing = 200;    // separacion entre nodos
+    var totalHeight = leads.length * spacing;
+    var startX = analysisNode.x + analysisNode.width + 60;
+    var startY = analysisNode.y + (analysisNode.height || 280) / 2 - totalHeight / 2;
+    if (startY < 50) startY = 50;
 
     leads.forEach(function(lead, idx) {
       var leadId = 'lead_' + lead.id;
       if (STATE.nodos[leadId]) return; // ya existe
 
       var x = startX;
-      var y = startY + idx * 120;
+      var y = startY + idx * spacing;
       createLeadNode(leadId, lead, x, y);
 
       // Crear arista desde el nodo de analisis al nodo lead
@@ -1585,10 +1591,20 @@ async function loadLeadNodes(propId, dateStr, analysisNodeId) {
       if (!STATE.aristas[edgeId]) {
         STATE.aristas[edgeId] = {
           id: edgeId, origen: analysisNodeId, destino: leadId,
-          tipo: 'lead', label: lead.username || 'lead',
+          tipo: 'lead', label: lead.contact_name || lead.username || 'lead',
         };
       }
     });
+
+    // Hacer scroll suave hasta los nuevos nodos
+    setTimeout(function() {
+      var firstNode = STATE.nodos[Object.keys(STATE.nodos).find(function(k) {
+        return k.startsWith('lead_');
+      })];
+      if (firstNode && firstNode.el) {
+        firstNode.el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }, 300);
 
     if (typeof updateEdges === 'function') updateEdges();
     markDirty();
