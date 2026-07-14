@@ -958,6 +958,13 @@ function restoreSnapshot(snapshot) {
         collapsed: false, color: null, el: null,
         field_data: n.field_data || null,
       };
+    } else if (n.tipo === 'lead_nodo') {
+      STATE.nodos[n.id] = {
+        id: n.id, tipo: 'lead_nodo', ref_id: n.ref_id,
+        x: n.x, y: n.y, width: n.width || 260, height: n.height || 160,
+        collapsed: false, color: null, el: null,
+        field_data: n.field_data || null,
+      };
     }
   });
 
@@ -1546,7 +1553,9 @@ function renderLeadAnalysisBody(nodeId, data) {
     html += '<div style="text-align:center;padding:20px;color:var(--cv-text-muted);font-size:12px;">Sin datos de leads</div>';
   }
 
-  // Handler de clic en columnas del grafico
+  body.innerHTML = html;
+
+  // Handler de clic en columnas del grafico (despues de innerHTML para que persista)
   body.removeEventListener('click', body._leadBarClick);
   body._leadBarClick = function(e) {
     var bar = e.target.closest('.cv-lead-bar');
@@ -1556,8 +1565,6 @@ function renderLeadAnalysisBody(nodeId, data) {
     if (propId && date) loadLeadNodes(propId, date, nodeId);
   };
   body.addEventListener('click', body._leadBarClick);
-
-  body.innerHTML = html;
   nodo.height = nodo.el.offsetHeight || 280;
   markDirty();
 }
