@@ -649,9 +649,15 @@ def api_leads_by_date(request):
             """, [date_str])
 
             leads = []
+            from datetime import timedelta
             for row in cursor.fetchall():
                 lead_id, username, source, source_detail, notes, score, last_msg, created_at, first_name, last_name, phone, email = row
-                created_str = created_at.isoformat() if hasattr(created_at, 'isoformat') else str(created_at)
+                # Convertir UTC a Peru (UTC-5)
+                if hasattr(created_at, 'isoformat'):
+                    peru_time = created_at - timedelta(hours=5)
+                    created_str = peru_time.isoformat()
+                else:
+                    created_str = str(created_at)
                 contact_name = (first_name or '') + (' ' + last_name if last_name else '')
                 contact_name = contact_name.strip() or username or ''
                 leads.append({
@@ -704,9 +710,14 @@ def api_lead_analysis_leads(request, prop_id):
             """, [prop_id, date_str])
 
             leads = []
+            from datetime import timedelta
             for row in cursor.fetchall():
                 lead_id, username, source, source_detail, notes, score, last_msg, created_at, first_name, last_name, phone, email = row
-                created_str = created_at.isoformat() if hasattr(created_at, 'isoformat') else str(created_at)
+                if hasattr(created_at, 'isoformat'):
+                    peru_time = created_at - timedelta(hours=5)
+                    created_str = peru_time.isoformat()
+                else:
+                    created_str = str(created_at)
                 contact_name = (first_name or '') + (' ' + last_name if last_name else '')
                 contact_name = contact_name.strip() or username or ''
                 leads.append({
