@@ -1747,7 +1747,9 @@ function createLeadNode(nodeId, lead, x, y) {
           timePart[2] ? parseInt(timePart[2], 10) : 0
         ));
         // Convertir UTC a Peru (UTC-5): restar 5 horas (en ms)
+        console.log('[LeadNode] createdAt raw:', createdAt, 'utcDate:', utcDate.toISOString());
         var peruTime = new Date(utcDate.getTime() - 5 * 60 * 60 * 1000);
+        console.log('[LeadNode] peruTime:', peruTime.toISOString(), 'hours:', peruTime.getUTCHours());
         var dia = String(peruTime.getUTCDate()).padStart(2,'0');
         var mes = String(peruTime.getUTCMonth()+1).padStart(2,'0');
         var anio = peruTime.getUTCFullYear();
