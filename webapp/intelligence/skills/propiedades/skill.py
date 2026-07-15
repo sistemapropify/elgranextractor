@@ -700,7 +700,7 @@ class BusquedaPropiedadesSkill(BaseSkill):
             # scores suelen estar en 0.75-0.95 para pares relacionados.
             # Umbral bajo (0.3) para no filtrar de más con queries cortas.
             UMBRAL_SIMILITUD = float(os.environ.get(
-                'UMBRAL_SIMILITUD_SEMANTICA', '0.3'
+                'UMBRAL_SIMILITUD_SEMANTICA', '0.65'
             ))
             if tiene_semantica and documentos:
                 antes = len(documentos)
