@@ -456,6 +456,8 @@ function renderSinglePlaceholder(n) {
   dom.nodes.appendChild(node);
   STATE.nodos[n.id].el = node;
   if (n.collapsed) node.classList.add('collapsed');
+  if (n.width) node.style.width = n.width + 'px';
+  if (n.height) node.style.minHeight = n.height + 'px';
   registerNodeEvents(n.id, node);
   // Adjuntar menú contextual de granularidad para nodos lead_analysis y lead_global
   if (n.tipo === 'lead_analysis' || n.tipo === 'lead_global') {
