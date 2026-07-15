@@ -245,24 +245,35 @@ function restoreStateFromHistory(snap) {
 
   // Refrescar nodos lead_analysis y lead_global despues de undo/redo
   setTimeout(function() {
+    var promesas = [];
     Object.values(STATE.nodos).forEach(function(n) {
       if (n.tipo === 'lead_analysis' && n.el) {
         var propId = n.ref_id || (n.field_data && n.field_data.prop_id);
         if (!propId) return;
         var gran = (n.field_data && n.field_data._granularity) || 'day';
-        fetch('/canvas/api/lead-analysis/' + propId + '/?granularity=' + gran)
-          .then(function(r) { return r.json(); })
-          .then(function(data) { renderLeadAnalysisBody(n.id, data); })
-          .catch(function() {});
+        promesas.push(
+          fetch('/canvas/api/lead-analysis/' + propId + '/?granularity=' + gran)
+            .then(function(r) { return r.json(); })
+            .then(function(data) { renderLeadAnalysisBody(n.id, data); })
+            .catch(function() {})
+        );
       }
       if (n.tipo === 'lead_global' && n.el) {
         var gran = (n.field_data && n.field_data._granularity) || 'day';
-        fetch('/canvas/api/lead-analysis-global/?granularity=' + gran)
-          .then(function(r) { return r.json(); })
-          .then(function(data) { renderLeadAnalysisBody(n.id, data); })
-          .catch(function() {});
+        promesas.push(
+          fetch('/canvas/api/lead-analysis-global/?granularity=' + gran)
+            .then(function(r) { return r.json(); })
+            .then(function(data) { renderLeadAnalysisBody(n.id, data); })
+            .catch(function() {})
+        );
       }
     });
+    // Re-dibujar aristas después de que los nodos se hayan re-renderizado
+    if (promesas.length > 0) {
+      Promise.all(promesas).then(function() {
+        if (typeof updateEdges === 'function') updateEdges();
+      });
+    }
   }, 300);
 }
 
