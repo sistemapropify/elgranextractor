@@ -319,7 +319,7 @@ function canvasSendChat() {
       }));
       // Detectar accion segun tipo
       if (data.action && data.action.type === 'add_nodes') {
-        executeAddNodesAction(data.action, data.response || data.html || '');
+        executeAddNodesAction(data.action, data.response || '');
         // Si además hay una sub-acción de reordenar (combinado agregar+reordenar)
         if (data.action.rearrange) {
           executeRearrangeNodesAction(data.action.rearrange);
@@ -430,7 +430,7 @@ function executeAddNodesAction(action, mensaje) {
   });
   if (addedCount > 0) {
     if (typeof markDirty === 'function') markDirty();
-    var confirmMsg = '✅ Agregu\u00e9 ' + addedCount + ' propieda' + (addedCount > 1 ? 'des' : 'd') + ' al lienzo. ' + (mensaje || '');
+    var confirmMsg = '✅ Agregu\u00e9 ' + addedCount + ' propieda' + (addedCount > 1 ? 'des' : 'd') + ' al lienzo.';
     var okDiv = createChatMsg('assistant', confirmMsg);
     msgEl.appendChild(okDiv);
   } else {
