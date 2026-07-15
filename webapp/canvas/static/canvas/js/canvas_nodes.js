@@ -1740,9 +1740,29 @@ async function loadLeadNodes(propId, dateStr, analysisNodeId) {
     var startY = analysisNode.y + (analysisNode.height || 280) / 2 - totalVisualHeight / 2;
     if (startY < 50) startY = 50;
 
+    // Intentar obtener datos de la propiedad desde el nodo de análisis padre
+    // (para inyectarla en los leads aunque la BD lead_properties no tenga el vínculo)
+    var parentPropInfo = null;
+    if (propId && analysisNode.field_data) {
+      parentPropInfo = {
+        id: parseInt(propId),
+        code: analysisNode.field_data._prop_code || '',
+        title: analysisNode.field_data._prop_title || '',
+        district_name: analysisNode.field_data._prop_district || '',
+        price: analysisNode.field_data._prop_price || null,
+        currency: analysisNode.field_data._prop_currency || '',
+      };
+    }
+
     leads.forEach(function(lead, idx) {
       var leadId = 'lead_' + lead.id;
       if (STATE.nodos[leadId]) return; // ya existe
+
+      // Si el lead no tiene propiedades vinculadas pero el nodo padre sí,
+      // inyectar la propiedad del padre
+      if ((!lead.propiedades || lead.propiedades.length === 0) && parentPropInfo) {
+        lead.propiedades = [parentPropInfo];
+      }
 
       var x = startX;
       var y = startY + idx * spacing;
@@ -1817,6 +1837,12 @@ function createLeadNode(nodeId, lead, x, y) {
   // Propiedad vinculada: tomar la primera del array 'propiedades'
   var propiedades = lead.propiedades || [];
   var prop = propiedades.length > 0 ? propiedades[0] : null;
+  // DEBUG: Verificar que propiedades llega desde la API
+  if (propiedades.length === 0) {
+    console.log('[LeadNode] lead #' + lead.id + ' sin propiedades vinculadas en lead_properties');
+  } else {
+    console.log('[LeadNode] lead #' + lead.id + ' propiedad:', prop.title || prop.code || prop.id);
+  }
   var propHtml = '';
   if (prop) {
     var propTitle = prop.title || prop.code || ('Prop #' + prop.id);
