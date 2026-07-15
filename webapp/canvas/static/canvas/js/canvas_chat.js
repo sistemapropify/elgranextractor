@@ -195,7 +195,7 @@ async function sendChatMessage() {
       // Detectar acción del backend (add_nodes, rearrange_nodes, clear_canvas, etc.)
       if (data.action) {
         if (data.action.type === 'add_nodes') {
-          executeAddNodesAction(data.action, data.response || data.html);
+          executeAddNodesAction(data.action, data.response || '');
         } else if (data.action.type === 'rearrange_nodes') {
           executeRearrangeNodesAction(data.action);
           // Mostrar también el mensaje de respuesta si existe
