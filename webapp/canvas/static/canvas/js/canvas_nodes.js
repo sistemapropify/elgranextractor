@@ -1223,6 +1223,7 @@ function renderPlaceholderNodes(nodos) {
           <span class="cv-node__badge cv-badge--lead-analysis">📊 LEAD</span>
           <span class="cv-node__title">Análisis de Leads</span>
           <span class="cv-lead-gran-label" title="Click derecho → cambiar vista">📅 ${savedGranLabel}</span>
+          <button class="cv-btn-clear-leads" title="Limpiar leads conectados">🧹</button>
           <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
         </div>
         <div class="cv-node__body"><div style="color:var(--cv-text-muted);font-size:11px;text-align:center;padding:16px">Cargando datos...</div></div>
@@ -1240,6 +1241,7 @@ function renderPlaceholderNodes(nodos) {
           <span class="cv-node__badge cv-badge--lead-analysis">📊 GLOBAL</span>
           <span class="cv-node__title">Todos los Leads</span>
           <span class="cv-lead-gran-label" title="Click derecho → cambiar vista">📅 ${savedGranLabel}</span>
+          <button class="cv-btn-clear-leads" title="Limpiar leads conectados">🧹</button>
           <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
         </div>
         <div class="cv-node__body"><div style="color:var(--cv-text-muted);font-size:11px;text-align:center;padding:16px">Cargando datos...</div></div>
@@ -1345,13 +1347,20 @@ function renderPlaceholderNodes(nodos) {
     if (n.width) node.style.width = n.width + 'px';
     if (n.height) node.style.minHeight = n.height + 'px';
     registerNodeEvents(n.id, node);
-    // Adjuntar menú contextual de granularidad para nodos de análisis de leads restaurados
+    // Adjuntar menú contextual de granularidad y botón limpiar leads
     if (n.tipo === 'lead_analysis' || n.tipo === 'lead_global') {
       node.addEventListener('contextmenu', function(e) {
         e.preventDefault();
         e.stopPropagation();
         showLeadContextMenu(n.id, e);
       });
+      var ccBtn = node.querySelector('.cv-btn-clear-leads');
+      if (ccBtn) {
+        ccBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          clearConnectedLeads(n.id);
+        });
+      }
     }
   });
   // Renderizar PDFs después de restaurar todos los nodos
@@ -1540,6 +1549,7 @@ async function openLeadAnalysis(propId, propNodeId) {
       <span class="cv-node__badge cv-badge--lead-analysis">📊 LEAD</span>
       <span class="cv-node__title">Análisis de Leads</span>
       <span class="cv-lead-gran-label" title="Click derecho → cambiar vista">📅 Día</span>
+      <button class="cv-btn-clear-leads" title="Limpiar leads conectados">🧹</button>
       <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
     </div>
     <div class="cv-node__body" style="text-align:center;padding:20px;color:var(--cv-text-muted);">
@@ -1566,6 +1576,15 @@ async function openLeadAnalysis(propId, propNodeId) {
 
   // Context menu on right-click
   node.addEventListener('contextmenu', function(e) { showLeadContextMenu(nodeId, e); });
+
+  // Boton limpiar leads conectados
+  var clearBtn = node.querySelector('.cv-btn-clear-leads');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      clearConnectedLeads(nodeId);
+    });
+  }
 
   createLeadAnalysisEdge(propNodeId, nodeId);
 
@@ -1851,6 +1870,59 @@ function createLeadNode(nodeId, lead, x, y) {
 }
 
 /**
+ * Elimina todos los nodos lead_nodo conectados a un nodo lead_analysis/lead_global.
+ * Busca aristas de tipo 'lead' desde/hacia el nodo y remueve los leads y aristas.
+ */
+function clearConnectedLeads(nodeId) {
+  const nodo = STATE.nodos[nodeId];
+  if (!nodo) return;
+
+  // Identificar aristas conectadas a este nodo
+  const edgeIds = Object.keys(STATE.aristas).filter(function(eid) {
+    var e = STATE.aristas[eid];
+    return (e.origen === nodeId || e.destino === nodeId) && e.tipo === 'lead';
+  });
+
+  // Identificar los lead_nodo a remover
+  var leadIds = [];
+  edgeIds.forEach(function(eid) {
+    var e = STATE.aristas[eid];
+    var leadId = e.origen === nodeId ? e.destino : e.origen;
+    if (STATE.nodos[leadId] && STATE.nodos[leadId].tipo === 'lead_nodo') {
+      if (leadIds.indexOf(leadId) === -1) leadIds.push(leadId);
+    }
+  });
+
+  if (leadIds.length === 0) {
+    showToast('No hay leads conectados');
+    return;
+  }
+
+  if (typeof captureState === 'function') captureState();
+
+  // Remover nodos lead_nodo del DOM y STATE
+  leadIds.forEach(function(leadId) {
+    var ln = STATE.nodos[leadId];
+    if (ln && ln.el && ln.el.parentNode) {
+      ln.el.parentNode.removeChild(ln.el);
+    }
+    delete STATE.nodos[leadId];
+  });
+
+  // Remover aristas
+  edgeIds.forEach(function(eid) {
+    delete STATE.aristas[eid];
+  });
+
+  if (typeof updateEdges === 'function') updateEdges();
+  markDirty();
+  showToast(leadIds.length + ' lead' + (leadIds.length > 1 ? 's' : '') + ' eliminado' + (leadIds.length > 1 ? 's' : '') + ' del lienzo');
+}
+
+/* ── window export ── */
+window.clearConnectedLeads = clearConnectedLeads;
+
+/**
  * Formatea fecha ISO a DD/MM.
  */
 function formatDateShort(dateStr) {
@@ -1934,6 +2006,7 @@ async function createGlobalLeadNode(x, y) {
       <span class="cv-node__badge cv-badge--lead-analysis">📊 GLOBAL</span>
       <span class="cv-node__title">Todos los Leads</span>
       <span class="cv-lead-gran-label" title="Click derecho \u2192 cambiar vista">📅 D\u00eda</span>
+      <button class="cv-btn-clear-leads" title="Limpiar leads conectados">🧹</button>
       <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
     </div>
     <div class="cv-node__body" style="text-align:center;padding:20px;color:var(--cv-text-muted);">
@@ -1960,6 +2033,15 @@ async function createGlobalLeadNode(x, y) {
 
   // Context menu on right-click
   node.addEventListener('contextmenu', function(e) { showLeadContextMenu(nodeId, e); });
+
+  // Boton limpiar leads conectados
+  var clearBtn = node.querySelector('.cv-btn-clear-leads');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      clearConnectedLeads(nodeId);
+    });
+  }
 
   try {
     const res = await fetch('/canvas/api/lead-analysis-global/?granularity=day');
