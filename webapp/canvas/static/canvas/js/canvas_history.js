@@ -399,6 +399,33 @@ function renderSinglePlaceholder(n) {
     var source = fd.source || '';
     var lastMsg = fd.last_message_text || '';
     var notes = fd.notes || '';
+    // Fecha del lead
+    var createdAt = fd.created_at || '';
+    var fechaStr = '';
+    if (createdAt) {
+      var dateMatch = createdAt.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+      if (dateMatch) {
+        fechaStr = dateMatch[3] + '/' + dateMatch[2] + '/' + dateMatch[1] + ' ' + dateMatch[4] + ':' + dateMatch[5];
+      } else {
+        fechaStr = createdAt;
+      }
+    }
+    // Propiedad vinculada
+    var propiedades = fd.propiedades || [];
+    var prop = propiedades.length > 0 ? propiedades[0] : null;
+    var propHtml = '';
+    if (prop) {
+      var propTitle = prop.title || prop.code || ('Prop #' + prop.id);
+      var propPrice = (prop.price != null)
+        ? (typeof formatPrice === 'function' ? formatPrice(prop.price, prop.currency) : '')
+        : '';
+      var propDistrict = prop.district_name || '';
+      var propTitleShort = propTitle.length > 30 ? propTitle.substring(0, 27) + '...' : propTitle;
+      var propDetail = propTitleShort;
+      if (propDistrict) propDetail += ' — ' + propDistrict;
+      if (propPrice) propDetail += ' (' + propPrice + ')';
+      propHtml = '<span class="cv-req-info__item" style="color:#66bb6a;">🏠 ' + (typeof escHtml === 'function' ? escHtml(propDetail) : propDetail) + '</span>';
+    }
     node.innerHTML = `
       <div class="cv-node__header" style="cursor:pointer;" title="Click para abrir CRM" onclick="window.open('https://app.propify.pe/crm/lead/${n.ref_id || ''}','_blank')">
         <span class="cv-node__badge cv-badge--lead-analysis">👤 LEAD</span>
@@ -406,6 +433,8 @@ function renderSinglePlaceholder(n) {
         <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
       </div>
       <div class="cv-node__req-info">
+        ${propHtml}
+        ${fechaStr ? '<span class="cv-req-info__item">🕐 ' + escHtml(fechaStr) + '</span>' : ''}
         ${phone ? '<span class="cv-req-info__item">📞 ' + escHtml(phone) + '</span>' : ''}
         ${email ? '<span class="cv-req-info__item">✉ ' + escHtml(email) + '</span>' : ''}
       </div>

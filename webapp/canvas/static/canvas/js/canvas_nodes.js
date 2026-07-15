@@ -1301,12 +1301,11 @@ function renderPlaceholderNodes(nodos) {
           ? formatPrice(prop.price, prop.currency)
           : '';
         var propDistrict = prop.district_name || '';
-        propHtml = '<div class="cv-lead-prop" style="background:rgba(102,187,106,0.08);border-radius:6px;padding:6px;margin-bottom:4px;border-left:2px solid #66bb6a;">' +
-          '<strong style="font-size:10px;color:#66bb6a;">🏠 Propiedad vinculada</strong>' +
-          '<div style="color:var(--cv-text);margin-top:2px;font-size:11px;">' + escHtml(propTitle) + '</div>' +
-          (propDistrict ? '<div style="color:var(--cv-text-muted);font-size:10px;">📍 ' + escHtml(propDistrict) + '</div>' : '') +
-          (propPrice ? '<div style="color:var(--cv-text-muted);font-size:10px;">💰 ' + escHtml(propPrice) + '</div>' : '') +
-          '</div>';
+        var propTitleShort = propTitle.length > 30 ? propTitle.substring(0, 27) + '...' : propTitle;
+        var propDetail = propTitleShort;
+        if (propDistrict) propDetail += ' — ' + propDistrict;
+        if (propPrice) propDetail += ' (' + propPrice + ')';
+        propHtml = '<span class="cv-req-info__item" style="color:#66bb6a;">🏠 ' + escHtml(propDetail) + '</span>';
       }
       node.innerHTML = `
         <div class="cv-node__header" style="cursor:pointer;" title="Click para abrir CRM" onclick="window.open('https://app.propify.pe/crm/lead/${n.ref_id || ''}','_blank')">
@@ -1315,13 +1314,13 @@ function renderPlaceholderNodes(nodos) {
           <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
         </div>
         <div class="cv-node__req-info">
+          ${propHtml}
           ${fechaStr ? '<span class="cv-req-info__item">🕐 ' + escHtml(fechaStr) + '</span>' : ''}
           ${phone ? '<span class="cv-req-info__item">📞 ' + escHtml(phone) + '</span>' : ''}
           ${email ? '<span class="cv-req-info__item">✉ ' + escHtml(email) + '</span>' : ''}
         </div>
         <div class="cv-node__req-body" style="font-size:11px;max-height:200px;overflow-y:auto;">
           ${source ? '<div style="color:var(--cv-text-muted);margin-bottom:4px;">📡 ' + escHtml(source) + '</div>' : ''}
-          ${propHtml}
           ${lastMsg ? '<div style="background:rgba(92,156,230,0.08);border-radius:6px;padding:6px;margin-bottom:4px;border-left:2px solid #5c9ce6;"><strong style="font-size:10px;color:#5c9ce6;">💬 Conversaci\u00f3n</strong><div style="color:var(--cv-text);margin-top:2px;white-space:pre-wrap;">' + escHtml(lastMsg) + '</div></div>' : ''}
           ${notes ? '<div style="background:rgba(255,221,0,0.06);border-radius:6px;padding:6px;border-left:2px solid #ffdd00;"><strong style="font-size:10px;color:#ffdd00;">📝 Notas</strong><div style="color:var(--cv-text-muted);margin-top:2px;white-space:pre-wrap;">' + escHtml(notes) + '</div></div>' : ''}
         </div>
@@ -1825,12 +1824,11 @@ function createLeadNode(nodeId, lead, x, y) {
       ? formatPrice(prop.price, prop.currency)
       : '';
     var propDistrict = prop.district_name || '';
-    propHtml = '<div class="cv-lead-prop" style="background:rgba(102,187,106,0.08);border-radius:6px;padding:6px;margin-bottom:4px;border-left:2px solid #66bb6a;">' +
-      '<strong style="font-size:10px;color:#66bb6a;">🏠 Propiedad vinculada</strong>' +
-      '<div style="color:var(--cv-text);margin-top:2px;font-size:11px;">' + escHtml(propTitle) + '</div>' +
-      (propDistrict ? '<div style="color:var(--cv-text-muted);font-size:10px;">📍 ' + escHtml(propDistrict) + '</div>' : '') +
-      (propPrice ? '<div style="color:var(--cv-text-muted);font-size:10px;">💰 ' + escHtml(propPrice) + '</div>' : '') +
-      '</div>';
+    var propTitleShort = propTitle.length > 30 ? propTitle.substring(0, 27) + '...' : propTitle;
+    var propDetail = propTitleShort;
+    if (propDistrict) propDetail += ' — ' + propDistrict;
+    if (propPrice) propDetail += ' (' + propPrice + ')';
+    propHtml = '<span class="cv-req-info__item" style="color:#66bb6a;">🏠 ' + escHtml(propDetail) + '</span>';
   }
 
   node.innerHTML = `
@@ -1840,13 +1838,13 @@ function createLeadNode(nodeId, lead, x, y) {
       <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
     </div>
     <div class="cv-node__req-info">
+      ${propHtml}
       ${fechaStr ? '<span class="cv-req-info__item">🕐 ' + escHtml(fechaStr) + '</span>' : ''}
       ${phone ? '<span class="cv-req-info__item">📞 ' + escHtml(phone) + '</span>' : ''}
       ${email ? '<span class="cv-req-info__item">✉ ' + escHtml(email) + '</span>' : ''}
     </div>
     <div class="cv-node__req-body" style="font-size:11px;max-height:200px;overflow-y:auto;">
       ${source ? '<div style="color:var(--cv-text-muted);margin-bottom:4px;">📡 ' + escHtml(source) + '</div>' : ''}
-      ${propHtml}
       ${lastMsg ? '<div style="background:rgba(92,156,230,0.08);border-radius:6px;padding:6px;margin-bottom:4px;border-left:2px solid #5c9ce6;"><strong style="font-size:10px;color:#5c9ce6;">💬 Conversaci\u00f3n</strong><div style="color:var(--cv-text);margin-top:2px;white-space:pre-wrap;">' + escHtml(lastMsg) + '</div></div>' : ''}
       ${notes ? '<div style="background:rgba(255,221,0,0.06);border-radius:6px;padding:6px;border-left:2px solid #ffdd00;"><strong style="font-size:10px;color:#ffdd00;">📝 Notas</strong><div style="color:var(--cv-text-muted);margin-top:2px;white-space:pre-wrap;">' + escHtml(notes) + '</div></div>' : ''}
     </div>
