@@ -239,6 +239,7 @@ class BusquedaPropiedadesSkill(BaseSkill):
         'paucarpata', 'sachaca', 'samuel pastor',
         'socabaya', 'tiabaya', 'uchumayo', 'yanahuara',
         'cercado', 'la joya', 'sabandia', 'yura',
+        'punta de bombón', 'punta de bombon', 'umacollo',
     ]
 
     # Palabras que indican que el usuario busca una propiedad por NOMBRE/TÍTULO específico
