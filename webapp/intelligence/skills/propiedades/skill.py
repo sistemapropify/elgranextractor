@@ -1,6 +1,9 @@
 """
 BusquedaPropiedadesSkill — Skill de búsqueda híbrida (SQL + semántica) de propiedades.
 
+NOTA: Usa sentence-transformers con normalize_embeddings=True (mean pooling automático).
+      No requiere Fase 1 de la SPEC (pooling) porque ya está correcto.
+
 Implementa los 4 pasos de SPEC-015:
   Paso 1: Determinar modo de búsqueda (solo_sql, solo_semantico, hibrido, sin_parametros)
   Paso 2: Filtrado SQL sobre field_values de IntelligenceDocument
@@ -638,25 +641,49 @@ class BusquedaPropiedadesSkill(BaseSkill):
                     skill_name=self.name
                 )
 
-            # ── FLUJO ÚNICO: Filtro SQL duro + re-ranking semántico ──
+            # ── FLUJO: Búsqueda semántica como método principal ──
             #
-            # 1. SIEMPRE aplicar filtros SQL duros primero (a nivel BD)
-            # 2. SI hay semantic_query → re-rank semántico sobre resultados filtrados
-            # 3. Si NO → ordenar por defecto
+            # 1. SIEMPRE obtener todos los documentos con embedding
+            # 2. SI hay semantic_query → búsqueda semántica (FAISS) primero
+            # 3. SI hay filtros exactos → refinar sobre resultados semánticos
+            # 4. Si no hay semantic_query → filtro SQL tradicional
 
-            # Paso 1: Obtener documentos con filtros SQL (si hay)
-            # NOTA: El filtrado SQL usa field_values, NO embeddings. Por lo tanto
-            # NO se debe validar la dimensión aquí. Los embeddings de 1024d antiguos
-            # se manejan en _reranking_semantico (Paso 2), que es donde se necesita
-            # la dimensión correcta para calcular similitud de coseno.
-            if tiene_filtros_exactos:
+            # Obtener docs base para búsqueda
+            todos_docs = list(IntelligenceDocument.objects.filter(
+                collection__in=colecciones, embedding__isnull=False
+            ).select_related('collection'))
+
+            if tiene_semantica:
+                # Paso 1: Búsqueda semántica (FAISS) sobre TODOS los docs
+                documentos = self._reranking_semantico(
+                    [(doc, 0.5) for doc in todos_docs], semantic_query
+                )
+                # Paso 2: Refinar con filtros exactos (si hay)
+                if tiene_filtros_exactos and documentos:
+                    filtrados = []
+                    for doc, score in documentos:
+                        if self._coincide_filtros(doc.field_values or {}, params):
+                            filtrados.append((doc, score))
+                    if filtrados:
+                        documentos = filtrados
+                    # Si no hay filtrados, mantener resultados semánticos
+                if not documentos:
+                    mensaje = "No se encontraron propiedades"
+                    if params.get('distrito'):
+                        mensaje += f" en {params['distrito']}"
+                    mensaje += "."
+                    return SkillResult.ok(
+                        data=[], message=mensaje,
+                        metadata={'filtros_aplicados': self._extract_filters(params)},
+                        skill_name=self.name
+                    )
+            elif tiene_filtros_exactos:
+                # Sin query semántica: filtrar por SQL
                 documentos = self._filtrar_por_sql(params, colecciones)
                 if not documentos:
                     mensaje = "No se encontraron propiedades"
                     if params.get('distrito'):
                         mensaje += f" en {params['distrito']}"
-                    if params.get('tipo_propiedad'):
-                        mensaje += f" de tipo {params['tipo_propiedad']}"
                     mensaje += "."
                     return SkillResult.ok(
                         data=[], message=mensaje,
@@ -664,15 +691,8 @@ class BusquedaPropiedadesSkill(BaseSkill):
                         skill_name=self.name
                     )
             else:
-                # Sin filtros: todos los documentos con embedding
-                documentos = [(doc, 0.5) for doc in
-                    IntelligenceDocument.objects.filter(
-                        collection__in=colecciones, embedding__isnull=False
-                    ).select_related('collection')]
-
-            # Paso 2: Re-ranking semántico (si hay semantic_query)
-            if tiene_semantica and documentos:
-                documentos = self._reranking_semantico(documentos, semantic_query)
+                # Sin filtros ni semántica: todos
+                documentos = [(doc, 0.5) for doc in todos_docs]
 
             # FASE 4: Umbral de similitud semántica (solo si hay semantic_query)
             # Después del re-ranking, descartar documentos con similitud muy baja.
