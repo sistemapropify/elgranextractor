@@ -1740,7 +1740,7 @@ function createLeadNode(nodeId, lead, x, y) {
   }
 
   node.innerHTML = `
-    <div class="cv-node__header">
+    <div class="cv-node__header" style="cursor:pointer;" title="Click para abrir CRM" onclick="window.open('https://app.propify.pe/crm/lead/${lead.id}','_blank')">
       <span class="cv-node__badge cv-badge--lead-analysis">👤 LEAD</span>
       <span class="cv-node__title">${escHtml(contactName)}</span>
       <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
