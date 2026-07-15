@@ -723,11 +723,6 @@ class BusquedaPropiedadesSkill(BaseSkill):
                     )
                     # Re-obtener el mejor score del re-ranking original
 
-            # Paso 3: Limitar resultados
-            top_k = params.get('top_k') or 10
-            if len(documentos) > top_k:
-                documentos = documentos[:top_k]
-
             # ── Filtro por similitud semántica para búsqueda por nombre ──
             # Si se buscó por nombre de propiedad (titulo_contains), filtrar
             # propiedades con baja similitud semántica. El re-ranking da scores
