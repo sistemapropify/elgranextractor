@@ -388,6 +388,7 @@ function renderSinglePlaceholder(n) {
       <div class="cv-port cv-port--right"  data-node="${n.id}" data-port="right"></div>
       <div class="cv-port cv-port--bottom" data-node="${n.id}" data-port="bottom"></div>
       <div class="cv-port cv-port--left"   data-node="${n.id}" data-port="left"></div>
+      <div class="cv-resize-handle" data-node="${n.id}"></div>
     `;
   } else if (n.tipo === 'lead_nodo') {
     const fd = n.field_data || {};
@@ -416,6 +417,7 @@ function renderSinglePlaceholder(n) {
       <div class="cv-port cv-port--right"  data-node="${n.id}" data-port="right"></div>
       <div class="cv-port cv-port--bottom" data-node="${n.id}" data-port="bottom"></div>
       <div class="cv-port cv-port--left"   data-node="${n.id}" data-port="left"></div>
+      <div class="cv-resize-handle" data-node="${n.id}"></div>
     `;
   } else if (n.tipo === 'lead_global') {
     var savedGran = (n.field_data && n.field_data._granularity) || 'day';
