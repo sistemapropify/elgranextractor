@@ -456,12 +456,12 @@ def api_lead_analysis(request, prop_id):
         with connections['propifai'].cursor() as cursor:
             # Siempre traer datos por día (CAST a DATE evita problemas de datetimeoffset)
             cursor.execute("""
-                SELECT CAST(l.created_at AS DATE) AS bucket_date,
+                SELECT CAST(SWITCHOFFSET(l.created_at, '-05:00') AS DATE) AS bucket_date,
                        COUNT(DISTINCT l.id) AS count
                 FROM lead_properties lp
                 INNER JOIN lead l ON l.id = lp.lead_id
                 WHERE lp.property_id = %s
-                GROUP BY CAST(l.created_at AS DATE)
+                GROUP BY CAST(SWITCHOFFSET(l.created_at, '-05:00') AS DATE)
                 ORDER BY bucket_date
             """, [prop_id])
 
@@ -558,10 +558,10 @@ def api_lead_analysis_global(request):
         from django.db import connections
         with connections['propifai'].cursor() as cursor:
             cursor.execute("""
-                SELECT CAST(created_at AS DATE) AS bucket_date,
+                SELECT CAST(SWITCHOFFSET(created_at, '-05:00') AS DATE) AS bucket_date,
                        COUNT(DISTINCT id) AS count
                 FROM lead
-                GROUP BY CAST(created_at AS DATE)
+                GROUP BY CAST(SWITCHOFFSET(created_at, '-05:00') AS DATE)
                 ORDER BY bucket_date
             """)
 
@@ -644,7 +644,7 @@ def api_leads_by_date(request):
                        c.first_name, c.last_name, c.phone, c.email
                 FROM lead l
                 LEFT JOIN contact c ON c.id = l.contact_id
-                WHERE CAST(l.created_at AS DATE) = %s
+                WHERE CAST(SWITCHOFFSET(l.created_at, '-05:00') AS DATE) = %s
                 ORDER BY l.created_at DESC
             """, [date_str])
 
@@ -699,7 +699,7 @@ def api_lead_analysis_leads(request, prop_id):
                 INNER JOIN lead l ON l.id = lp.lead_id
                 LEFT JOIN contact c ON c.id = l.contact_id
                 WHERE lp.property_id = %s
-                  AND CAST(l.created_at AS DATE) = %s
+                  AND CAST(SWITCHOFFSET(l.created_at, '-05:00') AS DATE) = %s
                 ORDER BY l.created_at DESC
             """, [prop_id, date_str])
 
