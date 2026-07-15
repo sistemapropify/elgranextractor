@@ -662,7 +662,7 @@ class BusquedaPropiedadesSkill(BaseSkill):
                 if tiene_filtros_exactos and documentos:
                     filtrados = []
                     for doc, score in documentos:
-                        if self._coincide_filtros(doc.field_values or {}, params):
+                        if self._documento_coincide_filtros(doc.field_values or {}, params):
                             filtrados.append((doc, score))
                     if filtrados:
                         documentos = filtrados
