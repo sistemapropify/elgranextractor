@@ -1727,6 +1727,22 @@ function createLeadNode(nodeId, lead, x, y) {
   var lastMsg = lead.last_message_text || '';
   var notes = lead.notes || '';
   var score = lead.score != null ? lead.score : '';
+  var createdAt = lead.created_at || '';
+  // Formatear fecha/hora a Peru (la API devuelve en UTC, restamos 5h)
+  var fechaStr = '';
+  if (createdAt) {
+    var d = new Date(createdAt);
+    if (!isNaN(d.getTime())) {
+      var dia = String(d.getDate()).padStart(2,'0');
+      var mes = String(d.getMonth()+1).padStart(2,'0');
+      var anio = d.getFullYear();
+      var hora = String(d.getHours()).padStart(2,'0');
+      var min = String(d.getMinutes()).padStart(2,'0');
+      fechaStr = dia + '/' + mes + '/' + anio + ' ' + hora + ':' + min;
+    } else {
+      fechaStr = createdAt;
+    }
+  }
 
   node.innerHTML = `
     <div class="cv-node__header">
@@ -1735,9 +1751,9 @@ function createLeadNode(nodeId, lead, x, y) {
       <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
     </div>
     <div class="cv-node__req-info">
+      ${fechaStr ? '<span class="cv-req-info__item">🕐 ' + escHtml(fechaStr) + '</span>' : ''}
       ${phone ? '<span class="cv-req-info__item">📞 ' + escHtml(phone) + '</span>' : ''}
       ${email ? '<span class="cv-req-info__item">✉ ' + escHtml(email) + '</span>' : ''}
-      ${score !== '' ? '<span class="cv-req-info__item">⭐ ' + score + '</span>' : ''}
     </div>
     <div class="cv-node__req-body" style="font-size:11px;max-height:200px;overflow-y:auto;">
       ${source ? '<div style="color:var(--cv-text-muted);margin-bottom:4px;">📡 ' + escHtml(source) + '</div>' : ''}
