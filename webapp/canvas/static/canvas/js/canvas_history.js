@@ -420,7 +420,7 @@ function renderSinglePlaceholder(n) {
         ? (typeof formatPrice === 'function' ? formatPrice(prop.price, prop.currency) : '')
         : '';
       var propDistrict = prop.district_name || '';
-      var propTitleShort = propTitle.length > 30 ? propTitle.substring(0, 27) + '...' : propTitle;
+      var propTitleShort = propTitle.length > 60 ? propTitle.substring(0, 57) + '...' : propTitle;
       var propDetail = propTitleShort;
       if (propDistrict) propDetail += ' — ' + propDistrict;
       if (propPrice) propDetail += ' (' + propPrice + ')';
