@@ -626,6 +626,7 @@ def api_leads_by_date(request):
     """
     GET /canvas/api/leads-by-date/?date=YYYY-MM-DD
     Retorna TODOS los leads creados en una fecha especifica (sin filtro por propiedad).
+    Incluye datos de la(s) propiedad(es) vinculada(s) via lead_properties.
     """
     user = _get_current_user(request)
     if not user:
@@ -660,6 +661,31 @@ def api_leads_by_date(request):
                     created_str = str(created_at)
                 contact_name = (first_name or '') + (' ' + last_name if last_name else '')
                 contact_name = contact_name.strip() or username or ''
+
+                # Obtener propiedades vinculadas a este lead via lead_properties
+                propiedades_vinculadas = []
+                try:
+                    cursor2 = connections['propifai'].cursor()
+                    cursor2.execute("""
+                        SELECT p.id, p.code, p.title
+                        FROM lead_properties lp
+                        INNER JOIN property p ON p.id = lp.property_id
+                        WHERE lp.lead_id = %s
+                        ORDER BY p.id
+                    """, [lead_id])
+                    for prow in cursor2.fetchall():
+                        propiedades_vinculadas.append({
+                            'id': prow[0],
+                            'code': prow[1] or '',
+                            'title': prow[2] or '',
+                            'district_name': '',
+                            'price': None,
+                            'currency': '',
+                        })
+                    cursor2.close()
+                except Exception as e2:
+                    logger.warning(f"Error obteniendo propiedades para lead {lead_id}: {e2}")
+
                 leads.append({
                     'id': lead_id,
                     'username': username or '',
@@ -672,6 +698,7 @@ def api_leads_by_date(request):
                     'score': score,
                     'last_message_text': (last_msg or ''),
                     'created_at': created_str,
+                    'propiedades': propiedades_vinculadas,
                 })
     except Exception as e:
         logger.warning(f"Error en leads by date {date_str}: {e}")
@@ -684,6 +711,7 @@ def api_lead_analysis_leads(request, prop_id):
     """
     GET /canvas/api/lead-analysis/<prop_id>/leads/?date=YYYY-MM-DD
     Retorna los leads individuales para una propiedad en una fecha específica.
+    Incluye datos de la propiedad vinculada.
     """
     user = _get_current_user(request)
     if not user:
@@ -709,6 +737,26 @@ def api_lead_analysis_leads(request, prop_id):
                 ORDER BY l.created_at DESC
             """, [prop_id, date_str])
 
+            # Obtener datos de la propiedad para incluir en la respuesta
+            propiedad_info = {'id': int(prop_id), 'code': '', 'title': '', 'district_name': '', 'price': None, 'currency': ''}
+            try:
+                cursor2 = connections['propifai'].cursor()
+                cursor2.execute("""
+                    SELECT p.code, p.title, p.district_name, p.price, p.currency_id
+                    FROM propiedadespropify p
+                    WHERE p.id = %s
+                """, [prop_id])
+                prow = cursor2.fetchone()
+                if prow:
+                    propiedad_info['code'] = prow[0] or ''
+                    propiedad_info['title'] = prow[1] or ''
+                    propiedad_info['district_name'] = prow[2] or ''
+                    propiedad_info['price'] = float(prow[3]) if prow[3] is not None else None
+                    propiedad_info['currency'] = prow[4] or ''
+                cursor2.close()
+            except Exception as e2:
+                logger.warning(f"Error obteniendo propiedad {prop_id}: {e2}")
+
             leads = []
             from datetime import timedelta
             for row in cursor.fetchall():
@@ -732,6 +780,7 @@ def api_lead_analysis_leads(request, prop_id):
                     'score': score,
                     'last_message_text': (last_msg or ''),
                     'created_at': created_str,
+                    'propiedades': [propiedad_info],  # Propiedad vinculada conocida
                 })
     except Exception as e:
         logger.warning(f"Error en lead analysis leads for property {prop_id}, date {date_str}: {e}")
