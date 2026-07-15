@@ -1728,17 +1728,35 @@ function createLeadNode(nodeId, lead, x, y) {
   var notes = lead.notes || '';
   var score = lead.score != null ? lead.score : '';
   var createdAt = lead.created_at || '';
-  // Formatear fecha/hora a Peru (la API devuelve en UTC, restamos 5h)
+  // La API devuelve created_at en UTC (sin timezone en el string).
+  // JavaScript interpreta strings sin timezone como hora LOCAL,
+  // por eso forzamos UTC con Date.UTC() y luego convertimos a Peru (UTC-5).
   var fechaStr = '';
   if (createdAt) {
-    var d = new Date(createdAt);
-    if (!isNaN(d.getTime())) {
-      var dia = String(d.getDate()).padStart(2,'0');
-      var mes = String(d.getMonth()+1).padStart(2,'0');
-      var anio = d.getFullYear();
-      var hora = String(d.getHours()).padStart(2,'0');
-      var min = String(d.getMinutes()).padStart(2,'0');
-      fechaStr = dia + '/' + mes + '/' + anio + ' ' + hora + ':' + min;
+    var parts = createdAt.split('T');
+    if (parts.length === 2) {
+      var datePart = parts[0].split('-');
+      var timePart = parts[1].split(':');
+      if (datePart.length === 3 && timePart.length >= 2) {
+        var utcDate = new Date(Date.UTC(
+          parseInt(datePart[0], 10),
+          parseInt(datePart[1], 10) - 1,
+          parseInt(datePart[2], 10),
+          parseInt(timePart[0], 10),
+          parseInt(timePart[1], 10),
+          timePart[2] ? parseInt(timePart[2], 10) : 0
+        ));
+        // Convertir UTC a Peru (UTC-5): restar 5 horas (en ms)
+        var peruTime = new Date(utcDate.getTime() - 5 * 60 * 60 * 1000);
+        var dia = String(peruTime.getUTCDate()).padStart(2,'0');
+        var mes = String(peruTime.getUTCMonth()+1).padStart(2,'0');
+        var anio = peruTime.getUTCFullYear();
+        var hora = String(peruTime.getUTCHours()).padStart(2,'0');
+        var min = String(peruTime.getUTCMinutes()).padStart(2,'0');
+        fechaStr = dia + '/' + mes + '/' + anio + ' ' + hora + ':' + min;
+      } else {
+        fechaStr = createdAt;
+      }
     } else {
       fechaStr = createdAt;
     }
