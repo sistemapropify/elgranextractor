@@ -363,10 +363,13 @@ function renderSinglePlaceholder(n) {
       <div class="cv-port cv-port--left"   data-node="${n.id}" data-port="left"></div>
     `;
   } else if (n.tipo === 'lead_analysis') {
+    var savedGran = (n.field_data && n.field_data._granularity) || 'day';
+    var savedGranLabel = { day: 'Día', week: 'Semana', month: 'Mes' }[savedGran] || 'Día';
     node.innerHTML = `
       <div class="cv-node__header">
         <span class="cv-node__badge cv-badge--lead-analysis">📊 LEAD</span>
         <span class="cv-node__title">An\u00e1lisis de Leads</span>
+        <span class="cv-lead-gran-label" title="Click derecho \u2192 cambiar vista">📅 ${savedGranLabel}</span>
         <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
       </div>
       <div class="cv-node__body"><div style="color:var(--cv-text-muted);font-size:11px;text-align:center;padding:16px">Cargando datos...</div></div>
@@ -404,10 +407,13 @@ function renderSinglePlaceholder(n) {
       <div class="cv-port cv-port--left"   data-node="${n.id}" data-port="left"></div>
     `;
   } else if (n.tipo === 'lead_global') {
+    var savedGran = (n.field_data && n.field_data._granularity) || 'day';
+    var savedGranLabel = { day: 'Día', week: 'Semana', month: 'Mes' }[savedGran] || 'Día';
     node.innerHTML = `
       <div class="cv-node__header">
         <span class="cv-node__badge cv-badge--lead-analysis">📊 GLOBAL</span>
         <span class="cv-node__title">Todos los Leads</span>
+        <span class="cv-lead-gran-label" title="Click derecho \u2192 cambiar vista">📅 ${savedGranLabel}</span>
         <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
       </div>
       <div class="cv-node__body"><div style="color:var(--cv-text-muted);font-size:11px;text-align:center;padding:16px">Cargando datos...</div></div>
@@ -440,6 +446,16 @@ function renderSinglePlaceholder(n) {
   STATE.nodos[n.id].el = node;
   if (n.collapsed) node.classList.add('collapsed');
   registerNodeEvents(n.id, node);
+  // Adjuntar menú contextual de granularidad para nodos lead_analysis y lead_global
+  if (n.tipo === 'lead_analysis' || n.tipo === 'lead_global') {
+    node.addEventListener('contextmenu', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (typeof showLeadContextMenu === 'function') {
+        showLeadContextMenu(n.id, e);
+      }
+    });
+  }
 }
 
 

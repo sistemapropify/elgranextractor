@@ -1216,10 +1216,13 @@ function renderPlaceholderNodes(nodos) {
         <div class="cv-resize-handle" data-node="${n.id}"></div>
       `;
     } else if (n.tipo === 'lead_analysis') {
+      var savedGran = (n.field_data && n.field_data._granularity) || 'day';
+      var savedGranLabel = { day: 'Día', week: 'Semana', month: 'Mes' }[savedGran] || 'Día';
       node.innerHTML = `
         <div class="cv-node__header">
           <span class="cv-node__badge cv-badge--lead-analysis">📊 LEAD</span>
           <span class="cv-node__title">Análisis de Leads</span>
+          <span class="cv-lead-gran-label" title="Click derecho → cambiar vista">📅 ${savedGranLabel}</span>
           <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
         </div>
         <div class="cv-node__body"><div style="color:var(--cv-text-muted);font-size:11px;text-align:center;padding:16px">Cargando datos...</div></div>
@@ -1229,10 +1232,13 @@ function renderPlaceholderNodes(nodos) {
         <div class="cv-port cv-port--left"   data-node="${n.id}" data-port="left"></div>
       `;
     } else if (n.tipo === 'lead_global') {
+      var savedGran = (n.field_data && n.field_data._granularity) || 'day';
+      var savedGranLabel = { day: 'Día', week: 'Semana', month: 'Mes' }[savedGran] || 'Día';
       node.innerHTML = `
         <div class="cv-node__header">
           <span class="cv-node__badge cv-badge--lead-analysis">📊 GLOBAL</span>
           <span class="cv-node__title">Todos los Leads</span>
+          <span class="cv-lead-gran-label" title="Click derecho → cambiar vista">📅 ${savedGranLabel}</span>
           <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
         </div>
         <div class="cv-node__body"><div style="color:var(--cv-text-muted);font-size:11px;text-align:center;padding:16px">Cargando datos...</div></div>
@@ -1270,6 +1276,34 @@ function renderPlaceholderNodes(nodos) {
       var source = fd.source || '';
       var lastMsg = fd.last_message_text || '';
       var notes = fd.notes || '';
+      // ── FIX: Restaurar fecha/hora del lead desde field_data ──
+      var createdAt = fd.created_at || '';
+      var fechaStr = '';
+      if (createdAt) {
+        var dateMatch = createdAt.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+        if (dateMatch) {
+          fechaStr = dateMatch[3] + '/' + dateMatch[2] + '/' + dateMatch[1] + ' ' + dateMatch[4] + ':' + dateMatch[5];
+        } else {
+          fechaStr = createdAt;
+        }
+      }
+      // Propiedad vinculada guardada en snapshot (via field_data.propiedades)
+      var propiedades = fd.propiedades || [];
+      var prop = propiedades.length > 0 ? propiedades[0] : null;
+      var propHtml = '';
+      if (prop) {
+        var propTitle = prop.title || prop.code || ('Prop #' + prop.id);
+        var propPrice = (prop.price != null)
+          ? formatPrice(prop.price, prop.currency)
+          : '';
+        var propDistrict = prop.district_name || '';
+        propHtml = '<div class="cv-lead-prop" style="background:rgba(102,187,106,0.08);border-radius:6px;padding:6px;margin-bottom:4px;border-left:2px solid #66bb6a;">' +
+          '<strong style="font-size:10px;color:#66bb6a;">🏠 Propiedad vinculada</strong>' +
+          '<div style="color:var(--cv-text);margin-top:2px;font-size:11px;">' + escHtml(propTitle) + '</div>' +
+          (propDistrict ? '<div style="color:var(--cv-text-muted);font-size:10px;">📍 ' + escHtml(propDistrict) + '</div>' : '') +
+          (propPrice ? '<div style="color:var(--cv-text-muted);font-size:10px;">💰 ' + escHtml(propPrice) + '</div>' : '') +
+          '</div>';
+      }
       node.innerHTML = `
         <div class="cv-node__header" style="cursor:pointer;" title="Click para abrir CRM" onclick="window.open('https://app.propify.pe/crm/lead/${n.ref_id || ''}','_blank')">
           <span class="cv-node__badge cv-badge--lead-analysis">👤 LEAD</span>
@@ -1277,11 +1311,13 @@ function renderPlaceholderNodes(nodos) {
           <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
         </div>
         <div class="cv-node__req-info">
+          ${fechaStr ? '<span class="cv-req-info__item">🕐 ' + escHtml(fechaStr) + '</span>' : ''}
           ${phone ? '<span class="cv-req-info__item">📞 ' + escHtml(phone) + '</span>' : ''}
           ${email ? '<span class="cv-req-info__item">✉ ' + escHtml(email) + '</span>' : ''}
         </div>
         <div class="cv-node__req-body" style="font-size:11px;max-height:200px;overflow-y:auto;">
           ${source ? '<div style="color:var(--cv-text-muted);margin-bottom:4px;">📡 ' + escHtml(source) + '</div>' : ''}
+          ${propHtml}
           ${lastMsg ? '<div style="background:rgba(92,156,230,0.08);border-radius:6px;padding:6px;margin-bottom:4px;border-left:2px solid #5c9ce6;"><strong style="font-size:10px;color:#5c9ce6;">💬 Conversaci\u00f3n</strong><div style="color:var(--cv-text);margin-top:2px;white-space:pre-wrap;">' + escHtml(lastMsg) + '</div></div>' : ''}
           ${notes ? '<div style="background:rgba(255,221,0,0.06);border-radius:6px;padding:6px;border-left:2px solid #ffdd00;"><strong style="font-size:10px;color:#ffdd00;">📝 Notas</strong><div style="color:var(--cv-text-muted);margin-top:2px;white-space:pre-wrap;">' + escHtml(notes) + '</div></div>' : ''}
         </div>
@@ -1307,6 +1343,14 @@ function renderPlaceholderNodes(nodos) {
     if (n.width) node.style.width = n.width + 'px';
     if (n.height) node.style.minHeight = n.height + 'px';
     registerNodeEvents(n.id, node);
+    // Adjuntar menú contextual de granularidad para nodos de análisis de leads restaurados
+    if (n.tipo === 'lead_analysis' || n.tipo === 'lead_global') {
+      node.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        showLeadContextMenu(n.id, e);
+      });
+    }
   });
   // Renderizar PDFs después de restaurar todos los nodos
   Object.values(STATE.nodos).forEach(function(n) {
@@ -1372,9 +1416,15 @@ function renderPlaceholderNodes(nodos) {
 
 /* ── CONTEXT MENU ── */
 var _leadContext = null;
+var LEAD_CONTEXT_MENU_ID = 'cv-lead-granularity-menu';
 
 function createLeadContextMenu() {
+  // Evitar duplicados: si ya existe, retornarlo
+  var existing = document.getElementById(LEAD_CONTEXT_MENU_ID);
+  if (existing) return existing;
+
   var menu = document.createElement('div');
+  menu.id = LEAD_CONTEXT_MENU_ID;
   menu.className = 'cv-lead-context-menu';
   menu.style.display = 'none';
   menu.innerHTML = `
@@ -1397,7 +1447,7 @@ function createLeadContextMenu() {
 }
 
 function getLeadContextMenu() {
-  var menu = document.querySelector('.cv-lead-context-menu');
+  var menu = document.getElementById(LEAD_CONTEXT_MENU_ID);
   if (!menu) menu = createLeadContextMenu();
   return menu;
 }
@@ -1549,6 +1599,7 @@ async function reloadLeadGranularity(nodeId, granularity) {
     nodo.field_data = nodo.field_data || {};
     nodo.field_data._granularity = granularity;
     renderLeadAnalysisBody(nodeId, await res.json());
+    markDirty(); // Persistir el cambio de granularidad en el snapshot del servidor
   } catch (err) {
     console.error('Error reloading lead analysis:', err);
     if (body) body.innerHTML = '<div style="color:var(--cv-block);padding:12px;text-align:center;">Error al cargar</div>';
@@ -1708,10 +1759,13 @@ async function loadLeadNodes(propId, dateStr, analysisNodeId) {
 
 /**
  * Crea un nodo lead en el canvas.
+ * Muestra los datos del lead e incluye la propiedad vinculada (si existe).
  */
 function createLeadNode(nodeId, lead, x, y) {
   if (STATE.nodos[nodeId]) return nodeId;
-  if (typeof captureState === 'function') captureState();
+  // NOTA: captureState NO se llama aquí porque loadLeadNodes ya captura
+  // el estado ANTES de agregar leads en lote. Si cada lead creara su propia
+  // entrada en el historial, el deshacer solo removería un lead a la vez.
 
   var node = document.createElement('div');
   node.className = 'cv-node cv-node--lead';
@@ -1739,6 +1793,24 @@ function createLeadNode(nodeId, lead, x, y) {
     }
   }
 
+  // Propiedad vinculada: tomar la primera del array 'propiedades'
+  var propiedades = lead.propiedades || [];
+  var prop = propiedades.length > 0 ? propiedades[0] : null;
+  var propHtml = '';
+  if (prop) {
+    var propTitle = prop.title || prop.code || ('Prop #' + prop.id);
+    var propPrice = (prop.price != null)
+      ? formatPrice(prop.price, prop.currency)
+      : '';
+    var propDistrict = prop.district_name || '';
+    propHtml = '<div class="cv-lead-prop" style="background:rgba(102,187,106,0.08);border-radius:6px;padding:6px;margin-bottom:4px;border-left:2px solid #66bb6a;">' +
+      '<strong style="font-size:10px;color:#66bb6a;">🏠 Propiedad vinculada</strong>' +
+      '<div style="color:var(--cv-text);margin-top:2px;font-size:11px;">' + escHtml(propTitle) + '</div>' +
+      (propDistrict ? '<div style="color:var(--cv-text-muted);font-size:10px;">📍 ' + escHtml(propDistrict) + '</div>' : '') +
+      (propPrice ? '<div style="color:var(--cv-text-muted);font-size:10px;">💰 ' + escHtml(propPrice) + '</div>' : '') +
+      '</div>';
+  }
+
   node.innerHTML = `
     <div class="cv-node__header" style="cursor:pointer;" title="Click para abrir CRM" onclick="window.open('https://app.propify.pe/crm/lead/${lead.id}','_blank')">
       <span class="cv-node__badge cv-badge--lead-analysis">👤 LEAD</span>
@@ -1752,6 +1824,7 @@ function createLeadNode(nodeId, lead, x, y) {
     </div>
     <div class="cv-node__req-body" style="font-size:11px;max-height:200px;overflow-y:auto;">
       ${source ? '<div style="color:var(--cv-text-muted);margin-bottom:4px;">📡 ' + escHtml(source) + '</div>' : ''}
+      ${propHtml}
       ${lastMsg ? '<div style="background:rgba(92,156,230,0.08);border-radius:6px;padding:6px;margin-bottom:4px;border-left:2px solid #5c9ce6;"><strong style="font-size:10px;color:#5c9ce6;">💬 Conversaci\u00f3n</strong><div style="color:var(--cv-text);margin-top:2px;white-space:pre-wrap;">' + escHtml(lastMsg) + '</div></div>' : ''}
       ${notes ? '<div style="background:rgba(255,221,0,0.06);border-radius:6px;padding:6px;border-left:2px solid #ffdd00;"><strong style="font-size:10px;color:#ffdd00;">📝 Notas</strong><div style="color:var(--cv-text-muted);margin-top:2px;white-space:pre-wrap;">' + escHtml(notes) + '</div></div>' : ''}
     </div>
