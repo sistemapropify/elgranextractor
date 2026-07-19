@@ -389,3 +389,549 @@ class PILOrchestrator:
                 "Por favor intenta de nuevo."
             )
             return state
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# NUEVA ARQUITECTURA: Agentes Independientes (SPEC refactor_plataforma_agentes)
+# ═══════════════════════════════════════════════════════════════════════════════
+# Fase 5 + Fase 6: Ejecución paralela con namespaces
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class AgentOrchestratorState(TypedDict):
+    """
+    Estado del nuevo grafo de agentes (Fase 5 + Fase 6).
+
+    Cada agente escribe EXCLUSIVAMENTE en results[agent_name],
+    nunca en una clave compartida sin prefijo — esto evita conflictos
+    cuando dos agentes corren en paralelo.
+    """
+    # ── Input ──
+    message: str
+    conversation_id: str
+    user_id: Optional[str]
+    user_level: int
+    user_context: Optional[Dict[str, Any]]
+
+    # ── Supervisor ──
+    routing_plan: Dict[str, Any]       # resultado de Supervisor.route()
+    agents_activated: List[str]        # nombres de agentes a ejecutar
+
+    # ── Namespaces por agente — nunca se cruzan ──
+    results: Dict[str, Any]            # results[agent_name] = AgentResult
+
+    # ── Agregación ──
+    aggregated_answer: Optional[Dict[str, Any]]
+    critique_passed: bool
+    critique_retries: int
+
+    # ── Tracing ──
+    trace_id: str
+    latencia_total_ms: float
+    error: Optional[str]
+
+
+def create_agent_initial_state(
+    message: str,
+    conversation_id: str,
+    user_id: Optional[str] = None,
+    user_context: Optional[Dict[str, Any]] = None,
+) -> AgentOrchestratorState:
+    """Crea un estado inicial para el grafo de agentes."""
+    import hashlib
+    return AgentOrchestratorState(
+        message=message,
+        conversation_id=conversation_id,
+        user_id=user_id,
+        user_level=(user_context or {}).get('level', 1),
+        user_context=user_context,
+        routing_plan={},
+        agents_activated=[],
+        results={},
+        aggregated_answer=None,
+        critique_passed=True,
+        critique_retries=0,
+        trace_id=hashlib.md5(
+            f"agent:{conversation_id}:{message}:{time.time()}".encode()
+        ).hexdigest()[:12],
+        latencia_total_ms=0.0,
+        error=None,
+    )
+
+
+# ── Node functions ──────────────────────────────────────────────────────────
+
+
+def supervisor_node(state: AgentOrchestratorState) -> Dict[str, Any]:
+    """
+    Nodo: Supervisor decide qué agente(s) activar.
+
+    Reutiliza Supervisor.route() que internamente usa SemanticSkillRouter
+    con templates de agentes.
+    """
+    from .supervisor import Supervisor
+
+    supervisor = Supervisor()
+    plan = supervisor.route(
+        message=state.get('message', ''),
+        user_level=state.get('user_level', 1),
+        user_context=state.get('user_context'),
+    )
+
+    agents = [a['name'] for a in plan.get('agents', [])]
+
+    logger.info(
+        f"[AgentGraph] Supervisor: {len(agents)} agente(s) activados: "
+        f"{agents}, modo={plan.get('execution_mode', 'single')}"
+    )
+
+    return {
+        'routing_plan': plan,
+        'agents_activated': agents,
+        'nodos_ejecutados': state.get('nodos_ejecutados', []) + ['supervisor'],
+    }
+
+
+def _build_agent_node(agent_name: str):
+    """
+    Factory de nodos de agente para el grafo.
+
+    Cada nodo de agente corre independientemente (pueden ejecutarse en paralelo).
+    Escribe SOLO en state['results'][agent_name].
+    """
+    def agent_node(state: AgentOrchestratorState) -> Dict[str, Any]:
+        from .registry import AgentRegistry
+
+        registry = AgentRegistry()
+        agent = registry.get_by_name(agent_name)
+
+        if not agent:
+            logger.warning(f"[AgentGraph] Agente '{agent_name}' no encontrado")
+            return {
+                'results': {
+                    agent_name: {
+                        'agent_name': agent_name,
+                        'success': False,
+                        'error_message': f"Agente '{agent_name}' no registrado",
+                        'steps': [],
+                        'iterations_used': 0,
+                        'confidence': 0.0,
+                    }
+                }
+            }
+
+        start = time.time()
+        logger.info(f"[AgentGraph] Ejecutando agente: '{agent_name}'")
+
+        try:
+            result = agent.run(
+                message=state.get('message', ''),
+                context={
+                    'user_id': state.get('user_id'),
+                    'user_level': state.get('user_level', 1),
+                    'user_context': state.get('user_context'),
+                    'conversation_id': state.get('conversation_id'),
+                },
+            )
+            duration_ms = (time.time() - start) * 1000
+            logger.info(
+                f"[AgentGraph] Agente '{agent_name}' completado: "
+                f"success={result.success}, "
+                f"iterations={result.iterations_used}, "
+                f"confidence={result.confidence:.2f}, "
+                f"duration={duration_ms:.0f}ms"
+            )
+            return {
+                'results': {agent_name: result.to_log() if hasattr(result, 'to_log') else result},
+                'nodos_ejecutados': state.get('nodos_ejecutados', []) + [agent_name],
+            }
+        except Exception as e:
+            duration_ms = (time.time() - start) * 1000
+            logger.error(f"[AgentGraph] Error en agente '{agent_name}': {e}")
+            return {
+                'results': {
+                    agent_name: {
+                        'agent_name': agent_name,
+                        'success': False,
+                        'error_message': str(e),
+                        'steps': [],
+                        'iterations_used': 0,
+                        'confidence': 0.0,
+                    }
+                },
+                'nodos_ejecutados': state.get('nodos_ejecutados', []) + [f'{agent_name}:error'],
+            }
+
+    return agent_node
+
+
+def aggregator_node(state: AgentOrchestratorState) -> Dict[str, Any]:
+    """
+    Nodo: Agrega resultados de todos los agentes activados.
+
+    Fan-in: recibe resultados de N agentes y los consolida.
+    Si algún agente falló, se registra pero no bloquea a los demás.
+    """
+    agents = state.get('agents_activated', [])
+    results = state.get('results', {})
+    successful = []
+    failed = []
+
+    for agent_name in agents:
+        result = results.get(agent_name, {})
+        if result.get('success', False):
+            successful.append({
+                'name': agent_name,
+                'final_answer': result.get('final_answer'),
+                'confidence': result.get('confidence', 0.0),
+            })
+        else:
+            failed.append({
+                'name': agent_name,
+                'error': result.get('error_message', 'unknown error'),
+            })
+
+    logger.info(
+        f"[AgentGraph] Aggregator: {len(successful)} exitosos, "
+        f"{len(failed)} fallidos de {len(agents)} agentes"
+    )
+
+    return {
+        'aggregated_answer': {
+            'successful': successful,
+            'failed': failed,
+            'total_agents': len(agents),
+            'successful_count': len(successful),
+            'failed_count': len(failed),
+        },
+        'nodos_ejecutados': state.get('nodos_ejecutados', []) + ['aggregator'],
+    }
+
+
+def self_critique_node(state: AgentOrchestratorState) -> Dict[str, Any]:
+    """
+    Nodo: Autocrítica antes de responder.
+
+    Evalúa si el resultado agregado es suficiente.
+    Si no es suficiente y hay reintentos disponibles, marca para reintentar.
+    """
+    aggregated = state.get('aggregated_answer', {})
+    successful = aggregated.get('successful', [])
+
+    # Si al menos un agente tuvo éxito, la respuesta es suficiente
+    is_sufficient = len(successful) > 0
+    retries = state.get('critique_retries', 0)
+
+    if not is_sufficient and retries < 1:
+        logger.info(
+            "[AgentGraph] Autocrítica: respuesta insuficiente, "
+            "reintentando con agente fallback RAG"
+        )
+        return {
+            'critique_passed': False,
+            'critique_retries': retries + 1,
+            'agents_activated': ['agente_fallback_rag'],
+            'nodos_ejecutados': state.get('nodos_ejecutados', []) + ['self_critique:retry'],
+        }
+
+    logger.info(
+        f"[AgentGraph] Autocrítica: respuesta {'suficiente' if is_sufficient else 'insuficiente, sin reintentos'}"
+    )
+    return {
+        'critique_passed': is_sufficient,
+        'nodos_ejecutados': state.get('nodos_ejecutados', []) + ['self_critique'],
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# AgentGraphBuilder — Construye el grafo LangGraph con fan-out/fan-in
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class AgentGraphBuilder:
+    """
+    Construye el grafo LangGraph con fan-out/fan-in de agentes.
+
+    Estructura:
+        supervisor
+          │  (fan-out condicional: decide qué agente(s) activar)
+          ├──▶ agente_propiedades
+          ├──▶ agente_mercado
+          ├──▶ agente_requerimientos
+          │  (fan-in: todos convergen en aggregator)
+          ▼
+        aggregator
+          │
+          ▼
+        self_critique
+          │
+          ▼
+        (END)
+
+    El supervisor decide el fan-out basado en la consulta.
+    Si solo se activa 1 agente, el grafo corre en modo single.
+    Si se activan 2+, el grafo corre con ejecución paralela.
+    """
+
+    # Agentes disponibles en el grafo
+    _AGENT_NODES = [
+        'agente_propiedades',
+        'agente_mercado',
+        'agente_requerimientos',
+    ]
+
+    def __init__(self):
+        self.graph = None
+        self._build()
+
+    def _build(self) -> None:
+        """Construye el grafo LangGraph."""
+        try:
+            from langgraph.graph import END, StateGraph
+
+            graph = StateGraph(AgentOrchestratorState)
+
+            # Nodos del grafo
+            graph.add_node("supervisor", supervisor_node)
+            for agent_name in self._AGENT_NODES:
+                graph.add_node(agent_name, _build_agent_node(agent_name))
+            graph.add_node("aggregator", aggregator_node)
+            graph.add_node("self_critique", self_critique_node)
+
+            # Fan-out: supervisor → agente(s) según routing_plan
+            graph.add_conditional_edges(
+                "supervisor",
+                self._route_to_agents,
+                {name: name for name in self._AGENT_NODES},
+            )
+
+            # Fan-in: todos los agentes → aggregator
+            for agent_name in self._AGENT_NODES:
+                graph.add_edge(agent_name, "aggregator")
+
+            # aggregator → self_critique
+            graph.add_edge("aggregator", "self_critique")
+
+            # self_critique → END (con posible reintento manejado por el nodo mismo)
+            graph.add_edge("self_critique", END)
+
+            # Entry point
+            graph.set_entry_point("supervisor")
+
+            self.graph = graph.compile()
+
+            logger.info(
+                f"[AgentGraph] Grafo compilado con "
+                f"{1 + len(self._AGENT_NODES) + 2} nodos "
+                f"(supervisor, {len(self._AGENT_NODES)} agentes, "
+                f"aggregator, self_critique)"
+            )
+
+        except ImportError as e:
+            logger.warning(
+                f"[AgentGraph] LangGraph no disponible: {e}. "
+                f"Usando pipeline legacy como fallback."
+            )
+            self.graph = None
+        except Exception as e:
+            logger.error(f"[AgentGraph] Error construyendo grafo: {e}")
+            self.graph = None
+
+    def _route_to_agents(self, state: AgentOrchestratorState) -> str:
+        """
+        Decide a qué nodo(s) de agente enviar según el plan del Supervisor.
+
+        Retorna el nombre del primer agente (LangGraph no soporta fan-out
+        dinámico nativo; la ejecución paralela real se maneja con
+        concurrent.futures en run()).
+        """
+        agents = state.get('agents_activated', [])
+        if agents:
+            # Retornar el primer agente activado como destino del edge condicional.
+            # Los demás agentes se ejecutan en paralelo via concurrent.futures en run().
+            return agents[0] if agents[0] in self._AGENT_NODES else self._AGENT_NODES[0]
+
+        return self._AGENT_NODES[0]  # fallback al primer agente disponible
+
+    def run(
+        self,
+        message: str,
+        conversation_id: str,
+        user_id: Optional[str] = None,
+        user_context: Optional[Dict[str, Any]] = None,
+    ) -> AgentOrchestratorState:
+        """
+        Ejecuta el grafo de agentes completo.
+
+        Para consultas multi-agente, usa concurrent.futures para
+        ejecución paralela real.
+
+        Args:
+            message: Mensaje del usuario
+            conversation_id: ID de la conversación
+            user_id: ID del usuario
+            user_context: Contexto del usuario
+
+        Returns:
+            AgentOrchestratorState con resultados de todos los agentes
+        """
+        start = time.time()
+
+        # Paso 1: Supervisor determina qué agente(s) activar
+        from .supervisor import Supervisor
+        supervisor = Supervisor()
+        plan = supervisor.route(
+            message=message,
+            user_level=(user_context or {}).get('level', 1),
+            user_context=user_context,
+        )
+
+        agents = [a['name'] for a in plan.get('agents', []) if a['name'] in self._AGENT_NODES]
+        if not agents:
+            agents = ['agente_propiedades']  # fallback
+
+        logger.info(
+            f"[AgentGraph] Plan: {len(agents)} agente(s), "
+            f"modo={plan.get('execution_mode', 'single')}"
+        )
+
+        # Crear estado inicial
+        state = create_agent_initial_state(
+            message=message,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            user_context=user_context,
+        )
+        state['routing_plan'] = plan
+        state['agents_activated'] = agents
+
+        # ── Fase 7: Guardrails ──────────────────────────────────────────
+        # 1. Validar nivel de acceso por agente
+        from .registry import AgentRegistry
+        registry = AgentRegistry()
+        validated_agents = []
+        user_level = (user_context or {}).get('level', 1)
+
+        for agent_name in agents:
+            agent_obj = registry.get_by_name(agent_name)
+            if agent_obj:
+                required_level = agent_obj.definition.access_level
+                if user_level < required_level:
+                    logger.warning(
+                        f"[Fase7] Agente '{agent_name}' requiere nivel "
+                        f"{required_level}, usuario tiene {user_level}. Bloqueado."
+                    )
+                    state['results'][agent_name] = {
+                        'agent_name': agent_name,
+                        'success': False,
+                        'error_message': (
+                            f"Nivel insuficiente: se requiere nivel "
+                            f"{required_level} para usar {agent_name}"
+                        ),
+                        'confidence': 0.0,
+                    }
+                    continue
+            validated_agents.append(agent_name)
+
+        agents = validated_agents
+        state['agents_activated'] = agents
+
+        # 2. Budget check: límite de iteraciones estimadas
+        MAX_TOTAL_ITERATIONS = 25
+        estimated = len(agents) * 5
+        if estimated > MAX_TOTAL_ITERATIONS:
+            logger.warning(
+                f"[Fase7] Presupuesto excedido: {estimated} > "
+                f"{MAX_TOTAL_ITERATIONS} iteraciones estimadas"
+            )
+            agents = agents[:MAX_TOTAL_ITERATIONS // 5]
+            state['agents_activated'] = agents
+
+        if not agents:
+            logger.warning("[Fase7] No hay agentes válidos después de guardrails")
+            state['latencia_total_ms'] = (time.time() - start) * 1000
+            state['aggregated_answer'] = {
+                'successful': [], 'failed': [],
+                'total_agents': 0, 'successful_count': 0, 'failed_count': 0,
+            }
+            return state
+
+        # ── Paso 2: Ejecutar agentes ──
+        if len(agents) == 1:
+            # Modo single: ejecución directa
+            agent = registry.get_by_name(agents[0])
+            if agent:
+                result = agent.run(
+                    message=message,
+                    context={
+                        'user_id': user_id,
+                        'user_level': (user_context or {}).get('level', 1),
+                        'user_context': user_context,
+                        'conversation_id': conversation_id,
+                    },
+                )
+                state['results'][agents[0]] = result.to_log() if hasattr(result, 'to_log') else {}
+        else:
+            # Modo paralelo: concurrent.futures
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=len(agents)) as executor:
+                futures = {}
+                for agent_name in agents:
+                    agent = registry.get_by_name(agent_name)
+                    if agent:
+                        future = executor.submit(
+                            agent.run,
+                            message=message,
+                            context={
+                                'user_id': user_id,
+                                'user_level': (user_context or {}).get('level', 1),
+                                'user_context': user_context,
+                                'conversation_id': conversation_id,
+                            },
+                        )
+                        futures[future] = agent_name
+
+                for future in concurrent.futures.as_completed(futures):
+                    agent_name = futures[future]
+                    try:
+                        result = future.result(timeout=30)
+                        state['results'][agent_name] = (
+                            result.to_log() if hasattr(result, 'to_log') else result
+                        )
+                    except Exception as e:
+                        state['results'][agent_name] = {
+                            'agent_name': agent_name,
+                            'success': False,
+                            'error_message': str(e),
+                            'confidence': 0.0,
+                        }
+
+        # Paso 3: Agregar resultados (similar a aggregator_node)
+        successful = [
+            {'name': name, 'data': r}
+            for name, r in state['results'].items()
+            if r.get('success', False)
+        ]
+        failed = [
+            {'name': name, 'error': r.get('error_message', 'unknown')}
+            for name, r in state['results'].items()
+            if not r.get('success', False)
+        ]
+
+        state['aggregated_answer'] = {
+            'successful': successful,
+            'failed': failed,
+            'total_agents': len(agents),
+            'successful_count': len(successful),
+            'failed_count': len(failed),
+        }
+        state['critique_passed'] = len(successful) > 0
+        state['latencia_total_ms'] = (time.time() - start) * 1000
+
+        logger.info(
+            f"[AgentGraph] Completado: {len(successful)} exitosos, "
+            f"{len(failed)} fallidos, "
+            f"{state['latencia_total_ms']:.0f}ms"
+        )
+
+        return state

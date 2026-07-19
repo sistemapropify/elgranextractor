@@ -99,6 +99,12 @@ class IntelligenceConfig(AppConfig):
                 ErroresRecientesSkill,
                 EstadoServiciosSkill,
             )
+            # ── Skills de Scraping de Portales (scrapi) ──
+            from .skills.scrapi.scraper_remax import ScraperRemaxSkill
+            from .skills.scrapi.scraper_adondevivir import ScraperAdondevivirSkill
+            from .skills.scrapi.scraper_properati import ScraperProperatiSkill
+            from .skills.scrapi.scraper_urbania import ScraperUrbaniaSkill
+            from .skills.scrapi.scraper_orchestrator import ScraperOrchestratorSkill
 
             registry = SkillRegistry()
             registry.register(BusquedaPropiedadesSkill)
@@ -144,9 +150,36 @@ class IntelligenceConfig(AppConfig):
             registry.register(LogsSistemaSkill)
             registry.register(ErroresRecientesSkill)
             registry.register(EstadoServiciosSkill)
-            logger.info(f"Skills registradas en SkillRegistry al iniciar Django (incluye {20} nuevas skills multi-rol)")
+            # ── Skills de Scraping de Portales (scrapi) ──
+            registry.register(ScraperRemaxSkill)
+            registry.register(ScraperAdondevivirSkill)
+            registry.register(ScraperProperatiSkill)
+            registry.register(ScraperUrbaniaSkill)
+            registry.register(ScraperOrchestratorSkill)
+            logger.info(
+                f"Skills registradas en SkillRegistry al iniciar Django "
+                f"(incluye 20 nuevas skills multi-rol + 5 scrapi skills)"
+            )
         except Exception as e:
             logger.warning(f"No se pudieron registrar skills en startup: {e}")
+
+        # ── Registrar agentes en AgentRegistry ──
+        try:
+            from .agents.registry import AgentRegistry
+            from .agents.propiedades_agent import AgentePropiedades
+            from .agents.mercado_agent import AgenteMercado
+            from .agents.requerimientos_agent import AgenteRequerimientos
+
+            agent_registry = AgentRegistry()
+            agent_registry.register(AgentePropiedades())
+            agent_registry.register(AgenteMercado())
+            agent_registry.register(AgenteRequerimientos())
+            logger.info(
+                f"3 agentes registrados en AgentRegistry: "
+                f"propiedades, mercado, requerimientos"
+            )
+        except Exception as e:
+            logger.warning(f"No se pudieron registrar agentes en startup: {e}")
 
         # 4. Pre-calcular embeddings del Semantic Router (F1-001)
         # NOTA: Solo se ejecuta en procesos NO saltados (i.e. no gunicorn ni collectstatic).

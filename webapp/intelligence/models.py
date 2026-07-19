@@ -963,3 +963,65 @@ class AIConsumptionLog(models.Model):
             status_code=status_code,
             error_message=error_message,
         )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MODELO: AgentExecution — Registro de ejecución de agentes (Fase 8)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class AgentExecution(models.Model):
+    """
+    Registro de ejecución de un agente para trazabilidad y dashboard.
+
+    Análogo a SkillExecution pero para agentes. Cada ejecución de un agente
+    (exitosa o no) queda registrada con la traza completa de pasos ReAct.
+
+    SPEC: refactor_plataforma_agentes.md — Fase 8
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    agent_name = models.CharField(max_length=100, db_index=True,
+                                  verbose_name="Nombre del agente")
+    conversation = models.ForeignKey(
+        Conversation, on_delete=models.CASCADE,
+        related_name='agent_executions',
+        verbose_name="Conversación",
+        null=True, blank=True,
+    )
+    steps = models.JSONField(
+        default=list, blank=True,
+        verbose_name="Pasos de ejecución",
+        help_text="Lista de AgentStep serializados del ReAct loop"
+    )
+    iterations_used = models.IntegerField(default=0,
+                                          verbose_name="Iteraciones usadas")
+    success = models.BooleanField(default=False,
+                                  verbose_name="¿Ejecución exitosa?")
+    confidence = models.FloatField(default=0.0,
+                                   verbose_name="Confianza del agente")
+    total_cost_usd = models.DecimalField(
+        max_digits=10, decimal_places=6, default=0,
+        verbose_name="Costo total USD",
+    )
+    duration_ms = models.IntegerField(default=0,
+                                      verbose_name="Duración (ms)")
+    error_message = models.TextField(null=True, blank=True,
+                                     verbose_name="Mensaje de error")
+    created_at = models.DateTimeField(auto_now_add=True,
+                                      verbose_name="Fecha de ejecución")
+
+    class Meta:
+        db_table = 'intelligence_agent_execution'
+        verbose_name = 'Ejecución de Agente'
+        verbose_name_plural = 'Ejecuciones de Agentes'
+        indexes = [
+            models.Index(fields=['agent_name', 'created_at']),
+            models.Index(fields=['success', 'created_at']),
+        ]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return (
+            f"Agente {self.agent_name} - "
+            f"{'✅' if self.success else '❌'} - "
+            f"{self.created_at.strftime('%d/%m/%Y %H:%M') if self.created_at else 'sin fecha'}"
+        )
