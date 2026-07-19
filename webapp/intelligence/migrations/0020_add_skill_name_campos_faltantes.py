@@ -30,6 +30,18 @@ class Migration(migrations.Migration):
             ],
             database_operations=[
                 migrations.RunSQL(
+                    sql="""
+                        IF NOT EXISTS (
+                            SELECT 1 FROM sys.columns
+                            WHERE object_id = OBJECT_ID(N'[intelligence_aiconsumptionlog]')
+                            AND name = 'skill_name'
+                        )
+                        ALTER TABLE [intelligence_aiconsumptionlog]
+                        ADD [skill_name] NVARCHAR(200) NULL
+                    """,
+                    reverse_sql="ALTER TABLE [intelligence_aiconsumptionlog] DROP COLUMN [skill_name]",
+                ),
+                migrations.RunSQL(
                     sql="ALTER TABLE [intelligence_aiconsumptionlog] ALTER COLUMN [skill_name] NVARCHAR(200) NULL",
                     reverse_sql="ALTER TABLE [intelligence_aiconsumptionlog] ALTER COLUMN [skill_name] NVARCHAR(200) NOT NULL",
                 ),
@@ -48,6 +60,18 @@ class Migration(migrations.Migration):
                 ),
             ],
             database_operations=[
+                migrations.RunSQL(
+                    sql="""
+                        IF NOT EXISTS (
+                            SELECT 1 FROM sys.columns
+                            WHERE object_id = OBJECT_ID(N'[intelligence_aiconsumptionlog]')
+                            AND name = 'campos_faltantes'
+                        )
+                        ALTER TABLE [intelligence_aiconsumptionlog]
+                        ADD [campos_faltantes] NVARCHAR(MAX) NULL
+                    """,
+                    reverse_sql="ALTER TABLE [intelligence_aiconsumptionlog] DROP COLUMN [campos_faltantes]",
+                ),
                 migrations.RunSQL(
                     sql="ALTER TABLE [intelligence_aiconsumptionlog] ALTER COLUMN [campos_faltantes] NVARCHAR(MAX) NULL",
                     reverse_sql="ALTER TABLE [intelligence_aiconsumptionlog] ALTER COLUMN [campos_faltantes] NVARCHAR(MAX) NOT NULL",

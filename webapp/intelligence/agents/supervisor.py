@@ -162,6 +162,54 @@ class Supervisor:
 
         return templates
 
+    # ── Multi-query helpers ────────────────────────────────────────────
+
+    _MULTI_CONNECTORS = [
+        ' y ', ' además ', ' también ', ' y además ', ' y luego ',
+        ' y también ', ' , ', ';',
+    ]
+
+    _MULTI_VERBS = [
+        'muestra', 'muestrame', 'busca', 'analiza', 'compara',
+        'listame', 'dime', 'quiero ver', 'necesito',
+    ]
+
+    def _es_consulta_compuesta(self, query: str) -> bool:
+        """Detecta si una consulta requiere múltiples agentes."""
+        if not query:
+            return False
+        q = query.lower().strip()
+
+        for conn in self._MULTI_CONNECTORS:
+            if conn in q:
+                return True
+
+        verbos_encontrados = 0
+        for v in self._MULTI_VERBS:
+            if v in q:
+                verbos_encontrados += 1
+                if verbos_encontrados >= 2:
+                    return True
+
+        return False
+
+    def _descomponer_consulta(self, query: str) -> List[str]:
+        """Descompone una consulta compuesta en sub-consultas."""
+        q = query.strip()
+
+        for conn in [' y además ', ' y también ', ' y luego ', ' y ']:
+            if conn in q.lower():
+                parts = q.lower().split(conn, 1)
+                if len(parts) == 2 and len(parts[0]) > 5 and len(parts[1]) > 5:
+                    return [parts[0].strip(), parts[1].strip()]
+
+        if ';' in q:
+            parts = [p.strip() for p in q.split(';') if len(p.strip()) > 5]
+            if len(parts) >= 2:
+                return parts
+
+        return [q]
+
     # ── Routing principal ──────────────────────────────────────────────
 
     def route(
@@ -205,11 +253,13 @@ class Supervisor:
             return self._empty_plan(message)
 
         # ── 1. Detectar si es consulta compuesta ──
-        is_compound = self.router._es_consulta_compuesta(message)
+        # (lógica inline porque los métodos _es_consulta_compuesta son
+        # locales dentro de SemanticRouter.classify_multi, no accesibles)
+        is_compound = self._es_consulta_compuesta(message)
 
         if is_compound:
             # Descomponer y clasificar cada sub-consulta
-            sub_queries = self.router._descomponer_consulta(message)
+            sub_queries = self._descomponer_consulta(message)
             agents = []
             for i, sq in enumerate(sub_queries):
                 result = self.router.classify(sq, user_context)

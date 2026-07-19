@@ -31,6 +31,18 @@ class Migration(migrations.Migration):
             ],
             database_operations=[
                 migrations.RunSQL(
+                    sql="""
+                        IF NOT EXISTS (
+                            SELECT 1 FROM sys.columns
+                            WHERE object_id = OBJECT_ID(N'[intelligence_aiconsumptionlog]')
+                            AND name = 'input_summary'
+                        )
+                        ALTER TABLE [intelligence_aiconsumptionlog]
+                        ADD [input_summary] NVARCHAR(MAX) NULL
+                    """,
+                    reverse_sql="ALTER TABLE [intelligence_aiconsumptionlog] DROP COLUMN [input_summary]",
+                ),
+                migrations.RunSQL(
                     sql="ALTER TABLE [intelligence_aiconsumptionlog] ALTER COLUMN [input_summary] NVARCHAR(MAX) NULL",
                     reverse_sql="ALTER TABLE [intelligence_aiconsumptionlog] ALTER COLUMN [input_summary] NVARCHAR(MAX) NOT NULL",
                 ),

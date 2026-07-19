@@ -29,6 +29,19 @@ class Migration(migrations.Migration):
                 ),
             ],
             database_operations=[
+                # Crear columna si no existe (para test database donde la columna no está en BD)
+                migrations.RunSQL(
+                    sql="""
+                        IF NOT EXISTS (
+                            SELECT 1 FROM sys.columns
+                            WHERE object_id = OBJECT_ID(N'[intelligence_aiconsumptionlog]')
+                            AND name = 'calidad_extraccion_pct'
+                        )
+                        ALTER TABLE [intelligence_aiconsumptionlog]
+                        ADD [calidad_extraccion_pct] FLOAT NULL
+                    """,
+                    reverse_sql="ALTER TABLE [intelligence_aiconsumptionlog] DROP COLUMN [calidad_extraccion_pct]",
+                ),
                 migrations.RunSQL(
                     sql="ALTER TABLE [intelligence_aiconsumptionlog] ALTER COLUMN [calidad_extraccion_pct] FLOAT NULL",
                     reverse_sql="ALTER TABLE [intelligence_aiconsumptionlog] ALTER COLUMN [calidad_extraccion_pct] FLOAT NOT NULL",

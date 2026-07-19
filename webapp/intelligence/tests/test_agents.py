@@ -169,7 +169,7 @@ class AgentRoutingRegressionTest(TestCase):
         print(f"{'='*60}")
 
         for d in details:
-            status = "✅" if d['ok'] else "❌"
+            status = "[OK]" if d['ok'] else "[FAIL]"
             print(f"  {status} [{d['expected']}] {d['desc']}: "
                   f"score={d['score']}")
 
@@ -189,16 +189,17 @@ class AgentRoutingRegressionTest(TestCase):
     def test_specific_cases(self):
         """Test específico para casos críticos que no deben fallar."""
         critical_cases = [
-            ("busco departamento en Cayma", "agente_propiedades"),
-            ("cómo está el mercado en Cayma", "agente_mercado"),
-            ("qué requerimientos tengo pendientes", "agente_requerimientos"),
-            ("hola cómo estás", "agente_fallback_rag"),
+            ("busco departamento en Cayma", "agente_propiedades", 1),
+            ("cómo está el mercado en Cayma", "agente_mercado", 2),
+            ("qué requerimientos tengo pendientes", "agente_requerimientos", 1),
+            ("hola cómo estás", "agente_fallback_rag", 1),
         ]
-        for query, expected in critical_cases:
-            detected, _ = self._classify(query)
+        for query, expected, level in critical_cases:
+            detected, _ = self._classify(query, user_level=level)
             self.assertEqual(
                 detected, expected,
-                f"CRÍTICO: '{query}' → esperado={expected}, detectado={detected}"
+                f"CRÍTICO: '{query}' → esperado={expected}, detectado={detected} "
+                f"(user_level={level})"
             )
 
     def test_access_level_filtering(self):
