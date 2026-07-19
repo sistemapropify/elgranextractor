@@ -76,10 +76,10 @@ let panStart = { x: 0, y: 0 };
 let panViewport = { x: 0, y: 0 };
 
 function startPan(e) {
-  // Pan con botón izquierdo (0) en espacio vacío, o botón derecho (2) / medio (1)
-  // No hacer pan si el click es sobre un nodo
+  // Pan con botón izquierdo (0) o medio (1) en espacio vacío.
+  // Botón derecho (2) NO inicia pan — permite que el evento contextmenu se dispare.
   if (e.target.closest('.cv-node')) return;
-  if (e.button !== 0 && e.button !== 2 && e.button !== 1) return;
+  if (e.button !== 0 && e.button !== 1) return;
   e.preventDefault();
   isPanning = true;
   panStart = { x: e.clientX, y: e.clientY };
@@ -392,7 +392,20 @@ function initCanvas() {
 
   // Restore snapshot if exists
   if (SNAPSHOT && SNAPSHOT.nodos && SNAPSHOT.nodos.length > 0) {
-    restoreSnapshot(SNAPSHOT);
+    try {
+      restoreSnapshot(SNAPSHOT);
+    } catch (e) {
+      console.error('[Canvas] Error restoring snapshot:', e);
+      console.warn('[Canvas] Limpiando estado corrupto del snapshot');
+      // Limpiar cualquier estado parcial que restoreSnapshot haya dejado
+      Object.keys(STATE.nodos).forEach(function(k) { delete STATE.nodos[k]; });
+      Object.keys(STATE.aristas).forEach(function(k) { delete STATE.aristas[k]; });
+      STATE.viewport = { x: 0, y: 0, zoom: 1.0 };
+      STATE.selected = null;
+      if (typeof showToast === 'function') {
+        showToast('⚠️ Error al cargar snapshot. Lienzo reiniciado.');
+      }
+    }
   }
   
   // Restaurar agente_id y campos del snapshot aunque no haya nodos
