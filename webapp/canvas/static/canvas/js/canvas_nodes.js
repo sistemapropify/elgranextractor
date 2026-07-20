@@ -1308,7 +1308,7 @@ function renderPlaceholderNodes(nodos) {
         propHtml = '<span class="cv-req-info__item" style="color:#66bb6a;">🏠 ' + escHtml(propDetail) + '</span>';
       }
       node.innerHTML = `
-        <div class="cv-node__header" style="cursor:pointer;" title="Click para abrir CRM" onclick="window.open('https://app.propify.pe/crm/lead/${n.ref_id || ''}','_blank')">
+        <div class="cv-node__header" style="cursor:pointer;" title="Doble click para abrir CRM" ondblclick="window.open('https://app.propify.pe/crm/lead/${n.ref_id || ''}','_blank')">
           <span class="cv-node__badge cv-badge--lead-analysis">👤 LEAD</span>
           <span class="cv-node__title">${escHtml(contactName)}</span>
           <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
@@ -1858,7 +1858,7 @@ function createLeadNode(nodeId, lead, x, y) {
   }
 
   node.innerHTML = `
-    <div class="cv-node__header" style="cursor:pointer;" title="Click para abrir CRM" onclick="window.open('https://app.propify.pe/crm/lead/${lead.id}','_blank')">
+    <div class="cv-node__header" style="cursor:pointer;" title="Doble click para abrir CRM" ondblclick="window.open('https://app.propify.pe/crm/lead/${lead.id}','_blank')">
       <span class="cv-node__badge cv-badge--lead-analysis">👤 LEAD</span>
       <span class="cv-node__title">${escHtml(contactName)}</span>
       <button class="cv-node__delete" title="Eliminar">&#x2715;</button>

@@ -30,6 +30,7 @@ PUBLIC_PATHS = [
     r'^/intelligence/skills/api/',        # API de skills (stats, logs, metrics) — público para el dashboard
     r'^/intelligence/chat-web/',    # Chat web API (público, autenticación por user_id)
     r'^/matching/',              # Matching dashboard y calendario (público)
+    r'^/canvas/api/',            # Canvas API (las vistas manejan autenticación internamente con JSON 401)
 ]
 
 

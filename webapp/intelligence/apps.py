@@ -27,6 +27,15 @@ class IntelligenceConfig(AppConfig):
         # CRITICO: Incluir gunicorn para evitar que workers carguen el modelo
         # de embeddings (1GB+) en el hilo principal, lo que causa OOM/restarts
         # en Azure App Service (tiers básicos con ~2GB RAM).
+        #
+        # FIX-504: Usar os.path.basename() para detectar gunicorn porque
+        # en Azure App Service sys.argv[0] es la ruta completa
+        # (/home/site/antenv/bin/gunicorn), no solo 'gunicorn'.
+        # Además, agregar variable de entorno PRODUCTION=true como guardia
+        # explícito para entornos productivos.
+        _cmd = os.path.basename(sys.argv[0]) if sys.argv else ''
+        _is_gunicorn = _cmd == 'gunicorn' or any('gunicorn' in a for a in sys.argv)
+        _is_production = os.environ.get('PRODUCTION', '').lower() in ('true', '1', 'yes')
         _should_skip = any([
             'migrate' in sys.argv,
             'makemigrations' in sys.argv,
@@ -34,11 +43,15 @@ class IntelligenceConfig(AppConfig):
             'flush' in sys.argv,
             'test' in sys.argv,
             'shell' in sys.argv,
-            'gunicorn' in sys.argv,
+            _is_gunicorn,                # FIX-504: detecta gunicorn incluso si es ruta completa
+            _is_production,              # FIX-504: variable PRODUCTION=true salta todo lo pesado
             os.environ.get('RUN_MAIN') != 'true' and 'runserver' in sys.argv,
         ])
         if _should_skip:
-            logger.debug("Saltando inicialización pesada (proceso secundario o comando administrativo)")
+            logger.debug(
+                "Saltando inicialización pesada "
+                f"(gunicorn={_is_gunicorn}, production={_is_production})"
+            )
         else:
             self._preload_models()
 
@@ -49,7 +62,9 @@ class IntelligenceConfig(AppConfig):
         except Exception as e:
             logger.warning(f"No se pudieron registrar signals: {e}")
         
-        # 2. Cargar índices FAISS
+        # 2. Cargar índices FAISS (rápido, <1s incluso en producción)
+        # NOTA: En producción con PRODUCTION=true igual se cargan porque
+        # son necesarios para búsquedas y pesan solo metadata en RAM.
         try:
             from .services.faiss_index import FAISSIndexManager
             FAISSIndexManager.load_all()
