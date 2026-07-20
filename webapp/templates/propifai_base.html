@@ -555,6 +555,25 @@
                     </div>
                 </div>
 
+                <!-- Scraping con submenú -->
+                <div class="nav-item has-submenu {% if '/ingestas/scraping/' in request.path %}active{% endif %}">
+                    <a href="#" class="nav-link submenu-toggle">
+                        <span class="nav-icon">&#x1F916;</span>
+                        <span>Scraping</span>
+                        <span class="submenu-arrow">&#x25BC;</span>
+                    </a>
+                    <div class="submenu-items">
+                        <a href="/ingestas/scraping/dashboard/" class="submenu-item {% if '/ingestas/scraping/dashboard/' in request.path %}active{% endif %}">
+                            <span class="submenu-icon">&#x1F4CA;</span>
+                            <span>Dashboard</span>
+                        </a>
+                        <a href="/ingestas/scraping/historial/" class="submenu-item {% if '/ingestas/scraping/historial/' in request.path %}active{% endif %}">
+                            <span class="submenu-icon">&#x1F4CB;</span>
+                            <span>Historial</span>
+                        </a>
+                    </div>
+                </div>
+
                 <!-- Matching con submenú -->
                 <div class="nav-item has-submenu {% if '/matching/' in request.path %}active{% endif %}">
                     <a href="#" class="nav-link submenu-toggle">

@@ -2099,6 +2099,9 @@ def chat_web_api(request):
         # pueda agregar nodos automáticamente)
         action_data = result.metadata.get('action') if isinstance(result.metadata, dict) else None
 
+        # NUEVO: extraer reasoning_steps del metadata (para mostrar el proceso de pensamiento)
+        reasoning_steps = result.metadata.get('reasoning_steps') if isinstance(result.metadata, dict) else None
+
         response_payload = {
             'success': True,
             'conversation_id': result.conversation_id,
@@ -2110,9 +2113,18 @@ def chat_web_api(request):
             'timestamp': result.timestamp,
         }
 
-        # Incluir action solo si existe (no enviar None para no contaminar respuestas normales)
+        # Incluir action solo si existe
         if action_data:
             response_payload['action'] = action_data
+
+        # Incluir reasoning_steps si existe (AgentGraphBuilder)
+        if reasoning_steps:
+            response_payload['reasoning_steps'] = reasoning_steps
+
+        # Incluir fallback_notice si existe (cuando AgentGraph falló y se usó LangGraph)
+        fallback_notice = result.metadata.get('fallback_notice') if isinstance(result.metadata, dict) else None
+        if fallback_notice:
+            response_payload['fallback_notice'] = fallback_notice
 
         return Response(response_payload)
 

@@ -38,7 +38,7 @@ REGLAS:
 5. No inventes cifras — usa SOLO los datos de las skills"""
 
 
-class AgenteMercado(BaseAgent, ReActLoopMixin):
+class AgenteMercado(ReActLoopMixin, BaseAgent):
     """Agente especializado en análisis de mercado y marketing."""
 
     definition = AgentDefinition(

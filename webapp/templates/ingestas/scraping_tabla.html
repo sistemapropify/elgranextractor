@@ -1,0 +1,36 @@
+{% for p in propiedades %}
+<tr>
+    <td style="font-size:10px;">{{ p.id }}</td>
+    <td><span class="badge-fuente badge-{{ p.fuente }}">{{ p.fuente }}</span></td>
+    <td style="font-size:10px;">{{ p.tipo_inmueble|default:'—' }}</td>
+    <td>{% if p.precio_usd %}${{ p.precio_usd|floatformat:0 }}{% else %}—{% endif %}</td>
+    <td>{% if p.precio_soles %}S/{{ p.precio_soles|floatformat:0 }}{% else %}—{% endif %}</td>
+    <td>{% if p.area_m2 %}{{ p.area_m2|floatformat:1 }}{% else %}—{% endif %}</td>
+    <td>{{ p.dormitorios|default:'—' }}</td>
+    <td>{{ p.banos|default:'—' }}</td>
+    <td>{{ p.estacionamientos|default:'—' }}</td>
+    <td>{{ p.distrito|default:'—' }}</td>
+    <td style="font-size:10px;">{{ p.latitud|default:'—' }}</td>
+    <td style="font-size:10px;">{{ p.longitud|default:'—' }}</td>
+    <td>{{ p.antiguedad_anios|default:'—' }}</td>
+    <td>{{ p.departamento|default:'—' }}</td>
+    <td>{{ p.provincia|default:'—' }}</td>
+    <td style="font-size:10px;max-width:150px;overflow:hidden;text-overflow:ellipsis;">{{ p.direccion_texto|default:'—' }}</td>
+    <td style="font-size:10px;">{{ p.agencia_agente|default:'—' }}</td>
+    <td>{% if p.url %}<a href="{{ p.url }}" target="_blank" style="color:#58a6ff;text-decoration:none;" title="{{ p.url }}"><i class="bi bi-box-arrow-up-right"></i></a>{% else %}—{% endif %}</td>
+    <td>{% if p.imagen_url %}<a href="{{ p.imagen_url }}" target="_blank" style="color:#58a6ff;text-decoration:none;" title="Ver imagen"><i class="bi bi-image"></i></a>{% else %}—{% endif %}</td>
+    <td style="font-size:10px;">{{ p.id_origen|default:'—' }}</td>
+    <td style="font-size:10px;max-width:150px;overflow:hidden;text-overflow:ellipsis;" title="{{ p.titulo|default:'' }}">{{ p.titulo|default:'—' }}</td>
+    <td>{{ p.tipo_operacion|default:'—' }}</td>
+    <td style="font-size:10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="{{ p.descripcion|default:'' }}">{{ p.descripcion|default:'—'|truncatechars:50 }}</td>
+    <td style="font-size:10px;max-width:100px;overflow:hidden;text-overflow:ellipsis;">{{ p.amenities|default:'—'|truncatechars:30 }}</td>
+    <td style="font-size:10px;color:var(--terminal-info);white-space:nowrap;">{{ p.fecha_extraccion|date:'d/m/Y H:i'|default:'—' }}</td>
+</tr>
+{% empty %}
+<tr>
+    <td colspan="25" style="text-align:center;color:var(--terminal-info);padding:20px;">
+        <i class="bi bi-inbox" style="font-size:20px;display:block;margin-bottom:4px;"></i>
+        No hay propiedades scrapeadas aún
+    </td>
+</tr>
+{% endfor %}

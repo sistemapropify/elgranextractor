@@ -4,7 +4,7 @@ from django.db.models import Count
 from django.http import HttpResponseRedirect
 from django.urls import path
 from django.utils.html import format_html
-from .models import CampoDinamico, MapeoFuente, PropiedadRaw, MigracionPendiente
+from .models import CampoDinamico, MapeoFuente, PropiedadRaw, MigracionPendiente, PropiedadesCompetencia, ScrapingJob, ScrapingLog
 
 
 @admin.register(CampoDinamico)
@@ -232,3 +232,34 @@ class MigracionPendienteAdmin(admin.ModelAdmin):
     list_filter = ('estado', 'tipo_dato', 'creado_en')
     search_fields = ('nombre_campo_bd', 'titulo_display', 'error_mensaje')
     readonly_fields = ('creado_en',)
+
+
+@admin.register(PropiedadesCompetencia)
+class PropiedadesCompetenciaAdmin(admin.ModelAdmin):
+    list_display = (
+        'fuente', 'id_origen', 'tipo_inmueble', 'precio_usd',
+        'distrito', 'fecha_extraccion'
+    )
+    list_filter = ('fuente', 'tipo_inmueble', 'distrito', 'fecha_extraccion')
+    search_fields = ('id_origen', 'titulo', 'distrito', 'descripcion')
+    readonly_fields = ('creado_en', 'actualizado_en')
+    date_hierarchy = 'fecha_extraccion'
+    ordering = ('-fecha_extraccion',)
+
+
+@admin.register(ScrapingJob)
+class ScrapingJobAdmin(admin.ModelAdmin):
+    list_display = ('id', 'estado', 'portal_actual', 'nuevas', 'actualizadas', 'errores', 'iniciado_en')
+    list_filter = ('estado',)
+    readonly_fields = ('creado_en', 'iniciado_en', 'completado_en')
+
+
+@admin.register(ScrapingLog)
+class ScrapingLogAdmin(admin.ModelAdmin):
+    list_display = ('id', 'job', 'nivel', 'portal', 'mensaje_corto', 'timestamp')
+    list_filter = ('nivel', 'portal')
+    readonly_fields = ('timestamp',)
+
+    def mensaje_corto(self, obj):
+        return obj.mensaje[:80]
+    mensaje_corto.short_description = 'Mensaje'

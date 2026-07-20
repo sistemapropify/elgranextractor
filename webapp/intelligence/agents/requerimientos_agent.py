@@ -36,7 +36,7 @@ REGLAS:
 5. No inventes datos — usa SOLO la información de las skills"""
 
 
-class AgenteRequerimientos(BaseAgent, ReActLoopMixin):
+class AgenteRequerimientos(ReActLoopMixin, BaseAgent):
     """Agente especializado en requerimientos y matching."""
 
     definition = AgentDefinition(

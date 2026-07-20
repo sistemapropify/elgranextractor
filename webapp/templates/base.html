@@ -1140,6 +1140,27 @@
                     <span>Requerimientos</span>
                 </a>
             </li>
+            <li class="has-submenu {% if '/ingestas/scraping/' in request.path %}active{% endif %}">
+                <a href="#">
+                    <i class="bi bi-robot"></i>
+                    <span>Scraping</span>
+                    <i class="bi bi-chevron-down ms-auto"></i>
+                </a>
+                <ul class="submenu">
+                    <li>
+                        <a href="/ingestas/scraping/dashboard/" class="{% if '/ingestas/scraping/dashboard/' in request.path %}active{% endif %}">
+                            <i class="bi bi-speedometer2"></i>
+                            <span>Dashboard</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/ingestas/scraping/historial/" class="{% if '/ingestas/scraping/historial/' in request.path %}active{% endif %}">
+                            <i class="bi bi-clock-history"></i>
+                            <span>Historial</span>
+                        </a>
+                    </li>
+                </ul>
+            </li>
             <li class="has-submenu {% if '/matching/' in request.path %}active{% endif %}">
                 <a href="#">
                     <i class="bi bi-lightning-charge-fill"></i>

@@ -1,11 +1,15 @@
 """
 Supervisor — Nodo raíz del grafo LangGraph.
+SPEC: supervisor_llm_routing.md
 
-El Supervisor no elige una skill — elige uno o más agentes.
-Reutiliza el SemanticSkillRouter (embeddings E5 + templates) pero aplicado
-a AgentDefinition.description en vez de a skills individuales.
+El Supervisor elige agente(s) mediante FUNCTION CALLING del LLM (DeepSeek)
+en vez de similitud de embeddings. El LLM recibe la lista de agentes como
+tools/herramientas y decide cuál(es) invocar, con razonamiento explícito.
 
-SPEC: refactor_plataforma_agentes.md — Fase 3
+Si DeepSeek falla (timeout, error), degrada a fallback por embeddings E5
+usando el SemanticSkillRouter existente.
+
+SPEC: refactor_plataforma_agentes.md — Fase 3 (actualizado)
 """
 
 from __future__ import annotations
@@ -21,59 +25,70 @@ logger = logging.getLogger(__name__)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Templates del Supervisor (descripciones de agentes + ejemplos few-shot)
+# Descripciones de agentes por INTENCIÓN (no por similitud léxica)
 # ═══════════════════════════════════════════════════════════════════════════════
-# Se usan con SemanticSkillRouter.classify() para determinar qué agente(s) activar
+# Reemplazan los templates E5 del Supervisor.
+# Describen CUÁNDO usar cada agente basado en la intención del usuario.
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# Templates por defecto para el Supervisor
-# Se genera automáticamente desde AgentDefinition.description de los agentes registrados
-# más ejemplos few-shot para mejorar discriminación semántica
+AGENT_DESCRIPTIONS: Dict[str, str] = {
+    "agente_propiedades": (
+        "Busca o consulta el INVENTARIO EXISTENTE de propiedades: qué propiedades hay, "
+        "disponibilidad, características, ubicación, matching entre oferta y requerimientos. "
+        "Úsalo cuando el usuario pregunta qué tiene la empresa, busca algo específico, "
+        "o quiere ver listados. Ejemplos de intención (no frases literales): "
+        "'qué tienes', 'busco', 'muéstrame', 'tienen algo de'."
+    ),
+    "agente_mercado": (
+        "Genera ANÁLISIS y REPORTES de mercado: precios promedio, evolución histórica de precios, "
+        "tendencias por zona, estado de campañas de marketing. NO se usa para listar propiedades "
+        "existentes, sino para responder preguntas de tipo analítico. "
+        "Ejemplos de intención: 'cuál es el precio promedio', 'cómo ha evolucionado', "
+        "'dame un reporte de', 'qué campañas están activas'."
+    ),
+    "agente_requerimientos": (
+        "Gestiona los requerimientos de clientes/compradores y su cruce con el inventario. "
+        "Úsalo cuando la consulta es sobre lo que un cliente busca, no sobre el inventario en sí."
+    ),
+}
 
+# Templates para fallback por embeddings (mismos que antes)
 _DEFAULT_SUPERVISOR_TEMPLATES: Dict[str, List[str]] = {
     'agente_propiedades': [
-        # Búsquedas directas de propiedades
         'busco departamento en Cayma',
-        'quiero comprar una casa en Yanahuara',
         'necesito un terreno para construir',
-        'busco propiedades en Cerro Colorado',
-        'alquiler de departamentos en Sachaca',
-        'busco casa en venta en Paucarpata',
         'muéstrame departamentos en José Luis Bustamante',
-        'departamento amoblado en Yanahuara en alquiler',
-        'casa con 3 dormitorios en Cayma',
         'terreno de 500 metros en Sachaca',
-        # Análisis de propiedades
         'analiza esta propiedad como inversión',
         'qué rentabilidad tiene esta propiedad',
-        'análisis de mercado para este inmueble',
         'compara estas dos propiedades',
+        'busco propiedades en arequipa',
+        'quiero ver las propiedades disponibles',
+        'lista de propiedades en venta',
+        'departamentos disponibles en cayma',
+        'terrenos en cayma para construir',
+        'qué terrenos tienes disponibles',
+        'muéstrame terrenos en cayma',
     ],
     'agente_mercado': [
-        # Análisis de mercado
         'cómo está el mercado en Cayma',
         'precio promedio de departamentos en Yanahuara',
         'tendencias de precios en Cerro Colorado',
         'comparativa de zonas residenciales',
         'cuál es el mejor distrito para invertir',
-        'precio promedio de terrenos en Cayma',
         'dónde están subiendo los precios',
-        # Marketing y campañas
         'qué campañas de Facebook están activas',
-        'cómo están rindiendo los anuncios',
         'métricas de marketing del mes',
         'cuántos leads generamos este mes',
-        'qué campaña está generando más leads',
         'ROI de las campañas de Meta Ads',
+        'tendencias del mercado inmobiliario',
+        'evolución de precios en arequipa',
     ],
     'agente_requerimientos': [
-        # Requerimientos
         'qué requerimientos tengo pendientes',
         'muéstreme los requerimientos activos',
         'quiero ver mis clientes buscando propiedad',
         'tengo un cliente que busca depa en Cayma',
-        'recibí un mensaje de un cliente interesado',
-        # Matching
         'cruza mis propiedades con requerimientos',
         'tengo matches nuevos',
         'qué matches tengo pendientes',
@@ -82,19 +97,62 @@ _DEFAULT_SUPERVISOR_TEMPLATES: Dict[str, List[str]] = {
 }
 
 # Templates configurables desde settings
-SUPERVISOR_TEMPLATES = None  # Se carga en __init__
+SUPERVISOR_TEMPLATES = None
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Helpers para construir herramientas del Supervisor
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def build_supervisor_tools(available_agents: List[Dict[str, Any]]) -> List[dict]:
+    """
+    Convierte agentes disponibles en formato tools de OpenAI/DeepSeek.
+
+    SPEC: supervisor_llm_routing.md — Sección 2.1.
+    Usa AGENT_DESCRIPTIONS (por intención) en vez de descripciones genéricas.
+    """
+    tools = []
+    for agent in available_agents:
+        name = agent['name']
+        desc = AGENT_DESCRIPTIONS.get(name, agent.get('description', ''))
+        tools.append({
+            "type": "function",
+            "function": {
+                "name": name,
+                "description": desc,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "sub_query": {
+                            "type": "string",
+                            "description": (
+                                "La parte del mensaje del usuario que este agente "
+                                "debe resolver. Si el mensaje completo aplica, "
+                                "repítelo tal cual."
+                            ),
+                        }
+                    },
+                    "required": ["sub_query"],
+                },
+            },
+        })
+    return tools
 
 
 class Supervisor:
     """
     Supervisor del sistema de agentes.
 
-    Usa SemanticSkillRouter para clasificar consultas y determinar
-    qué agente(s) activar. Reutiliza toda la infraestructura de embeddings
-    E5 existente.
+    SPEC: supervisor_llm_routing.md.
 
-    La lógica de "Multi-Skill Orchestration" (detección de consultas
-    compuestas) se reutiliza directamente de semantic_router.py.
+    Usa FUNCTION CALLING de DeepSeek (tools) para elegir el agente,
+    con razonamiento explícito del LLM. El routing por embeddings
+    (SemanticSkillRouter) se mantiene como fallback si DeepSeek falla.
+
+    La detección de consultas compuestas la resuelve el LLM naturalmente
+    (puede llamar a múltiples herramientas en una respuesta), eliminando
+    la necesidad de _es_consulta_compuesta y _descomponer_consulta.
     """
 
     def __init__(
@@ -105,110 +163,41 @@ class Supervisor:
         """
         Args:
             registry: AgentRegistry (usa singleton por defecto)
-            threshold: Umbral de confianza para el routing semántico
+            threshold: Umbral de confianza para fallback por embeddings
         """
         self.registry = registry or AgentRegistry()
         self.threshold = threshold or 0.45
 
-        # Inicializar router semántico con templates del Supervisor
+        # Inicializar router semántico SOLO para fallback
         templates = self._build_templates()
         self.router = SemanticSkillRouter(threshold=self.threshold)
-        # Sobrescribir templates con los del Supervisor
         self.router.templates = templates
-        # Pre-calcular embeddings
         self.router.precompute_all_embeddings()
 
         logger.info(
-            f"Supervisor inicializado: {len(templates)} agentes "
-            f"({sum(len(v) for v in templates.values())} templates, "
-            f"threshold={self.threshold})"
+            f"Supervisor LLM inicializado: {len(templates)} agentes disponibles, "
+            f"fallback por embeddings con {sum(len(v) for v in templates.values())} templates"
         )
 
     def _build_templates(self) -> Dict[str, List[str]]:
-        """
-        Construye templates del Supervisor desde los agentes registrados
-        más ejemplos few-shot por defecto.
-
-        Returns:
-            Dict {agent_name: [templates]}
-        """
+        """Construye templates solo para fallback por embeddings."""
         templates = {}
-
-        # 1. Descripciones de agentes registrados
         for agent_def in self.registry.list_all():
             name = agent_def['name']
-            desc = agent_def['description']
-            # Usar la descripción como template base
+            desc = agent_def.get('description', '')
             templates[name] = [desc]
-
-        # 2. Sobrescribir con templates específicos (mejor discriminación)
         for name, examples in _DEFAULT_SUPERVISOR_TEMPLATES.items():
             if name in templates:
-                # Mezclar: descripción + ejemplos
                 existing = templates[name]
                 templates[name] = existing + examples
             else:
                 templates[name] = examples
-
-        # 3. Agente fallback (siempre presente)
         if 'agente_fallback_rag' not in templates:
             templates['agente_fallback_rag'] = [
-                'consulta general',
-                'información del sistema',
-                'ayuda',
-                'quién eres',
-                'cómo funciona esto',
+                'consulta general', 'información del sistema',
+                'ayuda', 'quién eres', 'cómo funciona esto',
             ]
-
         return templates
-
-    # ── Multi-query helpers ────────────────────────────────────────────
-
-    _MULTI_CONNECTORS = [
-        ' y ', ' además ', ' también ', ' y además ', ' y luego ',
-        ' y también ', ' , ', ';',
-    ]
-
-    _MULTI_VERBS = [
-        'muestra', 'muestrame', 'busca', 'analiza', 'compara',
-        'listame', 'dime', 'quiero ver', 'necesito',
-    ]
-
-    def _es_consulta_compuesta(self, query: str) -> bool:
-        """Detecta si una consulta requiere múltiples agentes."""
-        if not query:
-            return False
-        q = query.lower().strip()
-
-        for conn in self._MULTI_CONNECTORS:
-            if conn in q:
-                return True
-
-        verbos_encontrados = 0
-        for v in self._MULTI_VERBS:
-            if v in q:
-                verbos_encontrados += 1
-                if verbos_encontrados >= 2:
-                    return True
-
-        return False
-
-    def _descomponer_consulta(self, query: str) -> List[str]:
-        """Descompone una consulta compuesta en sub-consultas."""
-        q = query.strip()
-
-        for conn in [' y además ', ' y también ', ' y luego ', ' y ']:
-            if conn in q.lower():
-                parts = q.lower().split(conn, 1)
-                if len(parts) == 2 and len(parts[0]) > 5 and len(parts[1]) > 5:
-                    return [parts[0].strip(), parts[1].strip()]
-
-        if ';' in q:
-            parts = [p.strip() for p in q.split(';') if len(p.strip()) > 5]
-            if len(parts) >= 2:
-                return parts
-
-        return [q]
 
     # ── Routing principal ──────────────────────────────────────────────
 
@@ -221,8 +210,8 @@ class Supervisor:
         """
         Determina qué agente(s) activar para una consulta.
 
-        Reutiliza la lógica de Multi-Skill Orchestration (ya existente en
-        SemanticSkillRouter) para detectar y descomponer consultas compuestas.
+        PRIMARIO: LLM function calling (DeepSeek con tools).
+        FALLBACK: SemanticSkillRouter por embeddings.
 
         Args:
             message: Mensaje del usuario
@@ -230,19 +219,13 @@ class Supervisor:
             user_context: Contexto adicional del usuario
 
         Returns:
-            Dict con plan de ejecución:
+            Dict con plan de ejecución (mismo formato que antes):
             {
+                'routing_method': 'llm' | 'embeddings_fallback',
+                'reasoning': str,           # ← NUEVO: razonamiento del LLM
                 'is_multi': bool,
-                'execution_mode': 'single' | 'sequential' | 'parallel',
-                'agents': [
-                    {
-                        'name': str,
-                        'description': str,
-                        'order': int,
-                        'score': float,
-                        'sub_query': str,
-                    }
-                ],
+                'execution_mode': 'single' | 'parallel',
+                'agents': [{'name', 'description', 'order', 'score', 'sub_query'}],
                 'original_query': str,
                 'latency_ms': float,
             }
@@ -252,51 +235,114 @@ class Supervisor:
         if not message or not message.strip():
             return self._empty_plan(message)
 
-        # ── 1. Detectar si es consulta compuesta ──
-        # (lógica inline porque los métodos _es_consulta_compuesta son
-        # locales dentro de SemanticRouter.classify_multi, no accesibles)
-        is_compound = self._es_consulta_compuesta(message)
-
-        if is_compound:
-            # Descomponer y clasificar cada sub-consulta
-            sub_queries = self._descomponer_consulta(message)
-            agents = []
-            for i, sq in enumerate(sub_queries):
-                result = self.router.classify(sq, user_context)
-                if result.accepted and result.skill_name:
-                    agent_def = self._get_agent_def(result.skill_name)
-                    if agent_def and agent_def.get('access_level', 1) <= user_level:
-                        agents.append({
-                            'name': result.skill_name,
-                            'description': agent_def.get('description', ''),
-                            'order': i + 1,
-                            'score': result.score,
-                            'sub_query': sq,
-                        })
-
-            if len(agents) >= 2:
-                execution_mode = 'parallel'
-            elif len(agents) == 1:
-                execution_mode = 'single'
-            else:
-                execution_mode = 'single'
-                agents = self._fallback_plan(message)
-
-            elapsed = (time.time() - start) * 1000
-            logger.info(
-                f"[Supervisor] Consulta compuesta: {len(agents)} agente(s), "
-                f"modo={execution_mode}, latencia={elapsed:.1f}ms"
+        # ── 1. Intentar routing por LLM ──
+        try:
+            return self._route_with_llm(message, user_level, user_context, start)
+        except Exception as e:
+            logger.warning(
+                f"[Supervisor] LLM routing falló: {e}. "
+                f"Usando fallback por embeddings."
+            )
+            return self._route_with_embeddings_fallback(
+                message, user_level, user_context, start
             )
 
-            return {
-                'is_multi': len(agents) >= 2,
-                'execution_mode': execution_mode,
-                'agents': agents,
-                'original_query': message,
-                'latency_ms': round(elapsed, 2),
-            }
+    def _route_with_llm(
+        self, message: str, user_level: int,
+        user_context: Optional[Dict], start: float,
+    ) -> Dict[str, Any]:
+        """
+        Routing por LLM function calling.
 
-        # ── 2. Consulta simple: clasificar contra agente ──
+        SPEC: supervisor_llm_routing.md — Sección 2.3.
+        """
+        from ..services.llm import LLMService
+
+        # Agentes disponibles según nivel de usuario
+        available = self.list_available_agents(user_level)
+        if not available:
+            plan = self._fallback_plan(message)
+            plan['latency_ms'] = round((time.time() - start) * 1000, 2)
+            return plan
+
+        tools = build_supervisor_tools(available)
+
+        result = LLMService.call_with_tools(
+            system_prompt=(
+                "Eres el supervisor de un sistema inmobiliario. Tu única tarea es decidir "
+                "qué agente(s) deben resolver la consulta del usuario. "
+                "Cada agente en la lista de herramientas tiene una descripción que indica "
+                "CUÁNDO debe ser usado. "
+                "Si la consulta tiene más de una intención distinta (ej. buscar propiedades "
+                "Y pedir análisis de precios), llama a más de un agente, cada uno con su "
+                "sub_query correspondiente. "
+                "No inventes agentes que no estén en la lista de herramientas."
+            ),
+            message=message,
+            tools=tools,
+        )
+
+        if not result.success or not result.tool_calls:
+            logger.warning(
+                f"[Supervisor] LLM no devolvió tool_calls válidos. "
+                f"Usando fallback por embeddings."
+            )
+            return self._route_with_embeddings_fallback(
+                message, user_level, user_context, start
+            )
+
+        elapsed = (time.time() - start) * 1000
+        agents = []
+        for tc in result.tool_calls:
+            name = tc['name']
+            sub_query = tc['arguments'].get('sub_query', message)
+            agent_def = self._get_agent_def(name)
+            if agent_def and agent_def.get('access_level', 1) <= user_level:
+                agents.append({
+                    'name': name,
+                    'description': agent_def.get('description', ''),
+                    'order': len(agents) + 1,
+                    'score': 1.0,
+                    'sub_query': sub_query,
+                })
+
+        if not agents:
+            logger.warning(
+                f"[Supervisor] LLM eligió agentes sin acceso. "
+                f"Usando fallback por embeddings."
+            )
+            return self._route_with_embeddings_fallback(
+                message, user_level, user_context, start
+            )
+
+        execution_mode = 'parallel' if len(agents) >= 2 else 'single'
+
+        logger.info(
+            f"[Supervisor] LLM routing: {len(agents)} agente(s), "
+            f"modo={execution_mode}, latencia={elapsed:.1f}ms, "
+            f"razonamiento='{result.reasoning[:80] if result.reasoning else 'N/A'}...'"
+        )
+
+        return {
+            'routing_method': 'llm',
+            'reasoning': result.reasoning,
+            'is_multi': len(agents) >= 2,
+            'execution_mode': execution_mode,
+            'agents': agents,
+            'original_query': message,
+            'latency_ms': round(elapsed, 2),
+        }
+
+    def _route_with_embeddings_fallback(
+        self, message: str, user_level: int,
+        user_context: Optional[Dict], start: float,
+    ) -> Dict[str, Any]:
+        """
+        Fallback: routing por embeddings E5 (SemanticSkillRouter).
+
+        SPEC: supervisor_llm_routing.md — Sección 2.4.
+        Reutiliza el sistema de templates anterior exactamente como estaba.
+        """
         result = self.router.classify(message, user_context)
 
         if result.accepted and result.skill_name:
@@ -311,10 +357,12 @@ class Supervisor:
                 }]
                 elapsed = (time.time() - start) * 1000
                 logger.info(
-                    f"[Supervisor] Agente detectado: '{result.skill_name}' "
+                    f"[Supervisor] Fallback embeddings: '{result.skill_name}' "
                     f"(score={result.score:.4f}, latencia={elapsed:.1f}ms)"
                 )
                 return {
+                    'routing_method': 'embeddings_fallback',
+                    'reasoning': f"Fallback por embeddings: score={result.score:.4f}",
                     'is_multi': False,
                     'execution_mode': 'single',
                     'agents': agents,
@@ -322,13 +370,15 @@ class Supervisor:
                     'latency_ms': round(elapsed, 2),
                 }
 
-        # ── 3. Fallback: RAG puro ──
+        # Fallback final: RAG puro
         elapsed = (time.time() - start) * 1000
         plan = self._fallback_plan(message)
         plan['latency_ms'] = round(elapsed, 2)
+        plan['routing_method'] = 'embeddings_fallback'
+        plan['reasoning'] = 'Ningún agente匹配, usando fallback RAG'
         logger.info(
-            f"[Supervisor] Fallback RAG (score={result.score:.4f}, "
-            f"latencia={elapsed:.1f}ms)"
+            f"[Supervisor] Fallback embeddings -> RAG puro "
+            f"(score={result.score:.4f}, latencia={elapsed:.1f}ms)"
         )
         return plan
 

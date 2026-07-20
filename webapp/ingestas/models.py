@@ -233,3 +233,299 @@ class MigracionPendiente(models.Model):
 
     def __str__(self):
         return f"{self.nombre_campo_bd} - {self.estado}"
+
+
+class PropiedadesCompetencia(models.Model):
+    """
+    Tabla unificada para propiedades scrapeadas de portales de competencia.
+    Cada scraper-skill (Remax, Adondevivir, Properati, Urbania) inserta aquí.
+    Unique: fuente + id_origen para evitar duplicados al re-scrapear.
+    """
+
+    TIPO_INMUEBLE_CHOICES = [
+        ('Casa', 'Casa'),
+        ('Departamento', 'Departamento'),
+        ('Terreno', 'Terreno'),
+        ('Oficina', 'Oficina'),
+        ('Local', 'Local'),
+        ('Hotel', 'Hotel'),
+        ('Otro', 'Otro'),
+    ]
+
+    TIPO_OPERACION_CHOICES = [
+        ('Venta', 'Venta'),
+        ('Alquiler', 'Alquiler'),
+        ('Ambos', 'Compra y Alquiler'),
+        ('No especificado', 'No especificado'),
+    ]
+
+    # ── Identificación ──
+    fuente = models.CharField(
+        max_length=50,
+        verbose_name='Portal de origen',
+        help_text='remax, adondevivir, properati, urbania'
+    )
+    id_origen = models.CharField(
+        max_length=100,
+        verbose_name='ID en el portal',
+        help_text='ID único de la propiedad en el portal de origen'
+    )
+    fecha_extraccion = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='Fecha de extracción'
+    )
+
+    # ── Datos de la propiedad ──
+    titulo = models.CharField(
+        max_length=255, null=True, blank=True,
+        verbose_name='Título'
+    )
+    tipo_inmueble = models.CharField(
+        max_length=50, choices=TIPO_INMUEBLE_CHOICES,
+        null=True, blank=True,
+        verbose_name='Tipo de inmueble'
+    )
+    tipo_operacion = models.CharField(
+        max_length=20, choices=TIPO_OPERACION_CHOICES,
+        null=True, blank=True,
+        verbose_name='Tipo de operación'
+    )
+    precio_soles = models.DecimalField(
+        max_digits=15, decimal_places=2,
+        null=True, blank=True,
+        verbose_name='Precio en Soles'
+    )
+    precio_usd = models.DecimalField(
+        max_digits=15, decimal_places=2,
+        null=True, blank=True,
+        verbose_name='Precio en USD'
+    )
+    area_m2 = models.DecimalField(
+        max_digits=10, decimal_places=2,
+        null=True, blank=True,
+        verbose_name='Área (m²)'
+    )
+    dormitorios = models.IntegerField(
+        null=True, blank=True,
+        verbose_name='Dormitorios'
+    )
+    banos = models.IntegerField(
+        null=True, blank=True,
+        verbose_name='Baños'
+    )
+    estacionamientos = models.IntegerField(
+        null=True, blank=True,
+        verbose_name='Estacionamientos'
+    )
+
+    # ── Ubicación ──
+    distrito = models.CharField(
+        max_length=100, null=True, blank=True
+    )
+    provincia = models.CharField(
+        max_length=100, null=True, blank=True
+    )
+    departamento = models.CharField(
+        max_length=100, null=True, blank=True
+    )
+    direccion_texto = models.TextField(
+        null=True, blank=True,
+        verbose_name='Dirección'
+    )
+    latitud = models.DecimalField(
+        max_digits=10, decimal_places=7,
+        null=True, blank=True
+    )
+    longitud = models.DecimalField(
+        max_digits=10, decimal_places=7,
+        null=True, blank=True
+    )
+
+    # ── Descripción ──
+    descripcion = models.TextField(
+        null=True, blank=True
+    )
+    amenities = models.TextField(
+        null=True, blank=True,
+        verbose_name='Servicios / Amenities'
+    )
+
+    # ── Enlaces ──
+    url = models.URLField(
+        max_length=500, null=True, blank=True,
+        verbose_name='URL de la propiedad'
+    )
+    imagen_url = models.URLField(
+        max_length=500, null=True, blank=True,
+        verbose_name='URL de imagen'
+    )
+
+    # ── Metadata ──
+    antiguedad_anios = models.IntegerField(
+        null=True, blank=True,
+        verbose_name='Antigüedad (años)'
+    )
+    agencia_agente = models.CharField(
+        max_length=200, null=True, blank=True,
+        verbose_name='Agencia / Agente'
+    )
+
+    # ── Respaldo RAW para QA ──
+    datos_crudos = models.JSONField(
+        null=True, blank=True,
+        verbose_name='Datos originales del scraper',
+        help_text='Respaldo del diccionario raw para depuración'
+    )
+
+    # ── Timestamps ──
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'propiedades_competencia'
+        verbose_name = "Propiedad de Competencia"
+        verbose_name_plural = "Propiedades de Competencia"
+        unique_together = ['fuente', 'id_origen']
+        indexes = [
+            models.Index(fields=['fuente']),
+            models.Index(fields=['fuente', 'fecha_extraccion']),
+            models.Index(fields=['tipo_inmueble']),
+            models.Index(fields=['distrito']),
+        ]
+        ordering = ['-fecha_extraccion']
+
+    def __str__(self):
+        return f"[{self.fuente}] {self.titulo or 'Sin título'} - {self.distrito or 'Sin distrito'}"
+
+
+class ScrapingJob(models.Model):
+    """
+    Estado de un trabajo de scraping en ejecución.
+    Permite controlar (pausar/reanudar/detener) desde el dashboard.
+    """
+
+    ESTADOS = [
+        ('idle', 'Inactivo'),
+        ('running', 'Ejecutando'),
+        ('paused', 'Pausado'),
+        ('completed', 'Completado'),
+        ('error', 'Error'),
+        ('stopped', 'Detenido'),
+    ]
+
+    estado = models.CharField(
+        max_length=20, choices=ESTADOS, default='idle',
+        verbose_name='Estado'
+    )
+    portal_actual = models.CharField(
+        max_length=50, null=True, blank=True,
+        verbose_name='Portal actual'
+    )
+    progreso = models.IntegerField(
+        default=0,
+        verbose_name='Progreso (%)'
+    )
+    total_propiedades = models.IntegerField(
+        default=0,
+        verbose_name='Total propiedades'
+    )
+    procesadas = models.IntegerField(
+        default=0,
+        verbose_name='Procesadas'
+    )
+    nuevas = models.IntegerField(
+        default=0,
+        verbose_name='Nuevas insertadas'
+    )
+    actualizadas = models.IntegerField(
+        default=0,
+        verbose_name='Actualizadas'
+    )
+    errores = models.IntegerField(
+        default=0,
+        verbose_name='Con error'
+    )
+    parametros = models.JSONField(
+        default=dict, null=True, blank=True,
+        verbose_name='Parámetros de ejecución',
+        help_text='Portales seleccionados, max_paginas, etc.'
+    )
+    mensaje_error = models.TextField(
+        null=True, blank=True,
+        verbose_name='Mensaje de error'
+    )
+    iniciado_en = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='Iniciado en'
+    )
+    completado_en = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='Completado en'
+    )
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'scraping_jobs'
+        verbose_name = "Trabajo de Scraping"
+        verbose_name_plural = "Trabajos de Scraping"
+        ordering = ['-creado_en']
+
+    def __str__(self):
+        return f"Scraping #{self.id} - {self.get_estado_display()}"
+
+
+class ScrapingLog(models.Model):
+    """
+    Log individual de cada propiedad procesada durante un scraping.
+    Se usa para el terminal en tiempo real vía SSE.
+    """
+
+    NIVELES = [
+        ('info', 'Info'),
+        ('success', 'Success'),
+        ('warning', 'Warning'),
+        ('error', 'Error'),
+        ('debug', 'Debug'),
+    ]
+
+    job = models.ForeignKey(
+        ScrapingJob, on_delete=models.CASCADE,
+        related_name='logs',
+        verbose_name='Trabajo'
+    )
+    nivel = models.CharField(
+        max_length=20, choices=NIVELES, default='info',
+        verbose_name='Nivel'
+    )
+    mensaje = models.TextField(
+        verbose_name='Mensaje'
+    )
+    portal = models.CharField(
+        max_length=50, null=True, blank=True,
+        verbose_name='Portal'
+    )
+    propiedad_id = models.CharField(
+        max_length=100, null=True, blank=True,
+        verbose_name='ID de propiedad'
+    )
+    timestamp = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='Timestamp'
+    )
+
+    class Meta:
+        db_table = 'scraping_logs'
+        verbose_name = "Log de Scraping"
+        verbose_name_plural = "Logs de Scraping"
+        ordering = ['timestamp']
+
+    def __str__(self):
+        return f"[{self.nivel}] {self.mensaje[:80]}"
+
+    @classmethod
+    def log(cls, job, nivel, mensaje, portal=None, propiedad_id=None):
+        """Crea un log y lo retorna (útil para SSE)."""
+        return cls.objects.create(
+            job=job, nivel=nivel, mensaje=mensaje,
+            portal=portal, propiedad_id=propiedad_id,
+        )

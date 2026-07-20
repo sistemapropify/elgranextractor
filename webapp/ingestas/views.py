@@ -1593,3 +1593,247 @@ class ListaPropiedadesCompletaView(ListView):
         queryset = super().get_queryset()
         # Ordenar por fecha de ingesta descendente
         return queryset.order_by('-fecha_ingesta')
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# TEST — Verificar import de camoufox
+# ═══════════════════════════════════════════════════════════════════════
+from django.http import HttpResponse
+
+def test_camoufox_import(request):
+    """Endpoint de prueba para verificar si camoufox es importable."""
+    import sys
+    result = []
+    result.append(f"Python: {sys.version}")
+    result.append(f"Executable: {sys.executable}")
+    result.append(f"Path: {sys.path[:5]}...")
+    try:
+        import camoufox
+        result.append(f"camoufox OK: {camoufox.__version__}")
+    except ImportError as e:
+        result.append(f"camoufox FAIL: {e}")
+    try:
+        from scrapi.remax_scraper import estandarizar
+        result.append("scrapi.remax_scraper OK")
+    except ImportError as e:
+        result.append(f"scrapi.remax_scraper FAIL: {e}")
+    return HttpResponse('<br>\n'.join(result))
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# SCRAPING DASHBOARD — Vistas para el dashboard de scraping
+# ═══════════════════════════════════════════════════════════════════════
+
+import json
+import time as time_module
+from django.http import JsonResponse, StreamingHttpResponse
+from django.views.generic import TemplateView, View, ListView
+from django.db.models import Count
+from django.utils import timezone
+
+from .models import PropiedadesCompetencia, ScrapingJob, ScrapingLog
+
+
+class ScrapingDashboardView(TemplateView):
+    """Dashboard principal de scraping con terminal, controles y tabla."""
+    template_name = 'ingestas/scraping_dashboard.html'
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+
+        # Último job activo o más reciente
+        ultimo_job = ScrapingJob.objects.order_by('-creado_en').first()
+
+        # Estadísticas por portal
+        stats_por_portal = PropiedadesCompetencia.objects.values('fuente').annotate(
+            total=Count('id')
+        ).order_by('fuente')
+
+        stats = {s['fuente']: s['total'] for s in stats_por_portal}
+        total = sum(stats.values())
+
+        # Jobs recientes
+        jobs_recientes = ScrapingJob.objects.order_by('-creado_en')[:10]
+
+        ctx.update({
+            'ultimo_job': ultimo_job,
+            'stats_por_portal': stats,
+            'total_propiedades': total,
+            'jobs_recientes': jobs_recientes,
+        })
+        return ctx
+
+
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+
+import threading
+
+@method_decorator(csrf_exempt, name='dispatch')
+class ScrapingControlView(View):
+    """Controla la ejecución del scraping: start, pause, resume, stop."""
+
+    def post(self, request):
+        action = request.POST.get('action')
+        job_id = request.POST.get('job_id')
+
+        if action == 'start':
+            portales_str = request.POST.get('portales', '')
+            portales = [p.strip() for p in portales_str.split(',') if p.strip()]
+
+            # Crear nuevo job
+            job = ScrapingJob.objects.create(
+                estado='running',
+                parametros={'portales': portales or None},
+            )
+
+            # Ejecutar en un hilo separado (sin Celery)
+            from colas.scraping_tasks import scraping_task_run
+            t = threading.Thread(target=scraping_task_run, args=(job.id,), daemon=True)
+            t.start()
+
+            return JsonResponse({'success': True, 'job_id': job.id})
+
+        elif action == 'pause' and job_id:
+            ScrapingJob.objects.filter(id=job_id).update(estado='paused')
+            return JsonResponse({'success': True})
+
+        elif action == 'resume' and job_id:
+            ScrapingJob.objects.filter(id=job_id).update(estado='running')
+            return JsonResponse({'success': True})
+
+        elif action == 'stop' and job_id:
+            ScrapingJob.objects.filter(id=job_id).update(estado='stopped')
+            return JsonResponse({'success': True})
+
+        return JsonResponse({'success': False, 'error': 'Acción inválida'})
+
+
+class ScrapingStreamView(View):
+    """
+    SSE endpoint: transmite logs en tiempo real del ScrapingJob.
+    El frontend abre una conexión EventSource a esta URL.
+    """
+
+    def get(self, request, job_id):
+        def event_stream():
+            ultimo_id = 0
+            while True:
+                logs = ScrapingLog.objects.filter(
+                    job_id=job_id, id__gt=ultimo_id
+                ).order_by('id')
+
+                for log in logs:
+                    ultimo_id = log.id
+                    data = json.dumps({
+                        'id': log.id,
+                        'nivel': log.nivel,
+                        'mensaje': log.mensaje,
+                        'portal': log.portal,
+                        'propiedad_id': log.propiedad_id,
+                        'timestamp': log.timestamp.strftime('%H:%M:%S'),
+                    })
+                    yield f"data: {data}\n\n"
+
+                # Verificar si el job terminó
+                job = ScrapingJob.objects.filter(id=job_id).first()
+                if job and job.estado in ('completed', 'error', 'stopped'):
+                    data = json.dumps({
+                        'type': 'job_end',
+                        'estado': job.estado,
+                        'nuevas': job.nuevas,
+                        'actualizadas': job.actualizadas,
+                        'errores': job.errores,
+                        'total': job.total_propiedades,
+                    })
+                    yield f"data: {data}\n\n"
+                    break
+
+                time_module.sleep(0.5)
+
+        response = StreamingHttpResponse(
+            event_stream(),
+            content_type='text/event-stream',
+        )
+        response['Cache-Control'] = 'no-cache'
+        response['X-Accel-Buffering'] = 'no'
+        return response
+
+
+class ScrapingStatusView(View):
+    """Retorna JSON con el estado actual del job."""
+
+    def get(self, request, job_id):
+        job = ScrapingJob.objects.filter(id=job_id).first()
+        if not job:
+            return JsonResponse({'error': 'Job no encontrado'}, status=404)
+
+        ultimos_logs = ScrapingLog.objects.filter(job=job).order_by('-id')[:50]
+
+        return JsonResponse({
+            'id': job.id,
+            'estado': job.estado,
+            'portal_actual': job.portal_actual,
+            'progreso': job.progreso,
+            'total_propiedades': job.total_propiedades,
+            'procesadas': job.procesadas,
+            'nuevas': job.nuevas,
+            'actualizadas': job.actualizadas,
+            'errores': job.errores,
+            'iniciado_en': job.iniciado_en.isoformat() if job.iniciado_en else None,
+            'completado_en': job.completado_en.isoformat() if job.completado_en else None,
+            'ultimos_logs': [
+                {
+                    'nivel': l.nivel,
+                    'mensaje': l.mensaje[:200],
+                    'timestamp': l.timestamp.strftime('%H:%M:%S'),
+                }
+                for l in ultimos_logs
+            ],
+        })
+
+
+class ScrapingPropiedadesView(ListView):
+    """Tabla filtrable de propiedades scrapeadas. Muestra TODOS los registros."""
+    model = PropiedadesCompetencia
+    template_name = 'ingestas/scraping_tabla.html'
+    context_object_name = 'propiedades'
+    paginate_by = 9999
+
+    def get_queryset(self):
+        qs = PropiedadesCompetencia.objects.all()
+        fuente = self.request.GET.get('fuente')
+        distrito = self.request.GET.get('distrito')
+        tipo = self.request.GET.get('tipo')
+        if fuente:
+            qs = qs.filter(fuente=fuente)
+        if distrito:
+            qs = qs.filter(distrito__icontains=distrito)
+        if tipo:
+            qs = qs.filter(tipo_inmueble=tipo)
+        return qs.order_by('-fecha_extraccion')
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['fuentes'] = PropiedadesCompetencia.objects.values_list(
+            'fuente', flat=True
+        ).distinct().order_by('fuente')
+        ctx['tipos'] = PropiedadesCompetencia.objects.values_list(
+            'tipo_inmueble', flat=True
+        ).distinct().order_by('tipo_inmueble')
+        ctx['filtro_activo'] = any([
+            self.request.GET.get('fuente'),
+            self.request.GET.get('distrito'),
+            self.request.GET.get('tipo'),
+        ])
+        return ctx
+
+
+class ScrapingHistorialView(TemplateView):
+    """Historial de trabajos de scraping ejecutados."""
+    template_name = 'ingestas/scraping_historial.html'
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['jobs'] = ScrapingJob.objects.order_by('-creado_en')[:50]
+        return ctx

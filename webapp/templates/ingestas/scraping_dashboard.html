@@ -1,0 +1,628 @@
+{% extends 'propifai_base.html' %}
+{% load static %}
+
+{% block title %}Dashboard de Scraping{% endblock %}
+
+{% block extra_head %}
+<style>
+:root {
+    --terminal-bg: #0d1117;
+    --terminal-text: #e6edf3;
+    --terminal-success: #3fb950;
+    --terminal-warning: #d29922;
+    --terminal-error: #f85149;
+    --terminal-info: #8b949e;
+    --card-bg: #161b22;
+    --border-color: #30363d;
+}
+
+/* ── Layout ── */
+.scraping-layout {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    grid-template-rows: auto 1fr;
+    gap: 16px;
+    height: calc(100vh - 100px);
+    min-height: 600px;
+}
+
+/* ── Panel de Control ── */
+.control-panel {
+    grid-row: 1 / 2;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.control-panel h3 {
+    margin: 0 0 12px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--terminal-text);
+}
+
+.control-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.btn-scraping {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    background: #21262d;
+    color: var(--terminal-text);
+}
+.btn-scraping:hover { background: #30363d; }
+.btn-scraping:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-scraping.primary { background: #238636; border-color: #2ea043; }
+.btn-scraping.primary:hover { background: #2ea043; }
+.btn-scraping.danger { background: #da3633; border-color: #f85149; }
+.btn-scraping.danger:hover { background: #f85149; }
+.btn-scraping.warning { background: #9e6a03; border-color: #d29922; }
+.btn-scraping.warning:hover { background: #bb8009; }
+
+/* Checkbox portales */
+.portal-checkboxes {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+.portal-checkboxes label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--terminal-text);
+    cursor: pointer;
+}
+.portal-checkboxes input[type="checkbox"] {
+    accent-color: #238636;
+}
+
+/* ── Estadísticas ── */
+.stats-panel {
+    grid-row: 2 / 3;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 16px;
+    overflow-y: auto;
+}
+
+.stat-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 13px;
+}
+.stat-card:last-child { border-bottom: none; }
+.stat-label { color: var(--terminal-info); }
+.stat-value { color: var(--terminal-text); font-weight: 600; }
+.stat-value.success { color: var(--terminal-success); }
+.stat-value.warning { color: var(--terminal-warning); }
+.stat-value.error { color: var(--terminal-error); }
+
+/* ── Terminal ── */
+.terminal-panel {
+    grid-row: 1 / 3;
+    background: var(--terminal-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.terminal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: #161b22;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 12px;
+    color: var(--terminal-info);
+}
+
+.terminal-badge {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+}
+.terminal-badge.running { background: #3fb950; }
+.terminal-badge.paused { background: #d29922; }
+.terminal-badge.stopped { background: #f85149; }
+
+.terminal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 12px;
+    font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.terminal-line {
+    white-space: pre-wrap;
+    word-break: break-all;
+    padding: 1px 0;
+}
+.terminal-line .ts { color: #484f58; margin-right: 8px; }
+.terminal-line .level-info { color: var(--terminal-info); }
+.terminal-line .level-success { color: var(--terminal-success); }
+.terminal-line .level-warning { color: var(--terminal-warning); }
+.terminal-line .level-error { color: var(--terminal-error); }
+
+.terminal-empty {
+    color: var(--terminal-info);
+    text-align: center;
+    padding: 40px 20px;
+    font-size: 13px;
+}
+
+/* ── Tabla ── */
+.table-section {
+    margin-top: 16px;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.table-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-color);
+}
+.table-header h3 { margin: 0; font-size: 14px; font-weight: 600; }
+
+.table-filters {
+    display: flex;
+    gap: 8px;
+}
+.table-filters select, .table-filters input {
+    padding: 4px 8px;
+    background: #21262d;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--terminal-text);
+    font-size: 12px;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+.data-table th {
+    padding: 8px 12px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--terminal-info);
+    border-bottom: 1px solid var(--border-color);
+    background: #0d1117;
+    position: sticky;
+    top: 0;
+}
+.data-table td {
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--terminal-text);
+}
+.data-table tr:hover td {
+    background: rgba(56, 139, 253, 0.08);
+}
+
+.badge-fuente {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+}
+.badge-remax { background: #1f6feb33; color: #58a6ff; }
+.badge-adondevivir { background: #3fb95033; color: #3fb950; }
+.badge-properati { background: #d2992233; color: #d29922; }
+.badge-urbania { background: #bc8cff33; color: #bc8cff; }
+
+/* Scrollbar */
+.terminal-body::-webkit-scrollbar { width: 6px; }
+.terminal-body::-webkit-scrollbar-track { background: transparent; }
+.terminal-body::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+
+/* Responsive */
+@media (max-width: 768px) {
+    .scraping-layout {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto 400px;
+    }
+    .terminal-panel { grid-row: auto; }
+    .stats-panel { grid-row: auto; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+{% csrf_token %}
+<div class="scraping-layout">
+
+    {# ═══ PANEL DE CONTROL ═══ #}
+    <div class="control-panel">
+        <h3><i class="bi bi-play-circle"></i> Control</h3>
+
+        <div class="control-buttons">
+            <button class="btn-scraping primary" id="btnStart" onclick="control('start')">
+                <i class="bi bi-play-fill"></i> Iniciar
+            </button>
+            <button class="btn-scraping warning" id="btnPause" onclick="control('pause')" disabled>
+                <i class="bi bi-pause-fill"></i> Pausar
+            </button>
+            <button class="btn-scraping primary" id="btnResume" onclick="control('resume')" style="display:none">
+                <i class="bi bi-play-fill"></i> Reanudar
+            </button>
+            <button class="btn-scraping danger" id="btnStop" onclick="control('stop')" disabled>
+                <i class="bi bi-stop-fill"></i> Detener
+            </button>
+        </div>
+
+        <div class="portal-checkboxes">
+            <label><input type="checkbox" class="portal-cb" value="remax" checked> Remax</label>
+            <label><input type="checkbox" class="portal-cb" value="adondevivir" checked> Adondevivir</label>
+            <label><input type="checkbox" class="portal-cb" value="properati" checked> Properati</label>
+            <label><input type="checkbox" class="portal-cb" value="urbania" checked> Urbania</label>
+        </div>
+    </div>
+
+    {# ═══ ESTADÍSTICAS ═══ #}
+    <div class="stats-panel">
+        <h3 style="margin:0 0 12px;font-size:14px;font-weight:600;">
+            <i class="bi bi-bar-chart"></i> Estadísticas
+        </h3>
+
+        <div id="liveStats">
+            <div class="stat-card">
+                <span class="stat-label">Estado</span>
+                <span class="stat-value" id="statEstado">
+                    {% if ultimo_job %}
+                        {{ ultimo_job.get_estado_display }}
+                    {% else %}
+                        Inactivo
+                    {% endif %}
+                </span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">Portal actual</span>
+                <span class="stat-value" id="statPortal">
+                    {{ ultimo_job.portal_actual|default:'—' }}
+                </span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">Progreso</span>
+                <span class="stat-value" id="statProgreso">{{ ultimo_job.progreso|default:0 }}%</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label"><i class="bi bi-check-circle" style="color:var(--terminal-success)"></i> Nuevas</span>
+                <span class="stat-value success" id="statNuevas">{{ ultimo_job.nuevas|default:0 }}</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label"><i class="bi bi-arrow-repeat" style="color:var(--terminal-warning)"></i> Actualizadas</span>
+                <span class="stat-value warning" id="statActualizadas">{{ ultimo_job.actualizadas|default:0 }}</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label"><i class="bi bi-x-circle" style="color:var(--terminal-error)"></i> Errores</span>
+                <span class="stat-value error" id="statErrores">{{ ultimo_job.errores|default:0 }}</span>
+            </div>
+        </div>
+
+        <hr style="border-color:var(--border-color);margin:12px 0;">
+
+        <h3 style="margin:0 0 8px;font-size:13px;font-weight:600;">
+            <i class="bi bi-database"></i> Total en DB
+        </h3>
+        {% for fuente, total in stats_por_portal.items %}
+        <div class="stat-card">
+            <span class="stat-label badge-fuente badge-{{ fuente }}">{{ fuente }}</span>
+            <span class="stat-value">{{ total }}</span>
+        </div>
+        {% empty %}
+        <div class="stat-card">
+            <span class="stat-label">Sin datos aún</span>
+            <span class="stat-value">0</span>
+        </div>
+        {% endfor %}
+        <div class="stat-card" style="font-weight:600;">
+            <span class="stat-label">TOTAL</span>
+            <span class="stat-value success">{{ total_propiedades }}</span>
+        </div>
+    </div>
+
+    {# ═══ TERMINAL ═══ #}
+    <div class="terminal-panel">
+        <div class="terminal-header">
+            <span>
+                <span class="terminal-badge" id="statusDot"></span>
+                <span id="terminalTitle">Esperando acción...</span>
+            </span>
+            <span>
+                <button onclick="clearTerminal()" style="background:none;border:none;color:var(--terminal-info);cursor:pointer;font-size:12px;">
+                    <i class="bi bi-eraser"></i> Limpiar
+                </button>
+            </span>
+        </div>
+        <div class="terminal-body" id="terminalBody">
+            <div class="terminal-empty" id="terminalEmpty">
+                <i class="bi bi-terminal" style="font-size:24px;display:block;margin-bottom:8px;"></i>
+                Presiona <strong>Iniciar</strong> para comenzar el scraping.<br>
+                Los logs aparecerán aquí en tiempo real.
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ═══ TABLA DE PROPIEDADES ═══ #}
+<div class="table-section">
+    <div class="table-header">
+        <h3><i class="bi bi-table"></i> Propiedades Scrapeadas</h3>
+        <div class="table-filters">
+            <select id="filterFuente" onchange="loadTable()">
+                <option value="">Todas las fuentes</option>
+                {% for f in stats_por_portal.keys %}
+                <option value="{{ f }}">{{ f }}</option>
+                {% endfor %}
+            </select>
+            <input type="text" id="filterDistrito" placeholder="Distrito..." onchange="loadTable()" style="width:100px;">
+            <select id="filterTipo" onchange="loadTable()">
+                <option value="">Todos los tipos</option>
+                <option value="Casa">Casa</option>
+                <option value="Departamento">Departamento</option>
+                <option value="Terreno">Terreno</option>
+                <option value="Oficina">Oficina</option>
+                <option value="Local">Local</option>
+            </select>
+        </div>
+    </div>
+    <div id="tablaContainer" style="overflow-x:auto;max-height:300px;overflow-y:auto;">
+        <table class="data-table" style="font-size:11px;">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Portal</th>
+                    <th>Tipo</th>
+                    <th>Precio USD</th>
+                    <th>Precio S/.</th>
+                    <th>Área m²</th>
+                    <th>Dorm</th>
+                    <th>Baños</th>
+                    <th>Estac</th>
+                    <th>Distrito</th>
+                    <th>Lat</th>
+                    <th>Lng</th>
+                    <th>Antigüedad</th>
+                    <th>Departamento</th>
+                    <th>Provincia</th>
+                    <th>Dirección</th>
+                    <th>Agente</th>
+                    <th>URL</th>
+                    <th>Imagen</th>
+                    <th>ID Origen</th>
+                    <th>Título</th>
+                    <th>Operación</th>
+                    <th>Descripción</th>
+                    <th>Amenities</th>
+                    <th>Fecha</th>
+                </tr>
+            </thead>
+            <tbody id="tablaBody">
+                <tr><td colspan="25" style="text-align:center;color:var(--terminal-info);padding:20px;">Cargando...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}
+{% block extra_js %}
+<script>
+let currentJobId = null;
+let eventSource = null;
+
+// ── Control ──
+function control(action) {
+    const csrf = document.querySelector('[name=csrfmiddlewaretoken]');
+    const formData = new FormData();
+    formData.append('action', action);
+    formData.append('csrfmiddlewaretoken', csrf ? csrf.value : '');
+
+    if (action === 'start') {
+        const checked = Array.from(document.querySelectorAll('.portal-cb:checked'))
+            .map(cb => cb.value);
+        if (checked.length === 0) { alert('Selecciona al menos un portal'); return; }
+        formData.append('portales', checked.join(','));
+    } else {
+        formData.append('job_id', currentJobId);
+    }
+
+    fetch('/ingestas/scraping/control/', {
+        method: 'POST',
+        body: formData,
+    })
+    .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+        return r.json();
+    })
+    .then(data => {
+        if (data.success) {
+            if (action === 'start') {
+                currentJobId = data.job_id;
+                connectSSE(data.job_id);
+                updateUI('running');
+            } else if (action === 'pause') {
+                updateUI('paused');
+            } else if (action === 'resume') {
+                updateUI('running');
+            } else if (action === 'stop') {
+                updateUI('idle');
+            }
+        }
+    })
+    .catch(err => {
+        appendLog('error', `❌ Error al conectar: ${err.message}`);
+        console.error('Control error:', err);
+    });
+}
+
+// ── SSE ──
+function connectSSE(jobId) {
+    if (eventSource) eventSource.close();
+    clearTerminal();
+
+    eventSource = new EventSource(`/ingestas/scraping/stream/${jobId}/`);
+    eventSource.onmessage = function(e) {
+        const data = JSON.parse(e.data);
+
+        if (data.type === 'job_end') {
+            appendLog('info', `✅ Scraping completado: ${data.nuevas} nuevas, ${data.actualizadas} actualizadas, ${data.errores} errores`);
+            updateUI(data.estado);
+            eventSource.close();
+            eventSource = null;
+            loadStats(jobId);
+            return;
+        }
+
+        appendLog(data.nivel, data.mensaje, data.portal);
+    };
+
+    eventSource.onerror = function() {
+        console.warn('SSE error, reconectando...');
+    };
+}
+
+// ── Terminal ──
+function appendLog(nivel, mensaje, portal) {
+    const body = document.getElementById('terminalBody');
+    const empty = document.getElementById('terminalEmpty');
+    if (empty) empty.style.display = 'none';
+
+    const now = new Date();
+    const ts = now.toTimeString().slice(0, 8);
+    const icons = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌', debug: '🔍' };
+
+    const line = document.createElement('div');
+    line.className = 'terminal-line';
+    line.innerHTML = `<span class="ts">${ts}</span><span class="level-${nivel}">${icons[nivel] || ''} ${mensaje}</span>`;
+    body.appendChild(line);
+    body.scrollTop = body.scrollHeight;
+}
+
+function clearTerminal() {
+    const body = document.getElementById('terminalBody');
+    body.innerHTML = `<div class="terminal-empty" id="terminalEmpty">
+        <i class="bi bi-terminal" style="font-size:24px;display:block;margin-bottom:8px;"></i>
+        Terminal limpiado. Esperando logs...
+    </div>`;
+}
+
+// ── UI State ──
+function updateUI(estado) {
+    const btnStart = document.getElementById('btnStart');
+    const btnPause = document.getElementById('btnPause');
+    const btnResume = document.getElementById('btnResume');
+    const btnStop = document.getElementById('btnStop');
+    const dot = document.getElementById('statusDot');
+    const title = document.getElementById('terminalTitle');
+
+    btnStart.disabled = (estado === 'running');
+    btnStop.disabled = (estado !== 'running');
+    btnPause.disabled = (estado !== 'running');
+
+    if (estado === 'running') {
+        btnPause.style.display = '';
+        btnResume.style.display = 'none';
+        dot.className = 'terminal-badge running';
+        title.textContent = 'Ejecutando...';
+    } else if (estado === 'paused') {
+        btnPause.style.display = 'none';
+        btnResume.style.display = '';
+        btnResume.disabled = false;
+        dot.className = 'terminal-badge paused';
+        title.textContent = '⏸️ Pausado';
+    } else {
+        btnPause.style.display = '';
+        btnResume.style.display = 'none';
+        btnStart.disabled = false;
+        btnStop.disabled = true;
+        dot.className = 'terminal-badge stopped';
+        title.textContent = estado === 'completed' ? '✅ Completado' : '⏹️ Detenido';
+    }
+
+    document.getElementById('statEstado').textContent =
+        estado === 'running' ? 'Ejecutando' :
+        estado === 'paused' ? 'Pausado' :
+        estado === 'completed' ? 'Completado' :
+        estado === 'error' ? 'Error' : 'Inactivo';
+}
+
+// ── Stats ──
+function loadStats(jobId) {
+    if (!jobId) return;
+    fetch(`/ingestas/scraping/status/${jobId}/`)
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('statNuevas').textContent = data.nuevas || 0;
+            document.getElementById('statActualizadas').textContent = data.actualizadas || 0;
+            document.getElementById('statErrores').textContent = data.errores || 0;
+            document.getElementById('statProgreso').textContent = (data.progreso || 0) + '%';
+            document.getElementById('statPortal').textContent = data.portal_actual || '—';
+        });
+}
+
+// ── Tabla ──
+function loadTable() {
+    const fuente = document.getElementById('filterFuente').value;
+    const distrito = document.getElementById('filterDistrito').value;
+    const tipo = document.getElementById('filterTipo').value;
+    const params = new URLSearchParams();
+    if (fuente) params.set('fuente', fuente);
+    if (distrito) params.set('distrito', distrito);
+    if (tipo) params.set('tipo', tipo);
+
+    fetch(`/ingestas/scraping/propiedades/?${params.toString()}`)
+        .then(r => r.text())
+        .then(html => {
+            document.getElementById('tablaBody').innerHTML = html;
+        });
+}
+
+// ── Init ──
+document.addEventListener('DOMContentLoaded', function() {
+    loadTable();
+
+    // Auto-refresh tabla cada 10s
+    setInterval(loadTable, 10000);
+
+    // Si hay un job activo, conectar SSE
+    {% if ultimo_job and ultimo_job.estado == 'running' %}
+    currentJobId = {{ ultimo_job.id }};
+    connectSSE(currentJobId);
+    updateUI('running');
+    {% endif %}
+});
+</script>
+{% endblock %}

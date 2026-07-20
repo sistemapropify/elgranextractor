@@ -57,7 +57,10 @@ class ContextAgent:
                 )
                 # Los parámetros nuevos sobrescriben los del contexto
                 params_existentes = state.get('params_extraidos', {})
-                params_combinados = {**contexto, **params_existentes}
+                # ActiveContext es un dataclass, no un dict.
+                # Se convierte a dict con to_dict() antes de combinarlo.
+                contexto_dict = contexto.to_dict() if hasattr(contexto, 'to_dict') else {}
+                params_combinados = {**contexto_dict, **params_existentes}
                 state['params_extraidos'] = params_combinados
                 state['contexto_resuelto'] = True
             else:

@@ -160,6 +160,9 @@ class ChatProcessor:
     # F2-001: Usar LangGraph para orquestación multi-agente
     USE_LANGGRAPH = True
 
+    # SPEC refactor_plataforma_agentes: Usar AgentGraphBuilder (Supervisor + ReAct loops)
+    USE_AGENT_GRAPH = True
+
     # ── Método principal (no streaming) ─────────────────────────────────
 
     @classmethod
@@ -182,30 +185,56 @@ class ChatProcessor:
                 # Guardar mensaje del usuario
                 cls._save_user_message(ctx.conversation, ctx.message)
 
-                # ── F2-001: LANGGRAPH ORCHESTRATION ──
-                # EJECUCIÓN DIRECTION (sin ThreadPool + timeout):
-                # Anteriormente usaba ThreadPoolExecutor con timeout=12s, lo que causaba:
-                # 1. LangGraph corría en un hilo mientras el pipeline secuencial corría EN PARALELO
-                # 2. Ambos ejecutaban search_dynamic() simultáneamente, duplicando el trabajo
-                # 3. La respuesta de LangGraph era RECHAZADA por el filtro de "Estas son las propiedades"
-                # 4. El sistema hacía TODO el trabajo DOS VECES (60-90s cada uno)
+                # ── AGENT GRAPH ORCHESTRATION (Supervisor + ReAct Agents) ──
+                # SPEC refactor_plataforma_agentes:
+                # El AgentGraphBuilder usa un Supervisor que elige uno o más agentes
+                # de dominio (propiedades, mercado, requerimientos). Cada agente ejecuta
+                # su propio ReAct loop (Think → Act → Observe) con hasta 5 iteraciones.
                 #
-                # Ahora: LangGraph corre sincrónicamente. Si falla o devuelve respuesta vacía,
-                # se cae al pipeline secuencial como fallback. Nunca ambos al mismo tiempo.
-                # Deshabilitar LangGraph para mensajes del canvas (usa pipeline secuencial
-                # que tiene el contexto del lienzo via _orquestar y construye acciones add_nodes)
-                # BUG ANTERIOR: La condición chequeaba canvas_ctx.get('propiedades') lo cual
-                # falla cuando el canvas está vacío porque [] es falsy en Python.
-                # Ahora: si el source es 'canvas', SIEMPRE usamos pipeline secuencial.
+                # Si AgentGraph falla o devuelve respuesta vacía, se cae a LangGraph
+                # como primer fallback, y luego al pipeline secuencial legacy.
+                # Deshabilitar ambos para mensajes del canvas (usa pipeline secuencial
+                # que tiene el contexto del lienzo via _orquestar y construye acciones).
+                usar_agent_graph = cls.USE_AGENT_GRAPH
                 usar_lg = cls.USE_LANGGRAPH
-                if usar_lg and ctx.metadata and ctx.metadata.get('source') == 'canvas':
+                es_canvas = ctx.metadata and ctx.metadata.get('source') == 'canvas'
+
+                if es_canvas:
                     log.info("[Canvas] Mensaje del canvas. Usando pipeline secuencial (orquestacion canvas).")
+                    usar_agent_graph = False
                     usar_lg = False
+
+                # Flag para detectar si AgentGraph falló y usamos fallback
+                agent_graph_fallido = False
+
+                if usar_agent_graph:
+                    try:
+                        agent_result = cls._process_with_agent_graph(ctx, timer)
+                        if agent_result and agent_result.response_text:
+                            log.info(
+                                "[AgentGraph] AgentGraphBuilder completado exitosamente",
+                                agents=agent_result.metadata.get('agents_activated', []),
+                                latency_ms=f"{timer.latency_ms:.1f}",
+                            )
+                            return agent_result
+                        else:
+                            log.info("[AgentGraph] AgentGraph devolvió respuesta vacía. Usando LangGraph.")
+                            agent_graph_fallido = True
+                    except Exception as agent_err:
+                        log.warning(f"[AgentGraph] AgentGraph falló: {agent_err}. Usando LangGraph.")
+                        agent_graph_fallido = True
 
                 if usar_lg:
                     try:
                         lg_result = cls._process_with_langgraph(ctx, timer)
                         if lg_result and lg_result.response_text:
+                            # Si AgentGraph falló, marcar la respuesta como fallback
+                            if agent_graph_fallido:
+                                lg_result.metadata['fallback_notice'] = (
+                                    "⚠️ El sistema de agentes con ReAct loop no estuvo disponible. "
+                                    "Se usó el sistema LangGraph clásico como respaldo."
+                                )
+                                lg_result.metadata['orchestration_mode'] = 'langgraph_fallback'
                             log.info(
                                 f"[F2-001] LangGraph completado exitosamente",
                                 skill=getattr(lg_result, 'skill_detectada', None),
@@ -499,6 +528,391 @@ class ChatProcessor:
             },
             timestamp=timezone.now().isoformat(),
         )
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # Agent Graph Orchestration (Supervisor + ReAct Agents)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    @classmethod
+    def _process_with_agent_graph(cls, ctx: ChatContext, timer) -> Optional[ChatResult]:
+        """
+        Procesa mensaje usando AgentGraphBuilder (Supervisor + ReAct agents).
+
+        SPEC: refactor_plataforma_agentes.md — Fase 3+4.
+
+        El Supervisor decide qué agente(s) activar según la consulta.
+        Cada agente ejecuta su propio ReAct loop (Think -> Act -> Observe)
+        con hasta max_iteraciones (default 5).
+
+        Si no hay agentes exitosos, retorna None para que ChatProcessor
+        intente con LangGraph o pipeline secuencial.
+
+        Args:
+            ctx: ChatContext con mensaje, conversación, usuario
+            timer: MetricsService.timer para métricas
+
+        Returns:
+            ChatResult si los agentes produjeron respuesta, None si fallback necesario
+        """
+        from ..agents.orchestrator import AgentGraphBuilder
+
+        log.info(
+            "[AgentGraph] Iniciando AgentGraphBuilder",
+            query=ctx.message[:80],
+            user_id=str(ctx.user.id) if ctx.user else None,
+        )
+
+        # Construir user_context para adaptación multi-rol (SPEC v2.0)
+        user_context = cls._build_user_context(ctx)
+
+        # Inicializar y ejecutar AgentGraphBuilder
+        builder = AgentGraphBuilder()
+        state = builder.run(
+            message=ctx.message,
+            conversation_id=str(ctx.conversation.id),
+            user_id=str(ctx.user.id) if ctx.user else None,
+            user_context=user_context,
+        )
+
+        # Verificar si algún agente tuvo éxito
+        aggregated = state.get('aggregated_answer', {})
+        successful = aggregated.get('successful', [])
+        failed = aggregated.get('failed', [])
+
+        if not successful:
+            log.info(
+                f"[AgentGraph] Ningún agente exitoso ({len(failed)} fallidos). "
+                f"Delegando a fallback."
+            )
+            return None
+
+        # Extraer respuesta del/los agente(s) exitoso(s)
+        response_text = cls._format_agent_results(state, ctx)
+
+        if not response_text:
+            log.info("[AgentGraph] No se generó respuesta de agentes. Delegando a fallback.")
+            return None
+
+        # Guardar respuesta en conversación
+        texto_guardar = response_text
+        if texto_guardar.startswith('__HTML__') and texto_guardar.endswith('__HTML__'):
+            texto_guardar = '🖼️ Resultados mostrados en formato visual.'
+        message_id = cls._save_response(ctx.conversation, texto_guardar)
+
+        # Guardar contexto para el siguiente turno
+        try:
+            meta = ctx.conversation.metadata or {}
+            meta['ultimo_contexto'] = {'origen': 'agent_graph'}
+            ctx.conversation.metadata = meta
+            ctx.conversation.save(update_fields=['metadata'])
+        except Exception as e:
+            log.debug(f"No se pudo guardar contexto agent_graph: {e}")
+
+        # Post-process (memoria episódica, hechos)
+        cls._save_post_process(
+            ctx=ctx,
+            response_text=response_text,
+            trace_id=timer.trace_id,
+        )
+
+        # ── Construir pasos de razonamiento para mostrar en el frontend ──
+        reasoning_steps = cls._build_reasoning_steps(state)
+        metadata_extra = {}
+        if reasoning_steps:
+            metadata_extra['reasoning_steps'] = reasoning_steps
+
+        agents_exitosos = [s['name'] for s in successful]
+        log.info(
+            "[AgentGraph] Mensaje procesado con AgentGraphBuilder",
+            agents=agents_exitosos,
+            latency_ms=f"{timer.latency_ms:.1f}",
+            trace_id=state.get('trace_id', timer.trace_id),
+        )
+
+        return ChatResult(
+            success=True,
+            response_text=response_text,
+            conversation_id=str(ctx.conversation.id),
+            message_id=message_id,
+            metadata={
+                'response': response_text,
+                'skill_executed': '+'.join(s['name'] for s in successful),
+                'had_skill_results': True,
+                'orchestration_mode': 'agent_graph',
+                'trace_id': state.get('trace_id', ''),
+                'agents_activated': agents_exitosos,
+                'agents_failed': [f['name'] for f in failed],
+                **metadata_extra,
+            },
+            context_summary={
+                'orchestration_mode': 'agent_graph',
+                'skill_name': '+'.join(s['name'] for s in successful),
+                'skill_success': True,
+            },
+            timestamp=timezone.now().isoformat(),
+        )
+
+    @classmethod
+    def _build_reasoning_steps(cls, state: Dict[str, Any]) -> list:
+        """
+        Construye una lista de pasos de razonamiento legibles para el frontend.
+
+        Toma el estado del AgentGraphBuilder (resultados por agente, aggregated_answer)
+        y genera una secuencia cronológica de pasos que describen el proceso
+        de pensamiento de los agentes.
+
+        Args:
+            state: AgentOrchestratorState con results y aggregated_answer
+
+        Returns:
+            Lista de dicts con 'icon', 'title', 'description', 'type'
+        """
+        steps = []
+        aggregated = state.get('aggregated_answer', {})
+        successful = aggregated.get('successful', [])
+        failed = aggregated.get('failed', [])
+        results = state.get('results', {})
+        routing_plan = state.get('routing_plan', {})
+
+        # 1. Paso: Supervisor analizando (con LLM o embeddings)
+        agents_in_plan = routing_plan.get('agents', [])
+        execution_mode = routing_plan.get('execution_mode', 'single')
+        routing_method = routing_plan.get('routing_method', 'embeddings')
+        reasoning = routing_plan.get('reasoning', '')
+
+        if agents_in_plan:
+            agent_names = [a['name'] for a in agents_in_plan[:3]]
+            method_icon = '🧠' if routing_method == 'llm' else '📊'
+            method_label = 'LLM (function calling)' if routing_method == 'llm' else 'Embeddings (fallback)'
+            desc = f"Detectó {len(agents_in_plan)} agente(s): {', '.join(agent_names)} (modo: {execution_mode}, método: {method_label})"
+            if reasoning:
+                reasoning_short = reasoning[:150] + '...' if len(reasoning) > 150 else reasoning
+                desc += f" | Razonamiento: {reasoning_short}"
+            steps.append({
+                'icon': method_icon,
+                'title': f'Supervisor ({method_label})',
+                'description': desc,
+                'type': 'router',
+            })
+
+        # 2. Pasos por agente ejecutado
+        for s in successful:
+            agent_name = s['name']
+            agent_data = results.get(agent_name, {})
+            agent_steps = agent_data.get('steps', [])
+            iterations = agent_data.get('iterations_used', 0)
+            confidence = agent_data.get('confidence', 0.0)
+
+            # Nombre legible del agente
+            agent_label = {
+                'agente_propiedades': 'Agente de Propiedades',
+                'agente_mercado': 'Agente de Mercado',
+                'agente_requerimientos': 'Agente de Requerimientos',
+                'agente_fallback_rag': 'Búsqueda RAG',
+            }.get(agent_name, agent_name)
+
+            steps.append({
+                'icon': '🤖',
+                'title': f'{agent_label} activado',
+                'description': f"Confianza: {confidence:.0%}",
+                'type': 'agent_start',
+            })
+
+            # Pasos del ReAct loop
+            for i, step_data in enumerate(agent_steps):
+                if isinstance(step_data, dict):
+                    thought = step_data.get('thought', '') or step_data.get('reasoning', '')
+                    skill_used = step_data.get('skill_used') or step_data.get('skill_name', '')
+                    status = step_data.get('status', '')
+
+                    if thought:
+                        # Truncar pensamiento largo
+                        thought_short = thought[:120] + '...' if len(thought) > 120 else thought
+                        steps.append({
+                            'icon': '💭',
+                            'title': f'Iteración {i+1}: Pensando',
+                            'description': thought_short,
+                            'type': 'think',
+                        })
+
+                    if skill_used and status not in ('failed', 'done'):
+                        skill_label = {
+                            'busqueda_propiedades': 'Búsqueda semántica de propiedades',
+                            'busqueda_exacta': 'Búsqueda exacta con filtros',
+                            'matching_hibrido': 'Matching híbrido oferta-demanda',
+                            'acm_analisis': 'Análisis Comparativo de Mercado',
+                            'reporte_precios_zona': 'Reporte de precios por zona',
+                            'metricas_marketing': 'Métricas de marketing',
+                            'campanas_activas': 'Campañas activas',
+                            'mis_requerimientos': 'Requerimientos de clientes',
+                            'matching_OD': 'Matching oferta-demanda',
+                            'mis_matches': 'Matches generados',
+                            'scraper_orchestrator': 'Scraping de portales',
+                            'formatear_propiedades': 'Formateo de propiedades',
+                        }.get(skill_used, skill_used)
+
+                        steps.append({
+                            'icon': '🔍',
+                            'title': f'Ejecutando: {skill_label}',
+                            'description': f"Skill: {skill_used}",
+                            'type': 'action',
+                        })
+
+                    if status == 'failed':
+                        steps.append({
+                            'icon': '⚠️',
+                            'title': 'Intento falló',
+                            'description': 'El agente intentará con otro enfoque',
+                            'type': 'error',
+                        })
+
+            steps.append({
+                'icon': '✅',
+                'title': f'{agent_label} completado ({iterations} iteraciones)',
+                'description': f"Confianza: {confidence:.0%}",
+                'type': 'agent_complete',
+            })
+
+        # Agentes fallidos
+        for f in failed:
+            agent_name = f['name']
+            error = f.get('error', 'Error desconocido')
+            agent_label = {
+                'agente_propiedades': 'Agente de Propiedades',
+                'agente_mercado': 'Agente de Mercado',
+                'agente_requerimientos': 'Agente de Requerimientos',
+            }.get(agent_name, agent_name)
+
+            steps.append({
+                'icon': '❌',
+                'title': f'{agent_label} falló',
+                'description': str(error)[:100],
+                'type': 'agent_fail',
+            })
+
+        # 3. Paso: Generando respuesta
+        steps.append({
+            'icon': '📝',
+            'title': 'Generando respuesta natural',
+            'description': f"DeepSeek formatea {len(successful)} resultado(s) de agente(s)",
+            'type': 'formatter',
+        })
+
+        # Añadir timestamp a cada paso para animación
+        for i, step in enumerate(steps):
+            step['order'] = i
+            step['delay_ms'] = i * 600  # 600ms entre cada paso
+
+        return steps
+
+    @classmethod
+    def _format_agent_results(cls, state: Dict[str, Any], ctx: ChatContext) -> str:
+        """
+        Formatea los resultados de los agentes en respuesta natural.
+
+        Toma los final_answer de los agentes exitosos y genera
+        una respuesta coherente usando DeepSeek.
+
+        Args:
+            state: AgentOrchestratorState con results y aggregated_answer
+            ctx: ChatContext original
+
+        Returns:
+            Texto de respuesta generado por DeepSeek, o cadena vacía si falla
+        """
+        from ..services.llm import LLMService
+
+        aggregated = state.get('aggregated_answer', {})
+        successful = aggregated.get('successful', [])
+        results = state.get('results', {})
+
+        if not successful:
+            return ""
+
+        # Construir contexto de resultados para el prompt
+        resultados_text = ""
+        for s in successful:
+            agent_name = s['name']
+            agent_data = results.get(agent_name, {})
+            final_answer = agent_data.get('final_answer', {})
+            steps = agent_data.get('steps', [])
+            iterations = agent_data.get('iterations_used', 0)
+            confidence = agent_data.get('confidence', 0.0)
+
+            resultados_text += f"\n--- {agent_name} ---\n"
+            resultados_text += f"  Iteraciones usadas: {iterations}\n"
+            resultados_text += f"  Confianza: {confidence:.2f}\n"
+
+            if isinstance(final_answer, dict):
+                for k, v in final_answer.items():
+                    if k not in ('steps', 'status'):
+                        if isinstance(v, (list, dict)):
+                            resultados_text += f"  {k}: {len(v)} elementos\n"
+                            # Primer elemento como preview
+                            if isinstance(v, list) and len(v) > 0:
+                                preview = v[0]
+                                if isinstance(preview, dict):
+                                    preview_items = [f"{pk}: {pv}" for pk, pv in list(preview.items())[:5]]
+                                    resultados_text += f"    Preview: {' | '.join(preview_items)}\n"
+                        else:
+                            resultados_text += f"  {k}: {v}\n"
+            elif isinstance(final_answer, list):
+                resultados_text += f"  Total resultados: {len(final_answer)}\n"
+                for i, item in enumerate(final_answer[:5]):
+                    resultados_text += f"  [{i+1}] {item}\n"
+                if len(final_answer) > 5:
+                    resultados_text += f"  ... y {len(final_answer) - 5} más\n"
+            elif final_answer:
+                resultados_text += f"  {final_answer}\n"
+
+        # Memoría del usuario para contexto
+        memory_context = ""
+        try:
+            from .formatter_agent import FormatterAgent
+            memory_context = FormatterAgent._build_memory_context(state)
+        except Exception:
+            pass
+
+        # Historial de conversación (últimos 4 mensajes)
+        historial = cls._get_historial_mensajes(ctx.conversation)
+        historial_str = "\n".join(historial) if historial else "(sin historial previo)"
+
+        # Prompt para DeepSeek
+        prompt = f"""Eres un asistente inmobiliario experto en Arequipa, Perú.
+
+HISTORIAL DE CONVERSACIÓN:
+{historial_str}
+
+CONSULTA DEL USUARIO:
+"{ctx.message}"
+
+RESULTADOS DEL SISTEMA (generados por agentes especializados):
+{resultados_text}
+
+INSTRUCCIONES:
+1. Genera una respuesta NATURAL y CONVERSACIONAL en español basada en los resultados.
+2. Los RESULTADOS DEL SISTEMA son la ÚNICA fuente de datos reales.
+3. Presenta los datos de forma organizada y amigable.
+4. Si hay propiedades, incluye: tipo, distrito, precio, area, características relevantes.
+5. NO inventes propiedades ni datos que no estén en los resultados.
+6. Usa un tono profesional pero cercano, como un asesor inmobiliario de confianza.
+7. Responde en español."""
+
+        try:
+            success, api_message, api_response = LLMService._call_deepseek_api(
+                messages=[{"role": "user", "content": prompt}],
+                system_prompt="Eres un asistente inmobiliario experto.",
+                caller_app="chat_processor",
+                endpoint="_format_agent_results",
+            )
+            if success and api_response:
+                return api_response.get('content', '') or api_message
+        except Exception as e:
+            log.error(f"Error generando respuesta de agentes: {e}", exc_info=True)
+
+        # Fallback: construir respuesta simple con nombres de agentes
+        agent_names = [s['name'] for s in successful]
+        return f"Los agentes {' y '.join(agent_names)} completaron el análisis. ¿Necesitas más detalles?"
 
     # ── Streaming ──────────────────────────────────────────────────────
 

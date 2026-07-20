@@ -26,4 +26,13 @@ urlpatterns = [
     path('propiedades-propify-directa/', views.vista_propiedades_propify_directa, name='propiedades_propify_directa'),
     # API para crear propiedad desde formulario modal
     path('api/crear-propiedad/', views.CrearPropiedadAPIView.as_view(), name='crear_propiedad_api'),
+
+    # ── Scraping Dashboard ──
+    path('scraping/dashboard/', views.ScrapingDashboardView.as_view(), name='scraping_dashboard'),
+    path('scraping/control/', views.ScrapingControlView.as_view(), name='scraping_control'),
+    path('scraping/stream/<int:job_id>/', views.ScrapingStreamView.as_view(), name='scraping_stream'),
+    path('scraping/status/<int:job_id>/', views.ScrapingStatusView.as_view(), name='scraping_status'),
+    path('scraping/propiedades/', views.ScrapingPropiedadesView.as_view(), name='scraping_propiedades'),
+    path('scraping/historial/', views.ScrapingHistorialView.as_view(), name='scraping_historial'),
+    path('scraping/test-import/', views.test_camoufox_import, name='test_import'),
 ]

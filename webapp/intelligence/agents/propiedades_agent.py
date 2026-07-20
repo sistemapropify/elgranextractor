@@ -37,7 +37,7 @@ REGLAS:
 5. No inventes propiedades — usa SOLO los datos de las skills"""
 
 
-class AgentePropiedades(BaseAgent, ReActLoopMixin):
+class AgentePropiedades(ReActLoopMixin, BaseAgent):
     """Agente especializado en búsqueda y análisis de propiedades."""
 
     definition = AgentDefinition(
@@ -55,6 +55,7 @@ class AgentePropiedades(BaseAgent, ReActLoopMixin):
             'busqueda_exacta',
             'matching_hibrido',
             'acm_analisis',
+            'formatear_propiedades',
         ],
         access_level=1,
         max_iterations=5,

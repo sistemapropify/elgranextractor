@@ -387,6 +387,91 @@
             0%, 60%, 100% { transform: translateY(0); }
             30% { transform: translateY(-6px); }
         }
+
+        /* Thinking trace - proceso de pensamiento de los agentes */
+        .thinking-trace {
+            align-self: flex-start;
+            width: 100%;
+            max-width: 90%;
+            margin-bottom: 16px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .thinking-step {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 6px 12px;
+            margin: 2px 0;
+            border-radius: 8px;
+            font-size: 13px;
+            opacity: 0;
+            transform: translateX(-10px);
+            transition: all 0.3s ease;
+        }
+
+        .thinking-step.visible {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        .thinking-step .step-icon {
+            font-size: 16px;
+            flex-shrink: 0;
+            width: 24px;
+            text-align: center;
+            line-height: 1.4;
+        }
+
+        .thinking-step .step-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .thinking-step .step-title {
+            font-weight: 600;
+            color: var(--accent-blue);
+            font-size: 13px;
+        }
+
+        .thinking-step .step-desc {
+            color: var(--text-secondary);
+            font-size: 12px;
+            margin-top: 1px;
+        }
+
+        .thinking-step.step-router .step-title { color: var(--accent-purple); }
+        .thinking-step.step-agent_start .step-title { color: var(--accent-green); }
+        .thinking-step.step-think .step-title { color: var(--accent-blue); }
+        .thinking-step.step-action .step-title { color: var(--accent-orange); }
+        .thinking-step.step-agent_complete .step-title { color: var(--accent-green); }
+        .thinking-step.step-agent_fail .step-title { color: #f85149; }
+        .thinking-step.step-formatter .step-title { color: var(--accent-purple); }
+        .thinking-step.step-error .step-title { color: #f85149; }
+
+        .thinking-trace-divider {
+            text-align: center;
+            padding: 8px 0;
+            position: relative;
+        }
+
+        .thinking-trace-divider::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 10%;
+            right: 10%;
+            height: 1px;
+            background: var(--border-color);
+        }
+
+        .thinking-trace-divider span {
+            background: var(--bg-primary);
+            padding: 0 12px;
+            position: relative;
+            color: var(--text-secondary);
+            font-size: 11px;
+        }
         
         /* Área de entrada */
         .input-container {
@@ -842,7 +927,7 @@
     
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="/static/intelligence/chat.js?v={{ cache_timestamp }}"></script>
+    <script src="/static/intelligence/chat.js?v=20260719-001"></script>
     
     <!-- Pasar datos de Django a JavaScript de forma simple -->
     <script>

@@ -17,6 +17,7 @@ import re
 import logging
 import time
 import inspect
+from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple, Any, Generator
 from datetime import datetime
 
@@ -30,6 +31,16 @@ from ..skills.registry import SkillRegistry
 from ..skills.base import SkillResult
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ToolCallResult:
+    """Resultado de una llamada a función/herramienta del LLM."""
+    tool_calls: List[Dict[str, Any]]  # [{name: str, arguments: dict}, ...]
+    reasoning: str = ""               # Razonamiento del LLM (si aplica)
+    raw_response: Optional[Dict] = None
+    success: bool = True
+    error_message: str = ""
 
 
 class LLMService:
@@ -353,6 +364,129 @@ class LLMService:
             logger.warning(f"Error extrayendo JSON de respuesta: {e}")
         
         return None
+    
+    @classmethod
+    def call_with_tools(
+        cls,
+        system_prompt: str,
+        message: str,
+        tools: List[Dict[str, Any]],
+        conversation_history: Optional[List[Dict]] = None,
+    ) -> ToolCallResult:
+        """
+        Llama a DeepSeek con function calling (tools) para routing.
+        
+        DeepSeek soporta el formato de tools compatible con OpenAI.
+        Envía el mensaje del usuario + lista de herramientas (agentes disponibles),
+        y el LLM decide qué herramienta(s) invocar.
+        
+        Args:
+            system_prompt: Prompt del sistema para el routing
+            message: Mensaje del usuario
+            tools: Lista de herramientas en formato OpenAI function calling
+            conversation_history: Historial de conversación opcional
+        
+        Returns:
+            ToolCallResult con tool_calls parseados
+        """
+        start = time.time()
+        
+        api_messages = [{"role": "system", "content": system_prompt}]
+        if conversation_history:
+            api_messages.extend(conversation_history)
+        api_messages.append({"role": "user", "content": message})
+        
+        payload = {
+            "model": cls.DEEPSEEK_MODEL,
+            "messages": api_messages,
+            "tools": tools,
+            "tool_choice": "required",
+            "temperature": 0.1,
+            "max_tokens": 500,
+        }
+        
+        headers = cls._get_headers()
+        
+        try:
+            logger.info(f"[LLM.Tools] Llamando a DeepSeek con {len(tools)} herramientas")
+            response = requests.post(
+                cls.DEEPSEEK_API_URL,
+                headers=headers,
+                json=payload,
+                timeout=15,
+            )
+            
+            elapsed = (time.time() - start) * 1000
+            logger.info(f"[LLM.Tools] Respuesta recibida en {elapsed:.0f}ms, status={response.status_code}")
+            
+            if response.status_code != 200:
+                return ToolCallResult(
+                    success=False,
+                    tool_calls=[],
+                    error_message=f"API error: {response.status_code}",
+                )
+            
+            data = response.json()
+            choices = data.get("choices", [])
+            if not choices:
+                return ToolCallResult(
+                    success=False,
+                    tool_calls=[],
+                    error_message="No choices in response",
+                )
+            
+            message_obj = choices[0].get("message", {})
+            reasoning = message_obj.get("content", "")
+            tool_calls_data = message_obj.get("tool_calls", [])
+            
+            if not tool_calls_data:
+                # DeepSeek podría no soportar tool_choice=required,
+                # en ese caso el LLM responde con texto libre
+                logger.warning(f"[LLM.Tools] No tool_calls en respuesta. Content: {reasoning[:100]}")
+                # Intentar parsear JSON del content como fallback
+                parsed = cls._extract_json_from_response(reasoning)
+                if parsed and "agent" in parsed:
+                    return ToolCallResult(
+                        tool_calls=[{"name": parsed["agent"], "arguments": {"sub_query": message}}],
+                        reasoning=reasoning,
+                        raw_response=data,
+                    )
+                return ToolCallResult(
+                    success=False,
+                    tool_calls=[],
+                    reasoning=reasoning,
+                    error_message="No tool_calls in response",
+                )
+            
+            # Parsear tool_calls
+            parsed_calls = []
+            for tc in tool_calls_data:
+                func = tc.get("function", {})
+                name = func.get("name", "")
+                try:
+                    args = json.loads(func.get("arguments", "{}"))
+                except json.JSONDecodeError:
+                    args = {"sub_query": message}
+                parsed_calls.append({"name": name, "arguments": args})
+            
+            return ToolCallResult(
+                tool_calls=parsed_calls,
+                reasoning=reasoning,
+                raw_response=data,
+                success=True,
+            )
+            
+        except requests.exceptions.Timeout:
+            return ToolCallResult(
+                success=False, tool_calls=[],
+                error_message="Timeout calling DeepSeek",
+            )
+        except Exception as e:
+            logger.error(f"[LLM.Tools] Error: {e}")
+            return ToolCallResult(
+                success=False, tool_calls=[],
+                error_message=str(e),
+            )
     
     @classmethod
     def _build_rag_context(

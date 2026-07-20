@@ -1,0 +1,47 @@
+{% extends 'propifai_base.html' %}
+{% block title %}Historial de Scraping{% endblock %}
+
+{% block content %}
+<div style="background:var(--card-bg);border:1px solid var(--border-color);border-radius:8px;padding:20px;">
+    <h2 style="margin:0 0 16px;font-size:18px;"><i class="bi bi-clock-history"></i> Historial de Scraping</h2>
+
+    <table class="data-table" style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+            <tr>
+                <th style="padding:8px 12px;border-bottom:1px solid var(--border-color);text-align:left;">#</th>
+                <th style="padding:8px 12px;border-bottom:1px solid var(--border-color);text-align:left;">Estado</th>
+                <th style="padding:8px 12px;border-bottom:1px solid var(--border-color);text-align:left;">Nuevas</th>
+                <th style="padding:8px 12px;border-bottom:1px solid var(--border-color);text-align:left;">Actualizadas</th>
+                <th style="padding:8px 12px;border-bottom:1px solid var(--border-color);text-align:left;">Errores</th>
+                <th style="padding:8px 12px;border-bottom:1px solid var(--border-color);text-align:left;">Inicio</th>
+                <th style="padding:8px 12px;border-bottom:1px solid var(--border-color);text-align:left;">Fin</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for job in jobs %}
+            <tr>
+                <td style="padding:6px 12px;border-bottom:1px solid var(--border-color);">{{ job.id }}</td>
+                <td style="padding:6px 12px;border-bottom:1px solid var(--border-color);">
+                    <span class="terminal-badge {{ job.estado }}" style="display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;
+                        {% if job.estado == 'completed' %}background:#3fb950;
+                        {% elif job.estado == 'error' %}background:#f85149;
+                        {% elif job.estado == 'running' %}background:#3fb950;
+                        {% elif job.estado == 'paused' %}background:#d29922;
+                        {% else %}background:#8b949e;{% endif %}"></span>
+                    {{ job.get_estado_display }}
+                </td>
+                <td style="padding:6px 12px;border-bottom:1px solid var(--border-color);color:#3fb950;">{{ job.nuevas }}</td>
+                <td style="padding:6px 12px;border-bottom:1px solid var(--border-color);color:#d29922;">{{ job.actualizadas }}</td>
+                <td style="padding:6px 12px;border-bottom:1px solid var(--border-color);color:#f85149;">{{ job.errores }}</td>
+                <td style="padding:6px 12px;border-bottom:1px solid var(--border-color);font-size:12px;color:#8b949e;">{{ job.iniciado_en|date:'d/m/Y H:i'|default:'—' }}</td>
+                <td style="padding:6px 12px;border-bottom:1px solid var(--border-color);font-size:12px;color:#8b949e;">{{ job.completado_en|date:'d/m/Y H:i'|default:'—' }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="7" style="padding:20px;text-align:center;color:#8b949e;">No hay ejecuciones registradas</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

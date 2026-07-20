@@ -72,29 +72,40 @@ class BusquedaExactaSkill(BaseSkill):
                 )
 
             def cumple(prop: Dict[str, Any]) -> bool:
+                # ADDENDUM 2: soporta formato anidado (field_values) y plano
+                # busqueda_propiedades retorna propiedades como:
+                #   {'document_id': ..., 'field_values': {'district_name': 'Cayma', ...}}
+                # busqueda_exacta esperaba formato plano:
+                #   {'district_name': 'Cayma', ...}
+                datos = prop.get('field_values', prop) if isinstance(prop.get('field_values'), dict) else prop
+
                 for campo, valor in filtros.items():
-                    if campo not in prop:
+                    if campo not in datos:
                         return False
                     if isinstance(valor, list):
-                        if prop[campo] not in valor:
+                        if datos[campo] not in valor:
                             return False
                     elif isinstance(valor, dict):
                         min_val = valor.get('min')
                         max_val = valor.get('max')
-                        if min_val is not None and prop[campo] < min_val:
+                        if min_val is not None and datos[campo] < min_val:
                             return False
-                        if max_val is not None and prop[campo] > max_val:
+                        if max_val is not None and datos[campo] > max_val:
                             return False
                     else:
-                        if str(prop[campo]).lower() != str(valor).lower():
+                        if str(datos[campo]).lower() != str(valor).lower():
                             return False
                 return True
+
+            def _get_sort_key(item: Dict[str, Any], campo: str):
+                datos = item.get('field_values', item) if isinstance(item.get('field_values'), dict) else item
+                return datos.get(campo, 0)
 
             filtradas = [prop for prop in propiedades if isinstance(prop, dict) and cumple(prop)]
 
             try:
                 filtradas.sort(
-                    key=lambda item: item.get(ordenar_por, 0) if isinstance(item, dict) else 0,
+                    key=lambda item: _get_sort_key(item, ordenar_por) if isinstance(item, dict) else 0,
                     reverse=(direccion == 'descendente')
                 )
             except TypeError:

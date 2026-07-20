@@ -315,6 +315,37 @@ document.addEventListener('DOMContentLoaded', function() {
             const data = await response.json();
             console.log('Datos recibidos:', data);
             
+            // ── MOSTRAR PROCESO DE PENSAMIENTO ──
+            // Si hay reasoning_steps reales del AgentGraphBuilder, reemplazar la simulación
+            if (data.reasoning_steps && data.reasoning_steps.length > 0) {
+                replaceWithRealSteps(data.reasoning_steps);
+            }
+            // Si no hay reasoning_steps, la simulación ya se está mostrando
+            
+            // ── AVISO DE FALLBACK ──
+            // Si el AgentGraph falló y se usó el sistema antiguo, mostrar advertencia
+            if (data.fallback_notice) {
+                const traceContainer = document.getElementById('thinking-trace');
+                if (traceContainer) {
+                    const fallbackEl = document.createElement('div');
+                    fallbackEl.className = 'thinking-step step-error';
+                    fallbackEl.style.opacity = '1';
+                    fallbackEl.style.transform = 'translateX(0)';
+                    fallbackEl.innerHTML = `
+                        <span class="step-icon">⚠️</span>
+                        <div class="step-content">
+                            <div class="step-title">Sistema de respaldo activado</div>
+                            <div class="step-desc">${escapeHtml(data.fallback_notice)}</div>
+                        </div>
+                    `;
+                    traceContainer.appendChild(fallbackEl);
+                    scrollToBottom();
+                }
+            }
+            
+            // Pequeña pausa para que terminen las animaciones
+            await new Promise(resolve => setTimeout(resolve, 300));
+            
             // Agregar respuesta del asistente
             addMessage('assistant', data.response || data.message || 'No se recibió respuesta');
             
@@ -428,7 +459,8 @@ document.addEventListener('DOMContentLoaded', function() {
             if (elements.sendButton) {
                 elements.sendButton.disabled = true;
             }
-            addTypingIndicator();
+            // En lugar de puntitos, mostrar proceso simulado
+            addThinkingTraceSimulated();
         } else {
             if (elements.thinkingIndicator) {
                 elements.thinkingIndicator.classList.remove('active');
@@ -437,32 +469,111 @@ document.addEventListener('DOMContentLoaded', function() {
                 elements.chatInput.disabled = false;
             }
             updateSendButtonState();
-            removeTypingIndicator();
+            // NO remover el thinking trace aquí - se maneja en sendMessage()
         }
     }
 
-    function addTypingIndicator() {
+    /**
+     * Muestra un proceso de pensamiento SIMULADO mientras se espera la respuesta.
+     * Esto reemplaza los puntitos "Escribiendo..." por pasos con íconos.
+     * Cuando llegan los reasoning_steps reales, se reemplazan.
+     */
+    function addThinkingTraceSimulated() {
         if (!elements.messagesContainer) return;
         
-        const typingElement = document.createElement('div');
-        typingElement.className = 'typing-indicator';
-        typingElement.id = 'typing-indicator';
-        typingElement.innerHTML = `
-            <div class="typing-dot"></div>
-            <div class="typing-dot"></div>
-            <div class="typing-dot"></div>
-            <span>Escribiendo...</span>
-        `;
+        // Remover trace anterior si existe
+        const oldTrace = document.getElementById('thinking-trace');
+        if (oldTrace) oldTrace.remove();
         
-        elements.messagesContainer.appendChild(typingElement);
+        const traceContainer = document.createElement('div');
+        traceContainer.className = 'thinking-trace';
+        traceContainer.id = 'thinking-trace';
+        elements.messagesContainer.appendChild(traceContainer);
         scrollToBottom();
+        
+        // Pasos simulados genéricos (si no llegan pasos reales, estos se quedan)
+        const simulatedSteps = [
+            { icon: '🧠', title: 'Analizando consulta...', type: 'router', delay: 800 },
+            { icon: '🔍', title: 'Buscando información...', type: 'action', delay: 1500 },
+            { icon: '💭', title: 'Procesando resultados...', type: 'think', delay: 1500 },
+            { icon: '📝', title: 'Generando respuesta...', type: 'formatter', delay: 1200 },
+        ];
+        
+        let cumulativeDelay = 300;
+        simulatedSteps.forEach((step, i) => {
+            cumulativeDelay += step.delay;
+            setTimeout(() => {
+                const trace = document.getElementById('thinking-trace');
+                if (!trace) return;
+                
+                const stepEl = document.createElement('div');
+                stepEl.className = `thinking-step step-${step.type}`;
+                stepEl.innerHTML = `
+                    <span class="step-icon">${step.icon}</span>
+                    <div class="step-content">
+                        <div class="step-title">${escapeHtml(step.title)}</div>
+                    </div>
+                `;
+                trace.appendChild(stepEl);
+                requestAnimationFrame(() => stepEl.classList.add('visible'));
+                scrollToBottom();
+            }, cumulativeDelay);
+        });
+    }
+
+    /**
+     * Reemplaza el thinking trace simulado con los pasos REALES del AgentGraphBuilder.
+     * Se llama cuando la API devuelve reasoning_steps.
+     */
+    function replaceWithRealSteps(realSteps) {
+        const traceContainer = document.getElementById('thinking-trace');
+        if (!traceContainer) return;
+        
+        // Limpiar pasos simulados
+        traceContainer.innerHTML = '';
+        
+        // Si no hay pasos reales, no hacer nada (los simulados ya se mostraron)
+        if (!realSteps || realSteps.length === 0) return;
+        
+        // Mostrar cada paso real con su delay
+        let cumulativeDelay = 200;
+        realSteps.forEach((step) => {
+            const delay = step.delay_ms || 600;
+            cumulativeDelay += delay;
+            
+            setTimeout(() => {
+                const trace = document.getElementById('thinking-trace');
+                if (!trace) return;
+                
+                const stepEl = document.createElement('div');
+                stepEl.className = `thinking-step step-${step.type}`;
+                stepEl.innerHTML = `
+                    <span class="step-icon">${step.icon}</span>
+                    <div class="step-content">
+                        <div class="step-title">${escapeHtml(step.title)}</div>
+                        ${step.description ? `<div class="step-desc">${escapeHtml(step.description)}</div>` : ''}
+                    </div>
+                `;
+                trace.appendChild(stepEl);
+                requestAnimationFrame(() => stepEl.classList.add('visible'));
+                scrollToBottom();
+            }, cumulativeDelay);
+        });
+        
+        // Agregar divisor al final
+        setTimeout(() => {
+            const trace = document.getElementById('thinking-trace');
+            if (!trace) return;
+            const divider = document.createElement('div');
+            divider.className = 'thinking-trace-divider';
+            divider.innerHTML = '<span>Respuesta generada</span>';
+            trace.appendChild(divider);
+            scrollToBottom();
+        }, cumulativeDelay + 500);
     }
 
     function removeTypingIndicator() {
-        const typingElement = document.getElementById('typing-indicator');
-        if (typingElement) {
-            typingElement.remove();
-        }
+        // Ya no se usa - reemplazado por thinking trace
     }
 
     function scrollToBottom() {
