@@ -2,4 +2,6 @@
 # Forces Python platform detection
 platform: python
 platform_version: '3.12'
-startup_command: "cd /home/site/wwwroot && python -m webapp.manage collectstatic --noinput && gunicorn --bind=0.0.0.0 --timeout 600 --access-logfile '-' --error-logfile '-' webapp.wsgi:application"
+# Startup command delegates to startup.sh which handles ODBC driver install,
+# static files, migrations, and gunicorn with optimized settings
+startup_command: "bash /home/site/wwwroot/startup.sh"
