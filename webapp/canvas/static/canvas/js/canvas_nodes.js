@@ -972,6 +972,13 @@ function restoreSnapshot(snapshot) {
         collapsed: false, color: null, el: null,
         field_data: n.field_data || null,
       };
+    } else if (n.tipo === 'lead_matrix') {
+      STATE.nodos[n.id] = {
+        id: n.id, tipo: 'lead_matrix', ref_id: null,
+        x: n.x, y: n.y, width: n.width || 560, height: n.height || 360,
+        collapsed: false, color: null, el: null,
+        field_data: n.field_data || null,
+      };
     }
   });
 
@@ -1341,6 +1348,11 @@ function renderPlaceholderNodes(nodos) {
     }
 
     dom.nodes.appendChild(node);
+    // Seguridad: si el nodo no se registró en STATE (tipo desconocido en restoreSnapshot), salir
+    if (!STATE.nodos[n.id]) {
+      console.warn(`[Canvas] renderPlaceholderNodes: nodo ${n.id} (tipo: ${n.tipo}) no registrado en STATE, saltando`);
+      return;
+    }
     STATE.nodos[n.id].el = node;
     if (n.collapsed) node.classList.add('collapsed');
     if (n.width) node.style.width = n.width + 'px';
@@ -1415,6 +1427,22 @@ function renderPlaceholderNodes(nodos) {
           .then(function(data) { renderLeadAnalysisBody(nodeId, data); })
           .catch(function() {});
       }, 800, n.id, gran);
+    }
+  });
+
+  // Refrescar nodos lead_matrix desde la API al cargar snapshot
+  Object.values(STATE.nodos).forEach(function(n) {
+    if (n.tipo === 'lead_matrix' && n.el) {
+      setTimeout(function(nodeId) {
+        fetch('/canvas/api/lead-matrix/')
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (typeof renderLeadMatrixBody === 'function') {
+              renderLeadMatrixBody(nodeId, data);
+            }
+          })
+          .catch(function() {});
+      }, 800, n.id);
     }
   });
 }
@@ -2080,17 +2108,190 @@ async function createGlobalLeadNode(x, y) {
 
 
 /**
+ * Crea un nodo de Matriz de Leads en el canvas.
+ * Muestra tabla con propiedades como filas, fechas como columnas,
+ * y el conteo de leads en cada celda con color por intensidad.
+ */
+async function createLeadMatrixNode(x, y) {
+  if (typeof captureState === 'function') captureState();
+
+  const nodeId = 'lead_matrix_' + Date.now();
+  if (STATE.nodos[nodeId]) return;
+
+  const node = document.createElement('div');
+  node.className = 'cv-node cv-node--lead-matrix';
+  node.dataset.id = nodeId;
+  node.style.left = (x || 200) + 'px';
+  node.style.top = (y || 200) + 'px';
+  node.style.width = '560px';
+  node.style.minWidth = '400px';
+  node.innerHTML = `
+    <div class="cv-node__header">
+      <span class="cv-node__badge cv-badge--lead-matrix">MATRIZ</span>
+      <span class="cv-node__title">Matriz de Leads</span>
+      <span class="cv-lead-gran-label" id="matrix-total-label">-</span>
+      <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
+    </div>
+    <div class="cv-node__body" style="padding:0;overflow:auto;max-height:420px;">
+      <div style="text-align:center;padding:30px;color:var(--cv-text-muted);font-size:13px;">
+        Cargando datos...
+      </div>
+    </div>
+    <div class="cv-port cv-port--top"    data-node="${nodeId}" data-port="top"></div>
+    <div class="cv-port cv-port--right"  data-node="${nodeId}" data-port="right"></div>
+    <div class="cv-port cv-port--bottom" data-node="${nodeId}" data-port="bottom"></div>
+    <div class="cv-port cv-port--left"   data-node="${nodeId}" data-port="left"></div>
+    <div class="cv-resize-handle" data-node="${nodeId}"></div>
+  `;
+
+  dom.nodes.appendChild(node);
+  positionNode(nodeId, node, x || 200, y || 200);
+
+  STATE.nodos[nodeId] = {
+    id: nodeId, tipo: 'lead_matrix', ref_id: null,
+    x: x || 200, y: y || 200, width: 560, height: node.offsetHeight || 360,
+    collapsed: false, color: null, el: node,
+    field_data: {},
+  };
+  registerNodeEvents(nodeId, node);
+  markDirty();
+
+  try {
+    const res = await fetch('/canvas/api/lead-matrix/');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    renderLeadMatrixBody(nodeId, await res.json());
+  } catch (err) {
+    console.error('Error loading lead matrix:', err);
+    const body = node.querySelector('.cv-node__body');
+    if (body) body.innerHTML = '<div style="color:var(--cv-block);padding:20px;text-align:center;">Error al cargar matriz</div>';
+  }
+}
+
+function renderLeadMatrixBody(nodeId, data) {
+  const nodo = STATE.nodos[nodeId];
+  if (!nodo || !nodo.el) return;
+  const body = nodo.el.querySelector('.cv-node__body');
+  if (!body) return;
+
+  const properties = data.properties || [];
+  const dates = data.dates || [];
+  const totalLeads = data.total_leads || 0;
+  const totalProps = data.total_properties || 0;
+
+  const totalLabel = nodo.el.querySelector('#matrix-total-label');
+  if (totalLabel) {
+    totalLabel.textContent = totalLeads + ' leads / ' + totalProps + ' props';
+  }
+
+  if (properties.length === 0 || dates.length === 0) {
+    body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--cv-text-muted);font-size:13px;">Sin datos de leads</div>';
+    return;
+  }
+
+  var maxCount = 1;
+  properties.forEach(function(p) {
+    Object.keys(p.daily_counts).forEach(function(k) {
+      if (p.daily_counts[k] > maxCount) maxCount = p.daily_counts[k];
+    });
+  });
+
+  function cellColor(count) {
+    if (!count || count === 0) return 'transparent';
+    var intensity = Math.min(1, count / maxCount);
+    var alpha = 0.12 + intensity * 0.68;
+    return 'rgba(92,107,192,' + alpha + ')';
+  }
+
+  function fmtDate(dateStr) {
+    if (!dateStr) return '';
+    var parts = dateStr.split('-');
+    if (parts.length === 3) return parts[2] + '/' + parts[1];
+    return dateStr;
+  }
+
+  var html = '<div class="cv-matrix-wrap" style="overflow-x:auto;overflow-y:auto;max-height:400px;">';
+  html += '<table class="cv-matrix-table" style="width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed;">';
+
+  html += '<thead><tr>';
+  html += '<th class="cv-matrix-th cv-matrix-th--prop" style="text-align:left;padding:5px 8px;position:sticky;top:0;left:0;z-index:3;background:var(--cv-surface);border-bottom:1px solid var(--cv-border);color:var(--cv-text-sec);font-weight:600;min-width:160px;max-width:200px;">Propiedad</th>';
+  html += '<th class="cv-matrix-th" style="text-align:right;padding:5px 6px;position:sticky;top:0;z-index:2;background:var(--cv-surface);border-bottom:1px solid var(--cv-border);color:var(--cv-text-sec);font-weight:600;width:44px;">Total</th>';
+  dates.forEach(function(d) {
+    html += '<th class="cv-matrix-th" style="text-align:center;padding:5px 1px;position:sticky;top:0;z-index:2;background:var(--cv-surface);border-bottom:1px solid var(--cv-border);color:var(--cv-text-muted);font-weight:500;font-size:10px;width:38px;" title="' + escHtml(d) + '">' + escHtml(fmtDate(d)) + '</th>';
+  });
+  html += '</tr></thead>';
+
+  html += '<tbody>';
+  properties.forEach(function(prop) {
+    var propLabel = prop.title || prop.code || 'Prop #' + prop.property_id;
+    if (prop.district_name) propLabel += ' - ' + prop.district_name;
+    if (propLabel.length > 55) propLabel = propLabel.substring(0, 52) + '...';
+
+    html += '<tr class="cv-matrix-row">';
+    html += '<td class="cv-matrix-td cv-matrix-td--prop" style="text-align:left;padding:3px 8px;border-bottom:1px solid var(--cv-border);color:var(--cv-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;position:sticky;left:0;z-index:1;background:var(--cv-bg);" title="' + escHtml(prop.title || prop.code || '') + ' - ' + escHtml(prop.district_name || '') + '">' + escHtml(propLabel) + '</td>';
+    html += '<td class="cv-matrix-td" style="text-align:right;padding:3px 6px;border-bottom:1px solid var(--cv-border);color:var(--cv-text-pri);font-weight:700;font-size:12px;">' + prop.total + '</td>';
+
+    dates.forEach(function(d) {
+      var count = prop.daily_counts[d] || 0;
+      var color = cellColor(count);
+      html += '<td class="cv-matrix-td" style="text-align:center;padding:3px 1px;border-bottom:1px solid var(--cv-border);background:' + color + ';color:' + (count > 0 ? 'var(--cv-text-pri)' : 'var(--cv-text-muted)') + ';font-size:11px;font-weight:' + (count > 0 ? '700' : '400') + ';cursor:' + (count > 0 ? 'pointer' : 'default') + ';"';
+      html += ' title="' + escHtml(prop.title || prop.code || 'Prop') + ' - ' + fmtDate(d) + ': ' + count + ' leads"';
+      html += '>';
+      html += count > 0 ? count : '-';
+      html += '</td>';
+    });
+
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  html += '</div>';
+
+  html += '<div style="display:flex;justify-content:space-between;padding:5px 10px;border-top:1px solid var(--cv-border);font-size:10px;color:var(--cv-text-muted);background:var(--cv-surface);">';
+  html += '<span>Total: <strong style="color:#5c6bc0;">' + totalLeads + '</strong> leads</span>';
+  html += '<span>Props: <strong style="color:var(--cv-text-sec);">' + totalProps + '</strong></span>';
+  html += '<span>' + fmtDate(dates[0]) + ' - ' + fmtDate(dates[dates.length-1]) + '</span>';
+  html += '</div>';
+
+  body.innerHTML = html;
+
+  body.querySelectorAll('.cv-matrix-row').forEach(function(tr) {
+    tr.addEventListener('mouseenter', function() {
+      this.style.background = 'rgba(92,107,192,0.06)';
+    });
+    tr.addEventListener('mouseleave', function() {
+      this.style.background = '';
+    });
+  });
+
+  nodo.height = nodo.el.offsetHeight || 360;
+  markDirty();
+}
+
+window.createLeadMatrixNode = createLeadMatrixNode;
+window.renderLeadMatrixBody = renderLeadMatrixBody;
+
+
+/**
  * Inicializa el menu contextual del canvas (click derecho en el fondo).
  */
 function initCanvasContextMenu() {
-  if (document.getElementById('cv-canvas-context-menu')) return;
+  var menu = document.getElementById('cv-canvas-context-menu');
+  if (!menu) {
+    menu = document.createElement('div');
+    menu.id = 'cv-canvas-context-menu';
+    menu.className = 'cv-lead-context-menu';
+    menu.style.display = 'none';
+    document.body.appendChild(menu);
+  }
 
-  var menu = document.createElement('div');
-  menu.id = 'cv-canvas-context-menu';
-  menu.className = 'cv-lead-context-menu';
-  menu.style.display = 'none';
-  menu.innerHTML = '<div class="cv-lead-context-menu__header">📊 Lienzo</div><div class="cv-lead-context-menu__item" data-action="create-global-leads">📊 Crear tarjeta de leads</div>';
-  document.body.appendChild(menu);
+  // Siempre actualizar el contenido (incluso si ya existe)
+  menu.innerHTML =
+    '<div class="cv-lead-context-menu__header">Lienzo</div>' +
+    '<div class="cv-lead-context-menu__item" data-action="create-global-leads">Crear tarjeta de leads</div>' +
+    '<div class="cv-lead-context-menu__item" data-action="create-lead-matrix">Matriz de Leads</div>';
+
+  // Solo adjuntar eventos globales una vez
+  if (menu.dataset._initialized) return;
+  menu.dataset._initialized = '1';
 
   menu.addEventListener('click', function(e) {
     var item = e.target.closest('.cv-lead-context-menu__item');
@@ -2103,14 +2304,17 @@ function initCanvasContextMenu() {
       if (typeof createGlobalLeadNode === 'function') {
         createGlobalLeadNode(x, y);
       }
+    } else if (action === 'create-lead-matrix') {
+      if (typeof createLeadMatrixNode === 'function') {
+        createLeadMatrixNode(x, y);
+      }
     }
   });
 
   // Mostrar menu en click derecho sobre el stage
   document.addEventListener('contextmenu', function(e) {
-    // Solo si el click es directamente sobre el fondo (no sobre un nodo)
     var target = e.target.closest('.cv-node, .cv-port');
-    if (target) return; // dejar que el nodo maneje su propio menu
+    if (target) return;
     e.preventDefault();
     menu.style.left = e.clientX + 'px';
     menu.style.top = e.clientY + 'px';

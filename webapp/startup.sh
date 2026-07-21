@@ -1,67 +1,39 @@
 #!/bin/bash
 
-# ── Startup script for Propifai (PropTech SaaS) ──
-# FIX-OOM: Configurado para Azure App Service (Linux, ~2GB RAM)
-# - Workers reducidos para evitar OOM
-# - Timeout extendido para carga lazy de modelos
-# - Manejo de errores graceful
-# FIX-504: Exporta PRODUCTION=true para saltar inicialización pesada
-# en apps.py (modelo de embeddings, semantic router), evitando 504
-# GatewayTimeout por startup lento. El modelo se carga lazy.
+# Startup script for Azure App Service - Propifai
+set -e
 
-set -e  # Exit on error
+echo "=== Iniciando Propifai en Azure App Service ==="
 
-# ── Modo Producción ──
-# FIX-504: Esta variable hace que intelligence/apps.py salte la
-# precarga del modelo de embeddings (1GB RAM, ~20s) en startup.
-# El modelo se cargará lazy en la primera solicitud que lo requiera.
-export PRODUCTION=true
-echo "Modo PRODUCTION activado — precarga de embeddings saltada (lazy load)"
+# Cambiar al directorio de la aplicación
+APP_DIR="/home/site/wwwroot"
+if [ -d "/tmp/8dee6a19f209a4a" ]; then
+    APP_DIR="/tmp/8dee6a19f209a4a"
+fi
+cd "$APP_DIR"
 
-# ── PYTHONPATH ──
-# Asegurar que tanto el root como webapp/ están en el path
-export PYTHONPATH="$(pwd):$(pwd)/webapp${PYTHONPATH:+:$PYTHONPATH}"
-echo "PYTHONPATH=$PYTHONPATH"
+echo "Directorio de trabajo: $(pwd)"
 
-# Activate virtual environment if it exists
-ANTENV_DIR="/home/site/wwwroot/antenv"
-if [ -d "$ANTENV_DIR" ]; then
-    source "$ANTENV_DIR/bin/activate"
-    echo "Virtual environment activated: $ANTENV_DIR"
-elif [ -d "antenv" ]; then
-    source antenv/bin/activate
-    echo "Virtual environment activated: ./antenv"
+# Activar virtual env
+if [ -d "$APP_DIR/antenv" ]; then
+    source "$APP_DIR/antenv/bin/activate"
+    echo "Virtualenv activado: antenv"
 fi
 
-# Install dependencies if requirements.txt exists
-if [ -f "requirements.txt" ]; then
-    echo "Installing dependencies..."
-    pip install -r requirements.txt -q
-fi
+# Migraciones
+echo "Ejecutando migraciones..."
+python manage.py migrate --noinput || echo "Migraciones omitidas o ya aplicadas"
 
-# Change to webapp directory
-cd webapp 2>/dev/null || {
-    echo "WARNING: webapp/ directory not found, trying current directory"
-}
+# Collect static
+echo "Recolectando archivos estáticos..."
+python manage.py collectstatic --noinput --clear 2>&1 || echo "Collectstatic omitido"
 
-# Collect static files
-echo "Collecting static files..."
-python manage.py collectstatic --noinput 2>&1
-
-# Run migrations
-echo "Running migrations..."
-python manage.py migrate --noinput 2>&1
-
-# ── Start Gunicorn ──
-# FIX-OOM: Solo 2 workers para mantener ~500MB libres para el modelo de embeddings
-# Timeout: 600s para carga lazy del modelo en primera solicitud
-# FIX-504: PRODUCTION=true evita que los workers carguen el modelo de embeddings
-echo "Starting Gunicorn (2 workers, 600s timeout)..."
-exec gunicorn webapp.wsgi:application \
-    --bind 0.0.0.0:8000 \
-    --workers 2 \
-    --timeout 600 \
-    --access-logfile '-' \
-    --error-logfile '-' \
-    --max-requests 1000 \
-    --max-requests-jitter 50
+# Iniciar Gunicorn
+echo "Iniciando Gunicorn en puerto ${PORT:-8000}..."
+gunicorn --bind=0.0.0.0:${PORT:-8000} \
+         --workers=2 \
+         --timeout=120 \
+         --access-logfile=- \
+         --error-logfile=- \
+         --log-level=info \
+         settings.wsgi:application

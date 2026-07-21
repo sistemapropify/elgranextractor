@@ -1379,6 +1379,148 @@ def api_archivos_list(request, lienzo_pk):
     return JsonResponse({'archivos': list(archivos)})
 
 
+# ── API: LEAD MATRIX ──────────────────────────────────────────
+
+
+def _es_titulo_real(val):
+    """True si el valor parece un título real (contiene al menos una letra)."""
+    if not val:
+        return False
+    s = str(val).strip()
+    return any(c.isalpha() for c in s)
+
+
+def _obtener_nombres_propiedades():
+    """
+    Construye dict source_id -> {title, code, district_name}
+    usando IntelligenceDocument como fuente principal y BD propifai como fallback.
+    También indexa por ID numérico cuando source_id es convertible a int.
+    """
+    prop_names = {}
+
+    # 1. FUENTE PRINCIPAL: IntelligenceDocument (field_values tiene el title real)
+    try:
+        from intelligence.models import IntelligenceCollection, IntelligenceDocument
+        col = IntelligenceCollection.objects.filter(name='propiedadespropify').first()
+        logger.info(f"[lead_matrix_debug] col={col}")
+        if col:
+            total = IntelligenceDocument.objects.filter(collection=col).count()
+            logger.info(f"[lead_matrix_debug] documentos total={total}")
+            for doc in IntelligenceDocument.objects.filter(collection=col).only('source_id', 'field_values').iterator():
+                sid = doc.source_id
+                fv = doc.field_values or {}
+                title = fv.get('title') or fv.get('name') or ''
+                code = fv.get('code') or ''
+                dist = fv.get('district_name') or fv.get('district') or ''
+                prop_names[sid] = {'title': title, 'code': code, 'district_name': dist}
+                # También indexar por ID numérico si source_id es convertible
+                try:
+                    num_key = str(int(sid))
+                    prop_names[num_key] = {'title': title, 'code': code, 'district_name': dist}
+                    if sid != num_key:
+                        logger.info(f"[lead_matrix_debug] indexado: {sid} -> {num_key} (title={title[:40]})")
+                except (ValueError, TypeError):
+                    pass
+            logger.info(f"[lead_matrix_debug] prop_names keys (muestra): {list(prop_names.keys())[:10]}")
+    except Exception as e:
+        logger.warning(f"[lead_matrix] No se pudo leer IntelligenceDocument: {e}")
+
+    # 2. FALLBACK: tabla property (singular) — solo usar title si es texto real
+    try:
+        from django.db import connections
+        with connections['propifai'].cursor() as cursor:
+            cursor.execute("SELECT id, code, title FROM property")
+            for row in cursor.fetchall():
+                pid = str(row[0])
+                code = row[1] or ''
+                raw_title = row[2]
+                # Solo considerar como título real si contiene letras
+                title = str(raw_title).strip() if _es_titulo_real(raw_title) else ''
+                if pid not in prop_names:
+                    prop_names[pid] = {
+                        'title': title or f'Prop #{row[0]}',
+                        'code': code,
+                        'district_name': '',
+                    }
+                else:
+                    if code and not prop_names[pid]['code']:
+                        prop_names[pid]['code'] = code
+                    if not prop_names[pid]['title']:
+                        prop_names[pid]['title'] = title or f'Prop #{row[0]}'
+    except Exception as e:
+        logger.warning(f"[lead_matrix] No se pudo leer tabla property: {e}")
+
+    return prop_names
+
+
+def api_lead_matrix(request):
+    """
+    GET /canvas/api/lead-matrix/
+    Retorna matriz de leads: filas = propiedades con leads, columnas = fechas,
+    celdas = conteo de leads por propiedad por fecha.
+    """
+    user = _get_current_user(request)
+    if not user:
+        return JsonResponse({'error': 'No autenticado'}, status=401)
+
+    try:
+        from django.db import connections
+        from collections import OrderedDict
+
+        prop_names = _obtener_nombres_propiedades()
+
+        # 3. Query SQL: leads agrupados por propiedad y fecha
+        with connections['propifai'].cursor() as cursor:
+            cursor.execute("""
+                SELECT
+                    lp.property_id,
+                    CAST(SWITCHOFFSET(l.created_at, '-05:00') AS DATE) AS lead_date,
+                    COUNT(DISTINCT l.id) AS lead_count
+                FROM lead l
+                INNER JOIN lead_properties lp ON lp.lead_id = l.id
+                GROUP BY
+                    lp.property_id,
+                    CAST(SWITCHOFFSET(l.created_at, '-05:00') AS DATE)
+                ORDER BY lp.property_id, lead_date
+            """)
+
+            props_map = OrderedDict()
+            dates_set = set()
+
+            for row in cursor.fetchall():
+                prop_id, lead_date, count = row
+                date_str = lead_date.isoformat() if hasattr(lead_date, 'isoformat') else str(lead_date)
+                sid = str(prop_id)
+
+                if sid not in props_map:
+                    info = prop_names.get(sid, {})
+                    props_map[sid] = {
+                        'property_id': prop_id,
+                        'code': info.get('code', '') or '',
+                        'title': info.get('title', '') or f'Prop #{prop_id}',
+                        'district_name': info.get('district_name', '') or '',
+                        'daily_counts': {},
+                        'total': 0,
+                    }
+                props_map[sid]['daily_counts'][date_str] = count
+                props_map[sid]['total'] += count
+                dates_set.add(date_str)
+
+        dates = sorted(dates_set)
+        properties = list(props_map.values())
+        total_leads = sum(p['total'] for p in properties)
+
+        return JsonResponse({
+            'properties': properties,
+            'dates': dates,
+            'total_properties': len(properties),
+            'total_leads': total_leads,
+        })
+    except Exception as e:
+        logger.error(f"Error en lead matrix: {e}", exc_info=True)
+        return JsonResponse({'error': str(e)}, status=500)
+
+
 def api_lienzo_eliminar(request, pk):
     """
     POST /canvas/api/eliminar/<pk>/

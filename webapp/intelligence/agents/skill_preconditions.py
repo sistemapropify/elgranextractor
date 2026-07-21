@@ -21,7 +21,7 @@ from __future__ import annotations
 from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .base_agent import AgentStep
+    from .base_agent import AgentStep, Requirement
 
 # Tipo de precondición: recibe historial de pasos y contexto, retorna bool
 SkillPrecondition = Callable[[List["AgentStep"], Dict[str, Any]], bool]
@@ -124,19 +124,23 @@ def get_available_skills(
     allowed_skills: List[str],
     steps_history: List["AgentStep"],
     context: Dict[str, Any],
+    requirements: Optional[List["Requirement"]] = None,
 ) -> List[str]:
     """
     Filtra allowed_skills a solo las que son ejecutables ahora mismo.
     
     SPEC: precondiciones_skills.md — Sección 2.
+    SPEC: skill_contamination_taxonomia.md — Sección 3.4 (relevance filter)
     
     1. Filtra por precondiciones (skills que requieren pasos previos).
     2. Excluye skills con MAX_CONSECUTIVE_FAILURES fallos seguidos.
+    3. Filtra por relevancia: solo skills cuyo 'kind' corresponde a un requisito
+       TODAVÍA PENDIENTE. Si no hay requisitos pendientes, no hay skills que ofrecer.
     
     Returns:
         Lista de nombres de skills disponibles en este momento.
     """
-    from .base_agent import AgentStatus
+    from .base_agent import AgentStatus, SKILL_SATISFIES_KIND
 
     # Paso 1: Filtrar por precondiciones
     precondition_filtered = [
@@ -150,6 +154,17 @@ def get_available_skills(
         s for s in precondition_filtered
         if failure_counts.get(s, 0) < MAX_CONSECUTIVE_FAILURES
     ]
+
+    # Paso 3 (NUEVO): relevancia — solo ofrecer skills cuyo kind
+    # corresponde a un requisito TODAVÍA PENDIENTE.
+    # Esto evita que el LLM elija skills de matching o comparación
+    # cuando no hay requisitos de ese tipo (SPEC_skill_contamination_taxonomia.md — Sección 3.4)
+    if requirements is not None:
+        kinds_pendientes = {r.kind for r in requirements if not r.satisfied}
+        result = [
+            s for s in result
+            if s not in SKILL_SATISFIES_KIND or SKILL_SATISFIES_KIND[s] in kinds_pendientes
+        ]
 
     return result
 

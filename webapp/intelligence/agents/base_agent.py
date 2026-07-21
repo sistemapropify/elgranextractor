@@ -111,7 +111,7 @@ class Requirement:
     """
     id: str                           # ej. "req_0", "req_1"
     description: str                  # ej. "buscar terrenos en Cerro Colorado"
-    kind: str                         # 'data' | 'format' | 'filter' | 'comparison' | 'other'
+    kind: str                         # 'data' | 'format' | 'filter' | 'comparison' | 'matching' | 'other'
     satisfied: bool = False
     satisfied_by_skill: Optional[str] = None
 
@@ -154,18 +154,25 @@ def detect_format_requirement(original_message: str) -> Optional[str]:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 SKILL_SATISFIES_KIND: dict[str, str] = {
+    # data — buscar/consultar inventario existente
     'busqueda_propiedades': 'data',
     'busqueda_exacta': 'data',
-    'matching_hibrido': 'data',
-    'acm_analisis': 'data',
-    'reporte_precios_zona': 'data',
     'mis_requerimientos': 'data',
-    'matching_OD': 'data',
-    'formatear_propiedades': 'format',
-    'metricas_marketing': 'data',
-    'campanas_activas': 'data',
-    'mis_matches': 'data',
     'mis_propiedades': 'data',
+    'campanas_activas': 'data',
+
+    # comparison — análisis comparativo de mercado, reportes de precios
+    'acm_analisis': 'comparison',
+    'reporte_precios_zona': 'comparison',
+    'metricas_marketing': 'comparison',
+
+    # matching — cruzar requerimientos con oferta disponible
+    'matching_hibrido': 'matching',
+    'matching_OD': 'matching',
+    'mis_matches': 'matching',
+
+    # format — formatear resultados
+    'formatear_propiedades': 'format',
 }
 
 
@@ -231,7 +238,11 @@ def _result_item_count(skill_result: Any) -> int:
     return 0
 
 
-DATA_SKILLS = {'busqueda_propiedades', 'busqueda_exacta', 'matching_hibrido', 'acm_analisis'}
+# DATA_SKILLS reemplazado por SKILL_SATISFIES_KIND (SPEC_skill_contamination_taxonomia.md)
+# El chequeo de "cero resultados" ahora usa SKILL_SATISFIES_KIND para contar
+# solo skills de kind='data'. Mantenemos DATA_SKILLS como sinónimo para
+# no romper código externo que pudiera importarlo.
+DATA_SKILLS = {s for s, k in SKILL_SATISFIES_KIND.items() if k == 'data'}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -328,12 +339,15 @@ class ReActLoopMixin:
 
         prompt = f"""Descompón esta consulta del usuario en requisitos atómicos que la respuesta final debe cumplir.
 
-IMPORTANTE — REGLA ESTRICTA SOBRE FORMATO:
-NO generes ningún requisito relacionado con CÓMO se presenta la información
-(formato visual, presentación, claridad, estructura de la respuesta).
-Eso se detecta por otro sistema, de forma automática, y NO es tu responsabilidad.
-Solo genera requisitos sobre QUÉ información se necesita, QUÉ filtros aplicar,
-o QUÉ comparación/análisis se pide — nunca sobre cómo debe verse la respuesta.
+Usa estos tipos ('kind') según lo que el usuario realmente necesita:
+- "data": buscar o consultar propiedades existentes en el inventario.
+- "comparison": pedir un análisis de mercado, reporte de precios, o comparación de valor.
+- "matching": cruzar los requerimientos de un cliente con el inventario disponible.
+- "filter": aplicar un filtro específico sobre resultados ya obtenidos.
+- "other": cualquier otra cosa.
+
+IMPORTANTE: NO generes ningún requisito de tipo 'format' (cómo se presenta la información) —
+eso se detecta automáticamente por otro sistema y no es tu responsabilidad.
 
 Presta especial atención a: filtros específicos, comparaciones,
 y cualquier "y además" / "y también" en la consulta.
@@ -342,7 +356,7 @@ Consulta: "{original_message}"
 
 Responde SOLO con JSON:
 {{"requirements": [
-    {{"description": "...", "kind": "data|filter|comparison|other"}}
+    {{"description": "...", "kind": "data|comparison|matching|filter|other"}}
 ]}}"""
 
         try:
@@ -470,8 +484,8 @@ Responde SOLO con JSON:
 
         steps_context = self._summarize_steps(steps)
 
-        # Filtrar skills disponibles según precondiciones y fallos
-        available_now = get_available_skills(self.definition.allowed_skills, steps, context)
+        # Filtrar skills disponibles según precondiciones, fallos y relevancia
+        available_now = get_available_skills(self.definition.allowed_skills, steps, context, requirements)
         excluded = set(self.definition.allowed_skills) - set(available_now)
 
         prompt = self.definition.system_prompt + f"""
@@ -578,12 +592,22 @@ Responde SOLO con JSON en este formato:
                         'confidence': 0.5,
                     }
 
-        # 3. Detectar "cero resultados genuino" (ADDENDUM: Sección 4)
-        # Si una data skill devolvió total=0 y ya intentamos 2 veces,
-        # es momento de responder "no hay resultados" en vez de seguir intentando.
-        if step.skill_used in DATA_SKILLS and _result_item_count(step.skill_result) == 0:
-            data_attempts = sum(1 for s in steps if s.skill_used in DATA_SKILLS)
-            if data_attempts >= 2:
+        # 3. Detectar "cero resultados genuino" (SPEC_skill_contamination_taxonomia.md — Sección 4)
+        # Solo skills de kind='data' cuentan para el chequeo de cero resultados.
+        # Un matching_hibrido que falle no debe disparar el contador.
+        SEARCH_KINDS = {'data'}
+        skill_kind = SKILL_SATISFIES_KIND.get(step.skill_used)
+        if skill_kind in SEARCH_KINDS and _result_item_count(step.skill_result) == 0:
+            data_attempts = sum(
+                1 for s in steps
+                if SKILL_SATISFIES_KIND.get(s.skill_used) in SEARCH_KINDS
+            )
+            all_empty = all(
+                _result_item_count(s.skill_result) == 0
+                for s in steps
+                if SKILL_SATISFIES_KIND.get(s.skill_used) in SEARCH_KINDS
+            )
+            if data_attempts >= 2 and all_empty:
                 logger.info(
                     f"[ReAct] Cero resultados tras {data_attempts} intentos "
                     f"de búsqueda. Concluyendo con respuesta honesta."

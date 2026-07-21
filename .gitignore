@@ -90,7 +90,6 @@ webapp/application.py
 webapp/cookies.txt
 webapp/propiedades_propify.html
 webapp/README.md
-webapp/startup.sh
 
 # Project specific
 screenshot_*.png

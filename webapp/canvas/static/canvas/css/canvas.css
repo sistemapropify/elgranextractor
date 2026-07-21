@@ -2024,6 +2024,62 @@
   opacity: 0.85;
 }
 
+/* ── LEAD MATRIX NODE ── */
+.cv-node--lead-matrix {
+  background: var(--cv-surface);
+  border: 1px solid var(--cv-border);
+  border-radius: var(--cv-radius);
+  box-shadow: var(--cv-shadow);
+  overflow: hidden;
+}
+
+.cv-badge--lead-matrix {
+  background: #4527a0;
+  color: #d1c4e9;
+}
+
+.cv-matrix-table {
+  font-size: 11px;
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.cv-matrix-table th {
+  user-select: none;
+  white-space: nowrap;
+}
+
+.cv-matrix-table td {
+  transition: background 0.15s;
+}
+
+.cv-matrix-table .cv-matrix-td--prop {
+  font-size: 11px;
+}
+
+.cv-matrix-row:hover td {
+  filter: brightness(1.15);
+}
+
+.cv-matrix-wrap::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+
+.cv-matrix-wrap::-webkit-scrollbar-track {
+  background: var(--cv-bg);
+}
+
+.cv-matrix-wrap::-webkit-scrollbar-thumb {
+  background: var(--cv-border);
+  border-radius: 3px;
+}
+
+.cv-matrix-wrap::-webkit-scrollbar-thumb:hover {
+  background: var(--cv-text-muted);
+}
+
+
 /* ── RESPONSIVE ── */
 @media (max-width: 768px) {
   .cv-sidebar { display: none; }
