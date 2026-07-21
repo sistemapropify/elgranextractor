@@ -1454,11 +1454,7 @@ def _obtener_nombres_propiedades():
 
 
 def api_lead_matrix(request):
-    """
-    GET /canvas/api/lead-matrix/
-    Retorna matriz de leads: filas = propiedades con leads, columnas = fechas,
-    celdas = conteo de leads por propiedad por fecha.
-    """
+    """Matriz de leads con títulos desde property (misma lógica que api_lead_analysis_leads)."""
     user = _get_current_user(request)
     if not user:
         return JsonResponse({'error': 'No autenticado'}, status=401)
@@ -1467,54 +1463,48 @@ def api_lead_matrix(request):
         from django.db import connections
         from collections import OrderedDict
 
-        prop_names = _obtener_nombres_propiedades()
-
-        # 3. Query SQL: leads agrupados por propiedad y fecha
-        with connections['propifai'].cursor() as cursor:
-            cursor.execute("""
-                SELECT
-                    lp.property_id,
-                    CAST(SWITCHOFFSET(l.created_at, '-05:00') AS DATE) AS lead_date,
-                    COUNT(DISTINCT l.id) AS lead_count
+        # JOIN directo lead -> lead_properties -> property (como api_lead_analysis_leads)
+        with connections['propifai'].cursor() as c:
+            c.execute("""
+                SELECT p.id, ISNULL(p.title, p.code) AS prop_title,
+                       CAST(SWITCHOFFSET(l.created_at, '-05:00') AS DATE) AS lead_date,
+                       COUNT(DISTINCT l.id) AS lead_count
                 FROM lead l
                 INNER JOIN lead_properties lp ON lp.lead_id = l.id
-                GROUP BY
-                    lp.property_id,
-                    CAST(SWITCHOFFSET(l.created_at, '-05:00') AS DATE)
-                ORDER BY lp.property_id, lead_date
+                INNER JOIN property p ON p.id = lp.property_id
+                GROUP BY p.id, ISNULL(p.title, p.code),
+                         CAST(SWITCHOFFSET(l.created_at, '-05:00') AS DATE)
+                ORDER BY p.id, lead_date
             """)
+            raw = c.fetchall()
 
-            props_map = OrderedDict()
-            dates_set = set()
+        if not raw:
+            return JsonResponse({'properties': [], 'dates': [], 'total_properties': 0, 'total_leads': 0})
 
-            for row in cursor.fetchall():
-                prop_id, lead_date, count = row
-                date_str = lead_date.isoformat() if hasattr(lead_date, 'isoformat') else str(lead_date)
-                sid = str(prop_id)
+        props_map = OrderedDict()
+        dates_set = set()
 
-                if sid not in props_map:
-                    info = prop_names.get(sid, {})
-                    props_map[sid] = {
-                        'property_id': prop_id,
-                        'code': info.get('code', '') or '',
-                        'title': info.get('title', '') or f'Prop #{prop_id}',
-                        'district_name': info.get('district_name', '') or '',
-                        'daily_counts': {},
-                        'total': 0,
-                    }
-                props_map[sid]['daily_counts'][date_str] = count
-                props_map[sid]['total'] += count
-                dates_set.add(date_str)
-
-        dates = sorted(dates_set)
-        properties = list(props_map.values())
-        total_leads = sum(p['total'] for p in properties)
+        for prop_id, prop_title, lead_date, count in raw:
+            date_str = lead_date.isoformat() if hasattr(lead_date, 'isoformat') else str(lead_date)
+            sid = str(prop_id)
+            if sid not in props_map:
+                props_map[sid] = {
+                    'property_id': prop_id,
+                    'title': prop_title or f'Prop #{prop_id}',
+                    'code': '',
+                    'district_name': '',
+                    'daily_counts': {},
+                    'total': 0,
+                }
+            props_map[sid]['daily_counts'][date_str] = count
+            props_map[sid]['total'] += count
+            dates_set.add(date_str)
 
         return JsonResponse({
-            'properties': properties,
-            'dates': dates,
-            'total_properties': len(properties),
-            'total_leads': total_leads,
+            'properties': list(props_map.values()),
+            'dates': sorted(dates_set),
+            'total_properties': len(props_map),
+            'total_leads': sum(p['total'] for p in props_map.values()),
         })
     except Exception as e:
         logger.error(f"Error en lead matrix: {e}", exc_info=True)
