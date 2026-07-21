@@ -2157,50 +2157,10 @@ async function createLeadMatrixNode(x, y) {
   markDirty();
 
   try {
-    // Obtener datos de la matriz y nombres de propiedades
-    const ts = Date.now();
-    const [matrixRes, propsRes] = await Promise.all([
-      fetch('/canvas/api/lead-matrix/?t=' + ts),
-      fetch('/canvas/api/propiedades/?t=' + ts)
-    ]);
-    if (!matrixRes.ok) throw new Error('HTTP ' + matrixRes.status);
-    
-    const matrixData = await matrixRes.json();
-    
-    // Fusionar con nombres reales desde api_propiedades
-    if (propsRes.ok) {
-      const propsData = await propsRes.json();
-      
-      // Construir lookup por _property_id (numérico) para match exacto
-      var propTitlesById = {};  // _property_id -> title
-      (propsData.propiedades || []).forEach(function(p) {
-        var propId = p._property_id;
-        var title = p.title || p.name || '';
-        if (propId && title) {
-          propTitlesById[propId] = title;
-        }
-      });
-      
-      // Reemplazar títulos en los datos de la matriz
-      matrixData.properties.forEach(function(prop) {
-        var pid = prop.property_id;
-        if (pid && propTitlesById[pid]) {
-          prop.title = propTitlesById[pid];
-        }
-      });
-    }
-    
-    // DEBUG: log first property
-    if (matrixData.properties && matrixData.properties.length > 0) {
-      var first = matrixData.properties[0];
-      console.log('[MATRIX_DEBUG] first prop:', JSON.stringify({
-        id: first.property_id,
-        title: first.title,
-        code: first.code
-      }));
-    }
-    
-    renderLeadMatrixBody(nodeId, matrixData);
+    const res = await fetch('/canvas/api/lead-matrix/?t=' + Date.now());
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    renderLeadMatrixBody(nodeId, data);
   } catch (err) {
     console.error('Error loading lead matrix:', err);
     const body = node.querySelector('.cv-node__body');
