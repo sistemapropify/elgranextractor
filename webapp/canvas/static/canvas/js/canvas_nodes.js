@@ -2157,10 +2157,11 @@ async function createLeadMatrixNode(x, y) {
   markDirty();
 
   try {
-    // Obtener datos de la matriz y nombres de propiedades (desde api_propiedades que funciona)
+    // Obtener datos de la matriz y nombres de propiedades
+    const ts = Date.now();
     const [matrixRes, propsRes] = await Promise.all([
-      fetch('/canvas/api/lead-matrix/'),
-      fetch('/canvas/api/propiedades/')
+      fetch('/canvas/api/lead-matrix/?t=' + ts),
+      fetch('/canvas/api/propiedades/?t=' + ts)
     ]);
     if (!matrixRes.ok) throw new Error('HTTP ' + matrixRes.status);
     
@@ -2187,6 +2188,16 @@ async function createLeadMatrixNode(x, y) {
           prop.title = propTitlesById[pid];
         }
       });
+    }
+    
+    // DEBUG: log first property
+    if (matrixData.properties && matrixData.properties.length > 0) {
+      var first = matrixData.properties[0];
+      console.log('[MATRIX_DEBUG] first prop:', JSON.stringify({
+        id: first.property_id,
+        title: first.title,
+        code: first.code
+      }));
     }
     
     renderLeadMatrixBody(nodeId, matrixData);
