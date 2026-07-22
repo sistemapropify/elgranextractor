@@ -4,7 +4,7 @@
 {% block title %}Canvas — {{ lienzo.nombre }} — Propifai{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'canvas/css/canvas.css' %}?v=6">
+<link rel="stylesheet" href="{% static 'canvas/css/canvas.css' %}?v=7">
 <style>
   .cv-page .content-area {
     padding: 0;
@@ -226,8 +226,8 @@
   const SNAPSHOT  = {{ snapshot_json|safe }};
   const USER_ID   = '{{ user_id }}';
 </script>
-<script src="{% static 'canvas/js/canvas_engine.js' %}?v=10"></script>
-<script src="{% static 'canvas/js/canvas_nodes.js' %}?v=18"></script>
+<script src="{% static 'canvas/js/canvas_engine.js' %}?v=11"></script>
+<script src="{% static 'canvas/js/canvas_nodes.js' %}?v=22"></script>
 <script src="{% static 'canvas/js/canvas_edges.js' %}?v=5"></script>
 <script src="{% static 'canvas/js/canvas_sidebar.js' %}?v=5"></script>
 <script src="{% static 'canvas/js/canvas_match_modal.js' %}?v=5"></script>

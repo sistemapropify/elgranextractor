@@ -1017,27 +1017,33 @@ def property_events_api(request, property_id):
     """
     Endpoint API que devuelve el historial completo de eventos de una propiedad.
     """
-    from .models import Event, EventType, User
-    events = Event.objects.filter(property_id=property_id).select_related(
-        'event_type', 'assigned_agent'
-    ).order_by('-fecha_evento', '-hora_inicio')
+    from .models import Event, User
+    events = Event.objects.filter(property_id=property_id).order_by('-start_time')
+    
+    # Resolver nombres de agentes
+    agent_ids = [e.assigned_agent_id for e in events if e.assigned_agent_id]
+    agent_map = {}
+    if agent_ids:
+        users = User.objects.filter(id__in=set(agent_ids))
+        agent_map = {u.id: f"{u.first_name} {u.last_name}".strip() for u in users}
     
     events_list = []
     for event in events:
+        st = event.start_time
+        et = event.end_time
         events_list.append({
             'id': event.id,
             'code': event.code,
-            'titulo': event.titulo,
-            'fecha_evento': event.fecha_evento.date().isoformat() if event.fecha_evento else None,
-            'hora_inicio': event.hora_inicio.isoformat() if event.hora_inicio else None,
-            'hora_fin': event.hora_fin.isoformat() if event.hora_fin else None,
-            'detalle': event.detalle,
-            'event_type_nombre': event.event_type.name if event.event_type else None,
-            'event_type_color': event.event_type.color if event.event_type else None,
-            'assigned_agent_nombre': event.assigned_agent.nombre_completo if event.assigned_agent else None,
+            'titulo': event.title,
+            'fecha_evento': st.isoformat() if st else None,
+            'hora_inicio': st.strftime('%H:%M') if st else None,
+            'hora_fin': et.strftime('%H:%M') if et else None,
+            'detalle': event.description,
+            'event_type_nombre': None,
+            'event_type_color': None,
+            'assigned_agent_nombre': agent_map.get(event.assigned_agent_id),
             'status': event.status,
-            'seguimiento': event.seguimiento,
-            'rejection_reason': event.rejection_reason,
+            'seguimiento': event.tracing,
             'lead_id': event.lead_id,
             'proposal_id': event.proposal_id,
         })
@@ -1205,26 +1211,32 @@ def property_timeline_api(request, property_id):
         return peru_dt_noon.isoformat()
     
     # Obtener eventos de la propiedad
-    events = Event.objects.filter(property_id=property_id).select_related(
-        'event_type', 'assigned_agent'
-    ).order_by('fecha_evento', 'hora_inicio')
+    events = Event.objects.filter(property_id=property_id).order_by('start_time')
+    
+    # Resolver nombres de agentes
+    agent_ids = [e.assigned_agent_id for e in events if e.assigned_agent_id]
+    agent_map = {}
+    if agent_ids:
+        users = User.objects.filter(id__in=set(agent_ids))
+        agent_map = {u.id: f"{u.first_name} {u.last_name}".strip() for u in users}
     
     events_list = []
     for event in events:
+        st = event.start_time
+        et = event.end_time
         events_list.append({
             'id': event.id,
             'code': event.code,
-            'titulo': event.titulo,
-            'fecha_evento': to_peru_date(event.fecha_evento) if event.fecha_evento else None,
-            'hora_inicio': event.hora_inicio.isoformat() if event.hora_inicio else None,
-            'hora_fin': event.hora_fin.isoformat() if event.hora_fin else None,
-            'detalle': event.detalle,
-            'event_type_nombre': event.event_type.name if event.event_type else None,
-            'event_type_color': event.event_type.color if event.event_type else None,
-            'assigned_agent_nombre': event.assigned_agent.nombre_completo if event.assigned_agent else None,
+            'titulo': event.title,
+            'fecha_evento': st.isoformat() if st else None,
+            'hora_inicio': st.strftime('%H:%M') if st else None,
+            'hora_fin': et.strftime('%H:%M') if et else None,
+            'detalle': event.description,
+            'event_type_nombre': None,
+            'event_type_color': None,
+            'assigned_agent_nombre': agent_map.get(event.assigned_agent_id),
             'status': event.status,
-            'seguimiento': event.seguimiento,
-            'rejection_reason': event.rejection_reason,
+            'seguimiento': event.tracing,
             'lead_id': event.lead_id,
             'proposal_id': event.proposal_id,
         })

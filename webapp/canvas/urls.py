@@ -31,5 +31,6 @@ urlpatterns = [
     path('api/lead-analysis-global/',               views.api_lead_analysis_global, name='api_lead_analysis_global'),
     path('api/leads-by-date/',                      views.api_leads_by_date,        name='api_leads_by_date'),
     path('api/lead-matrix/',                        views.api_lead_matrix,          name='api_lead_matrix'),
+    path('api/lead-events/<int:lead_id>/',           views.api_lead_events,          name='api_lead_events'),
     path('api/export-lead-matrix/',                  views.api_export_lead_matrix,   name='api_export_lead_matrix'),
 ]

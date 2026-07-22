@@ -300,15 +300,15 @@
                                     <td><span class="badge bg-secondary">#{{ item.evento.id }}</span></td>
                                     <td><code>{{ item.evento.code }}</code></td>
                                     <td>
-                                        <strong>{{ item.evento.titulo|truncatechars:30 }}</strong>
-                                        {% if item.evento.detalle %}
-                                        <br><small class="text-muted">{{ item.evento.detalle|truncatechars:50 }}</small>
+                                        <strong>{{ item.evento.title|truncatechars:30 }}</strong>
+                                        {% if item.evento.description %}
+                                        <br><small class="text-muted">{{ item.evento.description|truncatechars:50 }}</small>
                                         {% endif %}
                                     </td>
-                                    <td>{{ item.evento.fecha_evento|date:"d/m/Y" }}</td>
-                                    <td>{{ item.evento.hora_inicio|time:"H:i" }}</td>
-                                    <td>{{ item.evento.hora_fin|time:"H:i" }}</td>
-                                    <td>{{ item.evento.interesado|truncatechars:20 }}</td>
+                                    <td>{{ item.evento.start_time|date:"d/m/Y" }}</td>
+                                    <td>{{ item.evento.start_time|time:"H:i" }}</td>
+                                    <td>{{ item.evento.end_time|time:"H:i" }}</td>
+                                    <td>{{ item.evento.assigned_agent_id|default:"—" }}</td>
                                     <td>
                                         {% if item.evento.property_id %}
                                         <div class="d-flex flex-column">

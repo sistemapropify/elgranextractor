@@ -1155,6 +1155,7 @@
 .cv-edge--nota  { stroke: #c9b44a; stroke-dasharray: 3 3; }
 .cv-edge--lead_analysis { stroke: #5c9ce6; stroke-dasharray: 4 3; }
 .cv-edge--lead  { stroke: #5c9ce6; stroke-width: 2; }
+.cv-edge--visita { stroke: #e65100; stroke-width: 2; }
 
 .cv-edge__label {
   fill: var(--cv-text-muted);

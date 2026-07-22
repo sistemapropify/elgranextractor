@@ -399,6 +399,7 @@ function renderSinglePlaceholder(n) {
     var source = fd.source || '';
     var lastMsg = fd.last_message_text || '';
     var notes = fd.notes || '';
+    var leadStatus = fd.lead_status || '';
     // Fecha del lead
     var createdAt = fd.created_at || '';
     var fechaStr = '';
@@ -430,6 +431,7 @@ function renderSinglePlaceholder(n) {
       <div class="cv-node__header" style="cursor:pointer;" title="Click para abrir CRM" onclick="window.open('https://app.propify.pe/crm/lead/${n.ref_id || ''}','_blank')">
         <span class="cv-node__badge cv-badge--lead-analysis">👤 LEAD</span>
         <span class="cv-node__title">${escHtml(contactName)}</span>
+        ${leadStatus ? '<span style="background:#7b1fa2;color:white;padding:2px 6px;border-radius:8px;font-size:9px;margin-left:4px;">' + escHtml(leadStatus) + '</span>' : ''}
         <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
       </div>
       <div class="cv-node__req-info">
@@ -448,6 +450,50 @@ function renderSinglePlaceholder(n) {
       <div class="cv-port cv-port--bottom" data-node="${n.id}" data-port="bottom"></div>
       <div class="cv-port cv-port--left"   data-node="${n.id}" data-port="left"></div>
       <div class="cv-resize-handle" data-node="${n.id}"></div>
+    `;
+  } else if (n.tipo === 'lead_matrix') {
+    node.innerHTML = `
+      <div class="cv-node__header">
+        <span class="cv-node__badge cv-badge--lead-matrix">MATRIZ</span>
+        <span class="cv-node__title">Matriz de Leads</span>
+        <span class="cv-lead-gran-label" id="matrix-total-label-${n.id}">-</span>
+        <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
+      </div>
+      <div class="cv-node__body" style="padding:0;overflow:auto;max-height:420px;">
+        <div style="text-align:center;padding:30px;color:var(--cv-text-muted);font-size:13px;">
+          Cargando datos...
+        </div>
+      </div>
+      <div class="cv-port cv-port--top"    data-node="${n.id}" data-port="top"></div>
+      <div class="cv-port cv-port--right"  data-node="${n.id}" data-port="right"></div>
+      <div class="cv-port cv-port--bottom" data-node="${n.id}" data-port="bottom"></div>
+      <div class="cv-port cv-port--left"   data-node="${n.id}" data-port="left"></div>
+      <div class="cv-resize-handle" data-node="${n.id}"></div>
+    `;
+  } else if (n.tipo === 'visita') {
+    const fd = n.field_data || {};
+    var vTitulo = fd.titulo || 'Visita #' + (n.ref_id || '');
+    var vFecha = fd.fecha_evento || '';
+    var vFechaStr = '';
+    if (vFecha) { var vm = vFecha.match(/^(\d{4})-(\d{2})-(\d{2})/); if (vm) vFechaStr = vm[3] + '/' + vm[2] + '/' + vm[1]; else vFechaStr = vFecha; }
+    var vHoraStr = (fd.hora_inicio || '') + ((fd.hora_inicio && fd.hora_fin) ? ' - ' + fd.hora_fin : '');
+    node.innerHTML = `
+      <div class="cv-node__header" style="cursor:pointer;" title="Ver detalle de visita">
+        <span class="cv-node__badge" style="background:#e65100;">🏠 VISITA</span>
+        <span class="cv-node__title">${escHtml(vTitulo)}</span>
+        <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
+      </div>
+      <div class="cv-node__req-info">
+        ${vFechaStr ? '<span class="cv-req-info__item">📅 ' + escHtml(vFechaStr) + '</span>' : ''}
+        ${vHoraStr ? '<span class="cv-req-info__item">🕐 ' + escHtml(vHoraStr) + '</span>' : ''}
+        ${fd.interesado ? '<span class="cv-req-info__item">👤 ' + escHtml(fd.interesado) + '</span>' : ''}
+        ${fd.event_type_name ? '<span class="cv-req-info__item">🏷️ ' + escHtml(fd.event_type_name) + '</span>' : ''}
+      </div>
+      ${fd.detalle ? '<div class="cv-node__req-body" style="font-size:11px;padding:6px;border-top:1px solid var(--cv-border);"><div style="color:var(--cv-text-muted);white-space:pre-wrap;">' + escHtml(fd.detalle) + '</div></div>' : ''}
+      <div class="cv-port cv-port--top"    data-node="${n.id}" data-port="top"></div>
+      <div class="cv-port cv-port--right"  data-node="${n.id}" data-port="right"></div>
+      <div class="cv-port cv-port--bottom" data-node="${n.id}" data-port="bottom"></div>
+      <div class="cv-port cv-port--left"   data-node="${n.id}" data-port="left"></div>
     `;
   } else if (n.tipo === 'lead_global') {
     var savedGran = (n.field_data && n.field_data._granularity) || 'day';

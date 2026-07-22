@@ -23,7 +23,7 @@
             <div class="card border-0 shadow-sm mb-4">
                 <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
                     <h4 class="mb-0">
-                        <i class="bi bi-calendar-event me-2"></i>{{ evento.titulo }}
+                        <i class="bi bi-calendar-event me-2"></i>{{ evento.title }}
                     </h4>
                     <span class="badge bg-primary fs-6">#{{ evento.code }}</span>
                 </div>
@@ -39,21 +39,14 @@
                                     <th>Fecha:</th>
                                     <td>
                                         <i class="bi bi-calendar me-1"></i>
-                                        {{ evento.fecha_evento|date:"l, d F Y" }}
+                                        {{ evento.start_time|date:"l, d F Y" }}
                                     </td>
                                 </tr>
                                 <tr>
                                     <th>Horario:</th>
                                     <td>
                                         <i class="bi bi-clock me-1"></i>
-                                        {{ evento.hora_inicio|time:"H:i" }} - {{ evento.hora_fin|time:"H:i" }}
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <th>Interesado:</th>
-                                    <td>
-                                        <i class="bi bi-person me-1"></i>
-                                        {{ evento.interesado }}
+                                        {{ evento.start_time|time:"H:i" }} - {{ evento.end_time|time:"H:i" }}
                                     </td>
                                 </tr>
                                 <tr>
@@ -74,7 +67,7 @@
                                     <th width="40%">Tipo:</th>
                                     <td>
                                         {% if evento.event_type %}
-                                        <span class="badge" style="background-color: {{ evento.event_type.color }}; color: white;">
+                                        <span class="badge bg-primary">
                                             {{ evento.event_type.name }}
                                         </span>
                                         {% else %}
@@ -130,16 +123,16 @@
                         </div>
                     </div>
 
-                    <!-- Detalle -->
+                    <!-- Descripción -->
                     <div class="mt-4">
                         <h5 class="border-bottom pb-2">
-                            <i class="bi bi-card-text me-2"></i>Detalle del Evento
+                            <i class="bi bi-card-text me-2"></i>Descripción del Evento
                         </h5>
                         <div class="bg-light p-3 rounded">
-                            {% if evento.detalle %}
-                                {{ evento.detalle|linebreaks }}
+                            {% if evento.description %}
+                                {{ evento.description|linebreaks }}
                             {% else %}
-                                <p class="text-muted mb-0">No hay detalles adicionales.</p>
+                                <p class="text-muted mb-0">No hay descripción adicional.</p>
                             {% endif %}
                         </div>
                     </div>
@@ -150,8 +143,8 @@
                             <i class="bi bi-chat-left-text me-2"></i>Seguimiento
                         </h5>
                         <div class="bg-light p-3 rounded">
-                            {% if evento.seguimiento %}
-                                {{ evento.seguimiento|linebreaks }}
+                            {% if evento.tracing %}
+                                {{ evento.tracing|linebreaks }}
                             {% else %}
                                 <p class="text-muted mb-0">No hay información de seguimiento.</p>
                             {% endif %}
@@ -162,7 +155,7 @@
                     <small class="text-muted">
                         <i class="bi bi-clock-history me-1"></i>
                         Creado: {{ evento.created_at|date:"d/m/Y H:i" }}
-                        {% if evento.updated_at != evento.created_at %}
+                        {% if evento.updated_at and evento.updated_at != evento.created_at %}
                         · Actualizado: {{ evento.updated_at|date:"d/m/Y H:i" }}
                         {% endif %}
                     </small>
@@ -197,6 +190,16 @@
                             </span>
                         </li>
                         <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Match ID
+                            <span>
+                                {% if evento.match_id %}
+                                <span class="badge bg-info">#{{ evento.match_id }}</span>
+                                {% else %}
+                                <span class="text-muted">—</span>
+                                {% endif %}
+                            </span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
                             Proposal ID
                             <span>
                                 {% if evento.proposal_id %}
@@ -207,22 +210,18 @@
                             </span>
                         </li>
                         <li class="list-group-item d-flex justify-content-between align-items-center">
-                            Creado por ID
-                            <span class="badge bg-secondary">#{{ evento.created_by_id }}</span>
+                            Completado
+                            <span>
+                                {% if evento.completed %}
+                                <span class="badge bg-success">Sí</span>
+                                {% else %}
+                                <span class="badge bg-secondary">No</span>
+                                {% endif %}
+                            </span>
                         </li>
-                        <li class="list-group-item">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div>
-                                    <strong>Razón de Rechazo</strong>
-                                    <div class="mt-1 small">
-                                        {% if evento.rejection_reason %}
-                                            {{ evento.rejection_reason|truncatechars:100 }}
-                                        {% else %}
-                                            <span class="text-muted">Ninguna</span>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                            </div>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Creado por ID
+                            <span class="badge bg-secondary">#{{ evento.created_by_id|default:"—" }}</span>
                         </li>
                     </ul>
                 </div>
@@ -250,7 +249,7 @@
                             <i class="bi bi-tag me-2"></i>Ver eventos de este tipo
                         </a>
                         {% endif %}
-                        <a href="?dia={{ evento.fecha_evento|date:'Y-m-d' }}" class="btn btn-outline-warning">
+                        <a href="?dia={{ evento.start_time|date:'Y-m-d' }}" class="btn btn-outline-warning">
                             <i class="bi bi-calendar-day me-2"></i>Ver eventos de este día
                         </a>
                     </div>

@@ -727,7 +727,7 @@ def api_lead_analysis_leads(request, prop_id):
             cursor.execute("""
                 SELECT l.id, l.username, l.source, l.source_detail,
                        l.notes, l.score, l.last_message_text,
-                       l.created_at,
+                       l.created_at, l.lead_status_id,
                        c.first_name, c.last_name, c.phone, c.email
                 FROM lead_properties lp
                 INNER JOIN lead l ON l.id = lp.lead_id
@@ -737,13 +737,24 @@ def api_lead_analysis_leads(request, prop_id):
                 ORDER BY l.created_at DESC
             """, [prop_id, date_str])
 
+            # Mapa de estados de lead
+            lead_status_map = {}
+            try:
+                cursor3 = connections['propifai'].cursor()
+                cursor3.execute("SELECT id, name FROM lead_status")
+                for row3 in cursor3.fetchall():
+                    lead_status_map[row3[0]] = row3[1]
+                cursor3.close()
+            except Exception:
+                pass
+
             # Obtener datos de la propiedad para incluir en la respuesta
             propiedad_info = {'id': int(prop_id), 'code': '', 'title': '', 'district_name': '', 'price': None, 'currency': ''}
             try:
                 cursor2 = connections['propifai'].cursor()
                 cursor2.execute("""
-                    SELECT p.code, p.title, p.district_name, p.price, p.currency_id
-                    FROM propiedadespropify p
+                    SELECT p.code, p.title, NULL, NULL, NULL
+                    FROM property p
                     WHERE p.id = %s
                 """, [prop_id])
                 prow = cursor2.fetchone()
@@ -760,7 +771,7 @@ def api_lead_analysis_leads(request, prop_id):
             leads = []
             from datetime import timedelta
             for row in cursor.fetchall():
-                lead_id, username, source, source_detail, notes, score, last_msg, created_at, first_name, last_name, phone, email = row
+                lead_id, username, source, source_detail, notes, score, last_msg, created_at, lead_status_id, first_name, last_name, phone, email = row
                 if hasattr(created_at, 'isoformat'):
                     peru_time = created_at - timedelta(hours=5)
                     created_str = peru_time.isoformat()
@@ -776,6 +787,8 @@ def api_lead_analysis_leads(request, prop_id):
                     'email': email or '',
                     'source': source or '',
                     'source_detail': source_detail or '',
+                    'lead_status_id': lead_status_id,
+                    'lead_status': lead_status_map.get(lead_status_id, ''),
                     'notes': notes or '',
                     'score': score,
                     'last_message_text': (last_msg or ''),
@@ -1664,6 +1677,35 @@ def api_export_lead_matrix(request):
         return response
     except Exception as e:
         logger.error(f"Error exportando lead matrix: {e}", exc_info=True)
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+def api_lead_events(request, lead_id):
+    """GET /canvas/api/lead-events/<lead_id>/ - Eventos vinculados a un lead."""
+    user = _get_current_user(request)
+    if not user:
+        return JsonResponse({'error': 'No autenticado'}, status=401)
+    try:
+        from eventos.models import Event
+        eventos_qs = Event.objects.filter(lead_id=lead_id, is_active=True).order_by('-start_time')[:10]
+        eventos = []
+        for ev in eventos_qs:
+            st = ev.start_time
+            fecha_str = st.isoformat() if st else ''
+            hora_str = st.strftime('%H:%M') if st else ''
+            et = ev.end_time
+            hora_fin_str = et.strftime('%H:%M') if et else ''
+            eventos.append({
+                'id': ev.id,
+                'titulo': ev.title or '',
+                'fecha_evento': fecha_str,
+                'hora_inicio': hora_str,
+                'hora_fin': hora_fin_str,
+                'detalle': ev.description or '',
+            })
+        return JsonResponse({'eventos': eventos, 'total': len(eventos)})
+    except Exception as e:
+        logger.error(f"Error en lead events: {e}", exc_info=True)
         return JsonResponse({'error': str(e)}, status=500)
 
 

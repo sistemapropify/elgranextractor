@@ -381,47 +381,49 @@ class PropertyImage(models.Model):
 
 
 class Event(models.Model):
-    """Modelo para eventos de propiedades en la base de datos Propifai."""
+    """Modelo para eventos (dbo.event) en dbpropify_be."""
     id = models.BigIntegerField(primary_key=True)
+    created_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(null=True, blank=True)
     code = models.CharField(max_length=20)
-    titulo = models.CharField(max_length=200)
-    fecha_evento = models.DateField()
-    hora_inicio = models.TimeField()
-    hora_fin = models.TimeField()
-    detalle = models.TextField()
-    interesado = models.CharField(max_length=200)
-    created_at = models.DateTimeField()
-    updated_at = models.DateTimeField()
-    is_active = models.BooleanField()
-    created_by = models.ForeignKey('User', on_delete=models.CASCADE, related_name='eventos_creados', db_column='created_by_id')
-    property = models.ForeignKey('PropifaiProperty', on_delete=models.CASCADE, null=True, db_column='property_id')
-    event_type = models.ForeignKey('EventType', on_delete=models.CASCADE, db_column='event_type_id')
-    contact_id = models.BigIntegerField(null=True)
-    assigned_agent = models.ForeignKey('User', on_delete=models.CASCADE, null=True, related_name='eventos_asignados', db_column='assigned_agent_id')
-    seguimiento = models.TextField()
-    lead_id = models.BigIntegerField(null=True)
-    proposal_id = models.BigIntegerField(null=True)
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True, default='')
+    tracing = models.TextField(blank=True, default='')
+    start_time = models.DateTimeField(null=True, blank=True)
+    end_time = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=20)
-    rejection_reason = models.TextField()
+    is_active = models.BooleanField(default=True)
+    assigned_agent_id = models.BigIntegerField(null=True, blank=True)
+    contact_id = models.BigIntegerField(null=True, blank=True)
+    created_by_id = models.BigIntegerField(null=True, blank=True)
+    event_type_id = models.BigIntegerField(null=True, blank=True)
+    property_id = models.BigIntegerField(null=True, blank=True)
+    updated_by_id = models.BigIntegerField(null=True, blank=True)
+    lead_id = models.BigIntegerField(null=True, blank=True)
+    match_id = models.BigIntegerField(null=True, blank=True)
+    proposal_id = models.BigIntegerField(null=True, blank=True)
+    completed = models.BooleanField(default=False)
 
     class Meta:
-        db_table = 'events'
+        db_table = 'event'
         managed = False
 
     def __str__(self):
-        return f"{self.code} - {self.titulo}"
+        return f"{self.code} - {self.title}"
 
 
 class EventType(models.Model):
-    """Modelo para tipos de eventos."""
+    """Modelo para tipos de eventos (dbo.event_type) en dbpropify_be."""
     id = models.BigIntegerField(primary_key=True)
+    created_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(null=True, blank=True)
     name = models.CharField(max_length=100)
-    color = models.CharField(max_length=7)
-    is_active = models.BooleanField()
-    created_at = models.DateTimeField()
+    is_active = models.BooleanField(default=True)
+    created_by_id = models.BigIntegerField(null=True, blank=True)
+    updated_by_id = models.BigIntegerField(null=True, blank=True)
 
     class Meta:
-        db_table = 'event_types'
+        db_table = 'event_type'
         managed = False
 
     def __str__(self):

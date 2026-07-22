@@ -58,14 +58,14 @@ def calcular_evolucion_semanal(eventos_queryset):
     # Filtrar eventos de las últimas N*7 días (para cubrir todas las semanas)
     fecha_inicio = hoy - timedelta(days=7 * num_semanas)
     eventos_recientes = eventos_queryset.filter(
-        fecha_evento__gte=fecha_inicio,
-        fecha_evento__lte=hoy
+        start_time__date__gte=fecha_inicio,
+        start_time__date__lte=hoy
     )
     
     # Contar eventos por tipo y semana
     for evento in eventos_recientes:
         # Obtener semana ISO
-        año_sem, semana_sem, _ = evento.fecha_evento.isocalendar()
+        año_sem, semana_sem, _ = evento.start_time.isocalendar()
         clave_semana = f"{año_sem}-W{semana_sem:02d}"
         tipo_id = evento.event_type_id
         conteos[tipo_id][clave_semana] += 1
@@ -157,8 +157,8 @@ def calcular_matriz_agente_semana(eventos_queryset, num_semanas=8):
     # Obtener todos los agentes que tienen eventos en el período
     fecha_inicio = hoy - timedelta(days=7 * num_semanas)
     eventos_recientes = eventos_queryset.filter(
-        fecha_evento__gte=fecha_inicio,
-        fecha_evento__lte=hoy
+        start_time__date__gte=fecha_inicio,
+        start_time__date__lte=hoy
     )
     
     # Obtener IDs de agentes únicos
@@ -200,7 +200,7 @@ def calcular_matriz_agente_semana(eventos_queryset, num_semanas=8):
             continue
             
         # Obtener semana ISO
-        año_sem, semana_sem, _ = evento.fecha_evento.isocalendar()
+        año_sem, semana_sem, _ = evento.start_time.isocalendar()
         semana_iso = f"{año_sem}-W{semana_sem:02d}"
         
         # Si la semana no está en nuestro rango, saltar
@@ -253,18 +253,18 @@ def dashboard_eventos(request):
     """
     Vista principal del dashboard de eventos con paginación y filtros.
     """
-    # Obtener todos los eventos ordenados por fecha descendente
-    eventos_list = Event.objects.all().order_by('-fecha_evento', '-hora_inicio')
+    # Obtener todos los eventos ordenados por start_time descendente
+    eventos_list = Event.objects.all().order_by('-start_time')
     
     # Inicializar filtros
     filtros = {}
     
-    # Filtro por día (fecha específica)
+    # Filtro por día (fecha específica) - usar __date lookup en DateTimeField
     dia = request.GET.get('dia')
     if dia:
         try:
             fecha_filtro = datetime.strptime(dia, '%Y-%m-%d').date()
-            eventos_list = eventos_list.filter(fecha_evento=fecha_filtro)
+            eventos_list = eventos_list.filter(start_time__date=fecha_filtro)
             filtros['dia'] = dia
         except ValueError:
             pass
@@ -343,9 +343,9 @@ def dashboard_eventos(request):
     
     # Estadísticas básicas
     total_eventos = eventos_list.count()
-    eventos_hoy = eventos_list.filter(fecha_evento=date.today()).count()
+    eventos_hoy = eventos_list.filter(start_time__date=date.today()).count()
     eventos_semana = eventos_list.filter(
-        fecha_evento__gte=date.today() - timedelta(days=7)
+        start_time__date__gte=date.today() - timedelta(days=7)
     ).count()
     
     # Calcular evolución semanal por tipo de evento
@@ -396,18 +396,19 @@ def api_eventos(request):
     from django.http import JsonResponse
     import json
     
-    eventos = Event.objects.all().order_by('-fecha_evento')[:100]
+    eventos = Event.objects.all().order_by('-start_time')[:100]
     
     data = []
     for e in eventos:
+        st = e.start_time
+        et = e.end_time
         data.append({
             'id': e.id,
             'code': e.code,
-            'titulo': e.titulo,
-            'fecha_evento': e.fecha_evento.isoformat() if e.fecha_evento else None,
-            'hora_inicio': str(e.hora_inicio) if e.hora_inicio else None,
-            'hora_fin': str(e.hora_fin) if e.hora_fin else None,
-            'interesado': e.interesado,
+            'titulo': e.title,
+            'fecha_evento': st.isoformat() if st else None,
+            'hora_inicio': st.strftime('%H:%M') if st else None,
+            'hora_fin': et.strftime('%H:%M') if et else None,
             'property_id': e.property_id,
             'event_type_id': e.event_type_id,
             'assigned_agent_id': e.assigned_agent_id,
