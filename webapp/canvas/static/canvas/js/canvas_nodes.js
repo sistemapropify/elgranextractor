@@ -2306,7 +2306,7 @@ function renderLeadMatrixBody(nodeId, data) {
     });
   }
 
-  // Click en celdas con leads
+  // Click en celdas con leads - crea nodos lead_nodo en el canvas
   body.querySelectorAll('.cv-matrix-td[data-prop-id]').forEach(function(td) {
     var count = parseInt(td.getAttribute('data-count') || '0');
     if (count <= 0) return;
@@ -2316,19 +2316,76 @@ function renderLeadMatrixBody(nodeId, data) {
       var propId = this.getAttribute('data-prop-id');
       var date = this.getAttribute('data-date');
       if (!propId || !date) return;
-      // Crear leads modal usando api_lead_analysis_leads
+      
       fetch('/canvas/api/lead-analysis/' + propId + '/leads/?date=' + date)
         .then(function(r) { return r.json(); })
         .then(function(leadData) {
-          if (typeof window.showLeadModal === 'function') {
-            window.showLeadModal(leadData.leads || []);
-          } else {
-            console.log('[LeadMatrix] Leads para prop=' + propId + ' date=' + date + ':', leadData);
-            alert(leadData.leads && leadData.leads.length + ' lead(s) encontrados - Revisa la consola');
-          }
+          var leads = leadData.leads || [];
+          if (leads.length === 0) return;
+          
+          // Posicionar leads alrededor del nodo matriz
+          var matrixNodo = STATE.nodos[nodeId];
+          var baseX = matrixNodo ? matrixNodo.x + 580 : 300;
+          var baseY = matrixNodo ? matrixNodo.y : 200;
+          
+          leads.forEach(function(lead, idx) {
+            var leadNodeId = 'lead_nodo_' + Date.now() + '_' + idx;
+            if (STATE.nodos[leadNodeId]) return;
+            
+            var x = baseX + 30;
+            var y = baseY + (idx * 170);
+            
+            // Crear elemento DOM
+            var node = document.createElement('div');
+            node.className = 'cv-node cv-node--lead-nodo';
+            node.dataset.id = leadNodeId;
+            node.style.left = x + 'px';
+            node.style.top = y + 'px';
+            node.style.width = '220px';
+            
+            var contactName = lead.contact_name || lead.username || 'Lead';
+            var phone = lead.phone || '';
+            var source = lead.source || '';
+            var lastMsg = lead.last_message_text || '';
+            
+            node.innerHTML = '<div class="cv-node__header" style="cursor:pointer;" title="Doble click para abrir CRM" ondblclick="window.open(\'https://app.propify.pe/crm/lead/' + (lead.id || '') + '\',\'_blank\')">' +
+              '<span class="cv-node__badge cv-badge--lead-analysis">👤 LEAD</span>' +
+              '<span class="cv-node__title">' + escHtml(contactName) + '</span>' +
+              '<button class="cv-node__delete" title="Eliminar">&#x2715;</button></div>' +
+              '<div class="cv-node__req-info">' +
+              (phone ? '<span class="cv-req-info__item">📞 ' + escHtml(phone) + '</span>' : '') +
+              (source ? '<span class="cv-req-info__item">📡 ' + escHtml(source) + '</span>' : '') +
+              '</div>' +
+              (lastMsg ? '<div class="cv-node__req-body" style="font-size:11px;padding:6px;border-top:1px solid var(--cv-border);"><div style="color:var(--cv-text-muted);white-space:pre-wrap;">' + escHtml(lastMsg) + '</div></div>' : '') +
+              '<div class="cv-port cv-port--top" data-node="' + leadNodeId + '" data-port="top"></div>' +
+              '<div class="cv-port cv-port--right" data-node="' + leadNodeId + '" data-port="right"></div>' +
+              '<div class="cv-port cv-port--bottom" data-node="' + leadNodeId + '" data-port="bottom"></div>' +
+              '<div class="cv-port cv-port--left" data-node="' + leadNodeId + '" data-port="left"></div>';
+            
+            dom.nodes.appendChild(node);
+            positionNode(leadNodeId, node, x, y);
+            
+            STATE.nodos[leadNodeId] = {
+              id: leadNodeId, tipo: 'lead_nodo', ref_id: lead.id,
+              x: x, y: y, width: 220, height: node.offsetHeight || 160,
+              collapsed: false, color: null, el: node,
+              field_data: lead,
+            };
+            registerNodeEvents(leadNodeId, node);
+            
+            // Crear arista desde el nodo matriz al lead
+            var edgeId = 'e_matrix_lead_' + leadNodeId;
+            STATE.aristas[edgeId] = {
+              id: edgeId, origen: nodeId, destino: leadNodeId,
+              tipo: 'lead', label: date,
+            };
+          });
+          
+          if (typeof updateEdges === 'function') updateEdges();
+          markDirty();
         })
         .catch(function(err) {
-          console.error('[LeadMatrix] Error fetching leads:', err);
+          console.error('[LeadMatrix] Error:', err);
         });
     });
   });
