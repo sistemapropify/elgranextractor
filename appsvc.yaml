@@ -1,7 +1,7 @@
 # Azure App Service configuration
-# Forces Python platform detection
 platform: python
 platform_version: '3.12'
-# Startup command delegates to startup.sh which handles ODBC driver install,
-# static files, migrations, and gunicorn with optimized settings
-startup_command: "bash /home/site/wwwroot/startup.sh"
+# Startup command debe estar VACIO en Azure Portal
+# para que Oryx use el Procfile automaticamente.
+# NO usar startup_command aqui - Oryx extrae a /tmp/8dee*/
+# y no encuentra los archivos en /home/site/wwwroot/
