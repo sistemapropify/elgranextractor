@@ -51,9 +51,12 @@ else
 fi
 
 # ── Collect Static Files ──
+# NOTA: No usar --clear porque borra STATIC_ROOT antes de copiar.
+# Si la copia falla, el directorio queda vacio y todos los
+# archivos estaticos devuelven 404 (MIME type text/html).
 echo "[2/5] Collecting static files..."
 cd /home/site/wwwroot/webapp
-python manage.py collectstatic --noinput --clear 2>&1
+python manage.py collectstatic --noinput 2>&1
 echo "  ✓ Static files collected."
 
 # ── Run Migrations ──
