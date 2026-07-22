@@ -1511,6 +1511,162 @@ def api_lead_matrix(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
+def api_export_lead_matrix(request):
+    """
+    GET /canvas/api/export-lead-matrix/
+    Exporta la matriz de leads a Excel (.xlsx) usando openpyxl.
+    """
+    user = _get_current_user(request)
+    if not user:
+        return JsonResponse({'error': 'No autenticado'}, status=401)
+
+    try:
+        from django.db import connections
+        from collections import OrderedDict
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
+        from openpyxl.utils import get_column_letter
+        from django.http import HttpResponse
+
+        # Obtener datos
+        with connections['propifai'].cursor() as c:
+            c.execute("""
+                SELECT p.id, ISNULL(p.title, p.code) AS prop_title,
+                       CAST(SWITCHOFFSET(l.created_at, '-05:00') AS DATE) AS lead_date,
+                       COUNT(DISTINCT l.id) AS lead_count
+                FROM lead l
+                INNER JOIN lead_properties lp ON lp.lead_id = l.id
+                INNER JOIN property p ON p.id = lp.property_id
+                GROUP BY p.id, ISNULL(p.title, p.code),
+                         CAST(SWITCHOFFSET(l.created_at, '-05:00') AS DATE)
+                ORDER BY p.id, lead_date
+            """)
+            raw = c.fetchall()
+
+        # Agrupar
+        props_map = OrderedDict()
+        dates_set = set()
+        for prop_id, prop_title, lead_date, count in raw:
+            date_str = lead_date.isoformat() if hasattr(lead_date, 'isoformat') else str(lead_date)
+            sid = str(prop_id)
+            if sid not in props_map:
+                props_map[sid] = {'title': prop_title or f'Prop #{prop_id}', 'daily': {}, 'total': 0}
+            props_map[sid]['daily'][date_str] = count
+            props_map[sid]['total'] += count
+            dates_set.add(date_str)
+
+        dates = sorted(dates_set)
+        properties = list(props_map.values())
+
+        # Crear Excel
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Matriz de Leads"
+
+        # Estilos
+        hdr_fill = PatternFill(start_color="16213e", end_color="16213e", fill_type="solid")
+        hdr_font = Font(bold=True, color="FFFFFF", size=11)
+        prop_fill = PatternFill(start_color="0d1117", end_color="0d1117", fill_type="solid")
+        prop_font = Font(bold=True, color="FFFFFF", size=11)
+        total_fill = PatternFill(start_color="16213e", end_color="16213e", fill_type="solid")
+        total_font = Font(bold=True, color="FFDD00", size=12)
+        cell_font_num = Font(bold=True, color="FFFFFF", size=11)
+        cell_font_empty = Font(color="555555", size=11)
+        thin_border = Border(
+            bottom=Side(style='thin', color='1e3a5f'),
+            left=Side(style='thin', color='1e3a5f')
+        )
+        center = Alignment(horizontal='center', vertical='center')
+
+        max_count = max((p['daily'].get(d, 0) for p in properties for d in dates), default=1)
+
+        def cell_fill(count):
+            if not count: return PatternFill(start_color="1a1a2e", end_color="1a1a2e", fill_type="solid")
+            intensity = min(1, count / max_count)
+            alpha = 0.12 + intensity * 0.68
+            r = int(92 * alpha + 13 * (1 - alpha))
+            g = int(107 * alpha + 26 * (1 - alpha))
+            b = int(192 * alpha + 46 * (1 - alpha))
+            return PatternFill(start_color=f"{r:02x}{g:02x}{b:02x}", end_color=f"{r:02x}{g:02x}{b:02x}", fill_type="solid")
+
+        # Header
+        ws.cell(1, 1, "Propiedad").font = hdr_font
+        ws.cell(1, 1).fill = hdr_fill
+        ws.cell(1, 1).border = thin_border
+        ws.column_dimensions['A'].width = 50
+
+        for i, d in enumerate(dates):
+            parts = d.split('-')
+            label = f"{parts[2]}/{parts[1]}" if len(parts) == 3 else d
+            col = i + 2
+            cell = ws.cell(1, col, label)
+            cell.font = hdr_font
+            cell.fill = hdr_fill
+            cell.alignment = center
+            cell.border = thin_border
+            ws.column_dimensions[get_column_letter(col)].width = 12
+
+        total_col = len(dates) + 2
+        cell = ws.cell(1, total_col, "Total")
+        cell.font = Font(bold=True, color="FFDD00", size=11)
+        cell.fill = hdr_fill
+        cell.alignment = center
+        cell.border = Border(bottom=Side(style='thin', color='ffdd00'), left=Side(style='thin', color='ffdd00'))
+
+        # Data
+        for row_idx, p in enumerate(properties):
+            r = row_idx + 2
+            cell = ws.cell(r, 1, p['title'])
+            cell.font = prop_font
+            cell.fill = prop_fill
+            cell.border = thin_border
+
+            for i, d in enumerate(dates):
+                count = p['daily'].get(d, 0)
+                cell = ws.cell(r, i + 2, count if count else '-')
+                cell.fill = cell_fill(count)
+                cell.font = cell_font_num if count else cell_font_empty
+                cell.alignment = center
+                cell.border = thin_border
+
+            cell = ws.cell(r, total_col, p['total'])
+            cell.font = Font(bold=True, color="FFDD00", size=11)
+            cell.fill = PatternFill(start_color="0d1117", end_color="0d1117", fill_type="solid")
+            cell.alignment = center
+            cell.border = Border(bottom=Side(style='thin', color='1e3a5f'), left=Side(style='thin', color='ffdd00'))
+
+        # Totals row
+        tr = len(properties) + 2
+        cell = ws.cell(tr, 1, "TOTAL")
+        cell.font = total_font
+        cell.fill = total_fill
+        cell.border = Border(top=Side(style='medium', color='5c6bc0'))
+
+        total_leads = sum(p['total'] for p in properties)
+        for i, d in enumerate(dates):
+            day_total = sum(p['daily'].get(d, 0) for p in properties)
+            cell = ws.cell(tr, i + 2, day_total)
+            cell.font = total_font
+            cell.fill = total_fill
+            cell.alignment = center
+            cell.border = Border(top=Side(style='medium', color='5c6bc0'))
+
+        cell = ws.cell(tr, total_col, total_leads)
+        cell.font = Font(bold=True, color="FFDD00", size=14)
+        cell.fill = total_fill
+        cell.alignment = center
+        cell.border = Border(top=Side(style='medium', color='ffdd00'), left=Side(style='thin', color='ffdd00'))
+
+        # Responder
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = f'attachment; filename="Matriz_Leads.xlsx"'
+        wb.save(response)
+        return response
+    except Exception as e:
+        logger.error(f"Error exportando lead matrix: {e}", exc_info=True)
+        return JsonResponse({'error': str(e)}, status=500)
+
+
 def api_lienzo_eliminar(request, pk):
     """
     POST /canvas/api/eliminar/<pk>/

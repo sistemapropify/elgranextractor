@@ -2388,15 +2388,7 @@ function exportMatrixToExcel(nodeId) {
   
   html += '</table></body></html>';
 
-  var blob = new Blob([html], { type: 'application/vnd.ms-excel' });
-  var url = URL.createObjectURL(blob);
-  var a = document.createElement('a');
-  a.href = url;
-  a.download = 'Matriz_Leads_' + new Date().toISOString().slice(0,10) + '.csv';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  window.open('/canvas/api/export-lead-matrix/?t=' + Date.now(), '_blank');
 }
 
 function exportMatrixToExcel(nodeId) {
@@ -2454,15 +2446,7 @@ function exportMatrixToExcel(nodeId) {
   });
   csv += ',"' + totalLeads + '"\r\n';
   
-  var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-  var url = URL.createObjectURL(blob);
-  var a = document.createElement('a');
-  a.href = url;
-  a.download = 'Matriz_Leads_' + new Date().toISOString().slice(0,10) + '.csv';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  window.open('/canvas/api/export-lead-matrix/?t=' + Date.now(), '_blank');
 }
 
 window.createLeadMatrixNode = createLeadMatrixNode;
