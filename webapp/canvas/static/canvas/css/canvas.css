@@ -2063,21 +2063,27 @@
 }
 
 .cv-matrix-wrap::-webkit-scrollbar {
-  height: 6px;
-  width: 6px;
+  height: 14px;
+  width: 14px;
 }
 
 .cv-matrix-wrap::-webkit-scrollbar-track {
   background: var(--cv-bg);
+  border-radius: 7px;
 }
 
 .cv-matrix-wrap::-webkit-scrollbar-thumb {
   background: var(--cv-border);
-  border-radius: 3px;
+  border-radius: 7px;
+  border: 2px solid var(--cv-bg);
 }
 
 .cv-matrix-wrap::-webkit-scrollbar-thumb:hover {
   background: var(--cv-text-muted);
+}
+
+.cv-matrix-wrap::-webkit-scrollbar-corner {
+  background: var(--cv-bg);
 }
 
 
