@@ -1336,6 +1336,36 @@ function renderPlaceholderNodes(nodos) {
         <div class="cv-port cv-port--bottom" data-node="${n.id}" data-port="bottom"></div>
         <div class="cv-port cv-port--left"   data-node="${n.id}" data-port="left"></div>
       `;
+    } else if (n.tipo === 'lead_matrix') {
+      node.innerHTML = `
+        <div class="cv-node__header">
+          <span class="cv-node__badge cv-badge--lead-matrix">MATRIZ</span>
+          <span class="cv-node__title">Matriz de Leads</span>
+          <span class="cv-lead-gran-label" id="matrix-total-label-${n.id}">-</span>
+          <button class="cv-node__delete" title="Eliminar">&#x2715;</button>
+        </div>
+        <div class="cv-node__body" style="padding:0;overflow:auto;max-height:420px;">
+          <div style="text-align:center;padding:30px;color:var(--cv-text-muted);font-size:13px;">
+            Cargando datos...
+          </div>
+        </div>
+        <div class="cv-port cv-port--top"    data-node="${n.id}" data-port="top"></div>
+        <div class="cv-port cv-port--right"  data-node="${n.id}" data-port="right"></div>
+        <div class="cv-port cv-port--bottom" data-node="${n.id}" data-port="bottom"></div>
+        <div class="cv-port cv-port--left"   data-node="${n.id}" data-port="left"></div>
+        <div class="cv-resize-handle" data-node="${n.id}"></div>
+      `;
+      // Refrescar datos al restaurar
+      setTimeout(function(id) {
+        fetch('/canvas/api/lead-matrix/?t=' + Date.now())
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (typeof renderLeadMatrixBody === 'function') {
+              renderLeadMatrixBody(id, data);
+            }
+          })
+          .catch(function() {});
+      }, 500, n.id);
     } else {
       node.innerHTML = `
         <div class="cv-nota__handle">&#10022; nota</div>
@@ -2210,37 +2240,37 @@ function renderLeadMatrixBody(nodeId, data) {
     return dateStr;
   }
 
-  var html = '<div class="cv-matrix-wrap" style="overflow-x:auto;overflow-y:auto;max-height:400px;">';
-  html += '<table class="cv-matrix-table" style="width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed;">';
+  var html = '<div class="cv-matrix-wrap" style="overflow-x:auto;overflow-y:auto;max-height:400px;width:100%;">';
+  html += '<table class="cv-matrix-table" style="width:' + Math.max(800, dates.length * 70 + 350) + 'px;border-collapse:collapse;font-size:12px;table-layout:fixed;">';
 
   html += '<thead><tr>';
-  html += '<th class="cv-matrix-th cv-matrix-th--prop" style="text-align:left;padding:5px 8px;position:sticky;top:0;left:0;z-index:3;background:var(--cv-surface);border-bottom:1px solid var(--cv-border);color:var(--cv-text-sec);font-weight:600;min-width:160px;max-width:200px;">Propiedad</th>';
-  html += '<th class="cv-matrix-th" style="text-align:right;padding:5px 6px;position:sticky;top:0;z-index:2;background:var(--cv-surface);border-bottom:1px solid var(--cv-border);color:var(--cv-text-sec);font-weight:600;width:44px;">Total</th>';
+  html += '<th class="cv-matrix-th cv-matrix-th--prop" style="text-align:left;padding:8px 12px;position:sticky;top:0;left:0;z-index:3;background:#16213e;border-bottom:2px solid #5c6bc0;color:#e0e0e0;font-weight:700;width:350px;min-width:250px;cursor:col-resize;">Propiedad</th>';
   dates.forEach(function(d) {
-    html += '<th class="cv-matrix-th" style="text-align:center;padding:5px 1px;position:sticky;top:0;z-index:2;background:var(--cv-surface);border-bottom:1px solid var(--cv-border);color:var(--cv-text-muted);font-weight:500;font-size:10px;width:38px;" title="' + escHtml(d) + '">' + escHtml(fmtDate(d)) + '</th>';
+    html += '<th class="cv-matrix-th" style="text-align:center;padding:8px 4px;position:sticky;top:0;z-index:2;background:#16213e;border-bottom:2px solid #5c6bc0;color:#9e9e9e;font-weight:500;font-size:11px;width:70px;min-width:50px;" title="' + escHtml(d) + '">' + escHtml(fmtDate(d)) + '</th>';
   });
+  html += '<th class="cv-matrix-th" style="text-align:center;padding:8px 12px;position:sticky;top:0;z-index:2;background:#16213e;border-bottom:2px solid #ffdd00;color:#ffdd00;font-weight:700;font-size:12px;width:70px;min-width:50px;">Total</th>';
   html += '</tr></thead>';
 
   html += '<tbody>';
   properties.forEach(function(prop) {
     var propLabel = prop.title || prop.code || 'Prop #' + prop.property_id;
     if (prop.district_name) propLabel += ' - ' + prop.district_name;
-    if (propLabel.length > 55) propLabel = propLabel.substring(0, 52) + '...';
+    // Sin truncado
 
-    html += '<tr class="cv-matrix-row">';
-    html += '<td class="cv-matrix-td cv-matrix-td--prop" style="text-align:left;padding:3px 8px;border-bottom:1px solid var(--cv-border);color:var(--cv-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;position:sticky;left:0;z-index:1;background:var(--cv-bg);" title="' + escHtml(prop.title || prop.code || '') + ' - ' + escHtml(prop.district_name || '') + '">' + escHtml(propLabel) + '</td>';
-    html += '<td class="cv-matrix-td" style="text-align:right;padding:3px 6px;border-bottom:1px solid var(--cv-border);color:var(--cv-text-pri);font-weight:700;font-size:12px;">' + prop.total + '</td>';
+    html += '<tr class="cv-matrix-row" style="transition:background 0.2s;">';
+    html += '<td class="cv-matrix-td cv-matrix-td--prop" style="text-align:left;padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#e0e0e0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:350px;min-width:250px;position:sticky;left:0;z-index:1;background:#0d1117;cursor:col-resize;" title="' + escHtml(prop.title || prop.code || '') + ' - ' + escHtml(prop.district_name || '') + '"><strong style="color:#ffffff;">' + escHtml(propLabel) + '</strong></td>';
 
     dates.forEach(function(d) {
       var count = prop.daily_counts[d] || 0;
       var color = cellColor(count);
-      html += '<td class="cv-matrix-td" style="text-align:center;padding:3px 1px;border-bottom:1px solid var(--cv-border);background:' + color + ';color:' + (count > 0 ? 'var(--cv-text-pri)' : 'var(--cv-text-muted)') + ';font-size:11px;font-weight:' + (count > 0 ? '700' : '400') + ';cursor:' + (count > 0 ? 'pointer' : 'default') + ';"';
+      html += '<td class="cv-matrix-td" style="text-align:center;padding:8px 4px;border-bottom:1px solid #1e3a5f;background:' + color + ';color:' + (count > 0 ? '#ffffff' : '#555555') + ';font-size:12px;font-weight:' + (count > 0 ? '700' : '400') + ';min-width:50px;cursor:' + (count > 0 ? 'pointer' : 'default') + ';"';
       html += ' title="' + escHtml(prop.title || prop.code || 'Prop') + ' - ' + fmtDate(d) + ': ' + count + ' leads"';
       html += '>';
       html += count > 0 ? count : '-';
       html += '</td>';
     });
 
+    html += '<td class="cv-matrix-td" style="text-align:center;padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#ffdd00;font-weight:800;font-size:14px;background:#0d1117;min-width:50px;border-left:1px solid #ffdd00;">' + prop.total + '</td>';
     html += '</tr>';
   });
   html += '</tbody></table>';

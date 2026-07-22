@@ -1524,4 +1524,3 @@ def api_lienzo_eliminar(request, pk):
     lienzo.delete()
     from django.shortcuts import redirect
     return redirect('canvas:list')
-
