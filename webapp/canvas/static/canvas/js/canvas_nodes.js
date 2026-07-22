@@ -2335,28 +2335,67 @@ function renderLeadMatrixBody(nodeId, data) {
             var x = baseX + 30;
             var y = baseY + (idx * 170);
             
-            // Crear elemento DOM
+            var contactName = lead.contact_name || lead.username || 'Lead';
+            var phone = lead.phone || '';
+            var email = lead.email || '';
+            var source = lead.source || '';
+            var lastMsg = lead.last_message_text || '';
+            var notes = lead.notes || '';
+            
+            // Fecha/hora como en renderLeadNodoBody
+            var createdAt = lead.created_at || '';
+            var fechaStr = '';
+            if (createdAt) {
+              var dateMatch = createdAt.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+              if (dateMatch) {
+                fechaStr = dateMatch[3] + '/' + dateMatch[2] + '/' + dateMatch[1] + ' ' + dateMatch[4] + ':' + dateMatch[5];
+              } else {
+                fechaStr = createdAt;
+              }
+            }
+            
+            // Propiedades vinculadas
+            var propiedades = lead.propiedades || [];
+            var prop = propiedades.length > 0 ? propiedades[0] : null;
+            var propHtml = '';
+            if (prop) {
+              var propTitle = prop.title || prop.code || ('Prop #' + prop.id);
+              var propPrice = (prop.price != null)
+                ? (typeof formatPrice === 'function' ? formatPrice(prop.price, prop.currency) : prop.price)
+                : '';
+              var propDistrict = prop.district_name || '';
+              var propTitleShort = propTitle.length > 60 ? propTitle.substring(0, 57) + '...' : propTitle;
+              var propDetail = propTitleShort;
+              if (propDistrict) propDetail += ' — ' + propDistrict;
+              if (propPrice) propDetail += ' (' + propPrice + ')';
+              propHtml = '<span class="cv-req-info__item" style="color:#66bb6a;">🏠 ' + escHtml(propDetail) + '</span>';
+            }
+            
+            // Crear elemento DOM igual que renderLeadNodoBody
             var node = document.createElement('div');
             node.className = 'cv-node cv-node--lead-nodo';
             node.dataset.id = leadNodeId;
             node.style.left = x + 'px';
             node.style.top = y + 'px';
-            node.style.width = '220px';
+            node.style.width = '260px';
             
-            var contactName = lead.contact_name || lead.username || 'Lead';
-            var phone = lead.phone || '';
-            var source = lead.source || '';
-            var lastMsg = lead.last_message_text || '';
-            
-            node.innerHTML = '<div class="cv-node__header" style="cursor:pointer;" title="Doble click para abrir CRM" ondblclick="window.open(\'https://app.propify.pe/crm/lead/' + (lead.id || '') + '\',\'_blank\')">' +
-              '<span class="cv-node__badge cv-badge--lead-analysis">👤 LEAD</span>' +
-              '<span class="cv-node__title">' + escHtml(contactName) + '</span>' +
-              '<button class="cv-node__delete" title="Eliminar">&#x2715;</button></div>' +
-              '<div class="cv-node__req-info">' +
-              (phone ? '<span class="cv-req-info__item">📞 ' + escHtml(phone) + '</span>' : '') +
-              (source ? '<span class="cv-req-info__item">📡 ' + escHtml(source) + '</span>' : '') +
+            node.innerHTML =
+              '<div class="cv-node__header" style="cursor:pointer;" title="Doble click para abrir CRM" ondblclick="window.open(\'https://app.propify.pe/crm/lead/' + (lead.id || '') + '\',\'_blank\')">' +
+                '<span class="cv-node__badge cv-badge--lead-analysis">👤 LEAD</span>' +
+                '<span class="cv-node__title">' + escHtml(contactName) + '</span>' +
+                '<button class="cv-node__delete" title="Eliminar">&#x2715;</button>' +
               '</div>' +
-              (lastMsg ? '<div class="cv-node__req-body" style="font-size:11px;padding:6px;border-top:1px solid var(--cv-border);"><div style="color:var(--cv-text-muted);white-space:pre-wrap;">' + escHtml(lastMsg) + '</div></div>' : '') +
+              '<div class="cv-node__req-info">' +
+                (propHtml || '') +
+                (fechaStr ? '<span class="cv-req-info__item">🕐 ' + escHtml(fechaStr) + '</span>' : '') +
+                (phone ? '<span class="cv-req-info__item">📞 ' + escHtml(phone) + '</span>' : '') +
+                (email ? '<span class="cv-req-info__item">✉ ' + escHtml(email) + '</span>' : '') +
+              '</div>' +
+              '<div class="cv-node__req-body" style="font-size:11px;max-height:200px;overflow-y:auto;">' +
+                (source ? '<div style="color:var(--cv-text-muted);margin-bottom:4px;">📡 ' + escHtml(source) + '</div>' : '') +
+                (lastMsg ? '<div style="background:rgba(92,156,230,0.08);border-radius:6px;padding:6px;margin-bottom:4px;border-left:2px solid #5c9ce6;"><strong style="font-size:10px;color:#5c9ce6;">💬 Conversaci\u00f3n</strong><div style="color:var(--cv-text);margin-top:2px;white-space:pre-wrap;">' + escHtml(lastMsg) + '</div></div>' : '') +
+                (notes ? '<div style="background:rgba(255,221,0,0.06);border-radius:6px;padding:6px;border-left:2px solid #ffdd00;"><strong style="font-size:10px;color:#ffdd00;">📝 Notas</strong><div style="color:var(--cv-text-muted);margin-top:2px;white-space:pre-wrap;">' + escHtml(notes) + '</div></div>' : '') +
+              '</div>' +
               '<div class="cv-port cv-port--top" data-node="' + leadNodeId + '" data-port="top"></div>' +
               '<div class="cv-port cv-port--right" data-node="' + leadNodeId + '" data-port="right"></div>' +
               '<div class="cv-port cv-port--bottom" data-node="' + leadNodeId + '" data-port="bottom"></div>' +
