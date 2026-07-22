@@ -2430,7 +2430,7 @@ function exportMatrixToExcel(nodeId) {
   }
   
   var html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
-  html += '<head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Matriz</x:Name></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->';
+  html += '<head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Matriz</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->';
   html += '<style>td{border:1px solid #1e3a5f;padding:6px 10px;font-size:11px;font-family:Arial;} th{background:#16213e;color:#e0e0e0;padding:8px 12px;font-size:11px;font-weight:700;border:1px solid #5c6bc0;font-family:Arial;}</style></head><body><table>';
   
   html += '<tr><th>Propiedad</th>';
@@ -2457,11 +2457,13 @@ function exportMatrixToExcel(nodeId) {
   html += '<td style="text-align:center;background:#16213e;color:#ffdd00;font-weight:900;font-size:14px;border-left:2px solid #ffdd00;">' + totalLeads + '</td></tr>';
   html += '</table></body></html>';
   
-  var blob = new Blob([html], { type: 'text/html' });
+  // Usar XML Spreadsheet con .xls para que Excel lo abra sin advertencias
+  var xlsHeader = '<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?>';
+  var blob = new Blob([xlsHeader + html], { type: 'application/vnd.ms-excel' });
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a');
   a.href = url;
-  a.download = 'Matriz_Leads_' + new Date().toISOString().slice(0,10) + '.htm';
+  a.download = 'Matriz_Leads_' + new Date().toISOString().slice(0,10) + '.xls';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
