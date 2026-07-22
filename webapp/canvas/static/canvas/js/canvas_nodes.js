@@ -2457,11 +2457,11 @@ function exportMatrixToExcel(nodeId) {
   html += '<td style="text-align:center;background:#16213e;color:#ffdd00;font-weight:900;font-size:14px;border-left:2px solid #ffdd00;">' + totalLeads + '</td></tr>';
   html += '</table></body></html>';
   
-  var blob = new Blob([html], { type: 'application/vnd.ms-excel' });
+  var blob = new Blob([html], { type: 'text/html' });
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a');
   a.href = url;
-  a.download = 'Matriz_Leads_' + new Date().toISOString().slice(0,10) + '.xls';
+  a.download = 'Matriz_Leads_' + new Date().toISOString().slice(0,10) + '.htm';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
