@@ -5,19 +5,33 @@ set -e
 
 echo "=== Iniciando Propifai en Azure App Service ==="
 
-# Cambiar al directorio de la aplicación
+# Determinar directorio de la app
 APP_DIR="/home/site/wwwroot"
-if [ -d "/tmp/8dee6a19f209a4a" ]; then
-    APP_DIR="/tmp/8dee6a19f209a4a"
-fi
-cd "$APP_DIR"
 
+# Si Oryx extrajo en un subdirectorio temporal, usarlo
+for d in /tmp/8dee*/; do
+    if [ -d "$d" ]; then
+        APP_DIR="$d"
+        break
+    fi
+done
+
+# El proyecto Django está en webapp/ dentro del repo
+if [ -f "$APP_DIR/webapp/manage.py" ]; then
+    APP_DIR="$APP_DIR/webapp"
+fi
+
+cd "$APP_DIR"
 echo "Directorio de trabajo: $(pwd)"
+echo "Manage.py existe: $(test -f manage.py && echo SI || echo NO)"
 
 # Activar virtual env
 if [ -d "$APP_DIR/antenv" ]; then
     source "$APP_DIR/antenv/bin/activate"
     echo "Virtualenv activado: antenv"
+elif [ -d "/home/site/wwwroot/antenv" ]; then
+    source "/home/site/wwwroot/antenv/bin/activate"
+    echo "Virtualenv activado: antenv (home/site/wwwroot)"
 fi
 
 # Migraciones
