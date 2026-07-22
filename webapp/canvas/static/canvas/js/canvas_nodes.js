@@ -2429,37 +2429,69 @@ function exportMatrixToExcel(nodeId) {
     return '#' + [r,g,b].map(function(x) { return x.toString(16).padStart(2,'0'); }).join('');
   }
   
-  var html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
-  html += '<head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Matriz</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->';
-  html += '<style>td{border:1px solid #1e3a5f;padding:6px 10px;font-size:11px;font-family:Arial;} th{background:#16213e;color:#e0e0e0;padding:8px 12px;font-size:11px;font-weight:700;border:1px solid #5c6bc0;font-family:Arial;}</style></head><body><table>';
+  // Formato XML Spreadsheet 2003 (SpreadsheetML) - Excel lo abre sin advertencias
+  var xml = '<?xml version="1.0" encoding="UTF-8"?>';
+  xml += '<?mso-application progid="Excel.Sheet"?>';
+  xml += '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"';
+  xml += ' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"';
+  xml += ' xmlns:x="urn:schemas-microsoft-com:office:excel"';
+  xml += ' xmlns:o="urn:schemas-microsoft-com:office:office">';
+  xml += '<Styles>';
+  xml += '<Style ss:ID="header"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#16213e" ss:Pattern="Solid"/><Borders><Border ss:Position="Bottom" ss:Color="#5c6bc0" ss:Weight="2"/></Borders></Style>';
+  xml += '<Style ss:ID="prop"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#0d1117" ss:Pattern="Solid"/></Style>';
+  xml += '<Style ss:ID="total"><Font ss:Bold="1" ss:Color="#FFDD00"/><Interior ss:Color="#16213e" ss:Pattern="Solid"/><Borders><Border ss:Position="Left" ss:Color="#FFDD00" ss:Weight="2"/></Borders></Style>';
+  xml += '<Style ss:ID="totalrow"><Font ss:Bold="1" ss:Color="#FFDD00" ss:Size="14"/><Interior ss:Color="#16213e" ss:Pattern="Solid"/></Style>';
+  xml += '<Style ss:ID="cell0"><Font ss:Color="#555555"/><Interior ss:Color="#1a1a2e" ss:Pattern="Solid"/></Style>';
+  xml += '<Style ss:ID="cell1"><Font ss:Bold="1" ss:Color="#FFFFFF" ss:Size="11"/><Interior ss:Color="#3d4aab" ss:Pattern="Solid"/></Style>';
+  xml += '<Style ss:ID="cell2"><Font ss:Bold="1" ss:Color="#FFFFFF" ss:Size="12"/><Interior ss:Color="#5c6bc0" ss:Pattern="Solid"/></Style>';
+  xml += '<Style ss:ID="cell3"><Font ss:Bold="1" ss:Color="#FFFFFF" ss:Size="13"/><Interior ss:Color="#7c8ce0" ss:Pattern="Solid"/></Style>';
+  xml += '</Styles>';
+  xml += '<Worksheet ss:Name="Matriz de Leads">';
+  xml += '<Table>';
   
-  html += '<tr><th>Propiedad</th>';
+  // Header row
+  xml += '<Row>';
+  xml += '<Cell ss:StyleID="header"><Data ss:Type="String">Propiedad</Data></Cell>';
   dates.forEach(function(d) {
     var parts = d.split('-');
-    html += '<th>' + (parts.length === 3 ? parts[2] + '/' + parts[1] : d) + '</th>';
+    var label = parts.length === 3 ? parts[2] + '/' + parts[1] : d;
+    xml += '<Cell ss:StyleID="header"><Data ss:Type="String">' + escHtml(label) + '</Data></Cell>';
   });
-  html += '<th style="border-color:#ffdd00;color:#ffdd00;">Total</th></tr>';
+  xml += '<Cell ss:StyleID="header"><Data ss:Type="String">Total</Data></Cell>';
+  xml += '</Row>';
   
+  // Data rows
   properties.forEach(function(p) {
     var title = p.title || p.code || 'Prop #' + p.property_id;
-    html += '<tr><td style="background:#0d1117;color:#ffffff;font-weight:600;">' + title + '</td>';
+    xml += '<Row>';
+    xml += '<Cell ss:StyleID="prop"><Data ss:Type="String">' + escHtml(title) + '</Data></Cell>';
     dates.forEach(function(d) {
       var count = p.daily_counts[d] || 0;
-      html += '<td style="text-align:center;background:' + cellBg(count) + ';color:' + (count > 0 ? '#ffffff' : '#555555') + ';font-weight:' + (count > 0 ? '700' : '400') + ';">' + (count > 0 ? count : '-') + '</td>';
+      var intensity = Math.min(1, count / maxCount);
+      var style = 'cell0';
+      if (count > 0 && intensity < 0.4) style = 'cell1';
+      else if (count > 0 && intensity < 0.7) style = 'cell2';
+      else if (count > 0) style = 'cell3';
+      xml += '<Cell ss:StyleID="' + style + '"><Data ss:Type="Number">' + count + '</Data></Cell>';
     });
-    html += '<td style="text-align:center;background:#0d1117;color:#ffdd00;font-weight:800;border-left:2px solid #ffdd00;">' + p.total + '</td></tr>';
+    xml += '<Cell ss:StyleID="total"><Data ss:Type="Number">' + p.total + '</Data></Cell>';
+    xml += '</Row>';
   });
   
-  html += '<tr><td style="background:#16213e;color:#ffdd00;font-weight:700;">TOTAL</td>';
+  // Totals row
+  xml += '<Row>';
+  xml += '<Cell ss:StyleID="totalrow"><Data ss:Type="String">TOTAL</Data></Cell>';
   dates.forEach(function(d) {
-    html += '<td style="text-align:center;background:#16213e;color:#ffdd00;font-weight:800;">' + (dateTotals[d] || 0) + '</td>';
+    xml += '<Cell ss:StyleID="totalrow"><Data ss:Type="Number">' + (dateTotals[d] || 0) + '</Data></Cell>';
   });
-  html += '<td style="text-align:center;background:#16213e;color:#ffdd00;font-weight:900;font-size:14px;border-left:2px solid #ffdd00;">' + totalLeads + '</td></tr>';
-  html += '</table></body></html>';
+  xml += '<Cell ss:StyleID="totalrow"><Data ss:Type="Number">' + totalLeads + '</Data></Cell>';
+  xml += '</Row>';
   
-  // Usar XML Spreadsheet con .xls para que Excel lo abra sin advertencias
-  var xlsHeader = '<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?>';
-  var blob = new Blob([xlsHeader + html], { type: 'application/vnd.ms-excel' });
+  xml += '</Table>';
+  xml += '</Worksheet>';
+  xml += '</Workbook>';
+  
+  var blob = new Blob([xml], { type: 'application/vnd.ms-excel' });
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a');
   a.href = url;
