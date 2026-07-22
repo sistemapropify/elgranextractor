@@ -2268,6 +2268,7 @@ function renderLeadMatrixBody(nodeId, data) {
       var color = cellColor(count);
       html += '<td class="cv-matrix-td" style="text-align:center;padding:8px 4px;border-bottom:1px solid #1e3a5f;background:' + color + ';color:' + (count > 0 ? '#ffffff' : '#555555') + ';font-size:12px;font-weight:' + (count > 0 ? '700' : '400') + ';min-width:50px;cursor:' + (count > 0 ? 'pointer' : 'default') + ';"';
       html += ' title="' + escHtml(prop.title || prop.code || 'Prop') + ' - ' + fmtDate(d) + ': ' + count + ' leads"';
+      html += ' data-prop-id="' + prop.property_id + '" data-date="' + d + '" data-count="' + count + '"';
       html += '>';
       html += count > 0 ? count : '-';
       html += '</td>';
@@ -2304,6 +2305,33 @@ function renderLeadMatrixBody(nodeId, data) {
       exportMatrixToExcel(nodeId);
     });
   }
+
+  // Click en celdas con leads
+  body.querySelectorAll('.cv-matrix-td[data-prop-id]').forEach(function(td) {
+    var count = parseInt(td.getAttribute('data-count') || '0');
+    if (count <= 0) return;
+    td.style.cursor = 'pointer';
+    td.addEventListener('click', function(e) {
+      e.stopPropagation();
+      var propId = this.getAttribute('data-prop-id');
+      var date = this.getAttribute('data-date');
+      if (!propId || !date) return;
+      // Crear leads modal usando api_lead_analysis_leads
+      fetch('/canvas/api/lead-analysis/' + propId + '/leads/?date=' + date)
+        .then(function(r) { return r.json(); })
+        .then(function(leadData) {
+          if (typeof window.showLeadModal === 'function') {
+            window.showLeadModal(leadData.leads || []);
+          } else {
+            console.log('[LeadMatrix] Leads para prop=' + propId + ' date=' + date + ':', leadData);
+            alert(leadData.leads && leadData.leads.length + ' lead(s) encontrados - Revisa la consola');
+          }
+        })
+        .catch(function(err) {
+          console.error('[LeadMatrix] Error fetching leads:', err);
+        });
+    });
+  });
 
   body.querySelectorAll('.cv-matrix-row').forEach(function(tr) {
     tr.addEventListener('mouseenter', function() {
@@ -2451,8 +2479,65 @@ function exportMatrixToExcel(nodeId) {
 
 window.createLeadMatrixNode = createLeadMatrixNode;
 window.renderLeadMatrixBody = renderLeadMatrixBody;
-window.exportMatrixToExcel = exportMatrixToExcel;
+function showLeadsForPropertyDate(propId, dateStr) {
+  // Buscar nodo lead_analysis existente para esta propiedad
+  var analysisNodeId = null;
+  Object.values(STATE.nodos).forEach(function(n) {
+    if (n.tipo === 'lead_analysis' && String(n.ref_id) === String(propId)) {
+      analysisNodeId = n.id;
+    }
+  });
+  
+  // Si no existe nodo lead_analysis, crear uno
+  if (!analysisNodeId) {
+    // Buscar nodo propiedad
+    var propNodeId = null;
+    Object.values(STATE.nodos).forEach(function(n) {
+      if (n.tipo === 'propiedad' && String(n.ref_id) === String(propId)) {
+        propNodeId = n.id;
+      }
+    });
+    if (!propNodeId) {
+      console.warn('[LeadMatrix] No se encontró nodo propiedad para', propId);
+      return;
+    }
+    // Crear lead analysis temporal
+    var tempId = 'lead_matrix_analysis_' + Date.now();
+    createLeadAnalysisNode(propNodeId, propId);
+    // Buscar el id del nodo recién creado
+    setTimeout(function() {
+      Object.values(STATE.nodos).forEach(function(n) {
+        if (n.tipo === 'lead_analysis' && String(n.ref_id) === String(propId)) {
+          navigateToLeadsForDate(n.id, propId, dateStr);
+        }
+      });
+    }, 500);
+    return;
+  }
+  
+  navigateToLeadsForDate(analysisNodeId, propId, dateStr);
+}
 
+function navigateToLeadsForDate(analysisNodeId, propId, dateStr) {
+  // Navegar en el lead analysis a la fecha específica
+  var nodo = STATE.nodos[analysisNodeId];
+  if (nodo && nodo.el) {
+    // Hacer clic en la celda de la fecha correspondiente en el lead analysis
+    var cells = nodo.el.querySelectorAll('[data-date]');
+    for (var i = 0; i < cells.length; i++) {
+      if (cells[i].getAttribute('data-date') === dateStr) {
+        cells[i].click();
+        break;
+      }
+    }
+    // Centrar vista en el nodo
+    if (typeof centerOnNode === 'function') {
+      centerOnNode(analysisNodeId);
+    }
+  }
+}
+
+window.exportMatrixToExcel = exportMatrixToExcel;
 
 /**
  * Inicializa el menu contextual del canvas (click derecho en el fondo).
