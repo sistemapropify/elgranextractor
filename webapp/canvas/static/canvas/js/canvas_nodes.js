@@ -2208,6 +2208,9 @@ function renderLeadMatrixBody(nodeId, data) {
   const dates = data.dates || [];
   const totalLeads = data.total_leads || 0;
   const totalProps = data.total_properties || 0;
+  
+  // Guardar datos para exportar
+  nodo._matrixData = data;
 
   const totalLabel = nodo.el.querySelector('#matrix-total-label');
   if (totalLabel) {
@@ -2273,16 +2276,34 @@ function renderLeadMatrixBody(nodeId, data) {
     html += '<td class="cv-matrix-td" style="text-align:center;padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#ffdd00;font-weight:800;font-size:14px;background:#0d1117;min-width:50px;border-left:1px solid #ffdd00;">' + prop.total + '</td>';
     html += '</tr>';
   });
+  // Fila de totales por día
+  html += '<tr style="background:#16213e;border-top:2px solid #5c6bc0;">';
+  html += '<td class="cv-matrix-td" style="text-align:right;padding:8px 12px;color:#ffdd00;font-weight:700;font-size:13px;background:#16213e;position:sticky;left:0;z-index:1;">TOTAL</td>';
+  dates.forEach(function(d) {
+    var dayTotal = 0;
+    properties.forEach(function(prop) {
+      dayTotal += prop.daily_counts[d] || 0;
+    });
+    html += '<td class="cv-matrix-td" style="text-align:center;padding:8px 4px;color:#ffdd00;font-weight:800;font-size:14px;background:#16213e;border-top:2px solid #5c6bc0;">' + dayTotal + '</td>';
+  });
+  html += '<td class="cv-matrix-td" style="text-align:center;padding:8px 12px;color:#ffdd00;font-weight:800;font-size:16px;background:#16213e;border-top:2px solid #ffdd00;border-left:1px solid #ffdd00;">' + totalLeads + '</td>';
+  html += '</tr>';
   html += '</tbody></table>';
   html += '</div>';
 
-  html += '<div style="display:flex;justify-content:space-between;padding:5px 10px;border-top:1px solid var(--cv-border);font-size:10px;color:var(--cv-text-muted);background:var(--cv-surface);">';
-  html += '<span>Total: <strong style="color:#5c6bc0;">' + totalLeads + '</strong> leads</span>';
-  html += '<span>Props: <strong style="color:var(--cv-text-sec);">' + totalProps + '</strong></span>';
-  html += '<span>' + fmtDate(dates[0]) + ' - ' + fmtDate(dates[dates.length-1]) + '</span>';
+  // Botón exportar Excel
+  html += '<div style="text-align:center;padding:6px;border-top:1px solid #1e3a5f;background:#0d1117;">';
+  html += '<button class="cv-btn-export-excel" data-node="' + nodeId + '" style="background:#5c6bc0;color:white;border:none;border-radius:4px;padding:6px 16px;cursor:pointer;font-size:11px;font-weight:600;">📥 Exportar Excel</button>';
   html += '</div>';
 
   body.innerHTML = html;
+
+  var exportBtn = body.querySelector('.cv-btn-export-excel');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', function() {
+      exportMatrixToExcel(nodeId);
+    });
+  }
 
   body.querySelectorAll('.cv-matrix-row').forEach(function(tr) {
     tr.addEventListener('mouseenter', function() {
@@ -2297,8 +2318,159 @@ function renderLeadMatrixBody(nodeId, data) {
   markDirty();
 }
 
+function exportMatrixToExcel(nodeId) {
+  const nodo = STATE.nodos[nodeId];
+  if (!nodo || !nodo._matrixData) return;
+  const data = nodo._matrixData;
+  const properties = data.properties || [];
+  const dates = data.dates || [];
+  
+  // Calcular totales por día
+  var dateTotals = {};
+  dates.forEach(function(d) {
+    var total = 0;
+    properties.forEach(function(p) { total += p.daily_counts[d] || 0; });
+    dateTotals[d] = total;
+  });
+  var totalLeads = data.total_leads || 0;
+
+  // Encontrar máximo para escala de color
+  var maxCount = 1;
+  properties.forEach(function(p) {
+    Object.keys(p.daily_counts).forEach(function(k) {
+      if (p.daily_counts[k] > maxCount) maxCount = p.daily_counts[k];
+    });
+  });
+
+  function cellBg(count) {
+    if (!count || count === 0) return '#1a1a2e';
+    var intensity = Math.min(1, count / maxCount);
+    var alpha = 0.12 + intensity * 0.68;
+    // Convertir rgba a hex aproximado sobre fondo oscuro
+    var r = Math.round(92 * alpha + 13 * (1 - alpha));
+    var g = Math.round(107 * alpha + 26 * (1 - alpha));
+    var b = Math.round(192 * alpha + 46 * (1 - alpha));
+    return '#' + [r,g,b].map(function(x) { return x.toString(16).padStart(2,'0'); }).join('');
+  }
+
+  var html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
+  html += '<head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Matriz de Leads</x:Name></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->';
+  html += '<style>td{border:1px solid #1e3a5f;padding:6px 10px;font-size:11px;} th{background:#16213e;color:#e0e0e0;padding:8px 12px;font-size:11px;font-weight:700;border:1px solid #5c6bc0;}</style></head><body>';
+  html += '<table>';
+  
+  // Header
+  html += '<tr><th>Propiedad</th>';
+  dates.forEach(function(d) {
+    var parts = d.split('-');
+    var label = parts.length === 3 ? parts[2] + '/' + parts[1] : d;
+    html += '<th>' + label + '</th>';
+  });
+  html += '<th style="border-color:#ffdd00;color:#ffdd00;">Total</th></tr>';
+  
+  // Data rows
+  properties.forEach(function(p) {
+    var title = p.title || p.code || 'Prop #' + p.property_id;
+    html += '<tr><td style="background:#0d1117;color:#ffffff;font-weight:600;">' + title + '</td>';
+    dates.forEach(function(d) {
+      var count = p.daily_counts[d] || 0;
+      html += '<td style="text-align:center;background:' + cellBg(count) + ';color:' + (count > 0 ? '#ffffff' : '#555555') + ';font-weight:' + (count > 0 ? '700' : '400') + ';">' + (count > 0 ? count : '-') + '</td>';
+    });
+    html += '<td style="text-align:center;background:#0d1117;color:#ffdd00;font-weight:800;border-left:2px solid #ffdd00;">' + p.total + '</td>';
+    html += '</tr>';
+  });
+  
+  // Totals row
+  html += '<tr><td style="background:#16213e;color:#ffdd00;font-weight:700;">TOTAL</td>';
+  dates.forEach(function(d) {
+    html += '<td style="text-align:center;background:#16213e;color:#ffdd00;font-weight:800;">' + (dateTotals[d] || 0) + '</td>';
+  });
+  html += '<td style="text-align:center;background:#16213e;color:#ffdd00;font-weight:900;font-size:14px;border-left:2px solid #ffdd00;">' + totalLeads + '</td></tr>';
+  
+  html += '</table></body></html>';
+
+  var blob = new Blob([html], { type: 'application/vnd.ms-excel' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'Matriz_Leads_' + new Date().toISOString().slice(0,10) + '.xls';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function exportMatrixToExcel(nodeId) {
+  var nodo = STATE.nodos[nodeId];
+  if (!nodo || !nodo._matrixData) return;
+  var data = nodo._matrixData;
+  var properties = data.properties || [];
+  var dates = data.dates || [];
+  
+  var dateTotals = {};
+  dates.forEach(function(d) {
+    var t = 0;
+    properties.forEach(function(p) { t += p.daily_counts[d] || 0; });
+    dateTotals[d] = t;
+  });
+  var totalLeads = data.total_leads || 0;
+  
+  var maxCount = 1;
+  properties.forEach(function(p) {
+    Object.keys(p.daily_counts).forEach(function(k) { if (p.daily_counts[k] > maxCount) maxCount = p.daily_counts[k]; });
+  });
+  
+  function cellBg(count) {
+    if (!count || count === 0) return '#1a1a2e';
+    var intensity = Math.min(1, count / maxCount);
+    var alpha = 0.12 + intensity * 0.68;
+    var r = Math.round(92 * alpha + 13 * (1 - alpha));
+    var g = Math.round(107 * alpha + 26 * (1 - alpha));
+    var b = Math.round(192 * alpha + 46 * (1 - alpha));
+    return '#' + [r,g,b].map(function(x) { return x.toString(16).padStart(2,'0'); }).join('');
+  }
+  
+  var html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
+  html += '<head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Matriz</x:Name></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->';
+  html += '<style>td{border:1px solid #1e3a5f;padding:6px 10px;font-size:11px;font-family:Arial;} th{background:#16213e;color:#e0e0e0;padding:8px 12px;font-size:11px;font-weight:700;border:1px solid #5c6bc0;font-family:Arial;}</style></head><body><table>';
+  
+  html += '<tr><th>Propiedad</th>';
+  dates.forEach(function(d) {
+    var parts = d.split('-');
+    html += '<th>' + (parts.length === 3 ? parts[2] + '/' + parts[1] : d) + '</th>';
+  });
+  html += '<th style="border-color:#ffdd00;color:#ffdd00;">Total</th></tr>';
+  
+  properties.forEach(function(p) {
+    var title = p.title || p.code || 'Prop #' + p.property_id;
+    html += '<tr><td style="background:#0d1117;color:#ffffff;font-weight:600;">' + title + '</td>';
+    dates.forEach(function(d) {
+      var count = p.daily_counts[d] || 0;
+      html += '<td style="text-align:center;background:' + cellBg(count) + ';color:' + (count > 0 ? '#ffffff' : '#555555') + ';font-weight:' + (count > 0 ? '700' : '400') + ';">' + (count > 0 ? count : '-') + '</td>';
+    });
+    html += '<td style="text-align:center;background:#0d1117;color:#ffdd00;font-weight:800;border-left:2px solid #ffdd00;">' + p.total + '</td></tr>';
+  });
+  
+  html += '<tr><td style="background:#16213e;color:#ffdd00;font-weight:700;">TOTAL</td>';
+  dates.forEach(function(d) {
+    html += '<td style="text-align:center;background:#16213e;color:#ffdd00;font-weight:800;">' + (dateTotals[d] || 0) + '</td>';
+  });
+  html += '<td style="text-align:center;background:#16213e;color:#ffdd00;font-weight:900;font-size:14px;border-left:2px solid #ffdd00;">' + totalLeads + '</td></tr>';
+  html += '</table></body></html>';
+  
+  var blob = new Blob([html], { type: 'application/vnd.ms-excel' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'Matriz_Leads_' + new Date().toISOString().slice(0,10) + '.xls';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 window.createLeadMatrixNode = createLeadMatrixNode;
 window.renderLeadMatrixBody = renderLeadMatrixBody;
+window.exportMatrixToExcel = exportMatrixToExcel;
 
 
 /**
