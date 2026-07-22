@@ -668,15 +668,26 @@ class BusquedaPropiedadesSkill(BaseSkill):
                         documentos = filtrados
                     # Si no hay filtrados, mantener resultados semánticos
                 if not documentos:
-                    mensaje = "No se encontraron propiedades"
-                    if params.get('distrito'):
-                        mensaje += f" en {params['distrito']}"
-                    mensaje += "."
-                    return SkillResult.ok(
-                        data=[], message=mensaje,
-                        metadata={'filtros_aplicados': self._extract_filters(params)},
-                        skill_name=self.name
-                    )
+                    # FALLBACK: si la semántica no encontró resultados pero hay filtros exactos,
+                    # intentar búsqueda SQL pura (sin semántica).
+                    # Esto resuelve el caso donde propiedades existen en la BD pero sus
+                    # embeddings no superan el umbral de similitud semántica.
+                    if tiene_filtros_exactos:
+                        logger.info(
+                            "FALLBACK: búsqueda semántica sin resultados con filtros exactos. "
+                            "Ejecutando SQL puro como fallback."
+                        )
+                        documentos = self._filtrar_por_sql(params, colecciones)
+                    if not documentos:
+                        mensaje = "No se encontraron propiedades"
+                        if params.get('distrito'):
+                            mensaje += f" en {params['distrito']}"
+                        mensaje += "."
+                        return SkillResult.ok(
+                            data=[], message=mensaje,
+                            metadata={'filtros_aplicados': self._extract_filters(params)},
+                            skill_name=self.name
+                        )
             elif tiene_filtros_exactos:
                 # Sin query semántica: filtrar por SQL
                 documentos = self._filtrar_por_sql(params, colecciones)
@@ -714,14 +725,17 @@ class BusquedaPropiedadesSkill(BaseSkill):
                         f"{antes} -> {len(documentos)} docs "
                         f"(descartados {antes - len(documentos)})"
                     )
-                # Salvaguarda: si el filtro dejó vacío pero había resultados,
-                # mantener al menos el top-1
+                # Salvaguarda: si el filtro semántico dejó vacío pero HAY filtros exactos,
+                # hacer fallback a SQL puro en lugar de devolver vacío.
                 if not documentos and antes > 0:
                     logger.warning(
                         f"FASE 4: Umbral={UMBRAL_SIMILITUD} dejó 0 resultados. "
-                        f"Manteniendo top-1 como salvaguarda."
+                        f"Haciendo fallback a SQL puro con filtros exactos."
                     )
-                    # Re-obtener el mejor score del re-ranking original
+                    if tiene_filtros_exactos:
+                        documentos = self._filtrar_por_sql(params, colecciones)
+                    if not documentos:
+                        logger.warning("FALLBACK SQL también devolvió 0 resultados.")
 
             # ── Filtro por similitud semántica para búsqueda por nombre ──
             # Si se buscó por nombre de propiedad (titulo_contains), filtrar
