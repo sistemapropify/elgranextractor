@@ -2338,29 +2338,46 @@ function renderLeadMatrixBody(nodeId, data) {
 
     dates.forEach(function(d) {
       var count = prop.daily_counts[d] || 0;
+      var visitCount = (prop.visit_counts && prop.visit_counts[d]) || 0;
       var color = cellColor(count);
       html += '<td class="cv-matrix-td" style="text-align:center;padding:8px 4px;border-bottom:1px solid #1e3a5f;background:' + color + ';color:' + (count > 0 ? '#ffffff' : '#555555') + ';font-size:12px;font-weight:' + (count > 0 ? '700' : '400') + ';min-width:50px;cursor:' + (count > 0 ? 'pointer' : 'default') + ';"';
-      html += ' title="' + escHtml(prop.title || prop.code || 'Prop') + ' - ' + fmtDate(d) + ': ' + count + ' leads"';
+      html += ' title="' + escHtml(prop.title || prop.code || 'Prop') + ' - ' + fmtDate(d) + ': ' + count + ' leads' + (visitCount > 0 ? ', ' + visitCount + ' visitas' : '') + '"';
       html += ' data-prop-id="' + prop.property_id + '" data-date="' + d + '" data-count="' + count + '"';
       html += '>';
-      html += count > 0 ? count : '-';
+      if (count > 0) {
+        html += count;
+        if (visitCount > 0) {
+          html += ' <span style="color:#e65100;font-weight:700;font-size:11px;">(V' + visitCount + ')</span>';
+        }
+      } else {
+        html += '-';
+      }
       html += '</td>';
     });
 
-    html += '<td class="cv-matrix-td" style="text-align:center;padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#ffdd00;font-weight:800;font-size:14px;background:#0d1117;min-width:50px;border-left:1px solid #ffdd00;">' + prop.total + '</td>';
+    // Total por propiedad con visitas
+    var propVisitTotal = 0;
+    if (prop.visit_counts) {
+      Object.keys(prop.visit_counts).forEach(function(k) { propVisitTotal += prop.visit_counts[k]; });
+    }
+    html += '<td class="cv-matrix-td" style="text-align:center;padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#ffdd00;font-weight:800;font-size:14px;background:#0d1117;min-width:50px;border-left:1px solid #ffdd00;">' + prop.total + (propVisitTotal > 0 ? ' <span style="color:#e65100;font-weight:700;font-size:11px;">(V' + propVisitTotal + ')</span>' : '') + '</td>';
     html += '</tr>';
   });
   // Fila de totales por día
   html += '<tr style="background:#16213e;border-top:2px solid #5c6bc0;">';
   html += '<td class="cv-matrix-td" style="text-align:right;padding:8px 12px;color:#ffdd00;font-weight:700;font-size:13px;background:#16213e;position:sticky;left:0;z-index:1;">TOTAL</td>';
+  var grandVisitTotal = 0;
   dates.forEach(function(d) {
     var dayTotal = 0;
+    var dayVisits = 0;
     properties.forEach(function(prop) {
       dayTotal += prop.daily_counts[d] || 0;
+      dayVisits += (prop.visit_counts && prop.visit_counts[d]) || 0;
     });
-    html += '<td class="cv-matrix-td" style="text-align:center;padding:8px 4px;color:#ffdd00;font-weight:800;font-size:14px;background:#16213e;border-top:2px solid #5c6bc0;">' + dayTotal + '</td>';
+    grandVisitTotal += dayVisits;
+    html += '<td class="cv-matrix-td" style="text-align:center;padding:8px 4px;color:#ffdd00;font-weight:800;font-size:14px;background:#16213e;border-top:2px solid #5c6bc0;">' + dayTotal + (dayVisits > 0 ? ' <span style="color:#e65100;font-weight:700;font-size:10px;">(V' + dayVisits + ')</span>' : '') + '</td>';
   });
-  html += '<td class="cv-matrix-td" style="text-align:center;padding:8px 12px;color:#ffdd00;font-weight:800;font-size:16px;background:#16213e;border-top:2px solid #ffdd00;border-left:1px solid #ffdd00;">' + totalLeads + '</td>';
+  html += '<td class="cv-matrix-td" style="text-align:center;padding:8px 12px;color:#ffdd00;font-weight:800;font-size:16px;background:#16213e;border-top:2px solid #ffdd00;border-left:1px solid #ffdd00;">' + totalLeads + (grandVisitTotal > 0 ? ' <span style="color:#e65100;font-weight:700;font-size:12px;">(V' + grandVisitTotal + ')</span>' : '') + '</td>';
   html += '</tr>';
   html += '</tbody></table>';
   html += '</div>';
@@ -2453,52 +2470,74 @@ function renderLeadMatrixBody(nodeId, data) {
               };
             }
             
-            // Si el lead tiene status que contiene "Visita", buscar eventos
+            // Si el lead tiene status que contiene "Visita", crear nodo de visita
             var ls = (lead.lead_status || '').toLowerCase();
             if (ls.indexOf('visita') !== -1) {
+              // Crear nodo de visita inmediatamente desde datos del lead
+              var fakeEv = {
+                id: 'v_' + lead.id,
+                titulo: 'Visita - ' + (lead.contact_name || lead.username || '#' + lead.id),
+                fecha_evento: lead.created_at ? lead.created_at.substring(0,10) : '',
+                hora_inicio: '', hora_fin: '', detalle: lead.notes || '',
+              };
+              var vNodeId = 'visita_' + lead.id;
+              if (!STATE.nodos[vNodeId]) {
+                createVisitNode(vNodeId, fakeEv, leadId, x + 380, y - 30);
+                var vEdgeId = 'e_visita_' + leadId + '_' + vNodeId;
+                if (!STATE.aristas[vEdgeId]) {
+                  STATE.aristas[vEdgeId] = {
+                    id: vEdgeId, origen: leadId, destino: vNodeId,
+                    tipo: 'visita', label: fakeEv.titulo,
+                  };
+                }
+              }
+              // En segundo plano, enriquecer con datos reales del API
               fetch('/canvas/api/lead-events/' + lead.id + '/')
                 .then(function(r) { return r.json(); })
                 .then(function(eventData) {
                   var eventos = eventData.eventos || [];
-                  eventos.forEach(function(ev, evIdx) {
-                    var vNodeId = 'visita_' + lead.id + '_' + ev.id;
-                    if (STATE.nodos[vNodeId]) return;
-                    // Centrar verticalmente respecto al lead y más alejado
-                    var vx = x + 380;
-                    var vy = y - 30 + (evIdx * 220);
-                    createVisitNode(vNodeId, ev, leadId, vx, vy);
-                    // Crear arista explícitamente
-                    var vEdgeId = 'e_visita_' + leadId + '_' + vNodeId;
-                    if (!STATE.aristas[vEdgeId]) {
-                      STATE.aristas[vEdgeId] = {
-                        id: vEdgeId, origen: leadId, destino: vNodeId,
-                        tipo: 'visita', label: ev.titulo || 'Visita',
-                      };
-                    }
-                  });
-                  // Forzar actualización de aristas
-                  if (typeof updateEdges === 'function') {
-                    updateEdges();
-                  } else {
-                    // Fallback: dibujar aristas manualmente en SVG
-                    try {
-                      var svg = document.querySelector('#cv-edges');
-                      if (svg) {
-                        Object.values(STATE.aristas).forEach(function(ed) {
-                          var pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                          pathEl.setAttribute('d', 'M0,0');
-                          pathEl.classList.add('cv-edge', 'cv-edge--' + (ed.tipo || 'lead'));
-                          if (svg.querySelector('[data-edge-id="' + ed.id + '"]')) return;
-                          pathEl.dataset.edgeId = ed.id;
-                          svg.appendChild(pathEl);
-                        });
+                  var nodeEl = STATE.nodos[vNodeId];
+                  var leadEl = STATE.nodos[leadId];
+                  if (eventos.length > 0) {
+                    var ev = eventos[0];
+                    if (nodeEl && nodeEl.el) {
+                      nodeEl.field_data = ev;
+                      var fechaStr = '';
+                      var f = ev.fecha_evento || '';
+                      var m = f.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                      if (m) fechaStr = m[3] + '/' + m[2] + '/' + m[1];
+                      else fechaStr = f;
+                      var horaStr = (ev.hora_inicio || '') + ((ev.hora_inicio && ev.hora_fin) ? ' - ' + ev.hora_fin : '');
+                      var header = nodeEl.el.querySelector('.cv-node__header .cv-node__title');
+                      if (header) header.textContent = ev.titulo || 'Visita';
+                      var info = nodeEl.el.querySelector('.cv-node__req-info');
+                      if (info) {
+                        info.innerHTML =
+                          (fechaStr ? '<span class="cv-req-info__item">📅 ' + escHtml(fechaStr) + '</span>' : '') +
+                          (horaStr ? '<span class="cv-req-info__item">🕐 ' + escHtml(horaStr) + '</span>' : '') +
+                          (ev.detalle ? '<span class="cv-req-info__item">📝 ' + escHtml(ev.detalle) + '</span>' : '');
                       }
-                    } catch(e) { console.warn('[LeadMatrix] Fallback edges:', e); }
+                    }
+                  } else {
+                    // No hay eventos vinculados - mostrar alerta roja
+                    if (nodeEl && nodeEl.el) {
+                      var info2 = nodeEl.el.querySelector('.cv-node__req-info');
+                      if (info2) {
+                        info2.innerHTML += '<div style="color:#e53935;font-size:11px;font-weight:700;padding:4px 6px;margin-top:4px;background:rgba(229,57,53,0.1);border-radius:4px;">⚠️ No vinculado al lead</div>';
+                      }
+                    }
+                    // Borde rojo en la tarjeta del lead
+                    if (leadEl && leadEl.el) {
+                      leadEl.el.style.border = '2px solid #e53935';
+                      leadEl.el.style.boxShadow = '0 0 8px rgba(229,57,53,0.4)';
+                    }
                   }
+                  if (typeof updateEdges === 'function') updateEdges();
                   markDirty();
                 })
                 .catch(function(err) {
-                  console.warn('[LeadMatrix] Error fetching events for lead', lead.id, err);
+                  console.warn('[LeadMatrix] Error enriching visit node for lead', lead.id, err);
+                  if (typeof updateEdges === 'function') updateEdges();
                 });
             }
           });

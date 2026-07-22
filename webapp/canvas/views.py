@@ -1507,17 +1507,41 @@ def api_lead_matrix(request):
                     'code': '',
                     'district_name': '',
                     'daily_counts': {},
+                    'visit_counts': {},
                     'total': 0,
                 }
             props_map[sid]['daily_counts'][date_str] = count
             props_map[sid]['total'] += count
             dates_set.add(date_str)
 
+        # Contar leads cuyo lead_status es "Visita" por (property_id, fecha de creación)
+        try:
+            with connections['propifai'].cursor() as c2:
+                c2.execute("""
+                    SELECT lp.property_id,
+                           CAST(SWITCHOFFSET(l.created_at, '-05:00') AS DATE) AS lead_date,
+                           COUNT(*) AS visit_count
+                    FROM lead l
+                    INNER JOIN lead_properties lp ON lp.lead_id = l.id
+                    INNER JOIN lead_status ls ON ls.id = l.lead_status_id
+                    WHERE ls.name LIKE '%Visita%'
+                    GROUP BY lp.property_id, CAST(SWITCHOFFSET(l.created_at, '-05:00') AS DATE)
+                """)
+                for row in c2.fetchall():
+                    v_pid = str(row[0])
+                    v_date = row[1].isoformat() if hasattr(row[1], 'isoformat') else str(row[1])
+                    v_count = row[2]
+                    if v_pid in props_map:
+                        props_map[v_pid].setdefault('visit_counts', {})[v_date] = v_count
+        except Exception as e2:
+            logger.warning(f"[lead_matrix] Error counting visita leads: {e2}")
+
+        result = list(props_map.values())
         return JsonResponse({
-            'properties': list(props_map.values()),
+            'properties': result,
             'dates': sorted(dates_set),
             'total_properties': len(props_map),
-            'total_leads': sum(p['total'] for p in props_map.values()),
+            'total_leads': sum(p['total'] for p in result),
         })
     except Exception as e:
         logger.error(f"Error en lead matrix: {e}", exc_info=True)
@@ -1563,10 +1587,33 @@ def api_export_lead_matrix(request):
             date_str = lead_date.isoformat() if hasattr(lead_date, 'isoformat') else str(lead_date)
             sid = str(prop_id)
             if sid not in props_map:
-                props_map[sid] = {'title': prop_title or f'Prop #{prop_id}', 'daily': {}, 'total': 0}
+                props_map[sid] = {'title': prop_title or f'Prop #{prop_id}', 'daily': {}, 'visits': {}, 'total': 0, 'visit_total': 0}
             props_map[sid]['daily'][date_str] = count
             props_map[sid]['total'] += count
             dates_set.add(date_str)
+
+        # Contar visitas para Excel
+        try:
+            with connections['propifai'].cursor() as cv:
+                cv.execute("""
+                    SELECT lp.property_id,
+                           CAST(SWITCHOFFSET(l.created_at, '-05:00') AS DATE) AS lead_date,
+                           COUNT(*) AS visit_count
+                    FROM lead l
+                    INNER JOIN lead_properties lp ON lp.lead_id = l.id
+                    INNER JOIN lead_status ls ON ls.id = l.lead_status_id
+                    WHERE ls.name LIKE '%Visita%'
+                    GROUP BY lp.property_id, CAST(SWITCHOFFSET(l.created_at, '-05:00') AS DATE)
+                """)
+                for row in cv.fetchall():
+                    v_sid = str(row[0])
+                    v_date = row[1].isoformat() if hasattr(row[1], 'isoformat') else str(row[1])
+                    v_count = row[2]
+                    if v_sid in props_map:
+                        props_map[v_sid]['visits'][v_date] = v_count
+                        props_map[v_sid]['visit_total'] += v_count
+        except Exception:
+            pass
 
         dates = sorted(dates_set)
         properties = list(props_map.values())
