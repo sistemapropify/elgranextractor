@@ -2392,7 +2392,7 @@ function exportMatrixToExcel(nodeId) {
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a');
   a.href = url;
-  a.download = 'Matriz_Leads_' + new Date().toISOString().slice(0,10) + '.xls';
+  a.download = 'Matriz_Leads_' + new Date().toISOString().slice(0,10) + '.csv';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -2429,73 +2429,36 @@ function exportMatrixToExcel(nodeId) {
     return '#' + [r,g,b].map(function(x) { return x.toString(16).padStart(2,'0'); }).join('');
   }
   
-  // Formato XML Spreadsheet 2003 (SpreadsheetML) - Excel lo abre sin advertencias
-  var xml = '<?xml version="1.0" encoding="UTF-8"?>';
-  xml += '<?mso-application progid="Excel.Sheet"?>';
-  xml += '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"';
-  xml += ' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"';
-  xml += ' xmlns:x="urn:schemas-microsoft-com:office:excel"';
-  xml += ' xmlns:o="urn:schemas-microsoft-com:office:office">';
-  xml += '<Styles>';
-  xml += '<Style ss:ID="header"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#16213e" ss:Pattern="Solid"/><Borders><Border ss:Position="Bottom" ss:Color="#5c6bc0" ss:Weight="2"/></Borders></Style>';
-  xml += '<Style ss:ID="prop"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#0d1117" ss:Pattern="Solid"/></Style>';
-  xml += '<Style ss:ID="total"><Font ss:Bold="1" ss:Color="#FFDD00"/><Interior ss:Color="#16213e" ss:Pattern="Solid"/><Borders><Border ss:Position="Left" ss:Color="#FFDD00" ss:Weight="2"/></Borders></Style>';
-  xml += '<Style ss:ID="totalrow"><Font ss:Bold="1" ss:Color="#FFDD00" ss:Size="14"/><Interior ss:Color="#16213e" ss:Pattern="Solid"/></Style>';
-  xml += '<Style ss:ID="cell0"><Font ss:Color="#555555"/><Interior ss:Color="#1a1a2e" ss:Pattern="Solid"/></Style>';
-  xml += '<Style ss:ID="cell1"><Font ss:Bold="1" ss:Color="#FFFFFF" ss:Size="11"/><Interior ss:Color="#3d4aab" ss:Pattern="Solid"/></Style>';
-  xml += '<Style ss:ID="cell2"><Font ss:Bold="1" ss:Color="#FFFFFF" ss:Size="12"/><Interior ss:Color="#5c6bc0" ss:Pattern="Solid"/></Style>';
-  xml += '<Style ss:ID="cell3"><Font ss:Bold="1" ss:Color="#FFFFFF" ss:Size="13"/><Interior ss:Color="#7c8ce0" ss:Pattern="Solid"/></Style>';
-  xml += '</Styles>';
-  xml += '<Worksheet ss:Name="Matriz de Leads">';
-  xml += '<Table>';
-  
-  // Header row
-  xml += '<Row>';
-  xml += '<Cell ss:StyleID="header"><Data ss:Type="String">Propiedad</Data></Cell>';
+  // CSV: compatible con Excel sin errores
+  var csv = '\uFEFF'; // BOM para UTF-8
+  csv += '"Propiedad"';
   dates.forEach(function(d) {
     var parts = d.split('-');
     var label = parts.length === 3 ? parts[2] + '/' + parts[1] : d;
-    xml += '<Cell ss:StyleID="header"><Data ss:Type="String">' + escHtml(label) + '</Data></Cell>';
+    csv += ',"' + label + '"';
   });
-  xml += '<Cell ss:StyleID="header"><Data ss:Type="String">Total</Data></Cell>';
-  xml += '</Row>';
+  csv += ',"Total"\r\n';
   
-  // Data rows
   properties.forEach(function(p) {
-    var title = p.title || p.code || 'Prop #' + p.property_id;
-    xml += '<Row>';
-    xml += '<Cell ss:StyleID="prop"><Data ss:Type="String">' + escHtml(title) + '</Data></Cell>';
+    var title = (p.title || p.code || 'Prop #' + p.property_id).replace(/"/g, '""');
+    csv += '"' + title + '"';
     dates.forEach(function(d) {
-      var count = p.daily_counts[d] || 0;
-      var intensity = Math.min(1, count / maxCount);
-      var style = 'cell0';
-      if (count > 0 && intensity < 0.4) style = 'cell1';
-      else if (count > 0 && intensity < 0.7) style = 'cell2';
-      else if (count > 0) style = 'cell3';
-      xml += '<Cell ss:StyleID="' + style + '"><Data ss:Type="Number">' + count + '</Data></Cell>';
+      csv += ',"' + (p.daily_counts[d] || 0) + '"';
     });
-    xml += '<Cell ss:StyleID="total"><Data ss:Type="Number">' + p.total + '</Data></Cell>';
-    xml += '</Row>';
+    csv += ',"' + p.total + '"\r\n';
   });
   
-  // Totals row
-  xml += '<Row>';
-  xml += '<Cell ss:StyleID="totalrow"><Data ss:Type="String">TOTAL</Data></Cell>';
+  csv += '"TOTAL"';
   dates.forEach(function(d) {
-    xml += '<Cell ss:StyleID="totalrow"><Data ss:Type="Number">' + (dateTotals[d] || 0) + '</Data></Cell>';
+    csv += ',"' + (dateTotals[d] || 0) + '"';
   });
-  xml += '<Cell ss:StyleID="totalrow"><Data ss:Type="Number">' + totalLeads + '</Data></Cell>';
-  xml += '</Row>';
+  csv += ',"' + totalLeads + '"\r\n';
   
-  xml += '</Table>';
-  xml += '</Worksheet>';
-  xml += '</Workbook>';
-  
-  var blob = new Blob([xml], { type: 'application/vnd.ms-excel' });
+  var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a');
   a.href = url;
-  a.download = 'Matriz_Leads_' + new Date().toISOString().slice(0,10) + '.xls';
+  a.download = 'Matriz_Leads_' + new Date().toISOString().slice(0,10) + '.csv';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
