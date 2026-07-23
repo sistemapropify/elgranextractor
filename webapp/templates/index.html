@@ -1,493 +1,231 @@
 {% extends "propifai_base.html" %}
 
-{% block title %}El Gran Extractor - Dashboard{% endblock %}
+{% block title %}Centro de control · Propifai{% endblock %}
 
 {% block extra_css %}
 <style>
-    .dashboard-header {
-        background: linear-gradient(135deg, #047d7d 0%, #035e5e 100%);
-        color: white;
-        padding: 2rem 0;
-        margin-bottom: 2rem;
-        border-radius: 10px;
-        border: 1px solid rgba(4, 125, 125, 0.2);
+    .app-content {
+        background:
+            radial-gradient(circle at 85% -8%, rgba(88,166,255,.11), transparent 28rem),
+            radial-gradient(circle at 8% 40%, rgba(137,87,229,.07), transparent 25rem),
+            var(--bg-primary);
     }
-    
-    .card {
-        border: none;
-        border-radius: 15px;
-        box-shadow: 0 4px 6px rgba(3, 94, 94, 0.1);
-        margin-bottom: 1.5rem;
-        background-color: #ffffff;
-        border: 1px solid #daeded;
-    }
-    
-    .btn-primary {
-        background: linear-gradient(135deg, #047d7d 0%, #035e5e 100%);
-        border: none;
-    }
-    
-    .btn-primary:hover {
-        background: linear-gradient(135deg, #049b9b 0%, #047d7d 100%);
-    }
-    
-    .btn-outline-success {
-        border-color: #28a745;
-        color: #28a745;
-    }
-    
-    .btn-outline-success:hover {
-        background-color: #28a745;
-        color: white;
-    }
-    
-    .btn-outline-info {
-        border-color: #84bcbc;
-        color: #047d7d;
-    }
-    
-    .btn-outline-info:hover {
-        background-color: #84bcbc;
-        color: white;
-    }
-    
-    .btn-outline-warning {
-        border-color: #ffc107;
-        color: #ffc107;
-    }
-    
-    .btn-outline-warning:hover {
-        background-color: #ffc107;
-        color: #212529;
-    }
-    
-    .stat-card {
-        text-align: center;
-        padding: 1.5rem;
-        background-color: #ffffff;
-    }
-    
-    .stat-number {
-        font-size: 2.5rem;
-        font-weight: bold;
-        color: #047d7d;
-    }
-    
-    .url-list {
-        max-height: 300px;
-        overflow-y: auto;
-    }
-    
-    .url-item {
-        padding: 10px 15px;
-        border-bottom: 1px solid #daeded;
-    }
-    
-    .status-active {
-        color: #28a745;
-    }
-    
-    .status-error {
-        color: #dc3545;
-    }
-    
-    .footer {
-        margin-top: 3rem;
-        padding: 1.5rem 0;
-        background-color: #035e5e;
-        color: white;
-        text-align: center;
-        border-radius: 10px;
-        border-top: 1px solid #84bcbc;
-    }
-    
-    .text-muted {
-        color: #6c757d !important;
-    }
-    
-    .alert-info {
-        background-color: rgba(4, 125, 125, 0.1);
-        border-color: #84bcbc;
-        color: #035e5e;
-    }
-    
-    .spinner-border.text-primary {
-        color: #047d7d !important;
-    }
-    
-    .form-control, .form-select {
-        border: 1px solid #84bcbc;
-    }
-    
-    .form-control:focus, .form-select:focus {
-        border-color: #047d7d;
-        box-shadow: 0 0 0 0.25rem rgba(4, 125, 125, 0.25);
-    }
+    .control-room { max-width:1540px; margin:0 auto; }
+    .eyebrow { color:#58a6ff; font-size:.7rem; font-weight:800; letter-spacing:.13em; text-transform:uppercase; }
+    .dashboard-hero { display:flex; justify-content:space-between; gap:2rem; align-items:flex-end; margin-bottom:1.35rem; }
+    .dashboard-hero h1 { margin:.35rem 0; font-size:clamp(1.7rem,3vw,2.4rem); letter-spacing:-.045em; line-height:1.08; }
+    .dashboard-hero p { color:#8b949e; max-width:720px; font-size:.9rem; margin:0; }
+    .hero-meta { display:flex; gap:.5rem; flex-wrap:wrap; justify-content:flex-end; }
+    .meta-pill { border:1px solid #30363d; background:rgba(22,27,34,.88); color:#c9d1d9; border-radius:99px; padding:.42rem .7rem; font-size:.72rem; white-space:nowrap; }
+    .meta-pill .dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:#3fb950; box-shadow:0 0 0 4px rgba(63,185,80,.1); margin-right:.45rem; }
+    .command-bar { display:grid; grid-template-columns:minmax(220px,1fr) auto; gap:.75rem; padding:.68rem; border:1px solid #30363d; background:rgba(13,17,23,.78); border-radius:14px; margin-bottom:1rem; box-shadow:0 14px 42px rgba(0,0,0,.16); }
+    .command-search { display:flex; align-items:center; gap:.65rem; padding:0 .55rem; color:#8b949e; }
+    .command-search input { width:100%; background:transparent; border:0; outline:0; color:#f0f6fc; font:inherit; font-size:.84rem; }
+    .quick-links { display:flex; gap:.45rem; }
+    .quick-link { display:inline-flex; align-items:center; gap:.4rem; color:#fff; background:#1f6feb; border:1px solid #388bfd; padding:.6rem .78rem; border-radius:9px; text-decoration:none; font-size:.75rem; font-weight:700; }
+    .quick-link.secondary { color:#c9d1d9; background:#21262d; border-color:#30363d; }
+    .quick-link:hover { color:#fff; filter:brightness(1.08); text-decoration:none; }
+    .kpi-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.78rem; margin-bottom:1rem; }
+    .kpi { position:relative; overflow:hidden; min-height:135px; padding:1rem; border:1px solid #30363d; border-radius:13px; background:linear-gradient(145deg,rgba(28,35,46,.97),rgba(18,23,30,.97)); }
+    .kpi::after { content:""; position:absolute; width:105px; height:105px; border-radius:50%; right:-48px; top:-48px; background:var(--glow); opacity:.14; }
+    .kpi-top { display:flex; align-items:center; justify-content:space-between; color:#8b949e; font-size:.68rem; font-weight:750; letter-spacing:.025em; }
+    .kpi-icon { display:grid; place-items:center; width:30px; height:30px; border-radius:8px; background:var(--soft); color:var(--color); font-size:.92rem; }
+    .kpi-value { font-size:1.85rem; font-weight:800; letter-spacing:-.045em; margin:.68rem 0 .12rem; }
+    .kpi-foot { display:flex; justify-content:space-between; color:#8b949e; font-size:.67rem; gap:.5rem; }
+    .trend { color:#3fb950; font-weight:750; }
+    .trend.warn { color:#d29922; }
+    .dashboard-grid { display:grid; grid-template-columns:minmax(0,1.55fr) minmax(300px,.72fr); gap:1rem; }
+    .panel { background:rgba(22,27,34,.94); border:1px solid #30363d; border-radius:14px; overflow:hidden; box-shadow:0 10px 32px rgba(0,0,0,.12); }
+    .panel-header { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:.95rem 1rem; border-bottom:1px solid #30363d; }
+    .panel-title { font-size:.9rem; font-weight:750; margin:0; }
+    .panel-subtitle { color:#8b949e; font-size:.66rem; margin-top:.2rem; }
+    .panel-action { color:#58a6ff; text-decoration:none; font-size:.7rem; font-weight:700; }
+    .modules-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .module-card { --module:#58a6ff; display:grid; grid-template-columns:42px minmax(0,1fr) auto; gap:.78rem; align-items:center; padding:.95rem 1rem; color:inherit; text-decoration:none; border-right:1px solid #30363d; border-bottom:1px solid #30363d; transition:.18s ease; }
+    .module-card:nth-child(2n) { border-right:0; }
+    .module-card:hover { background:#1c222c; color:inherit; text-decoration:none; transform:translateY(-1px); }
+    .module-icon { display:grid; place-items:center; width:42px; height:42px; border-radius:11px; color:var(--module); background:rgba(88,166,255,.1); border:1px solid rgba(88,166,255,.2); font-size:1.05rem; }
+    .module-card[data-tone="violet"] .module-icon,.module-card[data-tone="purple"] .module-icon { --module:#bc8cff; color:#bc8cff; background:rgba(188,140,255,.1); border-color:rgba(188,140,255,.2); }
+    .module-card[data-tone="amber"] .module-icon { color:#d29922; background:rgba(210,153,34,.1); border-color:rgba(210,153,34,.2); }
+    .module-card[data-tone="cyan"] .module-icon { color:#39c5cf; background:rgba(57,197,207,.1); border-color:rgba(57,197,207,.2); }
+    .module-card[data-tone="green"] .module-icon { color:#3fb950; background:rgba(63,185,80,.1); border-color:rgba(63,185,80,.2); }
+    .module-card[data-tone="rose"] .module-icon,.module-card[data-tone="pink"] .module-icon { color:#f778ba; background:rgba(247,120,186,.1); border-color:rgba(247,120,186,.2); }
+    .module-name { display:block; font-size:.8rem; font-weight:730; }
+    .module-description { display:block; color:#8b949e; font-size:.65rem; line-height:1.35; margin-top:.18rem; }
+    .module-number { display:block; font-size:.88rem; font-weight:760; text-align:right; }
+    .module-label { display:block; color:#6e7681; font-size:.59rem; margin-top:.14rem; text-align:right; white-space:nowrap; }
+    .side-stack { display:grid; gap:1rem; align-content:start; }
+    .health-body { padding:1rem; }
+    .health-score { display:flex; align-items:center; justify-content:space-between; margin-bottom:.9rem; }
+    .score-number { font-size:2rem; font-weight:800; letter-spacing:-.05em; }
+    .score-number small { font-size:.72rem; color:#8b949e; letter-spacing:0; }
+    .health-badge { color:#3fb950; background:rgba(63,185,80,.1); border:1px solid rgba(63,185,80,.25); padding:.33rem .52rem; border-radius:99px; font-size:.64rem; font-weight:750; }
+    .health-row { margin-top:.8rem; }
+    .health-copy { display:flex; justify-content:space-between; color:#8b949e; font-size:.66rem; margin-bottom:.36rem; }
+    .health-copy strong { color:#c9d1d9; }
+    .bar { height:6px; background:#21262d; border-radius:99px; overflow:hidden; }
+    .bar span { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,#238636,#3fb950); }
+    .bar.blue span { background:linear-gradient(90deg,#1f6feb,#58a6ff); }
+    .status-list { padding:.3rem 1rem .85rem; }
+    .status-row { display:flex; justify-content:space-between; align-items:center; padding:.68rem 0; border-bottom:1px solid #21262d; font-size:.7rem; }
+    .status-row:last-child { border:0; }
+    .status-name { color:#8b949e; }
+    .status-value { font-weight:700; }
+    .status-value::before { content:""; display:inline-block; width:6px; height:6px; border-radius:50%; background:#3fb950; margin-right:.38rem; }
+    .status-value.warning::before { background:#d29922; }
+    .activity-panel { margin-top:1rem; }
+    .activity-grid { display:grid; grid-template-columns:1fr 1fr; }
+    .activity-column { padding:.3rem 1rem .75rem; min-width:0; }
+    .activity-column:first-child { border-right:1px solid #30363d; }
+    .activity-heading { color:#8b949e; font-size:.63rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; margin:.68rem 0 .18rem; }
+    .activity-item { display:grid; grid-template-columns:8px minmax(0,1fr) auto; gap:.62rem; align-items:center; padding:.62rem 0; border-bottom:1px solid #21262d; }
+    .activity-item:last-child { border:0; }
+    .activity-dot { width:7px; height:7px; border-radius:50%; background:#58a6ff; }
+    .activity-dot.issue { background:#f85149; }
+    .activity-title { font-size:.69rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .activity-meta { color:#6e7681; font-size:.59rem; margin-top:.14rem; }
+    .activity-state { color:#8b949e; font-size:.6rem; text-transform:capitalize; max-width:85px; text-align:right; }
+    .empty-mini { color:#6e7681; padding:1.15rem 0; font-size:.69rem; }
+    @media (max-width:1100px) { .kpi-grid{grid-template-columns:repeat(2,1fr)} .dashboard-grid{grid-template-columns:1fr} }
+    @media (max-width:720px) { .dashboard-hero{align-items:flex-start;flex-direction:column}.hero-meta{justify-content:flex-start}.command-bar{grid-template-columns:1fr}.quick-links{display:grid;grid-template-columns:1fr 1fr}.modules-grid,.activity-grid{grid-template-columns:1fr}.module-card{border-right:0}.activity-column:first-child{border-right:0;border-bottom:1px solid #30363d} }
+    @media (max-width:460px) { .kpi-grid{grid-template-columns:1fr}.quick-links{grid-template-columns:1fr}.module-card{grid-template-columns:38px minmax(0,1fr)}.module-stat{display:none} }
 </style>
 {% endblock %}
 
-{% block content %}
-    <div class="dashboard-header">
-        <div class="container">
-            <h1 class="display-5 fw-bold"><i class="bi bi-speedometer2 me-2"></i>Dashboard de Monitoreo</h1>
-            <p class="lead">Sistema de captura y análisis automático de portales inmobiliarios en Arequipa</p>
-        </div>
-    </div>
-
-    <div class="container">
-        <div class="row">
-            <div class="col-lg-8">
-                <div class="row mb-4">
-                    <div class="col-md-3"><div class="card stat-card"><div class="stat-number" id="total-fuentes">0</div><div>Fuentes Activas</div></div></div>
-                    <div class="col-md-3"><div class="card stat-card"><div class="stat-number" id="total-capturas">0</div><div>Capturas Totales</div></div></div>
-                    <div class="col-md-3"><div class="card stat-card"><div class="stat-number" id="cambios-detectados">0</div><div>Cambios Detectados</div></div></div>
-                    <div class="col-md-3"><div class="card stat-card"><div class="stat-number" id="urls-descubiertas">0</div><div>URLs Descubiertas</div></div></div>
-                </div>
-
-                <div class="card mb-4">
-                    <div class="card-body">
-                        <h5 class="card-title"><i class="bi bi-plus-circle me-2"></i>Agregar Nueva Fuente Web</h5>
-                        <p class="text-muted">Ingresa una URL de portal inmobiliario para comenzar a monitorear</p>
-                        <form id="urlForm">
-                            <div class="mb-3">
-                                <label for="url" class="form-label">URL del Portal</label>
-                                <input type="url" class="form-control" id="url" placeholder="https://ejemplo.com/propiedades" required>
-                                <div class="form-text">Ej: https://www.adondevivir.com/departamentos-en-venta-arequipa</div>
-                            </div>
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label for="frecuencia" class="form-label">Frecuencia (minutos)</label>
-                                    <input type="number" class="form-control" id="frecuencia" value="60" min="5" max="1440">
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="categoria" class="form-label">Categoría</label>
-                                    <select class="form-select" id="categoria">
-                                        <option value="venta">Venta</option>
-                                        <option value="alquiler">Alquiler</option>
-                                        <option value="proyectos">Proyectos</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Agregar Fuente</button>
-                        </form>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title"><i class="bi bi-play-circle me-2"></i>Control del Sistema</h5>
-                        <p class="text-muted">Ejecuta tareas del sistema manualmente</p>
-                        <div class="row">
-                            <div class="col-md-4 mb-3">
-                                <button class="btn btn-outline-success w-100" id="btnEjecutarSistema">
-                                    <i class="bi bi-play-fill me-1"></i>Ejecutar Sistema
-                                </button>
-                                <small class="text-muted">Inicia monitoreo de todas las fuentes</small>
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <button class="btn btn-outline-info w-100" id="btnDescubrirURLs">
-                                    <i class="bi bi-search me-1"></i>Descubrir URLs
-                                </button>
-                                <small class="text-muted">Busca nuevos portales en Arequipa</small>
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <button class="btn btn-outline-warning w-100" id="btnActualizarFrecuencias">
-                                    <i class="bi bi-graph-up me-1"></i>Ajustar Frecuencias
-                                </button>
-                                <small class="text-muted">Ajusta frecuencias automáticamente</small>
-                            </div>
-                        </div>
-                        <div class="mt-3 alert alert-info">
-                            <i class="bi bi-info-circle me-2"></i>
-                            <strong>Estado del sistema:</strong> <span id="sistemaEstado">Listo para ejecutar</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-lg-4">
-                <div class="card mb-4">
-                    <div class="card-body">
-                        <h5 class="card-title"><i class="bi bi-list-ul me-2"></i>Fuentes Activas</h5>
-                        <div class="url-list" id="urlList">
-                            <div class="text-center py-4">
-                                <div class="spinner-border text-primary" role="status">
-                                    <span class="visually-hidden">Cargando...</span>
-                                </div>
-                                <p class="mt-2 text-muted">Cargando fuentes...</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title"><i class="bi bi-clock-history me-2"></i>Cambios Recientes</h5>
-                        <div id="recentChanges">
-                            <div class="url-item">
-                                <small class="text-muted">No hay cambios recientes</small>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="footer">
-            <div class="container">
-                <p class="mb-0"><strong>El Gran Extractor</strong> - Sistema de Monitoreo de Mercado Inmobiliario Arequipeño</p>
-                <small class="text-light">Versión 1.0 | Desarrollado con Django, Celery y Bootstrap</small>
-            </div>
-        </div>
-    </div>
+{% block header_title_area %}
+<div class="header-title">Centro de control <span>— visión general</span></div>
 {% endblock %}
 
-{% block extra_js %}
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Cargar datos iniciales
-        cargarEstadisticas();
-        cargarFuentesActivas();
-        
-        // Form submission
-        document.getElementById('urlForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            agregarFuente();
-        });
-        
-        // System control buttons
-        document.getElementById('btnEjecutarSistema').addEventListener('click', ejecutarSistema);
-        document.getElementById('btnDescubrirURLs').addEventListener('click', descubrirURLs);
-        document.getElementById('btnActualizarFrecuencias').addEventListener('click', actualizarFrecuencias);
-        
-        // Auto-refresh
-        setInterval(cargarEstadisticas, 30000);
-        setInterval(cargarFuentesActivas, 45000);
-    });
-    
-    function cargarEstadisticas() {
-        fetch('/api/estadisticas/')
-            .then(response => response.json())
-            .then(data => {
-                document.getElementById('total-fuentes').textContent = data.total_fuentes || 0;
-                document.getElementById('total-capturas').textContent = data.total_capturas || 0;
-                document.getElementById('cambios-detectados').textContent = data.cambios_detectados || 0;
-                document.getElementById('urls-descubiertas').textContent = data.urls_descubiertas || 0;
-            })
-            .catch(error => {
-                console.error('Error cargando estadísticas:', error);
-                // Datos de respaldo
-                document.getElementById('total-fuentes').textContent = '0';
-                document.getElementById('total-capturas').textContent = '0';
-                document.getElementById('cambios-detectados').textContent = '0';
-                document.getElementById('urls-descubiertas').textContent = '0';
-            });
-    }
-    
-    function cargarFuentesActivas() {
-        fetch('/api/fuentes/')
-            .then(response => response.json())
-            .then(data => {
-                const urlList = document.getElementById('urlList');
-                urlList.innerHTML = '';
-                
-                if (data.length === 0) {
-                    urlList.innerHTML = '<div class="text-center py-4 text-muted">No hay fuentes activas</div>';
-                    return;
-                }
-                
-                data.slice(0, 8).forEach(fuente => {
-                    const urlItem = document.createElement('div');
-                    urlItem.className = 'url-item';
-                    
-                    let statusClass = 'status-active';
-                    if (fuente.estado === 'pausada' || fuente.estado === 'inactiva') statusClass = 'text-muted';
-                    if (fuente.estado === 'error') statusClass = 'status-error';
-                    
-                    urlItem.innerHTML = `
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div style="max-width: 80%;">
-                                <strong class="d-block text-truncate">${fuente.nombre || fuente.url}</strong>
-                                <small class="text-muted">${fuente.ultima_captura || 'Nunca'}</small>
-                            </div>
-                            <span class="${statusClass}">${fuente.estado || 'activa'}</span>
+{% block content %}
+<main class="control-room">
+    <section class="dashboard-hero">
+        <div>
+            <div class="eyebrow">Propifai Intelligence Platform</div>
+            <h1>{% if current_user %}Hola, {{ current_user.first_name|default:current_user.username }}.{% else %}Centro de control.{% endif %}</h1>
+            <p>Una vista ejecutiva de la oferta, la demanda, el matching y la operación inteligente de toda la plataforma.</p>
+        </div>
+        <div class="hero-meta">
+            <span class="meta-pill"><span class="dot"></span>Sistema operativo</span>
+            <span class="meta-pill">{{ role_name }} · Nivel {{ user_level }}</span>
+            <span class="meta-pill">{{ now|date:"d M Y · H:i" }}</span>
+        </div>
+    </section>
+
+    <section class="command-bar" aria-label="Acciones rápidas">
+        <label class="command-search"><span>⌕</span><input id="moduleSearch" type="search" placeholder="Buscar un módulo o función…" autocomplete="off"></label>
+        <div class="quick-links">
+            <a class="quick-link secondary" href="/requerimientos/lista/">＋ Requerimiento</a>
+            <a class="quick-link" href="/intelligence/chat-web/">✦ Consultar a Propifai</a>
+        </div>
+    </section>
+
+    <section class="kpi-grid" aria-label="Indicadores principales">
+        <article class="kpi" style="--color:#58a6ff;--soft:rgba(88,166,255,.12);--glow:#58a6ff">
+            <div class="kpi-top"><span>INVENTARIO TOTAL</span><span class="kpi-icon">⌂</span></div>
+            <div class="kpi-value">{{ metrics.inventory|default:0 }}</div>
+            <div class="kpi-foot"><span>{{ metrics.active_properties }} publicadas</span><span class="trend">{{ metrics.coverage }}% local activo</span></div>
+        </article>
+        <article class="kpi" style="--color:#bc8cff;--soft:rgba(188,140,255,.12);--glow:#bc8cff">
+            <div class="kpi-top"><span>REQUERIMIENTOS</span><span class="kpi-icon">▤</span></div>
+            <div class="kpi-value">{{ metrics.requirements|default:0 }}</div>
+            <div class="kpi-foot"><span>demanda acumulada</span><span class="trend">+{{ metrics.requirements_24h }} hoy</span></div>
+        </article>
+        <article class="kpi" style="--color:#d29922;--soft:rgba(210,153,34,.12);--glow:#d29922">
+            <div class="kpi-top"><span>MATCHES GENERADOS</span><span class="kpi-icon">ϟ</span></div>
+            <div class="kpi-value">{{ metrics.matches|default:0 }}</div>
+            <div class="kpi-foot"><span>{{ metrics.proposals }} propuestas</span><span class="trend">+{{ metrics.matches_24h }} en 24 h</span></div>
+        </article>
+        <article class="kpi" style="--color:#3fb950;--soft:rgba(63,185,80,.12);--glow:#3fb950">
+            <div class="kpi-top"><span>SALUD DE IA · 24 H</span><span class="kpi-icon">✦</span></div>
+            <div class="kpi-value">{{ metrics.ai_health }}%</div>
+            <div class="kpi-foot"><span>{{ metrics.traces_24h }} consultas</span><span class="trend {% if metrics.trace_issues_24h %}warn{% endif %}">{{ metrics.trace_issues_24h }} por revisar</span></div>
+        </article>
+    </section>
+
+    <div class="dashboard-grid">
+        <section>
+            <article class="panel">
+                <header class="panel-header">
+                    <div><h2 class="panel-title">Mapa de operaciones</h2><p class="panel-subtitle">Módulos disponibles para tu nivel de acceso</p></div>
+                    <span class="panel-action">{{ modules|length }} módulos</span>
+                </header>
+                <div class="modules-grid" id="modulesGrid">
+                    {% for module in modules %}
+                    <a class="module-card" data-tone="{{ module.tone }}" data-search="{{ module.name|lower }} {{ module.description|lower }}" href="{{ module.url }}">
+                        <span class="module-icon">{{ module.icon }}</span>
+                        <span><span class="module-name">{{ module.name }}</span><span class="module-description">{{ module.description }}</span></span>
+                        <span class="module-stat"><span class="module-number">{{ module.metric }}</span><span class="module-label">{{ module.metric_label }}</span></span>
+                    </a>
+                    {% endfor %}
+                </div>
+            </article>
+
+            <article class="panel activity-panel">
+                <header class="panel-header">
+                    <div><h2 class="panel-title">Actividad reciente</h2><p class="panel-subtitle">Movimiento operativo e inteligencia del sistema</p></div>
+                    {% if user_level >= 4 %}<a class="panel-action" href="/intelligence/learning/traces/">Ver observabilidad →</a>{% endif %}
+                </header>
+                <div class="activity-grid">
+                    <div class="activity-column">
+                        <div class="activity-heading">Consultas de IA</div>
+                        {% for trace in recent_traces %}
+                        <div class="activity-item">
+                            <span class="activity-dot {% if trace.status == 'failed' or trace.status == 'needs_review' or trace.status == 'completed_degraded' %}issue{% endif %}"></span>
+                            <span><span class="activity-title">{{ trace.query_redacted|default:"Consulta sin resumen" }}</span><span class="activity-meta">{{ trace.orchestration_mode|default:"orquestación" }} · hace {{ trace.started_at|timesince }}</span></span>
+                            <span class="activity-state">{{ trace.get_status_display }}</span>
                         </div>
-                    `;
-                    urlList.appendChild(urlItem);
-                });
-            })
-            .catch(error => {
-                console.error('Error cargando fuentes:', error);
-                const urlList = document.getElementById('urlList');
-                urlList.innerHTML = '<div class="text-center py-4 text-muted">Error cargando fuentes</div>';
-            });
-    }
-    
-    function agregarFuente() {
-        const url = document.getElementById('url').value.trim();
-        const frecuencia = document.getElementById('frecuencia').value;
-        const categoria = document.getElementById('categoria').value;
-        
-        if (!url) {
-            alert('Por favor ingresa una URL válida');
-            return;
-        }
-        
-        const btnAgregar = document.querySelector('#urlForm button[type="submit"]');
-        const originalText = btnAgregar.innerHTML;
-        btnAgregar.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Agregando...';
-        btnAgregar.disabled = true;
-        
-        fetch('/api/agregar-fuente/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken') || ''
-            },
-            body: JSON.stringify({
-                url: url,
-                frecuencia: parseInt(frecuencia),
-                categoria: categoria,
-                prioridad: 'media'
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert('Fuente agregada exitosamente');
-                document.getElementById('urlForm').reset();
-                cargarEstadisticas();
-                cargarFuentesActivas();
-            } else {
-                alert('Error: ' + (data.error || 'No se pudo agregar la fuente'));
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Error al agregar la fuente');
-        })
-        .finally(() => {
-            btnAgregar.innerHTML = originalText;
-            btnAgregar.disabled = false;
-        });
-    }
-    
-    function ejecutarSistema() {
-        const btn = document.getElementById('btnEjecutarSistema');
-        const originalText = btn.innerHTML;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Ejecutando...';
-        btn.disabled = true;
-        
-        document.getElementById('sistemaEstado').textContent = 'Ejecutando...';
-        
-        fetch('/api/ejecutar-sistema/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken') || ''
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert('Sistema ejecutado. ' + data.message);
-            } else {
-                alert('Error: ' + (data.error || 'No se pudo ejecutar el sistema'));
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Error al ejecutar el sistema');
-        })
-        .finally(() => {
-            setTimeout(() => {
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-                document.getElementById('sistemaEstado').textContent = 'Listo para ejecutar';
-            }, 2000);
-        });
-    }
-    
-    function descubrirURLs() {
-        const btn = document.getElementById('btnDescubrirURLs');
-        const originalText = btn.innerHTML;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Buscando...';
-        btn.disabled = true;
-        
-        fetch('/api/descubrir-urls/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken') || ''
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert('Búsqueda iniciada. ' + data.message);
-            } else {
-                alert('Error: ' + (data.error || 'No se pudo iniciar la búsqueda'));
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Error al iniciar la búsqueda');
-        })
-        .finally(() => {
-            setTimeout(() => {
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-            }, 2000);
-        });
-    }
-    
-    function actualizarFrecuencias() {
-        const btn = document.getElementById('btnActualizarFrecuencias');
-        const originalText = btn.innerHTML;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Ajustando...';
-        btn.disabled = true;
-        
-        fetch('/api/actualizar-frecuencias/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken') || ''
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert('Frecuencias ajustadas. ' + data.message);
-            } else {
-                alert('Error: ' + (data.error || 'No se pudieron ajustar las frecuencias'));
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Error al ajustar frecuencias');
-        })
-        .finally(() => {
-            setTimeout(() => {
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-            }, 2000);
-        });
-    }
-    
-    // Helper function to get CSRF token
-    function getCookie(name) {
-        let cookieValue = null;
-        if (document.cookie && document.cookie !== '') {
-            const cookies = document.cookie.split(';');
-            for (let i = 0; i < cookies.length; i++) {
-                const cookie = cookies[i].trim();
-                if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                    break;
-                }
-            }
-        }
-        return cookieValue;
-    }
+                        {% empty %}<div class="empty-mini">Todavía no hay trazas recientes.</div>{% endfor %}
+                    </div>
+                    <div class="activity-column">
+                        <div class="activity-heading">Nueva demanda</div>
+                        {% for req in recent_requirements %}
+                        <div class="activity-item">
+                            <span class="activity-dot"></span>
+                            <span><span class="activity-title">{{ req.get_tipo_propiedad_display }} · {{ req.distritos|default:"Sin distrito" }}</span><span class="activity-meta">{{ req.get_condicion_display }} · {{ req.agente|default:"Sin agente" }}</span></span>
+                            <span class="activity-state">hace {{ req.creado_en|timesince }}</span>
+                        </div>
+                        {% empty %}<div class="empty-mini">Todavía no hay requerimientos recientes.</div>{% endfor %}
+                    </div>
+                </div>
+            </article>
+        </section>
+
+        <aside class="side-stack">
+            <article class="panel">
+                <header class="panel-header"><div><h2 class="panel-title">Pulso del sistema</h2><p class="panel-subtitle">Últimas 24 horas</p></div><span class="health-badge">En línea</span></header>
+                <div class="health-body">
+                    <div class="health-score"><div><div class="score-number">{{ metrics.ai_health }}<small>/100</small></div><div class="panel-subtitle">Índice operativo de IA</div></div><span style="font-size:2rem;color:#3fb950">◉</span></div>
+                    <div class="health-row"><div class="health-copy"><span>Consultas sin incidencias</span><strong>{{ metrics.ai_health }}%</strong></div><div class="bar"><span style="width:{{ metrics.ai_health }}%"></span></div></div>
+                    <div class="health-row"><div class="health-copy"><span>Cobertura de cartera local</span><strong>{{ metrics.coverage }}%</strong></div><div class="bar blue"><span style="width:{{ metrics.coverage }}%"></span></div></div>
+                </div>
+                <div class="status-list">
+                    <div class="status-row"><span class="status-name">Motor de matching</span><span class="status-value">Disponible</span></div>
+                    <div class="status-row"><span class="status-name">Scraping</span><span class="status-value {% if scraping_status == 'error' or scraping_status == 'paused' %}warning{% endif %}">{{ scraping_label }}</span></div>
+                    <div class="status-row"><span class="status-name">Observabilidad IA</span><span class="status-value {% if metrics.trace_issues_24h %}warning{% endif %}">{{ metrics.trace_issues_24h }} alertas</span></div>
+                </div>
+            </article>
+
+            <article class="panel">
+                <header class="panel-header"><div><h2 class="panel-title">Siguiente mejor acción</h2><p class="panel-subtitle">Atajos para mantener el flujo comercial</p></div></header>
+                <div class="status-list">
+                    <a class="status-row" href="/matching/masivo/" style="text-decoration:none;color:inherit"><span class="status-name">Ejecutar matching masivo</span><span class="panel-action">Abrir →</span></a>
+                    <a class="status-row" href="/acm/analisis/" style="text-decoration:none;color:inherit"><span class="status-name">Crear análisis ACM</span><span class="panel-action">Abrir →</span></a>
+                    <a class="status-row" href="/prospects/capture/" style="text-decoration:none;color:inherit"><span class="status-name">Capturar prospecto</span><span class="panel-action">Abrir →</span></a>
+                    <a class="status-row" href="/ingestas/scraping/dashboard/" style="text-decoration:none;color:inherit"><span class="status-name">Revisar scraping</span><span class="panel-action">Abrir →</span></a>
+                </div>
+            </article>
+        </aside>
+    </div>
+</main>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.getElementById('moduleSearch')?.addEventListener('input', function () {
+    const query = this.value.trim().toLowerCase();
+    document.querySelectorAll('#modulesGrid .module-card').forEach(function (card) {
+        card.style.display = card.dataset.search.includes(query) ? '' : 'none';
+    });
+});
 </script>
 {% endblock %}

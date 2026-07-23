@@ -1,0 +1,103 @@
+{% extends "intelligence/base/base.html" %}
+
+{% block title %}Traza {{ trace.trace_id }}{% endblock %}
+{% block page_title %}Detalle de traza{% endblock %}
+
+{% block content %}
+<div class="learning-header">
+    <div>
+        <h1>{{ trace.trace_id }}</h1>
+        <p>{{ trace.query_redacted }}</p>
+    </div>
+    <a class="btn" href="{% url 'intelligence-web:learning_traces' %}">Volver a trazas</a>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card"><div class="stat-value">{{ trace.get_status_display }}</div><div class="stat-label">Estado</div></div>
+    <div class="stat-card"><div class="stat-value">{{ trace.orchestration_mode|default:"—" }}</div><div class="stat-label">Orquestación</div></div>
+    <div class="stat-card"><div class="stat-value">{{ trace.result_count|default_if_none:"—" }}</div><div class="stat-label">Resultados</div></div>
+    <div class="stat-card"><div class="stat-value">{{ trace.latency_ms|default:"—" }}</div><div class="stat-label">Latencia ms</div></div>
+</div>
+
+<section class="card">
+    <div class="card-header"><div class="card-title">Versiones</div></div>
+    <dl class="learning-definition">
+        <dt>Código</dt><dd>{{ trace.code_version }}</dd>
+        <dt>Configuración</dt><dd>{{ trace.config_version }}</dd>
+        <dt>Embeddings</dt><dd>{{ trace.embedding_version }}</dd>
+        <dt>Hash consulta</dt><dd>{{ trace.normalized_query_hash }}</dd>
+    </dl>
+</section>
+
+{% if audit_event %}
+<section class="card">
+    <div class="card-header"><div class="card-title">Auditoría automática</div></div>
+    <dl class="learning-definition">
+        <dt>Veredicto</dt><dd>{{ audit_event.payload.audit_verdict }}</dd>
+        <dt>Confianza</dt><dd>{{ audit_event.payload.audit_confidence }}</dd>
+        <dt>Resumen</dt><dd>{{ audit_event.payload.audit_summary }}</dd>
+        <dt>Señales</dt><dd>{{ audit_event.payload.audit_signals|default:"—" }}</dd>
+    </dl>
+</section>
+{% endif %}
+
+<section class="card">
+    <div class="card-header"><div class="card-title">Agentes, etapas y resultados</div></div>
+    <table class="table">
+        <thead><tr><th>Agente</th><th>Éxito</th><th>Iteraciones</th><th>Resultados</th><th>Pasos</th></tr></thead>
+        <tbody>
+        {% for event in execution_events %}
+            <tr>
+                <td>{{ event.payload.agent_name }}</td>
+                <td>{{ event.payload.success }}</td>
+                <td>{{ event.payload.iterations }}</td>
+                <td>{{ event.payload.item_count }}</td>
+                <td><pre>{{ event.payload.steps }}</pre></td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="5">La traza no contiene resumen de ejecución.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<section class="card">
+    <div class="card-header"><div class="card-title">Requisitos de la consulta</div></div>
+    <table class="table">
+        <thead><tr><th>Requisito</th><th>Tipo</th><th>Estado</th><th>Skill</th></tr></thead>
+        <tbody>
+        {% for event in requirement_events %}
+            <tr>
+                <td>{{ event.payload.error_preview }}</td>
+                <td>{{ event.payload.status }}</td>
+                <td>{% if event.event_type == "requirement.satisfied" %}Cumplido{% else %}Pendiente{% endif %}</td>
+                <td>{{ event.payload.skill_name|default:"—" }}</td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="4">Esta ruta no reportó requisitos estructurados.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<section class="card">
+    <div class="card-header"><div class="card-title">Línea temporal</div></div>
+    <div class="learning-timeline">
+    {% for event in events %}
+        <article class="learning-event learning-event--{{ event.outcome }}">
+            <div class="learning-event-index">{{ event.sequence }}</div>
+            <div>
+                <h3>{{ event.event_type }}</h3>
+                <p>{{ event.component }} · {{ event.created_at|date:"H:i:s.u" }}</p>
+                {% if event.error_code %}<strong>{{ event.error_code }}</strong>{% endif %}
+                {% if event.payload %}<pre>{{ event.payload }}</pre>{% endif %}
+            </div>
+        </article>
+    {% empty %}
+        <p>No hay eventos asociados.</p>
+    {% endfor %}
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_css %}{{ block.super }}<link rel="stylesheet" href="/static/intelligence/css/learning_dashboard.css">{% endblock %}

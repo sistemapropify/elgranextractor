@@ -1,0 +1,33 @@
+{% extends "intelligence/base/base.html" %}{% load static %}{% block title %}Nuevo Rol — SIIA{% endblock %}{% block active_section %}roles{% endblock %}{% block page_title %}Nuevo Rol{% endblock %}
+{% block extra_css %}
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',sans-serif;}
+body{background:#0d1117;color:#c9d1d9;padding:20px;}
+.container{max-width:600px;margin:0 auto;padding:20px;}
+h1{color:#58a6ff;font-size:24px;margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid #30363d;}
+.form-group{margin-bottom:16px;}
+label{display:block;margin-bottom:6px;color:#8b949e;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;}
+input,textarea{width:100%;padding:10px 12px;border:1px solid #30363d;border-radius:6px;background:#161b22;color:#c9d1d9;font-size:14px;}
+textarea{min-height:80px;resize:vertical;}
+input:focus,textarea:focus{outline:none;border-color:#58a6ff;}
+.btn{padding:10px 20px;border-radius:6px;border:none;font-size:14px;cursor:pointer;}
+.btn-primary{background:#238636;color:#fff;}
+.btn-secondary{background:#30363d;color:#c9d1d9;}
+.actions{display:flex;gap:10px;margin-top:24px;padding-top:16px;border-top:1px solid #30363d;}
+</style>
+{% endblock %}
+{% block content %}
+<div class="container">
+<h1>➕ Nuevo Rol</h1>
+<form method="post">
+{% csrf_token %}
+<div class="form-group"><label>Nombre</label><input type="text" name="name" placeholder="Ej: Agente Senior" required></div>
+<div class="form-group"><label>Nivel</label><input type="number" name="level" value="1" min="1" max="10"></div>
+<div class="form-group"><label>Descripción</label><textarea name="description" placeholder="Descripción del rol..."></textarea></div>
+<div class="actions">
+<button type="submit" class="btn btn-primary">✅ Crear</button>
+<a href="{% url 'intelligence-web:role_list' %}" class="btn btn-secondary">Cancelar</a>
+</div>
+</form>
+</div>
+{% endblock %}

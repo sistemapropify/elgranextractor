@@ -1,6 +1,7 @@
 from django.urls import path, re_path
 from django.views.decorators.csrf import csrf_exempt
 from . import views
+from . import learning_views
 import uuid
 
 app_name = 'intelligence'
@@ -55,6 +56,11 @@ urlpatterns = [
     path('evaluation/api/', views.pil_evaluation_api, name='pil_evaluation_api'),
     path('stats/', views.system_stats, name='system_stats'),
     path('logs/', views.activity_logs, name='activity_logs'),
+
+    # Aprendizaje operativo PIL (Nivel 1: observabilidad solamente)
+    path('learning/', learning_views.learning_dashboard, name='learning_dashboard'),
+    path('learning/traces/', learning_views.learning_traces, name='learning_traces'),
+    path('learning/traces/<str:trace_id>/', learning_views.learning_trace_detail, name='learning_trace_detail'),
     
     # Chat Web Interactivo (SPEC-007)
     path('chat-web/', views.chat_web, name='chat_web'),

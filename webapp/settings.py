@@ -247,6 +247,13 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
+# Aprendizaje operativo PIL: solo telemetría, nunca mutación automática.
+LEARNING_TELEMETRY_ENABLED = env.bool('LEARNING_TELEMETRY_ENABLED', default=True)
+LEARNING_AI_AUDIT_ALL = env.bool('LEARNING_AI_AUDIT_ALL', default=True)
+LEARNING_ALLOW_CONFIG_MUTATION = env.bool(
+    'LEARNING_ALLOW_CONFIG_MUTATION', default=False
+)
+
 # REST Framework Configuration
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [

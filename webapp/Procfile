@@ -1,2 +1,2 @@
 # FIX-OOM: 2 workers, 600s timeout, 1000 max-requests para evitar leaks
-web: gunicorn webapp.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 600 --access-logfile '-' --error-logfile '-' --max-requests 1000 --max-requests-jitter 50
+web: python webapp/manage.py collectstatic --noinput && test -f webapp/staticfiles/canvas/css/canvas.css && test -f webapp/staticfiles/canvas/js/canvas_engine.js && gunicorn webapp.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 600 --access-logfile '-' --error-logfile '-' --max-requests 1000 --max-requests-jitter 50

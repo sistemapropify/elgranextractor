@@ -140,7 +140,7 @@ def get_available_skills(
     Returns:
         Lista de nombres de skills disponibles en este momento.
     """
-    from .base_agent import AgentStatus, SKILL_SATISFIES_KIND
+    from .base_agent import AgentStatus, SKILL_CAPABILITIES
 
     # Paso 1: Filtrar por precondiciones
     precondition_filtered = [
@@ -163,7 +163,8 @@ def get_available_skills(
         kinds_pendientes = {r.kind for r in requirements if not r.satisfied}
         result = [
             s for s in result
-            if s not in SKILL_SATISFIES_KIND or SKILL_SATISFIES_KIND[s] in kinds_pendientes
+            if s not in SKILL_CAPABILITIES
+            or bool(SKILL_CAPABILITIES[s] & kinds_pendientes)
         ]
 
     return result

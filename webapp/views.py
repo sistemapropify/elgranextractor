@@ -3,6 +3,8 @@ from django.contrib import messages
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.db.models import Count, Sum, Q
+from django.utils import timezone
+from datetime import timedelta
 import json
 
 from semillas.models import FuenteWeb
@@ -12,30 +14,110 @@ from colas.tareas_descubrimiento import ejecutar_descubrimiento_automatico
 
 
 def home(request):
-    """Vista principal del dashboard"""
-    # Obtener estadísticas básicas
-    total_fuentes = FuenteWeb.objects.filter(estado='activa').count()
-    total_capturas = CapturaCruda.objects.count()
-    cambios_detectados = EventoDeteccion.objects.count()
-    
-    # Obtener fuentes activas recientes
-    fuentes_activas = FuenteWeb.objects.filter(estado='activa').order_by('-fecha_ultima_revision')[:10]
-    
-    # Obtener cambios recientes
-    cambios_recientes = EventoDeteccion.objects.select_related('captura', 'captura__fuente').order_by('-fecha_deteccion')[:5]
-    
-    # Usuario actual (establecido por middleware)
+    """Centro de control transversal de Propifai."""
     current_user = getattr(request, 'current_user', None)
-    
+    now = timezone.now()
+    since_24h = now - timedelta(hours=24)
+
+    def safe_value(callback, default=0):
+        try:
+            return callback()
+        except Exception:
+            return default
+
+    user_level = 1
+    role_name = 'Invitado'
+    if current_user:
+        role_name = getattr(getattr(current_user, 'role', None), 'name', '') or 'Usuario'
+        user_level = safe_value(
+            lambda: current_user.intelligence_profile.level,
+            getattr(getattr(current_user, 'role', None), 'default_level', 1) or 1,
+        )
+
+    from ingestas.models import PropiedadRaw, ScrapingJob
+    from requerimientos.models import Requerimiento
+    from matching.models import MatchResult, PropuestaWhatsApp
+    from acm.models import ACMLink
+    from intelligence.models import SystemTrace
+
+    local_properties = safe_value(lambda: PropiedadRaw.objects.count())
+    active_properties = safe_value(
+        lambda: PropiedadRaw.objects.filter(
+            Q(estado_propiedad='en_publicacion') | Q(estado_propiedad__isnull=True)
+        ).count()
+    )
+    propifai_properties = safe_value(
+        lambda: __import__('propifai.models', fromlist=['PropifaiProperty'])
+        .PropifaiProperty.objects.using('propifai').count()
+    )
+    requirements_total = safe_value(lambda: Requerimiento.objects.count())
+    requirements_24h = safe_value(
+        lambda: Requerimiento.objects.filter(creado_en__gte=since_24h).count()
+    )
+    matches_total = safe_value(lambda: MatchResult.objects.count())
+    matches_24h = safe_value(
+        lambda: MatchResult.objects.filter(ejecutado_en__gte=since_24h).count()
+    )
+    proposals_total = safe_value(lambda: PropuestaWhatsApp.objects.count())
+    traces_24h = safe_value(
+        lambda: SystemTrace.objects.filter(started_at__gte=since_24h).count()
+    )
+    trace_issues_24h = safe_value(
+        lambda: SystemTrace.objects.filter(
+            started_at__gte=since_24h,
+            status__in=['failed', 'timeout', 'blocked', 'needs_review', 'completed_degraded'],
+        ).count()
+    )
+    trace_ok_24h = max(traces_24h - trace_issues_24h, 0)
+    ai_health = round((trace_ok_24h / traces_24h) * 100) if traces_24h else 100
+    last_scrape = safe_value(lambda: ScrapingJob.objects.first(), None)
+    scraping_status = last_scrape.estado if last_scrape else 'idle'
+    scraping_label = {
+        'running': 'Ejecutando', 'paused': 'Pausado', 'completed': 'Operativo',
+        'error': 'Con errores', 'stopped': 'Detenido', 'idle': 'En espera',
+    }.get(scraping_status, 'En espera')
+    total_inventory = local_properties + propifai_properties
+    coverage = round((active_properties / local_properties) * 100) if local_properties else 0
+
+    modules = [
+        {'name': 'Propiedades', 'description': 'Cartera interna y oferta externa', 'url': '/propifai/propiedades/', 'icon': '▥', 'tone': 'blue', 'metric': f'{total_inventory:,}', 'metric_label': 'inmuebles', 'level': 1},
+        {'name': 'Requerimientos', 'description': 'Demanda estructurada desde WhatsApp', 'url': '/requerimientos/lista/', 'icon': '▤', 'tone': 'violet', 'metric': f'{requirements_total:,}', 'metric_label': 'registrados', 'level': 1},
+        {'name': 'Matching', 'description': 'Cruce inteligente de oferta y demanda', 'url': '/matching/dashboard/', 'icon': 'ϟ', 'tone': 'amber', 'metric': f'{matches_total:,}', 'metric_label': 'coincidencias', 'level': 1},
+        {'name': 'ACM', 'description': 'Valoración y comparables de mercado', 'url': '/acm/', 'icon': '⌁', 'tone': 'cyan', 'metric': f'{safe_value(lambda: ACMLink.objects.count()):,}', 'metric_label': 'análisis', 'level': 1},
+        {'name': 'Mercado', 'description': 'Precios, zonas y mapas de calor', 'url': '/market-analysis/dashboard/', 'icon': '⌖', 'tone': 'green', 'metric': f'{safe_value(lambda: PropiedadRaw.objects.exclude(distrito="").values("distrito").distinct().count()):,}', 'metric_label': 'zonas', 'level': 1},
+        {'name': 'Prospección', 'description': 'Captura de oportunidades en campo', 'url': '/prospects/', 'icon': '◎', 'tone': 'rose', 'metric': 'OCR', 'metric_label': 'captura asistida', 'level': 1},
+        {'name': 'Marketing', 'description': 'Campañas, leads y rendimiento', 'url': '/meta-ads/dashboard/exacto/', 'icon': '◖', 'tone': 'pink', 'metric': 'Meta', 'metric_label': 'campañas', 'level': 2},
+        {'name': 'Inteligencia IA', 'description': 'Agentes, trazas y aprendizaje', 'url': '/intelligence/dashboard/', 'icon': '✦', 'tone': 'purple', 'metric': f'{ai_health}%', 'metric_label': 'salud 24 h', 'level': 2},
+    ]
+
     context = {
-        'total_fuentes': total_fuentes,
-        'total_capturas': total_capturas,
-        'cambios_detectados': cambios_detectados,
-        'fuentes_activas': fuentes_activas,
-        'cambios_recientes': cambios_recientes,
         'current_user': current_user,
+        'user_level': user_level,
+        'role_name': role_name,
+        'now': now,
+        'metrics': {
+            'inventory': total_inventory,
+            'active_properties': active_properties,
+            'requirements': requirements_total,
+            'requirements_24h': requirements_24h,
+            'matches': matches_total,
+            'matches_24h': matches_24h,
+            'proposals': proposals_total,
+            'traces_24h': traces_24h,
+            'trace_issues_24h': trace_issues_24h,
+            'ai_health': ai_health,
+            'coverage': coverage,
+        },
+        'modules': [module for module in modules if user_level >= module['level']],
+        'recent_traces': safe_value(
+            lambda: list(SystemTrace.objects.order_by('-started_at')[:5]), []
+        ),
+        'recent_requirements': safe_value(
+            lambda: list(Requerimiento.objects.order_by('-creado_en')[:4]), []
+        ),
+        'scraping_status': scraping_status,
+        'scraping_label': scraping_label,
     }
-    
     return render(request, 'index.html', context)
 
 

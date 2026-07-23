@@ -71,6 +71,11 @@ FIELD_MAP = {
     'moneda': ['currency_name', 'currency_id', 'moneda', 'currency'],
 }
 
+SINONIMOS_DISTRITOS = {
+    'cercado': ['Arequipa'],
+    'cercado de arequipa': ['Arequipa'],
+}
+
 # Mapeo de valores de estado (property_status_name) para filtro condicion
 STATUS_MAP = {
     'disponible': 'Disponible',
@@ -100,9 +105,9 @@ TIPO_PROPIEDAD_MAP = {
     'terrenos': 'Terreno',
     'lote': 'Lote',
     'lotes': 'Lote',
-    'local': 'Local Comercial',
-    'locales': 'Local Comercial',
-    'local comercial': 'Local Comercial',
+    'local': 'Local',
+    'locales': 'Local',
+    'local comercial': 'Local',
     'oficina': 'Oficina',
     'oficinas': 'Oficina',
     'suite': 'Suite',
@@ -590,7 +595,7 @@ class BusquedaPropiedadesSkill(BaseSkill):
                         and len(query_limpia) >= 3):
                     logger.info(
                         f"FASE 2: Query limpiada de ruido: "
-                        f"'{semantic_query[:80]}' → '{query_limpia[:80]}'"
+                        f"'{semantic_query[:80]}' -> '{query_limpia[:80]}'"
                     )
                     semantic_query = query_limpia
                     params['semantic_query'] = query_limpia
@@ -662,10 +667,9 @@ class BusquedaPropiedadesSkill(BaseSkill):
                 if tiene_filtros_exactos and documentos:
                     filtrados = []
                     for doc, score in documentos:
-                        if self._documento_coincide_filtros(doc.field_values or {}, params):
+                        if self._doc_cumple_filtros(doc.field_values or {}, params):
                             filtrados.append((doc, score))
-                    if filtrados:
-                        documentos = filtrados
+                    documentos = filtrados
                     # Si no hay filtrados, mantener resultados semánticos
                 if not documentos:
                     # FALLBACK: si la semántica no encontró resultados pero hay filtros exactos,
@@ -934,8 +938,9 @@ class BusquedaPropiedadesSkill(BaseSkill):
         distrito = params.get('distrito')
         if distrito:
             distrito_q = Q()
-            for campo in FIELD_MAP['distrito']:
-                distrito_q |= Q(**{f'field_values__{campo}__iexact': distrito})
+            for valor in self._valores_distrito(distrito):
+                for campo in FIELD_MAP['distrito']:
+                    distrito_q |= Q(**{f'field_values__{campo}__iexact': valor})
             filter_q &= distrito_q
 
         # ── Filtro por tipo de propiedad ──
@@ -958,36 +963,14 @@ class BusquedaPropiedadesSkill(BaseSkill):
                 filter_q &= op_q
 
         # ── Filtros de precio (rango numérico) ──
-        precio_min = params.get('precio_min')
-        precio_max = params.get('precio_max')
-        if precio_min is not None or precio_max is not None:
-            precio_q = Q()
-            for campo in FIELD_MAP['precio']:
-                campo_q = Q()
-                if precio_min is not None:
-                    campo_q &= Q(**{f'field_values__{campo}__gte': precio_min})
-                if precio_max is not None:
-                    campo_q &= Q(**{f'field_values__{campo}__lte': precio_max})
-                precio_q |= campo_q
-            filter_q &= precio_q
+        # Se filtra en Python: SQL Server no compara de forma segura valores
+        # JSON nvarchar como "330000.0" contra parámetros enteros.
 
         # ── Filtro por habitaciones (solo si el campo existe en field_values) ──
         # NOTA: bedrooms/áreas están en property_specs, NO en property.
         # Solo se filtran si el campo existe en field_values.
-        habitaciones = params.get('habitaciones')
-        if habitaciones is not None:
-            hab_q = Q()
-            for campo in FIELD_MAP['habitaciones']:
-                hab_q |= Q(**{f'field_values__{campo}__gte': habitaciones})
-            filter_q &= hab_q
 
         # ── Filtro por área mínima (solo si el campo existe) ──
-        area_min = params.get('area_min')
-        if area_min is not None:
-            area_q = Q()
-            for campo in FIELD_MAP['area_min']:
-                area_q |= Q(**{f'field_values__{campo}__gte': area_min})
-            filter_q &= area_q
 
         # ── Filtro por condición/estado (SOLO si el usuario lo pide) ──
         # IMPORTANTE: NO se filtra por defecto. El campo 'condicion' en field_values
@@ -1012,7 +995,10 @@ class BusquedaPropiedadesSkill(BaseSkill):
         if filter_q:
             queryset = queryset.filter(filter_q)
 
-        documentos = list(queryset)
+        documentos = [
+            doc for doc in queryset
+            if self._doc_cumple_filtros(doc.field_values or {}, params)
+        ]
 
         return [(doc, 0.5) for doc in documentos]
 
@@ -1184,9 +1170,13 @@ class BusquedaPropiedadesSkill(BaseSkill):
         distrito = params.get('distrito')
         if distrito:
             coincide = False
+            valores_validos = {
+                str(valor).casefold()
+                for valor in self._valores_distrito(distrito)
+            }
             for campo in FIELD_MAP['distrito']:
                 val = field_values.get(campo)
-                if val and str(val).lower() == distrito.lower():
+                if val is not None and str(val).casefold() in valores_validos:
                     coincide = True
                     break
             if not coincide:
@@ -1251,6 +1241,22 @@ class BusquedaPropiedadesSkill(BaseSkill):
             if not coincide:
                 return False
 
+        # Habitaciones mínimas
+        habitaciones = params.get('habitaciones')
+        if habitaciones is not None:
+            if not self._cumple_minimo_numerico(
+                field_values, FIELD_MAP['habitaciones'], habitaciones
+            ):
+                return False
+
+        # Área mínima
+        area_min = params.get('area_min')
+        if area_min is not None:
+            if not self._cumple_minimo_numerico(
+                field_values, FIELD_MAP['area_min'], area_min
+            ):
+                return False
+
         # Condición
         condicion = params.get('condicion')
         if condicion:
@@ -1265,6 +1271,30 @@ class BusquedaPropiedadesSkill(BaseSkill):
                 return False
 
         return True
+
+    @staticmethod
+    def _valores_distrito(distrito: Any) -> List[str]:
+        """Incluye equivalentes oficiales para nombres coloquiales."""
+        valor = str(distrito).strip()
+        alias = SINONIMOS_DISTRITOS.get(valor.casefold(), [])
+        return list(dict.fromkeys([valor, *alias]))
+
+    @staticmethod
+    def _cumple_minimo_numerico(
+        field_values: Dict[str, Any],
+        campos: List[str],
+        minimo: Any,
+    ) -> bool:
+        for campo in campos:
+            valor = field_values.get(campo)
+            if valor is None:
+                continue
+            try:
+                if float(valor) >= float(minimo):
+                    return True
+            except (TypeError, ValueError):
+                continue
+        return False
 
     def _normalizar_tipo(self, tipo: str) -> str:
         """Normaliza el tipo de propiedad."""

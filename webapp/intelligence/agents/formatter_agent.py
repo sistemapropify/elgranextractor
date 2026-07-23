@@ -115,6 +115,24 @@ class FormatterAgent:
         skill_name = state.get('skill_detectada')
 
         try:
+            if state.get('search_failed'):
+                state['respuesta_generada'] = (
+                    "No pude completar la búsqueda por un error técnico. "
+                    "No interpretaré este fallo como ausencia de propiedades."
+                )
+                state['documentos_referencia'] = []
+                state['grounded_response'] = True
+                return state
+
+            if skill_name == 'busqueda_propiedades' and not resultados:
+                state['respuesta_generada'] = (
+                    "No encontré propiedades verificadas que coincidan con tu "
+                    "búsqueda. Puedes cambiar el distrito, tipo o rango de precio."
+                )
+                state['documentos_referencia'] = []
+                state['grounded_response'] = True
+                return state
+
             from ..services.llm import LLMService
             from ..services.prompts import PromptManager
 
@@ -133,6 +151,7 @@ class FormatterAgent:
                 )
 
             state['respuesta_generada'] = response_text
+            state['grounded_response'] = bool(resultados)
             state['documentos_referencia'] = [
                 {
                     'id': r.get('document_id'),
@@ -314,6 +333,10 @@ class FormatterAgent:
                     f"{role_prompt}\n\n"
                     f"{memory_context}\n\n"
                     "INSTRUCCIONES:\n"
+                    "- Usa exclusivamente los datos incluidos en Propiedades encontradas.\n"
+                    "- No inventes precios, áreas, dormitorios, estacionamientos, "
+                    "amenidades, direcciones ni disponibilidad.\n"
+                    "- Si un dato no aparece en los resultados, indica que no está registrado.\n"
                     "- Si el usuario pregunta quién es o cómo se llama, revisa la "
                     "INFORMACIÓN CONOCIDA DEL USUARIO arriba.\n"
                     "- Si hay información del usuario, úsala para personalizar la respuesta.\n"

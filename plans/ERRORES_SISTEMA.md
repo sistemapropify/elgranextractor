@@ -16,8 +16,8 @@
 
 | ID | Fecha | Título | Severidad | Estado |
 |---|---|---|---|---|
-| [`ERR-2026-002`](#err-2026-002) | 2026-07-22 | SQL Error precio + Alucinación DeepSeek — departamentos inventados en Cayma | 🔴 Crítica | Abierto |
-| [`ERR-2026-001`](#err-2026-001) | 2026-07-22 | Filtro exacto de distrito mata resultados semánticos — "Cercado" sinónimo de "Arequipa" | 🔴 Alta | Abierto |
+| [`ERR-2026-002`](#err-2026-002) | 2026-07-22 | SQL Error precio + Alucinación DeepSeek — departamentos inventados en Cayma | 🔴 Crítica | Corregido en código |
+| [`ERR-2026-001`](#err-2026-001) | 2026-07-22 | Filtro exacto de distrito mata resultados semánticos — "Cercado" sinónimo de "Arequipa" | 🔴 Alta | Corregido en código |
 
 ---
 
@@ -29,7 +29,7 @@
 |---|---|
 | **Fecha descubrimiento** | 2026-07-22 |
 | **Severidad** | 🔴 Crítica — datos inventados presentados como reales |
-| **Estado** | 🟡 Abierto (diagnóstico completo, pendiente de implementación) |
+| **Estado** | 🟢 Corregido en código; pendiente de validación integrada con Azure SQL |
 | **Módulo** | [`webapp/intelligence/skills/propiedades/skill.py`](webapp/intelligence/skills/propiedades/skill.py) |
 | **Actor** | [`BusquedaPropiedadesSkill._filtrar_por_sql()`](webapp/intelligence/skills/propiedades/skill.py:893) |
 | **LLM** | DeepSeek API (deepseek-chat) — [`webapp/intelligence/services/llm.py`](webapp/intelligence/services/llm.py) |
@@ -347,7 +347,7 @@ VERIFICACION: Existe un depto de $120,000 USD en Cayma?
 |---|---|
 | **Fecha descubrimiento** | 2026-07-22 |
 | **Severidad** | 🔴 Alta — afecta búsquedas en el distrito más céntrico de Arequipa |
-| **Estado** | 🟡 Abierto (diagnóstico completo, pendiente de implementación) |
+| **Estado** | 🟢 Corregido en código; pendiente de validación integrada con Azure SQL |
 | **Módulo** | [`webapp/intelligence/skills/propiedades/skill.py`](webapp/intelligence/skills/propiedades/skill.py) |
 | **Actor** | [`BusquedaPropiedadesSkill.execute()`](webapp/intelligence/skills/propiedades/skill.py:529) |
 | **Usuario reportante** | Zoo (debug agent) |

@@ -1025,3 +1025,88 @@ class AgentExecution(models.Model):
             f"{'✅' if self.success else '❌'} - "
             f"{self.created_at.strftime('%d/%m/%Y %H:%M') if self.created_at else 'sin fecha'}"
         )
+
+
+class SystemTrace(models.Model):
+    """Traza global, anónima y transversal de una interacción PIL."""
+
+    STATUS_CHOICES = [
+        ('started', 'Iniciada'),
+        ('completed', 'Completada'),
+        ('completed_degraded', 'Completada con fallback'),
+        ('completed_empty', 'Completada sin resultados'),
+        ('needs_review', 'Requiere revisión'),
+        ('failed', 'Fallida'),
+        ('timeout', 'Timeout'),
+        ('blocked', 'Bloqueada por guardrail'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    trace_id = models.CharField(max_length=64, unique=True, db_index=True)
+    conversation = models.ForeignKey(
+        Conversation, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='system_traces',
+    )
+    request_kind = models.CharField(max_length=50, default='unknown', db_index=True)
+    normalized_query_hash = models.CharField(max_length=64, blank=True, default='', db_index=True)
+    query_redacted = models.TextField(blank=True, default='')
+    status = models.CharField(
+        max_length=30, choices=STATUS_CHOICES, default='started', db_index=True,
+    )
+    technical_success = models.BooleanField(default=False)
+    grounded = models.BooleanField(null=True, blank=True, db_index=True)
+    result_count = models.IntegerField(null=True, blank=True)
+    orchestration_mode = models.CharField(max_length=50, blank=True, default='')
+    code_version = models.CharField(max_length=64, blank=True, default='unknown')
+    config_version = models.CharField(max_length=64, blank=True, default='unknown')
+    embedding_version = models.CharField(max_length=64, blank=True, default='unknown')
+    latency_ms = models.IntegerField(null=True, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    started_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'intelligence_system_trace'
+        ordering = ['-started_at']
+        indexes = [
+            models.Index(fields=['status', 'started_at'], name='intel_trace_status_idx'),
+            models.Index(fields=['request_kind', 'started_at'], name='intel_trace_kind_idx'),
+            models.Index(fields=['grounded', 'started_at'], name='intel_trace_ground_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.trace_id} · {self.status}"
+
+
+class SystemEvent(models.Model):
+    """Evento ordenado perteneciente a una SystemTrace."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    trace = models.ForeignKey(
+        SystemTrace, on_delete=models.CASCADE, related_name='events',
+    )
+    sequence = models.PositiveIntegerField()
+    event_type = models.CharField(max_length=80, db_index=True)
+    component = models.CharField(max_length=100, db_index=True)
+    outcome = models.CharField(max_length=30, default='info', db_index=True)
+    error_code = models.CharField(max_length=80, blank=True, default='', db_index=True)
+    payload = models.JSONField(default=dict, blank=True)
+    duration_ms = models.IntegerField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = 'intelligence_system_event'
+        ordering = ['sequence']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['trace', 'sequence'],
+                name='unique_event_sequence_per_trace',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['event_type', 'created_at'], name='intel_event_type_idx'),
+            models.Index(fields=['error_code', 'created_at'], name='intel_event_error_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.trace.trace_id} #{self.sequence} {self.event_type}"

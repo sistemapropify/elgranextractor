@@ -22,11 +22,10 @@ from django.conf import settings
 from django.conf.urls.static import static
 import views
 from intelligence import views as intelligence_views
-from acm import views as acm_views
 
 urlpatterns = [
-    # Página principal - ACM Dashboard
-    path('', acm_views.acm_dashboard, name='home'),
+    # Centro de control general. ACM conserva su dashboard en /acm/.
+    path('', views.home, name='home'),
     
     # Fuentes Web
     path('fuentes-web/', views.fuentes_web, name='fuentes_web'),

@@ -22,6 +22,7 @@ Compatibilidad:
 """
 
 import json
+import time
 import uuid
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, Tuple, Generator
@@ -181,7 +182,16 @@ class ChatProcessor:
             user_id=str(ctx.user.id),
             app_id=ctx.app_id,
         ) as timer:
+            learning_trace = None
             try:
+                from ..learning.events import start_trace
+                learning_trace = start_trace(
+                    query=ctx.message,
+                    conversation=ctx.conversation,
+                    request_kind='chat',
+                    app_id=ctx.app_id,
+                    trace_id=timer.trace_id,
+                )
                 # Guardar mensaje del usuario
                 cls._save_user_message(ctx.conversation, ctx.message)
 
@@ -206,27 +216,79 @@ class ChatProcessor:
 
                 # Flag para detectar si AgentGraph falló y usamos fallback
                 agent_graph_fallido = False
+                shared_search_plan = cls._build_shared_search_plan(ctx)
 
                 if usar_agent_graph:
                     try:
-                        agent_result = cls._process_with_agent_graph(ctx, timer)
+                        from ..learning.events import emit_event
+                        emit_event(
+                            learning_trace,
+                            'orchestration.agent_graph.started',
+                            'agent_graph',
+                            payload={'orchestration_mode': 'agent_graph'},
+                        )
+                        agent_result = cls._process_with_agent_graph(
+                            ctx, timer, search_plan=shared_search_plan
+                        )
                         if agent_result and agent_result.response_text:
                             log.info(
                                 "[AgentGraph] AgentGraphBuilder completado exitosamente",
                                 agents=agent_result.metadata.get('agents_activated', []),
                                 latency_ms=f"{timer.latency_ms:.1f}",
                             )
+                            cls._complete_learning_trace(
+                                learning_trace, agent_result, timer
+                            )
                             return agent_result
                         else:
                             log.info("[AgentGraph] AgentGraph devolvió respuesta vacía. Usando LangGraph.")
                             agent_graph_fallido = True
+                            emit_event(
+                                learning_trace,
+                                'orchestration.agent_graph.failed',
+                                'agent_graph',
+                                outcome='error',
+                                error_code='AGENT_GRAPH_NO_SUCCESS',
+                                payload={
+                                    'fallback_used': True,
+                                    'status': 'no_successful_agents',
+                                },
+                            )
                     except Exception as agent_err:
                         log.warning(f"[AgentGraph] AgentGraph falló: {agent_err}. Usando LangGraph.")
                         agent_graph_fallido = True
+                        from ..learning.events import emit_event
+                        emit_event(
+                            learning_trace,
+                            'orchestration.agent_graph.failed',
+                            'agent_graph',
+                            outcome='error',
+                            error_code='AGENT_GRAPH_EXCEPTION',
+                            payload={
+                                'fallback_used': True,
+                                'error_type': type(agent_err).__name__,
+                                'error_preview': str(agent_err),
+                            },
+                        )
 
                 if usar_lg:
                     try:
-                        lg_result = cls._process_with_langgraph(ctx, timer)
+                        if agent_graph_fallido:
+                            from ..learning.events import emit_event
+                            emit_event(
+                                learning_trace,
+                                'fallback.activated',
+                                'chat_processor',
+                                outcome='warning',
+                                error_code='AGENT_GRAPH_FALLBACK',
+                                payload={
+                                    'fallback_used': True,
+                                    'orchestration_mode': 'langgraph',
+                                },
+                            )
+                        lg_result = cls._process_with_langgraph(
+                            ctx, timer, search_plan=shared_search_plan
+                        )
                         if lg_result and lg_result.response_text:
                             # Si AgentGraph falló, marcar la respuesta como fallback
                             if agent_graph_fallido:
@@ -235,10 +297,26 @@ class ChatProcessor:
                                     "Se usó el sistema LangGraph clásico como respaldo."
                                 )
                                 lg_result.metadata['orchestration_mode'] = 'langgraph_fallback'
+                                lg_result.context_summary['orchestration_mode'] = 'langgraph_fallback'
+                                if lg_result.metadata.get('fallback_plan_reused'):
+                                    emit_event(
+                                        learning_trace,
+                                        'fallback.plan_reused',
+                                        'chat_processor',
+                                        payload={
+                                            'fallback_used': True,
+                                            'search_plan_hash': lg_result.metadata.get(
+                                                'search_plan_hash', ''
+                                            ),
+                                        },
+                                    )
                             log.info(
                                 f"[F2-001] LangGraph completado exitosamente",
                                 skill=getattr(lg_result, 'skill_detectada', None),
                                 latency_ms=getattr(timer, 'latency_ms', 0),
+                            )
+                            cls._complete_learning_trace(
+                                learning_trace, lg_result, timer
                             )
                             return lg_result
                         else:
@@ -364,6 +442,9 @@ class ChatProcessor:
                     latency_ms=f"{timer.latency_ms:.1f}",
                     trace_id=timer.trace_id,
                 )
+                cls._complete_learning_trace(
+                    learning_trace, result, timer, raw_results=resultados
+                )
                 return result
 
             except Exception as e:
@@ -374,7 +455,7 @@ class ChatProcessor:
                     exc_info=True,
                     trace_id=timer.trace_id,
                 )
-                return ChatResult(
+                error_result = ChatResult(
                     success=False,
                     response_text=f"Error al procesar mensaje: {str(e)}",
                     conversation_id=str(ctx.conversation.id) if ctx.conversation else '',
@@ -383,11 +464,152 @@ class ChatProcessor:
                     metadata={'error': str(e), 'traceback': error_details},
                     timestamp=timezone.now().isoformat(),
                 )
+                cls._complete_learning_trace(
+                    learning_trace, error_result, timer, error=e
+                )
+                return error_result
+
+    @staticmethod
+    def _complete_learning_trace(
+        trace,
+        result: ChatResult,
+        timer,
+        raw_results: Optional[Dict[str, Any]] = None,
+        error: Optional[Exception] = None,
+    ) -> None:
+        """Finaliza la telemetría sin afectar la respuesta principal."""
+        try:
+            from ..learning.events import complete_trace, emit_event
+            from ..learning.auditor import audit_interaction
+
+            result_count = None
+            if isinstance(raw_results, dict):
+                data = raw_results.get('data')
+                if isinstance(data, list):
+                    result_count = len(data)
+                elif isinstance(raw_results.get('total'), int):
+                    result_count = raw_results['total']
+
+            metadata = result.metadata or {}
+            if result_count is None and isinstance(metadata.get('result_count'), int):
+                result_count = metadata['result_count']
+            orchestration_mode = (
+                metadata.get('orchestration_mode')
+                or (result.context_summary or {}).get('orchestration_mode')
+                or 'unknown'
+            )
+            execution_summary = metadata.get('execution_summary') or []
+            result_evidence = metadata.get('result_evidence') or []
+            for agent in execution_summary:
+                emit_event(
+                    trace,
+                    'execution.agent.completed',
+                    agent.get('agent_name', 'unknown'),
+                    outcome='success' if agent.get('success') else 'error',
+                    error_code='' if agent.get('success') else 'AGENT_STEP_FAILED',
+                    payload={
+                        'agent_name': agent.get('agent_name'),
+                        'success': agent.get('success'),
+                        'iterations': agent.get('iterations'),
+                        'item_count': agent.get('item_count'),
+                        'step_count': len(agent.get('steps') or []),
+                        'steps': agent.get('steps') or [],
+                    },
+                )
+                for requirement in agent.get('requirements') or []:
+                    emit_event(
+                        trace,
+                        (
+                            'requirement.satisfied'
+                            if requirement.get('satisfied')
+                            else 'requirement.unsatisfied'
+                        ),
+                        agent.get('agent_name', 'unknown'),
+                        outcome=(
+                            'success' if requirement.get('satisfied') else 'warning'
+                        ),
+                        error_code=(
+                            '' if requirement.get('satisfied')
+                            else 'REQUIREMENT_UNSATISFIED'
+                        ),
+                        payload={
+                            'agent_name': agent.get('agent_name'),
+                            'skill_name': requirement.get('satisfied_by_skill') or '',
+                            'status': requirement.get('kind') or 'unknown',
+                            'error_preview': requirement.get('description') or '',
+                        },
+                    )
+
+            audit = audit_interaction(
+                query=getattr(trace, 'query_redacted', ''),
+                response=result.response_text,
+                orchestration_mode=orchestration_mode,
+                result_count=result_count,
+                grounded=metadata.get('grounded_response'),
+                execution_summary=execution_summary,
+                result_evidence=result_evidence,
+            )
+            emit_event(
+                trace,
+                'audit.completed',
+                'learning_auditor',
+                outcome=(
+                    'success' if audit.get('audit_verdict') == 'pass'
+                    else 'warning'
+                ),
+                error_code=(
+                    '' if audit.get('audit_verdict') == 'pass'
+                    else 'SILENT_ERROR_SUSPECTED'
+                ),
+                payload=audit,
+            )
+            complete_trace(
+                trace,
+                success=result.success,
+                orchestration_mode=orchestration_mode,
+                result_count=result_count,
+                grounded=metadata.get('grounded_response'),
+                latency_ms=(
+                    (time.time() - timer.start_time) * 1000
+                    if getattr(timer, 'start_time', None)
+                    else getattr(timer, 'latency_ms', None)
+                ),
+                error=error,
+                review_required=audit.get('audit_verdict') != 'pass',
+            )
+        except Exception as telemetry_error:
+            log.warning(
+                f"No se pudo finalizar telemetría de aprendizaje: {telemetry_error}"
+            )
 
     # ── F2-001: LangGraph Orchestration ───────────────────────────────
 
     @classmethod
-    def _process_with_langgraph(cls, ctx: ChatContext, timer) -> ChatResult:
+    def _build_shared_search_plan(cls, ctx: ChatContext) -> dict:
+        """Crea una sola interpretación de búsqueda para todas las rutas."""
+        from ..search.normalizer import SearchPlanNormalizer
+
+        params = dict(ctx.skill_params or {})
+        # Lo expresado en el mensaje actual prevalece sobre parámetros
+        # auxiliares del mismo request. No se incorpora memoria de usuario.
+        params.update(SearchPlanNormalizer.params_from_message(ctx.message))
+        collections = list(ctx.collections or ['propiedadespropify'])
+        plan = SearchPlanNormalizer.from_params(
+            query=ctx.message,
+            params=params,
+            collections=collections,
+        )
+        log.info(
+            "[SearchPlan] Plan compartido creado",
+            plan_hash=plan.fingerprint(),
+            filters=len(plan.conditions),
+        )
+        return plan.to_dict()
+
+    @classmethod
+    def _process_with_langgraph(
+        cls, ctx: ChatContext, timer, search_plan: Optional[dict] = None
+    ) -> ChatResult:
         """
         Procesa mensaje usando PILOrchestrator con LangGraph StateGraph.
 
@@ -466,6 +688,7 @@ class ChatProcessor:
             user_id=str(ctx.user.id) if ctx.user else None,
             contexto_activo=contexto_activo,
             user_context=user_context,
+            search_plan=search_plan,
         )
 
         response_text = state.get('respuesta_generada', '')
@@ -520,6 +743,33 @@ class ChatProcessor:
                 'nodos_ejecutados': state.get('nodos_ejecutados', []),
                 'total_resultados': state.get('total_resultados', 0),
                 'router_score': state.get('score_routing', 0),
+                'search_plan_hash': state.get('search_plan_hash', ''),
+                'fallback_plan_reused': state.get('fallback_plan_reused', False),
+                'result_count': state.get('total_resultados', 0),
+                'grounded_response': state.get('grounded_response'),
+                'execution_summary': [{
+                    'agent_name': 'langgraph',
+                    'success': not state.get('search_failed', False),
+                    'iterations': 1,
+                    'item_count': state.get('total_resultados', 0),
+                    'requirements_total': 0,
+                    'requirements_satisfied': 0,
+                    'requirements': [],
+                    'steps': [{
+                        'iterations': 1,
+                        'skill_name': state.get('skill_detectada') or 'rag_puro',
+                        'success': not state.get('search_failed', False),
+                        'item_count': state.get('total_resultados', 0),
+                        'filter_count': len(state.get('filtros_aplicados') or []),
+                        'status': (
+                            'failed' if state.get('search_failed') else 'completed'
+                        ),
+                        'error_preview': state.get('error') or '',
+                    }],
+                }],
+                'result_evidence': cls._build_result_evidence(
+                    state.get('resultados_busqueda') or []
+                ),
             },
             context_summary={
                 'orchestration_mode': 'langgraph',
@@ -534,7 +784,9 @@ class ChatProcessor:
     # ═══════════════════════════════════════════════════════════════════════
 
     @classmethod
-    def _process_with_agent_graph(cls, ctx: ChatContext, timer) -> Optional[ChatResult]:
+    def _process_with_agent_graph(
+        cls, ctx: ChatContext, timer, search_plan: Optional[dict] = None
+    ) -> Optional[ChatResult]:
         """
         Procesa mensaje usando AgentGraphBuilder (Supervisor + ReAct agents).
 
@@ -572,6 +824,7 @@ class ChatProcessor:
             conversation_id=str(ctx.conversation.id),
             user_id=str(ctx.user.id) if ctx.user else None,
             user_context=user_context,
+            search_plan=search_plan,
         )
 
         # Verificar si algún agente tuvo éxito
@@ -622,6 +875,15 @@ class ChatProcessor:
             metadata_extra['reasoning_steps'] = reasoning_steps
 
         agents_exitosos = [s['name'] for s in successful]
+        execution_summary = cls._build_execution_summary(state)
+        result_evidence = []
+        for agent_data in (state.get('results') or {}).values():
+            result_evidence.extend(cls._build_result_evidence(
+                cls._extract_property_items(agent_data.get('final_answer'))
+            ))
+        result_count = sum(
+            int(agent.get('item_count') or 0) for agent in execution_summary
+        )
         log.info(
             "[AgentGraph] Mensaje procesado con AgentGraphBuilder",
             agents=agents_exitosos,
@@ -642,6 +904,10 @@ class ChatProcessor:
                 'trace_id': state.get('trace_id', ''),
                 'agents_activated': agents_exitosos,
                 'agents_failed': [f['name'] for f in failed],
+                'result_count': result_count,
+                'grounded_response': True,
+                'execution_summary': execution_summary,
+                'result_evidence': result_evidence,
                 **metadata_extra,
             },
             context_summary={
@@ -651,6 +917,81 @@ class ChatProcessor:
             },
             timestamp=timezone.now().isoformat(),
         )
+
+    @classmethod
+    def _build_execution_summary(cls, state: Dict[str, Any]) -> list:
+        """Resumen estructurado de requisitos, iteraciones y skills por agente."""
+        summary = []
+        for agent_name, data in (state.get('results') or {}).items():
+            final_answer = data.get('final_answer')
+            item_count = len(cls._extract_property_items(final_answer))
+            steps = []
+            for step in data.get('steps') or []:
+                steps.append({
+                    'iterations': int(step.get('iteration', 0)) + 1,
+                    'skill_name': step.get('skill_used') or '',
+                    'success': step.get('skill_success'),
+                    'item_count': step.get('item_count', 0),
+                    'filter_count': step.get('filter_count', 0),
+                    'status': step.get('status', ''),
+                    'error_preview': step.get('error_message') or '',
+                })
+            requirements = data.get('requirements') or []
+            summary.append({
+                'agent_name': agent_name,
+                'success': bool(data.get('success')),
+                'iterations': data.get('iterations_used', 0),
+                'item_count': item_count,
+                'requirements_total': len(requirements),
+                'requirements_satisfied': sum(
+                    1 for requirement in requirements
+                    if requirement.get('satisfied')
+                ),
+                'requirements': requirements,
+                'steps': steps,
+            })
+        return summary
+
+    @staticmethod
+    def _build_result_evidence(items: list) -> list:
+        """Campos mínimos permitidos para comprobar afirmaciones del formatter."""
+        evidence = []
+        for item in items[:200]:
+            fields = item.get('field_values')
+            if not isinstance(fields, dict):
+                fields = item
+            evidence.append({
+                'id': str(
+                    item.get('source_id')
+                    or fields.get('id')
+                    or item.get('document_id')
+                    or ''
+                )[:80],
+                'title': fields.get('title') or fields.get('titulo') or '',
+                'price': fields.get('price', fields.get('precio')),
+                'currency': (
+                    fields.get('currency_name')
+                    or fields.get('moneda')
+                    or fields.get('currency')
+                    or ''
+                ),
+                'district': (
+                    fields.get('district_name')
+                    or fields.get('distrito')
+                    or ''
+                ),
+                'property_type': (
+                    fields.get('property_type_name')
+                    or fields.get('tipo_propiedad')
+                    or ''
+                ),
+                'status': (
+                    fields.get('property_status_name')
+                    or fields.get('estado')
+                    or ''
+                ),
+            })
+        return evidence
 
     @classmethod
     def _build_reasoning_steps(cls, state: Dict[str, Any]) -> list:
@@ -791,10 +1132,20 @@ class ChatProcessor:
             })
 
         # 3. Paso: Generando respuesta
+        property_count = sum(
+            len(cls._extract_property_items(
+                results.get(item.get('name', ''), {}).get('final_answer')
+            ))
+            for item in successful
+        )
+        formatter_count = property_count or len(successful)
+        formatter_unit = (
+            'propiedad(es)' if property_count else 'resultado(s) de agente(s)'
+        )
         steps.append({
             'icon': '📝',
             'title': 'Generando respuesta natural',
-            'description': f"DeepSeek formatea {len(successful)} resultado(s) de agente(s)",
+            'description': f"Formateando {formatter_count} {formatter_unit}",
             'type': 'formatter',
         })
 
@@ -828,6 +1179,43 @@ class ChatProcessor:
 
         if not successful:
             return ""
+
+        # Guardrail final del AgentGraph: si el único dominio consultado fue
+        # propiedades y todos sus agentes confirmaron cero filas, devolver una
+        # respuesta determinista. No reenviar el historial a DeepSeek, porque
+        # podría reciclar una propiedad inventada de un turno anterior.
+        property_answers = []
+        only_property_agents = True
+        for item in successful:
+            agent_name = item.get('name', '')
+            if agent_name != 'agente_propiedades':
+                only_property_agents = False
+                break
+            answer = results.get(agent_name, {}).get('final_answer')
+            property_answers.append(answer)
+
+        if only_property_agents and property_answers and all(
+            isinstance(answer, dict)
+            and (
+                answer.get('total') == 0
+                or answer.get('data') == []
+                or answer.get('propiedades') == []
+            )
+            for answer in property_answers
+        ):
+            return (
+                "No encontré propiedades verificadas que coincidan con tu "
+                "búsqueda. Puedes cambiar el distrito, tipo o rango de precio."
+            )
+
+        # No pasar inventario inmobiliario por un segundo LLM. Se muestran
+        # todos los registros reales y se conserva el conteo exacto.
+        if only_property_agents:
+            property_items = []
+            for answer in property_answers:
+                property_items.extend(cls._extract_property_items(answer))
+            if property_items:
+                return cls._format_grounded_property_items(property_items)
 
         # Construir contexto de resultados para el prompt
         resultados_text = ""
@@ -913,6 +1301,80 @@ INSTRUCCIONES:
         # Fallback: construir respuesta simple con nombres de agentes
         agent_names = [s['name'] for s in successful]
         return f"Los agentes {' y '.join(agent_names)} completaron el análisis. ¿Necesitas más detalles?"
+
+    @staticmethod
+    def _extract_property_items(answer: Any) -> list:
+        """Extrae propiedades de las formas de resultado actualmente soportadas."""
+        if isinstance(answer, list):
+            return [item for item in answer if isinstance(item, dict)]
+        if isinstance(answer, dict):
+            for key in ('resultados', 'properties', 'propiedades', 'data', 'items'):
+                value = answer.get(key)
+                if isinstance(value, list):
+                    return [item for item in value if isinstance(item, dict)]
+        return []
+
+    @classmethod
+    def _format_grounded_property_items(cls, items: list) -> str:
+        """Lista todos los candidatos recuperados sin datos generativos."""
+        lines = [f"Encontré **{len(items)} propiedades** que cumplen los filtros:"]
+        for index, item in enumerate(items, 1):
+            fields = item.get('field_values')
+            if not isinstance(fields, dict):
+                fields = item
+
+            title = (
+                fields.get('title')
+                or fields.get('titulo')
+                or fields.get('code')
+                or f'Propiedad {index}'
+            )
+            price = fields.get('price', fields.get('precio'))
+            currency = (
+                fields.get('currency_name')
+                or fields.get('moneda')
+                or fields.get('currency')
+                or ''
+            )
+            district = fields.get('district_name', fields.get('distrito'))
+            property_type = fields.get(
+                'property_type_name', fields.get('tipo_propiedad')
+            )
+            status = fields.get(
+                'property_status_name', fields.get('estado')
+            )
+            area = next(
+                (
+                    fields.get(key)
+                    for key in (
+                        'built_area', 'total_area', 'land_area',
+                        'area_construida', 'area_terreno',
+                    )
+                    if fields.get(key) not in (None, '')
+                ),
+                None,
+            )
+
+            details = []
+            if price not in (None, ''):
+                details.append(f"Precio: {currency} {price}".strip())
+            if property_type:
+                details.append(f"Tipo: {property_type}")
+            if district:
+                details.append(f"Distrito: {district}")
+            if area is not None:
+                details.append(f"Área: {area} m²")
+            if status:
+                details.append(f"Estado: {status}")
+
+            lines.append(f"\n{index}. **{title}**")
+            if details:
+                lines.append("   " + " · ".join(details))
+
+        lines.append(
+            "\nTodos los datos anteriores provienen de los registros recuperados."
+        )
+        return "\n".join(lines)
 
     # ── Streaming ──────────────────────────────────────────────────────
 

@@ -408,7 +408,7 @@ def role_create(request):
                     capabilities=capabilities
                 )
                 messages.success(request, f'Rol "{role.name}" creado exitosamente.')
-                return redirect('role_list')
+                return redirect('intelligence-web:role_list')
             except Exception as e:
                 messages.error(request, f'Error al crear rol: {str(e)}')
         else:
@@ -447,7 +447,7 @@ def role_edit(request, role_id):
                 }
                 role.save()
                 messages.success(request, f'Rol "{role.name}" actualizado exitosamente.')
-                return redirect('role_list')
+                return redirect('intelligence-web:role_list')
             except Exception as e:
                 messages.error(request, f'Error al actualizar rol: {str(e)}')
         else:
@@ -466,6 +466,7 @@ def role_delete(request, role_id):
         try:
             role.delete()
             messages.success(request, 'Rol eliminado exitosamente.')
+            return redirect('intelligence-web:role_list')
         except Exception as e:
             messages.error(request, f'Error al eliminar rol: {str(e)}')
     return redirect('role_list')
@@ -3001,7 +3002,7 @@ def user_create(request):
                 user.save()
 
                 messages.success(request, f'Usuario "{username}" creado exitosamente.')
-                return redirect('user_list')
+                return redirect('intelligence-web:user_list')
             except Exception as e:
                 messages.error(request, f'Error al crear usuario: {str(e)}')
         else:
@@ -3037,7 +3038,7 @@ def user_edit(request, user_id):
                 user.save()
 
                 messages.success(request, f'Usuario "{username}" actualizado exitosamente.')
-                return redirect('user_list')
+                return redirect('intelligence-web:user_list')
             except Exception as e:
                 messages.error(request, f'Error al actualizar usuario: {str(e)}')
         else:
@@ -3060,7 +3061,7 @@ def user_toggle_active(request, user_id):
         user.save()
         status_text = 'activado' if user.is_active else 'desactivado'
         messages.success(request, f'Usuario "{user.phone}" {status_text} exitosamente.')
-        return redirect('user_list')
+        return redirect('intelligence-web:user_list')
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

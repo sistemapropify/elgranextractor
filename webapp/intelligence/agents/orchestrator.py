@@ -56,6 +56,10 @@ class PILAgentState(TypedDict):
     contexto_resuelto: bool
     hechos_usuario: List[Dict[str, Any]]
     params_extraidos: Dict[str, Any]
+    search_plan: Optional[Dict[str, Any]]
+    search_plan_hash: str
+    fallback_plan_reused: bool
+    search_failed: bool
 
     # ── User Context (SPEC v2.0 - Multi-Rol) ──
     user_context: Optional[Dict[str, Any]]
@@ -83,6 +87,7 @@ def create_initial_state(
     user_id: Optional[str] = None,
     contexto_activo: Optional[Dict[str, Any]] = None,
     user_context: Optional[Dict[str, Any]] = None,
+    search_plan: Optional[Dict[str, Any]] = None,
 ) -> PILAgentState:
     """Crea un estado inicial para el grafo.
 
@@ -110,6 +115,10 @@ def create_initial_state(
         contexto_resuelto=False,
         hechos_usuario=[],
         params_extraidos={},
+        search_plan=search_plan,
+        search_plan_hash='',
+        fallback_plan_reused=False,
+        search_failed=False,
         # User Context (SPEC v2.0)
         user_context=user_context,
         # Search
@@ -317,6 +326,7 @@ class PILOrchestrator:
         user_id: Optional[str] = None,
         contexto_activo: Optional[Dict[str, Any]] = None,
         user_context: Optional[Dict[str, Any]] = None,
+        search_plan: Optional[Dict[str, Any]] = None,
     ) -> PILAgentState:
         """
         Ejecuta el grafo completo.
@@ -340,7 +350,11 @@ class PILOrchestrator:
             user_id=user_id,
             contexto_activo=contexto_activo,
             user_context=user_context,
+            search_plan=search_plan,
         )
+        if search_plan:
+            from ..search.contracts import SearchPlan
+            state['search_plan_hash'] = SearchPlan.from_dict(search_plan).fingerprint()
         state['_start_time'] = start * 1000
 
         logger.info(
@@ -759,6 +773,7 @@ class AgentGraphBuilder:
         conversation_id: str,
         user_id: Optional[str] = None,
         user_context: Optional[Dict[str, Any]] = None,
+        search_plan: Optional[Dict[str, Any]] = None,
     ) -> AgentOrchestratorState:
         """
         Ejecuta el grafo de agentes completo.
@@ -868,6 +883,7 @@ class AgentGraphBuilder:
                         'user_level': (user_context or {}).get('level', 1),
                         'user_context': user_context,
                         'conversation_id': conversation_id,
+                        'search_plan': search_plan,
                     },
                 )
                 state['results'][agents[0]] = result.to_log() if hasattr(result, 'to_log') else {}
@@ -887,6 +903,7 @@ class AgentGraphBuilder:
                                 'user_level': (user_context or {}).get('level', 1),
                                 'user_context': user_context,
                                 'conversation_id': conversation_id,
+                                'search_plan': search_plan,
                             },
                         )
                         futures[future] = agent_name

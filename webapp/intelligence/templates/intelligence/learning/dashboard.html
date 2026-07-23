@@ -1,0 +1,97 @@
+{% extends "intelligence/base/base.html" %}
+
+{% block title %}Aprendizaje PIL{% endblock %}
+{% block page_title %}Aprendizaje del sistema{% endblock %}
+
+{% block content %}
+<div class="learning-header">
+    <div>
+        <h1>Observabilidad del aprendizaje</h1>
+        <p>Nivel 1 · Solo lectura. Ningún dato de este panel modifica el sistema.</p>
+    </div>
+    <form method="get">
+        <label for="hours">Ventana</label>
+        <select id="hours" name="hours" onchange="this.form.submit()">
+            <option value="24" {% if hours == 24 %}selected{% endif %}>24 horas</option>
+            <option value="168" {% if hours == 168 %}selected{% endif %}>7 días</option>
+            <option value="720" {% if hours == 720 %}selected{% endif %}>30 días</option>
+        </select>
+    </form>
+</div>
+
+<div class="learning-safety">
+    <strong>Modo seguro:</strong> telemetría activa · mutación automática deshabilitada
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card"><div class="stat-value">{{ total }}</div><div class="stat-label">Trazas</div></div>
+    <div class="stat-card"><div class="stat-value">{{ coverage_pct }}%</div><div class="stat-label">Cobertura final</div></div>
+    <div class="stat-card"><div class="stat-value">{{ failed }}</div><div class="stat-label">Fallidas</div></div>
+    <div class="stat-card"><div class="stat-value">{{ degraded }}</div><div class="stat-label">Éxitos degradados</div></div>
+    <div class="stat-card"><div class="stat-value">{{ needs_review }}</div><div class="stat-label">Requieren revisión</div></div>
+    <div class="stat-card"><div class="stat-value">{{ internal_failures }}</div><div class="stat-label">Fallos internos</div></div>
+    <div class="stat-card"><div class="stat-value">{{ fallback_activations }}</div><div class="stat-label">Fallbacks activados</div></div>
+    <div class="stat-card"><div class="stat-value">{{ empty }}</div><div class="stat-label">Sin resultados</div></div>
+    <div class="stat-card"><div class="stat-value">{{ ungrounded }}</div><div class="stat-label">No fundamentadas</div></div>
+    <div class="stat-card"><div class="stat-value">{{ avg_latency }} ms</div><div class="stat-label">Latencia media</div></div>
+</div>
+
+<div class="grid grid-2">
+    <section class="card">
+        <div class="card-header"><div class="card-title">Estado de trazas</div></div>
+        <table class="table">
+            <thead><tr><th>Estado</th><th>Total</th></tr></thead>
+            <tbody>
+            {% for row in status_rows %}
+                <tr><td><span class="trace-status trace-status--{{ row.status }}">{{ row.status }}</span></td><td>{{ row.total }}</td></tr>
+            {% empty %}
+                <tr><td colspan="2">Todavía no hay trazas.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </section>
+    <section class="card">
+        <div class="card-header"><div class="card-title">Rutas de orquestación</div></div>
+        <table class="table">
+            <thead><tr><th>Modo</th><th>Total</th></tr></thead>
+            <tbody>
+            {% for row in orchestration_rows %}
+                <tr><td>{{ row.orchestration_mode }}</td><td>{{ row.total }}</td></tr>
+            {% empty %}
+                <tr><td colspan="2">Sin información de routing.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </section>
+</div>
+
+<section class="card">
+    <div class="card-header learning-card-title">
+        <div class="card-title">Trazas recientes</div>
+        <a class="btn" href="{% url 'intelligence-web:learning_traces' %}">Ver todas</a>
+    </div>
+    <div class="learning-table-wrap">
+        <table class="table">
+            <thead><tr><th>Hora</th><th>Consulta redactada</th><th>Ruta</th><th>Estado</th><th>Latencia</th></tr></thead>
+            <tbody>
+            {% for trace in recent_traces %}
+                <tr>
+                    <td><a href="{% url 'intelligence-web:learning_trace_detail' trace.trace_id %}">{{ trace.started_at|date:"d/m H:i:s" }}</a></td>
+                    <td>{{ trace.query_redacted|truncatechars:80 }}</td>
+                    <td>{{ trace.orchestration_mode|default:"—" }}</td>
+                    <td><span class="trace-status trace-status--{{ trace.status }}">{{ trace.get_status_display }}</span></td>
+                    <td>{{ trace.latency_ms|default:"—" }}{% if trace.latency_ms %} ms{% endif %}</td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="5">Las nuevas conversaciones aparecerán aquí.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_css %}
+{{ block.super }}
+<link rel="stylesheet" href="/static/intelligence/css/learning_dashboard.css">
+{% endblock %}

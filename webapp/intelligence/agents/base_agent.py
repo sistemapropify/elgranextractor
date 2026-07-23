@@ -45,6 +45,8 @@ class AgentStep:
     skill_used: Optional[str] = None  # None si decidió no usar ninguna skill
     skill_params: Optional[dict] = None
     skill_result: Optional[dict] = None
+    skill_metadata: Dict[str, Any] = field(default_factory=dict)
+    skill_success: Optional[bool] = None
     status: AgentStatus = AgentStatus.THINKING
     error_message: Optional[str] = None  # SPEC precondiciones: mensaje de fallo explícito
 
@@ -60,16 +62,21 @@ class AgentResult:
     error_message: Optional[str] = None
     confidence: float = 0.0           # autoevaluación del propio agente
     pending_requirements: List[str] = field(default_factory=list)
+    requirements: List[Dict[str, Any]] = field(default_factory=list)
 
     def to_log(self) -> dict:
         """Convierte a dict para logging y persistencia (Fase 8)."""
         return {
             'agent_name': self.agent_name,
             'success': self.success,
+            # Este dict también transporta el estado hacia el formatter.
+            # Sin final_answer, el LLM recibía cero registros y los inventaba.
+            'final_answer': self.final_answer,
             'iterations_used': self.iterations_used,
             'confidence': round(self.confidence, 4),
             'error_message': self.error_message,
             'pending_requirements': self.pending_requirements,
+            'requirements': self.requirements,
             'steps': [
                 {
                     'iteration': s.iteration,
@@ -77,6 +84,15 @@ class AgentResult:
                     'skill_used': s.skill_used,
                     'skill_params': s.skill_params,
                     'status': s.status.value,
+                    'skill_success': s.skill_success,
+                    'item_count': _result_item_count(s.skill_result),
+                    'filter_count': len(
+                        (s.skill_metadata or {}).get('applied_filters')
+                        or (s.skill_metadata or {}).get('filtros_exactos')
+                        or (s.skill_metadata or {}).get('filtros_aplicados')
+                        or []
+                    ),
+                    'error_message': s.error_message,
                 }
                 for s in self.steps
             ],
@@ -174,6 +190,17 @@ SKILL_SATISFIES_KIND: dict[str, str] = {
     # format — formatear resultados
     'formatear_propiedades': 'format',
 }
+
+# Contrato nuevo: una skill puede producir evidencia para más de un tipo.
+# SKILL_SATISFIES_KIND se conserva como alias legacy durante la migración.
+SKILL_CAPABILITIES: dict[str, set[str]] = {
+    skill: {kind} for skill, kind in SKILL_SATISFIES_KIND.items()
+}
+SKILL_CAPABILITIES.update({
+    'busqueda_propiedades': {'data', 'filter', 'matching'},
+    'busqueda_exacta': {'data', 'filter'},
+    'matching_hibrido': {'matching', 'filter'},
+})
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -431,15 +458,18 @@ Responde SOLO con JSON:
         if step.status == AgentStatus.FAILED or not step.skill_used:
             return  # nada que actualizar; NO se toca ningún requisito
 
-        skill_kind = SKILL_SATISFIES_KIND.get(step.skill_used)
-        if skill_kind is None:
+        capabilities = SKILL_CAPABILITIES.get(step.skill_used, set())
+        if not capabilities or step.skill_success is False:
             return  # skill sin mapeo conocido: no se asume nada
 
-        # ADDENDUM: usar _result_item_count en vez de bool(skill_result)
-        # Un dict con total=0 sigue siendo truthy pero no debe satisfacer requisitos
+        metadata = step.skill_metadata or {}
+        applied_filters = (
+            metadata.get('applied_filters')
+            or metadata.get('filtros_aplicados')
+            or metadata.get('filtros_exactos')
+            or []
+        )
         item_count = _result_item_count(step.skill_result)
-        if item_count == 0:
-            return  # ADDENDUM: total=0 no satisface nada, aunque SkillResult.success=True
 
         for requirement in requirements:
             was_satisfied = requirement.satisfied
@@ -447,7 +477,60 @@ Responde SOLO con JSON:
             if requirement.satisfied:
                 continue  # regla 1: ya estaba cumplido, no se re-evalúa
 
-            if requirement.kind == skill_kind:
+            description = requirement.description.casefold()
+            unrestricted_location = any(
+                phrase in description
+                for phrase in (
+                    'cualquier distrito', 'todos los distritos',
+                    'no aplicar filtro por distrito', 'sin distrito específico',
+                )
+            )
+            semantic_suitability = (
+                item_count > 0
+                and bool(metadata.get('busqueda_semantica'))
+                and any(
+                    phrase in description
+                    for phrase in (
+                        'adecuad', 'apropiad', 'recomend', 'donde pueda',
+                        'tienda', 'negocio', 'uso comercial',
+                    )
+                )
+            )
+
+            has_evidence = unrestricted_location or semantic_suitability
+            if requirement.kind == 'data':
+                # Una búsqueda técnicamente exitosa satisface el acceso a datos,
+                # incluso cuando el conjunto genuino es vacío.
+                has_evidence = has_evidence or (
+                    'data' in capabilities and step.skill_success is not False
+                )
+            elif requirement.kind == 'filter':
+                applied_names = (
+                    set(applied_filters)
+                    if isinstance(applied_filters, dict)
+                    else {
+                        item.get('logical_name')
+                        for item in applied_filters
+                        if isinstance(item, dict)
+                    }
+                )
+                has_evidence = has_evidence or (
+                    'filter' in capabilities and bool(applied_filters)
+                ) or (
+                    unrestricted_location and 'distrito' not in applied_names
+                )
+            elif requirement.kind == 'matching':
+                has_evidence = has_evidence or (
+                    'matching' in capabilities
+                    and item_count > 0
+                    and bool(metadata.get('busqueda_semantica'))
+                )
+            else:
+                has_evidence = has_evidence or (
+                    requirement.kind in capabilities and item_count > 0
+                )
+
+            if has_evidence:
                 requirement.satisfied = True
                 requirement.satisfied_by_skill = step.skill_used
                 logger.info(
@@ -665,6 +748,18 @@ Responde SOLO con JSON en este formato:
 
         # ── 1. Extraer requisitos (una sola vez al inicio) ──
         requirements = self.extract_requirements(original_message)
+
+        def requirement_snapshot() -> List[Dict[str, Any]]:
+            return [
+                {
+                    'id': requirement.id,
+                    'description': requirement.description,
+                    'kind': requirement.kind,
+                    'satisfied': requirement.satisfied,
+                    'satisfied_by_skill': requirement.satisfied_by_skill,
+                }
+                for requirement in requirements
+            ]
         logger.info(
             f"[ReAct] {agent_name}: {len(requirements)} requisito(s) extraídos: "
             f"{[r.description for r in requirements]}"
@@ -714,6 +809,7 @@ Responde SOLO con JSON en este formato:
                         iterations_used=iteration + 1,
                         confidence=thought_result.get('confidence', 0.8),
                         pending_requirements=[],
+                        requirements=requirement_snapshot(),
                     )
                 else:
                     # El LLM quiere terminar pero hay requisitos pendientes
@@ -754,6 +850,7 @@ Responde SOLO con JSON en este formato:
                     error_message=f"Presupuesto excedido (${accumulated_cost:.6f})",
                     confidence=0.0,
                     pending_requirements=pending_descriptions,
+                    requirements=requirement_snapshot(),
                 )
 
             # ACT: ejecutar la skill
@@ -783,6 +880,16 @@ Responde SOLO con JSON en este formato:
 
                     # Pipeline automático: inyectar resultados y filtrar
                     params = dict(step.skill_params or {})
+                    shared_plan = context.get('search_plan')
+                    if (
+                        shared_plan
+                        and skill_name in {'busqueda_propiedades', 'busqueda_exacta'}
+                    ):
+                        from ..search.contracts import SearchPlan
+                        plan_params = SearchPlan.from_dict(shared_plan).to_params()
+                        # El plan canónico prevalece: es el contrato creado antes
+                        # de entrar a cualquier ruta de orquestación.
+                        params.update(plan_params)
                     if skill_name == 'busqueda_exacta':
                         # Inyectar 'propiedades' desde skill anterior
                         if 'propiedades' not in params:
@@ -848,6 +955,14 @@ Responde SOLO con JSON en este formato:
                         context=exec_ctx,
                     )
                     step.skill_result = skill_result.data if hasattr(skill_result, 'data') else {}
+                    step.skill_metadata = (
+                        dict(skill_result.metadata or {})
+                        if hasattr(skill_result, 'metadata') else {}
+                    )
+                    step.skill_success = (
+                        bool(skill_result.success)
+                        if hasattr(skill_result, 'success') else True
+                    )
                     accumulated_cost += 0.0001
                 except Exception as e:
                     logger.error(
@@ -871,11 +986,15 @@ Responde SOLO con JSON en este formato:
                 return AgentResult(
                     agent_name=agent_name,
                     success=True,
-                    final_answer=thought_result.get('final_answer', step.skill_result),
+                    final_answer=observation.get(
+                        'final_answer_override',
+                        step.skill_result,
+                    ),
                     steps=steps,
                     iterations_used=iteration + 1,
                     confidence=observation.get('confidence', 0.7),
                     pending_requirements=[],
+                    requirements=requirement_snapshot(),
                 )
 
             # Si no es suficiente, el loop continúa
@@ -901,4 +1020,5 @@ Responde SOLO con JSON en este formato:
             error_message=f"max_iterations con requisitos pendientes: {pending_descriptions}",
             confidence=0.0,
             pending_requirements=pending_descriptions,
+            requirements=requirement_snapshot(),
         )

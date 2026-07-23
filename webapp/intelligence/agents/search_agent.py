@@ -30,7 +30,7 @@ class SearchAgent:
         'Terreno': ['terreno', 'terrenos', 'lote', 'lotes', 'parcela'],
         'Casa': ['casa', 'casas', 'vivienda', 'chalet'],
         'Departamento': ['departamento', 'departamentos', 'depa', 'depas', 'depto', 'deptos'],
-        'Local Comercial': ['local', 'locales', 'comercial'],
+        'Local': ['local', 'locales', 'comercial', 'tienda', 'negocio'],
         'Oficina': ['oficina', 'oficinas'],
     }
 
@@ -70,17 +70,37 @@ class SearchAgent:
             # Determinar colecciones según la skill
             collections = cls._get_collections_for_skill(skill_name)
 
-            # Extraer parámetros del mensaje para construir filtros SQL.
-            params_from_message = cls._extract_basic_intent(message)
-            if params_from_message:
-                params.update(params_from_message)
-                state['params_extraidos'] = params
-                if not skill_name:
-                    state['skill_detectada'] = 'busqueda_propiedades'
-                    skill_name = 'busqueda_propiedades'
+            from ..search.executor import apply_conditions
+            from ..search.contracts import SearchPlan
+            from ..search.normalizer import SearchPlanNormalizer
 
-            # Construir filtros desde parámetros extraídos
-            filters = cls._build_filters(params, skill_name)
+            existing_plan = state.get('search_plan')
+            if existing_plan:
+                search_plan = SearchPlan.from_dict(existing_plan)
+                params = search_plan.to_params()
+                state['params_extraidos'] = params
+                state['fallback_plan_reused'] = True
+                expected_hash = state.get('search_plan_hash')
+                if expected_hash and expected_hash != search_plan.fingerprint():
+                    raise ValueError('FALLBACK_PLAN_DIVERGENCE')
+            else:
+                # Extraer parámetros del mensaje para construir filtros SQL.
+                params_from_message = cls._extract_basic_intent(message)
+                if params_from_message:
+                    params.update(params_from_message)
+                    state['params_extraidos'] = params
+                    if not skill_name:
+                        state['skill_detectada'] = 'busqueda_propiedades'
+                        skill_name = 'busqueda_propiedades'
+
+                search_plan = SearchPlanNormalizer.from_params(
+                    query=message,
+                    params=params,
+                    collections=collections,
+                )
+
+            collections = search_plan.collections or collections
+            filters = search_plan.equality_filters()
 
             # Ejecutar búsqueda semántica con pre-filtrado SQL
             results = RAGService.search_dynamic(
@@ -88,9 +108,17 @@ class SearchAgent:
                 collection_names=collections,
                 filters=filters or None,
             )
+            results, applied_filters = apply_conditions(
+                results,
+                search_plan.conditions,
+            )
 
             state['resultados_busqueda'] = results
-            state['filtros_aplicados'] = filters
+            state['search_plan'] = search_plan.to_dict()
+            state['search_plan_hash'] = search_plan.fingerprint()
+            state['filtros_aplicados'] = [
+                applied_filter.to_dict() for applied_filter in applied_filters
+            ]
             state['total_resultados'] = len(results)
 
             elapsed = (time.time() - start) * 1000
@@ -103,8 +131,15 @@ class SearchAgent:
         except Exception as e:
             logger.error(f"[F2-001] SearchAgent error: {e}")
             state['resultados_busqueda'] = []
-            state['filtros_aplicados'] = {}
+            state['filtros_aplicados'] = []
             state['total_resultados'] = 0
+            state['search_failed'] = True
+            state['error'] = str(e)
+            state['search_error_code'] = (
+                'FALLBACK_PLAN_DIVERGENCE'
+                if 'FALLBACK_PLAN_DIVERGENCE' in str(e)
+                else 'SEARCH_EXECUTION_FAILED'
+            )
 
         return state
 
@@ -231,25 +266,12 @@ class SearchAgent:
 
     @classmethod
     def _build_filters(cls, params: dict, skill_name: str) -> dict:
-        """Construye filtros SQL desde parámetros extraídos por DeepSeek."""
-        filters = {}
-        if not params:
-            return filters
+        """Adaptador legacy: solo devuelve igualdades no ambiguas."""
+        from ..search.normalizer import SearchPlanNormalizer
 
-        # Mapeo de parámetros extraídos a field_values reales en BD
-        # Los nombres reales vienen de la vista vwd_propiedades_propify_listado
-        field_mapping = {
-            'distrito': 'district_name',
-            'tipo_propiedad': 'property_type_name',
-            'operacion': 'operation_type_name',
-            'precio': 'price',
-            'precio_min': 'price',
-            'precio_max': 'price',
-        }
-
-        for param_key, field_name in field_mapping.items():
-            value = params.get(param_key)
-            if value is not None and value != '':
-                filters[field_name] = value
-
-        return filters
+        plan = SearchPlanNormalizer.from_params(
+            query='',
+            params=params,
+            collections=cls._get_collections_for_skill(skill_name),
+        )
+        return plan.equality_filters()

@@ -1,0 +1,54 @@
+{% extends "intelligence/base/base.html" %}
+
+{% block title %}Trazas PIL{% endblock %}
+{% block page_title %}Trazas del sistema{% endblock %}
+
+{% block content %}
+<div class="learning-header">
+    <div><h1>Trazas</h1><p>Registro redactado y correlacionado de interacciones PIL.</p></div>
+    <a class="btn" href="{% url 'intelligence-web:learning_dashboard' %}">Volver al resumen</a>
+</div>
+
+<form method="get" class="card learning-filters">
+    <input type="search" name="q" value="{{ query }}" placeholder="Trace ID, tipo o consulta redactada">
+    <select name="status">
+        <option value="">Todos los estados</option>
+        {% for value, label in status_choices %}
+            <option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+    </select>
+    <input type="text" name="mode" value="{{ selected_mode }}" placeholder="Modo de orquestación">
+    <button class="btn btn-primary" type="submit">Filtrar</button>
+</form>
+
+<section class="card learning-table-wrap">
+    <table class="table">
+        <thead><tr><th>Trace</th><th>Inicio</th><th>Consulta</th><th>Modo</th><th>Estado</th><th>Resultados</th></tr></thead>
+        <tbody>
+        {% for trace in page_obj %}
+            <tr>
+                <td><a href="{% url 'intelligence-web:learning_trace_detail' trace.trace_id %}">{{ trace.trace_id }}</a></td>
+                <td>{{ trace.started_at|date:"d/m/Y H:i:s" }}</td>
+                <td>{{ trace.query_redacted|truncatechars:100 }}</td>
+                <td>{{ trace.orchestration_mode|default:"—" }}</td>
+                <td><span class="trace-status trace-status--{{ trace.status }}">{{ trace.get_status_display }}</span></td>
+                <td>{{ trace.result_count|default_if_none:"—" }}</td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="6">No hay trazas para estos filtros.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+{% if page_obj.has_other_pages %}
+<div class="learning-pagination">
+    {% if page_obj.has_previous %}<a class="btn" href="?page={{ page_obj.previous_page_number }}&status={{ selected_status }}&mode={{ selected_mode }}&q={{ query }}">Anterior</a>{% endif %}
+    <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}<a class="btn" href="?page={{ page_obj.next_page_number }}&status={{ selected_status }}&mode={{ selected_mode }}&q={{ query }}">Siguiente</a>{% endif %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_css %}{{ block.super }}<link rel="stylesheet" href="/static/intelligence/css/learning_dashboard.css">{% endblock %}
+

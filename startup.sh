@@ -57,6 +57,9 @@ fi
 echo "[2/5] Collecting static files..."
 cd /home/site/wwwroot/webapp
 python manage.py collectstatic --noinput 2>&1
+test -f staticfiles/canvas/css/canvas.css
+test -f staticfiles/canvas/js/canvas_engine.js
+test -f staticfiles/canvas/js/canvas_gallery.js
 echo "  ✓ Static files collected."
 
 # ── Run Migrations ──

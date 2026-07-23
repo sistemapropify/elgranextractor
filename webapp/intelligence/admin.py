@@ -3,8 +3,42 @@ from django.utils.html import format_html
 from .models import (
     Role, User, AppConfig, Conversation, Fact,
     IntelligenceCollection, IntelligenceDocument,
-    EpisodicMemory, UserIntelligenceProfile
+    EpisodicMemory, UserIntelligenceProfile, SystemTrace, SystemEvent
 )
+
+
+@admin.register(SystemTrace)
+class SystemTraceAdmin(admin.ModelAdmin):
+    list_display = (
+        'trace_id', 'request_kind', 'status', 'orchestration_mode',
+        'result_count', 'grounded', 'latency_ms', 'started_at',
+    )
+    list_filter = ('status', 'request_kind', 'orchestration_mode', 'grounded')
+    search_fields = ('trace_id', 'query_redacted', 'normalized_query_hash')
+    readonly_fields = [field.name for field in SystemTrace._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(SystemEvent)
+class SystemEventAdmin(admin.ModelAdmin):
+    list_display = (
+        'trace', 'sequence', 'event_type', 'component',
+        'outcome', 'error_code', 'created_at',
+    )
+    list_filter = ('event_type', 'component', 'outcome', 'error_code')
+    search_fields = ('trace__trace_id', 'event_type', 'error_code')
+    readonly_fields = [field.name for field in SystemEvent._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
 
 # ─── Constantes para choices ────────────────────────────────────────────────
 LEVEL_CHOICES = [

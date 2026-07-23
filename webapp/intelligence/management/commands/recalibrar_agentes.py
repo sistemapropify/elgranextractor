@@ -14,7 +14,8 @@ import logging
 from datetime import timedelta
 from typing import Any, Dict, List, Optional
 
-from django.core.management.base import BaseCommand
+from django.conf import settings
+from django.core.management.base import BaseCommand, CommandError
 from django.db.models import Q, Count, Avg
 from django.utils import timezone
 
@@ -31,7 +32,12 @@ class Command(BaseCommand):
         parser.add_argument(
             '--dry-run',
             action='store_true',
-            help='Modo simulación: no persiste cambios, solo reporta',
+            help='Compatibilidad: la simulación ya es el modo por defecto',
+        )
+        parser.add_argument(
+            '--apply',
+            action='store_true',
+            help='Solicita persistir el cambio (requiere feature flag explícito)',
         )
         parser.add_argument(
             '--days',
@@ -47,7 +53,16 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        dry_run = options.get('dry_run', False)
+        apply_requested = options.get('apply', False)
+        mutation_allowed = bool(getattr(
+            settings, 'LEARNING_ALLOW_CONFIG_MUTATION', False
+        ))
+        if apply_requested and not mutation_allowed:
+            raise CommandError(
+                "Mutación bloqueada. LEARNING_ALLOW_CONFIG_MUTATION=false. "
+                "Use el reporte dry-run hasta superar los gates de aprendizaje."
+            )
+        dry_run = not (apply_requested and mutation_allowed)
         days = options.get('days', 7)
         threshold_key = options.get('threshold_key', 'supervisor_threshold')
 
