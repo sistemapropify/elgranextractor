@@ -44,6 +44,9 @@ class SearchPlanNormalizer:
         'negocio': 'Local',
         'terreno': 'Terreno',
         'terrenos': 'Terreno',
+        # Errores tipográficos frecuentes en consultas escritas rápidamente.
+        'terreo': 'Terreno',
+        'terreos': 'Terreno',
         'lote': 'Terreno',
         'lotes': 'Terreno',
         'departamento': 'Departamento',
@@ -119,6 +122,9 @@ class SearchPlanNormalizer:
         ):
             params.setdefault('tipo_propiedad', 'Terreno')
             params.setdefault('condicion', 'Disponible')
+
+        if re.search(r'\bdisponibles?\b', lowered):
+            params['condicion'] = 'Disponible'
 
         number = r'(\d[\d.,]*)'
         money_unit = r'(?:usd|d[oó]lares?|pen|soles?|s\/|\$)'

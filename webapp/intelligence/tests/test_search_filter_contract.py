@@ -37,6 +37,15 @@ class SearchPlanNormalizerTests(SimpleTestCase):
 
         self.assertEqual(float(params['precio_max']), 170000.0)
 
+    def test_common_terrain_typo_keeps_property_and_price_filters(self):
+        params = SearchPlanNormalizer.params_from_message(
+            'muestrame terreos de menos de 200000 dolares'
+        )
+
+        self.assertEqual(params['tipo_propiedad'], 'Terreno')
+        self.assertEqual(float(params['precio_max']), 200000.0)
+        self.assertEqual(params['moneda'], 'USD')
+
     def test_grocery_store_query_maps_to_commercial_property(self):
         params = SearchPlanNormalizer.params_from_message(
             'propiedades donde pueda poner una tienda de abarrotes '
@@ -44,6 +53,15 @@ class SearchPlanNormalizerTests(SimpleTestCase):
         )
 
         self.assertEqual(params['tipo_propiedad'], 'Local')
+
+    def test_available_property_query_adds_status_filter(self):
+        params = SearchPlanNormalizer.params_from_message(
+            'muéstrame terrenos en Cayma disponibles'
+        )
+
+        self.assertEqual(params['distrito'], 'Cayma')
+        self.assertEqual(params['tipo_propiedad'], 'Terreno')
+        self.assertEqual(params['condicion'], 'Disponible')
 
     def test_price_operators_are_not_collapsed_to_equality(self):
         plan = SearchPlanNormalizer.from_params(

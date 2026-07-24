@@ -11,11 +11,11 @@ Verifica:
 7. ChatProcessor flag LangGraph
 """
 
-from django.test import TestCase
+from django.test import SimpleTestCase
 from unittest.mock import patch
 
 
-class F2LangGraphOrchestrationTest(TestCase):
+class F2LangGraphOrchestrationTest(SimpleTestCase):
     """Tests para F2-001: LangGraph Orchestration."""
 
     def test_01_imports(self):
@@ -123,6 +123,30 @@ class F2LangGraphOrchestrationTest(TestCase):
         ]
         response = FormatterAgent._build_fallback_response(resultados)
         self.assertIn('Departamento en Cayma', response)
+        self.assertNotIn('<br>', response)
+
+    def test_08b_formatter_fallback_uses_commercial_fields_not_internal_metadata(self):
+        from intelligence.agents.formatter_agent import FormatterAgent
+
+        response = FormatterAgent._build_fallback_response([{
+            'source_id': 176,
+            'field_values': {
+                'id': 176,
+                'created_at': '2026-06-02',
+                'uuid': 'internal-value',
+                'title': 'Terreno comercial en Yanahuara',
+                'price': '2301000.00',
+                'currency_name': 'Dolares',
+                'district_name': 'Yanahuara',
+                'property_type_name': 'Terreno',
+            },
+        }])
+
+        self.assertIn('1. **Terreno comercial en Yanahuara**', response)
+        self.assertIn('**Precio:** Dolares 2301000.00', response)
+        self.assertIn('**Distrito:** Yanahuara', response)
+        self.assertNotIn('created_at', response)
+        self.assertNotIn('uuid', response)
 
     def test_09_chatprocessor_has_langgraph_flag(self):
         """Verificar que ChatProcessor tiene USE_LANGGRAPH flag."""

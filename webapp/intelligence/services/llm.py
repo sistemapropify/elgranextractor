@@ -54,8 +54,19 @@ class LLMService:
     """
     
     # Configuración de DeepSeek API
-    DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions"
-    DEEPSEEK_MODEL = "deepseek-chat"
+    DEEPSEEK_API_URL = os.environ.get(
+        "DEEPSEEK_API_URL",
+        "https://api.deepseek.com/chat/completions",
+    )
+    _REQUESTED_DEEPSEEK_MODEL = os.environ.get(
+        "DEEPSEEK_MODEL",
+        "deepseek-v4-flash",
+    ).strip()
+    # El proveedor retiró el alias histórico ``deepseek-chat``. Mantener esta
+    # traducción evita que una variable antigua en Azure derribe AgentGraph.
+    DEEPSEEK_MODEL = {
+        "deepseek-chat": "deepseek-v4-flash",
+    }.get(_REQUESTED_DEEPSEEK_MODEL, _REQUESTED_DEEPSEEK_MODEL)
     
     # Configuración desde variables de entorno
     API_KEY = os.environ.get('DEEPSEEK_API_KEY', '')

@@ -567,32 +567,67 @@ class FormatterAgent:
                     f"necesitas más detalles?"
                 )
 
-        # Si NO es consulta de conteo, mostrar todas las propiedades separadas
+        # Markdown restringido compatible con las tarjetas del chat. El
+        # artefacto del panel derecho conserva todos los resultados.
+        visible_results = resultados[:5]
         response_parts = [
-            f"Estas son las propiedades que encontré ({len(resultados)} en total):\n"
+            f"Encontré **{len(resultados)} propiedades verificadas**. "
+            "Te muestro las primeras opciones:"
         ]
-        for r in resultados:
-            fv = r.get('field_values', {})
-            campos_visibles = []
-            for key in ['titulo', 'direccion', 'precio', 'distrito', 'tipo_propiedad',
-                        'area_construida', 'area_terreno', 'dormitorios', 'operacion',
-                        'moneda', 'descripcion']:
-                val = fv.get(key)
-                if val is not None and val != '':
-                    campos_visibles.append(f"{key}: {val}")
-            
-            if not campos_visibles and fv:
-                for k, v in fv.items():
-                    if v is not None and v != '':
-                        campos_visibles.append(f"{k}: {v}")
-            
-            if campos_visibles:
-                response_parts.append(f"• {' | '.join(campos_visibles[:6])}")
-            else:
-                response_parts.append("• Propiedad (sin detalles disponibles)")
+        for index, result in enumerate(visible_results, 1):
+            fields = result.get('field_values', {})
+            title = (
+                fields.get('title')
+                or fields.get('titulo')
+                or fields.get('project_name')
+                or f"Propiedad {result.get('source_id') or fields.get('id') or index}"
+            )
+            price = fields.get('price', fields.get('precio'))
+            currency = (
+                fields.get('currency_name')
+                or fields.get('currency')
+                or fields.get('moneda')
+            )
+            property_type = (
+                fields.get('property_type_name')
+                or fields.get('tipo_propiedad')
+            )
+            district = fields.get('district_name') or fields.get('distrito')
+            status = fields.get('property_status_name') or fields.get('estado')
+            area = (
+                fields.get('land_area')
+                or fields.get('total_area')
+                or fields.get('built_area')
+                or fields.get('area_terreno')
+                or fields.get('area_construida')
+            )
 
+            details = []
+            if price not in (None, ''):
+                details.append(
+                    f"**Precio:** {currency or 'Moneda no registrada'} {price}"
+                )
+            if property_type:
+                details.append(f"**Tipo:** {property_type}")
+            if district:
+                details.append(f"**Distrito:** {district}")
+            if area not in (None, ''):
+                details.append(f"**Área:** {area} m²")
+            if status:
+                details.append(f"**Estado:** {status}")
+            if not details:
+                details.append("Datos comerciales no registrados.")
+
+            response_parts.append(
+                f"{index}. **{title}**\n" + " · ".join(details)
+            )
+
+        remaining = len(resultados) - len(visible_results)
+        if remaining > 0:
+            response_parts.append(
+                f"Hay **{remaining} opciones adicionales** en el panel de resultados."
+            )
         response_parts.append(
-            "<br>¿Te gusta alguna? Puedo darte más detalles."
+            "Selecciona una tarjeta para ver la ficha completa, fotografías y videos."
         )
-        # Separar cada propiedad con <br> (HTML line break para frontend)
-        return "<br><br>".join(response_parts)
+        return "\n\n".join(response_parts)
