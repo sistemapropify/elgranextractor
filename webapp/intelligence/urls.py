@@ -67,6 +67,7 @@ urlpatterns = [
     path('chat-web/api/', csrf_exempt(views.chat_web_api), name='chat_web_api'),
     path('chat-web/stream/', csrf_exempt(views.chat_web_stream), name='chat_web_stream'),
     path('chat-web/upload/', csrf_exempt(views.chat_web_upload), name='chat_web_upload'),
+    path('chat-web/properties/<int:property_id>/', views.chat_property_detail, name='chat_property_detail'),
     
     # Conversation Flows (Sistema de flujos conversacionales)
     path('chat-workflows/manage/', views.conversation_flows_page, name='conversation_flows_page'),

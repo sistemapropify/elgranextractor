@@ -5,18 +5,38 @@ SPEC: refactor_plataforma_agentes.md — Fase 10
 Suite con 50+ casos reales cubriendo los 3 agentes piloto.
 Corre automáticamente después de cualquier cambio de threshold.
 Bloquea la recalibración si introduce regresiones.
+
+⚠ SEGURIDAD: Estos tests NO deben ejecutarse contra Azure SQL.
+Django crea automáticamente test databases (prefijo test_) en el
+servidor configurado, lo que genera costos imprevistos.
+
+Usar: python manage.py test --settings=webapp.test_settings
 """
 
 from __future__ import annotations
 
 import logging
+import sys
 from typing import Any, Dict, List, Optional, Tuple
 
-from django.test import TestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 
 from ..agents.registry import AgentRegistry
 from ..agents.supervisor import Supervisor
 from ..agents.base_agent import AgentDefinition
+
+# ── VERIFICACIÓN DE SEGURIDAD ──────────────────────────────────────
+# Prevenir ejecución accidental contra Azure SQL (costo ~$100 USD/semana)
+if 'webapp.test_settings' not in ' '.join(sys.argv):
+    from django.conf import settings
+    engine = settings.DATABASES.get('default', {}).get('ENGINE', '')
+    if 'mssql' in engine:
+        raise RuntimeError(
+            "⛔ SEGURIDAD: No ejecutar tests contra Azure SQL.\n"
+            "    Usar: python manage.py test --settings=webapp.test_settings\n"
+            "    Esto evita crear test databases facturables en Azure."
+        )
+# ────────────────────────────────────────────────────────────────────
 
 logger = logging.getLogger(__name__)
 

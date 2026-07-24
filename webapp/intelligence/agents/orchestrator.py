@@ -438,6 +438,9 @@ class AgentOrchestratorState(TypedDict):
     aggregated_answer: Optional[Dict[str, Any]]
     critique_passed: bool
     critique_retries: int
+    evaluation: Optional[Dict[str, Any]]
+    semantic_evaluation: Optional[Dict[str, Any]]
+    advisory_decision: Optional[Dict[str, Any]]
 
     # ── Tracing ──
     trace_id: str
@@ -465,6 +468,9 @@ def create_agent_initial_state(
         aggregated_answer=None,
         critique_passed=True,
         critique_retries=0,
+        evaluation=None,
+        semantic_evaluation=None,
+        advisory_decision=None,
         trace_id=hashlib.md5(
             f"agent:{conversation_id}:{message}:{time.time()}".encode()
         ).hexdigest()[:12],
@@ -820,6 +826,39 @@ class AgentGraphBuilder:
         state['routing_plan'] = plan
         state['agents_activated'] = agents
 
+        # Preflight: ciertas consultas no deben ejecutar inventario hasta contar
+        # con criterios verificables (p. ej. aptitud para colegio o clínica).
+        from .execution_evaluator import ExecutionEvaluator
+        preflight = ExecutionEvaluator.evaluate(
+            message=message,
+            results={},
+            search_plan=search_plan,
+            attempt=0,
+        )
+        if preflight.verdict == 'clarify':
+            state['evaluation'] = preflight.to_dict()
+            from .semantic_execution_judge import SemanticExecutionJudge
+            state['semantic_evaluation'] = SemanticExecutionJudge.evaluate(
+                message=message,
+                results={},
+                deterministic_evaluation=preflight.to_dict(),
+                attempt=0,
+            )
+            state['critique_passed'] = False
+            state['aggregated_answer'] = {
+                'successful': [],
+                'failed': [],
+                'total_agents': 0,
+                'successful_count': 0,
+                'failed_count': 0,
+            }
+            state['latencia_total_ms'] = (time.time() - start) * 1000
+            logger.info(
+                "[AgentGraph] Preflight requiere aclaración: %s",
+                preflight.reason,
+            )
+            return state
+
         # ── Fase 7: Guardrails ──────────────────────────────────────────
         # 1. Validar nivel de acceso por agente
         from .registry import AgentRegistry
@@ -942,12 +981,171 @@ class AgentGraphBuilder:
             'successful_count': len(successful),
             'failed_count': len(failed),
         }
-        state['critique_passed'] = len(successful) > 0
+
+        # ── Paso 4: Evaluación previa a respuesta y replan limitado ──
+        evaluation = ExecutionEvaluator.evaluate(
+            message=message,
+            results=state['results'],
+            search_plan=search_plan,
+            attempt=0,
+        )
+        state['evaluation'] = evaluation.to_dict()
+        state['critique_retries'] = 0
+
+        if (
+            evaluation.verdict == 'replan'
+            and evaluation.suggested_plan
+            and len(agents) == 1
+        ):
+            agent_name = agents[0]
+            agent = registry.get_by_name(agent_name)
+            if agent:
+                logger.info(
+                    "[AgentGraph] Evaluador solicitó replan: %s",
+                    evaluation.reason,
+                )
+                retry_result = agent.run(
+                    message=message,
+                    context={
+                        'user_id': user_id,
+                        'user_level': (user_context or {}).get('level', 1),
+                        'user_context': user_context,
+                        'conversation_id': conversation_id,
+                        'search_plan': evaluation.suggested_plan,
+                        'evaluation_feedback': evaluation.to_dict(),
+                    },
+                )
+                state['results'][agent_name] = (
+                    retry_result.to_log()
+                    if hasattr(retry_result, 'to_log')
+                    else {}
+                )
+                state['critique_retries'] = 1
+                evaluation = ExecutionEvaluator.evaluate(
+                    message=message,
+                    results=state['results'],
+                    search_plan=evaluation.suggested_plan,
+                    attempt=1,
+                )
+                state['evaluation'] = evaluation.to_dict()
+                successful = [
+                    {'name': name, 'data': result}
+                    for name, result in state['results'].items()
+                    if result.get('success', False)
+                ]
+                failed = [
+                    {'name': name, 'error': result.get('error_message', 'unknown')}
+                    for name, result in state['results'].items()
+                    if not result.get('success', False)
+                ]
+                state['aggregated_answer'] = {
+                    'successful': successful,
+                    'failed': failed,
+                    'total_agents': len(agents),
+                    'successful_count': len(successful),
+                    'failed_count': len(failed),
+                }
+
+        from .semantic_execution_judge import SemanticExecutionJudge
+        state['semantic_evaluation'] = SemanticExecutionJudge.evaluate(
+            message=message,
+            results=state['results'],
+            deterministic_evaluation=evaluation.to_dict(),
+            attempt=state.get('critique_retries', 0),
+        )
+        from .semantic_advisory_controller import SemanticAdvisoryController
+        advisory = SemanticAdvisoryController.decide(
+            semantic_evaluation=state['semantic_evaluation'],
+            deterministic_evaluation=evaluation.to_dict(),
+            search_plan=search_plan,
+            retries_used=state.get('critique_retries', 0),
+        )
+        state['advisory_decision'] = advisory
+
+        if (
+            advisory.get('action') == 'replan'
+            and advisory.get('authority_applied')
+            and len(agents) == 1
+        ):
+            agent_name = agents[0]
+            agent = registry.get_by_name(agent_name)
+            if agent:
+                retry_result = agent.run(
+                    message=message,
+                    context={
+                        'user_id': user_id,
+                        'user_level': (user_context or {}).get('level', 1),
+                        'user_context': user_context,
+                        'conversation_id': conversation_id,
+                        'search_plan': advisory['suggested_plan'],
+                        'evaluation_feedback': advisory,
+                    },
+                )
+                state['results'][agent_name] = (
+                    retry_result.to_log()
+                    if hasattr(retry_result, 'to_log')
+                    else {}
+                )
+                state['critique_retries'] = 1
+                evaluation = ExecutionEvaluator.evaluate(
+                    message=message,
+                    results=state['results'],
+                    search_plan=advisory['suggested_plan'],
+                    attempt=1,
+                )
+                state['evaluation'] = evaluation.to_dict()
+                successful = [
+                    {'name': name, 'data': result}
+                    for name, result in state['results'].items()
+                    if result.get('success', False)
+                ]
+                failed = [
+                    {'name': name, 'error': result.get('error_message', 'unknown')}
+                    for name, result in state['results'].items()
+                    if not result.get('success', False)
+                ]
+                state['aggregated_answer'] = {
+                    'successful': successful,
+                    'failed': failed,
+                    'total_agents': len(agents),
+                    'successful_count': len(successful),
+                    'failed_count': len(failed),
+                }
+
+        if advisory.get('authority_applied'):
+            state['semantic_evaluation']['authority_applied'] = True
+            if advisory.get('action') == 'clarify':
+                state['evaluation'] = {
+                    'verdict': 'clarify',
+                    'confidence': state['semantic_evaluation'].get('confidence'),
+                    'reason': advisory.get('reason'),
+                    'signals': state['semantic_evaluation'].get('signals') or [],
+                    'clarification_question': advisory.get('clarification_question'),
+                    'metrics': {'source': 'semantic_advisory'},
+                }
+                evaluation = type(evaluation)(**{
+                    **evaluation.to_dict(),
+                    **state['evaluation'],
+                })
+            elif advisory.get('action') == 'block':
+                state['evaluation'] = {
+                    'verdict': 'block',
+                    'confidence': state['semantic_evaluation'].get('confidence'),
+                    'reason': advisory.get('reason'),
+                    'signals': state['semantic_evaluation'].get('signals') or [],
+                    'metrics': {'source': 'semantic_advisory'},
+                }
+                evaluation = type(evaluation)(**{
+                    **evaluation.to_dict(),
+                    **state['evaluation'],
+                })
+        state['critique_passed'] = evaluation.verdict == 'pass'
         state['latencia_total_ms'] = (time.time() - start) * 1000
 
         logger.info(
             f"[AgentGraph] Completado: {len(successful)} exitosos, "
             f"{len(failed)} fallidos, "
+            f"evaluación={evaluation.verdict}, "
             f"{state['latencia_total_ms']:.0f}ms"
         )
 

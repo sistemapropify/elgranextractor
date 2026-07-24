@@ -36,6 +36,32 @@
     <div class="stat-card"><div class="stat-value">{{ avg_latency }} ms</div><div class="stat-label">Latencia media</div></div>
 </div>
 
+<section class="card">
+    <div class="card-header">
+        <div>
+            <div class="card-title">Evaluación agentic · Niveles 2 y 3A</div>
+            <p>El desacuerdo identifica consultas que requieren calibración; no equivale por sí solo a un error.</p>
+        </div>
+    </div>
+    <div class="stats-grid">
+        <div class="stat-card"><div class="stat-value">{{ semantic_total }}</div><div class="stat-label">Juicios semánticos</div></div>
+        <div class="stat-card"><div class="stat-value">{{ semantic_failed }}</div><div class="stat-label">Jueces fallidos</div></div>
+        <div class="stat-card"><div class="stat-value">{{ semantic_disagreements }}</div><div class="stat-label">Desacuerdos N1/N2</div></div>
+        <div class="stat-card"><div class="stat-value">{{ semantic_disagreement_pct }}%</div><div class="stat-label">Tasa de desacuerdo</div></div>
+        <div class="stat-card"><div class="stat-value">{{ advisory_total }}</div><div class="stat-label">Decisiones advisory</div></div>
+        <div class="stat-card"><div class="stat-value">{{ advisory_applied }}</div><div class="stat-label">Autoridad aplicada</div></div>
+        <div class="stat-card"><div class="stat-value">{{ advisory_application_pct }}%</div><div class="stat-label">Tasa de intervención</div></div>
+    </div>
+    <table class="table">
+        <thead><tr><th>Acción Nivel 3A</th><th>Aplicaciones</th><th>Efecto</th></tr></thead>
+        <tbody>
+            <tr><td>Aclarar</td><td>{{ advisory_clarify }}</td><td>Solicita información antes de responder</td></tr>
+            <tr><td>Bloquear</td><td>{{ advisory_block }}</td><td>Impide publicar una respuesta de alto riesgo</td></tr>
+            <tr><td>Replanificar</td><td>{{ advisory_replan }}</td><td>Reutiliza una vez el plan canónico</td></tr>
+        </tbody>
+    </table>
+</section>
+
 <div class="grid grid-2">
     <section class="card">
         <div class="card-header"><div class="card-title">Estado de trazas</div></div>

@@ -1,937 +1,195 @@
+{% load static %}
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-theme="salvia">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Propifai Intelligence - Chat Web Interactivo</title>
-    
-    <!-- Bootstrap 5 CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Font Awesome Icons -->
+    <title>Propifai · Workspace inteligente</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <style>
-        :root {
-            --bg-primary: #0d1117;
-            --bg-secondary: #161b22;
-            --bg-tertiary: #21262d;
-            --border-color: #30363d;
-            --text-primary: #f0f6fc;
-            --text-secondary: #8b949e;
-            --accent-blue: #58a6ff;
-            --accent-green: #238636;
-            --accent-purple: #8957e5;
-            --accent-orange: #f78166;
-        }
-        
-        body {
-            background-color: var(--bg-primary);
-            color: var(--text-primary);
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            height: 100vh;
-            overflow: hidden;
-            margin: 0;
-        }
-        
-        /* Layout principal */
-        .chat-container {
-            display: flex;
-            height: 100vh;
-            width: 100%;
-        }
-        
-        /* Panel lateral (30%) */
-        .sidebar {
-            width: 30%;
-            min-width: 300px;
-            max-width: 400px;
-            background-color: var(--bg-secondary);
-            border-right: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            overflow-y: auto;
-            padding: 20px;
-        }
-        
-        .sidebar-section {
-            margin-bottom: 25px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid var(--border-color);
-        }
-        
-        .sidebar-section:last-child {
-            border-bottom: none;
-        }
-        
-        .section-title {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-            font-weight: 600;
-            font-size: 16px;
-        }
-        
-        .section-title i {
-            color: var(--accent-blue);
-            margin-right: 8px;
-        }
-        
-        .section-title .fa-sync-alt {
-            cursor: pointer;
-            color: var(--text-secondary);
-            font-size: 14px;
-        }
-        
-        .section-title .fa-sync-alt:hover {
-            color: var(--accent-blue);
-        }
-        
-        /* Memoria del usuario */
-        .memory-item {
-            margin-bottom: 12px;
-        }
-        
-        .memory-label {
-            font-size: 13px;
-            color: var(--text-secondary);
-            margin-bottom: 4px;
-        }
-        
-        .memory-value {
-            font-size: 14px;
-            font-weight: 500;
-        }
-        
-        /* Instrucciones */
-        .instructions-list {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        
-        .instruction-item {
-            padding: 12px;
-            background-color: var(--bg-tertiary);
-            border-radius: 8px;
-            border: 1px solid var(--border-color);
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        
-        .instruction-item:hover {
-            border-color: var(--accent-blue);
-            background-color: rgba(88, 166, 255, 0.1);
-        }
-        
-        .instruction-item.active {
-            border-color: var(--accent-blue);
-            background-color: rgba(88, 166, 255, 0.15);
-        }
-        
-        .instruction-title {
-            font-weight: 600;
-            margin-bottom: 4px;
-        }
-        
-        .instruction-desc {
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
-        
-        /* Archivos */
-        .files-list {
-            min-height: 100px;
-        }
-        
-        .empty-state {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100px;
-            border: 2px dashed var(--border-color);
-            border-radius: 8px;
-            color: var(--text-secondary);
-            text-align: center;
-            padding: 20px;
-        }
-        
-        .upload-area {
-            cursor: pointer;
-        }
-        
-        .upload-area i {
-            font-size: 24px;
-            margin-bottom: 8px;
-            color: var(--accent-blue);
-        }
-        
-        .upload-text {
-            font-size: 14px;
-            margin-bottom: 4px;
-        }
-        
-        .upload-area small {
-            font-size: 12px;
-        }
-        
-        .file-item {
-            display: flex;
-            align-items: center;
-            padding: 10px;
-            background-color: var(--bg-tertiary);
-            border-radius: 8px;
-            margin-bottom: 8px;
-            border: 1px solid var(--border-color);
-        }
-        
-        .file-icon {
-            width: 36px;
-            height: 36px;
-            border-radius: 6px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-right: 12px;
-            background-color: var(--bg-secondary);
-        }
-        
-        .file-icon.pdf {
-            color: #f44336;
-        }
-        
-        .file-icon.image {
-            color: #4caf50;
-        }
-        
-        .file-icon.text {
-            color: #2196f3;
-        }
-        
-        .file-icon.excel {
-            color: #2e7d32;
-        }
-        
-        .file-info {
-            flex: 1;
-        }
-        
-        .file-name {
-            font-size: 14px;
-            font-weight: 500;
-            margin-bottom: 2px;
-        }
-        
-        .file-size {
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
-        
-        .file-actions {
-            display: flex;
-            gap: 8px;
-        }
-        
-        .file-action {
-            background: none;
-            border: none;
-            color: var(--text-secondary);
-            cursor: pointer;
-            padding: 4px;
-        }
-        
-        .file-action:hover {
-            color: var(--accent-orange);
-        }
-        
-        /* Área principal del chat */
-        .chat-main {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-        
-        .chat-header {
-            padding: 20px;
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .chat-title {
-            font-size: 20px;
-            font-weight: 700;
-            color: var(--accent-blue);
-        }
-        
-        .chat-subtitle {
-            font-size: 14px;
-            color: var(--text-secondary);
-        }
-        
-        .loading-indicator {
-            display: none;
-            align-items: center;
-            gap: 8px;
-            font-size: 14px;
-            color: var(--accent-blue);
-        }
-        
-        .loading-indicator.active {
-            display: flex;
-        }
-        
-        .spinner {
-            width: 16px;
-            height: 16px;
-            border: 2px solid rgba(88, 166, 255, 0.3);
-            border-top-color: var(--accent-blue);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-        
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        
-        /* Mensajes */
-        .messages-container {
-            flex: 1;
-            overflow-y: auto;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-        
-        .message {
-            max-width: 80%;
-            padding: 12px 16px;
-            border-radius: 12px;
-            position: relative;
-            animation: fadeIn 0.3s ease;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .message-user {
-            align-self: flex-end;
-            background-color: var(--accent-blue);
-            color: white;
-            border-bottom-right-radius: 4px;
-        }
-        
-        .message-assistant {
-            align-self: flex-start;
-            background-color: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
-            border-bottom-left-radius: 4px;
-        }
-        
-        .message-system {
-            align-self: center;
-            background-color: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            max-width: 90%;
-            text-align: center;
-            font-size: 14px;
-            color: var(--text-secondary);
-        }
-        
-        .message-content {
-            word-wrap: break-word;
-        }
-        
-        .message-time {
-            font-size: 11px;
-            opacity: 0.7;
-            margin-top: 4px;
-            text-align: right;
-        }
-        
-        .typing-indicator {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 12px 16px;
-            background-color: var(--bg-tertiary);
-            border-radius: 12px;
-            align-self: flex-start;
-            border: 1px solid var(--border-color);
-            margin-bottom: 16px;
-        }
-        
-        .typing-dot {
-            width: 8px;
-            height: 8px;
-            background-color: var(--accent-blue);
-            border-radius: 50%;
-            animation: typing 1.4s infinite ease-in-out;
-        }
-        
-        .typing-dot:nth-child(2) {
-            animation-delay: 0.2s;
-        }
-        
-        .typing-dot:nth-child(3) {
-            animation-delay: 0.4s;
-        }
-        
-        @keyframes typing {
-            0%, 60%, 100% { transform: translateY(0); }
-            30% { transform: translateY(-6px); }
-        }
-
-        /* Thinking trace - proceso de pensamiento de los agentes */
-        .thinking-trace {
-            align-self: flex-start;
-            width: 100%;
-            max-width: 90%;
-            margin-bottom: 16px;
-            animation: fadeIn 0.3s ease;
-        }
-
-        .thinking-step {
-            display: flex;
-            align-items: flex-start;
-            gap: 10px;
-            padding: 6px 12px;
-            margin: 2px 0;
-            border-radius: 8px;
-            font-size: 13px;
-            opacity: 0;
-            transform: translateX(-10px);
-            transition: all 0.3s ease;
-        }
-
-        .thinking-step.visible {
-            opacity: 1;
-            transform: translateX(0);
-        }
-
-        .thinking-step .step-icon {
-            font-size: 16px;
-            flex-shrink: 0;
-            width: 24px;
-            text-align: center;
-            line-height: 1.4;
-        }
-
-        .thinking-step .step-content {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .thinking-step .step-title {
-            font-weight: 600;
-            color: var(--accent-blue);
-            font-size: 13px;
-        }
-
-        .thinking-step .step-desc {
-            color: var(--text-secondary);
-            font-size: 12px;
-            margin-top: 1px;
-        }
-
-        .thinking-step.step-router .step-title { color: var(--accent-purple); }
-        .thinking-step.step-agent_start .step-title { color: var(--accent-green); }
-        .thinking-step.step-think .step-title { color: var(--accent-blue); }
-        .thinking-step.step-action .step-title { color: var(--accent-orange); }
-        .thinking-step.step-agent_complete .step-title { color: var(--accent-green); }
-        .thinking-step.step-agent_fail .step-title { color: #f85149; }
-        .thinking-step.step-formatter .step-title { color: var(--accent-purple); }
-        .thinking-step.step-error .step-title { color: #f85149; }
-
-        .thinking-trace-divider {
-            text-align: center;
-            padding: 8px 0;
-            position: relative;
-        }
-
-        .thinking-trace-divider::before {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 10%;
-            right: 10%;
-            height: 1px;
-            background: var(--border-color);
-        }
-
-        .thinking-trace-divider span {
-            background: var(--bg-primary);
-            padding: 0 12px;
-            position: relative;
-            color: var(--text-secondary);
-            font-size: 11px;
-        }
-        
-        /* Área de entrada */
-        .input-container {
-            padding: 20px;
-            border-top: 1px solid var(--border-color);
-            background-color: var(--bg-secondary);
-        }
-        
-        .input-wrapper {
-            display: flex;
-            gap: 12px;
-            align-items: flex-end;
-        }
-        
-        .chat-input {
-            flex: 1;
-            background-color: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            color: var(--text-primary);
-            padding: 12px 16px;
-            font-size: 14px;
-            resize: none;
-            max-height: 120px;
-            min-height: 44px;
-            font-family: inherit;
-        }
-        
-        .chat-input:focus {
-            outline: none;
-            border-color: var(--accent-blue);
-            box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2);
-        }
-        
-        .chat-input::placeholder {
-            color: var(--text-secondary);
-        }
-        
-        .send-button {
-            width: 44px;
-            height: 44px;
-            border-radius: 8px;
-            background-color: var(--accent-blue);
-            border: none;
-            color: white;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: background-color 0.2s;
-        }
-        
-        .send-button:hover:not(:disabled) {
-            background-color: #4a94e6;
-        }
-        
-        .send-button:disabled {
-            background-color: var(--border-color);
-            cursor: not-allowed;
-            opacity: 0.5;
-        }
-        
-        /* Botones de acción */
-        .action-buttons {
-            display: flex;
-            gap: 8px;
-            margin-top: 12px;
-        }
-        
-        .btn {
-            border-radius: 6px;
-            font-size: 13px;
-            padding: 6px 12px;
-        }
-        
-        .btn-outline-secondary {
-            border-color: var(--border-color);
-            color: var(--text-secondary);
-        }
-        
-        .btn-outline-secondary:hover {
-            border-color: var(--accent-blue);
-            color: var(--accent-blue);
-            background-color: rgba(88, 166, 255, 0.1);
-        }
-        
-        .btn-outline-primary {
-            border-color: var(--accent-blue);
-            color: var(--accent-blue);
-        }
-        
-        .btn-outline-primary:hover {
-            background-color: var(--accent-blue);
-            color: white;
-        }
-        
-        /* Toggle sidebar */
-        .toggle-sidebar {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            z-index: 100;
-            background-color: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            width: 32px;
-            height: 32px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            color: var(--text-secondary);
-        }
-        
-        .toggle-sidebar:hover {
-            color: var(--accent-blue);
-            border-color: var(--accent-blue);
-        }
-        
-        /* Timeline de memoria episódica (SPEC-008 - Fase 4.1) */
-        .episodic-timeline {
-            max-height: 300px;
-            overflow-y: auto;
-            scrollbar-width: thin;
-            scrollbar-color: var(--border-color) transparent;
-        }
-        
-        .episodic-timeline::-webkit-scrollbar {
-            width: 4px;
-        }
-        
-        .episodic-timeline::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        
-        .episodic-timeline::-webkit-scrollbar-thumb {
-            background-color: var(--border-color);
-            border-radius: 2px;
-        }
-        
-        .timeline-item {
-            display: flex;
-            gap: 12px;
-            padding: 10px 0;
-            border-left: 2px solid var(--border-color);
-            padding-left: 16px;
-            margin-left: 8px;
-            position: relative;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        
-        .timeline-item:hover {
-            border-left-color: var(--accent-blue);
-            background-color: rgba(88, 166, 255, 0.05);
-            border-radius: 0 8px 8px 0;
-        }
-        
-        .timeline-item::before {
-            content: '';
-            position: absolute;
-            left: -6px;
-            top: 14px;
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background-color: var(--bg-tertiary);
-            border: 2px solid var(--border-color);
-        }
-        
-        .timeline-item:hover::before {
-            background-color: var(--accent-blue);
-            border-color: var(--accent-blue);
-        }
-        
-        .timeline-item:last-child {
-            border-left-color: transparent;
-        }
-        
-        .timeline-icon {
-            width: 28px;
-            height: 28px;
-            border-radius: 6px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            flex-shrink: 0;
-            background-color: var(--bg-tertiary);
-        }
-        
-        .timeline-icon.property_search { color: #58a6ff; }
-        .timeline-icon.property_detail { color: #3fb950; }
-        .timeline-icon.price_inquiry { color: #d29922; }
-        .timeline-icon.matching { color: #a371f7; }
-        .timeline-icon.acm_analysis { color: #f78166; }
-        .timeline-icon.general { color: #8b949e; }
-        .timeline-icon.fact_extraction { color: #79c0ff; }
-        .timeline-icon.user_preference { color: #ff7b72; }
-        
-        .timeline-content {
-            flex: 1;
-            min-width: 0;
-        }
-        
-        .timeline-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 2px;
-        }
-        
-        .timeline-type {
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--text-secondary);
-        }
-        
-        .timeline-time {
-            font-size: 11px;
-            color: var(--text-secondary);
-            white-space: nowrap;
-        }
-        
-        .timeline-message {
-            font-size: 13px;
-            color: var(--text-primary);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        
-        .timeline-importance {
-            display: inline-block;
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            margin-right: 4px;
-        }
-        
-        .timeline-importance.high { background-color: #f78166; }
-        .timeline-importance.medium { background-color: #d29922; }
-        .timeline-importance.low { background-color: #8b949e; }
-        
-        .timeline-empty {
-            text-align: center;
-            padding: 20px;
-            color: var(--text-secondary);
-            font-size: 13px;
-        }
-        
-        .timeline-loading {
-            text-align: center;
-            padding: 20px;
-            color: var(--text-secondary);
-        }
-        
-        .timeline-error {
-            text-align: center;
-            padding: 20px;
-            color: var(--accent-orange);
-            font-size: 13px;
-        }
-        
-        /* Responsive */
-        @media (max-width: 768px) {
-            .sidebar {
-                display: none;
-            }
-            
-            .sidebar.active {
-                display: flex;
-                position: absolute;
-                z-index: 1000;
-                width: 100%;
-                height: 100%;
-            }
-            
-            .message {
-                max-width: 90%;
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="{% static 'intelligence/chat-workspace.css' %}?v=20260723-004">
 </head>
 <body>
-    <div class="chat-container">
-        <!-- Panel lateral (30%) -->
-        <div class="sidebar" id="sidebar">
-            <!-- Sección de memoria del usuario -->
-            <div class="sidebar-section">
-                <div class="section-title">
-                    <span><i class="fas fa-brain"></i> Memoria del Usuario</span>
-                    <i class="fas fa-sync-alt" id="refresh-memory" title="Actualizar memoria"></i>
-                </div>
-                <div id="memory-content">
-                    <!-- La memoria se cargará dinámicamente -->
-                    <div class="memory-item">
-                        <div class="memory-label">Nombre</div>
-                        <div class="memory-value">{{ user_name|default:"Usuario" }}</div>
+    <div class="workspace-shell" id="workspace-shell">
+        <aside class="navigation-panel" id="sidebar" aria-label="Navegación principal">
+            <header class="brand-row">
+                <img class="brand-logo" src="{% static 'intelligence/img/logo-propify.png' %}" alt="Propifai">
+                <button class="icon-button toggle-sidebar" id="toggle-sidebar" type="button" aria-label="Colapsar navegación">
+                    <i class="fa-solid fa-chevron-left"></i>
+                </button>
+            </header>
+
+            <button class="new-chat-button" id="new-chat" type="button">
+                <i class="fa-regular fa-pen-to-square"></i>
+                <span>Nueva conversación</span>
+            </button>
+
+            <nav class="nav-scroll">
+                <section class="nav-section">
+                    <h2>Herramientas</h2>
+                    <div class="instructions-list" id="instructions-list">
+                        <button class="nav-item instruction-item active" data-instruction="general" type="button">
+                            <i class="fa-solid fa-sparkles"></i><span>Asistente general</span>
+                        </button>
+                        <button class="nav-item instruction-item" data-instruction="busqueda" type="button">
+                            <i class="fa-solid fa-house-chimney"></i><span>Buscar propiedades</span>
+                        </button>
+                        <button class="nav-item instruction-item" data-instruction="analisis" type="button">
+                            <i class="fa-solid fa-chart-line"></i><span>Análisis de mercado</span>
+                        </button>
+                        <button class="nav-item instruction-item" data-instruction="requerimientos" type="button">
+                            <i class="fa-solid fa-users-viewfinder"></i><span>Requerimientos</span>
+                        </button>
                     </div>
-                    <div class="memory-item">
-                        <div class="memory-label">Nivel de acceso</div>
-                        <div class="memory-value">Nivel {{ user_level|default:"1" }}</div>
+                </section>
+
+                <section class="nav-section">
+                    <div class="nav-heading">
+                        <h2>Proyectos</h2>
+                        <button class="mini-button" type="button" title="Nuevo proyecto"><i class="fa-solid fa-plus"></i></button>
                     </div>
-                    <div class="memory-item">
-                        <div class="memory-label">Contexto activo</div>
-                        <div class="memory-value" id="active-context">
-                            {% if memory_context and memory_context.0.type != 'no_active_conversation' %}
-                                {{ memory_context.0.summary|default:"Conversación activa"|truncatechars:50 }}
-                            {% else %}
-                                Sin contexto activo
-                            {% endif %}
+                    <button class="nav-item" type="button">
+                        <i class="fa-regular fa-folder"></i><span>Prospección Arequipa</span>
+                    </button>
+                    <button class="nav-item" type="button">
+                        <i class="fa-regular fa-folder"></i><span>Análisis comerciales</span>
+                    </button>
+                </section>
+
+                <section class="nav-section">
+                    <div class="nav-heading">
+                        <h2>Conversaciones</h2>
+                        <span class="count-pill">{{ total_conversations|default:"0" }}</span>
+                    </div>
+                    <div class="conversation-list">
+                        {% for conversation in conversations %}
+                        <button class="conversation-item" type="button" data-conversation-id="{{ conversation.id }}">
+                            <span>{{ conversation.title|default:"Conversación sin título"|truncatechars:34 }}</span>
+                            <small>{{ conversation.last_message_at|date:"d M" }}</small>
+                        </button>
+                        {% empty %}
+                        <div class="nav-empty">Tus conversaciones aparecerán aquí.</div>
+                        {% endfor %}
+                    </div>
+                </section>
+
+                <section class="nav-section utility-section">
+                    <details>
+                        <summary><i class="fa-solid fa-brain"></i><span>Contexto y memoria</span></summary>
+                        <div id="memory-content" class="memory-content">
+                            <div><span>Contexto</span><strong id="active-context">Sin contexto activo</strong></div>
+                            <div><span>Colecciones</span><strong>{{ available_collections|length }}</strong></div>
                         </div>
-                    </div>
-                    <div class="memory-item">
-                        <div class="memory-label">Hechos conocidos</div>
-                        <div class="memory-value">{{ user_facts|length }} hechos registrados</div>
-                    </div>
-                    <div class="memory-item">
-                        <div class="memory-label">Colecciones</div>
-                        <div class="memory-value">{{ accessible_collections|length }} colecciones accesibles</div>
-                    </div>
+                    </details>
+                    <div class="sr-only" id="files-list"><div class="empty-state"></div></div>
+                    <div class="sr-only" id="upload-trigger"></div>
+                    <div class="sr-only" id="file-count">0 archivos</div>
+                    <button class="sr-only" id="refresh-memory" type="button">Actualizar memoria</button>
+                </section>
+            </nav>
+
+            <footer class="account-card">
+                <div class="avatar">{{ user_name|default:"U"|slice:":1"|upper }}</div>
+                <div class="account-copy">
+                    <strong>{{ user_name|default:"Usuario" }}</strong>
+                    <span><i class="status-dot"></i> Nivel {{ user_level|default:"1" }} · En línea</span>
                 </div>
-            </div>
-            
-            <!-- Sección de instrucciones -->
-            <div class="sidebar-section">
-                <div class="section-title">
-                    <span><i class="fas fa-list-check"></i> Instrucciones</span>
-                </div>
-                <div class="instructions-list" id="instructions-list">
-                    <div class="instruction-item active" data-instruction="general">
-                        <div class="instruction-title">Asistente General</div>
-                        <div class="instruction-desc">Respuestas generales sobre propiedades y mercado</div>
-                    </div>
-                    <div class="instruction-item" data-instruction="analisis">
-                        <div class="instruction-title">Análisis de Mercado</div>
-                        <div class="instruction-desc">Precios, tendencias, comparativas</div>
-                    </div>
-                    <div class="instruction-item" data-instruction="busqueda">
-                        <div class="instruction-title">Búsqueda de Propiedades</div>
-                        <div class="instruction-desc">Filtros por zona, precio, características</div>
-                    </div>
-                    <div class="instruction-item" data-instruction="requerimientos">
-                        <div class="instruction-title">Gestión de Requerimientos</div>
-                        <div class="instruction-desc">Clientes buscando propiedades</div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Sección de archivos -->
-            <div class="sidebar-section">
-                <div class="section-title">
-                    <span><i class="fas fa-paperclip"></i> Archivos Adjuntos</span>
-                    <span class="badge bg-secondary" id="file-count">0</span>
-                </div>
-                <div class="files-list" id="files-list">
-                    <div class="empty-state" id="empty-files">
-                        <div class="upload-area" id="upload-trigger">
-                            <i class="fas fa-cloud-upload-alt"></i>
-                            <div>Arrastra archivos aquí o haz clic para subir</div>
-                            <small>PDF, Excel, Word, Imágenes</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Sección de timeline de memoria episódica (SPEC-008 - Fase 4.1) -->
-            <div class="sidebar-section">
-                <div class="section-title">
-                    <span><i class="fas fa-history"></i> Historial de Episodios</span>
-                    <i class="fas fa-sync-alt" id="refresh-timeline" title="Actualizar timeline"></i>
-                </div>
-                <div class="episodic-timeline" id="episodic-timeline">
-                    <div class="timeline-loading" id="timeline-loading">
-                        <div class="spinner" style="margin: 0 auto 8px;"></div>
-                        <div>Cargando historial...</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Área principal del chat (70%) -->
-        <div class="chat-main">
-            <!-- Cabecera -->
-            <div class="chat-header">
+                <button class="mini-button" type="button" aria-label="Opciones de cuenta"><i class="fa-solid fa-ellipsis"></i></button>
+            </footer>
+        </aside>
+
+        <main class="conversation-panel">
+            <header class="conversation-header">
                 <div>
-                    <div class="chat-title">Propifai Intelligence Chat</div>
-                    <div class="chat-subtitle">Asistente IA para gestión inmobiliaria</div>
+                    <span class="eyebrow">Workspace inteligente</span>
+                    <h1>Asistente Propifai</h1>
                 </div>
-                <div class="d-flex align-items-center gap-3">
+                <div class="header-actions">
                     <div class="loading-indicator" id="thinking-indicator">
-                        <div class="spinner"></div>
-                        <span>Pensando...</span>
+                        <span class="spinner"></span><span>Procesando</span>
                     </div>
-                    <button class="btn btn-sm btn-outline-secondary" id="clear-chat" title="Limpiar conversación">
-                        <i class="fas fa-trash"></i> Limpiar
+                    <button class="icon-button mobile-nav-toggle" id="mobile-nav-toggle" type="button" aria-label="Abrir navegación">
+                        <i class="fa-solid fa-bars"></i>
                     </button>
-                    <button class="btn btn-sm btn-outline-primary" id="export-chat" title="Exportar conversación">
-                        <i class="fas fa-download"></i> Exportar
+                    <button class="icon-button" id="clear-chat" type="button" title="Limpiar conversación">
+                        <i class="fa-regular fa-trash-can"></i>
+                    </button>
+                    <button class="icon-button" id="export-chat" type="button" title="Exportar conversación">
+                        <i class="fa-solid fa-arrow-up-from-bracket"></i>
+                    </button>
+                    <button class="icon-button artifact-toggle" id="artifact-toggle" type="button" title="Mostrar resultados">
+                        <i class="fa-solid fa-table-columns"></i>
                     </button>
                 </div>
-            </div>
-            
-            <!-- Área de mensajes -->
-            <div class="messages-container" id="messages-container">
-                <!-- Mensaje de bienvenida -->
+            </header>
+
+            <div class="messages-container" id="messages-container" aria-live="polite">
                 <div class="message message-system">
-                    <i class="fas fa-robot"></i>
+                    <span class="assistant-mark"><i class="fa-solid fa-sparkles"></i></span>
                     <div class="message-content">
                         {{ initial_message|default:"¡Hola! Soy el asistente de Propifai. ¿En qué puedo ayudarte hoy?" }}
-                        <div class="message-time">{{ "now"|date:"H:i" }}</div>
-                    </div>
-                </div>
-                
-                <!-- Los mensajes se agregarán dinámicamente aquí -->
-            </div>
-            
-            <!-- Área de entrada -->
-            <div class="input-container">
-                <div class="input-wrapper">
-                    <textarea
-                        class="chat-input"
-                        id="chat-input"
-                        placeholder="Escribe tu mensaje aquí... (Presiona Ctrl+Enter para enviar)"
-                        rows="1"
-                    ></textarea>
-                    <button class="send-button" id="send-button" disabled>
-                        <i class="fas fa-paper-plane"></i>
-                    </button>
-                </div>
-                <div class="d-flex justify-content-between mt-2">
-                    <div class="d-flex gap-2">
-                        <button class="btn btn-sm btn-outline-secondary" id="attach-file" title="Adjuntar archivo">
-                            <i class="fas fa-paperclip"></i>
-                        </button>
-                        <button class="btn btn-sm btn-outline-secondary" id="voice-input" title="Entrada de voz">
-                            <i class="fas fa-microphone"></i>
-                        </button>
-                        <button class="btn btn-sm btn-outline-secondary" id="toggle-sidebar" title="Mostrar/ocultar panel lateral">
-                            <i class="fas fa-chevron-left"></i>
-                        </button>
-                    </div>
-                    <div class="d-flex gap-2">
-                        <button class="btn btn-sm btn-outline-secondary" id="add-instruction" title="Agregar instrucción personalizada">
-                            <i class="fas fa-plus-circle"></i> Instrucción
-                        </button>
+                        <div class="message-time">{% now "H:i" %}</div>
                     </div>
                 </div>
             </div>
-        </div>
+
+            <div class="composer-zone">
+                <div class="composer">
+                    <textarea class="chat-input" id="chat-input" placeholder="Pregunta por propiedades, mercado o clientes…" rows="1"></textarea>
+                    <div class="composer-actions">
+                        <div>
+                            <button class="composer-button" id="attach-file" type="button" title="Adjuntar archivo"><i class="fa-solid fa-paperclip"></i></button>
+                            <button class="composer-button" id="voice-input" type="button" title="Entrada de voz"><i class="fa-solid fa-microphone"></i></button>
+                            <button class="composer-button" id="add-instruction" type="button" title="Agregar instrucción"><i class="fa-solid fa-sliders"></i></button>
+                        </div>
+                        <button class="send-button" id="send-button" type="button" disabled aria-label="Enviar mensaje">
+                            <i class="fa-solid fa-arrow-up"></i>
+                        </button>
+                    </div>
+                </div>
+                <p>Propifai puede cometer errores. Verifica siempre los datos críticos de una propiedad.</p>
+            </div>
+        </main>
+
+        <div
+            class="artifact-resizer"
+            id="artifact-resizer"
+            role="separator"
+            aria-label="Ajustar ancho del panel de resultados"
+            aria-orientation="vertical"
+            aria-valuemin="320"
+            aria-valuemax="720"
+            aria-valuenow="390"
+            tabindex="0"
+        ></div>
+        <aside class="artifact-panel" id="artifact-panel" aria-label="Resultados">
+            <header class="artifact-header">
+                <div>
+                    <span class="eyebrow">Resultado activo</span>
+                    <h2>Vista de resultados</h2>
+                </div>
+                <button class="icon-button" id="close-artifact" type="button" aria-label="Cerrar resultados"><i class="fa-solid fa-xmark"></i></button>
+            </header>
+            <div class="artifact-content" id="artifact-content">
+                <div class="artifact-empty">
+                    <span class="artifact-illustration"><i class="fa-regular fa-window-maximize"></i></span>
+                    <h3>Tu espacio de resultados</h3>
+                    <p>Las propiedades, gráficas, tablas, mapas y documentos aparecerán aquí sin interrumpir la conversación.</p>
+                    <div class="artifact-types">
+                        <span><i class="fa-solid fa-house"></i> Propiedades</span>
+                        <span><i class="fa-solid fa-chart-simple"></i> Gráficas</span>
+                        <span><i class="fa-solid fa-file-lines"></i> Documentos</span>
+                        <span><i class="fa-solid fa-map-location-dot"></i> Mapas</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+        <div class="mobile-scrim" id="mobile-scrim"></div>
     </div>
-    
-    <!-- Scripts -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="/static/intelligence/chat.js?v=20260719-001"></script>
-    
-    <!-- Pasar datos de Django a JavaScript de forma simple -->
+
     <script>
-        // Datos básicos disponibles para JavaScript
         window.djangoContext = {
             user_id: "{{ user_id|default:''|escapejs }}",
             user_name: "{{ user_name|default:'Usuario'|escapejs }}",
@@ -939,126 +197,6 @@
             initial_message: "{{ initial_message|default:'¡Hola! Soy el asistente de Propifai. ¿En qué puedo ayudarte hoy?'|escapejs }}"
         };
     </script>
-    
-    <!-- Timeline de memoria episódica (SPEC-008 - Fase 4.1) -->
-    <script>
-        (function() {
-            'use strict';
-            
-            const timelineEl = document.getElementById('episodic-timeline');
-            const refreshBtn = document.getElementById('refresh-timeline');
-            
-            // Iconos por tipo de episodio
-            const TYPE_ICONS = {
-                property_search: 'fa-search',
-                property_detail: 'fa-building',
-                price_inquiry: 'fa-tag',
-                matching: 'fa-handshake',
-                acm_analysis: 'fa-chart-bar',
-                general: 'fa-comment',
-                fact_extraction: 'fa-lightbulb',
-                user_preference: 'fa-heart'
-            };
-            
-            // Nombres legibles por tipo
-            const TYPE_NAMES = {
-                property_search: 'Búsqueda',
-                property_detail: 'Detalle',
-                price_inquiry: 'Precio',
-                matching: 'Matching',
-                acm_analysis: 'ACM',
-                general: 'General',
-                fact_extraction: 'Hecho',
-                user_preference: 'Preferencia'
-            };
-            
-            function getImportanceLevel(score) {
-                if (score >= 0.7) return 'high';
-                if (score >= 0.4) return 'medium';
-                return 'low';
-            }
-            
-            function formatTime(isoString) {
-                if (!isoString) return '';
-                const date = new Date(isoString);
-                const now = new Date();
-                const diffMs = now - date;
-                const diffMins = Math.floor(diffMs / 60000);
-                const diffHours = Math.floor(diffMs / 3600000);
-                const diffDays = Math.floor(diffMs / 86400000);
-                
-                if (diffMins < 1) return 'Ahora';
-                if (diffMins < 60) return `Hace ${diffMins} min`;
-                if (diffHours < 24) return `Hace ${diffHours}h`;
-                if (diffDays < 7) return `Hace ${diffDays}d`;
-                return date.toLocaleDateString('es-PE', { day: 'numeric', month: 'short' });
-            }
-            
-            function loadTimeline() {
-                const userId = window.djangoContext?.user_id;
-                if (!userId) {
-                    timelineEl.innerHTML = '<div class="timeline-empty">Inicia sesión para ver el historial</div>';
-                    return;
-                }
-                
-                timelineEl.innerHTML = '<div class="timeline-loading"><div class="spinner" style="margin: 0 auto 8px;"></div><div>Cargando historial...</div></div>';
-                
-                fetch(`/api/v1/intelligence/episodic-memory/?user_id=${encodeURIComponent(userId)}&limit=10`)
-                    .then(response => response.json())
-                    .then(data => {
-                        if (!data.success || !data.results || data.results.length === 0) {
-                            timelineEl.innerHTML = '<div class="timeline-empty">No hay episodios registrados aún</div>';
-                            return;
-                        }
-                        
-                        let html = '';
-                        data.results.forEach(ep => {
-                            const icon = TYPE_ICONS[ep.episode_type] || 'fa-comment';
-                            const typeName = TYPE_NAMES[ep.episode_type] || ep.episode_type;
-                            const importance = getImportanceLevel(ep.importance_score);
-                            const message = ep.user_message || '';
-                            const timeStr = formatTime(ep.timestamp);
-                            
-                            html += `
-                                <div class="timeline-item" title="${ep.episode_type_display || typeName}: ${message}">
-                                    <div class="timeline-icon ${ep.episode_type}">
-                                        <i class="fas ${icon}"></i>
-                                    </div>
-                                    <div class="timeline-content">
-                                        <div class="timeline-header">
-                                            <span class="timeline-type">
-                                                <span class="timeline-importance ${importance}"></span>
-                                                ${typeName}
-                                            </span>
-                                            <span class="timeline-time">${timeStr}</span>
-                                        </div>
-                                        <div class="timeline-message">${message}</div>
-                                    </div>
-                                </div>
-                            `;
-                        });
-                        
-                        timelineEl.innerHTML = html;
-                    })
-                    .catch(error => {
-                        console.error('Error loading episodic timeline:', error);
-                        timelineEl.innerHTML = '<div class="timeline-error">Error al cargar historial</div>';
-                    });
-            }
-            
-            // Cargar timeline al iniciar
-            if (timelineEl) {
-                loadTimeline();
-            }
-            
-            // Recargar al hacer clic en refresh
-            if (refreshBtn) {
-                refreshBtn.addEventListener('click', loadTimeline);
-            }
-            
-            // Recargar después de cada mensaje enviado (opcional)
-            document.addEventListener('episodicMemorySaved', loadTimeline);
-        })();
-    </script>
+    <script src="{% static 'intelligence/chat.js' %}?v=20260723-006"></script>
 </body>
 </html>

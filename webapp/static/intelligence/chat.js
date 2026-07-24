@@ -11,7 +11,11 @@ document.addEventListener('DOMContentLoaded', function() {
         activeInstruction: 'general',
         isThinking: false,
         sidebarVisible: true,
-        currentConversationId: null
+        currentConversationId: null,
+        thinkingTimers: [],
+        artifacts: [],
+        activeArtifactId: null,
+        activeGalleryIndex: 0
     };
 
     // Elementos DOM
@@ -31,13 +35,23 @@ document.addEventListener('DOMContentLoaded', function() {
         refreshMemory: document.getElementById('refresh-memory'),
         addInstruction: document.getElementById('add-instruction'),
         fileCount: document.getElementById('file-count'),
-        toggleSidebarBtn: document.querySelector('.toggle-sidebar')
+        toggleSidebarBtn: document.querySelector('.toggle-sidebar'),
+        workspaceShell: document.getElementById('workspace-shell'),
+        artifactPanel: document.getElementById('artifact-panel'),
+        artifactContent: document.getElementById('artifact-content'),
+        artifactResizer: document.getElementById('artifact-resizer'),
+        artifactToggle: document.getElementById('artifact-toggle'),
+        closeArtifact: document.getElementById('close-artifact'),
+        mobileNavToggle: document.getElementById('mobile-nav-toggle'),
+        mobileScrim: document.getElementById('mobile-scrim'),
+        newChat: document.getElementById('new-chat')
     };
 
     // URLs API
     const apiUrls = {
         chat: '/api/v1/intelligence/chat-web/api/',
-        upload: '/api/v1/intelligence/chat-web/upload/'
+        upload: '/api/v1/intelligence/chat-web/upload/',
+        propertyDetail: '/api/v1/intelligence/chat-web/properties/'
     };
 
     // Inicializar
@@ -55,6 +69,7 @@ document.addEventListener('DOMContentLoaded', function() {
         bindEvents();
         loadInitialData();
         setupAutoResize();
+        restoreWorkspacePreferences();
         
         console.log('Inicialización completada');
     }
@@ -86,6 +101,33 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elements.toggleSidebarBtn) {
             elements.toggleSidebarBtn.addEventListener('click', toggleSidebar);
             console.log('Evento click vinculado a toggle-sidebar');
+        }
+
+        if (elements.artifactToggle) {
+            elements.artifactToggle.addEventListener('click', toggleArtifactPanel);
+        }
+
+        if (elements.closeArtifact) {
+            elements.closeArtifact.addEventListener('click', closeArtifactPanel);
+        }
+
+        setupArtifactResizer();
+
+        if (elements.mobileNavToggle) {
+            elements.mobileNavToggle.addEventListener('click', function() {
+                elements.workspaceShell?.classList.toggle('mobile-nav-open');
+            });
+        }
+
+        if (elements.mobileScrim) {
+            elements.mobileScrim.addEventListener('click', function() {
+                elements.workspaceShell?.classList.remove('mobile-nav-open');
+                if (window.innerWidth <= 1180) closeArtifactPanel();
+            });
+        }
+
+        if (elements.newChat) {
+            elements.newChat.addEventListener('click', clearChat);
         }
 
         // Instrucciones
@@ -343,11 +385,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
             
-            // Pequeña pausa para que terminen las animaciones
-            await new Promise(resolve => setTimeout(resolve, 300));
-            
             // Agregar respuesta del asistente
             addMessage('assistant', data.response || data.message || 'No se recibió respuesta');
+
+            if (Array.isArray(data.artifacts) && data.artifacts.length > 0) {
+                handleArtifacts(data.artifacts);
+            }
             
             // Actualizar memoria si viene en la respuesta
             if (data.memory) {
@@ -410,11 +453,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 renderedContent = html;
             }
         } else {
-            renderedContent = escapeHtml(content);
+            renderedContent = message.role === 'assistant'
+                ? renderAssistantContent(content)
+                : escapeHtml(content);
         }
-        
+
         messageElement.innerHTML = `
-            <div>${renderedContent}</div>
+            <div class="message-content">${renderedContent}</div>
             <div class="message-time">${message.timestamp}</div>
         `;
         
@@ -425,6 +470,84 @@ document.addEventListener('DOMContentLoaded', function() {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    /**
+     * Renderizador restringido para respuestas del asistente.
+     * Primero escapa todo el contenido y después habilita únicamente un
+     * subconjunto controlado de Markdown. No acepta HTML del modelo.
+     */
+    function renderAssistantContent(content) {
+        const text = String(content || '').trim();
+        const propertyPattern = /(\d+)\.\s+\*\*(.+?)\*\*\s*([\s\S]*?)(?=(?:\s+\d+\.\s+\*\*)|$)/g;
+        const matches = Array.from(text.matchAll(propertyPattern));
+
+        if (matches.length >= 2) {
+            const intro = text.slice(0, matches[0].index).trim();
+            const cards = matches.map((match, index) => {
+                let details = match[3].trim();
+                let closing = '';
+
+                // Separar la conclusión que el LLM suele pegar a la última propiedad.
+                if (index === matches.length - 1) {
+                    const closingMatch = details.match(/\s+(Todos los datos|Si quieres|Si deseas|¿Te gustaría|Puedo ayudarte)[\s\S]*$/i);
+                    if (closingMatch && closingMatch.index !== undefined) {
+                        closing = details.slice(closingMatch.index).trim();
+                        details = details.slice(0, closingMatch.index).trim();
+                    }
+                }
+
+                return {
+                    number: match[1],
+                    title: match[2],
+                    details,
+                    closing
+                };
+            });
+
+            const closingText = cards.map(card => card.closing).filter(Boolean).join(' ');
+            return `
+                ${intro ? `<p class="assistant-summary">${renderInlineMarkdown(intro)}</p>` : ''}
+                <ol class="property-response-list">
+                    ${cards.map(card => `
+                        <li class="property-response-card">
+                            <span class="property-response-number">${escapeHtml(card.number)}</span>
+                            <div>
+                                <h3>${renderInlineMarkdown(card.title)}</h3>
+                                <p>${renderPropertyDetails(card.details)}</p>
+                            </div>
+                        </li>
+                    `).join('')}
+                </ol>
+                ${closingText ? `<p class="assistant-closing">${renderInlineMarkdown(closingText)}</p>` : ''}
+            `;
+        }
+
+        return renderInlineMarkdown(text)
+            .replace(/\r?\n\r?\n/g, '</p><p>')
+            .replace(/\r?\n/g, '<br>');
+    }
+
+    function renderInlineMarkdown(text) {
+        return escapeHtml(String(text || ''))
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/__(.+?)__/g, '<strong>$1</strong>')
+            .replace(/`([^`]+)`/g, '<code>$1</code>')
+            .replace(/(^|[^\*])\*([^\*\n]+)\*/g, '$1<em>$2</em>');
+    }
+
+    function renderPropertyDetails(details) {
+        const formattedDetails = String(details || '')
+            .replace(/D[oó]lares\s+(\d+(?:\.\d+)?)/gi, (_, value) =>
+                `US$ ${Number(value).toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+            )
+            .replace(/Soles\s+(\d+(?:\.\d+)?)/gi, (_, value) =>
+                `S/ ${Number(value).toLocaleString('es-PE', { maximumFractionDigits: 0 })}`
+            );
+
+        return renderInlineMarkdown(formattedDetails)
+            .replace(/\s*·\s*/g, '<span class="property-detail-separator" aria-hidden="true"></span>')
+            .replace(/\b(Precio|Tipo|Distrito|Estado|Área|Dormitorios|Baños):/gi, '<strong class="property-detail-label">$1:</strong>');
     }
 
     function setupAutoResize() {
@@ -462,6 +585,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // En lugar de puntitos, mostrar proceso simulado
             addThinkingTraceSimulated();
         } else {
+            clearThinkingTimers();
             if (elements.thinkingIndicator) {
                 elements.thinkingIndicator.classList.remove('active');
             }
@@ -480,6 +604,8 @@ document.addEventListener('DOMContentLoaded', function() {
      */
     function addThinkingTraceSimulated() {
         if (!elements.messagesContainer) return;
+
+        clearThinkingTimers();
         
         // Remover trace anterior si existe
         const oldTrace = document.getElementById('thinking-trace');
@@ -502,7 +628,7 @@ document.addEventListener('DOMContentLoaded', function() {
         let cumulativeDelay = 300;
         simulatedSteps.forEach((step, i) => {
             cumulativeDelay += step.delay;
-            setTimeout(() => {
+            const timerId = setTimeout(() => {
                 const trace = document.getElementById('thinking-trace');
                 if (!trace) return;
                 
@@ -518,58 +644,45 @@ document.addEventListener('DOMContentLoaded', function() {
                 requestAnimationFrame(() => stepEl.classList.add('visible'));
                 scrollToBottom();
             }, cumulativeDelay);
+            state.thinkingTimers.push(timerId);
         });
     }
 
+    function clearThinkingTimers() {
+        state.thinkingTimers.forEach(timerId => clearTimeout(timerId));
+        state.thinkingTimers = [];
+    }
+
     /**
-     * Reemplaza el thinking trace simulado con los pasos REALES del AgentGraphBuilder.
-     * Se llama cuando la API devuelve reasoning_steps.
+     * Inserta los pasos reales antes de la respuesta. Se renderizan de forma
+     * sincrónica para evitar que temporizadores pendientes los añadan al final.
      */
     function replaceWithRealSteps(realSteps) {
         const traceContainer = document.getElementById('thinking-trace');
         if (!traceContainer) return;
-        
-        // Limpiar pasos simulados
+
+        clearThinkingTimers();
         traceContainer.innerHTML = '';
-        
-        // Si no hay pasos reales, no hacer nada (los simulados ya se mostraron)
         if (!realSteps || realSteps.length === 0) return;
-        
-        // Mostrar cada paso real con su delay
-        let cumulativeDelay = 200;
+
         realSteps.forEach((step) => {
-            const delay = step.delay_ms || 600;
-            cumulativeDelay += delay;
-            
-            setTimeout(() => {
-                const trace = document.getElementById('thinking-trace');
-                if (!trace) return;
-                
-                const stepEl = document.createElement('div');
-                stepEl.className = `thinking-step step-${step.type}`;
-                stepEl.innerHTML = `
-                    <span class="step-icon">${step.icon}</span>
-                    <div class="step-content">
-                        <div class="step-title">${escapeHtml(step.title)}</div>
-                        ${step.description ? `<div class="step-desc">${escapeHtml(step.description)}</div>` : ''}
-                    </div>
-                `;
-                trace.appendChild(stepEl);
-                requestAnimationFrame(() => stepEl.classList.add('visible'));
-                scrollToBottom();
-            }, cumulativeDelay);
+            const stepEl = document.createElement('div');
+            stepEl.className = `thinking-step step-${step.type} visible`;
+            stepEl.innerHTML = `
+                <span class="step-icon">${step.icon}</span>
+                <div class="step-content">
+                    <div class="step-title">${escapeHtml(step.title)}</div>
+                    ${step.description ? `<div class="step-desc">${escapeHtml(step.description)}</div>` : ''}
+                </div>
+            `;
+            traceContainer.appendChild(stepEl);
         });
-        
-        // Agregar divisor al final
-        setTimeout(() => {
-            const trace = document.getElementById('thinking-trace');
-            if (!trace) return;
-            const divider = document.createElement('div');
-            divider.className = 'thinking-trace-divider';
-            divider.innerHTML = '<span>Respuesta generada</span>';
-            trace.appendChild(divider);
-            scrollToBottom();
-        }, cumulativeDelay + 500);
+
+        const divider = document.createElement('div');
+        divider.className = 'thinking-trace-divider';
+        divider.innerHTML = '<span>Respuesta generada</span>';
+        traceContainer.appendChild(divider);
+        scrollToBottom();
     }
 
     function removeTypingIndicator() {
@@ -578,20 +691,413 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function scrollToBottom() {
         if (elements.messagesContainer) {
-            elements.messagesContainer.scrollTop = elements.messagesContainer.scrollHeight;
+            const scroll = () => {
+                elements.messagesContainer.scrollTop = elements.messagesContainer.scrollHeight;
+            };
+            scroll();
+            requestAnimationFrame(scroll);
         }
     }
 
     function toggleSidebar() {
-        if (!elements.sidebar) return;
-        
+        if (!elements.sidebar || !elements.workspaceShell) return;
+
         state.sidebarVisible = !state.sidebarVisible;
-        elements.sidebar.classList.toggle('collapsed');
-        
+        elements.workspaceShell.classList.toggle('sidebar-collapsed', !state.sidebarVisible);
+        localStorage.setItem('propifai.sidebarCollapsed', String(!state.sidebarVisible));
+        setArtifactWidth(getArtifactWidth());
+
         const toggleButton = document.querySelector('.toggle-sidebar i');
         if (toggleButton) {
-            toggleButton.className = state.sidebarVisible ? 'fas fa-chevron-left' : 'fas fa-chevron-right';
+            toggleButton.className = 'fas fa-chevron-left';
         }
+    }
+
+    function toggleArtifactPanel() {
+        if (!elements.workspaceShell) return;
+        const willClose = !elements.workspaceShell.classList.contains('artifact-closed');
+        elements.workspaceShell.classList.toggle('artifact-closed', willClose);
+        localStorage.setItem('propifai.artifactClosed', String(willClose));
+    }
+
+    function closeArtifactPanel() {
+        if (!elements.workspaceShell) return;
+        elements.workspaceShell.classList.add('artifact-closed');
+        localStorage.setItem('propifai.artifactClosed', 'true');
+    }
+
+    function restoreWorkspacePreferences() {
+        if (!elements.workspaceShell) return;
+        const sidebarCollapsed = localStorage.getItem('propifai.sidebarCollapsed') === 'true';
+        const artifactClosed = localStorage.getItem('propifai.artifactClosed') === 'true';
+        const storedArtifactWidth = Number(localStorage.getItem('propifai.artifactWidth'));
+        if (Number.isFinite(storedArtifactWidth) && storedArtifactWidth > 0) {
+            setArtifactWidth(storedArtifactWidth);
+        }
+        elements.workspaceShell.classList.toggle('sidebar-collapsed', sidebarCollapsed);
+        elements.workspaceShell.classList.toggle('artifact-closed', artifactClosed);
+        state.sidebarVisible = !sidebarCollapsed;
+    }
+
+    function setupArtifactResizer() {
+        if (!elements.artifactResizer || !elements.workspaceShell) return;
+
+        let pointerId = null;
+
+        elements.artifactResizer.addEventListener('pointerdown', function(event) {
+            if (window.innerWidth <= 1180) return;
+            pointerId = event.pointerId;
+            elements.artifactResizer.setPointerCapture(pointerId);
+            elements.workspaceShell.classList.add('resizing-artifact');
+            event.preventDefault();
+        });
+
+        elements.artifactResizer.addEventListener('pointermove', function(event) {
+            if (pointerId !== event.pointerId) return;
+            setArtifactWidth(window.innerWidth - event.clientX);
+        });
+
+        const finishResize = function(event) {
+            if (pointerId !== event.pointerId) return;
+            pointerId = null;
+            elements.workspaceShell.classList.remove('resizing-artifact');
+            const width = getArtifactWidth();
+            localStorage.setItem('propifai.artifactWidth', String(width));
+        };
+
+        elements.artifactResizer.addEventListener('pointerup', finishResize);
+        elements.artifactResizer.addEventListener('pointercancel', finishResize);
+
+        elements.artifactResizer.addEventListener('keydown', function(event) {
+            if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+            event.preventDefault();
+            const step = event.shiftKey ? 50 : 20;
+            let width = getArtifactWidth();
+            if (event.key === 'ArrowLeft') width += step;
+            if (event.key === 'ArrowRight') width -= step;
+            if (event.key === 'Home') width = 320;
+            if (event.key === 'End') width = getArtifactWidthLimits().max;
+            setArtifactWidth(width);
+            localStorage.setItem('propifai.artifactWidth', String(getArtifactWidth()));
+        });
+
+        window.addEventListener('resize', function() {
+            if (window.innerWidth > 1180) {
+                setArtifactWidth(getArtifactWidth());
+            }
+        });
+    }
+
+    function getArtifactWidthLimits() {
+        const sidebarWidth = elements.workspaceShell?.classList.contains('sidebar-collapsed') ? 76 : 268;
+        const minimumChatWidth = 480;
+        const maximumByViewport = window.innerWidth - sidebarWidth - minimumChatWidth - 1;
+        return {
+            min: 320,
+            max: Math.max(320, Math.min(720, maximumByViewport))
+        };
+    }
+
+    function setArtifactWidth(requestedWidth) {
+        if (!elements.workspaceShell) return;
+        const limits = getArtifactWidthLimits();
+        const width = Math.round(Math.min(limits.max, Math.max(limits.min, requestedWidth)));
+        elements.workspaceShell.style.setProperty('--artifact-width', `${width}px`);
+        elements.artifactResizer?.setAttribute('aria-valuemax', String(limits.max));
+        elements.artifactResizer?.setAttribute('aria-valuenow', String(width));
+    }
+
+    function getArtifactWidth() {
+        if (!elements.workspaceShell) return 390;
+        const value = getComputedStyle(elements.workspaceShell).getPropertyValue('--artifact-width');
+        return Number.parseFloat(value) || 390;
+    }
+
+    function handleArtifacts(artifacts) {
+        const validArtifacts = artifacts.filter(artifact =>
+            artifact && artifact.type === 'property_collection' && Array.isArray(artifact.items)
+        );
+        if (validArtifacts.length === 0) return;
+
+        validArtifacts.forEach(artifact => {
+            const existingIndex = state.artifacts.findIndex(item => item.id === artifact.id);
+            if (existingIndex >= 0) state.artifacts[existingIndex] = artifact;
+            else state.artifacts.push(artifact);
+        });
+
+        const activeArtifact = validArtifacts[0];
+        state.activeArtifactId = activeArtifact.id;
+        elements.workspaceShell?.classList.remove('artifact-closed');
+        localStorage.setItem('propifai.artifactClosed', 'false');
+        renderPropertyCollection(activeArtifact);
+        connectConversationCards(activeArtifact);
+    }
+
+    function connectConversationCards(artifact) {
+        const assistantMessages = elements.messagesContainer?.querySelectorAll('.message-assistant');
+        const latestMessage = assistantMessages?.[assistantMessages.length - 1];
+        const cards = latestMessage?.querySelectorAll('.property-response-card') || [];
+        cards.forEach((card, index) => {
+            const property = artifact.items[index];
+            if (!property) return;
+            card.classList.add('is-clickable');
+            card.tabIndex = 0;
+            card.setAttribute('role', 'button');
+            card.setAttribute('aria-label', `Ver detalle de ${property.title}`);
+            card.addEventListener('click', () => loadPropertyDetail(property.id));
+            card.addEventListener('keydown', event => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    loadPropertyDetail(property.id);
+                }
+            });
+        });
+    }
+
+    function renderPropertyCollection(artifact) {
+        if (!elements.artifactContent) return;
+        const items = artifact.items || [];
+        elements.artifactContent.innerHTML = `
+            <div class="property-collection">
+                <div class="property-collection-toolbar">
+                    <div>
+                        <span class="eyebrow">Propiedades verificadas</span>
+                        <h3>${escapeHtml(artifact.title || 'Propiedades encontradas')}</h3>
+                        <p>${items.length} resultado${items.length === 1 ? '' : 's'}</p>
+                    </div>
+                    <span class="view-pill"><i class="fa-solid fa-grip"></i> Tarjetas</span>
+                </div>
+                <div class="property-artifact-grid">
+                    ${items.map(property => renderPropertyArtifactCard(property)).join('')}
+                </div>
+            </div>
+        `;
+
+        elements.artifactContent.querySelectorAll('[data-property-id]').forEach(card => {
+            card.addEventListener('click', () => loadPropertyDetail(card.dataset.propertyId));
+            card.addEventListener('keydown', event => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    loadPropertyDetail(card.dataset.propertyId);
+                }
+            });
+        });
+        elements.artifactContent.querySelectorAll('.property-card-media img').forEach(image => {
+            image.addEventListener('error', function() {
+                const media = image.closest('.property-card-media');
+                image.remove();
+                if (media && !media.querySelector('.property-image-fallback')) {
+                    const fallback = document.createElement('span');
+                    fallback.className = 'property-image-fallback';
+                    fallback.innerHTML = '<i class="fa-regular fa-image"></i>';
+                    media.prepend(fallback);
+                }
+            }, { once: true });
+        });
+    }
+
+    function renderPropertyArtifactCard(property) {
+        const image = safeMediaUrl(property.images?.[0]?.url);
+        const price = formatPropertyPrice(property.price, property.currency);
+        const meta = [
+            property.area_m2 ? `${formatNumber(property.area_m2)} m²` : '',
+            property.bedrooms != null ? `${property.bedrooms} dorm.` : '',
+            property.bathrooms != null ? `${formatNumber(property.bathrooms)} baños` : ''
+        ].filter(Boolean);
+        return `
+            <article class="property-artifact-card" data-property-id="${escapeHtml(property.id)}" tabindex="0" role="button">
+                <div class="property-card-media">
+                    ${image
+                        ? `<img src="${image}" alt="${escapeHtml(property.title)}" loading="lazy">`
+                        : '<span><i class="fa-regular fa-image"></i></span>'}
+                    ${property.status ? `<span class="property-status">${escapeHtml(property.status)}</span>` : ''}
+                </div>
+                <div class="property-card-copy">
+                    <span class="property-code">${escapeHtml(property.code || property.property_type || 'Propiedad')}</span>
+                    <h4>${escapeHtml(property.title)}</h4>
+                    <strong class="property-price">${escapeHtml(price)}</strong>
+                    <p><i class="fa-solid fa-location-dot"></i> ${escapeHtml(property.district || 'Ubicación no registrada')}</p>
+                    ${meta.length ? `<div class="property-meta">${meta.map(value => `<span>${escapeHtml(value)}</span>`).join('')}</div>` : ''}
+                    <button type="button">Ver detalle <i class="fa-solid fa-arrow-right"></i></button>
+                </div>
+            </article>
+        `;
+    }
+
+    async function loadPropertyDetail(propertyId) {
+        if (!elements.artifactContent || !propertyId) return;
+        elements.workspaceShell?.classList.remove('artifact-closed');
+        elements.artifactContent.innerHTML = `
+            <div class="artifact-loading"><span class="spinner"></span><p>Cargando ficha completa…</p></div>
+        `;
+        try {
+            const response = await fetch(`${apiUrls.propertyDetail}${encodeURIComponent(propertyId)}/`, {
+                credentials: 'same-origin'
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || 'No se pudo cargar la propiedad.');
+            }
+            state.activeGalleryIndex = 0;
+            renderPropertyDetail(data.property);
+        } catch (error) {
+            elements.artifactContent.innerHTML = `
+                <div class="artifact-error">
+                    <i class="fa-solid fa-circle-exclamation"></i>
+                    <h3>No pudimos abrir la ficha</h3>
+                    <p>${escapeHtml(error.message)}</p>
+                    <button type="button" id="back-to-properties-error">Volver a resultados</button>
+                </div>
+            `;
+            document.getElementById('back-to-properties-error')?.addEventListener('click', renderActiveArtifact);
+        }
+    }
+
+    function renderPropertyDetail(property) {
+        if (!elements.artifactContent) return;
+        const gallery = (property.gallery || [])
+            .map(image => ({...image, url: safeMediaUrl(image.url)}))
+            .filter(image => image.url);
+        const specs = property.specs || {};
+        const featureLabels = {
+            bedrooms: 'Dormitorios', bathrooms: 'Baños', half_bathrooms: 'Medios baños',
+            land_area: 'Área de terreno', built_area: 'Área construida',
+            garage_spaces: 'Estacionamientos', antiquity_years: 'Antigüedad',
+            floors_total: 'Pisos', front_measure: 'Frente', depth_measure: 'Fondo'
+        };
+        const featureEntries = Object.entries(featureLabels)
+            .filter(([key]) => specs[key] !== null && specs[key] !== undefined && specs[key] !== '')
+            .map(([key, label]) => {
+                const areaSuffix = ['land_area', 'built_area'].includes(key) ? ' m²' : '';
+                return `<div><span>${label}</span><strong>${escapeHtml(formatNumber(specs[key]))}${areaSuffix}</strong></div>`;
+            }).join('');
+
+        elements.artifactContent.innerHTML = `
+            <div class="property-detail">
+                <button class="back-button" id="back-to-properties" type="button">
+                    <i class="fa-solid fa-arrow-left"></i> Volver a resultados
+                </button>
+                <section class="property-gallery" aria-label="Galería de la propiedad">
+                    <div class="property-gallery-stage">
+                        ${gallery.length
+                            ? `<img id="property-gallery-main" src="${gallery[0].url}" alt="${escapeHtml(gallery[0].alt || property.title)}">`
+                            : '<div class="gallery-empty"><i class="fa-regular fa-image"></i><span>Sin fotografías registradas</span></div>'}
+                        ${gallery.length > 1 ? `
+                            <button class="gallery-arrow gallery-prev" type="button" aria-label="Fotografía anterior"><i class="fa-solid fa-chevron-left"></i></button>
+                            <button class="gallery-arrow gallery-next" type="button" aria-label="Fotografía siguiente"><i class="fa-solid fa-chevron-right"></i></button>
+                            <span class="gallery-counter" id="gallery-counter">1 / ${gallery.length}</span>
+                        ` : ''}
+                    </div>
+                    ${gallery.length > 1 ? `
+                        <div class="property-thumbnails">
+                            ${gallery.map((image, index) => `
+                                <button type="button" data-gallery-index="${index}" class="${index === 0 ? 'active' : ''}">
+                                    <img src="${image.url}" alt="Miniatura ${index + 1}" loading="lazy">
+                                </button>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                </section>
+                ${renderPropertyVideos(property.videos || [])}
+                <section class="property-detail-heading">
+                    <span>${escapeHtml(property.code || property.property_type || 'Propiedad')}</span>
+                    <h3>${escapeHtml(property.title)}</h3>
+                    <strong>${escapeHtml(formatPropertyPrice(property.price, property.currency))}</strong>
+                    <p><i class="fa-solid fa-location-dot"></i> ${escapeHtml(property.address || property.district || 'Ubicación no registrada')}</p>
+                </section>
+                <section class="detail-section">
+                    <h4>Información principal</h4>
+                    <div class="detail-facts">
+                        ${detailFact('Tipo', property.property_type)}
+                        ${detailFact('Operación', property.operation_type)}
+                        ${detailFact('Estado', property.status)}
+                        ${detailFact('Condición', property.condition)}
+                        ${detailFact('Distrito', property.district)}
+                        ${detailFact('Mantenimiento', property.maintenance_fee != null ? formatPropertyPrice(property.maintenance_fee, property.currency) : null)}
+                    </div>
+                </section>
+                ${featureEntries ? `<section class="detail-section"><h4>Características</h4><div class="detail-facts">${featureEntries}</div></section>` : ''}
+                ${property.description ? `<section class="detail-section"><h4>Descripción</h4><p class="property-description">${escapeHtml(property.description)}</p></section>` : ''}
+                <footer class="property-source">
+                    <i class="fa-solid fa-shield-check"></i>
+                    <span>Fuente: ${escapeHtml(property.source?.name || 'Propify DB')} · ID ${escapeHtml(property.id)}</span>
+                </footer>
+            </div>
+        `;
+
+        document.getElementById('back-to-properties')?.addEventListener('click', renderActiveArtifact);
+        setupGallery(gallery);
+    }
+
+    function renderPropertyVideos(videos) {
+        const safeVideos = videos.map(safeMediaUrl).filter(Boolean);
+        if (safeVideos.length === 0) return '';
+        return `
+            <section class="property-videos">
+                <h4><i class="fa-solid fa-circle-play"></i> Videos</h4>
+                ${safeVideos.map(url => {
+                    const direct = /\.(mp4|webm|ogg)(?:\?.*)?$/i.test(url);
+                    return direct
+                        ? `<video controls preload="metadata"><source src="${url}"></video>`
+                        : `<a href="${url}" target="_blank" rel="noopener noreferrer"><i class="fa-solid fa-play"></i> Ver video de la propiedad</a>`;
+                }).join('')}
+            </section>
+        `;
+    }
+
+    function setupGallery(gallery) {
+        if (gallery.length <= 1) return;
+        const main = document.getElementById('property-gallery-main');
+        const counter = document.getElementById('gallery-counter');
+        const thumbnails = Array.from(elements.artifactContent.querySelectorAll('[data-gallery-index]'));
+        const show = index => {
+            state.activeGalleryIndex = (index + gallery.length) % gallery.length;
+            main.src = gallery[state.activeGalleryIndex].url;
+            main.alt = gallery[state.activeGalleryIndex].alt || `Fotografía ${state.activeGalleryIndex + 1}`;
+            counter.textContent = `${state.activeGalleryIndex + 1} / ${gallery.length}`;
+            thumbnails.forEach((button, buttonIndex) => button.classList.toggle('active', buttonIndex === state.activeGalleryIndex));
+        };
+        elements.artifactContent.querySelector('.gallery-prev')?.addEventListener('click', () => show(state.activeGalleryIndex - 1));
+        elements.artifactContent.querySelector('.gallery-next')?.addEventListener('click', () => show(state.activeGalleryIndex + 1));
+        thumbnails.forEach(button => button.addEventListener('click', () => show(Number(button.dataset.galleryIndex))));
+    }
+
+    function renderActiveArtifact() {
+        const artifact = state.artifacts.find(item => item.id === state.activeArtifactId);
+        if (artifact) renderPropertyCollection(artifact);
+    }
+
+    function detailFact(label, value) {
+        if (value === null || value === undefined || value === '') return '';
+        return `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong></div>`;
+    }
+
+    function safeMediaUrl(value) {
+        if (!value) return '';
+        try {
+            const url = new URL(value, window.location.origin);
+            return url.protocol === 'https:' || url.origin === window.location.origin
+                ? escapeHtml(url.href)
+                : '';
+        } catch (_) {
+            return '';
+        }
+    }
+
+    function formatPropertyPrice(value, currency) {
+        const number = Number(value);
+        if (!Number.isFinite(number)) return 'Precio no registrado';
+        const code = String(currency || '').toUpperCase().includes('SOL') || currency === 'PEN' ? 'PEN' : 'USD';
+        return new Intl.NumberFormat('es-PE', {
+            style: 'currency', currency: code, maximumFractionDigits: 0
+        }).format(number);
+    }
+
+    function formatNumber(value) {
+        const number = Number(value);
+        return Number.isFinite(number)
+            ? new Intl.NumberFormat('es-PE', { maximumFractionDigits: 2 }).format(number)
+            : String(value ?? '');
     }
 
     function setActiveInstruction(instruction) {

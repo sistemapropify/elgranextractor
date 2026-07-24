@@ -2102,6 +2102,7 @@ def chat_web_api(request):
 
         # NUEVO: extraer reasoning_steps del metadata (para mostrar el proceso de pensamiento)
         reasoning_steps = result.metadata.get('reasoning_steps') if isinstance(result.metadata, dict) else None
+        artifacts = result.metadata.get('artifacts', []) if isinstance(result.metadata, dict) else []
 
         response_payload = {
             'success': True,
@@ -2112,6 +2113,7 @@ def chat_web_api(request):
             'metadata': result.metadata,
             'context_summary': result.context_summary,
             'timestamp': result.timestamp,
+            'artifacts': artifacts,
         }
 
         # Incluir action solo si existe
@@ -2139,6 +2141,108 @@ def chat_web_api(request):
             'traceback': error_details,
             'timestamp': timezone.now().isoformat()
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def chat_property_detail(request, property_id):
+    """Detalle determinista de una propiedad Propifai para el panel derecho."""
+    from django.db import connections
+    from propifai.models import PropifaiProperty, PropertyImage
+
+    try:
+        prop = PropifaiProperty.objects.using('propifai').get(pk=property_id)
+    except PropifaiProperty.DoesNotExist:
+        return Response(
+            {'success': False, 'error': 'Propiedad no encontrada.'},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    def lookup_name(table, related_id):
+        if not related_id:
+            return None
+        allowed = {
+            'currency', 'district', 'operation_type',
+            'property_status', 'property_type', 'property_condition',
+        }
+        if table not in allowed:
+            return None
+        try:
+            with connections['propifai'].cursor() as cursor:
+                cursor.execute(
+                    f"SELECT name FROM {table} WHERE id = %s",
+                    [related_id],
+                )
+                row = cursor.fetchone()
+                return row[0] if row else None
+        except Exception:
+            return None
+
+    def json_value(value):
+        if value is None or isinstance(value, (str, int, float, bool)):
+            return value
+        if hasattr(value, 'isoformat'):
+            return value.isoformat()
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return str(value)
+
+    specs = prop.get_specs(using='propifai') or {}
+    images = []
+    try:
+        media = PropertyImage.objects.using('propifai').filter(
+            property_id=prop.id
+        ).order_by('id')
+        for index, image in enumerate(media):
+            url = prop._convertir_a_url_azure(image.image)
+            if url:
+                images.append({
+                    'id': str(image.id),
+                    'url': url,
+                    'alt': prop.title or f'Propiedad {prop.id}',
+                    'is_primary': index == 0,
+                })
+    except Exception as exc:
+        logger.warning("No se pudo cargar galería de property %s: %s", prop.id, exc)
+
+    if not images and prop.imagen_url:
+        images.append({
+            'id': 'cover',
+            'url': prop.imagen_url,
+            'alt': prop.title or f'Propiedad {prop.id}',
+            'is_primary': True,
+        })
+
+    detail = {
+        'id': str(prop.id),
+        'code': prop.code,
+        'title': prop.title or f'Propiedad {prop.id}',
+        'description': prop.description or '',
+        'price': json_value(prop.price),
+        'currency': lookup_name('currency', prop.currency_id),
+        'maintenance_fee': json_value(prop.maintenance_fee),
+        'property_type': lookup_name('property_type', prop.property_type_id),
+        'operation_type': lookup_name('operation_type', prop.operation_type_id),
+        'status': lookup_name('property_status', prop.property_status_id),
+        'condition': lookup_name('property_condition', prop.property_condition_id),
+        'district': lookup_name('district', prop.district_id),
+        'address': prop.display_address or prop.map_address,
+        'registry_number': prop.registry_number,
+        'is_project': prop.is_project,
+        'project_name': prop.project_name,
+        'specs': {key: json_value(value) for key, value in specs.items()},
+        'location': {
+            'latitude': json_value(prop.latitude),
+            'longitude': json_value(prop.longitude),
+        },
+        'gallery': images,
+        'videos': [prop.video_url] if prop.video_url else [],
+        'updated_at': json_value(prop.updated_at),
+        'source': {'name': 'Propify DB', 'property_id': str(prop.id)},
+    }
+    return Response({'success': True, 'property': detail})
 
 
 @level_required(2)

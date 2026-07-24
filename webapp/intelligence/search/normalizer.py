@@ -33,6 +33,10 @@ class SearchPlanNormalizer:
         'Cercado', 'Arequipa',
     )
     _PROPERTY_TYPES = {
+        'construir un colegio': 'Terreno',
+        'construir colegio': 'Terreno',
+        'construir una escuela': 'Terreno',
+        'construir escuela': 'Terreno',
         'tienda de abarrotes': 'Local',
         'tienda comercial': 'Local',
         'local para tienda': 'Local',
@@ -109,6 +113,13 @@ class SearchPlanNormalizer:
                 params['tipo_propiedad'] = normalized
                 break
 
+        if (
+            any(term in lowered for term in ('colegio', 'escuela'))
+            and any(term in lowered for term in ('construir', 'instalar', 'implementar'))
+        ):
+            params.setdefault('tipo_propiedad', 'Terreno')
+            params.setdefault('condicion', 'Disponible')
+
         number = r'(\d[\d.,]*)'
         max_patterns = (
             rf'(?:menos\s+de|menor(?:es)?\s+(?:a|de)|hasta|máximo|maximo|no\s+más\s+de|no\s+mas\s+de)\s*(?:usd|\$|s\/)?\s*{number}',
@@ -134,6 +145,16 @@ class SearchPlanNormalizer:
         )
         if rooms:
             params['habitaciones'] = int(cls._parse_number(rooms.group(1)))
+
+        area_patterns = (
+            rf'(?:área|area)(?:\s+mínima|\s+minima)?\s+(?:de\s+)?{number}\s*(?:m2|m²|metros?(?:\s+cuadrados?)?)',
+            rf'(?:mínimo|minimo|desde|más\s+de|mas\s+de)\s+{number}\s*(?:m2|m²|metros?(?:\s+cuadrados?)?)',
+        )
+        for pattern in area_patterns:
+            match = re.search(pattern, lowered)
+            if match:
+                params['area_min'] = cls._parse_number(match.group(1))
+                break
 
         if 'dólar' in lowered or 'dolar' in lowered or 'usd' in lowered or '$' in text:
             params['moneda'] = 'USD'

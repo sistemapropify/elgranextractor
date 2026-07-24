@@ -11,7 +11,7 @@ from intelligence.agents.base_agent import (
 
 
 class AgentRequirementEvidenceTests(SimpleTestCase):
-    def test_semantic_search_satisfies_suitability_and_any_district(self):
+    def test_semantic_search_does_not_prove_suitability(self):
         requirements = [
             Requirement(
                 'req_0',
@@ -39,7 +39,8 @@ class AgentRequirementEvidenceTests(SimpleTestCase):
 
         ReActLoopMixin._update_requirements_status(requirements, step)
 
-        self.assertTrue(all(requirement.satisfied for requirement in requirements))
+        self.assertFalse(requirements[0].satisfied)
+        self.assertTrue(requirements[1].satisfied)
 
     def test_property_search_satisfies_data_and_filter_in_same_step(self):
         requirements = [

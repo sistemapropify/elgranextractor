@@ -130,6 +130,7 @@ class Requirement:
     kind: str                         # 'data' | 'format' | 'filter' | 'comparison' | 'matching' | 'other'
     satisfied: bool = False
     satisfied_by_skill: Optional[str] = None
+    evidence_status: str = "pending"  # pending | verified | acknowledged_unverified
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -470,6 +471,15 @@ Responde SOLO con JSON:
             or []
         )
         item_count = _result_item_count(step.skill_result)
+        applied_names = (
+            set(applied_filters)
+            if isinstance(applied_filters, dict)
+            else {
+                item.get('logical_name')
+                for item in applied_filters
+                if isinstance(item, dict)
+            }
+        )
 
         for requirement in requirements:
             was_satisfied = requirement.satisfied
@@ -478,6 +488,9 @@ Responde SOLO con JSON:
                 continue  # regla 1: ya estaba cumplido, no se re-evalúa
 
             description = requirement.description.casefold()
+            capacity_constraint = any(
+                term in description for term in ('alumno', 'estudiante', 'capacidad')
+            )
             unrestricted_location = any(
                 phrase in description
                 for phrase in (
@@ -485,38 +498,50 @@ Responde SOLO con JSON:
                     'no aplicar filtro por distrito', 'sin distrito específico',
                 )
             )
-            semantic_suitability = (
-                item_count > 0
-                and bool(metadata.get('busqueda_semantica'))
-                and any(
-                    phrase in description
-                    for phrase in (
-                        'adecuad', 'apropiad', 'recomend', 'donde pueda',
-                        'tienda', 'negocio', 'uso comercial',
-                    )
+            requires_suitability = any(
+                phrase in description
+                for phrase in (
+                    'adecuad', 'apropiad', 'recomend', 'donde pueda',
+                    'ideal para', 'apta para', 'apto para', 'para construir',
+                    'tienda', 'negocio', 'uso comercial', 'colegio', 'clínica',
                 )
             )
+            specialized_suitability_evidence = (
+                item_count > 0
+                and bool(metadata.get('suitability_evidence'))
+            )
 
-            has_evidence = unrestricted_location or semantic_suitability
+            has_evidence = unrestricted_location
             if requirement.kind == 'data':
-                # Una búsqueda técnicamente exitosa satisface el acceso a datos,
-                # incluso cuando el conjunto genuino es vacío.
-                has_evidence = has_evidence or (
-                    'data' in capabilities and step.skill_success is not False
-                )
+                if requires_suitability:
+                    # La similitud semántica no demuestra aptitud para un uso.
+                    has_evidence = specialized_suitability_evidence
+                else:
+                    # Una búsqueda técnicamente exitosa satisface acceso a datos.
+                    has_evidence = has_evidence or (
+                        'data' in capabilities and step.skill_success is not False
+                    )
             elif requirement.kind == 'filter':
-                applied_names = (
-                    set(applied_filters)
-                    if isinstance(applied_filters, dict)
-                    else {
-                        item.get('logical_name')
-                        for item in applied_filters
-                        if isinstance(item, dict)
-                    }
-                )
+                expected_filters = set()
+                if any(term in description for term in ('cayma', 'distrito', 'ubicad', 'zona')):
+                    expected_filters.add('distrito')
+                if any(term in description for term in ('área', 'area', 'metros', 'm²', 'm2')):
+                    expected_filters.add('area_min')
+                if any(term in description for term in ('terreno', 'departamento', 'casa', 'oficina', 'local')):
+                    expected_filters.add('tipo_propiedad')
+                if any(term in description for term in ('precio', 'presupuesto', 'dólar', 'dolar', 'soles')):
+                    expected_filters.update({'precio_min', 'precio_max'})
+
+                matched_expected = bool(expected_filters & applied_names)
+                if capacity_constraint:
+                    # La capacidad se conserva en la tarea, pero el inventario no
+                    # la demuestra. Se considera atendida, nunca verificada.
+                    has_evidence = item_count > 0 and 'area_min' in applied_names
+                else:
+                    has_evidence = has_evidence or (
+                        'filter' in capabilities and matched_expected
+                    )
                 has_evidence = has_evidence or (
-                    'filter' in capabilities and bool(applied_filters)
-                ) or (
                     unrestricted_location and 'distrito' not in applied_names
                 )
             elif requirement.kind == 'matching':
@@ -533,6 +558,10 @@ Responde SOLO con JSON:
             if has_evidence:
                 requirement.satisfied = True
                 requirement.satisfied_by_skill = step.skill_used
+                requirement.evidence_status = (
+                    "acknowledged_unverified"
+                    if capacity_constraint else "verified"
+                )
                 logger.info(
                     f"[ReAct] Requisito '{requirement.description}' "
                     f"recién cumplido por '{step.skill_used}'"
@@ -757,6 +786,7 @@ Responde SOLO con JSON en este formato:
                     'kind': requirement.kind,
                     'satisfied': requirement.satisfied,
                     'satisfied_by_skill': requirement.satisfied_by_skill,
+                    'evidence_status': requirement.evidence_status,
                 }
                 for requirement in requirements
             ]

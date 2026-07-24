@@ -52,6 +52,7 @@ Thumbs.db
 webapp/home_render*.html
 webapp/check_*.py
 webapp/test_*.py
+!webapp/test_settings.py
 webapp/debug_*.py
 webapp/verificar_*.py
 webapp/diagnostic*.py
@@ -94,6 +95,7 @@ webapp/README.md
 # Project specific
 screenshot_*.png
 *.png
+!webapp/static/intelligence/img/logo-propify.png
 *.jpg
 *.jpeg
 *.gif
@@ -120,3 +122,12 @@ webapp/~$*.xlsx
 # Test artifacts
 eval_output*.txt
 eval_stderr*.txt
+
+# Node.js / package managers
+node_modules/
+.pnpm-store/
+.sites/
+
+# Test archives / cache
+*.tar.gz
+*.har

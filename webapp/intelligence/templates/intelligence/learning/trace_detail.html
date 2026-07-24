@@ -29,6 +29,48 @@
     </dl>
 </section>
 
+<section class="card">
+    <div class="card-header"><div class="card-title">Ciclo de evaluación agentic</div></div>
+    <div class="grid grid-3">
+        <div class="stat-card">
+            <div class="stat-label">Nivel 1 · Determinista</div>
+            {% if deterministic_event %}
+                <div class="stat-value">{{ deterministic_event.payload.status }}</div>
+                <p>{{ deterministic_event.payload.error_preview }}</p>
+                <small>Confianza: {{ deterministic_event.payload.confidence|default:"—" }}</small>
+            {% else %}
+                <div class="stat-value">Sin evento</div>
+            {% endif %}
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Nivel 2 · Juez semántico</div>
+            {% if semantic_event %}
+                <div class="stat-value">{{ semantic_event.payload.verdict }}</div>
+                <p>{{ semantic_event.payload.error_preview }}</p>
+                <small>
+                    Confianza: {{ semantic_event.payload.confidence|default:"—" }} ·
+                    {% if semantic_event.payload.disagrees_with_deterministic %}Discrepa de N1{% else %}Coincide con N1{% endif %}
+                </small>
+            {% else %}
+                <div class="stat-value">No ejecutado</div>
+            {% endif %}
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Nivel 3A · Advisory</div>
+            {% if advisory_event %}
+                <div class="stat-value">{{ advisory_event.payload.action }}</div>
+                <p>{{ advisory_event.payload.reason }}</p>
+                <small>
+                    {% if advisory_event.payload.authority_applied %}Autoridad aplicada{% else %}Sin intervención{% endif %}
+                    · Reintentos usados: {{ advisory_event.payload.retries_used|default:0 }}
+                </small>
+            {% else %}
+                <div class="stat-value">No ejecutado</div>
+            {% endif %}
+        </div>
+    </div>
+</section>
+
 {% if audit_event %}
 <section class="card">
     <div class="card-header"><div class="card-title">Auditoría automática</div></div>

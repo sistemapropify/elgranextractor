@@ -216,7 +216,10 @@ class ChatProcessor:
 
                 # Flag para detectar si AgentGraph falló y usamos fallback
                 agent_graph_fallido = False
-                shared_search_plan = cls._build_shared_search_plan(ctx)
+                effective_message = cls._message_with_pending_clarification(ctx)
+                shared_search_plan = cls._build_shared_search_plan(
+                    ctx, message=effective_message
+                )
 
                 if usar_agent_graph:
                     try:
@@ -228,7 +231,8 @@ class ChatProcessor:
                             payload={'orchestration_mode': 'agent_graph'},
                         )
                         agent_result = cls._process_with_agent_graph(
-                            ctx, timer, search_plan=shared_search_plan
+                            ctx, timer, search_plan=shared_search_plan,
+                            message=effective_message,
                         )
                         if agent_result and agent_result.response_text:
                             log.info(
@@ -500,6 +504,88 @@ class ChatProcessor:
             )
             execution_summary = metadata.get('execution_summary') or []
             result_evidence = metadata.get('result_evidence') or []
+            evaluation = metadata.get('evaluation') or {}
+            if evaluation:
+                verdict = evaluation.get('verdict', 'unknown')
+                emit_event(
+                    trace,
+                    'evaluation.completed',
+                    'execution_evaluator',
+                    outcome='success' if verdict == 'pass' else 'warning',
+                    error_code=(
+                        '' if verdict == 'pass'
+                        else f"EVALUATION_{verdict.upper()}"
+                    ),
+                    payload={
+                        'status': verdict,
+                        'confidence': evaluation.get('confidence'),
+                        'error_preview': evaluation.get('reason') or '',
+                        'signals': evaluation.get('signals') or [],
+                        'metrics': evaluation.get('metrics') or {},
+                        'critique_retries': metadata.get('critique_retries', 0),
+                    },
+                )
+            semantic_evaluation = metadata.get('semantic_evaluation') or {}
+            if semantic_evaluation.get('enabled'):
+                emit_event(
+                    trace,
+                    'evaluation.semantic.completed',
+                    'semantic_execution_judge',
+                    outcome=(
+                        'success'
+                        if semantic_evaluation.get('status') == 'completed'
+                        else 'warning'
+                    ),
+                    error_code=(
+                        '' if semantic_evaluation.get('status') == 'completed'
+                        else 'SEMANTIC_JUDGE_FAILED'
+                    ),
+                    payload={
+                        'status': semantic_evaluation.get('status'),
+                        'mode': semantic_evaluation.get('mode'),
+                        'verdict': semantic_evaluation.get('verdict', 'unknown'),
+                        'confidence': semantic_evaluation.get('confidence'),
+                        'error_preview': (
+                            semantic_evaluation.get('reason')
+                            or semantic_evaluation.get('error')
+                            or ''
+                        ),
+                        'signals': semantic_evaluation.get('signals') or [],
+                        'latency_ms': semantic_evaluation.get('latency_ms'),
+                        'disagrees_with_deterministic': semantic_evaluation.get(
+                            'disagrees_with_deterministic'
+                        ),
+                        'authority_applied': semantic_evaluation.get(
+                            'authority_applied', False
+                        ),
+                    },
+                )
+            advisory_decision = metadata.get('advisory_decision') or {}
+            if advisory_decision.get('enabled'):
+                emit_event(
+                    trace,
+                    'evaluation.advisory.decided',
+                    'semantic_advisory_controller',
+                    outcome=(
+                        'warning'
+                        if advisory_decision.get('authority_applied')
+                        else 'success'
+                    ),
+                    error_code=(
+                        f"ADVISORY_{str(advisory_decision.get('action')).upper()}"
+                        if advisory_decision.get('authority_applied')
+                        else ''
+                    ),
+                    payload={
+                        'mode': advisory_decision.get('mode'),
+                        'action': advisory_decision.get('action'),
+                        'authority_applied': advisory_decision.get(
+                            'authority_applied', False
+                        ),
+                        'reason': advisory_decision.get('reason', ''),
+                        'retries_used': advisory_decision.get('retries_used', 0),
+                    },
+                )
             for agent in execution_summary:
                 emit_event(
                     trace,
@@ -585,17 +671,32 @@ class ChatProcessor:
     # ── F2-001: LangGraph Orchestration ───────────────────────────────
 
     @classmethod
-    def _build_shared_search_plan(cls, ctx: ChatContext) -> dict:
+    def _message_with_pending_clarification(cls, ctx: ChatContext) -> str:
+        """Une una respuesta de criterios con la intención pendiente del turno anterior."""
+        from .conversation_task_state import ConversationTaskState
+
+        effective, task, relationship = ConversationTaskState.resolve(
+            ctx.conversation.metadata, ctx.message
+        )
+        ctx.metadata['_resolved_agent_task'] = task
+        ctx.metadata['_task_relationship'] = relationship
+        return effective
+
+    @classmethod
+    def _build_shared_search_plan(
+        cls, ctx: ChatContext, message: Optional[str] = None
+    ) -> dict:
         """Crea una sola interpretación de búsqueda para todas las rutas."""
         from ..search.normalizer import SearchPlanNormalizer
 
         params = dict(ctx.skill_params or {})
         # Lo expresado en el mensaje actual prevalece sobre parámetros
         # auxiliares del mismo request. No se incorpora memoria de usuario.
-        params.update(SearchPlanNormalizer.params_from_message(ctx.message))
+        effective_message = message or ctx.message
+        params.update(SearchPlanNormalizer.params_from_message(effective_message))
         collections = list(ctx.collections or ['propiedadespropify'])
         plan = SearchPlanNormalizer.from_params(
-            query=ctx.message,
+            query=effective_message,
             params=params,
             collections=collections,
         )
@@ -728,6 +829,17 @@ class ChatProcessor:
             latency_ms=f"{timer.latency_ms:.1f}",
             trace_id=state.get('trace_id', timer.trace_id),
         )
+        langgraph_artifacts = []
+        langgraph_items = state.get('resultados_busqueda') or []
+        if langgraph_items:
+            from .property_artifacts import build_property_collection_artifact
+            artifact = build_property_collection_artifact(
+                langgraph_items,
+                message_id=message_id,
+                trace_id=state.get('trace_id', timer.trace_id),
+            )
+            if artifact:
+                langgraph_artifacts.append(artifact)
 
         return ChatResult(
             success=True,
@@ -770,6 +882,7 @@ class ChatProcessor:
                 'result_evidence': cls._build_result_evidence(
                     state.get('resultados_busqueda') or []
                 ),
+                'artifacts': langgraph_artifacts,
             },
             context_summary={
                 'orchestration_mode': 'langgraph',
@@ -785,7 +898,8 @@ class ChatProcessor:
 
     @classmethod
     def _process_with_agent_graph(
-        cls, ctx: ChatContext, timer, search_plan: Optional[dict] = None
+        cls, ctx: ChatContext, timer, search_plan: Optional[dict] = None,
+        message: Optional[str] = None,
     ) -> Optional[ChatResult]:
         """
         Procesa mensaje usando AgentGraphBuilder (Supervisor + ReAct agents).
@@ -819,8 +933,37 @@ class ChatProcessor:
 
         # Inicializar y ejecutar AgentGraphBuilder
         builder = AgentGraphBuilder()
+        effective_message = message or ctx.message
+        pending_task = ctx.metadata.get('_resolved_agent_task')
+        if (
+            pending_task
+            and ctx.metadata.get('_task_relationship') == 'ambiguous'
+        ):
+            response_text = (
+                "¿Deseas continuar con la búsqueda pendiente para construir un "
+                "colegio o iniciar una consulta diferente?"
+            )
+            message_id = cls._save_response(ctx.conversation, response_text)
+            return ChatResult(
+                success=True,
+                response_text=response_text,
+                conversation_id=str(ctx.conversation.id),
+                message_id=message_id,
+                metadata={
+                    'response': response_text,
+                    'orchestration_mode': 'task_state',
+                    'status': 'needs_task_confirmation',
+                    'grounded_response': True,
+                    'artifacts': [],
+                },
+                context_summary={
+                    'orchestration_mode': 'task_state',
+                    'needs_clarification': True,
+                },
+                timestamp=timezone.now().isoformat(),
+            )
         state = builder.run(
-            message=ctx.message,
+            message=effective_message,
             conversation_id=str(ctx.conversation.id),
             user_id=str(ctx.user.id) if ctx.user else None,
             user_context=user_context,
@@ -831,6 +974,95 @@ class ChatProcessor:
         aggregated = state.get('aggregated_answer', {})
         successful = aggregated.get('successful', [])
         failed = aggregated.get('failed', [])
+        evaluation = state.get('evaluation') or {}
+        semantic_evaluation = state.get('semantic_evaluation') or {}
+        advisory_decision = state.get('advisory_decision') or {}
+
+        if evaluation.get('verdict') == 'clarify':
+            from .conversation_task_state import ConversationTaskState
+
+            task = ctx.metadata.get('_resolved_agent_task')
+            if not task:
+                task = ConversationTaskState.from_message(effective_message)
+            if task:
+                task = ConversationTaskState.merge(task, effective_message)
+                task_question = ConversationTaskState.clarification_question(task)
+                if task_question:
+                    evaluation['clarification_question'] = task_question
+            response_text = (
+                evaluation.get('clarification_question')
+                or "Necesito algunos criterios adicionales antes de continuar."
+            )
+            try:
+                meta = ctx.conversation.metadata or {}
+                if task:
+                    meta[ConversationTaskState.METADATA_KEY] = task
+                meta.pop(ConversationTaskState.LEGACY_KEY, None)
+                ctx.conversation.metadata = meta
+                ctx.conversation.save(update_fields=['metadata'])
+            except Exception as exc:
+                log.warning(f"No se pudo guardar aclaración pendiente: {exc}")
+            message_id = cls._save_response(ctx.conversation, response_text)
+            return ChatResult(
+                success=True,
+                response_text=response_text,
+                conversation_id=str(ctx.conversation.id),
+                message_id=message_id,
+                metadata={
+                    'response': response_text,
+                    'orchestration_mode': 'agent_graph',
+                    'trace_id': state.get('trace_id', ''),
+                    'status': 'needs_clarification',
+                    'evaluation': evaluation,
+                    'semantic_evaluation': semantic_evaluation,
+                    'advisory_decision': advisory_decision,
+                    'critique_retries': state.get('critique_retries', 0),
+                    'result_count': 0,
+                    'grounded_response': True,
+                    'artifacts': [],
+                    'reasoning_steps': cls._build_reasoning_steps(state),
+                },
+                context_summary={
+                    'orchestration_mode': 'agent_graph',
+                    'skill_name': 'execution_evaluator',
+                    'skill_success': True,
+                    'needs_clarification': True,
+                },
+                timestamp=timezone.now().isoformat(),
+            )
+
+        if evaluation.get('verdict') == 'block' and successful:
+            response_text = (
+                "No puedo confirmar una respuesta fiable con los resultados "
+                "obtenidos. Ajusta los criterios o intenta una búsqueda más específica."
+            )
+            message_id = cls._save_response(ctx.conversation, response_text)
+            return ChatResult(
+                success=True,
+                response_text=response_text,
+                conversation_id=str(ctx.conversation.id),
+                message_id=message_id,
+                metadata={
+                    'response': response_text,
+                    'orchestration_mode': 'agent_graph',
+                    'trace_id': state.get('trace_id', ''),
+                    'status': 'blocked_by_evaluator',
+                    'evaluation': evaluation,
+                    'semantic_evaluation': semantic_evaluation,
+                    'advisory_decision': advisory_decision,
+                    'critique_retries': state.get('critique_retries', 0),
+                    'result_count': 0,
+                    'grounded_response': True,
+                    'artifacts': [],
+                    'reasoning_steps': cls._build_reasoning_steps(state),
+                },
+                context_summary={
+                    'orchestration_mode': 'agent_graph',
+                    'skill_name': 'execution_evaluator',
+                    'skill_success': False,
+                },
+                timestamp=timezone.now().isoformat(),
+            )
 
         if not successful:
             log.info(
@@ -838,6 +1070,17 @@ class ChatProcessor:
                 f"Delegando a fallback."
             )
             return None
+
+        try:
+            meta = ctx.conversation.metadata or {}
+            from .conversation_task_state import ConversationTaskState
+            removed = meta.pop(ConversationTaskState.METADATA_KEY, None)
+            meta.pop(ConversationTaskState.LEGACY_KEY, None)
+            if removed is not None:
+                ctx.conversation.metadata = meta
+                ctx.conversation.save(update_fields=['metadata'])
+        except Exception as exc:
+            log.debug(f"No se pudo limpiar aclaración pendiente: {exc}")
 
         # Extraer respuesta del/los agente(s) exitoso(s)
         response_text = cls._format_agent_results(state, ctx)
@@ -884,6 +1127,21 @@ class ChatProcessor:
         result_count = sum(
             int(agent.get('item_count') or 0) for agent in execution_summary
         )
+        property_items = []
+        for agent_data in (state.get('results') or {}).values():
+            property_items.extend(cls._extract_property_items(
+                agent_data.get('final_answer')
+            ))
+        if property_items:
+            from .property_artifacts import build_property_collection_artifact
+            artifact = build_property_collection_artifact(
+                property_items,
+                message_id=message_id,
+                trace_id=state.get('trace_id', timer.trace_id),
+            )
+            if artifact:
+                metadata_extra['artifacts'] = [artifact]
+                result_count = artifact['result_count']
         log.info(
             "[AgentGraph] Mensaje procesado con AgentGraphBuilder",
             agents=agents_exitosos,
@@ -908,6 +1166,10 @@ class ChatProcessor:
                 'grounded_response': True,
                 'execution_summary': execution_summary,
                 'result_evidence': result_evidence,
+                'evaluation': evaluation,
+                'semantic_evaluation': semantic_evaluation,
+                'advisory_decision': advisory_decision,
+                'critique_retries': state.get('critique_retries', 0),
                 **metadata_extra,
             },
             context_summary={
@@ -1129,6 +1391,59 @@ class ChatProcessor:
                 'title': f'{agent_label} falló',
                 'description': str(error)[:100],
                 'type': 'agent_fail',
+            })
+
+        evaluation = state.get('evaluation') or {}
+        if evaluation:
+            verdict = evaluation.get('verdict', 'unknown')
+            verdict_labels = {
+                'pass': ('✅', 'Evaluación aprobada', 'evaluation_pass'),
+                'replan': ('🔁', 'Replanificación solicitada', 'evaluation_replan'),
+                'clarify': ('❓', 'Se necesitan más criterios', 'evaluation_clarify'),
+                'block': ('🛑', 'Respuesta bloqueada por seguridad', 'evaluation_block'),
+            }
+            icon, title, step_type = verdict_labels.get(
+                verdict, ('🧪', 'Evaluación completada', 'evaluation')
+            )
+            retries = state.get('critique_retries', 0)
+            retry_text = f" · Replans: {retries}" if retries else ""
+            steps.append({
+                'icon': icon,
+                'title': title,
+                'description': f"{evaluation.get('reason', '')}{retry_text}"[:240],
+                'type': step_type,
+            })
+
+        semantic_evaluation = state.get('semantic_evaluation') or {}
+        if semantic_evaluation.get('enabled'):
+            status = semantic_evaluation.get('status')
+            verdict = semantic_evaluation.get('verdict', 'sin veredicto')
+            disagreement = semantic_evaluation.get('disagrees_with_deterministic')
+            steps.append({
+                'icon': '🔬',
+                'title': 'Juez semántico (observación)',
+                'description': (
+                    f"Veredicto: {verdict} · "
+                    f"{'Discrepa del Nivel 1' if disagreement else 'Coincide con el Nivel 1'}"
+                    if status == 'completed'
+                    else 'No pudo completar la evaluación; sin impacto en la respuesta.'
+                ),
+                'type': 'semantic_evaluation',
+            })
+
+        advisory = state.get('advisory_decision') or {}
+        if advisory.get('enabled'):
+            action = advisory.get('action', 'none')
+            applied = advisory.get('authority_applied', False)
+            steps.append({
+                'icon': '🛡️',
+                'title': 'Control advisory',
+                'description': (
+                    f"Acción aplicada: {action}"
+                    if applied else
+                    f"Sin acción: {advisory.get('reason', '')}"
+                )[:240],
+                'type': 'advisory_decision',
             })
 
         # 3. Paso: Generando respuesta

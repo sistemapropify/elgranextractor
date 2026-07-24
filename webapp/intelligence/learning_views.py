@@ -11,6 +11,48 @@ from .models import SystemEvent, SystemTrace
 from .permissions import has_permission
 
 
+def _agentic_quality_metrics(events):
+    """Agrega eventos N2/N3A sin depender de consultas JSON del motor SQL."""
+    metrics = {
+        'semantic_total': 0,
+        'semantic_completed': 0,
+        'semantic_failed': 0,
+        'semantic_disagreements': 0,
+        'advisory_total': 0,
+        'advisory_applied': 0,
+        'advisory_clarify': 0,
+        'advisory_block': 0,
+        'advisory_replan': 0,
+    }
+    for event in events:
+        payload = event.payload or {}
+        if event.event_type == 'evaluation.semantic.completed':
+            metrics['semantic_total'] += 1
+            if payload.get('status') == 'completed':
+                metrics['semantic_completed'] += 1
+            else:
+                metrics['semantic_failed'] += 1
+            if payload.get('disagrees_with_deterministic') is True:
+                metrics['semantic_disagreements'] += 1
+        elif event.event_type == 'evaluation.advisory.decided':
+            metrics['advisory_total'] += 1
+            if payload.get('authority_applied') is True:
+                metrics['advisory_applied'] += 1
+                key = f"advisory_{str(payload.get('action') or '').lower()}"
+                if key in metrics:
+                    metrics[key] += 1
+
+    metrics['semantic_disagreement_pct'] = round(
+        metrics['semantic_disagreements'] / metrics['semantic_completed'] * 100,
+        1,
+    ) if metrics['semantic_completed'] else 0
+    metrics['advisory_application_pct'] = round(
+        metrics['advisory_applied'] / metrics['advisory_total'] * 100,
+        1,
+    ) if metrics['advisory_total'] else 0
+    return metrics
+
+
 @has_permission(required_levels=[4, 5])
 def learning_dashboard(request):
     hours = min(max(int(request.GET.get('hours', 24)), 1), 720)
@@ -33,6 +75,16 @@ def learning_dashboard(request):
     fallback_activations = SystemEvent.objects.filter(
         trace__in=traces, event_type='fallback.activated'
     ).count()
+    quality_events = list(
+        SystemEvent.objects.filter(
+            trace__in=traces,
+            event_type__in=[
+                'evaluation.semantic.completed',
+                'evaluation.advisory.decided',
+            ],
+        ).only('event_type', 'payload')
+    )
+    quality_metrics = _agentic_quality_metrics(quality_events)
     avg_latency = traces.aggregate(value=Avg('latency_ms'))['value'] or 0
 
     status_rows = list(
@@ -64,6 +116,7 @@ def learning_dashboard(request):
         'orchestration_rows': orchestration_rows,
         'recent_traces': recent,
         'mutation_enabled': False,
+        **quality_metrics,
     }
     return render(request, 'intelligence/learning/dashboard.html', context)
 
@@ -111,4 +164,13 @@ def learning_trace_detail(request, trace_id):
             event_type__in=['requirement.satisfied', 'requirement.unsatisfied']
         ),
         'audit_event': events.filter(event_type='audit.completed').last(),
+        'deterministic_event': events.filter(
+            event_type='evaluation.completed'
+        ).last(),
+        'semantic_event': events.filter(
+            event_type='evaluation.semantic.completed'
+        ).last(),
+        'advisory_event': events.filter(
+            event_type='evaluation.advisory.decided'
+        ).last(),
     })
