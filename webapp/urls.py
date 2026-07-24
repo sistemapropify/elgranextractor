@@ -111,6 +111,9 @@ path('agentes/', include('agentes.urls')),
 # Canvas - PropFlow Visual Canvas (lienzos interactivos)
 path('canvas/', include('canvas.urls')),
 
+# Puente n8n - endpoints aislados para conectar leads de WhatsApp al chat existente
+path('api/n8n/', include('n8n_bridge.urls')),
+
 # Redirect: /inmobiliarias/ → /agentes/inmobiliarias/ (acceso directo amigable)
 path('inmobiliarias/', RedirectView.as_view(url='/agentes/inmobiliarias/', permanent=True)),
 ]
