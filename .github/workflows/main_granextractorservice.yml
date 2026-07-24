@@ -187,10 +187,10 @@ jobs:
             sleep 15
           done
           echo "Application or static assets did not become healthy"
+          echo "=== Last 50 log entries ==="
           az webapp log tail \
             --name granextractorservice \
-            --resource-group DefaultResourceGroup-brazilsouth \
-            --timeout 60 || true
+            --resource-group DefaultResourceGroup-brazilsouth || true
           exit 1
 
       - name: Logout from Azure

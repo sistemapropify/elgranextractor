@@ -215,7 +215,9 @@ STATICFILES_DIRS = [
 ]
 
 # WhiteNoise configuration for static files
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
+# Usar StaticFileStorage (sin compresión ni renombrado) para evitar 404
+# por archivos con hash en el nombre. Los archivos se sirven con su nombre original.
+STATICFILES_STORAGE = 'whitenoise.storage.StaticFileStorage'
 
 # Media files (user uploads) — using Azure Blob Storage for prospects
 DEFAULT_FILE_STORAGE = 'storages.backends.azure_storage.AzureStorage'
