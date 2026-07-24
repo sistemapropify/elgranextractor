@@ -34,8 +34,16 @@ jobs:
           python -m venv antenv
           source antenv/bin/activate
           pip install -r requirements.txt
-                
-      # By default, when you enable GitHub CI/CD integration through the Azure portal, the platform automatically sets the SCM_DO_BUILD_DURING_DEPLOYMENT application setting to true. This triggers the use of Oryx, a build engine that handles application compilation and dependency installation (e.g., pip install) directly on the platform during deployment. Hence, we exclude the antenv virtual environment directory from the deployment artifact to reduce the payload size. 
+
+      - name: Collect Django static files
+        env:
+          PRODUCTION: 'true'
+        run: |
+          source antenv/bin/activate
+          python webapp/manage.py collectstatic --noinput --clear
+
+      # Build the deployment artifact without generated browser profiles,
+      # duplicated projects, logs, or other runtime-only data.
       - name: Upload artifact for deployment jobs
         uses: actions/upload-artifact@v4
         with:
@@ -43,6 +51,17 @@ jobs:
           path: |
             .
             !antenv/
+            !elgranextractor/**
+            !webapp/camoufox_session/**
+            !webapp/camoufox_session_adondevivir/**
+            !webapp/logs/**
+            !webapp/__pycache__/**
+            !webapp/**/*.pyc
+            !webapp/*.xlsx
+            !webapp/*.log
+            !webapp/*.har
+          if-no-files-found: error
+          retention-days: 1
 
       # 🚫 Opting Out of Oryx Build
       # If you prefer to disable the Oryx build process during deployment, follow these steps:
@@ -131,10 +150,40 @@ jobs:
         run: |
           echo "Deployment completed successfully"
           echo "App URL: https://granextractorservice-emehaffsf8e2c7eg.brazilsouth-01.azurewebsites.net"
-          # Wait a moment for app to be fully ready
-          sleep 10
-          # Optional: Verify the app is responding
-          curl -s -o /dev/null -w "HTTP Status: %{http_code}\n" https://granextractorservice-emehaffsf8e2c7eg.brazilsouth-01.azurewebsites.net || echo "App URL not yet responding (this is expected immediately after deployment)"
+          for i in {1..20}; do
+            HEALTH_STATUS=$(curl -s -o /tmp/health-response.json -w "%{http_code}" \
+              --max-time 20 \
+              https://granextractorservice-emehaffsf8e2c7eg.brazilsouth-01.azurewebsites.net/api/v1/intelligence/health/ \
+              || echo "000")
+            CSS_STATUS=$(curl -s -o /tmp/chat-workspace.css -w "%{http_code}" \
+              --max-time 20 \
+              https://granextractorservice-emehaffsf8e2c7eg.brazilsouth-01.azurewebsites.net/static/intelligence/chat-workspace.css \
+              || echo "000")
+            JS_STATUS=$(curl -s -o /tmp/chat.js -w "%{http_code}" \
+              --max-time 20 \
+              https://granextractorservice-emehaffsf8e2c7eg.brazilsouth-01.azurewebsites.net/static/intelligence/chat.js \
+              || echo "000")
+            LOGO_STATUS=$(curl -s -o /tmp/logo-propify.png -w "%{http_code}" \
+              --max-time 20 \
+              https://granextractorservice-emehaffsf8e2c7eg.brazilsouth-01.azurewebsites.net/static/intelligence/img/logo-propify.png \
+              || echo "000")
+            echo "Check $i/20 - health=$HEALTH_STATUS css=$CSS_STATUS js=$JS_STATUS logo=$LOGO_STATUS"
+            if [ "$HEALTH_STATUS" = "200" ] \
+              && [ "$CSS_STATUS" = "200" ] \
+              && [ "$JS_STATUS" = "200" ] \
+              && [ "$LOGO_STATUS" = "200" ] \
+              && grep -q '"status":"ok"\|"status": "ok"' /tmp/health-response.json; then
+              echo "Application and static assets are healthy"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "Application or static assets did not become healthy"
+          az webapp log tail \
+            --name granextractorservice \
+            --resource-group DefaultResourceGroup-brazilsouth \
+            --timeout 60 || true
+          exit 1
 
       - name: Logout from Azure
         if: always()
