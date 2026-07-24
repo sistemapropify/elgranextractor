@@ -50,6 +50,20 @@ jobs:
           source antenv/bin/activate
           python webapp/manage.py collectstatic --noinput --clear
 
+      - name: Validate Azure production startup
+        env:
+          DB_NAME: 'dummy'
+          DB_USER: 'dummy'
+          DB_PASSWORD: 'dummy'
+          DB_HOST: 'dummy'
+          DB_PORT: '1433'
+          SECRET_KEY: 'dummy-secret-key-for-build'
+          PRODUCTION: 'true'
+          WEBSITE_SITE_NAME: 'granextractorservice'
+        run: |
+          source antenv/bin/activate
+          python -c "import os, sys; sys.path.insert(0, 'webapp'); os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'settings'); from wsgi import application; print('Azure WSGI startup validated')"
+
       # Build the deployment artifact without generated browser profiles,
       # duplicated projects, logs, or other runtime-only data.
       - name: Upload artifact for deployment jobs

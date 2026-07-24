@@ -335,6 +335,31 @@ django.template.context.BaseContext.__copy__ = patched_basecontext_copy
 print("Monkey patch aplicado a django.template.context.__copy__")
 
 # Logging Configuration
+RUNNING_IN_PRODUCTION = (
+    os.environ.get('PRODUCTION', 'false').strip().lower() == 'true'
+    or bool(os.environ.get('WEBSITE_SITE_NAME'))
+)
+
+LOG_HANDLERS = {
+    'console': {
+        'class': 'logging.StreamHandler',
+        'formatter': 'simple',
+        'level': 'DEBUG',
+    },
+}
+ACTIVE_LOG_HANDLERS = ['console']
+
+if not RUNNING_IN_PRODUCTION:
+    LOG_DIR = BASE_DIR / 'logs'
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    LOG_HANDLERS['file'] = {
+        'class': 'logging.FileHandler',
+        'filename': LOG_DIR / 'django.log',
+        'formatter': 'verbose',
+        'level': 'INFO',
+    }
+    ACTIVE_LOG_HANDLERS.append('file')
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -348,32 +373,20 @@ LOGGING = {
             'style': '{',
         },
     },
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-            'formatter': 'simple',
-            'level': 'DEBUG',
-        },
-        'file': {
-            'class': 'logging.FileHandler',
-            'filename': BASE_DIR / 'logs' / 'django.log',
-            'formatter': 'verbose',
-            'level': 'INFO',
-        },
-    },
+    'handlers': LOG_HANDLERS,
     'loggers': {
         'django': {
-            'handlers': ['console', 'file'],
+            'handlers': ACTIVE_LOG_HANDLERS,
             'level': 'INFO',
             'propagate': True,
         },
         'intelligence': {
-            'handlers': ['console', 'file'],
+            'handlers': ACTIVE_LOG_HANDLERS,
             'level': 'DEBUG',
             'propagate': False,
         },
         'intelligence.views': {
-            'handlers': ['console', 'file'],
+            'handlers': ACTIVE_LOG_HANDLERS,
             'level': 'DEBUG',
             'propagate': False,
         },
