@@ -59,6 +59,26 @@ class SearchPlan:
             if condition.operator == FilterOperator.EQ
         }
 
+    def document_prefilters(self) -> dict[str, Any]:
+        """Igualdades presentes físicamente en `IntelligenceDocument`.
+
+        Las especificaciones viven en `property_specs` y se aplican después
+        de enriquecer los resultados; enviarlas al JSONField produciría cero
+        resultados aunque la propiedad exista.
+        """
+        relational_fields = {
+            'bedrooms', 'bathrooms', 'half_bathrooms',
+            'land_area', 'built_area',
+        }
+        return {
+            condition.field_name: condition.value
+            for condition in self.conditions
+            if (
+                condition.operator == FilterOperator.EQ
+                and condition.field_name not in relational_fields
+            )
+        }
+
     def to_params(self) -> dict[str, Any]:
         """Reconstruye parámetros normalizados para skills legacy."""
         params = {

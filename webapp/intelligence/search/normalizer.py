@@ -6,6 +6,11 @@ from decimal import Decimal, InvalidOperation
 import re
 from typing import Any
 
+from ..language.es_pe_real_estate import (
+    DISTRICT_ALIASES,
+    PROPERTY_TYPE_ALIASES,
+    SPANISH_SMALL_NUMBERS,
+)
 from .contracts import FilterCondition, FilterOperator, SearchPlan
 
 
@@ -19,11 +24,14 @@ class SearchPlanNormalizer:
         'tipo_propiedad': ('property_type_name', FilterOperator.EQ, 'string'),
         'operacion': ('operation_type_name', FilterOperator.EQ, 'string'),
         'condicion': ('property_status_name', FilterOperator.EQ, 'string'),
+        'moneda': ('currency_name', FilterOperator.EQ, 'string'),
         'precio': ('price', FilterOperator.EQ, 'decimal'),
         'precio_min': ('price', FilterOperator.GTE, 'decimal'),
         'precio_max': ('price', FilterOperator.LTE, 'decimal'),
         'habitaciones': ('bedrooms', FilterOperator.EQ, 'integer'),
         'habitaciones_min': ('bedrooms', FilterOperator.GTE, 'integer'),
+        'banos': ('bathrooms', FilterOperator.EQ, 'integer'),
+        'banos_min': ('bathrooms', FilterOperator.GTE, 'integer'),
         'area_min': ('built_area', FilterOperator.GTE, 'decimal'),
         'area_max': ('built_area', FilterOperator.LTE, 'decimal'),
     }
@@ -58,6 +66,7 @@ class SearchPlanNormalizer:
         'oficinas': 'Oficina',
         'local comercial': 'Local',
         'locales': 'Local',
+        **PROPERTY_TYPE_ALIASES,
     }
 
     @classmethod
@@ -78,6 +87,11 @@ class SearchPlanNormalizer:
             value = params.get(logical_name)
             if value is None or value == '':
                 continue
+            if logical_name == 'moneda':
+                value = {
+                    'USD': 'Dolares',
+                    'PEN': 'Soles',
+                }.get(str(value).strip().upper(), value)
             conditions.append(FilterCondition(
                 logical_name=logical_name,
                 field_name=field_name,
@@ -85,7 +99,11 @@ class SearchPlanNormalizer:
                 value=cls._coerce(value, value_type, logical_name),
                 value_type=value_type,
                 source=source,
-                currency=str(currency).upper() if currency and field_name == 'price' else None,
+                currency=(
+                    str(currency).upper()
+                    if currency and field_name in {'price', 'currency_name'}
+                    else None
+                ),
             ))
 
         return SearchPlan(
@@ -101,10 +119,18 @@ class SearchPlanNormalizer:
         """Extracción determinista mínima para crear el plan antes del routing."""
         text = (message or '').strip()
         lowered = text.casefold()
+        lowered = cls._normalize_money_expressions(lowered)
         params: dict[str, Any] = {}
 
+        for alias, district in sorted(
+            DISTRICT_ALIASES.items(), key=lambda item: len(item[0]), reverse=True
+        ):
+            if re.search(rf'\b{re.escape(alias)}\b', lowered):
+                params['distrito'] = district
+                break
+
         for district in cls._DISTRICTS:
-            if district.casefold() in lowered:
+            if 'distrito' not in params and district.casefold() in lowered:
                 params['distrito'] = district
                 break
 
@@ -156,6 +182,21 @@ class SearchPlanNormalizer:
         if rooms:
             params['habitaciones'] = int(cls._parse_number(rooms.group(1)))
 
+        bathrooms = re.search(
+            rf'{number}\s*(?:baños?|banos?|servicios?\s+higienicos?)',
+            lowered,
+        )
+        if bathrooms:
+            params['banos'] = int(cls._parse_number(bathrooms.group(1)))
+
+        bathrooms_word = re.search(
+            r'\b(' + '|'.join(SPANISH_SMALL_NUMBERS) + r')\s+'
+            r'(?:baños?|banos?|servicios?\s+higienicos?)',
+            lowered,
+        )
+        if bathrooms_word and 'banos' not in params:
+            params['banos'] = SPANISH_SMALL_NUMBERS[bathrooms_word.group(1)]
+
         area_max_patterns = (
             rf'(?:menos\s+de|menor(?:es)?\s+(?:a|de)|hasta|m[aá]ximo|no\s+m[aá]s\s+de)\s+{number}\s*(?:m2|m²|metros?(?:\s+cuadrados?)?)',
             rf'(?:[aá]rea|superficie)\s+m[aá]xima\s+(?:de\s+)?{number}\s*(?:m2|m²|metros?(?:\s+cuadrados?)?)',
@@ -182,6 +223,36 @@ class SearchPlanNormalizer:
             params['moneda'] = 'PEN'
 
         return params
+
+    @staticmethod
+    def _normalize_money_expressions(text: str) -> str:
+        """Convierte variantes monetarias peruanas a ``<monto> dolares|soles``."""
+        currency_patterns = (
+            (r'(?:us\$|usd|\$)\s*(\d[\d.,]*)', 'dolares'),
+            (r'(?:s\/\.?|pen)\s*(\d[\d.,]*)', 'soles'),
+        )
+        normalized = text
+        for pattern, currency in currency_patterns:
+            normalized = re.sub(
+                pattern,
+                lambda match: f"{match.group(1)} {currency}",
+                normalized,
+            )
+
+        number_words = '|'.join(SPANISH_SMALL_NUMBERS)
+        normalized = re.sub(
+            rf'\b({number_words})\s+mil\b',
+            lambda match: str(SPANISH_SMALL_NUMBERS[match.group(1)] * 1000),
+            normalized,
+        )
+        normalized = re.sub(
+            r'\b(\d[\d.,]*)\s*(?:mil|k)\b',
+            lambda match: str(
+                SearchPlanNormalizer._parse_number(match.group(1)) * 1000
+            ),
+            normalized,
+        )
+        return normalized
 
     @staticmethod
     def _parse_number(raw: str) -> Decimal:

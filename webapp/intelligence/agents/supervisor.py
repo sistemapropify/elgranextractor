@@ -235,6 +235,10 @@ class Supervisor:
         if not message or not message.strip():
             return self._empty_plan(message)
 
+        deterministic_plan = self._route_inventory_query(message, user_level, start)
+        if deterministic_plan:
+            return deterministic_plan
+
         # ── 1. Intentar routing por LLM ──
         try:
             return self._route_with_llm(message, user_level, user_context, start)
@@ -246,6 +250,65 @@ class Supervisor:
             return self._route_with_embeddings_fallback(
                 message, user_level, user_context, start
             )
+
+    def _route_inventory_query(
+        self, message: str, user_level: int, start: float
+    ) -> Optional[Dict[str, Any]]:
+        """Blinda búsquedas estructuradas contra desvíos al dominio CRM."""
+        from ..search.normalizer import SearchPlanNormalizer
+
+        lowered = message.casefold()
+        if any(term in lowered for term in (
+            'cliente', 'requerimiento', 'mis matches', 'match con',
+            'precio promedio', 'tendencia', 'reporte de mercado',
+        )):
+            return None
+
+        params = SearchPlanNormalizer.params_from_message(message)
+        property_signals = {
+            key for key in (
+                'distrito', 'tipo_propiedad', 'habitaciones', 'habitaciones_min',
+                'banos', 'banos_min', 'precio', 'precio_min', 'precio_max',
+                'area_min', 'area_max', 'condicion',
+            )
+            if key in params
+        }
+        listing_language = any(term in lowered for term in (
+            'muéstrame', 'muestrame', 'quiero ver', 'qué tienes',
+            'que tienes', 'busco', 'tienes',
+        ))
+        if len(property_signals) < 2 and not (
+            listing_language and 'tipo_propiedad' in property_signals
+        ):
+            return None
+
+        agent_def = self._get_agent_def('agente_propiedades')
+        if not agent_def or agent_def.get('access_level', 1) > user_level:
+            return None
+
+        elapsed = (time.time() - start) * 1000
+        logger.info(
+            "[Supervisor] Routing determinista a agente_propiedades: señales=%s",
+            sorted(property_signals),
+        )
+        return {
+            'routing_method': 'deterministic_inventory',
+            'reasoning': (
+                'Consulta de inventario con filtros inmobiliarios estructurados: '
+                + ', '.join(sorted(property_signals))
+            ),
+            'is_multi': False,
+            'execution_mode': 'single',
+            'agents': [{
+                'name': 'agente_propiedades',
+                'description': agent_def.get('description', ''),
+                'order': 1,
+                'score': 1.0,
+                'sub_query': message,
+            }],
+            'original_query': message,
+            'latency_ms': round(elapsed, 2),
+        }
 
     def _route_with_llm(
         self, message: str, user_level: int,

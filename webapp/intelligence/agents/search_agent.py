@@ -100,7 +100,7 @@ class SearchAgent:
                 )
 
             collections = search_plan.collections or collections
-            filters = search_plan.equality_filters()
+            filters = search_plan.document_prefilters()
 
             # Ejecutar búsqueda semántica con pre-filtrado SQL
             results = RAGService.search_dynamic(
@@ -108,6 +108,8 @@ class SearchAgent:
                 collection_names=collections,
                 filters=filters or None,
             )
+            from ..search.property_specs import enrich_property_results
+            results = enrich_property_results(results)
             results, applied_filters = apply_conditions(
                 results,
                 search_plan.conditions,

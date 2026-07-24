@@ -46,6 +46,85 @@ class SearchPlanNormalizerTests(SimpleTestCase):
         self.assertEqual(float(params['precio_max']), 200000.0)
         self.assertEqual(params['moneda'], 'USD')
 
+    def test_peruvian_slang_and_all_property_filters_are_normalized(self):
+        params = SearchPlanNormalizer.params_from_message(
+            'quiero ver depas en Cayma de 3 habitaciones y 2 baños '
+            'con menos de 500 mil dólares'
+        )
+
+        self.assertEqual(params['tipo_propiedad'], 'Departamento')
+        self.assertEqual(params['distrito'], 'Cayma')
+        self.assertEqual(params['habitaciones'], 3)
+        self.assertEqual(params['banos'], 2)
+        self.assertEqual(float(params['precio_max']), 500000.0)
+        self.assertEqual(params['moneda'], 'USD')
+
+    def test_common_usd_amount_formats_are_equivalent(self):
+        queries = (
+            'depas por menos de 20000 dólares',
+            'depas por menos de 20 mil dólares',
+            'depas por menos de $20000',
+            'depas por menos de 20,000 dólares',
+            'depas por menos de USD 20000',
+            'depas por menos de veinte mil dólares',
+        )
+
+        for query in queries:
+            with self.subTest(query=query):
+                params = SearchPlanNormalizer.params_from_message(query)
+                self.assertEqual(params['tipo_propiedad'], 'Departamento')
+                self.assertEqual(float(params['precio_max']), 20000.0)
+                self.assertEqual(params['moneda'], 'USD')
+
+    def test_bathrooms_are_preserved_in_typed_search_plan(self):
+        plan = SearchPlanNormalizer.from_params(
+            query='depas con 2 baños',
+            params={'banos': 2},
+            collections=['propiedadespropify'],
+        )
+
+        condition = plan.conditions[0]
+        self.assertEqual(condition.field_name, 'bathrooms')
+        self.assertEqual(condition.operator, FilterOperator.EQ)
+        self.assertEqual(condition.value, 2)
+        self.assertEqual(plan.document_prefilters(), {})
+
+    def test_relational_specs_are_not_sent_to_document_json_prefilter(self):
+        plan = SearchPlanNormalizer.from_params(
+            query='depas en Cayma con 3 habitaciones y 2 baños',
+            params={
+                'distrito': 'Cayma',
+                'tipo_propiedad': 'Departamento',
+                'habitaciones': 3,
+                'banos': 2,
+            },
+            collections=['propiedadespropify'],
+        )
+
+        self.assertEqual(plan.document_prefilters(), {
+            'district_name': 'Cayma',
+            'property_type_name': 'Departamento',
+        })
+
+    def test_currency_is_an_executable_filter_not_only_metadata(self):
+        plan = SearchPlanNormalizer.from_params(
+            query='depas por menos de 500 mil dólares',
+            params={'precio_max': 500000, 'moneda': 'USD'},
+            collections=['propiedadespropify'],
+        )
+
+        currency_condition = next(
+            condition
+            for condition in plan.conditions
+            if condition.logical_name == 'moneda'
+        )
+        self.assertEqual(currency_condition.field_name, 'currency_name')
+        self.assertEqual(currency_condition.value, 'Dolares')
+        self.assertEqual(plan.document_prefilters(), {
+            'currency_name': 'Dolares',
+        })
+        self.assertEqual(plan.to_params()['moneda'], 'USD')
+
     def test_grocery_store_query_maps_to_commercial_property(self):
         params = SearchPlanNormalizer.params_from_message(
             'propiedades donde pueda poner una tienda de abarrotes '
@@ -121,11 +200,13 @@ class SearchPlanNormalizerTests(SimpleTestCase):
                 'district_name': 'Cerro Colorado',
                 'property_type_name': 'Terreno',
                 'price': '95000.0',
+                'currency_name': 'Dolares',
             }},
             {'document_id': '2', 'field_values': {
                 'district_name': 'Cerro Colorado',
                 'property_type_name': 'Terreno',
                 'price': '175000.0',
+                'currency_name': 'Dolares',
             }},
             {'document_id': '3', 'field_values': {
                 'district_name': 'Cayma',
@@ -161,11 +242,13 @@ class SearchPlanNormalizerTests(SimpleTestCase):
                 'district_name': 'Cerro Colorado',
                 'property_type_name': 'Terreno',
                 'price': '95000.0',
+                'currency_name': 'Dolares',
             }},
             {'document_id': '2', 'field_values': {
                 'district_name': 'Cerro Colorado',
                 'property_type_name': 'Terreno',
                 'price': '175000.0',
+                'currency_name': 'Dolares',
             }},
         ]
         plan = SearchPlanNormalizer.from_params(
