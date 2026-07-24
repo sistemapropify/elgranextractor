@@ -37,6 +37,14 @@ jobs:
 
       - name: Collect Django static files
         env:
+          # Valores dummy para que Django cargue settings sin conexión a BD.
+          # collectstatic solo necesita que Django se inicie, no que consulte la BD.
+          DB_NAME: 'dummy'
+          DB_USER: 'dummy'
+          DB_PASSWORD: 'dummy'
+          DB_HOST: 'dummy'
+          DB_PORT: '1433'
+          SECRET_KEY: 'dummy-secret-key-for-build'
           PRODUCTION: 'true'
         run: |
           source antenv/bin/activate
