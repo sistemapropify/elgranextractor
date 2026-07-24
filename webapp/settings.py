@@ -86,6 +86,7 @@ INSTALLED_APPS = [
     'whatsapp_extractor',  # Extracción automática de requerimientos desde WhatsApp
     'agentes',  # Gestión de agentes e inmobiliarias
     'canvas',   # PropFlow Visual Canvas — lienzos interactivos
+    'n8n_bridge',  # Puente de endpoints para conectar n8n/WhatsApp al chat existente
 ]
 
 MIDDLEWARE = [
