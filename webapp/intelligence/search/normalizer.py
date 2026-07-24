@@ -121,12 +121,16 @@ class SearchPlanNormalizer:
             params.setdefault('condicion', 'Disponible')
 
         number = r'(\d[\d.,]*)'
+        money_unit = r'(?:usd|d[oó]lares?|pen|soles?|s\/|\$)'
         max_patterns = (
-            rf'(?:menos\s+de|menor(?:es)?\s+(?:a|de)|hasta|máximo|maximo|no\s+más\s+de|no\s+mas\s+de)\s*(?:usd|\$|s\/)?\s*{number}',
-            rf'(?:usd|\$|s\/)?\s*{number}\s*(?:o\s+menos|como\s+máximo|como\s+maximo)',
+            rf'(?:precio|presupuesto)(?:\s+m[aá]ximo)?\s+(?:de\s+)?(?:{money_unit}\s*)?{number}',
+            rf'(?:menos\s+de|menor(?:es)?\s+(?:a|de)|hasta|m[aá]ximo|no\s+m[aá]s\s+de)\s*(?:{money_unit}\s*)?{number}\s*{money_unit}',
+            rf'{money_unit}\s*{number}\s*(?:o\s+menos|como\s+m[aá]ximo)',
         )
         min_patterns = (
-            rf'(?:más\s+de|mas\s+de|mayor(?:es)?\s+(?:a|de)|desde|mínimo|minimo)\s*(?:usd|\$|s\/)?\s*{number}',
+            rf'(?:precio|presupuesto)(?:\s+m[ií]nimo)\s+(?:de\s+)?(?:{money_unit}\s*)?{number}',
+            rf'(?:m[aá]s\s+de|mayor(?:es)?\s+(?:a|de)|desde|m[ií]nimo)\s*(?:{money_unit}\s*)?{number}\s*{money_unit}',
+            rf'{money_unit}\s*{number}\s*(?:o\s+m[aá]s|como\s+m[ií]nimo)',
         )
         for pattern in max_patterns:
             match = re.search(pattern, lowered)
@@ -146,11 +150,21 @@ class SearchPlanNormalizer:
         if rooms:
             params['habitaciones'] = int(cls._parse_number(rooms.group(1)))
 
-        area_patterns = (
+        area_max_patterns = (
+            rf'(?:menos\s+de|menor(?:es)?\s+(?:a|de)|hasta|m[aá]ximo|no\s+m[aá]s\s+de)\s+{number}\s*(?:m2|m²|metros?(?:\s+cuadrados?)?)',
+            rf'(?:[aá]rea|superficie)\s+m[aá]xima\s+(?:de\s+)?{number}\s*(?:m2|m²|metros?(?:\s+cuadrados?)?)',
+        )
+        for pattern in area_max_patterns:
+            match = re.search(pattern, lowered)
+            if match:
+                params['area_max'] = cls._parse_number(match.group(1))
+                break
+
+        area_min_patterns = (
             rf'(?:área|area)(?:\s+mínima|\s+minima)?\s+(?:de\s+)?{number}\s*(?:m2|m²|metros?(?:\s+cuadrados?)?)',
             rf'(?:mínimo|minimo|desde|más\s+de|mas\s+de)\s+{number}\s*(?:m2|m²|metros?(?:\s+cuadrados?)?)',
         )
-        for pattern in area_patterns:
+        for pattern in area_min_patterns:
             match = re.search(pattern, lowered)
             if match:
                 params['area_min'] = cls._parse_number(match.group(1))

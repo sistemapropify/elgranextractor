@@ -58,8 +58,40 @@ class PropertyFilterRegressionTests(SimpleTestCase):
             {'distrito': 'Cayma', 'precio_max': 160000},
         ))
 
+    def test_area_max_accepts_only_properties_below_limit(self):
+        params = {
+            'distrito': 'Cayma',
+            'tipo_propiedad': 'Terreno',
+            'area_max': 500,
+        }
+        valid = {
+            'district_name': 'Cayma',
+            'property_type_name': 'Terreno',
+            'land_area': '150.00',
+        }
+        too_large = {**valid, 'land_area': '600.00'}
+
+        self.assertTrue(self.skill._doc_cumple_filtros(valid, params))
+        self.assertFalse(self.skill._doc_cumple_filtros(too_large, params))
+
 
 class FormatterGroundingRegressionTests(SimpleTestCase):
+    def test_result_evidence_uses_land_area_for_terrain(self):
+        evidence = ChatProcessor._build_result_evidence([{
+            'source_id': 206,
+            'field_values': {
+                'title': 'Terreno real',
+                'property_type_name': 'Terreno',
+                'district_name': 'Cayma',
+                'land_area': '150.00',
+                'built_area': None,
+            },
+        }])
+
+        self.assertEqual(evidence[0]['area'], '150.00')
+        self.assertEqual(evidence[0]['area_source'], 'land_area')
+        self.assertEqual(evidence[0]['land_area'], '150.00')
+
     def test_agent_result_preserves_final_answer_for_formatter(self):
         result = AgentResult(
             agent_name='agente_propiedades',

@@ -15,6 +15,10 @@ ALLOWED_PAYLOAD_KEYS = {
     'audit_confidence', 'audit_summary', 'audit_signals',
     'response_claimed_count', 'search_plan_hash',
     'result_evidence',
+    'confidence', 'verdict', 'signals', 'metrics', 'critique_retries',
+    'mode', 'latency_ms', 'disagrees_with_deterministic',
+    'authority_applied', 'action', 'reason', 'retries_used',
+    'judge_status', 'judge_verdict', 'judge_confidence', 'judge_attempts',
 }
 
 _PATTERNS = [

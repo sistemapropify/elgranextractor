@@ -87,3 +87,11 @@ class SemanticAdvisoryControllerTests(SimpleTestCase):
         ))
 
         self.assertFalse(decision["authority_applied"])
+
+    def test_pass_reports_operational_judge_without_intervention(self):
+        decision = self.decide(self.semantic("pass", confidence=0.97))
+
+        self.assertFalse(decision["authority_applied"])
+        self.assertEqual(decision["judge_status"], "completed")
+        self.assertEqual(decision["judge_verdict"], "pass")
+        self.assertIn("aprobó", decision["reason"])

@@ -13,6 +13,8 @@ import concurrent.futures
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, field
 
+from django.core.serializers.json import DjangoJSONEncoder
+
 from .registry import SkillRegistry
 from .cache import SkillCache
 
@@ -439,7 +441,11 @@ class SkillOrchestrator:
             record.latency_ms = round(latency_ms, 2)
             record.cached = cached
             if result_data is not None:
-                record.result = result_data
+                record.result = json.loads(json.dumps(
+                    result_data,
+                    cls=DjangoJSONEncoder,
+                    ensure_ascii=False,
+                ))
             if error_message:
                 record.error_message = str(error_message)[:1000]
             record.save(update_fields=['status', 'latency_ms', 'cached', 'result', 'error_message'])

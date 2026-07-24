@@ -584,6 +584,10 @@ class ChatProcessor:
                         ),
                         'reason': advisory_decision.get('reason', ''),
                         'retries_used': advisory_decision.get('retries_used', 0),
+                        'judge_status': advisory_decision.get('judge_status'),
+                        'judge_verdict': advisory_decision.get('judge_verdict'),
+                        'judge_confidence': advisory_decision.get('judge_confidence'),
+                        'judge_attempts': advisory_decision.get('judge_attempts', 0),
                     },
                 )
             for agent in execution_summary:
@@ -1222,6 +1226,21 @@ class ChatProcessor:
             fields = item.get('field_values')
             if not isinstance(fields, dict):
                 fields = item
+            property_type = (
+                fields.get('property_type_name')
+                or fields.get('tipo_propiedad')
+                or ''
+            )
+            land_area = fields.get('land_area', fields.get('area_terreno'))
+            built_area = fields.get(
+                'built_area',
+                fields.get('area_construida'),
+            )
+            canonical_area = (
+                land_area
+                if 'terreno' in str(property_type).casefold()
+                else built_area if built_area not in (None, '') else land_area
+            )
             evidence.append({
                 'id': str(
                     item.get('source_id')
@@ -1242,15 +1261,24 @@ class ChatProcessor:
                     or fields.get('distrito')
                     or ''
                 ),
-                'property_type': (
-                    fields.get('property_type_name')
-                    or fields.get('tipo_propiedad')
-                    or ''
-                ),
+                'property_type': property_type,
                 'status': (
                     fields.get('property_status_name')
                     or fields.get('estado')
                     or ''
+                ),
+                'area': canonical_area,
+                'area_source': (
+                    'land_area'
+                    if canonical_area == land_area and land_area not in (None, '')
+                    else 'built_area'
+                ),
+                'land_area': land_area,
+                'built_area': built_area,
+                'bedrooms': (
+                    fields.get('bedrooms')
+                    or fields.get('habitaciones')
+                    or fields.get('dormitorios')
                 ),
             })
         return evidence
@@ -1658,6 +1686,11 @@ INSTRUCCIONES:
             status = fields.get(
                 'property_status_name', fields.get('estado')
             )
+            bedrooms = (
+                fields.get('bedrooms')
+                or fields.get('habitaciones')
+                or fields.get('dormitorios')
+            )
             area = next(
                 (
                     fields.get(key)
@@ -1677,6 +1710,8 @@ INSTRUCCIONES:
                 details.append(f"Tipo: {property_type}")
             if district:
                 details.append(f"Distrito: {district}")
+            if bedrooms not in (None, ''):
+                details.append(f"Habitaciones: {bedrooms}")
             if area is not None:
                 details.append(f"Área: {area} m²")
             if status:

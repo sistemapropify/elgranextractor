@@ -42,6 +42,10 @@ class SemanticAdvisoryController:
         base = {
             "enabled": mode in {"advisory", "enforced"},
             "mode": mode,
+            "judge_status": semantic_evaluation.get("status"),
+            "judge_verdict": semantic_evaluation.get("verdict"),
+            "judge_confidence": semantic_evaluation.get("confidence"),
+            "judge_attempts": semantic_evaluation.get("attempts", 0),
             "action": "none",
             "authority_applied": False,
             "reason": "",
@@ -51,13 +55,23 @@ class SemanticAdvisoryController:
             base["reason"] = "El juez no está en modo advisory."
             return base
         if semantic_evaluation.get("status") != "completed":
-            base["reason"] = "El juez no completó una evaluación válida."
+            attempts = semantic_evaluation.get("attempts", 0)
+            error = semantic_evaluation.get("error") or "evaluación inválida"
+            base["reason"] = (
+                f"El juez falló de forma segura después de {attempts} "
+                f"intento(s): {error}."
+            )
             return base
 
         verdict = semantic_evaluation.get("verdict")
         confidence = float(semantic_evaluation.get("confidence") or 0)
         if verdict not in cls.ALLOWED_ACTIONS:
-            base["reason"] = "El veredicto no requiere una acción autorizada."
+            if verdict == "pass":
+                base["reason"] = (
+                    "El juez aprobó la coherencia semántica; no requiere intervención."
+                )
+            else:
+                base["reason"] = "El veredicto no requiere una acción autorizada."
             return base
         if confidence < cls.confidence_threshold():
             base["reason"] = "Confianza inferior al umbral de autoridad."

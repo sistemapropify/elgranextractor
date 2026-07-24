@@ -142,6 +142,38 @@ class ExecutionEvaluator:
                 metrics=metrics,
             )
 
+        unsatisfied_requirements = [
+            requirement
+            for requirement in requirements
+            if not requirement.get("satisfied")
+        ]
+        if unsatisfied_requirements:
+            if attempt < 1:
+                return EvaluationResult(
+                    verdict="replan",
+                    confidence=0.98,
+                    reason=(
+                        f"Quedaron {len(unsatisfied_requirements)} requisitos "
+                        "sin evidencia de ejecución."
+                    ),
+                    signals=["UNSATISFIED_QUERY_REQUIREMENTS"],
+                    suggested_plan=dict(search_plan or {}),
+                    metrics={
+                        **metrics,
+                        "unsatisfied_requirements": len(unsatisfied_requirements),
+                    },
+                )
+            return EvaluationResult(
+                verdict="block",
+                confidence=0.99,
+                reason="El reintento terminó con requisitos todavía no verificados.",
+                signals=["REPLAN_DID_NOT_SATISFY_REQUIREMENTS"],
+                metrics={
+                    **metrics,
+                    "unsatisfied_requirements": len(unsatisfied_requirements),
+                },
+            )
+
         explicit_type = next(
             (value for keyword, value in EXPLICIT_TYPES.items()
              if re.search(rf"\b{re.escape(keyword)}s?\b", normalized_message)),
@@ -175,6 +207,28 @@ class ExecutionEvaluator:
                     signals=["REPLAN_DID_NOT_FIX_TYPE_MISMATCH"],
                     metrics={**metrics, "mismatch_count": len(mismatches)},
                 )
+
+        plan_mismatches = cls._filter_mismatches(items, search_plan)
+        if items and plan_mismatches:
+            if attempt < 1:
+                return EvaluationResult(
+                    verdict="replan",
+                    confidence=0.98,
+                    reason=(
+                        f"{len(plan_mismatches)} resultados incumplen uno o más "
+                        "filtros obligatorios del plan de búsqueda."
+                    ),
+                    signals=["SEARCH_PLAN_FILTER_MISMATCH"],
+                    suggested_plan=dict(search_plan or {}),
+                    metrics={**metrics, "mismatch_count": len(plan_mismatches)},
+                )
+            return EvaluationResult(
+                verdict="block",
+                confidence=0.99,
+                reason="El reintento todavía incumple filtros obligatorios.",
+                signals=["REPLAN_DID_NOT_FIX_FILTER_MISMATCH"],
+                metrics={**metrics, "mismatch_count": len(plan_mismatches)},
+            )
 
         if len(items) > cls.MAX_BROAD_RESULTS:
             return EvaluationResult(
@@ -241,6 +295,10 @@ class ExecutionEvaluator:
         district = cls._plan_value(plan, "distrito")
         property_type = cls._plan_value(plan, "tipo_propiedad")
         area_min = cls._plan_value(plan, "area_min")
+        area_max = cls._plan_value(plan, "area_max")
+        bedrooms = cls._plan_value(plan, "habitaciones")
+        price_min = cls._plan_value(plan, "precio_min")
+        price_max = cls._plan_value(plan, "precio_max")
         status = cls._plan_value(plan, "condicion")
         mismatches = []
         for item in items:
@@ -260,6 +318,12 @@ class ExecutionEvaluator:
                 or fields.get("estado")
                 or fields.get("status")
             )
+            item_bedrooms = (
+                fields.get("bedrooms")
+                or fields.get("habitaciones")
+                or fields.get("dormitorios")
+            )
+            item_price = fields.get("price") or fields.get("precio")
             invalid = (
                 (district and str(item_district or "").casefold() != str(district).casefold())
                 or (property_type and str(property_type).casefold() not in str(item_type or "").casefold())
@@ -268,6 +332,25 @@ class ExecutionEvaluator:
             if area_min is not None:
                 try:
                     invalid = invalid or item_area is None or float(item_area) < float(area_min)
+                except (TypeError, ValueError):
+                    invalid = True
+            if area_max is not None:
+                try:
+                    invalid = invalid or item_area is None or float(item_area) > float(area_max)
+                except (TypeError, ValueError):
+                    invalid = True
+            for actual, expected, comparison in (
+                (item_bedrooms, bedrooms, "minimum"),
+                (item_price, price_min, "minimum"),
+                (item_price, price_max, "maximum"),
+            ):
+                if expected is None:
+                    continue
+                try:
+                    if comparison == "minimum":
+                        invalid = invalid or actual is None or float(actual) < float(expected)
+                    else:
+                        invalid = invalid or actual is None or float(actual) > float(expected)
                 except (TypeError, ValueError):
                     invalid = True
             if invalid:

@@ -28,6 +28,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
+from django.db import connections
 from django.db.models import Q
 
 from ...models import IntelligenceCollection, IntelligenceDocument
@@ -67,6 +68,7 @@ FIELD_MAP = {
     'precio': ['price', 'precio', 'sale_price', 'precio_venta'],
     'habitaciones': ['bedrooms', 'habitaciones', 'num_habitaciones', 'dormitorios'],
     'area_min': ['built_area', 'area_construida', 'area', 'total_area', 'land_area'],
+    'area_max': ['built_area', 'area_construida', 'area', 'total_area', 'land_area'],
     'condicion': ['property_status_name', 'property_condition_name', 'condicion', 'estado', 'status', 'availability_status'],
     'moneda': ['currency_name', 'currency_id', 'moneda', 'currency'],
 }
@@ -194,6 +196,11 @@ class BusquedaPropiedadesSkill(BaseSkill):
             'description': 'Filtro exacto: área mínima en m²',
             'required': False,
         },
+        'area_max': {
+            'type': 'number',
+            'description': 'Filtro exacto: área máxima en m²',
+            'required': False,
+        },
         'semantic_query': {
             'type': 'string',
             'description': 'BÚSQUEDA SEMÁNTICA: cualquier texto en lenguaje natural que describa el PROPÓSITO, USO, CARACTERÍSTICAS, UBICACIÓN o cualquier aspecto de la propiedad. El sistema busca por SIGNIFICADO usando embeddings, no por palabras exactas. Ejemplos: "para poner un colegio", "donde acepten perros", "cerca de un colegio", "para negocio", "ambientes amplios y luminosos", "para construir", "frente a parque", "esquinero", "cerca de universidad", "para taller mecánico", "para consultorio médico", "zona tranquila", "para familia grande", "con vista", "para oficina", "todo incluido". USA SIEMPRE este parámetro cuando el usuario describa lo que busca en lenguaje natural, aunque también mencione distritos o tipos específicos (se pueden COMBINAR con los filtros exactos de arriba).',
@@ -232,6 +239,7 @@ class BusquedaPropiedadesSkill(BaseSkill):
             params.get(k) is not None and params.get(k) != ''
             for k in ('distrito', 'tipo_propiedad', 'operacion',
                       'precio_min', 'precio_max', 'habitaciones', 'area_min',
+                      'area_max',
                       'semantic_query')
         )
         return has_filter
@@ -368,6 +376,24 @@ class BusquedaPropiedadesSkill(BaseSkill):
             filtros['condicion'] = 'Disponible'
         elif any(p in mensaje_lower for p in ['vendida', 'vendido', 'vendidas']):
             filtros['condicion'] = 'Vendida'
+
+        habitaciones_match = re.search(
+            r'\b(\d+)\s*(?:habitaciones?|dormitorios?|cuartos?|bedrooms?)\b',
+            mensaje_lower,
+        )
+        if habitaciones_match:
+            filtros['habitaciones'] = int(habitaciones_match.group(1))
+
+        area_max_match = re.search(
+            r'\b(?:menos\s+de|menor(?:es)?\s+(?:a|de)|hasta|máximo|'
+            r'maximo|no\s+más\s+de|no\s+mas\s+de)\s+'
+            r'(\d+(?:[.,]\d+)?)\s*(?:m2|m²|metros?(?:\s+cuadrados?)?)\b',
+            mensaje_lower,
+        )
+        if area_max_match:
+            filtros['area_max'] = float(
+                area_max_match.group(1).replace(',', '.')
+            )
 
         # ── Detectar búsqueda por NOMBRE/TÍTULO de propiedad ──
         # Si el mensaje contiene palabras clave que indican búsqueda por nombre
@@ -605,6 +631,7 @@ class BusquedaPropiedadesSkill(BaseSkill):
                 params.get(k) is not None and params.get(k) != ''
                 for k in ('distrito', 'tipo_propiedad', 'operacion',
                           'precio_min', 'precio_max', 'habitaciones', 'area_min',
+                          'area_max',
                           'condicion')
             )
 
@@ -663,6 +690,7 @@ class BusquedaPropiedadesSkill(BaseSkill):
                 documentos = self._reranking_semantico(
                     [(doc, 0.5) for doc in todos_docs], semantic_query
                 )
+                documentos = self._enriquecer_con_property_specs(documentos)
                 # Paso 2: Refinar con filtros exactos (si hay)
                 if tiene_filtros_exactos and documentos:
                     filtrados = []
@@ -995,12 +1023,91 @@ class BusquedaPropiedadesSkill(BaseSkill):
         if filter_q:
             queryset = queryset.filter(filter_q)
 
+        candidatos = self._enriquecer_con_property_specs(
+            [(doc, 0.5) for doc in queryset]
+        )
         documentos = [
-            doc for doc in queryset
+            doc for doc, _score in candidatos
             if self._doc_cumple_filtros(doc.field_values or {}, params)
         ]
 
         return [(doc, 0.5) for doc in documentos]
+
+    @staticmethod
+    def _property_id_from_document(doc: IntelligenceDocument) -> Optional[int]:
+        """Resuelve el ID de `property` usado por el documento indexado."""
+        field_values = doc.field_values or {}
+        raw_id = field_values.get('id') or doc.source_id
+        try:
+            return int(raw_id)
+        except (TypeError, ValueError):
+            return None
+
+    def _enriquecer_con_property_specs(
+        self,
+        documentos: List[Tuple[IntelligenceDocument, float]],
+    ) -> List[Tuple[IntelligenceDocument, float]]:
+        """Añade specs relacionales en memoria antes de aplicar filtros."""
+        if not documentos:
+            return documentos
+
+        ids = {
+            property_id
+            for doc, _score in documentos
+            if (property_id := self._property_id_from_document(doc)) is not None
+        }
+        if not ids:
+            return documentos
+
+        columns = (
+            'bedrooms', 'bathrooms', 'half_bathrooms',
+            'land_area', 'built_area', 'garage_spaces',
+            'garage_type', 'antiquity_years', 'floors_total',
+            'unit_location', 'has_elevator', 'has_terrace',
+            'has_garden', 'has_pool', 'has_security',
+        )
+        specs_by_id: Dict[int, Dict[str, Any]] = {}
+        try:
+            ordered_ids = sorted(ids)
+            placeholders = ', '.join(['%s'] * len(ordered_ids))
+            with connections['propifai'].cursor() as cursor:
+                cursor.execute(
+                    f"""
+                    SELECT property_id, {', '.join(columns)}
+                    FROM property_specs
+                    WHERE property_id IN ({placeholders})
+                    """,
+                    ordered_ids,
+                )
+                for row in cursor.fetchall():
+                    specs_by_id[int(row[0])] = dict(zip(columns, row[1:]))
+        except Exception as exc:
+            logger.error(
+                "No se pudo enriquecer la búsqueda desde property_specs: %s",
+                exc,
+                exc_info=True,
+            )
+            return documentos
+
+        enriched = 0
+        for doc, _score in documentos:
+            specs = specs_by_id.get(self._property_id_from_document(doc))
+            if not specs:
+                continue
+            values = dict(doc.field_values or {})
+            values.update({
+                key: value for key, value in specs.items()
+                if value is not None
+            })
+            doc.field_values = values
+            enriched += 1
+
+        logger.info(
+            "Búsqueda enriquecida con property_specs: %s/%s documentos",
+            enriched,
+            len(documentos),
+        )
+        return documentos
 
     # ── Helper: Validación de dimensión de embeddings ─────────────────────
 
@@ -1257,6 +1364,14 @@ class BusquedaPropiedadesSkill(BaseSkill):
             ):
                 return False
 
+        # Área máxima
+        area_max = params.get('area_max')
+        if area_max is not None:
+            if not self._cumple_maximo_numerico(
+                field_values, FIELD_MAP['area_max'], area_max
+            ):
+                return False
+
         # Condición
         condicion = params.get('condicion')
         if condicion:
@@ -1291,6 +1406,23 @@ class BusquedaPropiedadesSkill(BaseSkill):
                 continue
             try:
                 if float(valor) >= float(minimo):
+                    return True
+            except (TypeError, ValueError):
+                continue
+        return False
+
+    @staticmethod
+    def _cumple_maximo_numerico(
+        field_values: Dict[str, Any],
+        campos: List[str],
+        maximo: Any,
+    ) -> bool:
+        for campo in campos:
+            valor = field_values.get(campo)
+            if valor is None:
+                continue
+            try:
+                if float(valor) <= float(maximo):
                     return True
             except (TypeError, ValueError):
                 continue
@@ -1356,7 +1488,10 @@ class BusquedaPropiedadesSkill(BaseSkill):
                     if key.endswith('_name') and value is not None and value != '':
                         result[key] = value
                 # Asegurar campos clave siempre presentes
-                for key in ('title', 'price', 'code'):
+                for key in (
+                    'title', 'price', 'code', 'bedrooms', 'bathrooms',
+                    'land_area', 'built_area', 'garage_spaces',
+                ):
                     if key in all_values and key not in result:
                         result[key] = all_values[key]
                 return result

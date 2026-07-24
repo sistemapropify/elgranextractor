@@ -100,3 +100,39 @@ class AgentRequirementEvidenceTests(SimpleTestCase):
         ReActLoopMixin._update_requirements_status([requirement], step)
 
         self.assertFalse(requirement.satisfied)
+
+    def test_area_max_requirement_needs_area_max_evidence(self):
+        requirement = Requirement(
+            'req_0',
+            'filtrar terrenos con superficie menor a 500 metros cuadrados',
+            'filter',
+        )
+        wrong_step = AgentStep(
+            iteration=0,
+            thought='buscar',
+            skill_used='busqueda_propiedades',
+            skill_result=[],
+            skill_metadata={'filtros_exactos': {
+                'tipo_propiedad': 'Terreno',
+                'area_min': 500,
+            }},
+            skill_success=True,
+            status=AgentStatus.ACTING,
+        )
+        right_step = AgentStep(
+            iteration=1,
+            thought='corregir filtro',
+            skill_used='busqueda_propiedades',
+            skill_result=[],
+            skill_metadata={'filtros_exactos': {
+                'tipo_propiedad': 'Terreno',
+                'area_max': 500,
+            }},
+            skill_success=True,
+            status=AgentStatus.ACTING,
+        )
+
+        ReActLoopMixin._update_requirements_status([requirement], wrong_step)
+        self.assertFalse(requirement.satisfied)
+        ReActLoopMixin._update_requirements_status([requirement], right_step)
+        self.assertTrue(requirement.satisfied)

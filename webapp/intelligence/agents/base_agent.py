@@ -525,14 +525,25 @@ Responde SOLO con JSON:
                 expected_filters = set()
                 if any(term in description for term in ('cayma', 'distrito', 'ubicad', 'zona')):
                     expected_filters.add('distrito')
-                if any(term in description for term in ('área', 'area', 'metros', 'm²', 'm2')):
-                    expected_filters.add('area_min')
+                if any(term in description for term in ('área', 'area', 'superficie', 'metros', 'm²', 'm2')):
+                    if any(term in description for term in ('menor', 'menos de', 'hasta', 'máxima', 'maxima')):
+                        expected_filters.add('area_max')
+                    else:
+                        expected_filters.add('area_min')
                 if any(term in description for term in ('terreno', 'departamento', 'casa', 'oficina', 'local')):
                     expected_filters.add('tipo_propiedad')
+                if any(term in description for term in ('habitacion', 'dormitorio', 'cuarto', 'bedroom')):
+                    expected_filters.add('habitaciones')
                 if any(term in description for term in ('precio', 'presupuesto', 'dólar', 'dolar', 'soles')):
-                    expected_filters.update({'precio_min', 'precio_max'})
+                    if any(term in description for term in ('mayor', 'desde', 'mínimo', 'minimo', 'más de', 'mas de')):
+                        expected_filters.add('precio_min')
+                    elif any(term in description for term in ('menor', 'hasta', 'máximo', 'maximo', 'menos de')):
+                        expected_filters.add('precio_max')
 
-                matched_expected = bool(expected_filters & applied_names)
+                matched_expected = (
+                    bool(expected_filters)
+                    and expected_filters.issubset(applied_names)
+                )
                 if capacity_constraint:
                     # La capacidad se conserva en la tarea, pero el inventario no
                     # la demuestra. Se considera atendida, nunca verificada.

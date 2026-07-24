@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import json
 import os
 import re
@@ -19,11 +20,12 @@ COMPLEX_TERMS = (
 
 
 class SemanticExecutionJudge:
-    """Evalúa coherencia semántica sin modificar el plan en shadow mode."""
+    """Evalúa coherencia semántica con autoridad limitada y auditable."""
 
     VALID_VERDICTS = {"pass", "replan", "clarify", "block"}
     MAX_SAMPLE_ITEMS = 8
     MAX_FIELD_LENGTH = 220
+    MAX_ATTEMPTS = 2
 
     @classmethod
     def mode(cls) -> str:
@@ -36,8 +38,12 @@ class SemanticExecutionJudge:
         message: str,
         deterministic_evaluation: Optional[Dict[str, Any]] = None,
     ) -> bool:
-        if cls.mode() == "off":
+        mode = cls.mode()
+        if mode == "off":
             return False
+        if mode in {"advisory", "enforced"}:
+            # El operador solicitó evaluar todas las consultas en estos modos.
+            return True
         normalized = (message or "").casefold()
         deterministic_verdict = (deterministic_evaluation or {}).get("verdict")
         return (
@@ -61,6 +67,8 @@ class SemanticExecutionJudge:
                 "mode": mode,
                 "status": "skipped",
                 "reason": "Consulta simple aprobada por controles deterministas.",
+                "authority_applied": False,
+                "attempts": 0,
             }
 
         started = time.perf_counter()
@@ -73,23 +81,48 @@ class SemanticExecutionJudge:
         )
 
         try:
-            success, api_message, response = LLMService._call_deepseek_api(
-                messages=[{"role": "user", "content": prompt}],
-                system_prompt=(
-                    "Eres un juez de calidad de un sistema inmobiliario. "
-                    "No respondas al usuario. Evalúa evidencia y devuelve sólo JSON."
-                ),
-                caller_app="execution_judge",
-                endpoint="evaluate",
-            )
-            latency_ms = round((time.perf_counter() - started) * 1000, 2)
-            if not success or not isinstance(response, dict):
-                return cls._failure(
-                    mode, latency_ms, api_message or "LLM judge unavailable"
+            parsed = None
+            raw_content: Any = ""
+            last_error = ""
+            attempts_used = 0
+            for judge_attempt in range(1, cls.MAX_ATTEMPTS + 1):
+                attempts_used = judge_attempt
+                current_prompt = (
+                    prompt if judge_attempt == 1
+                    else cls._repair_prompt(raw_content)
                 )
-            parsed = cls._parse_response(response.get("content", ""))
+                success, api_message, response = LLMService._call_deepseek_api(
+                    messages=[{"role": "user", "content": current_prompt}],
+                    system_prompt=(
+                        "Eres un juez de calidad de un sistema inmobiliario. "
+                        "No respondas al usuario. Devuelve un único objeto JSON válido, "
+                        "sin Markdown ni texto adicional."
+                    ),
+                    caller_app="execution_judge",
+                    endpoint=(
+                        "evaluate"
+                        if judge_attempt == 1
+                        else "evaluate_json_repair"
+                    ),
+                )
+                if not success or not isinstance(response, dict):
+                    last_error = api_message or "LLM judge unavailable"
+                    continue
+                raw_content = response.get("content", "")
+                parsed = cls._parse_response(raw_content)
+                if parsed:
+                    break
+                last_error = "Invalid judge JSON"
+
+            latency_ms = round((time.perf_counter() - started) * 1000, 2)
             if not parsed:
-                return cls._failure(mode, latency_ms, "Invalid judge JSON")
+                return cls._failure(
+                    mode,
+                    latency_ms,
+                    last_error or "Invalid judge JSON",
+                    attempts=attempts_used,
+                    raw_preview=raw_content,
+                )
 
             deterministic_verdict = deterministic_evaluation.get("verdict")
             parsed.update({
@@ -103,11 +136,12 @@ class SemanticExecutionJudge:
                 ),
                 "sample_size": len(sample),
                 "authority_applied": False,
+                "attempts": attempts_used,
             })
             return parsed
         except Exception as exc:
             latency_ms = round((time.perf_counter() - started) * 1000, 2)
-            return cls._failure(mode, latency_ms, str(exc))
+            return cls._failure(mode, latency_ms, str(exc), attempts=0)
 
     @classmethod
     def _build_prompt(
@@ -143,23 +177,40 @@ DATOS:
 
 Devuelve SOLO JSON:
 {{
-  "verdict": "pass|replan|clarify|block",
-  "confidence": 0.0,
+  "verdict": "pass",
+  "confidence": 0.95,
   "reason": "máximo 300 caracteres",
-  "signals": ["SIGNAL"],
-  "missing_information": ["dato"],
+  "signals": [],
+  "missing_information": [],
   "suggested_action": "descripción breve"
 }}"""
 
     @classmethod
-    def _parse_response(cls, content: str) -> Optional[Dict[str, Any]]:
-        match = re.search(r"\{[\s\S]*\}", content or "")
-        if not match:
+    def _parse_response(cls, content: Any) -> Optional[Dict[str, Any]]:
+        if isinstance(content, dict):
+            data = content
+        else:
+            normalized = str(content or "").strip()
+            normalized = re.sub(
+                r"^```(?:json)?\s*|\s*```$",
+                "",
+                normalized,
+                flags=re.IGNORECASE,
+            ).strip()
+            match = re.search(r"\{[\s\S]*\}", normalized)
+            if not match:
+                return None
+            candidate = match.group()
+            try:
+                data = json.loads(candidate)
+            except (TypeError, ValueError):
+                try:
+                    data = ast.literal_eval(candidate)
+                except (SyntaxError, ValueError):
+                    return None
+        if not isinstance(data, dict):
             return None
-        try:
-            data = json.loads(match.group())
-        except (TypeError, ValueError):
-            return None
+
         verdict = str(data.get("verdict", "")).lower()
         if verdict not in cls.VALID_VERDICTS:
             return None
@@ -180,6 +231,17 @@ Devuelve SOLO JSON:
             ],
             "suggested_action": str(data.get("suggested_action", ""))[:240],
         }
+
+    @staticmethod
+    def _repair_prompt(raw_content: Any) -> str:
+        return f"""Convierte la siguiente salida en un único objeto JSON válido.
+No cambies el significado y no agregues Markdown. Usa exactamente estas claves:
+verdict, confidence, reason, signals, missing_information, suggested_action.
+`verdict` debe ser pass, replan, clarify o block; `confidence` debe ser un número
+entre 0 y 1; signals y missing_information deben ser listas.
+
+SALIDA A REPARAR:
+{str(raw_content or '')[:1400]}"""
 
     @classmethod
     def _result_sample(cls, results: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -219,6 +281,11 @@ Devuelve SOLO JSON:
                         or fields.get("built_area")
                         or fields.get("area_terreno")
                     ),
+                    "bedrooms": (
+                        fields.get("bedrooms")
+                        or fields.get("habitaciones")
+                        or fields.get("dormitorios")
+                    ),
                 })
                 if len(sample) >= cls.MAX_SAMPLE_ITEMS:
                     return sample
@@ -231,7 +298,14 @@ Devuelve SOLO JSON:
         return str(value)[:cls.MAX_FIELD_LENGTH]
 
     @staticmethod
-    def _failure(mode: str, latency_ms: float, error: str) -> Dict[str, Any]:
+    def _failure(
+        mode: str,
+        latency_ms: float,
+        error: str,
+        *,
+        attempts: int = 1,
+        raw_preview: Any = "",
+    ) -> Dict[str, Any]:
         return {
             "enabled": True,
             "mode": mode,
@@ -239,4 +313,6 @@ Devuelve SOLO JSON:
             "error": str(error)[:240],
             "latency_ms": latency_ms,
             "authority_applied": False,
+            "attempts": attempts,
+            "raw_preview": str(raw_preview or "")[:240],
         }

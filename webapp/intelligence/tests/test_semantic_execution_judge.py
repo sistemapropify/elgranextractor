@@ -86,3 +86,53 @@ class SemanticExecutionJudgeTests(SimpleTestCase):
         )
         self.assertEqual(result['status'], 'failed')
         self.assertFalse(result['authority_applied'])
+        self.assertEqual(result['attempts'], 2)
+        self.assertEqual(mock_call.call_count, 2)
+
+    @patch.dict(
+        os.environ,
+        {'EXECUTION_JUDGE_MODE': 'advisory'},
+    )
+    @patch(
+        'intelligence.agents.semantic_execution_judge.'
+        'LLMService._call_deepseek_api'
+    )
+    def test_advisory_evaluates_simple_queries(self, mock_call):
+        mock_call.return_value = (
+            True,
+            'ok',
+            {'content': '{"verdict":"pass","confidence":0.97,"reason":"Coincide","signals":[]}'},
+        )
+
+        result = SemanticExecutionJudge.evaluate(
+            message='Departamentos de 3 habitaciones en Cayma',
+            results={},
+            deterministic_evaluation={'verdict': 'pass'},
+        )
+
+        self.assertEqual(result['status'], 'completed')
+        self.assertEqual(result['verdict'], 'pass')
+        self.assertEqual(result['attempts'], 1)
+
+    @patch(
+        'intelligence.agents.semantic_execution_judge.'
+        'LLMService._call_deepseek_api'
+    )
+    def test_repairs_invalid_first_response_once(self, mock_call):
+        mock_call.side_effect = [
+            (True, 'ok', {'content': 'veredicto pass sin json'}),
+            (
+                True,
+                'ok',
+                {'content': '{"verdict":"pass","confidence":0.93,"reason":"Válido","signals":[]}'},
+            ),
+        ]
+
+        result = SemanticExecutionJudge.evaluate(
+            message='Recomiéndame una propiedad',
+            results={},
+            deterministic_evaluation={'verdict': 'clarify'},
+        )
+
+        self.assertEqual(result['status'], 'completed')
+        self.assertEqual(result['attempts'], 2)

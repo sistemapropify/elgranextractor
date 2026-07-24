@@ -17,6 +17,40 @@ def audit_enabled() -> bool:
     return bool(getattr(settings, 'LEARNING_AI_AUDIT_ALL', True))
 
 
+def _evidence_covers_query(
+    query: str,
+    result_evidence: list[dict[str, Any]] | None,
+) -> bool:
+    """Comprueba que la evidencia contiene los campos verificables solicitados."""
+    evidence = result_evidence or []
+    if not evidence:
+        return False
+    text = (query or '').casefold()
+    required_fields = []
+    if any(term in text for term in ('área', 'area', 'metros', 'm²', 'm2')):
+        required_fields.append('area')
+    if any(term in text for term in ('habitacion', 'dormitorio', 'cuarto')):
+        required_fields.append('bedrooms')
+    if any(term in text for term in (
+        'precio', 'presupuesto', 'dólar', 'dolar', 'soles',
+        'usd', 'pen', '$',
+    )):
+        required_fields.append('price')
+    if any(term in text for term in (
+        'distrito', 'cayma', 'yanahuara', 'cerro colorado',
+    )):
+        required_fields.append('district')
+    if any(term in text for term in (
+        'terreno', 'departamento', 'casa', 'oficina', 'local',
+    )):
+        required_fields.append('property_type')
+
+    return all(
+        all(item.get(field) not in (None, '') for field in required_fields)
+        for item in evidence
+    )
+
+
 def audit_interaction(
     *,
     query: str,
@@ -74,6 +108,10 @@ Respuesta redactada: {redact_text(response, 1200)}
 Ejecución y evidencia recuperada: {json.dumps(prompt_payload, ensure_ascii=True, default=str)}
 Señales deterministas: {json.dumps(signals)}
 
+En result_evidence, `area` es el área canónica usada para validar la consulta.
+`area_source` indica si procede de `land_area` o `built_area`. Para terrenos,
+normalmente corresponde `land_area`. Estos campos son evidencia directa.
+
 Solo usa DATA_INVENTED cuando un dato concreto de la respuesta contradiga la
 evidencia recuperada. Si no hay evidencia suficiente para comparar, usa
 INSUFFICIENT_GROUNDING_EVIDENCE y verdict review, nunca DATA_INVENTED.
@@ -104,6 +142,17 @@ Responde SOLO JSON:
                 combined_signals = list(dict.fromkeys(
                     signals + list(parsed.get('signals') or [])
                 ))
+                if (
+                    'INSUFFICIENT_GROUNDING_EVIDENCE' in combined_signals
+                    and _evidence_covers_query(query, result_evidence)
+                ):
+                    combined_signals.remove('INSUFFICIENT_GROUNDING_EVIDENCE')
+                    if not combined_signals:
+                        verdict = 'pass'
+                        parsed['summary'] = (
+                            'La evidencia estructurada contiene los campos '
+                            'necesarios para validar la respuesta.'
+                        )
                 if signals and verdict == 'pass':
                     verdict = 'review'
                 return {

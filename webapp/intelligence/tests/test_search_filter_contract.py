@@ -11,6 +11,14 @@ from intelligence.search.normalizer import SearchPlanNormalizer
 
 
 class SearchPlanNormalizerTests(SimpleTestCase):
+    def test_area_max_is_not_misclassified_as_price(self):
+        params = SearchPlanNormalizer.params_from_message(
+            'muéstrame terrenos en Cayma con menos de 500 metros'
+        )
+
+        self.assertEqual(float(params['area_max']), 500.0)
+        self.assertNotIn('precio_max', params)
+
     def test_incident_query_is_extracted_before_orchestration(self):
         params = SearchPlanNormalizer.params_from_message(
             'quiero ver terreno en Cerro Colorado con menos de '
@@ -55,6 +63,16 @@ class SearchPlanNormalizerTests(SimpleTestCase):
         self.assertEqual(operators['precio'], FilterOperator.EQ)
         self.assertEqual(operators['precio_min'], FilterOperator.GTE)
         self.assertEqual(operators['precio_max'], FilterOperator.LTE)
+
+    def test_area_max_uses_less_than_or_equal_operator(self):
+        plan = SearchPlanNormalizer.from_params(
+            query='terrenos menores de 500 m2',
+            params={'area_max': 500},
+            collections=['propiedadespropify'],
+        )
+
+        self.assertEqual(plan.conditions[0].logical_name, 'area_max')
+        self.assertEqual(plan.conditions[0].operator, FilterOperator.LTE)
 
     def test_legacy_adapter_never_converts_price_max_to_price_equality(self):
         filters = SearchAgent._build_filters(
