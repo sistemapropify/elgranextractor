@@ -79,6 +79,7 @@ INSTALLED_APPS = [
     'acm',
     'market_analysis',
     'analisis_crm',
+    'lead_intelligence',
     'eventos',
     'intelligence',
     'meta_ads',  # Habilitado para desarrollo - dashboard de Meta Ads
@@ -146,13 +147,6 @@ DATABASES = {
         'OPTIONS': {
             'driver': 'ODBC Driver 18 for SQL Server',
         },
-        # ⚠ SEGURIDAD: Prevenir creación de test databases en Azure SQL.
-        # Django crea automáticamente test_{DB_NAME} al ejecutar tests,
-        # lo que genera costos inesperados (~$100 USD en julio 2026).
-        # Usar: python manage.py test --settings=webapp.test_settings
-        'TEST': {
-            'NAME': ':memory:',
-        },
     },
     'propifai': {
         'ENGINE': 'mssql',
@@ -163,10 +157,6 @@ DATABASES = {
         'PORT': env('PROPIFAI_DB_PORT', default='1433'),
         'OPTIONS': {
             'driver': 'ODBC Driver 18 for SQL Server',
-        },
-        # ⚠ SEGURIDAD: Prevenir creación de test databases en Azure SQL.
-        'TEST': {
-            'NAME': ':memory:',
         },
     }
 }
