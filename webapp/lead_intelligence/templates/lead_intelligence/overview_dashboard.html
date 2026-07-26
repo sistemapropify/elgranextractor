@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Resumen de Leads | Prometeo{% endblock %}
+{% block extra_css %}<style>{% include "lead_intelligence/_dashboard_styles.html" %}</style>{% endblock %}
+{% block content %}
+<main class="pli-page">
+  <header class="pli-head">
+    <div><div class="pli-kicker">Marketing &amp; prospección</div><h1>Resumen gerencial de leads</h1><p>Salud operativa de todos los leads captados dentro del periodo seleccionado.</p></div>
+    <form class="pli-filter" method="get">
+      <div><label for="from">Desde</label><input id="from" name="from" type="date" value="{{ date_from|date:'Y-m-d' }}"></div>
+      <div><label for="to">Hasta</label><input id="to" name="to" type="date" value="{{ date_to|date:'Y-m-d' }}"></div>
+      <button class="pli-submit" type="submit">↻&nbsp; Actualizar</button>
+    </form>
+  </header>
+  <nav class="pli-tabs" aria-label="Secciones de inteligencia de leads">
+    <a class="pli-tab active" href="{% url 'analisis_crm:dashboard' %}">Resumen gerencial</a>
+    <a class="pli-tab" href="{% url 'analisis_crm:cohorts' %}">Cohortes por día</a>
+  </nav>
+  <section class="pli-grid-5">
+    <article class="pli-card pli-kpi"><small>Leads captados</small><strong>{{ overview.new_in_period|default:0 }}</strong><span>{{ date_from|date:"d/m/Y" }} — {{ date_to|date:"d/m/Y" }}</span></article>
+    <article class="pli-card pli-kpi"><small>Sin responsable</small><strong>{{ overview.unassigned|default:0 }}</strong><span>Necesitan asignación antes de distribuir tareas.</span></article>
+    <article class="pli-card pli-kpi"><small>Estancados</small><strong>{{ overview.stalled|default:0 }}</strong><span>Más de 7 días sin actividad registrada.</span></article>
+    <article class="pli-card pli-kpi"><small>Mensajes no leídos</small><strong>{{ overview.unread|default:0 }}</strong><span>Respuestas pendientes dentro del periodo.</span></article>
+    <article class="pli-card pli-kpi"><small>Próximas visitas</small><strong>{{ overview.upcoming_visits|default:0 }}</strong><span>{{ overview.overdue_events|default:0 }} eventos vencidos.</span></article>
+  </section>
+  <section class="pli-grid">
+    <article class="pli-card pli-section">
+      <div class="pli-section-head"><div><h2>Atención requerida</h2><p>Problemas operativos detectados en este grupo de leads.</p></div><span class="pli-chip">Periodo seleccionado</span></div>
+      <div class="pli-alerts">
+        <div class="pli-alert"><div><b>Sin responsable</b><span>No pueden recibir tareas individuales</span></div><strong>{{ overview.unassigned|default:0 }}</strong></div>
+        <div class="pli-alert"><div><b>Mensajes no leídos</b><span>Posibles clientes esperando respuesta</span></div><strong>{{ overview.unread|default:0 }}</strong></div>
+        <div class="pli-alert"><div><b>Seguimiento detenido</b><span>Más de 7 días sin actividad</span></div><strong>{{ overview.stalled|default:0 }}</strong></div>
+        <div class="pli-alert"><div><b>Eventos vencidos</b><span>Tareas o visitas aún abiertas</span></div><strong>{{ overview.overdue_events|default:0 }}</strong></div>
+      </div>
+    </article>
+    <article class="pli-card pli-section">
+      <div class="pli-section-head"><div><h2>Calidad del periodo</h2><p>Datos que limitan el análisis.</p></div></div>
+      <div class="pli-quality">
+        <div><strong>{{ data_quality.no_chatwoot|default:0 }}</strong><span>sin Chatwoot</span></div>
+        <div><strong>{{ data_quality.no_last_message|default:0 }}</strong><span>sin último mensaje</span></div>
+        <div><strong>{{ data_quality.events_without_lead|default:0 }}</strong><span>eventos sin lead</span></div>
+        <div><strong>{{ data_quality.invalid_dates|default:0 }}</strong><span>fechas inválidas</span></div>
+      </div>
+    </article>
+  </section>
+  <section class="pli-card pli-section">
+    <div class="pli-section-head"><div><h2>Carga de seguimiento por agente</h2><p>Distribución de los leads captados en el periodo; no incluye otros periodos.</p></div></div>
+    <div class="pli-table-wrap"><table class="pli-table">
+      <thead><tr><th>Agente</th><th>Leads asignados</th><th>No leídos</th><th>Estancados</th></tr></thead>
+      <tbody>{% for agent in agent_load %}<tr><td>{{ agent.agent_name }}</td><td>{{ agent.leads }}</td><td>{{ agent.unread }}</td><td>{{ agent.stalled }}</td></tr>{% empty %}<tr><td colspan="4">Sin datos para este periodo.</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+</main>
+{% endblock %}
