@@ -36,6 +36,111 @@
     <div class="stat-card"><div class="stat-value">{{ avg_latency }} ms</div><div class="stat-label">Latencia media</div></div>
 </div>
 
+<section class="card learning-latency-card">
+    <div class="card-header learning-chart-header">
+        <div>
+            <div class="card-title">Evolución de la latencia</div>
+            <p>Latencia de cada consulta, promedio y percentil 95 por intervalo.</p>
+        </div>
+        <div class="learning-chart-legend" aria-label="Leyenda">
+            <span><i class="legend-line legend-line--average"></i> Promedio</span>
+            <span><i class="legend-line legend-line--p95"></i> P95</span>
+            <span><i class="legend-line legend-line--query"></i> Cada consulta</span>
+        </div>
+    </div>
+    <div class="learning-chart-summary">
+        <span>Intervalo: {% if latency_series.bucket_hours == 1 %}1 hora{% elif latency_series.bucket_hours == 6 %}6 horas{% else %}1 día{% endif %}</span>
+        <span id="latency-chart-detail">Pasa el cursor por la gráfica para ver el detalle</span>
+    </div>
+    <div class="learning-latency-chart">
+        <canvas id="latency-evolution-chart" role="img" aria-label="Evolución temporal de la latencia de cada consulta, promedio y percentil 95"></canvas>
+        <div class="learning-chart-empty" id="latency-chart-empty" hidden>
+            Todavía no hay trazas finalizadas con latencia en esta ventana.
+        </div>
+    </div>
+    {{ latency_series|json_script:"latency-series-data" }}
+</section>
+
+<section class="card learning-ai-usage-card">
+    <div class="card-header">
+        <div>
+            <div class="card-title">Consumo de inteligencia artificial</div>
+            <p>Tokens registrados y costo estimado en dólares para la ventana seleccionada.</p>
+        </div>
+    </div>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-value">{{ ai_usage.calls }}</div>
+            <div class="stat-label">Llamadas LLM</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ ai_usage.prompt_tokens }}</div>
+            <div class="stat-label">Tokens de entrada</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ ai_usage.completion_tokens }}</div>
+            <div class="stat-label">Tokens de salida</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ ai_usage.total_tokens }}</div>
+            <div class="stat-label">Tokens totales</div>
+        </div>
+        <div class="stat-card stat-card--cost">
+            <div class="stat-value">US$ {{ ai_usage.estimated_cost_usd|floatformat:6 }}</div>
+            <div class="stat-label">Costo estimado</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ ai_usage.coverage_pct }}%</div>
+            <div class="stat-label">Llamadas con tokens</div>
+        </div>
+    </div>
+    <p class="learning-usage-note">
+        El costo se calcula con las tarifas configuradas en el registro de consumo.
+        Las llamadas en streaming que no devuelven usage pueden registrarse con cero
+        tokens y reducen la cobertura.
+    </p>
+    <div class="grid grid-2">
+        <div class="learning-table-wrap">
+            <table class="table">
+                <thead>
+                    <tr><th>Componente</th><th>Llamadas</th><th>Tokens</th><th>USD estimado</th></tr>
+                </thead>
+                <tbody>
+                {% for row in ai_usage_by_caller %}
+                    <tr>
+                        <td>{{ row.caller_app|default:"desconocido" }}</td>
+                        <td>{{ row.calls }}</td>
+                        <td>{{ row.tokens|default:0 }}</td>
+                        <td>US$ {{ row.cost|default:0|floatformat:6 }}</td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="4">Todavía no hay consumo registrado.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="learning-table-wrap">
+            <table class="table">
+                <thead>
+                    <tr><th>Modelo</th><th>Llamadas</th><th>Tokens</th><th>USD estimado</th></tr>
+                </thead>
+                <tbody>
+                {% for row in ai_usage_by_model %}
+                    <tr>
+                        <td>{{ row.model_name|default:"desconocido" }}</td>
+                        <td>{{ row.calls }}</td>
+                        <td>{{ row.tokens|default:0 }}</td>
+                        <td>US$ {{ row.cost|default:0|floatformat:6 }}</td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="4">Todavía no hay consumo registrado.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
 <section class="card">
     <div class="card-header">
         <div>
@@ -98,7 +203,7 @@
     </div>
     <div class="learning-table-wrap">
         <table class="table">
-            <thead><tr><th>Hora</th><th>Consulta redactada</th><th>Ruta</th><th>Estado</th><th>Latencia</th></tr></thead>
+            <thead><tr><th>Hora</th><th>Consulta redactada</th><th>Ruta</th><th>Estado</th><th>Latencia</th><th>Costo IA</th></tr></thead>
             <tbody>
             {% for trace in recent_traces %}
                 <tr>
@@ -106,10 +211,30 @@
                     <td>{{ trace.query_redacted|truncatechars:80 }}</td>
                     <td>{{ trace.orchestration_mode|default:"—" }}</td>
                     <td><span class="trace-status trace-status--{{ trace.status }}">{{ trace.get_status_display }}</span></td>
-                    <td>{{ trace.latency_ms|default:"—" }}{% if trace.latency_ms %} ms{% endif %}</td>
+                    <td>
+                        {% if trace.latency_ms %}
+                            {{ trace.latency_ms }} ms
+                        {% elif trace.has_elapsed_latency %}
+                            {% if trace.is_stale_started %}Abierta hace{% else %}En curso{% endif %}
+                            {{ trace.elapsed_latency_ms }} ms
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if trace.has_ai_usage %}
+                            <span title="{{ trace.ai_tokens }} tokens en {{ trace.ai_calls }} llamada(s)">
+                                US$ {{ trace.ai_cost_usd|floatformat:6 }}
+                            </span>
+                        {% elif trace.ai_calls %}
+                            <span title="{{ trace.ai_calls }} llamada(s) sin usage del proveedor">Sin conteo</span>
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
                 </tr>
             {% empty %}
-                <tr><td colspan="5">Las nuevas conversaciones aparecerán aquí.</td></tr>
+                <tr><td colspan="6">Las nuevas conversaciones aparecerán aquí.</td></tr>
             {% endfor %}
             </tbody>
         </table>
@@ -119,5 +244,10 @@
 
 {% block extra_css %}
 {{ block.super }}
-<link rel="stylesheet" href="/static/intelligence/css/learning_dashboard.css">
+<link rel="stylesheet" href="/static/intelligence/css/learning_dashboard.css?v=20260726-002">
+{% endblock %}
+
+{% block extra_scripts %}
+{{ block.super }}
+<script src="/static/intelligence/js/learning_dashboard.js?v=20260726-002"></script>
 {% endblock %}

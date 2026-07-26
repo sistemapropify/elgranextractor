@@ -31,6 +31,8 @@ import numpy as np
 from django.db import connections
 from django.db.models import Q
 
+from ...search.property_fields import canonical_property_area
+
 from ...models import IntelligenceCollection, IntelligenceDocument
 from ...services.rag import RAGService
 from ..base import BaseSkill, SkillResult
@@ -188,7 +190,12 @@ class BusquedaPropiedadesSkill(BaseSkill):
         },
         'habitaciones': {
             'type': 'integer',
-            'description': 'Filtro exacto: número mínimo de habitaciones',
+            'description': 'Filtro exacto: número de habitaciones (igualdad)',
+            'required': False,
+        },
+        'habitaciones_min': {
+            'type': 'integer',
+            'description': 'Número mínimo de habitaciones para consultas que lo indiquen explícitamente',
             'required': False,
         },
         'area_min': {
@@ -238,7 +245,8 @@ class BusquedaPropiedadesSkill(BaseSkill):
         has_filter = any(
             params.get(k) is not None and params.get(k) != ''
             for k in ('distrito', 'tipo_propiedad', 'operacion',
-                      'precio_min', 'precio_max', 'habitaciones', 'area_min',
+                      'precio_min', 'precio_max', 'habitaciones',
+                      'habitaciones_min', 'area_min',
                       'area_max',
                       'semantic_query')
         )
@@ -377,11 +385,25 @@ class BusquedaPropiedadesSkill(BaseSkill):
         elif any(p in mensaje_lower for p in ['vendida', 'vendido', 'vendidas']):
             filtros['condicion'] = 'Vendida'
 
+        habitaciones_min_match = re.search(
+            r'\b(?:m[ií]nimo(?:\s+de)?|al\s+menos|desde)\s+'
+            r'(\d+)\s*(?:habitaciones?|dormitorios?|cuartos?|bedrooms?)\b',
+            mensaje_lower,
+        )
+        habitaciones_mas_match = re.search(
+            r'\b(?:m[aá]s\s+de|mayor(?:es)?\s+(?:a|de))\s+'
+            r'(\d+)\s*(?:habitaciones?|dormitorios?|cuartos?|bedrooms?)\b',
+            mensaje_lower,
+        )
         habitaciones_match = re.search(
             r'\b(\d+)\s*(?:habitaciones?|dormitorios?|cuartos?|bedrooms?)\b',
             mensaje_lower,
         )
-        if habitaciones_match:
+        if habitaciones_mas_match:
+            filtros['habitaciones_min'] = int(habitaciones_mas_match.group(1)) + 1
+        elif habitaciones_min_match:
+            filtros['habitaciones_min'] = int(habitaciones_min_match.group(1))
+        elif habitaciones_match:
             filtros['habitaciones'] = int(habitaciones_match.group(1))
 
         area_max_match = re.search(
@@ -630,12 +652,36 @@ class BusquedaPropiedadesSkill(BaseSkill):
             tiene_filtros_exactos = any(
                 params.get(k) is not None and params.get(k) != ''
                 for k in ('distrito', 'tipo_propiedad', 'operacion',
-                          'precio_min', 'precio_max', 'habitaciones', 'area_min',
+                          'precio_min', 'precio_max', 'habitaciones',
+                          'habitaciones_min', 'area_min',
                           'area_max',
                           'condicion')
             )
 
             # ── Sin parámetros: conteo general ──
+            semantic_markers = (
+                'ideal para', 'apto para', 'cerca de', 'similar a',
+                'con vista', 'zona tranquila', 'para construir',
+                'para colegio', 'para tienda', 'para negocio',
+                'inversión', 'inversion',
+            )
+            if (
+                tiene_filtros_exactos
+                and not titulo_clean
+                and semantic_query
+                and not any(
+                    marker in semantic_query.casefold()
+                    for marker in semantic_markers
+                )
+            ):
+                logger.info(
+                    "Consulta estructurada: se omite reranking semántico y se "
+                    "aplican filtros exactos sobre todo el inventario."
+                )
+                semantic_query = ''
+                params['semantic_query'] = ''
+                tiene_semantica = False
+
             if not tiene_semantica and not tiene_filtros_exactos:
                 try:
                     from propifai.models import PropifaiProperty
@@ -681,9 +727,11 @@ class BusquedaPropiedadesSkill(BaseSkill):
             # 4. Si no hay semantic_query → filtro SQL tradicional
 
             # Obtener docs base para búsqueda
-            todos_docs = list(IntelligenceDocument.objects.filter(
-                collection__in=colecciones, embedding__isnull=False
-            ).select_related('collection'))
+            todos_docs = []
+            if tiene_semantica or not tiene_filtros_exactos:
+                todos_docs = list(IntelligenceDocument.objects.filter(
+                    collection__in=colecciones, embedding__isnull=False
+                ).select_related('collection'))
 
             if tiene_semantica:
                 # Paso 1: Búsqueda semántica (FAISS) sobre TODOS los docs
@@ -1087,6 +1135,7 @@ class BusquedaPropiedadesSkill(BaseSkill):
                 exc,
                 exc_info=True,
             )
+
             return documentos
 
         enriched = 0
@@ -1348,28 +1397,54 @@ class BusquedaPropiedadesSkill(BaseSkill):
             if not coincide:
                 return False
 
-        # Habitaciones mínimas
+        # Habitaciones exactas
         habitaciones = params.get('habitaciones')
         if habitaciones is not None:
-            if not self._cumple_minimo_numerico(
+            if not self._cumple_exacto_numerico(
                 field_values, FIELD_MAP['habitaciones'], habitaciones
+            ):
+                return False
+
+        # Habitaciones mínimas
+        habitaciones_min = params.get('habitaciones_min')
+        if habitaciones_min is not None:
+            if not self._cumple_minimo_numerico(
+                field_values, FIELD_MAP['habitaciones'], habitaciones_min
             ):
                 return False
 
         # Área mínima
         area_min = params.get('area_min')
         if area_min is not None:
-            if not self._cumple_minimo_numerico(
-                field_values, FIELD_MAP['area_min'], area_min
-            ):
+            area_value, _ = canonical_property_area(
+                field_values,
+                params.get('tipo_propiedad'),
+            )
+            try:
+                area_matches = (
+                    area_value is not None
+                    and float(area_value) >= float(area_min)
+                )
+            except (TypeError, ValueError):
+                area_matches = False
+            if not area_matches:
                 return False
 
         # Área máxima
         area_max = params.get('area_max')
         if area_max is not None:
-            if not self._cumple_maximo_numerico(
-                field_values, FIELD_MAP['area_max'], area_max
-            ):
+            area_value, _ = canonical_property_area(
+                field_values,
+                params.get('tipo_propiedad'),
+            )
+            try:
+                area_matches = (
+                    area_value is not None
+                    and float(area_value) <= float(area_max)
+                )
+            except (TypeError, ValueError):
+                area_matches = False
+            if not area_matches:
                 return False
 
         # Condición
@@ -1393,6 +1468,23 @@ class BusquedaPropiedadesSkill(BaseSkill):
         valor = str(distrito).strip()
         alias = SINONIMOS_DISTRITOS.get(valor.casefold(), [])
         return list(dict.fromkeys([valor, *alias]))
+
+    @staticmethod
+    def _cumple_exacto_numerico(
+        field_values: Dict[str, Any],
+        campos: List[str],
+        esperado: Any,
+    ) -> bool:
+        for campo in campos:
+            valor = field_values.get(campo)
+            if valor is None:
+                continue
+            try:
+                if float(valor) == float(esperado):
+                    return True
+            except (TypeError, ValueError):
+                continue
+        return False
 
     @staticmethod
     def _cumple_minimo_numerico(

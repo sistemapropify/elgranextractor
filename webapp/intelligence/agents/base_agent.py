@@ -533,7 +533,13 @@ Responde SOLO con JSON:
                 if any(term in description for term in ('terreno', 'departamento', 'casa', 'oficina', 'local')):
                     expected_filters.add('tipo_propiedad')
                 if any(term in description for term in ('habitacion', 'dormitorio', 'cuarto', 'bedroom')):
-                    expected_filters.add('habitaciones')
+                    if any(term in description for term in (
+                        'mínimo', 'minimo', 'al menos', 'desde',
+                        'más de', 'mas de',
+                    )):
+                        expected_filters.add('habitaciones_min')
+                    else:
+                        expected_filters.add('habitaciones')
                 if any(term in description for term in ('precio', 'presupuesto', 'dólar', 'dolar', 'soles')):
                     if any(term in description for term in ('mayor', 'desde', 'mínimo', 'minimo', 'más de', 'mas de')):
                         expected_filters.add('precio_min')

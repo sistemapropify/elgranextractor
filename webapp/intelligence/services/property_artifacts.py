@@ -5,6 +5,8 @@ from typing import Any, Dict, Iterable, List, Optional
 import urllib.parse
 import uuid
 
+from ..search.property_fields import canonical_property_area
+
 
 MEDIA_BASE = "https://propifymedia01.blob.core.windows.net/media"
 
@@ -66,7 +68,7 @@ def _media_url(path: Any) -> Optional[str]:
 
 
 def _hydrate_real_gallery(items: List[Dict[str, Any]]) -> None:
-    """Carga property_media en una sola consulta y reemplaza URLs inferidas."""
+    """Carga solo la portada; la galería completa se obtiene en el detalle."""
     numeric_ids = []
     for item in items:
         try:
@@ -88,6 +90,8 @@ def _hydrate_real_gallery(items: List[Dict[str, Any]]) -> None:
                 continue
             property_id = str(row.property_id)
             gallery = grouped.setdefault(property_id, [])
+            if gallery:
+                continue
             gallery.append({
                 "url": url,
                 "alt": f"Fotografía de propiedad {property_id}",
@@ -107,21 +111,20 @@ def normalize_property_item(item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     if not isinstance(fields, dict):
         fields = item
 
-    source_id = (
-        item.get("source_id")
-        or fields.get("_source_id")
-        or fields.get("id")
-        or fields.get("property_id")
+    source_id = _first(
+        item,
+        "source_id",
     )
+    if source_id in (None, ""):
+        source_id = _first(fields, "_source_id", "id", "property_id")
     if source_id in (None, ""):
         return None
 
     code = _first(fields, "code", "codigo")
     price = _number(_first(fields, "price", "precio", "precio_usd"))
-    area = _number(_first(
-        fields, "built_area", "total_area", "land_area",
-        "area_construida", "area_terreno",
-    ))
+    property_type = _first(fields, "property_type_name", "tipo_propiedad")
+    canonical_area, _ = canonical_property_area(fields, property_type)
+    area = _number(canonical_area)
     latitude = _number(_first(fields, "latitude", "lat"))
     longitude = _number(_first(fields, "longitude", "lng", "lon"))
     currency = _currency(_first(fields, "currency_name", "currency", "moneda"))
@@ -130,7 +133,7 @@ def normalize_property_item(item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         "id": str(source_id),
         "code": str(code) if code not in (None, "") else None,
         "title": str(_first(fields, "title", "titulo") or f"Propiedad {source_id}"),
-        "property_type": _first(fields, "property_type_name", "tipo_propiedad"),
+        "property_type": property_type,
         "operation_type": _first(fields, "operation_type_name", "tipo_operacion"),
         "status": _first(fields, "property_status_name", "estado"),
         "district": _first(fields, "district_name", "distrito"),
@@ -180,6 +183,46 @@ def build_property_collection_artifact(
     if len(normalized) >= 2:
         views.append("compare")
 
+    def group_counts(field: str) -> List[Dict[str, Any]]:
+        grouped: Dict[str, Dict[str, Any]] = {}
+        for item in normalized:
+            label = str(item.get(field) or "Sin especificar").strip()
+            key = label.casefold()
+            group = grouped.setdefault(key, {
+                "key": key,
+                "label": label,
+                "count": 0,
+                "types": {},
+            })
+            group["count"] += 1
+            if field == "district":
+                property_type = str(
+                    item.get("property_type") or "Sin especificar"
+                ).strip()
+                type_key = property_type.casefold()
+                previous = group["types"].get(type_key, {}).get("count", 0)
+                group["types"][type_key] = {
+                    "label": property_type,
+                    "count": previous + 1,
+                }
+        result = []
+        for group in grouped.values():
+            group["types"] = sorted(
+                group["types"].values(),
+                key=lambda entry: (-entry["count"], entry["label"]),
+            )
+            result.append(group)
+        return sorted(
+            result,
+            key=lambda entry: (-entry["count"], entry["label"]),
+        )
+
+    page_size = 12
+    if len(normalized) > page_size:
+        display_mode = "grouped"
+    else:
+        display_mode = "cards"
+
     return {
         "schema_version": "1.0",
         "type": "property_collection",
@@ -190,6 +233,12 @@ def build_property_collection_artifact(
         "default_view": "cards",
         "available_views": views,
         "result_count": len(normalized),
+        "display_mode": display_mode,
+        "page_size": page_size,
+        "groups": {
+            "districts": group_counts("district"),
+            "property_types": group_counts("property_type"),
+        },
         "filters": [],
         "items": normalized,
         "provenance": {

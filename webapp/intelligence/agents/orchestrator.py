@@ -997,7 +997,7 @@ class AgentGraphBuilder:
             and evaluation.suggested_plan
             and len(agents) == 1
         ):
-            agent_name = agents[0]
+            agent_name = evaluation.suggested_agent or agents[0]
             agent = registry.get_by_name(agent_name)
             if agent:
                 logger.info(
@@ -1015,6 +1015,18 @@ class AgentGraphBuilder:
                         'evaluation_feedback': evaluation.to_dict(),
                     },
                 )
+                if evaluation.suggested_agent:
+                    state['results'] = {}
+                    agents = [agent_name]
+                    state['agents_activated'] = agents
+                    state['routing_plan']['corrected_by_evaluator'] = True
+                    state['routing_plan']['agents'] = [{
+                        'name': agent_name,
+                        'description': getattr(agent.definition, 'description', ''),
+                        'order': 1,
+                        'score': 1.0,
+                        'sub_query': message,
+                    }]
                 state['results'][agent_name] = (
                     retry_result.to_log()
                     if hasattr(retry_result, 'to_log')

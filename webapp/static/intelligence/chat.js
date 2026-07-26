@@ -15,7 +15,9 @@ document.addEventListener('DOMContentLoaded', function() {
         thinkingTimers: [],
         artifacts: [],
         activeArtifactId: null,
-        activeGalleryIndex: 0
+        activeGalleryIndex: 0,
+        artifactPage: 1,
+        artifactFilter: null
     };
 
     // Elementos DOM
@@ -857,22 +859,142 @@ document.addEventListener('DOMContentLoaded', function() {
     function renderPropertyCollection(artifact) {
         if (!elements.artifactContent) return;
         const items = artifact.items || [];
+        state.artifactPage = 1;
+        state.artifactFilter = null;
+        if (artifact.display_mode === 'grouped' || items.length > 12) {
+            renderPropertyGroups(artifact);
+            return;
+        }
+        renderPropertyPage(artifact);
+    }
+
+    function renderPropertyGroups(artifact) {
+        const districts = artifact.groups?.districts || buildClientGroups(artifact.items, 'district');
+        const propertyTypes = artifact.groups?.property_types || buildClientGroups(artifact.items, 'property_type');
+        elements.artifactContent.innerHTML = `
+            <div class="property-collection property-group-summary">
+                <div class="property-collection-toolbar">
+                    <div>
+                        <span class="eyebrow">Resumen de resultados</span>
+                        <h3>${escapeHtml(artifact.title || 'Propiedades encontradas')}</h3>
+                        <p>Encontré ${artifact.result_count || artifact.items.length} propiedades. Elige un grupo para explorarlas.</p>
+                    </div>
+                </div>
+                <section class="property-group-section">
+                    <div class="property-group-heading">
+                        <h4><i class="fa-solid fa-location-dot"></i> Por distrito</h4>
+                        <span>${districts.length} distritos</span>
+                    </div>
+                    <div class="property-group-grid">
+                        ${districts.map(group => renderPropertyGroupCard(group, 'district')).join('')}
+                    </div>
+                </section>
+                <section class="property-group-section">
+                    <div class="property-group-heading">
+                        <h4><i class="fa-solid fa-house"></i> Por tipo de propiedad</h4>
+                        <span>${propertyTypes.length} tipos</span>
+                    </div>
+                    <div class="property-group-grid property-type-groups">
+                        ${propertyTypes.map(group => renderPropertyGroupCard(group, 'property_type')).join('')}
+                    </div>
+                </section>
+            </div>
+        `;
+        elements.artifactContent.querySelectorAll('[data-group-field]').forEach(card => {
+            card.addEventListener('click', () => {
+                state.artifactFilter = {
+                    field: card.dataset.groupField,
+                    key: card.dataset.groupKey
+                };
+                state.artifactPage = 1;
+                renderPropertyPage(artifact);
+            });
+        });
+    }
+
+    function renderPropertyGroupCard(group, field) {
+        const typeSummary = field === 'district' && Array.isArray(group.types)
+            ? group.types.slice(0, 3).map(item =>
+                `<span>${escapeHtml(item.label)} · ${item.count}</span>`
+            ).join('')
+            : '';
+        return `
+            <button class="property-group-card" type="button"
+                    data-group-field="${escapeHtml(field)}"
+                    data-group-key="${escapeHtml(group.key)}">
+                <span class="property-group-icon"><i class="fa-solid ${field === 'district' ? 'fa-location-dot' : 'fa-building'}"></i></span>
+                <span class="property-group-copy">
+                    <strong>${escapeHtml(group.label)}</strong>
+                    <small>${group.count} propiedad${group.count === 1 ? '' : 'es'}</small>
+                    ${typeSummary ? `<span class="property-group-types">${typeSummary}</span>` : ''}
+                </span>
+                <i class="fa-solid fa-chevron-right"></i>
+            </button>
+        `;
+    }
+
+    function buildClientGroups(items, field) {
+        const groups = new Map();
+        (items || []).forEach(item => {
+            const label = String(item[field] || 'Sin especificar').trim();
+            const key = label.toLocaleLowerCase('es');
+            const group = groups.get(key) || {key, label, count: 0, types: []};
+            group.count += 1;
+            groups.set(key, group);
+        });
+        return Array.from(groups.values()).sort((a, b) =>
+            b.count - a.count || a.label.localeCompare(b.label, 'es')
+        );
+    }
+
+    function filteredArtifactItems(artifact) {
+        if (!state.artifactFilter) return artifact.items || [];
+        const {field, key} = state.artifactFilter;
+        return (artifact.items || []).filter(item =>
+            String(item[field] || 'Sin especificar').trim().toLocaleLowerCase('es') === key
+        );
+    }
+
+    function renderPropertyPage(artifact) {
+        const items = filteredArtifactItems(artifact);
+        const pageSize = Number(artifact.page_size) || 12;
+        const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
+        state.artifactPage = Math.min(Math.max(1, state.artifactPage), pageCount);
+        const start = (state.artifactPage - 1) * pageSize;
+        const visibleItems = items.slice(start, start + pageSize);
+        const groupLabel = state.artifactFilter
+            ? (items[0]?.[state.artifactFilter.field] || 'Sin especificar')
+            : null;
         elements.artifactContent.innerHTML = `
             <div class="property-collection">
                 <div class="property-collection-toolbar">
                     <div>
+                        ${state.artifactFilter ? '<button class="artifact-back-link" id="back-to-property-groups" type="button"><i class="fa-solid fa-arrow-left"></i> Todos los grupos</button>' : ''}
                         <span class="eyebrow">Propiedades verificadas</span>
-                        <h3>${escapeHtml(artifact.title || 'Propiedades encontradas')}</h3>
-                        <p>${items.length} resultado${items.length === 1 ? '' : 's'}</p>
+                        <h3>${escapeHtml(groupLabel || artifact.title || 'Propiedades encontradas')}</h3>
+                        <p>${items.length} resultado${items.length === 1 ? '' : 's'} · Mostrando ${items.length ? start + 1 : 0}–${Math.min(start + pageSize, items.length)}</p>
                     </div>
                     <span class="view-pill"><i class="fa-solid fa-grip"></i> Tarjetas</span>
                 </div>
                 <div class="property-artifact-grid">
-                    ${items.map(property => renderPropertyArtifactCard(property)).join('')}
+                    ${visibleItems.map(property => renderPropertyArtifactCard(property)).join('')}
                 </div>
+                ${renderPropertyPagination(state.artifactPage, pageCount)}
             </div>
         `;
 
+        document.getElementById('back-to-property-groups')?.addEventListener('click', () => {
+            state.artifactFilter = null;
+            state.artifactPage = 1;
+            renderPropertyGroups(artifact);
+        });
+        elements.artifactContent.querySelectorAll('[data-artifact-page]').forEach(button => {
+            button.addEventListener('click', () => {
+                state.artifactPage = Number(button.dataset.artifactPage);
+                renderPropertyPage(artifact);
+                elements.artifactContent.scrollTop = 0;
+            });
+        });
         elements.artifactContent.querySelectorAll('[data-property-id]').forEach(card => {
             card.addEventListener('click', () => loadPropertyDetail(card.dataset.propertyId));
             card.addEventListener('keydown', event => {
@@ -894,6 +1016,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }, { once: true });
         });
+    }
+
+    function renderPropertyPagination(currentPage, pageCount) {
+        if (pageCount <= 1) return '';
+        return `
+            <nav class="property-pagination" aria-label="Páginas de propiedades">
+                <button type="button" data-artifact-page="${currentPage - 1}" ${currentPage === 1 ? 'disabled' : ''}>
+                    <i class="fa-solid fa-chevron-left"></i> Anterior
+                </button>
+                <span>Página ${currentPage} de ${pageCount}</span>
+                <button type="button" data-artifact-page="${currentPage + 1}" ${currentPage === pageCount ? 'disabled' : ''}>
+                    Siguiente <i class="fa-solid fa-chevron-right"></i>
+                </button>
+            </nav>
+        `;
     }
 
     function renderPropertyArtifactCard(property) {
@@ -1064,7 +1201,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function renderActiveArtifact() {
         const artifact = state.artifacts.find(item => item.id === state.activeArtifactId);
-        if (artifact) renderPropertyCollection(artifact);
+        if (artifact) {
+            const shouldGroup = (
+                artifact.display_mode === 'grouped'
+                || (artifact.items || []).length > 12
+            );
+            if (state.artifactFilter || !shouldGroup) {
+                renderPropertyPage(artifact);
+            } else {
+                renderPropertyGroups(artifact);
+            }
+        }
     }
 
     function detailFact(label, value) {

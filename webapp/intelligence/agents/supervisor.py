@@ -258,10 +258,21 @@ class Supervisor:
         from ..search.normalizer import SearchPlanNormalizer
 
         lowered = message.casefold()
-        if any(term in lowered for term in (
-            'cliente', 'requerimiento', 'mis matches', 'match con',
+        explicit_crm_intent = any(term in lowered for term in (
+            'requerimiento', 'mis matches', 'match con',
+            'qué busca mi cliente', 'que busca mi cliente',
+            'clientes buscando', 'requerimientos de clientes',
+        )) or (
+            'tengo un cliente que busca' in lowered
+            and not any(term in lowered for term in (
+                'muéstrame', 'muestrame', 'quiero ver', 'quiero enviar',
+                'enviarle', 'mostrarle', 'recomendarle', 'compartirle',
+            ))
+        )
+        analytical_intent = any(term in lowered for term in (
             'precio promedio', 'tendencia', 'reporte de mercado',
-        )):
+        ))
+        if explicit_crm_intent or analytical_intent:
             return None
 
         params = SearchPlanNormalizer.params_from_message(message)
@@ -269,16 +280,17 @@ class Supervisor:
             key for key in (
                 'distrito', 'tipo_propiedad', 'habitaciones', 'habitaciones_min',
                 'banos', 'banos_min', 'precio', 'precio_min', 'precio_max',
-                'area_min', 'area_max', 'condicion',
+                'area_min', 'area_max', 'condicion', 'operacion',
             )
             if key in params
         }
         listing_language = any(term in lowered for term in (
             'muéstrame', 'muestrame', 'quiero ver', 'qué tienes',
-            'que tienes', 'busco', 'tienes',
+            'que tienes', 'busco', 'tienes', 'quiero enviar',
+            'enviarle', 'mostrarle', 'recomendarle', 'compartirle',
         ))
-        if len(property_signals) < 2 and not (
-            listing_language and 'tipo_propiedad' in property_signals
+        if not property_signals or (
+            len(property_signals) < 2 and not listing_language
         ):
             return None
 

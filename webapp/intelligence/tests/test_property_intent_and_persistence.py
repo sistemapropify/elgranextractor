@@ -6,6 +6,7 @@ from django.test import SimpleTestCase
 
 from intelligence.skills.orchestrator import SkillOrchestrator
 from intelligence.skills.propiedades.skill import BusquedaPropiedadesSkill
+from intelligence.search.normalizer import SearchPlanNormalizer
 
 
 class PropertyIntentTests(SimpleTestCase):
@@ -17,6 +18,34 @@ class PropertyIntentTests(SimpleTestCase):
         self.assertEqual(filters['distrito'], 'Cayma')
         self.assertEqual(filters['tipo_propiedad'], 'Departamento')
         self.assertEqual(filters['habitaciones'], 3)
+
+    def test_distinguishes_exact_from_minimum_bedrooms(self):
+        skill = BusquedaPropiedadesSkill()
+
+        exact = skill._analizar_intencion('propiedades con 3 habitaciones')
+        minimum = skill._analizar_intencion(
+            'propiedades con al menos 3 habitaciones'
+        )
+        greater = skill._analizar_intencion(
+            'propiedades con más de 3 habitaciones'
+        )
+
+        self.assertEqual(exact['habitaciones'], 3)
+        self.assertNotIn('habitaciones_min', exact)
+        self.assertEqual(minimum['habitaciones_min'], 3)
+        self.assertNotIn('habitaciones', minimum)
+        self.assertEqual(greater['habitaciones_min'], 4)
+
+    def test_search_plan_preserves_bedroom_operator(self):
+        exact = SearchPlanNormalizer.params_from_message(
+            'propiedades con 3 habitaciones'
+        )
+        minimum = SearchPlanNormalizer.params_from_message(
+            'propiedades con mínimo 3 habitaciones'
+        )
+
+        self.assertEqual(exact['habitaciones'], 3)
+        self.assertEqual(minimum['habitaciones_min'], 3)
 
 
 class SkillExecutionPersistenceTests(SimpleTestCase):

@@ -142,6 +142,15 @@ class SearchPlanNormalizerTests(SimpleTestCase):
         self.assertEqual(params['tipo_propiedad'], 'Terreno')
         self.assertEqual(params['condicion'], 'Disponible')
 
+    def test_sale_operation_is_extracted_from_inventory_query(self):
+        params = SearchPlanNormalizer.params_from_message(
+            'quiero enviarle a mi cliente departamentos en venta en Cayma'
+        )
+
+        self.assertEqual(params['distrito'], 'Cayma')
+        self.assertEqual(params['tipo_propiedad'], 'Departamento')
+        self.assertEqual(params['operacion'], 'Venta')
+
     def test_price_operators_are_not_collapsed_to_equality(self):
         plan = SearchPlanNormalizer.from_params(
             query='terrenos',

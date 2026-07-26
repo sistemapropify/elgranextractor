@@ -844,6 +844,11 @@ class AIConsumptionLog(models.Model):
         verbose_name="App Django que originó la llamada"
     )
     
+    trace_id = models.CharField(
+        max_length=64, blank=True, default='', db_index=True,
+        verbose_name="Traza de la consulta",
+    )
+
     # Tokens
     prompt_tokens = models.IntegerField(
         default=0, verbose_name="Tokens de entrada (prompt)"
@@ -934,6 +939,7 @@ class AIConsumptionLog(models.Model):
         success: bool = True,
         status_code: int = None,
         error_message: str = '',
+        trace_id: str = '',
     ) -> 'AIConsumptionLog':
         """
         Crea un registro de consumo de IA.
@@ -950,10 +956,18 @@ class AIConsumptionLog(models.Model):
         cost_output = (completion_tokens / 1_000_000) * PRICE_OUTPUT_PER_1M
         estimated_cost = cost_input + cost_output
         
+        if not trace_id:
+            try:
+                from .learning.trace_context import current_trace_id
+                trace_id = current_trace_id()
+            except Exception:
+                trace_id = ''
+
         return cls.objects.create(
             model_name=model_name,
             endpoint=endpoint,
             caller_app=caller_app,
+            trace_id=trace_id,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             total_tokens=total_tokens or (prompt_tokens + completion_tokens),

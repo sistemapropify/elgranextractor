@@ -10,7 +10,7 @@ Bloquea la recalibración si introduce regresiones.
 Django crea automáticamente test databases (prefijo test_) en el
 servidor configurado, lo que genera costos imprevistos.
 
-Usar: python manage.py test --settings=webapp.test_settings
+Usar: python manage.py test --settings=test_settings
 """
 
 from __future__ import annotations
@@ -27,13 +27,13 @@ from ..agents.base_agent import AgentDefinition
 
 # ── VERIFICACIÓN DE SEGURIDAD ──────────────────────────────────────
 # Prevenir ejecución accidental contra Azure SQL (costo ~$100 USD/semana)
-if 'webapp.test_settings' not in ' '.join(sys.argv):
+if 'test_settings' not in ' '.join(sys.argv):
     from django.conf import settings
     engine = settings.DATABASES.get('default', {}).get('ENGINE', '')
     if 'mssql' in engine:
         raise RuntimeError(
             "⛔ SEGURIDAD: No ejecutar tests contra Azure SQL.\n"
-            "    Usar: python manage.py test --settings=webapp.test_settings\n"
+            "    Usar: python manage.py test --settings=test_settings\n"
             "    Esto evita crear test databases facturables en Azure."
         )
 # ────────────────────────────────────────────────────────────────────

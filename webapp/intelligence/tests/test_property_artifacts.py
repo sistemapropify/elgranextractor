@@ -55,3 +55,47 @@ class PropertyArtifactTests(SimpleTestCase):
             hydrate_media=False,
         )
         self.assertIsNone(artifact)
+
+    def test_large_collection_is_grouped_by_district_and_type(self):
+        items = [
+            {
+                'source_id': index,
+                'field_values': {
+                    'district_name': 'Cayma' if index < 40 else 'Yanahuara',
+                    'property_type_name': (
+                        'Departamento' if index % 2 == 0 else 'Casa'
+                    ),
+                },
+            }
+            for index in range(51)
+        ]
+        artifact = build_property_collection_artifact(
+            items, message_id='message-large', hydrate_media=False,
+        )
+        self.assertEqual(artifact['display_mode'], 'grouped')
+        self.assertEqual(artifact['page_size'], 12)
+        self.assertEqual(artifact['groups']['districts'][0]['label'], 'Cayma')
+        self.assertEqual(artifact['groups']['districts'][0]['count'], 40)
+
+    def test_medium_collection_is_grouped_before_pagination(self):
+        artifact = build_property_collection_artifact(
+            [
+                {'source_id': index, 'field_values': {'title': f'Propiedad {index}'}}
+                for index in range(13)
+            ],
+            message_id='message-medium',
+            hydrate_media=False,
+        )
+        self.assertEqual(artifact['display_mode'], 'grouped')
+        self.assertTrue(artifact['groups']['districts'])
+
+    def test_terrain_card_uses_land_area_as_canonical_area(self):
+        item = normalize_property_item({
+            'source_id': 7,
+            'field_values': {
+                'property_type_name': 'Terreno',
+                'land_area': 450,
+                'built_area': 80,
+            },
+        })
+        self.assertEqual(item['area_m2'], 450)

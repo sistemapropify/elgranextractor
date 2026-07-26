@@ -36,6 +36,7 @@ from .memory import MemoryService
 from .episodic_memory import EpisodicMemoryService
 from .rag import RAGService
 from .llm import LLMService
+from ..learning.trace_context import bind_trace_id, release_trace_id
 from .prompts import (
     PromptManager,
     build_orchestration_prompt,
@@ -183,6 +184,7 @@ class ChatProcessor:
             app_id=ctx.app_id,
         ) as timer:
             learning_trace = None
+            trace_context_token = None
             try:
                 from ..learning.events import start_trace
                 learning_trace = start_trace(
@@ -192,6 +194,7 @@ class ChatProcessor:
                     app_id=ctx.app_id,
                     trace_id=timer.trace_id,
                 )
+                trace_context_token = bind_trace_id(timer.trace_id)
                 # Guardar mensaje del usuario
                 cls._save_user_message(ctx.conversation, ctx.message)
 
@@ -243,6 +246,7 @@ class ChatProcessor:
                             cls._complete_learning_trace(
                                 learning_trace, agent_result, timer
                             )
+                            release_trace_id(trace_context_token)
                             return agent_result
                         else:
                             log.info("[AgentGraph] AgentGraph devolvió respuesta vacía. Usando LangGraph.")
@@ -322,6 +326,7 @@ class ChatProcessor:
                             cls._complete_learning_trace(
                                 learning_trace, lg_result, timer
                             )
+                            release_trace_id(trace_context_token)
                             return lg_result
                         else:
                             log.info(f"[F2-001] LangGraph devolvió respuesta vacía. Usando fallback secuencial.")
@@ -449,6 +454,7 @@ class ChatProcessor:
                 cls._complete_learning_trace(
                     learning_trace, result, timer, raw_results=resultados
                 )
+                release_trace_id(trace_context_token)
                 return result
 
             except Exception as e:
@@ -471,6 +477,7 @@ class ChatProcessor:
                 cls._complete_learning_trace(
                     learning_trace, error_result, timer, error=e
                 )
+                release_trace_id(trace_context_token)
                 return error_result
 
     @staticmethod
@@ -1231,15 +1238,15 @@ class ChatProcessor:
                 or fields.get('tipo_propiedad')
                 or ''
             )
+            from ..search.property_fields import canonical_property_area
+            canonical_area, area_source = canonical_property_area(
+                fields,
+                property_type,
+            )
             land_area = fields.get('land_area', fields.get('area_terreno'))
             built_area = fields.get(
                 'built_area',
                 fields.get('area_construida'),
-            )
-            canonical_area = (
-                land_area
-                if 'terreno' in str(property_type).casefold()
-                else built_area if built_area not in (None, '') else land_area
             )
             evidence.append({
                 'id': str(
@@ -1268,11 +1275,7 @@ class ChatProcessor:
                     or ''
                 ),
                 'area': canonical_area,
-                'area_source': (
-                    'land_area'
-                    if canonical_area == land_area and land_area not in (None, '')
-                    else 'built_area'
-                ),
+                'area_source': area_source,
                 'land_area': land_area,
                 'built_area': built_area,
                 'bedrooms': (
@@ -1659,7 +1662,15 @@ INSTRUCCIONES:
 
     @classmethod
     def _format_grounded_property_items(cls, items: list) -> str:
-        """Lista todos los candidatos recuperados sin datos generativos."""
+        """Resume inventarios amplios; el artefacto conserva todos los registros."""
+        if len(items) > 12:
+            return (
+                f"Encontré **{len(items)} propiedades** que cumplen los filtros. "
+                "Las organicé en el panel de resultados por distrito y tipo de "
+                "propiedad; allí puedes abrir cada grupo, paginar y consultar "
+                "el detalle completo de cualquier opción."
+            )
+
         lines = [f"Encontré **{len(items)} propiedades** que cumplen los filtros:"]
         for index, item in enumerate(items, 1):
             fields = item.get('field_values')

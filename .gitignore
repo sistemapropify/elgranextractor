@@ -53,6 +53,7 @@ webapp/home_render*.html
 webapp/check_*.py
 webapp/test_*.py
 !webapp/test_settings.py
+webapp/.test-propifai.sqlite3
 webapp/debug_*.py
 webapp/verificar_*.py
 webapp/diagnostic*.py

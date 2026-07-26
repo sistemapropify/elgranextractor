@@ -74,6 +74,54 @@ class PropertyFilterRegressionTests(SimpleTestCase):
         self.assertTrue(self.skill._doc_cumple_filtros(valid, params))
         self.assertFalse(self.skill._doc_cumple_filtros(too_large, params))
 
+    def test_terrain_area_uses_land_area_not_smaller_built_area(self):
+        misleading = {
+            'property_type_name': 'Terreno',
+            'land_area': '700',
+            'built_area': '100',
+        }
+        self.assertFalse(self.skill._doc_cumple_filtros(
+            misleading,
+            {'tipo_propiedad': 'Terreno', 'area_max': 500},
+        ))
+
+    def test_terrain_area_falls_back_to_total_area(self):
+        terrain = {
+            'property_type_name': 'Terreno',
+            'total_area': '450',
+        }
+        self.assertTrue(self.skill._doc_cumple_filtros(
+            terrain,
+            {'tipo_propiedad': 'Terreno', 'area_max': 500},
+        ))
+
+    def test_apartment_area_uses_built_area_not_land_area(self):
+        apartment = {
+            'property_type_name': 'Departamento',
+            'built_area': '120',
+            'land_area': '700',
+        }
+        self.assertTrue(self.skill._doc_cumple_filtros(
+            apartment,
+            {'tipo_propiedad': 'Departamento', 'area_max': 500},
+        ))
+
+    def test_exact_bedrooms_rejects_properties_with_more_rooms(self):
+        exact = {'bedrooms': 3}
+        too_many = {'bedrooms': 5}
+
+        self.assertTrue(self.skill._doc_cumple_filtros(
+            exact, {'habitaciones': 3},
+        ))
+        self.assertFalse(self.skill._doc_cumple_filtros(
+            too_many, {'habitaciones': 3},
+        ))
+
+    def test_minimum_bedrooms_accepts_properties_with_more_rooms(self):
+        self.assertTrue(self.skill._doc_cumple_filtros(
+            {'bedrooms': 5}, {'habitaciones_min': 3},
+        ))
+
 
 class FormatterGroundingRegressionTests(SimpleTestCase):
     def test_result_evidence_uses_land_area_for_terrain(self):

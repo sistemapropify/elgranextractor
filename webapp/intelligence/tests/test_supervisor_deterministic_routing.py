@@ -41,3 +41,35 @@ class DeterministicInventoryRoutingTests(SimpleTestCase):
             )
 
         self.assertEqual(result, sentinel)
+
+    def test_client_as_recipient_still_routes_to_property_inventory(self):
+        supervisor = self._supervisor_without_init()
+
+        with patch.object(
+            supervisor,
+            '_route_with_llm',
+            side_effect=AssertionError('LLM routing should not run'),
+        ):
+            result = supervisor.route(
+                'hola quiero enviarle a mi cliente departamentos '
+                'en venta en Cayma'
+            )
+
+        self.assertEqual(result['routing_method'], 'deterministic_inventory')
+        self.assertEqual(result['agents'][0]['name'], 'agente_propiedades')
+        self.assertIn('operacion', result['reasoning'])
+
+    def test_generic_properties_with_bedrooms_routes_without_llm(self):
+        supervisor = self._supervisor_without_init()
+
+        with patch.object(
+            supervisor,
+            '_route_with_llm',
+            side_effect=AssertionError('LLM routing should not run'),
+        ):
+            result = supervisor.route(
+                'muestrame propiedades con 3 habitaciones'
+            )
+
+        self.assertEqual(result['routing_method'], 'deterministic_inventory')
+        self.assertEqual(result['agents'][0]['name'], 'agente_propiedades')

@@ -6,6 +6,8 @@ from dataclasses import asdict, dataclass, field
 import re
 from typing import Any, Dict, List, Optional
 
+from ..search.property_fields import canonical_property_area
+
 
 SUITABILITY_TERMS = (
     "ideal para", "adecuad", "apta para", "apto para", "recomend",
@@ -37,6 +39,7 @@ class EvaluationResult:
     signals: List[str] = field(default_factory=list)
     clarification_question: Optional[str] = None
     suggested_plan: Optional[Dict[str, Any]] = None
+    suggested_agent: Optional[str] = None
     metrics: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -77,6 +80,61 @@ class ExecutionEvaluator:
             ),
             "attempt": attempt,
         }
+
+        if cls._expects_property_inventory(normalized_message, search_plan):
+            agent_names = {
+                str(name)
+                for name, result in results.items()
+                if isinstance(result, dict) and result.get("success")
+            }
+            used_skills = {
+                str(step.get("skill_used") or "")
+                for result in successful
+                for step in (result.get("steps") or [])
+                if step.get("skill_used")
+            }
+            wrong_agent = bool(agent_names) and "agente_propiedades" not in agent_names
+            wrong_skill = bool(used_skills) and not used_skills.issubset({
+                "busqueda_propiedades",
+                "busqueda_exacta",
+                "formatear_propiedades",
+                "matching_hibrido",
+            })
+            if wrong_agent or wrong_skill:
+                signals = []
+                if wrong_agent:
+                    signals.append("WRONG_AGENT_SELECTED")
+                if wrong_skill:
+                    signals.append("WRONG_SKILL_FOR_REQUIREMENT")
+                signals.append("EVIDENCE_DOMAIN_MISMATCH")
+                if attempt < 1:
+                    return EvaluationResult(
+                        verdict="replan",
+                        confidence=1.0,
+                        reason=(
+                            "La consulta requiere evidencia del inventario de "
+                            "propiedades, pero la ejecución usó un agente o skill "
+                            "de otro dominio."
+                        ),
+                        signals=signals,
+                        suggested_plan=dict(search_plan or {}),
+                        suggested_agent="agente_propiedades",
+                        metrics={
+                            **metrics,
+                            "agents_used": sorted(agent_names),
+                            "skills_used": sorted(used_skills),
+                        },
+                    )
+                return EvaluationResult(
+                    verdict="block",
+                    confidence=1.0,
+                    reason=(
+                        "El reintento continuó usando evidencia incompatible "
+                        "con una búsqueda de propiedades."
+                    ),
+                    signals=["REPLAN_DID_NOT_FIX_DOMAIN_MISMATCH", *signals],
+                    metrics=metrics,
+                )
 
         suitability = (
             any(term in normalized_message for term in SUITABILITY_TERMS)
@@ -230,7 +288,8 @@ class ExecutionEvaluator:
                 metrics={**metrics, "mismatch_count": len(plan_mismatches)},
             )
 
-        if len(items) > cls.MAX_BROAD_RESULTS:
+        has_explicit_filters = bool((search_plan or {}).get("conditions"))
+        if len(items) > cls.MAX_BROAD_RESULTS and not has_explicit_filters:
             return EvaluationResult(
                 verdict="clarify",
                 confidence=0.92,
@@ -247,13 +306,51 @@ class ExecutionEvaluator:
             verdict="pass",
             confidence=0.9,
             reason="La ejecución supera los controles deterministas disponibles.",
-            signals=[],
+            signals=(
+                ["BROAD_RESULTS_GROUPED"]
+                if len(items) > cls.MAX_BROAD_RESULTS
+                else []
+            ),
             metrics=metrics,
         )
 
     @staticmethod
     def _normalize(value: str) -> str:
         return " ".join((value or "").casefold().split())
+
+    @classmethod
+    def _expects_property_inventory(
+        cls,
+        message: str,
+        search_plan: Optional[Dict[str, Any]],
+    ) -> bool:
+        logical_names = {
+            str(condition.get("logical_name") or "")
+            for condition in (search_plan or {}).get("conditions") or []
+        }
+        if logical_names & {
+            "distrito", "tipo_propiedad", "operacion", "condicion",
+            "precio", "precio_min", "precio_max", "habitaciones",
+            "habitaciones_min", "banos", "banos_min", "area_min", "area_max",
+        }:
+            return True
+        property_terms = (
+            "propiedad", "departamento", "depa", "terreno", "casa",
+            "local", "oficina", "dpto",
+        )
+        inventory_actions = (
+            "muéstrame", "muestrame", "quiero ver", "quiero enviar",
+            "enviarle", "mostrarle", "qué tienes", "que tienes", "busco",
+        )
+        explicit_crm = (
+            "requerimiento", "qué busca mi cliente", "que busca mi cliente",
+            "mis matches", "tengo un cliente que busca",
+        )
+        return (
+            any(term in message for term in property_terms)
+            and any(term in message for term in inventory_actions)
+            and not any(term in message for term in explicit_crm)
+        )
 
     @staticmethod
     def _extract_items(successful: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -297,6 +394,7 @@ class ExecutionEvaluator:
         area_min = cls._plan_value(plan, "area_min")
         area_max = cls._plan_value(plan, "area_max")
         bedrooms = cls._plan_value(plan, "habitaciones")
+        bedrooms_min = cls._plan_value(plan, "habitaciones_min")
         price_min = cls._plan_value(plan, "precio_min")
         price_max = cls._plan_value(plan, "precio_max")
         status = cls._plan_value(plan, "condicion")
@@ -307,11 +405,9 @@ class ExecutionEvaluator:
                 fields = item
             item_district = fields.get("district_name") or fields.get("distrito")
             item_type = fields.get("property_type_name") or fields.get("tipo_propiedad")
-            item_area = (
-                fields.get("land_area")
-                or fields.get("built_area")
-                or fields.get("area_terreno")
-                or fields.get("area_construida")
+            item_area, _ = canonical_property_area(
+                fields,
+                property_type or item_type,
             )
             item_status = (
                 fields.get("property_status_name")
@@ -340,14 +436,21 @@ class ExecutionEvaluator:
                 except (TypeError, ValueError):
                     invalid = True
             for actual, expected, comparison in (
-                (item_bedrooms, bedrooms, "minimum"),
+                (item_bedrooms, bedrooms, "exact"),
+                (item_bedrooms, bedrooms_min, "minimum"),
                 (item_price, price_min, "minimum"),
                 (item_price, price_max, "maximum"),
             ):
                 if expected is None:
                     continue
                 try:
-                    if comparison == "minimum":
+                    if comparison == "exact":
+                        invalid = (
+                            invalid
+                            or actual is None
+                            or float(actual) != float(expected)
+                        )
+                    elif comparison == "minimum":
                         invalid = invalid or actual is None or float(actual) < float(expected)
                     else:
                         invalid = invalid or actual is None or float(actual) > float(expected)

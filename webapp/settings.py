@@ -161,6 +161,17 @@ DATABASES = {
     }
 }
 
+# El servidor Azure principal solo puede abrir ``propiextractor``.
+# Cualquier :memory:, test_* u otro DB_NAME detiene el arranque.
+from database_safety import validate_database_safety
+
+validate_database_safety(
+    DATABASES,
+    allow_local_test_settings=(
+        os.environ.get('DJANGO_SETTINGS_MODULE', '').endswith('test_settings')
+    ),
+)
+
 # Database routers for multiple databases
 DATABASE_ROUTERS = ['routers.PropifaiRouter', 'routers.DefaultRouter']
 

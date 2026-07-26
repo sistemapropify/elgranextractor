@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any
 
 from django.conf import settings
@@ -51,6 +52,34 @@ def _evidence_covers_query(
     )
 
 
+def _exact_bedrooms_requested(query: str) -> int | None:
+    text = (query or '').casefold()
+    if any(term in text for term in (
+        'mínimo', 'minimo', 'al menos', 'desde', 'más de', 'mas de',
+        'mayor a', 'mayor de',
+    )):
+        return None
+    match = re.search(
+        r'\b(\d+)\s*(?:habitaciones?|dormitorios?|cuartos?|bedrooms?)\b',
+        text,
+    )
+    return int(match.group(1)) if match else None
+
+
+def _bedrooms_evidence_mismatch(
+    requested: int,
+    evidence: list[dict[str, Any]] | None,
+) -> bool:
+    for item in evidence or []:
+        value = item.get('bedrooms')
+        try:
+            if value in (None, '') or float(value) != float(requested):
+                return True
+        except (TypeError, ValueError):
+            return True
+    return False
+
+
 def audit_interaction(
     *,
     query: str,
@@ -78,25 +107,45 @@ def audit_interaction(
         if step.get('skill_name')
     ):
         signals.append('SUCCESS_WITH_ZERO_ITEMS')
+    requested_bedrooms = _exact_bedrooms_requested(query)
+    if (
+        requested_bedrooms is not None
+        and _bedrooms_evidence_mismatch(requested_bedrooms, result_evidence)
+    ):
+        signals.append('FILTER_VALUE_MISMATCH')
 
+    has_filter_mismatch = 'FILTER_VALUE_MISMATCH' in signals
     base = {
-        'audit_verdict': 'review' if signals else 'pass',
+        'audit_verdict': (
+            'fail' if has_filter_mismatch
+            else ('review' if signals else 'pass')
+        ),
         'audit_confidence': 1.0 if signals else 0.8,
         'audit_summary': (
-            'Se detectaron señales deterministas que requieren revisión.'
-            if signals else 'No se detectaron inconsistencias deterministas.'
+            'Uno o más resultados incumplen el número exacto de habitaciones.'
+            if has_filter_mismatch
+            else (
+                'Se detectaron señales deterministas que requieren revisión.'
+                if signals else 'No se detectaron inconsistencias deterministas.'
+            )
         ),
         'audit_signals': signals,
     }
     if not audit_enabled():
         return base
 
+    evidence = result_evidence or []
+    evidence_sample_limit = int(getattr(
+        settings, 'LEARNING_AI_AUDIT_EVIDENCE_LIMIT', 25
+    ))
     prompt_payload = sanitize_payload({
         'orchestration_mode': orchestration_mode,
         'result_count': result_count,
         'grounded': grounded,
         'steps': execution_summary,
-        'result_evidence': result_evidence or [],
+        'result_evidence_total': len(evidence),
+        'result_evidence_sampled': len(evidence) > evidence_sample_limit,
+        'result_evidence': evidence[:evidence_sample_limit],
     })
     prompt = f"""Audita esta ejecución de un asistente inmobiliario.
 Busca errores silenciosos: datos inventados, conteos inconsistentes, filtros
@@ -153,7 +202,9 @@ Responde SOLO JSON:
                             'La evidencia estructurada contiene los campos '
                             'necesarios para validar la respuesta.'
                         )
-                if signals and verdict == 'pass':
+                if 'FILTER_VALUE_MISMATCH' in combined_signals:
+                    verdict = 'fail'
+                elif signals and verdict == 'pass':
                     verdict = 'review'
                 return {
                     'audit_verdict': verdict,
@@ -164,6 +215,7 @@ Responde SOLO JSON:
     except Exception as exc:
         logger.warning("Auditoría IA no disponible: %s", exc)
 
-    base['audit_verdict'] = 'review'
+    if base['audit_verdict'] == 'pass':
+        base['audit_verdict'] = 'review'
     base['audit_signals'] = list(dict.fromkeys(signals + ['AI_AUDIT_UNAVAILABLE']))
     return base

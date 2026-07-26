@@ -130,6 +130,27 @@ class LearningAuditorTests(SimpleTestCase):
         self.assertIn('MISSING_RESULT_COUNT', result['audit_signals'])
         self.assertIn('GROUNDING_NOT_CONFIRMED', result['audit_signals'])
 
+    @override_settings(LEARNING_AI_AUDIT_ALL=False)
+    def test_exact_bedroom_mismatch_fails_deterministically(self):
+        from intelligence.learning.auditor import audit_interaction
+
+        result = audit_interaction(
+            query='muéstrame propiedades con 3 habitaciones',
+            response='Casa con 5 habitaciones',
+            orchestration_mode='agent_graph',
+            result_count=1,
+            grounded=True,
+            execution_summary=[],
+            result_evidence=[{
+                'id': '1',
+                'title': 'Casa',
+                'bedrooms': 5,
+            }],
+        )
+
+        self.assertEqual(result['audit_verdict'], 'fail')
+        self.assertIn('FILTER_VALUE_MISMATCH', result['audit_signals'])
+
     @patch('intelligence.services.llm.LLMService._call_deepseek_api')
     def test_complete_area_evidence_clears_false_insufficient_signal(self, call):
         from intelligence.learning.auditor import audit_interaction
@@ -172,6 +193,20 @@ class LearningAuditorTests(SimpleTestCase):
             'INSUFFICIENT_GROUNDING_EVIDENCE',
             result['audit_signals'],
         )
+
+    def test_result_evidence_uses_total_area_fallback_for_terrain(self):
+        from intelligence.services.chat_processor import ChatProcessor
+
+        evidence = ChatProcessor._build_result_evidence([{
+            'source_id': 1,
+            'field_values': {
+                'property_type_name': 'Terreno',
+                'total_area': 450,
+            },
+        }])
+
+        self.assertEqual(evidence[0]['area'], 450)
+        self.assertEqual(evidence[0]['area_source'], 'total_area')
 
     @patch('intelligence.services.llm.LLMService._call_deepseek_api')
     def test_missing_area_evidence_still_requires_review(self, call):

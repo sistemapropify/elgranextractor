@@ -72,7 +72,7 @@ class SkillCache:
 
     def __init__(
         self,
-        redis_url: str = "redis://localhost:6379/0",
+        redis_url: Optional[str] = None,
         local_cache_size: int = 1000,
         default_ttl: int = 3600,
         enable_local_fallback: bool = True
@@ -107,8 +107,10 @@ class SkillCache:
             'redis_errors': 0,
         }
 
-        # Inicializar Redis
-        self._init_redis()
+        # Redis es opcional. Si no existe una URL explícita, el cache local es
+        # suficiente y evitamos bloquear cada consulta intentando localhost.
+        if self.redis_url:
+            self._init_redis()
 
     def _init_redis(self) -> None:
         """Inicializa conexión a Redis."""
@@ -118,7 +120,12 @@ class SkillCache:
             return
 
         try:
-            self._redis_client = redis.from_url(self.redis_url)
+            self._redis_client = redis.from_url(
+                self.redis_url,
+                socket_connect_timeout=0.35,
+                socket_timeout=0.75,
+                retry_on_timeout=False,
+            )
             # Test de conexión
             self._redis_client.ping()
             self._redis_available = True

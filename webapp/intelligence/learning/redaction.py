@@ -14,7 +14,7 @@ ALLOWED_PAYLOAD_KEYS = {
     'iterations', 'item_count', 'filter_count', 'audit_verdict',
     'audit_confidence', 'audit_summary', 'audit_signals',
     'response_claimed_count', 'search_plan_hash',
-    'result_evidence',
+    'result_evidence', 'result_evidence_total', 'result_evidence_sampled',
     'confidence', 'verdict', 'signals', 'metrics', 'critique_retries',
     'mode', 'latency_ms', 'disagrees_with_deterministic',
     'authority_applied', 'action', 'reason', 'retries_used',

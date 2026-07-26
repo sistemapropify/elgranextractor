@@ -84,7 +84,7 @@ def __dir__():
 
 
 def create_skill_system(
-    redis_url: str = "redis://localhost:6379/0",
+    redis_url: str | None = None,
     enable_cache: bool = True,
     auto_discover_skills: bool = True,
     auto_discover_examples: bool = True,
@@ -101,6 +101,8 @@ def create_skill_system(
     Returns:
         SkillOrchestrator configurado y listo
     """
+    import os
+
     from .registry import SkillRegistry as DynamicSkillRegistry
     from .cache import SkillCache
     from .orchestrator import SkillOrchestrator
@@ -109,7 +111,8 @@ def create_skill_system(
     registry = DynamicSkillRegistry()
 
     # Crear cache
-    cache = SkillCache(redis_url=redis_url) if enable_cache else None
+    resolved_redis_url = redis_url or os.environ.get('REDIS_URL')
+    cache = SkillCache(redis_url=resolved_redis_url) if enable_cache else None
 
     # Crear orchestrator
     orchestrator = SkillOrchestrator(registry, cache)

@@ -14,6 +14,65 @@ def agent_result(items):
 
 
 class ExecutionEvaluatorTests(SimpleTestCase):
+    def test_replans_inventory_query_routed_to_crm(self):
+        evaluation = ExecutionEvaluator.evaluate(
+            message=(
+                'quiero enviarle a mi cliente departamentos '
+                'en venta en Cayma'
+            ),
+            results={
+                'agente_requerimientos': {
+                    'success': True,
+                    'final_answer': {'data': [{'client_name': 'Carlos'}]},
+                    'requirements': [{
+                        'description': 'Obtener departamentos en Cayma',
+                        'satisfied': True,
+                    }],
+                    'steps': [{
+                        'skill_used': 'mis_requerimientos',
+                        'skill_success': True,
+                    }],
+                },
+            },
+            search_plan={
+                'conditions': [
+                    {'logical_name': 'distrito', 'value': 'Cayma'},
+                    {
+                        'logical_name': 'tipo_propiedad',
+                        'value': 'Departamento',
+                    },
+                    {'logical_name': 'operacion', 'value': 'Venta'},
+                ],
+            },
+        )
+
+        self.assertEqual(evaluation.verdict, 'replan')
+        self.assertEqual(evaluation.suggested_agent, 'agente_propiedades')
+        self.assertIn('WRONG_AGENT_SELECTED', evaluation.signals)
+        self.assertIn('WRONG_SKILL_FOR_REQUIREMENT', evaluation.signals)
+        self.assertIn('EVIDENCE_DOMAIN_MISMATCH', evaluation.signals)
+
+    def test_blocks_persistent_inventory_domain_mismatch(self):
+        evaluation = ExecutionEvaluator.evaluate(
+            message='muestrame departamentos en Cayma',
+            results={
+                'agente_requerimientos': {
+                    'success': True,
+                    'final_answer': {'data': [{'client_name': 'Carlos'}]},
+                    'requirements': [],
+                    'steps': [{'skill_used': 'mis_requerimientos'}],
+                },
+            },
+            search_plan={'conditions': []},
+            attempt=1,
+        )
+
+        self.assertEqual(evaluation.verdict, 'block')
+        self.assertIn(
+            'REPLAN_DID_NOT_FIX_DOMAIN_MISMATCH',
+            evaluation.signals,
+        )
+
     def test_clarifies_school_suitability_instead_of_returning_inventory(self):
         items = [
             {
@@ -85,6 +144,24 @@ class ExecutionEvaluatorTests(SimpleTestCase):
         self.assertEqual(evaluation.verdict, 'clarify')
         self.assertIn('LOW_SELECTIVITY', evaluation.signals)
 
+    def test_groups_broad_inventory_when_query_has_explicit_filter(self):
+        items = [
+            {'source_id': index, 'field_values': {'bedrooms': 3}}
+            for index in range(51)
+        ]
+        evaluation = ExecutionEvaluator.evaluate(
+            message='Muéstrame propiedades con 3 habitaciones',
+            results=agent_result(items),
+            search_plan={
+                'conditions': [{
+                    'logical_name': 'habitaciones',
+                    'value': 3,
+                }],
+            },
+        )
+        self.assertEqual(evaluation.verdict, 'pass')
+        self.assertIn('BROAD_RESULTS_GROUPED', evaluation.signals)
+
     def test_replans_when_bedrooms_from_plan_are_violated(self):
         evaluation = ExecutionEvaluator.evaluate(
             message='Departamentos con 3 habitaciones en Cayma',
@@ -108,6 +185,23 @@ class ExecutionEvaluatorTests(SimpleTestCase):
         )
 
         self.assertEqual(evaluation.verdict, 'replan')
+
+    def test_replans_when_exact_bedrooms_result_has_more_rooms(self):
+        evaluation = ExecutionEvaluator.evaluate(
+            message='Propiedades con 3 habitaciones',
+            results=agent_result([{
+                'source_id': 1,
+                'field_values': {'bedrooms': 5},
+            }]),
+            search_plan={
+                'conditions': [{
+                    'logical_name': 'habitaciones',
+                    'value': 3,
+                }],
+            },
+        )
+        self.assertEqual(evaluation.verdict, 'replan')
+        self.assertIn('SEARCH_PLAN_FILTER_MISMATCH', evaluation.signals)
         self.assertIn('SEARCH_PLAN_FILTER_MISMATCH', evaluation.signals)
 
     def test_replans_when_area_max_is_violated(self):
@@ -127,6 +221,45 @@ class ExecutionEvaluatorTests(SimpleTestCase):
             },
         )
 
+        self.assertEqual(evaluation.verdict, 'replan')
+
+    def test_terrain_area_max_uses_total_area_fallback(self):
+        evaluation = ExecutionEvaluator.evaluate(
+            message='Terrenos de menos de 500 metros',
+            results=agent_result([{
+                'source_id': 1,
+                'field_values': {
+                    'property_type_name': 'Terreno',
+                    'total_area': 450,
+                },
+            }]),
+            search_plan={
+                'conditions': [
+                    {'logical_name': 'tipo_propiedad', 'value': 'Terreno'},
+                    {'logical_name': 'area_max', 'value': 500},
+                ],
+            },
+        )
+        self.assertEqual(evaluation.verdict, 'pass')
+
+    def test_terrain_area_max_rejects_large_land_area_even_if_built_is_small(self):
+        evaluation = ExecutionEvaluator.evaluate(
+            message='Terrenos de menos de 500 metros',
+            results=agent_result([{
+                'source_id': 1,
+                'field_values': {
+                    'property_type_name': 'Terreno',
+                    'land_area': 700,
+                    'built_area': 100,
+                },
+            }]),
+            search_plan={
+                'conditions': [
+                    {'logical_name': 'tipo_propiedad', 'value': 'Terreno'},
+                    {'logical_name': 'area_max', 'value': 500},
+                ],
+            },
+        )
         self.assertEqual(evaluation.verdict, 'replan')
         self.assertIn('SEARCH_PLAN_FILTER_MISMATCH', evaluation.signals)
 

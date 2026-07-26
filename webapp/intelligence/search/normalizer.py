@@ -152,6 +152,14 @@ class SearchPlanNormalizer:
         if re.search(r'\bdisponibles?\b', lowered):
             params['condicion'] = 'Disponible'
 
+        if re.search(r'\b(?:en\s+)?venta\b|\bcomprar\b|\bcompra\b', lowered):
+            params['operacion'] = 'Venta'
+        elif re.search(
+            r'\b(?:en\s+)?alquiler\b|\balquilar\b|\brenta\b',
+            lowered,
+        ):
+            params['operacion'] = 'Alquiler'
+
         number = r'(\d[\d.,]*)'
         money_unit = r'(?:usd|d[oó]lares?|pen|soles?|s\/|\$)'
         max_patterns = (
@@ -175,11 +183,29 @@ class SearchPlanNormalizer:
                 params['precio_min'] = cls._parse_number(match.group(1))
                 break
 
+        rooms_minimum = re.search(
+            rf'(?:m[ií]nimo(?:\s+de)?|al\s+menos|desde)\s+'
+            rf'{number}\s*(?:dormitorios?|habitaciones?|cuartos?)',
+            lowered,
+        )
+        rooms_greater = re.search(
+            rf'(?:m[aá]s\s+de|mayor(?:es)?\s+(?:a|de))\s+'
+            rf'{number}\s*(?:dormitorios?|habitaciones?|cuartos?)',
+            lowered,
+        )
         rooms = re.search(
             rf'{number}\s*(?:dormitorios?|habitaciones?|cuartos?)',
             lowered,
         )
-        if rooms:
+        if rooms_greater:
+            params['habitaciones_min'] = int(
+                cls._parse_number(rooms_greater.group(1))
+            ) + 1
+        elif rooms_minimum:
+            params['habitaciones_min'] = int(
+                cls._parse_number(rooms_minimum.group(1))
+            )
+        elif rooms:
             params['habitaciones'] = int(cls._parse_number(rooms.group(1)))
 
         bathrooms = re.search(
