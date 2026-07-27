@@ -48,7 +48,7 @@ jobs:
           PRODUCTION: 'true'
         run: |
           source antenv/bin/activate
-          python webapp/manage.py collectstatic --noinput --clear
+          python webapp/manage.py collectstatic --noinput
 
       # Build the deployment artifact without generated browser profiles,
       # duplicated projects, logs, or other runtime-only data.
@@ -97,23 +97,15 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_0FA92F15F0804AE197DC2EECF943B7DB }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_C521A0DD71BB48CE88443464F4F718FB }}
 
-      - name: Wait for previous deployments to complete
+      - name: Brief pause before deploying
         run: |
-          echo "Waiting for Azure App Service to stabilize (120 seconds)..."
-          sleep 120
-          echo "Initial stabilization complete, checking slot status..."
-          for i in {1..6}; do
-            DEPLOYMENT_STATUS=$(az webapp deployment slot list -n granextractorservice -g DefaultResourceGroup-brazilsouth --query "[?name=='Production'].state" -o tsv 2>/dev/null || echo "unknown")
-            echo "Slot status check $i - Status: $DEPLOYMENT_STATUS"
-            if [ "$DEPLOYMENT_STATUS" = "Running" ] || [ "$DEPLOYMENT_STATUS" = "unknown" ]; then
-              echo "Waiting for slot to stabilize... ($i/6)"
-              sleep 15
-            else
-              echo "Slot appears ready for deployment"
-              break
-            fi
-          done
-          echo "Proceeding with deployment..."
+          # Este app service no tiene deployment slots (solo el sitio por
+          # defecto), asi que no hay nada real que "esperar a que se libere":
+          # el loop de az webapp deployment slot list anterior siempre
+          # devolvia "unknown" (ademas apuntaba a un resource group que no
+          # existe: DefaultResourceGroup-brazilsouth). Los conflictos 409
+          # reales ya se manejan con los 3 intentos + backoff de abajo.
+          echo "Esperando 30s antes de desplegar..."
           sleep 30
 
       - name: 'Deploy to Azure Web App (Attempt 1)'
@@ -190,7 +182,7 @@ jobs:
           echo "=== Last 50 log entries ==="
           az webapp log tail \
             --name granextractorservice \
-            --resource-group DefaultResourceGroup-brazilsouth || true
+            --resource-group rg-elgranextractor || true
           exit 1
 
       - name: Logout from Azure
