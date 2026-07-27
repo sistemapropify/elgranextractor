@@ -76,10 +76,18 @@ class ConversationTaskState:
             if extracted.get(source) is not None:
                 collected[target] = cls._json_value(extracted[source])
 
+        # Busca "300 alumnos", "50 estudiantes" (número → palabra)
+        msg_lower = (message or "").casefold()
         students = re.search(
             r"\b(\d[\d.,]*)\s*(?:alumnos?|estudiantes?|personas?)\b",
-            (message or "").casefold(),
+            msg_lower,
         )
+        if not students:
+            # Busca "alumnos es de 300", "cantidad de alumnos: 300" (palabra → número)
+            students = re.search(
+                r"(?:alumnos?|estudiantes?|personas?)\s*(?:es\s*de\s*|:?\s*|hay\s*|son\s*|)\b(\d[\d.,]*)\b",
+                msg_lower,
+            )
         if students:
             collected["cantidad_alumnos"] = int(
                 SearchPlanNormalizer._parse_number(students.group(1))
@@ -107,12 +115,33 @@ class ConversationTaskState:
             r"\b\d[\d.,]*\s*(?:alumnos?|estudiantes?|personas?|m2|m²|metros?)\b",
             lowered,
         ))
+        property_terms = (
+            "departamento", "departamentos", "depa", "depas",
+            "dúplex", "duplex", "casa", "casas", "oficina", "oficinas",
+            "terreno", "terrenos", "local", "locales",
+        )
+        new_search_terms = (
+            "muéstrame", "muestrame", "mostrar", "busca", "buscar", "busco",
+            "quiero ver", "quiero", "necesito", "deseo", "tienes", "tiene",
+            "enséñame", "enseñame",
+        )
+        has_property_type = any(term in lowered for term in property_terms)
+        has_new_search_signal = any(term in lowered for term in new_search_terms)
+        has_school_term = any(term in lowered for term in SCHOOL_TERMS)
+        has_independent_property_filters = (
+            has_property_type
+            and any(
+                extracted.get(field) is not None
+                for field in (
+                    "distrito", "precio_min", "precio_max",
+                    "habitaciones", "banos", "area_min", "area_max",
+                )
+            )
+        )
         explicit_new_property_query = (
-            any(term in lowered for term in ("muéstrame", "muestrame", "busca", "quiero ver"))
-            and any(term in lowered for term in (
-                "departamento", "dúplex", "duplex", "casa", "oficina", "terreno"
-            ))
-            and not any(term in lowered for term in SCHOOL_TERMS)
+            has_property_type
+            and not has_school_term
+            and (has_new_search_signal or has_independent_property_filters)
         )
         if explicit_new_property_query:
             return "new_task"

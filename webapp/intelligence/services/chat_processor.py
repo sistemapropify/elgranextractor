@@ -1000,19 +1000,54 @@ class ChatProcessor:
                 task_question = ConversationTaskState.clarification_question(task)
                 if task_question:
                     evaluation['clarification_question'] = task_question
-            response_text = (
-                evaluation.get('clarification_question')
-                or "Necesito algunos criterios adicionales antes de continuar."
+            # ── FIX: Si el mensaje es una consulta clara de propiedades (sin términos
+            #    escolares), NUNCA devolver la pregunta escolar. Forzar la limpieza
+            #    de cualquier tarea pendiente en la metadata de la conversación.
+            PROPERTY_TERMS = (
+                "departamento", "departamentos", "depa", "depas",
+                "casa", "casas", "terreno", "terrenos", "local", "locales",
+                "oficina", "oficinas", "dúplex", "duplex",
             )
-            try:
-                meta = ctx.conversation.metadata or {}
-                if task:
-                    meta[ConversationTaskState.METADATA_KEY] = task
-                meta.pop(ConversationTaskState.LEGACY_KEY, None)
-                ctx.conversation.metadata = meta
-                ctx.conversation.save(update_fields=['metadata'])
-            except Exception as exc:
-                log.warning(f"No se pudo guardar aclaración pendiente: {exc}")
+            SCHOOL_TERMS = ("colegio", "escuela", "institución educativa",
+                            "institucion educativa")
+            msg_lower = (effective_message or "").casefold()
+            has_property_type = any(t in msg_lower for t in PROPERTY_TERMS)
+            has_school_term = any(t in msg_lower for t in SCHOOL_TERMS)
+            is_clear_property_query = has_property_type and not has_school_term
+
+            if is_clear_property_query:
+                # Limpiar cualquier tarea escolar pendiente de la metadata
+                task = None
+                if ConversationTaskState.METADATA_KEY in (ctx.conversation.metadata or {}):
+                    meta = ctx.conversation.metadata or {}
+                    meta.pop(ConversationTaskState.METADATA_KEY, None)
+                    meta.pop(ConversationTaskState.LEGACY_KEY, None)
+                    ctx.conversation.metadata = meta
+                    ctx.conversation.save(update_fields=['metadata'])
+                    log.info(
+                        "[FIX] Tarea escolar limpiada de metadata por consulta "
+                        f"clara de propiedades: {effective_message[:80]}"
+                    )
+                # Usar la pregunta de aclaración del evaluador (si existe) o
+                # un mensaje genérico; nunca la pregunta escolar.
+                response_text = (
+                    evaluation.get('clarification_question')
+                    or "Necesito algunos criterios adicionales antes de continuar."
+                )
+            else:
+                response_text = (
+                    evaluation.get('clarification_question')
+                    or "Necesito algunos criterios adicionales antes de continuar."
+                )
+                try:
+                    meta = ctx.conversation.metadata or {}
+                    if task:
+                        meta[ConversationTaskState.METADATA_KEY] = task
+                    meta.pop(ConversationTaskState.LEGACY_KEY, None)
+                    ctx.conversation.metadata = meta
+                    ctx.conversation.save(update_fields=['metadata'])
+                except Exception as exc:
+                    log.warning(f"No se pudo guardar aclaración pendiente: {exc}")
             message_id = cls._save_response(ctx.conversation, response_text)
             return ChatResult(
                 success=True,
