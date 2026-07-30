@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% load tz %}
+{% block title %}Calidad de atención | Prometeo{% endblock %}
+{% block extra_css %}<style>{% include "lead_intelligence/_dashboard_styles.html" %}</style>{% endblock %}
+{% block content %}
+<main class="pli-page">
+  <header class="pli-head">
+    <div>
+      <div class="pli-kicker">Análisis de conversaciones</div>
+      <h1>Calidad de atención</h1>
+      <p>Mide cuánto demora el agente y si su primera respuesta atiende realmente lo solicitado por el lead.</p>
+    </div>
+    <form class="pli-filter pli-filter-wide" method="get">
+      <div><label for="from">Desde</label><input id="from" name="from" type="date" value="{{ date_from|date:'Y-m-d' }}"></div>
+      <div><label for="to">Hasta</label><input id="to" name="to" type="date" value="{{ date_to|date:'Y-m-d' }}"></div>
+      <div>
+        <label for="agent">Agente</label>
+        <select id="agent" name="agent">
+          <option value="">Todos</option>
+          {% for id,name in agent_options %}
+            {% if id %}<option value="{{ id }}"{% if selected_agent_id == id %} selected{% endif %}>{{ name }}</option>{% endif %}
+          {% endfor %}
+        </select>
+      </div>
+      <button class="pli-submit" type="submit">↻&nbsp; Actualizar</button>
+    </form>
+  </header>
+
+  {% include "lead_intelligence/_analysis_tabs.html" %}
+
+  <section class="pli-grid-6">
+    <article class="pli-card pli-kpi"><small>Leads evaluados</small><strong>{{ overall.leads }}</strong><span>{{ overall.contacted }} recibieron respuesta.</span></article>
+    <article class="pli-card pli-kpi"><small>Mediana primera respuesta</small><strong class="pli-kpi-text">{{ overall.median_first_response_label }}</strong><span>P75 {{ overall.p75_first_response_label }} · P90 {{ overall.p90_first_response_label }}</span></article>
+    <article class="pli-card pli-kpi"><small>SLA ≤ 15 min</small><strong>{{ overall.sla_15_pct }}%</strong><span>{{ overall.sla_15_count }} primeras respuestas dentro del objetivo.</span></article>
+    <article class="pli-card pli-kpi"><small>Respuesta adecuada</small><strong>{{ overall.adequate_pct }}%</strong><span>{{ overall.adequate }} de {{ overall.quality_assessed }} evaluaciones vigentes.</span></article>
+    <article class="pli-card pli-kpi"><small>Uso repetido</small><strong>{{ overall.template_pct }}%</strong><span>{{ overall.template_count }} respuestas con una firma usada al menos 3 veces.</span></article>
+    <article class="pli-card pli-kpi"><small>Esperando al agente</small><strong>{{ overall.unattended }}</strong><span>{{ overall.attention_overdue }} llevan más de 24 h sin respuesta.</span></article>
+  </section>
+
+  {% if overall.quality_pending %}
+    <div class="pli-note pli-note-info"><strong>{{ overall.quality_pending }} conversaciones respondidas aún no tienen evaluación {{ analysis_version }}.</strong> Las métricas semánticas se completarán con el procesamiento incremental.</div>
+  {% endif %}
+  {% if overall.media_unobservable %}
+    <div class="pli-note pli-note-info"><strong>{{ overall.media_unobservable }} conversaciones quedaron ambiguas por multimedia no observable.</strong> chat_history conserva texto, pero puede omitir fotos, planos, videos y documentos enviados desde Chatwoot; estos casos no se califican como respuesta parcial o inadecuada sin revisar la fuente original.</div>
+  {% endif %}
+
+  <section class="pli-card pli-section">
+    <div class="pli-section-head">
+      <div><h2>Comparación por agente</h2><p>El tiempo se mide desde el mensaje del lead hasta la siguiente respuesta. La calidad se evalúa sobre el primer intercambio.</p></div>
+      <span class="pli-chip">{{ date_from|date:"d/m/Y" }} — {{ date_to|date:"d/m/Y" }}</span>
+    </div>
+    <div class="pli-table-wrap">
+      <table class="pli-table pli-table-quality">
+        <thead>
+          <tr>
+            <th>Agente</th><th>Leads</th><th>Mediana</th><th>P90</th><th>SLA 15 min</th>
+            <th>Pertinencia</th><th>Cobertura</th><th>Directitud</th><th>Personalización</th><th>Adecuadas</th>
+            <th>Plantilla repetida</th><th>Contactado → bidireccional</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for agent in agent_rows %}
+            <tr>
+              <td>{{ agent.agent_name }}</td>
+              <td>{{ agent.leads }}</td>
+              <td><span class="pli-conversion pli-conversion-{{ agent.speed_tone }}">{{ agent.median_first_response_label }}</span></td>
+              <td>{{ agent.p90_first_response_label }}</td>
+              <td>{{ agent.sla_15_pct }}%</td>
+              <td>{% if agent.avg_relevance is not None %}{% widthratio agent.avg_relevance 1 100 %}%{% else %}—{% endif %}</td>
+              <td>{% if agent.avg_coverage is not None %}{% widthratio agent.avg_coverage 1 100 %}%{% else %}—{% endif %}</td>
+              <td>{% if agent.avg_directness is not None %}{% widthratio agent.avg_directness 1 100 %}%{% else %}—{% endif %}</td>
+              <td>{% if agent.avg_personalization is not None %}{% widthratio agent.avg_personalization 1 100 %}%{% else %}—{% endif %}</td>
+              <td><span class="pli-conversion pli-conversion-{{ agent.quality_tone }}">{{ agent.adequate_pct }}%</span> <small>({{ agent.quality_assessed }})</small></td>
+              <td>{{ agent.template_pct }}%</td>
+              <td>{{ agent.bidirectional_from_contacted_pct }}%</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="12">No hay leads en este periodo.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="pli-card pli-section">
+    <div class="pli-section-head">
+      <div><h2>Casos que requieren revisión</h2><p>Atenciones vencidas, respuestas parciales o inadecuadas, solicitudes omitidas, demoras mayores a una hora o plantillas repetidas.</p></div>
+      <span class="pli-chip">{{ flagged_leads|length }} casos mostrados</span>
+    </div>
+    <div class="pli-review-list">
+      {% for lead in flagged_leads %}
+        <article class="pli-review-row">
+          <div class="pli-review-main">
+            <div><span class="pli-lead-id">LEAD #{{ lead.lead_id }}</span><h3>{{ lead.display_name }}</h3></div>
+            <div class="pli-badges">
+              {% for issue in lead.issues %}<span class="pli-badge{% if lead.quality_status == 'inadequate' %} red{% else %} amber{% endif %}">{{ issue }}</span>{% endfor %}
+            </div>
+            {% if lead.attention_reason %}<p>{{ lead.attention_reason }}</p>{% endif %}
+            {% if lead.unsupported_request_items %}<p><strong>Supuestos descartados:</strong> {{ lead.unsupported_request_items|join:", " }}</p>{% endif %}
+            {% if lead.unanswered_items %}<p><strong>No cubierto en la primera respuesta:</strong> {{ lead.unanswered_items|join:", " }}</p>{% endif %}
+            {% if lead.response_preview %}<blockquote>{{ lead.response_preview }}</blockquote>{% endif %}
+          </div>
+          <div class="pli-review-side">
+            <span>{{ lead.agent_name }} <small>al responder</small></span>
+            {% if lead.current_agent_id != lead.agent_id %}<small>Responsable actual: {{ lead.current_agent_name }}</small>{% endif %}
+            {% if lead.assignment_changes %}<small>{{ lead.assignment_changes }} cambio(s) de asignación</small>{% endif %}
+            <strong>{{ lead.first_response_label }}</strong>
+            <a class="pli-result-back" href="{% url 'analisis_crm:lead_conversation' lead.lead_id %}?from={{ date_from|date:'Y-m-d' }}&amp;to={{ date_to|date:'Y-m-d' }}">Ver conversación →</a>
+          </div>
+        </article>
+      {% empty %}
+        <div class="pli-note">No hay casos marcados para este filtro.</div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="pli-card pli-section">
+    <div class="pli-section-head"><div><h2>Cómo leer estas métricas</h2><p>Evitan atribuir toda la conversión únicamente al agente.</p></div></div>
+    <div class="pli-definition-grid">
+      <div><strong>Pertinencia</strong><span>La respuesta habla de lo que el cliente pidió.</span></div>
+      <div><strong>Cobertura</strong><span>Responde todas las preguntas y condiciones del mensaje inicial.</span></div>
+      <div><strong>Directitud</strong><span>Contesta sin desviar al lead con una respuesta genérica o una pregunta evasiva.</span></div>
+      <div><strong>Personalización</strong><span>Usa las necesidades expresadas, no solamente un saludo o el nombre.</span></div>
+      <div><strong>Plantilla repetida</strong><span>Detecta firmas textuales reutilizadas; se cruza con calidad antes de juzgarla.</span></div>
+      <div><strong>Tiempo transcurrido</strong><span>Es tiempo calendario 24/7; todavía no descuenta noches, domingos ni horarios fuera de turno.</span></div>
+      <div><strong>Atribución al agente</strong><span>Se usa el responsable vigente en lead_activity cuando ocurrió la primera respuesta. Esto identifica responsabilidad operativa, no prueba quién escribió físicamente el mensaje.</span></div>
+      <div><strong>Multimedia</strong><span>Fotos, planos, videos o documentos ausentes de chat_history no se suponen. Si el texto sugiere que fueron enviados, el caso queda ambiguo hasta contrastarlo con Chatwoot.</span></div>
+      <div><strong>Colores comparativos</strong><span>Azul es el mejor y rojo el menor resultado; solo se colorean agentes con al menos 5 casos comparables.</span></div>
+    </div>
+  </section>
+</main>
+{% endblock %}

@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% load tz %}
+{% block title %}{{ stage_label }} | Inteligencia de Leads{% endblock %}
+{% block extra_css %}<style>{% include "lead_intelligence/_dashboard_styles.html" %}</style>{% endblock %}
+{% block content %}
+<main class="pli-page">
+  <div class="pli-result-head">
+    <div>
+      {% if origin == "cohorts" %}
+        <a class="pli-result-back" href="{% url 'analisis_crm:cohorts' %}?cohort={{ cohort_date|date:'Y-m-d' }}">← Volver a la cohorte</a>
+      {% else %}
+        <a class="pli-result-back" href="{% url 'analisis_crm:dashboard' %}?from={{ date_from|date:'Y-m-d' }}&amp;to={{ date_to|date:'Y-m-d' }}">← Volver al resumen</a>
+      {% endif %}
+      <div class="pli-kicker" style="margin-top:12px">Resultados de leads</div>
+      <h1>{{ stage_label }}</h1>
+      <p>{{ date_from|date:"d/m/Y" }} — {{ date_to|date:"d/m/Y" }} · {{ page_obj.paginator.count }} leads</p>
+    </div>
+    <form class="pli-filter" method="get">
+      {% if cohort_date %}<input type="hidden" name="cohort" value="{{ cohort_date|date:'Y-m-d' }}">{% else %}<input type="hidden" name="from" value="{{ date_from|date:'Y-m-d' }}"><input type="hidden" name="to" value="{{ date_to|date:'Y-m-d' }}">{% endif %}
+      <div><label for="stage">Etapa</label><select id="stage" name="stage">{% for value,label in stage_options.items %}<option value="{{ value }}"{% if value == stage %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+      <button class="pli-submit" type="submit">Ver resultados</button>
+    </form>
+  </div>
+
+  <section class="pli-results">
+    {% for lead in page_obj %}
+      <a class="pli-card pli-lead-card" href="{% url 'analisis_crm:lead_conversation' lead.id %}?{{ current_query }}">
+        <div class="pli-lead-card-head"><div><span class="pli-lead-id">LEAD #{{ lead.id }}</span><h2>{{ lead.display_name }}</h2></div><span class="pli-chip">{{ lead.status_name }}</span></div>
+        <div class="pli-lead-meta">
+          <div><small>Teléfono</small><span>{{ lead.phone|default:"No registrado" }}</span></div>
+          <div><small>Correo</small><span>{{ lead.email|default:"No registrado" }}</span></div>
+          <div><small>Agente</small><span>{{ lead.agent_name }}</span></div>
+          <div><small>Canal</small><span>{{ lead.channel_name }}</span></div>
+          <div><small>Ingreso</small><span>{{ lead.entered_at|localtime|date:"d/m/Y H:i" }}</span></div>
+          <div><small>Mensajes</small><span>{{ lead.total_messages }}</span></div>
+          {% if lead.unattended %}<div><small>Esperando respuesta</small><span>{{ lead.unattended_label }}</span></div>{% endif %}
+        </div>
+        <div class="pli-badges">
+          {% if lead.contacted %}<span class="pli-badge">Contactado</span>{% endif %}
+          {% if lead.bidirectional %}<span class="pli-badge">Bidireccional</span>{% endif %}
+          {% if lead.qualified %}<span class="pli-badge green">Calificado</span>{% endif %}
+          {% if lead.visit_intent %}<span class="pli-badge amber">Intención de visita</span>{% endif %}
+          {% if lead.visit_registered %}<span class="pli-badge green">Visita registrada</span>{% endif %}
+          {% if lead.never_contacted %}<span class="pli-badge red">Sin primera respuesta</span>{% endif %}
+          {% if lead.attention_overdue %}<span class="pli-badge red">Atención vencida · {{ lead.unattended_label }}</span>{% elif lead.unattended %}<span class="pli-badge amber">Esperando al agente</span>{% endif %}
+          {% if lead.context_analysis_pending %}<span class="pli-badge amber">Análisis contextual pendiente</span>{% endif %}
+        </div>
+        <span class="pli-card-action">Ver conversación completa →</span>
+      </a>
+    {% empty %}
+      <article class="pli-card pli-section"><h2>Sin resultados</h2><p>No hay leads que cumplan esta etapa dentro del período seleccionado.</p></article>
+    {% endfor %}
+  </section>
+  {% if page_obj.paginator.num_pages > 1 %}
+    <nav class="pli-pagination" aria-label="Paginación">
+      {% if page_obj.has_previous %}<a href="?{{ query_without_page }}&amp;page={{ page_obj.previous_page_number }}">← Anterior</a>{% endif %}
+      <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+      {% if page_obj.has_next %}<a href="?{{ query_without_page }}&amp;page={{ page_obj.next_page_number }}">Siguiente →</a>{% endif %}
+    </nav>
+  {% endif %}
+</main>
+{% endblock %}

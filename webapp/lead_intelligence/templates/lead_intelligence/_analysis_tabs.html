@@ -1,0 +1,6 @@
+<nav class="pli-tabs pli-tabs-main" aria-label="Secciones de análisis CRM">
+  <a class="pli-tab{% if active_tab == 'overview' %} active{% endif %}" href="{% url 'analisis_crm:dashboard' %}?from={{ date_from|date:'Y-m-d' }}&amp;to={{ date_to|date:'Y-m-d' }}">Embudo comercial</a>
+  <a class="pli-tab{% if active_tab == 'cohorts' %} active{% endif %}" href="{% url 'analisis_crm:cohorts' %}?from={{ date_from|date:'Y-m-d' }}&amp;to={{ date_to|date:'Y-m-d' }}">Cohortes</a>
+  <a class="pli-tab{% if active_tab == 'attention' %} active{% endif %}" href="{% url 'analisis_crm:attention_quality' %}?from={{ date_from|date:'Y-m-d' }}&amp;to={{ date_to|date:'Y-m-d' }}">Calidad de atención</a>
+  <a class="pli-tab{% if active_tab == 'engine' %} active{% endif %}" href="{% url 'analisis_crm:analysis_quality' %}?from={{ date_from|date:'Y-m-d' }}&amp;to={{ date_to|date:'Y-m-d' }}">Calidad del motor IA</a>
+</nav>

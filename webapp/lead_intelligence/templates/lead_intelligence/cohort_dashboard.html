@@ -1,58 +1,69 @@
 {% extends "base.html" %}
-{% block title %}Cohortes de Leads | Prometeo{% endblock %}
+{% load l10n %}
+{% block title %}Cohorte diaria de Leads | Prometeo{% endblock %}
 {% block extra_css %}<style>{% include "lead_intelligence/_dashboard_styles.html" %}</style>{% endblock %}
 {% block content %}
 <main class="pli-page">
   <header class="pli-head">
-    <div><div class="pli-kicker">Marketing &amp; prospección</div><h1>Cohortes por día</h1><p>Compara grupos diarios. El embudo muestra únicamente la fecha seleccionada, nunca la suma del rango.</p></div>
+    <div>
+      <div class="pli-kicker">Marketing &amp; prospección</div>
+      <h1>Cohortes por día</h1>
+      <p>Analiza exclusivamente los leads que ingresaron en una fecha, usando la hora de Perú.</p>
+    </div>
     <form class="pli-filter" method="get">
-      <div><label for="from">Desde</label><input id="from" name="from" type="date" value="{{ date_from|date:'Y-m-d' }}"></div>
-      <div><label for="to">Hasta</label><input id="to" name="to" type="date" value="{{ date_to|date:'Y-m-d' }}"></div>
+      <div>
+        <label for="cohort">Fecha de la cohorte</label>
+        <input id="cohort" name="cohort" type="date" max="{{ today|date:'Y-m-d' }}" value="{{ cohort_date|date:'Y-m-d' }}">
+      </div>
       <button class="pli-submit" type="submit">↻&nbsp; Actualizar</button>
     </form>
   </header>
-  <nav class="pli-tabs" aria-label="Secciones de inteligencia de leads">
-    <a class="pli-tab" href="{% url 'analisis_crm:dashboard' %}">Resumen gerencial</a>
-    <a class="pli-tab active" href="{% url 'analisis_crm:cohorts' %}">Cohortes por día</a>
-  </nav>
+
+  {% include "lead_intelligence/_analysis_tabs.html" %}
+
+  <div class="pli-tabs" aria-label="Navegación entre fechas">
+    <a class="pli-tab" href="?cohort={{ previous_day|date:'Y-m-d' }}">← Día anterior</a>
+    <a class="pli-tab" href="?cohort={{ today|date:'Y-m-d' }}">Hoy</a>
+    {% if next_day %}
+      <a class="pli-tab" href="?cohort={{ next_day|date:'Y-m-d' }}">Día siguiente →</a>
+    {% else %}
+      <span class="pli-tab" aria-disabled="true" style="opacity:.45;cursor:not-allowed">Día siguiente →</span>
+    {% endif %}
+  </div>
+
   <section class="pli-grid">
     <article class="pli-card pli-section">
-      <div class="pli-section-head"><div><h2>Embudo del {{ cohort_date|date:"d/m/Y" }}</h2><p>Solo incluye los leads que ingresaron ese día.</p></div><span class="pli-chip">{{ selected_cohort.entered|default:0 }} leads</span></div>
-      {% widthratio selected_cohort.contacted selected_cohort.entered 100 as contacted_pct %}
-      {% widthratio selected_cohort.active_last_48h selected_cohort.entered 100 as active_pct %}
-      {% widthratio selected_cohort.qualified_proxy selected_cohort.entered 100 as qualified_pct %}
-      {% widthratio selected_cohort.visit_scheduled selected_cohort.entered 100 as visit_pct %}
+      <div class="pli-section-head">
+        <div>
+          <h2>Embudo del {{ cohort_date|date:"d/m/Y" }}</h2>
+          <p>Todos los porcentajes usan como base los {{ selected_cohort.entered|default:0 }} leads ingresados ese día.</p>
+        </div>
+        <span class="pli-chip">{{ selected_cohort.entered|default:0 }} leads</span>
+      </div>
       <div class="pli-funnel">
-        <div class="pli-funnel-row"><label>Ingresaron</label><div class="pli-track"><div class="pli-fill" style="width:100%"></div></div><strong>{{ selected_cohort.entered|default:0 }}</strong></div>
-        <div class="pli-funnel-row"><label>Contactados</label><div class="pli-track"><div class="pli-fill" style="width:{{ contacted_pct|default:0 }}%;--bar:#5574dc"></div></div><strong>{{ selected_cohort.contacted|default:0 }}</strong></div>
-        <div class="pli-funnel-row"><label>Activos 48 h</label><div class="pli-track"><div class="pli-fill" style="width:{{ active_pct|default:0 }}%;--bar:#718bea"></div></div><strong>{{ selected_cohort.active_last_48h|default:0 }}</strong></div>
-        <div class="pli-funnel-row"><label>Calificados*</label><div class="pli-track"><div class="pli-fill" style="width:{{ qualified_pct|default:0 }}%;--bar:#279174"></div></div><strong>{{ selected_cohort.qualified_proxy|default:0 }}</strong></div>
-        <div class="pli-funnel-row"><label>Visita agendada</label><div class="pli-track"><div class="pli-fill" style="width:{{ visit_pct|default:0 }}%;--bar:#d68a22"></div></div><strong>{{ selected_cohort.visit_scheduled|default:0 }}</strong></div>
+        <a class="pli-funnel-row pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=entered&amp;cohort={{ cohort_date|date:'Y-m-d' }}"><label>Ingresaron</label><div class="pli-track"><div class="pli-fill" style="width:{% if selected_cohort.entered %}100{% else %}0{% endif %}%"></div></div><strong>{{ selected_cohort.entered|default:0 }} <span class="pli-rate">{% if selected_cohort.entered %}100{% else %}0{% endif %}%</span></strong></a>
+        <a class="pli-funnel-row pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=contacted&amp;cohort={{ cohort_date|date:'Y-m-d' }}"><label>Contactados</label><div class="pli-track"><div class="pli-fill" style="width:{{ selected_cohort.contacted_pct|default:0|unlocalize }}%;--bar:#5574dc"></div></div><strong>{{ selected_cohort.contacted|default:0 }} <span class="pli-rate">{{ selected_cohort.contacted_pct|default:0 }}%</span></strong></a>
+        <a class="pli-funnel-row pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=bidirectional&amp;cohort={{ cohort_date|date:'Y-m-d' }}"><label>Bidireccionales</label><div class="pli-track"><div class="pli-fill" style="width:{{ selected_cohort.bidirectional_pct|default:0|unlocalize }}%;--bar:#718bea"></div></div><strong>{{ selected_cohort.bidirectional|default:0 }} <span class="pli-rate">{{ selected_cohort.bidirectional_pct|default:0 }}%</span></strong></a>
+        <a class="pli-funnel-row pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=qualified&amp;cohort={{ cohort_date|date:'Y-m-d' }}"><label>Calificados</label><div class="pli-track"><div class="pli-fill" style="width:{{ selected_cohort.qualified_pct|default:0|unlocalize }}%;--bar:#279174"></div></div><strong>{{ selected_cohort.qualified|default:0 }} <span class="pli-rate">{{ selected_cohort.qualified_pct|default:0 }}%</span></strong></a>
+        <a class="pli-funnel-row pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=visit_intent&amp;cohort={{ cohort_date|date:'Y-m-d' }}"><label>Intención de visita</label><div class="pli-track"><div class="pli-fill" style="width:{{ selected_cohort.visit_intent_pct|default:0|unlocalize }}%;--bar:#b7791f"></div></div><strong>{{ selected_cohort.visit_intent|default:0 }} <span class="pli-rate">{{ selected_cohort.visit_intent_pct|default:0 }}%</span></strong></a>
+        <a class="pli-funnel-row pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=visit_registered&amp;cohort={{ cohort_date|date:'Y-m-d' }}"><label>Visita registrada</label><div class="pli-track"><div class="pli-fill" style="width:{{ selected_cohort.visit_registered_pct|default:0|unlocalize }}%;--bar:#d68a22"></div></div><strong>{{ selected_cohort.visit_registered|default:0 }} <span class="pli-rate">{{ selected_cohort.visit_registered_pct|default:0 }}%</span></strong></a>
       </div>
-      <div class="pli-note"><strong>*Calificación provisional:</strong> usa avance de estado comercial. La calificación conversacional se activará con el historial completo de Chatwoot.</div>
+      <div class="pli-note">
+        <strong>Reglas:</strong> contactado = lead → agente; bidireccional = lead → agente → lead; calificado = bidireccional + interés concreto. La intención surge del chat; la visita registrada exige un evento oficial asociado al lead.
+        <br><strong>Cobertura contextual:</strong> {{ selected_cohort.context_analyzed|default:0 }} analizados por IA y {{ selected_cohort.context_pending|default:0 }} pendientes.
+      </div>
     </article>
+
     <article class="pli-card pli-section">
-      <div class="pli-section-head"><div><h2>Lectura de la cohorte</h2><p>Reglas de interpretación.</p></div></div>
+      <div class="pli-section-head">
+        <div><h2>Lectura de la cohorte</h2><p>Indicadores complementarios de atención.</p></div>
+      </div>
       <div class="pli-alerts" style="grid-template-columns:1fr">
-        <div class="pli-alert"><div><b>Grupo fijo</b><span>El total nunca cambia: son quienes ingresaron el {{ cohort_date|date:"d/m/Y" }}.</span></div></div>
-        <div class="pli-alert"><div><b>Conversión acumulada</b><span>Un lead cuenta cuando alcanza el hito, aunque después se enfríe.</span></div></div>
-        <div class="pli-alert"><div><b>Activos 48 h</b><span>Este indicador sí refleja actividad reciente y puede disminuir.</span></div></div>
+        <div class="pli-alert"><div><b>Sin atender</b><span>El último mensaje válido del lead aún no tiene una respuesta posterior del agente.</span></div><strong>{{ selected_cohort.unattended|default:0 }}</strong></div>
+        <div class="pli-alert"><div><b>Grupo fijo</b><span>Solo contiene ingresos del {{ cohort_date|date:"d/m/Y" }} en America/Lima.</span></div></div>
+        <div class="pli-alert"><div><b>Visitas oficiales</b><span>Se cuentan exclusivamente desde eventos “Visita” vinculados al lead.</span></div></div>
       </div>
     </article>
-  </section>
-  <section class="pli-card pli-section">
-    <div class="pli-section-head"><div><h2>Comparación diaria</h2><p>Haz clic en una fecha para abrir exclusivamente esa cohorte.</p></div><span class="pli-chip">{{ date_from|date:"d/m" }} — {{ date_to|date:"d/m/Y" }}</span></div>
-    <div class="pli-table-wrap"><table class="pli-table">
-      <thead><tr><th>Fecha de ingreso</th><th>Total</th><th>Contactados D1</th><th>Calificados D1*</th><th>Calificados D3*</th><th>Visita D7</th></tr></thead>
-      <tbody>{% for cohort in cohorts %}<tr class="{% if cohort.cohort_date == cohort_date %}selected{% endif %}">
-        <td><a href="?from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}&cohort={{ cohort.cohort_date|date:'Y-m-d' }}">{{ cohort.cohort_date|date:"d/m/Y" }}</a></td>
-        <td>{{ cohort.total }}</td>
-        <td>{{ cohort.contacted_d1 }}<span class="pli-rate">{{ cohort.contacted_d1_pct }}%</span></td>
-        <td>{{ cohort.qualified_d1 }}<span class="pli-rate">{{ cohort.qualified_d1_pct }}%</span></td>
-        <td>{{ cohort.qualified_d3 }}<span class="pli-rate">{{ cohort.qualified_d3_pct }}%</span></td>
-        <td>{{ cohort.visits_d7 }}<span class="pli-rate">{{ cohort.visits_d7_pct }}%</span></td>
-      </tr>{% empty %}<tr><td colspan="6">No existen cohortes en el rango.</td></tr>{% endfor %}</tbody>
-    </table></div>
   </section>
 </main>
 {% endblock %}

@@ -17,7 +17,11 @@ class AnalysisRun(models.Model):
     status = models.CharField(max_length=20, choices=Status.choices)
     started_at = models.DateTimeField()
     completed_at = models.DateTimeField(null=True, blank=True)
+    heartbeat_at = models.DateTimeField(null=True, blank=True)
+    leads_total = models.PositiveIntegerField(default=0)
     leads_analyzed = models.PositiveIntegerField(default=0)
+    leads_skipped = models.PositiveIntegerField(default=0)
+    leads_failed = models.PositiveIntegerField(default=0)
     diagnoses_created = models.PositiveIntegerField(default=0)
     actions_created = models.PositiveIntegerField(default=0)
     rules_version = models.CharField(max_length=40, default="v1")
@@ -134,3 +138,122 @@ class LeadMilestone(models.Model):
             )
         ]
 
+
+class LeadConversationAssessment(models.Model):
+    class Decision(models.TextChoices):
+        CONFIRMED = "confirmed", "Confirmado"
+        NOT_CONFIRMED = "not_confirmed", "No confirmado"
+        AMBIGUOUS = "ambiguous", "Ambiguo"
+
+    class AttentionDecision(models.TextChoices):
+        ADEQUATE = "adequate", "Adecuada"
+        PARTIAL = "partial", "Parcial"
+        INADEQUATE = "inadequate", "Inadecuada"
+        NOT_APPLICABLE = "not_applicable", "No aplica"
+        AMBIGUOUS = "ambiguous", "Ambigua"
+
+    source_lead_id = models.BigIntegerField(db_index=True)
+    history_hash = models.CharField(max_length=64, db_index=True)
+    analysis_version = models.CharField(max_length=40, default="context-v2")
+    qualified_status = models.CharField(max_length=20, choices=Decision.choices)
+    visit_intent_status = models.CharField(max_length=20, choices=Decision.choices)
+    qualified_confidence = models.DecimalField(max_digits=5, decimal_places=4)
+    visit_intent_confidence = models.DecimalField(max_digits=5, decimal_places=4)
+    qualified_evidence = models.JSONField(default=list)
+    visit_intent_evidence = models.JSONField(default=list)
+    reason = models.TextField(blank=True)
+    first_response_status = models.CharField(
+        max_length=20,
+        choices=AttentionDecision.choices,
+        null=True,
+        blank=True,
+    )
+    first_response_confidence = models.DecimalField(
+        max_digits=5, decimal_places=4, null=True, blank=True
+    )
+    relevance_score = models.DecimalField(
+        max_digits=5, decimal_places=4, null=True, blank=True
+    )
+    coverage_score = models.DecimalField(
+        max_digits=5, decimal_places=4, null=True, blank=True
+    )
+    directness_score = models.DecimalField(
+        max_digits=5, decimal_places=4, null=True, blank=True
+    )
+    personalization_score = models.DecimalField(
+        max_digits=5, decimal_places=4, null=True, blank=True
+    )
+    lead_request_items = models.JSONField(default=list)
+    answered_request_items = models.JSONField(default=list)
+    unanswered_request_items = models.JSONField(default=list)
+    first_response_evidence = models.JSONField(default=list)
+    attention_reason = models.TextField(blank=True)
+    model_version = models.CharField(max_length=80)
+    analyzed_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = "prometeo_lead_conversation_assessment"
+        ordering = ["-analyzed_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["source_lead_id", "history_hash", "analysis_version"],
+                name="pli_unique_conversation_assessment",
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=["source_lead_id", "analysis_version", "analyzed_at"],
+                name="pli_assess_lead_ver_date",
+            )
+        ]
+
+
+class LeadConversationReview(models.Model):
+    class Stage(models.TextChoices):
+        QUALIFIED = "qualified", "Calificación"
+        VISIT_INTENT = "visit_intent", "Intención de visita"
+        FIRST_RESPONSE = "first_response", "Primera respuesta"
+
+    class Verdict(models.TextChoices):
+        CORRECT = "correct", "Correcto"
+        INCORRECT = "incorrect", "Incorrecto"
+        UNSURE = "unsure", "Requiere discusión"
+
+    source_lead_id = models.BigIntegerField(db_index=True)
+    history_hash = models.CharField(max_length=64, db_index=True)
+    analysis_version = models.CharField(max_length=40, db_index=True)
+    stage = models.CharField(max_length=20, choices=Stage.choices)
+    ai_value = models.CharField(max_length=30)
+    human_value = models.CharField(max_length=30)
+    verdict = models.CharField(max_length=15, choices=Verdict.choices)
+    notes = models.TextField(blank=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="lead_conversation_reviews",
+    )
+    reviewed_at = models.DateTimeField(auto_now=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "prometeo_lead_conversation_review"
+        ordering = ["-reviewed_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "source_lead_id",
+                    "history_hash",
+                    "analysis_version",
+                    "stage",
+                ],
+                name="pli_unique_conversation_review",
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=["analysis_version", "stage", "verdict"],
+                name="pli_review_ver_stage_result",
+            )
+        ]

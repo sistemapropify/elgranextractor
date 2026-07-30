@@ -11,43 +11,251 @@
       <button class="pli-submit" type="submit">↻&nbsp; Actualizar</button>
     </form>
   </header>
-  <nav class="pli-tabs" aria-label="Secciones de inteligencia de leads">
-    <a class="pli-tab active" href="{% url 'analisis_crm:dashboard' %}">Resumen gerencial</a>
-    <a class="pli-tab" href="{% url 'analisis_crm:cohorts' %}">Cohortes por día</a>
-  </nav>
-  <section class="pli-grid-5">
-    <article class="pli-card pli-kpi"><small>Leads captados</small><strong>{{ overview.new_in_period|default:0 }}</strong><span>{{ date_from|date:"d/m/Y" }} — {{ date_to|date:"d/m/Y" }}</span></article>
-    <article class="pli-card pli-kpi"><small>Sin responsable</small><strong>{{ overview.unassigned|default:0 }}</strong><span>Necesitan asignación antes de distribuir tareas.</span></article>
-    <article class="pli-card pli-kpi"><small>Estancados</small><strong>{{ overview.stalled|default:0 }}</strong><span>Más de 7 días sin actividad registrada.</span></article>
-    <article class="pli-card pli-kpi"><small>Mensajes no leídos</small><strong>{{ overview.unread|default:0 }}</strong><span>Respuestas pendientes dentro del periodo.</span></article>
-    <article class="pli-card pli-kpi"><small>Próximas visitas</small><strong>{{ overview.upcoming_visits|default:0 }}</strong><span>{{ overview.overdue_events|default:0 }} eventos vencidos.</span></article>
+  {% include "lead_intelligence/_analysis_tabs.html" %}
+  <section class="pli-grid-6">
+    <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=entered&amp;from={{ date_from|date:'Y-m-d' }}&amp;to={{ date_to|date:'Y-m-d' }}"><small>Ingresaron</small><strong>{{ selected_cohort.entered|default:0 }}</strong><span>Base del embudo: 100% · {{ date_from|date:"d/m/Y" }} — {{ date_to|date:"d/m/Y" }}</span></a>
+    <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=contacted&amp;from={{ date_from|date:'Y-m-d' }}&amp;to={{ date_to|date:'Y-m-d' }}"><small>Contactados</small><strong>{{ selected_cohort.contacted|default:0 }}</strong><span>{{ selected_cohort.contacted_pct|default:0 }}% de {{ selected_cohort.entered|default:0 }} ingresos recibió respuesta del agente.</span></a>
+    <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=bidirectional&amp;from={{ date_from|date:'Y-m-d' }}&amp;to={{ date_to|date:'Y-m-d' }}"><small>Bidireccionales</small><strong>{{ selected_cohort.bidirectional|default:0 }}</strong><span>{{ selected_cohort.bidirectional_pct|default:0 }}% de {{ selected_cohort.entered|default:0 }} ingresos respondió después del agente.</span></a>
+    <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=qualified&amp;from={{ date_from|date:'Y-m-d' }}&amp;to={{ date_to|date:'Y-m-d' }}"><small>Calificados por IA</small><strong>{{ selected_cohort.qualified|default:0 }}</strong><span>{{ selected_cohort.qualified_pct|default:0 }}% de {{ selected_cohort.entered|default:0 }} ingresos tiene interés concreto confirmado.</span></a>
+    <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=visit_intent&amp;from={{ date_from|date:'Y-m-d' }}&amp;to={{ date_to|date:'Y-m-d' }}"><small>Intención de visita confirmada en chat</small><strong>{{ selected_cohort.visit_intent|default:0 }}</strong><span>{{ selected_cohort.visit_intent_pct|default:0 }}% de {{ selected_cohort.entered|default:0 }} ingresos aceptó o propuso una visita.</span></a>
+    <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=visit_registered&amp;from={{ date_from|date:'Y-m-d' }}&amp;to={{ date_to|date:'Y-m-d' }}"><small>Visita registrada</small><strong>{{ selected_cohort.visit_registered|default:0 }}</strong><span>{{ selected_cohort.visit_registered_pct|default:0 }}% de {{ selected_cohort.entered|default:0 }} ingresos tiene evento oficial.</span></a>
+  </section>
+  <div class="pli-metric-guide">
+    <strong>Cómo leer estos KPI</strong>
+    <span>Todos los porcentajes usan como base los {{ selected_cohort.entered|default:0 }} leads ingresados. La IA ya evaluó {{ selected_cohort.context_analyzed|default:0 }} ({{ selected_cohort.context_analyzed_pct|default:0 }}%); quedan {{ selected_cohort.context_pending|default:0 }} pendientes y {{ selected_cohort.context_unavailable|default:0 }} sin conversación válida. Los pendientes todavía no tienen veredicto y no forman parte de los {{ selected_cohort.qualified|default:0 }} calificados ni de las {{ selected_cohort.visit_intent|default:0 }} intenciones confirmadas.</span>
+  </div>
+  <section class="pli-card pli-section">
+    <div class="pli-section-head">
+      <div><h2>Leads entrantes por día</h2><p>Ingresos diarios en hora de Perú dentro del periodo seleccionado.</p></div>
+      <span class="pli-chip">{{ date_from|date:"d/m/Y" }} — {{ date_to|date:"d/m/Y" }}</span>
+    </div>
+    <div class="pli-chart"><canvas id="incomingLeadsChart" aria-label="Gráfica de leads entrantes por día" role="img"></canvas></div>
+    {{ incoming_leads|json_script:"incoming-leads-data" }}
   </section>
   <section class="pli-grid">
     <article class="pli-card pli-section">
       <div class="pli-section-head"><div><h2>Atención requerida</h2><p>Problemas operativos detectados en este grupo de leads.</p></div><span class="pli-chip">Periodo seleccionado</span></div>
       <div class="pli-alerts">
         <div class="pli-alert"><div><b>Sin responsable</b><span>No pueden recibir tareas individuales</span></div><strong>{{ overview.unassigned|default:0 }}</strong></div>
-        <div class="pli-alert"><div><b>Mensajes no leídos</b><span>Posibles clientes esperando respuesta</span></div><strong>{{ overview.unread|default:0 }}</strong></div>
-        <div class="pli-alert"><div><b>Seguimiento detenido</b><span>Más de 7 días sin actividad</span></div><strong>{{ overview.stalled|default:0 }}</strong></div>
-        <div class="pli-alert"><div><b>Eventos vencidos</b><span>Tareas o visitas aún abiertas</span></div><strong>{{ overview.overdue_events|default:0 }}</strong></div>
+        <a class="pli-alert" href="{% url 'analisis_crm:lead_results' %}?stage=never_contacted&amp;from={{ date_from|date:'Y-m-d' }}&amp;to={{ date_to|date:'Y-m-d' }}"><div><b>Sin primera respuesta</b><span>El agente nunca respondió · {{ selected_cohort.never_contacted_overdue|default:0 }} llevan más de 24 h</span></div><strong>{{ selected_cohort.never_contacted|default:0 }}</strong></a>
+        <a class="pli-alert" href="{% url 'analisis_crm:lead_results' %}?stage=unattended&amp;from={{ date_from|date:'Y-m-d' }}&amp;to={{ date_to|date:'Y-m-d' }}"><div><b>Esperando al agente</b><span>Total cuyo último mensaje válido fue del lead</span></div><strong>{{ selected_cohort.unattended|default:0 }}</strong></a>
+        <a class="pli-alert pli-alert-danger" href="{% url 'analisis_crm:lead_results' %}?stage=attention_overdue&amp;from={{ date_from|date:'Y-m-d' }}&amp;to={{ date_to|date:'Y-m-d' }}"><div><b>Atención vencida &gt;24 h</b><span>Subconjunto de “Esperando” con más de 24 horas sin respuesta</span></div><strong>{{ selected_cohort.attention_overdue|default:0 }}</strong></a>
       </div>
+      <div class="pli-note pli-note-info"><strong>Estas alertas se superponen y no se suman.</strong> “Sin primera respuesta” y “Atención vencida” son subconjuntos de “Esperando al agente”. Haz clic en una alerta para ver los leads y su tiempo individual de espera. Se calculan con remitentes y timestamps de chat_history, no mediante una opinión de la IA.</div>
     </article>
     <article class="pli-card pli-section">
       <div class="pli-section-head"><div><h2>Calidad del periodo</h2><p>Datos que limitan el análisis.</p></div></div>
       <div class="pli-quality">
         <div><strong>{{ data_quality.no_chatwoot|default:0 }}</strong><span>sin Chatwoot</span></div>
-        <div><strong>{{ data_quality.no_last_message|default:0 }}</strong><span>sin último mensaje</span></div>
-        <div><strong>{{ data_quality.events_without_lead|default:0 }}</strong><span>eventos sin lead</span></div>
-        <div><strong>{{ data_quality.invalid_dates|default:0 }}</strong><span>fechas inválidas</span></div>
+        <div><strong>{{ data_quality.no_chat_history|default:0 }}</strong><span>sin chat_history</span></div>
+        <div><strong>{{ data_quality.empty_chat_history|default:0 }}</strong><span>chat_history vacío</span></div>
+        <div><strong>{{ data_quality.invalid_chat_history|default:0 }}</strong><span>JSON inválido</span></div>
+        <div><strong>{{ data_quality.messages_without_valid_timestamp|default:0 }}</strong><span>mensajes sin fecha válida</span></div>
+        <div><strong>{{ data_quality.unknown_senders|default:0 }}</strong><span>remitentes desconocidos</span></div>
+        <div><strong>{{ data_quality.pending_context_analysis|default:0 }}</strong><span>pendientes de análisis contextual</span></div>
+        <div><strong>{{ data_quality.media_unobservable|default:0 }}</strong><span>posible multimedia no observable</span></div>
+        <div><strong>{{ data_quality.with_assignment_changes|default:0 }}</strong><span>con cambios de responsable</span></div>
       </div>
     </article>
   </section>
   <section class="pli-card pli-section">
-    <div class="pli-section-head"><div><h2>Carga de seguimiento por agente</h2><p>Distribución de los leads captados en el periodo; no incluye otros periodos.</p></div></div>
+    <div class="pli-section-head"><div><h2>Carga de seguimiento por agente</h2><p>Distribución de los leads captados en el periodo. Cada porcentaje usa como base los leads del propio agente.</p></div></div>
     <div class="pli-table-wrap"><table class="pli-table">
-      <thead><tr><th>Agente</th><th>Leads asignados</th><th>No leídos</th><th>Estancados</th></tr></thead>
-      <tbody>{% for agent in agent_load %}<tr><td>{{ agent.agent_name }}</td><td>{{ agent.leads }}</td><td>{{ agent.unread }}</td><td>{{ agent.stalled }}</td></tr>{% empty %}<tr><td colspan="4">Sin datos para este periodo.</td></tr>{% endfor %}</tbody>
+      <thead><tr><th>Agente</th><th>Leads</th><th>Conversión</th><th>Contactados</th><th>Conversión</th><th>Bidireccionales</th><th>Calificados</th><th>Esperando respuesta</th></tr></thead>
+      <tbody>{% for agent in agent_load %}<tr><td>{{ agent.agent_name }}</td><td>{{ agent.leads }} <small>(100%)</small></td><td><span class="pli-conversion pli-conversion-{{ agent.contact_tone }}">← {{ agent.contacted_pct }}% →</span></td><td>{{ agent.contacted }} <small>({{ agent.contacted_pct }}%)</small></td><td><span class="pli-conversion pli-conversion-{{ agent.conversion_tone }}">← {% if agent.bidirectional_from_contacted_pct is not None %}{{ agent.bidirectional_from_contacted_pct }}%{% else %}—{% endif %} →</span></td><td>{{ agent.bidirectional }} <small>({{ agent.bidirectional_pct }}%)</small></td><td>{{ agent.qualified }} <small>({{ agent.qualified_pct }}%)</small></td><td>{{ agent.unattended }} <small>({{ agent.unattended_pct }}%)</small></td></tr>{% empty %}<tr><td colspan="8">Sin datos para este periodo.</td></tr>{% endfor %}</tbody>
     </table></div>
   </section>
 </main>
+{% endblock %}
+{% block extra_js %}
+(() => {
+  const element = document.getElementById('incoming-leads-data');
+  const canvas = document.getElementById('incomingLeadsChart');
+  if (!element || !canvas) return;
+  const rows = JSON.parse(element.textContent);
+  if (!rows.length) return;
+  const tooltip = document.createElement('div');
+  tooltip.className = 'pli-chart-tooltip';
+  canvas.parentElement.appendChild(tooltip);
+  let chartGeometry = null;
+
+  function drawIncomingLeadsChart() {
+    const box = canvas.parentElement.getBoundingClientRect();
+    const width = Math.max(320, Math.floor(box.width));
+    const height = Math.max(220, Math.floor(box.height));
+    const ratio = window.devicePixelRatio || 1;
+    canvas.width = width * ratio;
+    canvas.height = height * ratio;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+
+    const ctx = canvas.getContext('2d');
+    ctx.scale(ratio, ratio);
+    ctx.clearRect(0, 0, width, height);
+
+    const padding = { top: 30, right: 18, bottom: 38, left: 42 };
+    const plotWidth = width - padding.left - padding.right;
+    const plotHeight = height - padding.top - padding.bottom;
+    const values = rows.map(row => Number(row.count) || 0);
+    const maximum = Math.max(1, ...values);
+    const yMaximum = Math.max(5, Math.ceil(maximum / 5) * 5);
+    const movingAverages = values.map((value, index) => {
+      const windowStart = Math.max(0, index - 4);
+      const windowValues = values.slice(windowStart, index + 1);
+      return windowValues.reduce((total, item) => total + item, 0) / windowValues.length;
+    });
+    const xAt = index => padding.left + (
+      rows.length === 1 ? plotWidth / 2 : index * plotWidth / (rows.length - 1)
+    );
+    const yAt = value => padding.top + plotHeight - value * plotHeight / yMaximum;
+    chartGeometry = { width, height, xAt, yAt, values, movingAverages };
+
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.textBaseline = 'middle';
+    for (let line = 0; line <= 5; line += 1) {
+      const value = yMaximum * line / 5;
+      const y = yAt(value);
+      ctx.beginPath();
+      ctx.moveTo(padding.left, y);
+      ctx.lineTo(width - padding.right, y);
+      ctx.strokeStyle = '#eef1f5';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = '#667085';
+      ctx.textAlign = 'right';
+      ctx.fillText(String(Math.round(value)), padding.left - 8, y);
+    }
+
+    const labelStep = Math.max(1, Math.ceil(rows.length / 10));
+    rows.forEach((row, index) => {
+      if (index % labelStep !== 0 && index !== rows.length - 1) return;
+      const [, month, day] = row.date.split('-');
+      ctx.fillStyle = '#667085';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(`${day}/${month}`, xAt(index), height - padding.bottom + 10);
+    });
+
+    const gradient = ctx.createLinearGradient(0, padding.top, 0, height - padding.bottom);
+    gradient.addColorStop(0, 'rgba(49,87,213,.24)');
+    gradient.addColorStop(1, 'rgba(49,87,213,.03)');
+    ctx.beginPath();
+    ctx.moveTo(xAt(0), yAt(0));
+    values.forEach((value, index) => ctx.lineTo(xAt(index), yAt(value)));
+    ctx.lineTo(xAt(values.length - 1), yAt(0));
+    ctx.closePath();
+    ctx.fillStyle = gradient;
+    ctx.fill();
+
+    ctx.beginPath();
+    values.forEach((value, index) => {
+      const x = xAt(index);
+      const y = yAt(value);
+      if (index === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = '#3157d5';
+    ctx.lineWidth = 2.5;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.stroke();
+
+    values.forEach((value, index) => {
+      ctx.beginPath();
+      ctx.arc(xAt(index), yAt(value), rows.length <= 45 ? 3 : 2, 0, Math.PI * 2);
+      ctx.fillStyle = '#fff';
+      ctx.fill();
+      ctx.strokeStyle = '#3157d5';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    });
+
+    ctx.save();
+    ctx.beginPath();
+    movingAverages.forEach((value, index) => {
+      const x = xAt(index);
+      const y = yAt(value);
+      if (index === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = '#eab308';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([7, 5]);
+    ctx.stroke();
+    ctx.restore();
+    movingAverages.forEach((value, index) => {
+      ctx.beginPath();
+      ctx.arc(xAt(index), yAt(value), 3.5, 0, Math.PI * 2);
+      ctx.fillStyle = '#eab308';
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    });
+    ctx.font = '700 10px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    values.forEach((value, index) => {
+      const labelY = yAt(value) - 7;
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(255,255,255,.95)';
+      ctx.strokeText(String(value), xAt(index), labelY);
+      ctx.fillStyle = '#3157d5';
+      ctx.fillText(String(value), xAt(index), labelY);
+    });
+    const latestAverage = movingAverages[movingAverages.length - 1];
+    const latestAverageY = yAt(latestAverage);
+    ctx.fillStyle = '#a16207';
+    ctx.font = '600 11px system-ui, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(
+      `Prom. móvil 5 días ${latestAverage.toLocaleString('es-PE', { maximumFractionDigits: 1 })}`,
+      width - padding.right,
+      latestAverageY - 4
+    );
+  }
+
+  function showChartTooltip(event) {
+    if (!chartGeometry) return;
+    const bounds = canvas.getBoundingClientRect();
+    const pointerX = (event.clientX - bounds.left) * chartGeometry.width / bounds.width;
+    let closestIndex = 0;
+    let closestDistance = Infinity;
+    rows.forEach((row, index) => {
+      const distance = Math.abs(chartGeometry.xAt(index) - pointerX);
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestIndex = index;
+      }
+    });
+    if (closestDistance > Math.max(18, chartGeometry.width / rows.length / 2)) {
+      tooltip.style.display = 'none';
+      return;
+    }
+    const [year, month, day] = rows[closestIndex].date.split('-');
+    const averageValue = chartGeometry.movingAverages[closestIndex];
+    tooltip.textContent =
+      `${day}/${month}/${year}\n` +
+      `Leads entrantes: ${chartGeometry.values[closestIndex]}\n` +
+      `Promedio móvil 5 días: ${averageValue.toLocaleString('es-PE', { maximumFractionDigits: 1 })}`;
+    tooltip.style.display = 'block';
+    const preferredLeft = chartGeometry.xAt(closestIndex) + 12;
+    const tooltipWidth = tooltip.offsetWidth || 190;
+    tooltip.style.left = `${Math.max(8, Math.min(preferredLeft, chartGeometry.width - tooltipWidth - 8))}px`;
+    const topPoint = Math.min(
+      chartGeometry.yAt(chartGeometry.values[closestIndex]),
+      chartGeometry.yAt(averageValue)
+    );
+    tooltip.style.top = `${Math.max(8, topPoint - tooltip.offsetHeight - 10)}px`;
+  }
+
+  drawIncomingLeadsChart();
+  window.addEventListener('resize', drawIncomingLeadsChart);
+  canvas.addEventListener('mousemove', showChartTooltip);
+  canvas.addEventListener('click', showChartTooltip);
+  canvas.addEventListener('mouseleave', () => {
+    tooltip.style.display = 'none';
+  });
+})();
 {% endblock %}

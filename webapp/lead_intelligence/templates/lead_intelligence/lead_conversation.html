@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% load tz %}
+{% block title %}Conversación de {{ lead.display_name }} | Prometeo{% endblock %}
+{% block extra_css %}<style>{% include "lead_intelligence/_dashboard_styles.html" %}</style>{% endblock %}
+{% block content %}
+<main class="pli-page">
+  <div class="pli-result-head">
+    <div><a class="pli-result-back" href="{% url 'analisis_crm:lead_results' %}{% if back_query %}?{{ back_query }}{% endif %}">← Volver a resultados</a><div class="pli-kicker" style="margin-top:12px">Detalle del lead</div><h1>{{ lead.display_name }}</h1><p>Mensajes y actividad CRM ordenados cronológicamente · hora de Perú</p></div>
+  </div>
+  <section class="pli-conversation-layout">
+    <aside class="pli-card pli-profile">
+      <span class="pli-lead-id">LEAD #{{ lead.id }}</span><h2>{{ lead.display_name }}</h2>
+      <div class="pli-profile-list">
+        <div><small>Teléfono</small><span>{{ lead.phone|default:"No registrado" }}</span></div>
+        <div><small>Correo</small><span>{{ lead.email|default:"No registrado" }}</span></div>
+        <div><small>Responsable actual</small><span>{{ lead.agent_name }}</span></div>
+        {% if lead.contacted %}<div><small>Responsable al responder</small><span>{{ lead.agent_at_first_response_name }}</span></div>{% endif %}
+        {% if lead.assignment_timeline %}<div><small>Cambios de asignación</small><span>{{ lead.assignment_timeline|length }}</span></div>{% endif %}
+        <div><small>Estado CRM</small><span>{{ lead.status_name }}</span></div>
+        <div><small>Canal / fuente</small><span>{{ lead.channel_name }}{% if lead.source %} · {{ lead.source }}{% endif %}</span></div>
+        <div><small>Ingreso</small><span>{{ lead.entered_at|localtime|date:"d/m/Y H:i" }}</span></div>
+        <div><small>Mensajes</small><span>{{ lead.lead_messages }} del lead · {{ lead.agent_messages }} del agente</span></div>
+        {% if lead.budget %}<div><small>Presupuesto</small><span>{{ lead.budget }}</span></div>{% endif %}
+        {% if lead.financing %}<div><small>Financiamiento</small><span>{{ lead.financing }}</span></div>{% endif %}
+      </div>
+      <div class="pli-badges" style="margin-top:16px">
+        {% if lead.contacted %}<span class="pli-badge">Contactado</span>{% endif %}
+        {% if lead.bidirectional %}<span class="pli-badge">Bidireccional</span>{% endif %}
+        {% if lead.qualified %}<span class="pli-badge green">Calificado</span>{% endif %}
+        {% if lead.visit_intent %}<span class="pli-badge amber">Intención de visita</span>{% endif %}
+        {% if lead.attention_overdue %}<span class="pli-badge red">Atención vencida</span>{% elif lead.unattended %}<span class="pli-badge amber">Esperando al agente</span>{% endif %}
+        {% if lead.context_analysis_pending %}<span class="pli-badge amber">Análisis contextual pendiente</span>{% endif %}
+      </div>
+    </aside>
+    <article class="pli-card pli-chat-panel">
+      {% if lead.attention_overdue %}
+        <div class="pli-note pli-note-danger" style="margin-bottom:16px">
+          <strong>Atención vencida: el lead espera respuesta desde hace {{ lead.unattended_label }}.</strong>
+          El último mensaje válido fue del cliente y no existe una respuesta posterior del agente. Es una alerta operativa; no modifica el estado comercial del lead en el CRM.
+        </div>
+      {% elif lead.unattended %}
+        <div class="pli-note pli-note-info" style="margin-bottom:16px">
+          <strong>Esperando respuesta del agente desde hace {{ lead.unattended_label }}.</strong>
+          El último mensaje válido fue del cliente.
+        </div>
+      {% endif %}
+      {% if lead.media_gap_risk %}
+        <div class="pli-note pli-note-info" style="margin-bottom:16px">
+          <strong>Multimedia no observable en chat_history.</strong>
+          El texto sugiere una respuesta con fotos, planos, videos o documentos, pero esos adjuntos no están en la fuente analizada. La calidad de esta respuesta queda no concluyente hasta contrastarla con Chatwoot.
+        </div>
+      {% endif %}
+      {% if lead.context_assessment %}
+        <div class="pli-note" style="margin-bottom:16px">
+          <strong>Evaluación contextual IA</strong><br>
+          Calificación: {{ lead.context_assessment.get_qualified_status_display }}
+          ({{ lead.context_assessment.qualified_confidence|floatformat:2 }}) ·
+          Intención de visita: {{ lead.context_assessment.get_visit_intent_status_display }}
+          ({{ lead.context_assessment.visit_intent_confidence|floatformat:2 }}).
+          {% if lead.context_assessment.reason %}<br>{{ lead.context_assessment.reason }}{% endif %}
+        </div>
+        {% if lead.context_assessment.first_response_status %}
+          <div class="pli-note pli-note-info" style="margin-bottom:16px">
+            {% if lead.media_gap_risk %}
+              <strong>Calidad de la primera respuesta: no concluyente</strong><br>
+              La evaluación textual se conserva para auditoría, pero no se usa como veredicto mientras falte la multimedia.
+            {% elif lead.attention_grounding_issue %}
+              <strong>Calidad de la primera respuesta: no concluyente</strong><br>
+              La IA infirió solicitudes que el lead no expresó en su bloque inicial:
+              {{ lead.attention_unsupported_items|join:", " }}.
+              Este veredicto queda fuera de las métricas de calidad y se envía a revisión.
+            {% else %}
+              <strong>Calidad de la primera respuesta: {{ lead.context_assessment.get_first_response_status_display }}</strong>
+              · confianza {% widthratio lead.context_assessment.first_response_confidence 1 100 %}%<br>
+              Pertinencia {% widthratio lead.context_assessment.relevance_score 1 100 %}% ·
+              cobertura {% widthratio lead.context_assessment.coverage_score 1 100 %}% ·
+              respuesta directa {% widthratio lead.context_assessment.directness_score 1 100 %}% ·
+              personalización {% widthratio lead.context_assessment.personalization_score 1 100 %}%.
+              {% if lead.context_assessment.attention_reason %}<br>{{ lead.context_assessment.attention_reason }}{% endif %}
+              {% if lead.attention_unanswered_items %}<br><strong>No cubierto en la primera respuesta:</strong> {{ lead.attention_unanswered_items|join:", " }}{% endif %}
+            {% endif %}
+          </div>
+        {% endif %}
+      {% else %}
+        <div class="pli-note" style="margin-bottom:16px"><strong>Evaluación contextual pendiente.</strong> Este chat todavía no tiene una clasificación IA vigente para su contenido actual.</div>
+      {% endif %}
+      <div class="pli-section-head"><div><h2>Cronología del lead</h2><p>{{ lead.total_messages }} mensajes válidos · {{ lead.activity_events|length }} actividades CRM</p></div></div>
+      <div class="pli-chat-stream">
+        {% for event in lead.timeline_events %}
+          {% if event.event_type == "activity" %}
+            <div class="pli-activity-event">
+              <div class="pli-activity-head">
+                <strong>{{ event.activity_label }}</strong>
+                <span>{{ event.actor_name }}</span>
+              </div>
+              {% if event.description %}<div class="pli-activity-description">{{ event.description }}</div>{% endif %}
+              {% if event.change_from or event.change_to %}
+                <div class="pli-activity-change">
+                  <span>{{ event.change_from|default:"Sin dato" }}</span>
+                  <b>→</b>
+                  <span>{{ event.change_to|default:"Sin dato" }}</span>
+                </div>
+              {% endif %}
+              {% if event.detail %}<div class="pli-activity-detail">{{ event.detail }}</div>{% endif %}
+              <time class="pli-activity-time">{{ event.timestamp|localtime|date:"d/m/Y H:i:s" }}</time>
+            </div>
+          {% else %}
+            <div class="pli-message pli-message-{{ event.sender }}">
+              <div class="pli-message-bubble">
+                <span class="pli-message-role">{% if event.sender == "lead" %}Lead{% else %}Agente{% endif %}</span>
+                <div class="pli-message-text">{{ event.text|urlize|linebreaksbr }}</div>
+                <time class="pli-message-time">{{ event.timestamp|localtime|date:"d/m/Y H:i:s" }}</time>
+              </div>
+            </div>
+          {% endif %}
+        {% empty %}
+          <div class="pli-note">Este lead no tiene mensajes válidos ni actividades CRM registradas.</div>
+        {% endfor %}
+      </div>
+    </article>
+  </section>
+</main>
+{% endblock %}

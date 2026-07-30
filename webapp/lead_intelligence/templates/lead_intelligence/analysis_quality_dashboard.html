@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% load tz %}
+{% block title %}Calidad del motor IA | Prometeo{% endblock %}
+{% block extra_css %}<style>{% include "lead_intelligence/_dashboard_styles.html" %}</style>{% endblock %}
+{% block content %}
+<main class="pli-page">
+  <header class="pli-head">
+    <div>
+      <div class="pli-kicker">Gobierno del análisis</div>
+      <h1>Calidad del motor IA</h1>
+      <p>Supervisa cobertura, confianza, evidencia y correcciones humanas de la clasificación de conversaciones.</p>
+    </div>
+    <form class="pli-filter" method="get">
+      <div><label for="from">Desde</label><input id="from" name="from" type="date" value="{{ date_from|date:'Y-m-d' }}"></div>
+      <div><label for="to">Hasta</label><input id="to" name="to" type="date" value="{{ date_to|date:'Y-m-d' }}"></div>
+      <button class="pli-submit" type="submit">↻&nbsp; Actualizar</button>
+    </form>
+  </header>
+
+  {% include "lead_intelligence/_analysis_tabs.html" %}
+
+  {% if messages %}
+    {% for message in messages %}<div class="pli-flash pli-flash-{{ message.tags }}">{{ message }}</div>{% endfor %}
+  {% endif %}
+
+  <section class="pli-grid-6">
+    <article class="pli-card pli-kpi"><small>Cobertura vigente</small><strong>{{ coverage_pct }}%</strong><span>{{ analyzed }} de {{ analyzable }} chats válidos · {{ analysis_version }}.</span></article>
+    <article class="pli-card pli-kpi"><small>Pendientes</small><strong>{{ pending }}</strong><span>Conversaciones cuyo hash aún no tiene esta versión.</span></article>
+    <article class="pli-card pli-kpi"><small>Decisiones ambiguas</small><strong>{{ ambiguous }}</strong><span>{{ source_gaps }} chats tienen posible multimedia no observable.</span></article>
+    <article class="pli-card pli-kpi"><small>Baja confianza</small><strong>{{ low_confidence }}</strong><span>Decisiones con confianza inferior a 75%.</span></article>
+    <article class="pli-card pli-kpi"><small>Revisiones humanas</small><strong>{{ reviewed }}</strong><span>Acuerdo observado: {% if decisive_reviews %}{{ agreement_pct }}%{% else %}aún sin muestra{% endif %}.</span></article>
+    <article class="pli-card pli-kpi"><small>Errores confirmados</small><strong>{{ incorrect_reviews }}</strong><span>{{ false_positives }} falsos positivos · {{ false_negatives }} falsos negativos.</span></article>
+  </section>
+
+  <section class="pli-grid">
+    <article class="pli-card pli-section">
+      <div class="pli-section-head"><div><h2>Distribución de decisiones</h2><p>Volumen producido por la versión vigente.</p></div><span class="pli-chip">{{ analysis_version }}</span></div>
+      <div class="pli-table-wrap">
+        <table class="pli-table">
+          <thead><tr><th>Evaluación</th><th>Confirmado / adecuada</th><th>No confirmado / inadecuada</th><th>Parcial</th><th>Ambigua</th><th>No aplica</th></tr></thead>
+          <tbody>
+            <tr><td>Calificación</td><td>{{ decision_counts.qualified.confirmed|default:0 }}</td><td>{{ decision_counts.qualified.not_confirmed|default:0 }}</td><td>—</td><td>{{ decision_counts.qualified.ambiguous|default:0 }}</td><td>—</td></tr>
+            <tr><td>Intención de visita</td><td>{{ decision_counts.visit_intent.confirmed|default:0 }}</td><td>{{ decision_counts.visit_intent.not_confirmed|default:0 }}</td><td>—</td><td>{{ decision_counts.visit_intent.ambiguous|default:0 }}</td><td>—</td></tr>
+            <tr><td>Primera respuesta</td><td>{{ decision_counts.first_response.adequate|default:0 }}</td><td>{{ decision_counts.first_response.inadequate|default:0 }}</td><td>{{ decision_counts.first_response.partial|default:0 }}</td><td>{{ decision_counts.first_response.ambiguous|default:0 }}</td><td>{{ decision_counts.first_response.not_applicable|default:0 }}</td></tr>
+          </tbody>
+        </table>
+      </div>
+      {% if evidence_issues %}<div class="pli-note"><strong>{{ evidence_issues }} decisiones positivas no tienen evidencia válida.</strong> Deben revisarse antes de confiar en ellas.</div>{% endif %}
+    </article>
+    <article class="pli-card pli-section">
+      <div class="pli-section-head"><div><h2>Calibración de confianza</h2><p>Una confianza alta solo será confiable cuando las revisiones humanas confirmen su exactitud.</p></div></div>
+      <div class="pli-confidence-list">
+        {% for bucket in confidence_buckets %}
+          <div><span>{{ bucket.label }}</span><div class="pli-track"><div class="pli-fill" style="width:{% widthratio bucket.count decision_total 100 %}%"></div></div><strong>{{ bucket.count }}</strong></div>
+        {% endfor %}
+      </div>
+    </article>
+  </section>
+
+  <section class="pli-card pli-section">
+    <div class="pli-section-head">
+      <div><h2>Cola de revisión humana</h2><p>Prioriza ambigüedad, baja confianza y evidencia faltante; también incluye una muestra de alta confianza para detectar errores silenciosos.</p></div>
+      <span class="pli-chip">{{ review_queue|length }} casos</span>
+    </div>
+    <div class="pli-note pli-note-info" style="margin:0 0 14px"><strong>Las correcciones no alteran automáticamente el embudo.</strong> Se guardan como verdad humana para medir errores y probar una nueva versión antes de publicarla.</div>
+    <div class="pli-review-list">
+      {% for item in review_queue %}
+        <article class="pli-review-row pli-engine-review">
+          <div class="pli-review-main">
+            <div class="pli-review-title">
+              <div><span class="pli-lead-id">LEAD #{{ item.lead_id }} · {{ item.agent_name }}</span><h3>{{ item.display_name }}</h3></div>
+              <span class="pli-chip">{{ item.stage_label }}</span>
+            </div>
+            <div class="pli-badges">
+              <span class="pli-badge">{{ item.ai_label }} · {% widthratio item.confidence 1 100 %}%</span>
+              {% for reason in item.review_reasons %}<span class="pli-badge amber">{{ reason }}</span>{% empty %}<span class="pli-badge green">Muestra de control</span>{% endfor %}
+            </div>
+            {% if item.reason %}<p>{{ item.reason }}</p>{% endif %}
+            {% if item.unsupported_request_items %}<p><strong>Supuestos no sustentados por el bloque inicial:</strong> {{ item.unsupported_request_items|join:", " }}</p>{% endif %}
+            {% if item.review %}
+              <div class="pli-review-result"><strong>Última revisión:</strong> {{ item.review.get_verdict_display }} · valor humano: {{ item.review.human_value }}{% if item.review.notes %} · {{ item.review.notes }}{% endif %}</div>
+            {% endif %}
+          </div>
+          <div class="pli-review-actions">
+            <a class="pli-result-back" href="{% url 'analisis_crm:lead_conversation' item.lead_id %}?from={{ date_from|date:'Y-m-d' }}&amp;to={{ date_to|date:'Y-m-d' }}">Abrir conversación</a>
+            <form method="post" action="{% url 'analisis_crm:conversation_review' %}">
+              {% csrf_token %}
+              <input type="hidden" name="lead_id" value="{{ item.lead_id }}">
+              <input type="hidden" name="history_hash" value="{{ item.history_hash }}">
+              <input type="hidden" name="analysis_version" value="{{ item.analysis_version }}">
+              <input type="hidden" name="stage" value="{{ item.stage }}">
+              <input type="hidden" name="next" value="{{ request.get_full_path }}">
+              <select name="human_value" aria-label="Corrección humana">
+                <option value="">Seleccionar corrección</option>
+                {% for value,label in item.human_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+              </select>
+              <input name="notes" type="text" maxlength="300" placeholder="Comentario opcional">
+              <div class="pli-review-buttons">
+                <button name="verdict" value="correct" type="submit" class="pli-review-button good">Correcto</button>
+                <button name="verdict" value="incorrect" type="submit" class="pli-review-button bad">Corregir</button>
+                <button name="verdict" value="unsure" type="submit" class="pli-review-button neutral">Discutir</button>
+              </div>
+            </form>
+          </div>
+        </article>
+      {% empty %}
+        <div class="pli-note">No existen evaluaciones vigentes para revisar en este periodo.</div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="pli-card pli-section">
+    <div class="pli-section-head"><div><h2>Ejecuciones del analizador</h2><p>Historial interno; no genera escrituras en dbpropify_be.</p></div></div>
+    <div class="pli-table-wrap">
+      <table class="pli-table">
+        <thead><tr><th>Inicio</th><th>Estado</th><th>Progreso</th><th>Analizados</th><th>Omitidos</th><th>Fallidos</th><th>Versión / modelo</th><th>Último latido</th><th>Observación</th></tr></thead>
+        <tbody>
+          {% for run in runs %}
+            <tr>
+              <td>{{ run.started_at|localtime|date:"d/m/Y H:i:s" }}</td>
+              <td>{{ run.get_status_display }}</td>
+              <td>{{ run.processed }}/{{ run.leads_total }} · {{ run.progress_pct }}%</td>
+              <td>{{ run.leads_analyzed }}</td>
+              <td>{{ run.leads_skipped }}</td>
+              <td>{{ run.leads_failed }}</td>
+              <td>{{ run.rules_version }}<small class="pli-rate">{{ run.model_version }}</small></td>
+              <td>{{ run.heartbeat_at|localtime|date:"d/m/Y H:i:s"|default:"—" }}</td>
+              <td>{{ run.error_summary|default:"Sin errores" }}</td>
+            </tr>
+          {% empty %}<tr><td colspan="9">La versión actual todavía no registra ejecuciones.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+{% endblock %}
