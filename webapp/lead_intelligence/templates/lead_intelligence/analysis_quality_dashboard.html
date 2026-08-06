@@ -23,6 +23,28 @@
     {% for message in messages %}<div class="pli-flash pli-flash-{{ message.tags }}">{{ message }}</div>{% endfor %}
   {% endif %}
 
+  <section class="pli-card pli-section">
+    <div class="pli-section-head">
+      <div><h2>Ejecutar evaluación IA</h2><p>Analiza con DeepSeek las conversaciones de los leads del periodo. Es incremental: omite los ya evaluados con la versión vigente.</p></div>
+      <span class="pli-chip">{{ analysis_version }}</span>
+    </div>
+    <form class="pli-run-form" method="post" action="{% url 'analisis_crm:run_analysis' %}">
+      {% csrf_token %}
+      <input type="hidden" name="from" value="{{ date_from|date:'Y-m-d' }}">
+      <input type="hidden" name="to" value="{{ date_to|date:'Y-m-d' }}">
+      <label class="pli-run-force" title="Reejecuta DeepSeek incluso sobre conversaciones ya evaluadas (más lento)."><input type="checkbox" name="force" value="1"> Recalcular los ya evaluados</label>
+      <button class="pli-submit pli-run-button" type="submit" {% if analysis_running %}disabled{% endif %}>▶&nbsp; Ejecutar evaluación IA</button>
+      {% if analysis_running %}
+        <button class="pli-submit pli-stop-button" type="submit" formaction="{% url 'analisis_crm:cancel_analysis' %}" formmethod="post">⏹&nbsp; Detener ejecución</button>
+      {% endif %}
+    </form>
+    {% if analysis_running %}
+      <div class="pli-note pli-note-info pli-run-note"><strong>Hay una ejecución en curso.</strong> Puedes detenerla con “⏹ Detener ejecución”. El progreso se muestra en “Ejecuciones del analizador”.</div>
+    {% else %}
+      <div class="pli-note pli-run-note"><strong>Consejo:</strong> elige un periodo acotado. La primera corrida de un periodo amplio con muchos pendientes puede tardar varios minutos.</div>
+    {% endif %}
+  </section>
+
   <section class="pli-grid-6">
     <article class="pli-card pli-kpi"><small>Cobertura vigente</small><strong>{{ coverage_pct }}%</strong><span>{{ analyzed }} de {{ analyzable }} chats válidos · {{ analysis_version }}.</span></article>
     <article class="pli-card pli-kpi"><small>Pendientes</small><strong>{{ pending }}</strong><span>Conversaciones cuyo hash aún no tiene esta versión.</span></article>

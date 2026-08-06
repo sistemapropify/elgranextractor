@@ -1,0 +1,8 @@
+diff --git a/webapp/lead_intelligence/models.py b/webapp/lead_intelligence/models.py
+--- a/webapp/lead_intelligence/models.py
++++ b/webapp/lead_intelligence/models.py
+@@ -299,3 +299,4 @@ class LeadEventResolution(models.Model):
+                 fields=["resolver_version", "resolution_status"],
+                 name="pli_event_ver_status",
+             ),
++        ]

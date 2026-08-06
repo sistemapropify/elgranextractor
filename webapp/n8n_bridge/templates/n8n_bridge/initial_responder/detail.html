@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Detalle de respuesta inicial{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'n8n_bridge/initial_responder.css' %}">
+<div class="bot-shell"><a class="back" href="{% url 'property-bot-dashboard:dashboard' %}">← Volver</a>
+  <header class="bot-header"><div><span class="eyebrow">{{ interaction.id }}</span><h1>{{ interaction.property_code|default:'Sin propiedad' }}</h1><p>{{ interaction.reason_code }} · {{ interaction.received_at }}</p></div></header>
+  <div class="detail-grid">
+    <section class="table-card"><h2>Mensaje recibido</h2><pre>{{ interaction.incoming_text }}</pre></section>
+    <section class="table-card"><h2>Respuesta enviada</h2><pre>{{ interaction.response_text|default:'No se envió respuesta.' }}</pre></section>
+    <section class="table-card full"><h2>Evidencia</h2><pre>{{ interaction.evidence }}</pre></section>
+    <section class="table-card full"><h2>Revisión humana</h2><form method="post" action="{% url 'property-bot-dashboard:review' interaction.id %}">{% csrf_token %}<textarea name="note" placeholder="Comentario">{{ interaction.review_note }}</textarea><div class="review-actions"><button name="verdict" value="confirmed_ok">Marcar correcta</button><button class="danger" name="verdict" value="confirmed_error">Marcar error</button></div></form></section>
+  </div>
+</div>
+{% endblock %}

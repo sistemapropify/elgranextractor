@@ -698,6 +698,7 @@ class AgentGraphBuilder:
         'agente_propiedades',
         'agente_mercado',
         'agente_requerimientos',
+        'agente_inteligencia_leads',
     ]
 
     def __init__(self):

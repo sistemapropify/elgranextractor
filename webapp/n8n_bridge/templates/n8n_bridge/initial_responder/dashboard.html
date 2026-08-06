@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Respondedor nocturno · Propifai{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'n8n_bridge/initial_responder.css' %}">
+<style>
+  .metric-grid article.kpi{display:grid;grid-template-columns:1fr;gap:6px;align-content:start}
+  .metric-grid article.kpi small{font-size:12px;color:#6b7d77}
+  .metric-grid .kpi-break{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;padding-top:8px;border-top:1px dashed #cfe0da}
+  .metric-grid .kpi-break span{font-size:12px;font-weight:700;padding:4px 8px;border-radius:999px}
+  .metric-grid .kpi-break span.ok{background:#d7f7e8;color:#075d3f}
+  .metric-grid .kpi-break span.err{background:#fde3e3;color:#a11d1d}
+  .metric-grid article.kpi-total{background:#0f4c3a;border-color:#0f4c3a;color:#fff}
+  .metric-grid article.kpi-total span,.metric-grid article.kpi-total small{color:#cfe9df}
+  .lead-name{font-size:11px;color:#6b7d77;margin-top:2px}
+</style>
+<div class="bot-shell">
+  <header class="bot-header">
+    <div><span class="eyebrow">WhatsApp · Etapa 1</span><h1>Respondedor nocturno</h1><p>Una respuesta verificada por hilo; luego continúa el asesor.</p></div>
+    <span class="status-pill {% if config.enabled and schedule.inside %}on{% endif %}">{% if not config.enabled %}Apagado{% elif schedule.inside %}Operativo{% else %}Fuera de horario{% endif %}</span>
+  </header>
+
+  <section class="control-card">
+    <form method="post" class="control-form">{% csrf_token %}
+      <label class="switch-row"><span><strong>Activación general</strong><small>Apagado inmediato y persistente</small></span><input type="checkbox" name="enabled" {% if config.enabled %}checked{% endif %}><i></i></label>
+      <label>Inicio<input type="time" name="start_time" value="{{ config.start_time|time:'H:i' }}" required></label>
+      <label>Fin<input type="time" name="end_time" value="{{ config.end_time|time:'H:i' }}" required></label>
+      <div class="clock"><small>Hora en {{ schedule.timezone }}</small><strong>{{ schedule.local_now|date:'H:i:s' }}</strong></div>
+      <button type="submit">Guardar configuración</button>
+    </form>
+  </section>
+
+  <section class="metric-grid">
+    <article class="kpi kpi-total"><span>Eventos</span><strong>{{ metrics.total }}</strong><small>100% del total</small></article>
+    <article class="kpi">
+      <span>Respondidos</span><strong>{{ metrics.responded }}</strong>
+      <small>{{ metrics.responded_pct }}% del total</small>
+      <div class="kpi-break">
+        <span class="ok">Correctos {{ metrics.responded_ok }}</span>
+        <span class="err">Error {{ metrics.responded_error }}</span>
+      </div>
+    </article>
+    <article class="kpi">
+      <span>Ignorados</span><strong>{{ metrics.ignored }}</strong>
+      <small>{{ metrics.ignored_pct }}% del total</small>
+      <div class="kpi-break">
+        <span class="ok">Correctos {{ metrics.ignored_ok }}</span>
+        <span class="err">Error {{ metrics.ignored_error }}</span>
+      </div>
+    </article>
+    <article class="kpi"><span>Por revisar</span><strong>{{ metrics.review }}</strong><small>{{ metrics.review_pct }}% del total</small></article>
+    <article class="kpi"><span>Errores</span><strong>{{ metrics.errors }}</strong><small>{{ metrics.errors_pct }}% del total</small></article>
+    <article class="kpi"><span>Latencia media</span><strong>{{ metrics.avg_latency }} ms</strong><small>&nbsp;</small></article>
+  </section>
+
+  <section class="table-card"><div class="section-title"><div><h2>Interacciones recientes</h2><p>Decisiones de los últimos 100 leads · una fila por conversación.</p></div></div>
+    <div class="table-wrap"><table><thead><tr><th>Hora</th><th>Lead</th><th>Propiedad</th><th>Tipo</th><th>Acción</th><th>Motivo</th><th>Latencia</th><th>Revisión</th></tr></thead>
+      <tbody>{% for item in interactions %}<tr><td><a href="{% url 'property-bot-dashboard:detail' item.id %}">{{ item.received_at|date:'d/m H:i:s' }}</a></td><td>{% if item.phone %}{{ item.phone }}{% else %}•••• {{ item.phone_last4 }}{% endif %}{% if item.contact_name %}<div class="lead-name">{{ item.contact_name }}</div>{% endif %}</td><td>{{ item.property_code|default:'—' }}</td><td>{{ item.property_type|default:'—' }}</td><td><span class="tag {{ item.action }}">{{ item.get_action_display }}</span></td><td>{{ item.reason_code }}</td><td>{{ item.latency_ms|default:'—' }} ms</td><td>{{ item.get_review_status_display }}</td></tr>{% empty %}<tr><td colspan="8" class="empty">Todavía no hay interacciones.</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+</div>
+{% endblock %}

@@ -82,6 +82,7 @@ class IntelligenceConfig(AppConfig):
             from .skills.busqueda_exacta import BusquedaExactaSkill
             from .skills.formatear_propiedades import FormatearPropiedadesSkill
             from .skills.clasificar_intencion_whatsapp import ClasificarIntencionWhatsAppSkill
+            from .skills.analizar_conversacion_lead import AnalizarConversacionLeadSkill
             from .skills.examples.math_skills import (
                 SumaSkill, RestaSkill, MultiplicacionSkill,
                 DivisionSkill, PotenciaSkill, RaizCuadradaSkill,
@@ -130,6 +131,7 @@ class IntelligenceConfig(AppConfig):
             registry.register(BusquedaExactaSkill)
             registry.register(FormatearPropiedadesSkill)
             registry.register(ClasificarIntencionWhatsAppSkill)
+            registry.register(AnalizarConversacionLeadSkill)
             # NOTA: ResolverContextoSkill eliminado en refactor v2.
             # DeepSeek ahora resuelve el contexto conversacional directamente
             # como parte del prompt de orquestación. Ver services/chat_processor.py
@@ -184,14 +186,16 @@ class IntelligenceConfig(AppConfig):
             from .agents.propiedades_agent import AgentePropiedades
             from .agents.mercado_agent import AgenteMercado
             from .agents.requerimientos_agent import AgenteRequerimientos
+            from .agents.lead_intelligence_agent import AgenteInteligenciaLeads
 
             agent_registry = AgentRegistry()
             agent_registry.register(AgentePropiedades())
             agent_registry.register(AgenteMercado())
             agent_registry.register(AgenteRequerimientos())
+            agent_registry.register(AgenteInteligenciaLeads())
             logger.info(
-                f"3 agentes registrados en AgentRegistry: "
-                f"propiedades, mercado, requerimientos"
+                f"4 agentes registrados en AgentRegistry: "
+                f"propiedades, mercado, requerimientos, inteligencia de leads"
             )
         except Exception as e:
             logger.warning(f"No se pudieron registrar agentes en startup: {e}")

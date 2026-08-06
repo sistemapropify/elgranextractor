@@ -1,0 +1,18 @@
+diff --git a/webapp/lead_intelligence/services.py b/webapp/lead_intelligence/services.py
+--- a/webapp/lead_intelligence/services.py
++++ b/webapp/lead_intelligence/services.py
+@@ -433,2 +433,1 @@
+-                COALESCE(cl.name, 'Sin canal') AS channel_name,
+-                visit.first_visit_at
++                COALESCE(cl.name, 'Sin canal') AS channel_name
+@@ -440,6 +439,0 @@
+-            OUTER APPLY (
+-                SELECT MIN(e.created_at) AS first_visit_at
+-                FROM dbo.[event] e
+-                INNER JOIN dbo.event_type et ON et.id = e.event_type_id
+-                WHERE e.lead_id = l.id AND LOWER(et.name) = 'visita'
+-            ) visit
+@@ -451,1 +444,2 @@
+-        return _dict_rows(cursor)
++        rows = _dict_rows(cursor)
++    return apply_visit_resolutions(rows)

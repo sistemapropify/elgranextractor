@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Emulador WhatsApp · Bot nocturno</title>
+<style>
+  :root{
+    --bg-header: #1f2c34;
+    --bg-chat: #0b141a;
+    --bubble-in: #202c33;
+    --bubble-out: #005c4b;
+    --text-main: #e9edef;
+    --text-secondary: #8696a0;
+    --check-read: #53bdeb;
+    --accent-green: #00a884;
+  }
+  *{ box-sizing:border-box; }
+  html,body{
+    margin:0; padding:0; height:100%;
+    font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;
+    display:flex; align-items:center; justify-content:center;
+    background:#111b21;
+  }
+  .wrap{
+    display:flex; flex-direction:column; align-items:center; gap:10px;
+    padding:8px;
+  }
+  .layout{
+    display:flex; flex-direction:row; align-items:flex-start; gap:20px;
+  }
+  .topbar{
+    color:#8696a0; font-size:13px; display:flex; gap:14px; align-items:center;
+  }
+  .topbar a{ color:#00a884; text-decoration:none; font-weight:600; }
+  .phone{
+    width:330px; height:580px;
+    background:var(--bg-chat);
+    border-radius:26px;
+    overflow:hidden;
+    display:flex; flex-direction:column;
+    box-shadow:0 20px 60px rgba(0,0,0,.6);
+    border:8px solid #000;
+    position:relative;
+    flex-shrink:0;
+  }
+
+  /* ---------- PANEL IZQUIERDO (solo teléfono y nombre) ---------- */
+  .side-panel{
+    display:flex; flex-direction:column; gap:10px;
+    width:360px;
+  }
+  .client-bar{
+    display:flex; flex-direction:column; gap:8px;
+    padding:12px;
+    background:var(--bg-header); border-radius:14px;
+  }
+  .client-bar .bar-title{
+    font-size:11px; color:var(--text-secondary);
+    font-weight:700; text-transform:uppercase; letter-spacing:.5px;
+  }
+  .client-bar label{
+    display:flex; flex-direction:column; gap:4px;
+    font-size:12px; color:var(--text-main);
+  }
+  .client-bar label em{ color:var(--text-secondary); font-style:normal; font-size:11px; }
+  .client-bar input{
+    background:#2a3942; border:none; outline:none; color:var(--text-main);
+    font-size:13px; padding:8px 10px; border-radius:8px;
+  }
+  .client-bar input::placeholder{ color:var(--text-secondary); }
+  .hint{
+    color:#8696a0; font-size:12px; text-align:center; line-height:1.5;
+  }
+  .hint code{ color:#53bdeb; background:#182229; padding:1px 5px; border-radius:5px; }
+
+  /* ---------- HEADER ---------- */
+  .header{
+    background:var(--bg-header);
+    color:var(--text-main);
+    display:flex; align-items:center;
+    padding:10px 12px;
+    gap:12px;
+    flex-shrink:0;
+    z-index:5;
+  }
+  .header .back{ font-size:20px; cursor:pointer; }
+  .avatar{
+    width:38px; height:38px; border-radius:50%;
+    background:linear-gradient(135deg,#4a5a63,#2b3940);
+    display:flex; align-items:center; justify-content:center;
+    font-size:16px; color:#cfd9de; flex-shrink:0;
+  }
+  .header .info{ flex:1; min-width:0; }
+  .header .info .name{ font-size:16px; font-weight:600; }
+  .header .info .status{ font-size:12px; color:var(--text-secondary); }
+  .header .icons{ display:flex; gap:18px; font-size:18px; }
+  .header .icons span{ cursor:pointer; }
+
+  /* ---------- CHAT AREA ---------- */
+  .chat{
+    flex:1;
+    overflow-y:auto;
+    padding:14px 8px;
+    background-color:var(--bg-chat);
+    background-image:
+      radial-gradient(circle at 10px 10px, rgba(255,255,255,.025) 1.5px, transparent 1.5px),
+      radial-gradient(circle at 45px 35px, rgba(255,255,255,.02) 1.5px, transparent 1.5px);
+    background-size:60px 60px;
+    display:flex; flex-direction:column; gap:2px;
+  }
+  .chat::-webkit-scrollbar{ width:0; }
+
+  .row{ display:flex; width:100%; }
+  .row.in{ justify-content:flex-start; }
+  .row.out{ justify-content:flex-end; }
+
+  .bubble{
+    max-width:75%;
+    padding:6px 9px 7px 9px;
+    border-radius:8px;
+    font-size:14.2px;
+    line-height:19px;
+    color:var(--text-main);
+    word-wrap:break-word;
+    box-shadow:0 1px 0.5px rgba(0,0,0,.13);
+    margin:1px 6px;
+    display:flex;
+    flex-direction:column;
+  }
+  .bubble.in{ background:var(--bubble-in); border-top-left-radius:0; }
+  .bubble.out{ background:var(--bubble-out); border-top-right-radius:0; }
+  .bubble.note{ background:#182229; color:#f5c451; }
+
+  .bubble .txt{ white-space:pre-wrap; }
+  .bubble .meta{
+    align-self:flex-end;
+    margin-top:2px;
+    font-size:11px;
+    color:var(--text-secondary);
+    display:flex; align-items:center; gap:3px;
+    white-space:nowrap;
+  }
+  .bubble.out .meta{ color:#7fdad0; }
+  .meta .check{ color:var(--check-read); font-size:14px; line-height:1; }
+
+  .day-sep{
+    align-self:center;
+    background:#182229;
+    color:var(--text-secondary);
+    font-size:12px;
+    padding:5px 10px;
+    border-radius:8px;
+    margin:8px 0;
+  }
+
+  /* ---------- INPUT BAR ---------- */
+  .inputbar{
+    display:flex; align-items:center; gap:8px;
+    padding:8px 10px;
+    background:var(--bg-header);
+    flex-shrink:0;
+  }
+  .inputbar .field{
+    flex:1;
+    display:flex; align-items:center;
+    background:#2a3942;
+    border-radius:24px;
+    padding:8px 10px;
+    gap:8px;
+  }
+  .inputbar .field input{
+    flex:1; border:none; outline:none; background:transparent;
+    color:var(--text-main); font-size:15px;
+  }
+  .inputbar .field input::placeholder{ color:var(--text-secondary); }
+  .icon-btn{
+    font-size:19px; color:var(--text-secondary);
+    cursor:pointer; flex-shrink:0; user-select:none;
+  }
+  .send-btn{
+    width:40px; height:40px; border-radius:50%;
+    background:var(--accent-green);
+    display:flex; align-items:center; justify-content:center;
+    color:#fff; font-size:18px; cursor:pointer; flex-shrink:0;
+    border:none;
+  }
+</style>
+</head>
+<body>
+{% csrf_token %}
+<div class="wrap">
+  <div class="topbar">
+    <a href="{% url 'property-bot-dashboard:dashboard' %}">← Volver al dashboard</a>
+    <span>Entorno de pruebas · Bot nocturno</span>
+  </div>
+
+  <div class="layout">
+    <div class="side-panel">
+      <div class="client-bar">
+        <div class="bar-title">Datos del contacto</div>
+
+        <label>Nombre <em>(contact_name)</em>
+          <input id="nameInput" type="text" placeholder="ej. Juan Pérez" autocomplete="off" />
+        </label>
+
+        <label>Número de WhatsApp <em>(phone)</em>
+          <input id="phoneInput" type="tel" placeholder="+51 987 654 321" autocomplete="off" />
+        </label>
+      </div>
+
+      <div class="hint">
+        El emulador solo aporta <b>teléfono</b> y <b>nombre</b>; el resto lo decide la
+        lógica real del respondedor nocturno. Escribe el mensaje en el chat (ej.
+        <code>¡Hola! 👋 Más info (PROP000261)</code>) — si el endpoint responde, se
+        muestra; si no, silencio.
+      </div>
+    </div>
+
+    <div class="phone">
+      <div class="header">
+        <div class="back">&#8592;</div>
+        <div class="avatar">🤖</div>
+        <div class="info">
+          <div class="name">Mi Bot</div>
+          <div class="status" id="status">en línea</div>
+        </div>
+        <div class="icons">
+          <span>&#128249;</span>
+          <span>&#128222;</span>
+          <span>&#8942;</span>
+        </div>
+      </div>
+
+      <div class="chat" id="chat">
+        <div class="day-sep">Hoy</div>
+      </div>
+
+      <div class="inputbar">
+        <span class="icon-btn">&#128512;</span>
+        <div class="field">
+          <input id="msgInput" type="text" placeholder="Mensaje" autocomplete="off" />
+          <span class="icon-btn">&#128206;</span>
+          <span class="icon-btn">&#128247;</span>
+        </div>
+        <button class="send-btn" id="sendBtn">&#127908;</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const chat = document.getElementById('chat');
+const input = document.getElementById('msgInput');
+const sendBtn = document.getElementById('sendBtn');
+const status = document.getElementById('status');
+const nameInput = document.getElementById('nameInput');
+const phoneInput = document.getElementById('phoneInput');
+
+// Persistir datos del contacto para no volver a escribirlos al recargar
+nameInput.value = localStorage.getItem('emu_name') || '';
+phoneInput.value = localStorage.getItem('emu_phone') || '';
+nameInput.addEventListener('input', () => localStorage.setItem('emu_name', nameInput.value));
+phoneInput.addEventListener('input', () => localStorage.setItem('emu_phone', phoneInput.value));
+
+function timeNow(){
+  const d = new Date();
+  let h = d.getHours();
+  const m = d.getMinutes().toString().padStart(2,'0');
+  const ampm = h >= 12 ? 'pm' : 'am';
+  h = h % 12; if(h === 0) h = 12;
+  return `${h}:${m} ${ampm}`;
+}
+
+function addMessage(text, who){ // who: 'in' | 'out' | 'note'
+  const row = document.createElement('div');
+  row.className = 'row ' + (who === 'note' ? 'in' : who);
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble ' + who;
+
+  const txt = document.createElement('div');
+  txt.className = 'txt';
+  txt.textContent = text;
+
+  const meta = document.createElement('div');
+  meta.className = 'meta';
+  meta.innerHTML = `<span class="time">${timeNow()}</span>` +
+    (who === 'out' ? `<span class="check">&#10003;&#10003;</span>` : '');
+
+  bubble.appendChild(txt);
+  bubble.appendChild(meta);
+  row.appendChild(bubble);
+  chat.appendChild(row);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function showTyping(){
+  const row = document.createElement('div');
+  row.className = 'row in';
+  row.id = 'typing-row';
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble in';
+  bubble.innerHTML = `<div class="txt" style="padding-right:0;">escribiendo…</div>`;
+  row.appendChild(bubble);
+  chat.appendChild(row);
+  chat.scrollTop = chat.scrollHeight;
+}
+function hideTyping(){
+  const el = document.getElementById('typing-row');
+  if(el) el.remove();
+}
+
+// Envía el mensaje al endpoint real del respondedor nocturno (misma lógica de n8n).
+async function getBotReply(userText){
+  const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
+  const res = await fetch("{% url 'property-bot-dashboard:emulator_reply' %}", {
+    method:'POST',
+    headers:{
+      'Content-Type':'application/x-www-form-urlencoded',
+      'X-CSRFToken': csrf
+    },
+    body: new URLSearchParams({
+      message: userText,
+      name: nameInput.value.trim(),
+      phone: phoneInput.value.trim()
+    })
+  });
+  return res.json();
+}
+
+async function handleSend(){
+  const text = input.value.trim();
+  const name = nameInput.value.trim();
+  const phone = phoneInput.value.trim();
+  if(!text) return;
+  if(!name || !phone){
+    addMessage('Completa nombre y número en "Datos del contacto" (izquierda).', 'note');
+    return;
+  }
+
+  addMessage(text, 'out');
+  input.value = '';
+
+  status.textContent = 'escribiendo...';
+  showTyping();
+  const data = await getBotReply(text);
+  hideTyping();
+  status.textContent = 'en línea';
+
+  // Sin reglas propias: solo se refleja la respuesta del endpoint.
+  // Si devuelve reply_text se muestra; si no, silencio total.
+  if(data.reply_text){
+    addMessage(data.reply_text, 'in');
+  }
+}
+
+sendBtn.addEventListener('click', handleSend);
+input.addEventListener('keydown', (e) => {
+  if(e.key === 'Enter') handleSend();
+});
+
+// El chat inicia vacío: el usuario escribe su propio mensaje.
+</script>
+</body>
+</html>

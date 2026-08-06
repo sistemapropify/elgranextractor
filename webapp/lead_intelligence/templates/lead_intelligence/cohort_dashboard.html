@@ -65,5 +65,50 @@
       </div>
     </article>
   </section>
+
+  <section class="pli-card pli-section">
+    <div class="pli-section-head">
+      <div><h2>Distribución horaria por agente</h2><p>Ingresos del día por hora (America/Lima) y agente asignado. Celeste = horario de atención (09:00–18:00); rosado = fuera de horario.</p></div>
+      <span class="pli-chip">{{ hourly_matrix.grand_total }} leads</span>
+    </div>
+    <div class="pli-hour-summary">
+      <div class="pli-hour-sum pli-hour-sum-in"><small>En horario de atención (09:00–18:00)</small><strong>{{ hourly_matrix.working }}</strong><span>{{ hourly_matrix.working_pct }}%</span></div>
+      <div class="pli-hour-sum pli-hour-sum-out"><small>Fuera de horario</small><strong>{{ hourly_matrix.outside }}</strong><span>{{ hourly_matrix.outside_pct }}%</span></div>
+    </div>
+    <div class="pli-table-wrap pli-hour-wrap">
+      <table class="pli-table pli-hour-matrix">
+        <thead>
+          <tr>
+            <th class="pli-hour-agent">Agente</th>
+            {% for h in hourly_matrix.hours %}
+              <th class="pli-hour-col{% if h.working %} pli-hour-head-in{% else %} pli-hour-head-out{% endif %}" title="{{ h.label }}">{{ h.label }}</th>
+            {% endfor %}
+            <th class="pli-hour-total">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in hourly_matrix.agent_rows %}
+            <tr>
+              <td class="pli-hour-agent">{{ row.agent }}</td>
+              {% for cell in row.cells %}
+                <td class="pli-hour-cell{% if cell.count %}{% if cell.working %} pli-hour-in{% else %} pli-hour-out{% endif %}{% endif %}">{{ cell.count|default:"" }}</td>
+              {% endfor %}
+              <td class="pli-hour-total">{{ row.total }}</td>
+            </tr>
+          {% empty %}
+            <tr><td class="pli-hour-agent">Sin datos</td><td colspan="26">No hay leads en el periodo seleccionado.</td></tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr>
+            <th class="pli-hour-agent">Total</th>
+            {% for h in hourly_matrix.hours %}<th class="pli-hour-cell-total{% if h.working %} pli-hour-head-in{% else %} pli-hour-head-out{% endif %}">{{ h.total }}</th>{% endfor %}
+            <th class="pli-hour-total">{{ hourly_matrix.grand_total }}</th>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    <div class="pli-note pli-run-note"><strong>Horario de atención:</strong> 09:00–18:00. El recuento usa la hora de ingreso del lead (<code>date_entry</code>) convertida a America/Lima, según el agente asignado al lead.</div>
+  </section>
 </main>
 {% endblock %}

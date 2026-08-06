@@ -1,3 +1,11 @@
+{% if page_obj %}
+<tr>
+    <td colspan="25" style="padding:7px 10px;color:var(--terminal-info);background:rgba(56,139,253,.06);">
+        Mostrando {{ page_obj.start_index }}–{{ page_obj.end_index }}
+        de {{ page_obj.paginator.count }} propiedades, ordenadas por extracción reciente.
+    </td>
+</tr>
+{% endif %}
 {% for p in propiedades %}
 <tr>
     <td style="font-size:10px;">{{ p.id }}</td>
@@ -18,7 +26,18 @@
     <td style="font-size:10px;max-width:150px;overflow:hidden;text-overflow:ellipsis;">{{ p.direccion_texto|default:'—' }}</td>
     <td style="font-size:10px;">{{ p.agencia_agente|default:'—' }}</td>
     <td>{% if p.url %}<a href="{{ p.url }}" target="_blank" style="color:#58a6ff;text-decoration:none;" title="{{ p.url }}"><i class="bi bi-box-arrow-up-right"></i></a>{% else %}—{% endif %}</td>
-    <td>{% if p.imagen_url %}<a href="{{ p.imagen_url }}" target="_blank" style="color:#58a6ff;text-decoration:none;" title="Ver imagen"><i class="bi bi-image"></i></a>{% else %}—{% endif %}</td>
+    <td style="min-width:96px;">
+        {% if p.imagen_display_url %}
+        <a href="{{ p.imagen_display_url }}" target="_blank" title="Abrir imagen" style="text-decoration:none;">
+            <img src="{{ p.imagen_display_url }}" alt="{{ p.titulo|default:'Propiedad' }}" loading="lazy" style="width:84px;height:58px;object-fit:cover;border-radius:6px;border:1px solid rgba(47,129,95,.7);display:block;">
+            <span style="font-size:10px;color:#58a6ff;">Ver</span>
+        </a>
+        {% elif p.imagen_url %}
+        <span style="font-size:10px;color:#d29922;" title="La imagen existe pero no se pudo firmar">Protegida</span>
+        {% else %}
+        —
+        {% endif %}
+    </td>
     <td style="font-size:10px;">{{ p.id_origen|default:'—' }}</td>
     <td style="font-size:10px;max-width:150px;overflow:hidden;text-overflow:ellipsis;" title="{{ p.titulo|default:'' }}">{{ p.titulo|default:'—' }}</td>
     <td>{{ p.tipo_operacion|default:'—' }}</td>

@@ -1,16 +1,17 @@
 """
-ScraperAdondevivirSkill — Skill independiente.
+ScraperAdondevivirSkill ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Skill independiente.
 
 Scrapea propiedades de Adondevivir.com y las guarda en PropiedadesCompetencia.
-Reutiliza la lógica de extracción de scrapi/adondevivir_scraper.py.
+Reutiliza la lÃƒÆ’Ã‚Â³gica de extracciÃƒÆ’Ã‚Â³n de scrapi/adondevivir_scraper.py.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import random
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any, Dict, Callable
 
 from intelligence.skills.base import BaseSkill, SkillResult
 from .db_utils import guardar_propiedades
@@ -18,33 +19,94 @@ from .db_utils import guardar_propiedades
 logger = logging.getLogger(__name__)
 
 
-def _ejecutar_scraping(max_paginas: int = 0) -> list[Dict[str, Any]]:
+def _ejecutar_scraping(
+    max_paginas: int = 0,
+    progress_callback: Callable[[Dict[str, Any]], bool] | None = None,
+    batch_callback: Callable[[list[Dict[str, Any]]], Dict[str, int]] | None = None,
+    update_callback: Callable[[list[Dict[str, Any]]], Any] | None = None,
+) -> list[Dict[str, Any]]:
     """
     Ejecuta el scraping de Adondevivir y retorna lista de propiedades estandarizadas.
     
     Args:
-        max_paginas: Máximo de páginas a scrapear. 0 = todas.
+        max_paginas: MÃƒÆ’Ã‚Â¡ximo de pÃƒÆ’Ã‚Â¡ginas a scrapear. 0 = todas.
     
     Returns:
         Lista de dicts con formato estandarizado listo para guardar en DB.
     """
     # Importar funciones del scraper original
+    from scrapi import adondevivir_scraper as adondevivir_source
     from scrapi.adondevivir_scraper import (
         LISTING_URL, GUARDAR_CADA_N_PAGINAS, PROPS_POR_PAGINA,
         estandarizar, extraer_listado, extraer_coordenadas_desde_detalle,
-        navegar_con_cloudflare, manejar_sigint, detener,
-        mapear_a_formato_remax,
+        navegar_con_cloudflare, manejar_sigint,
+        mapear_a_formato_remax, subir_imagen_a_blob, obtener_numero_paginas,
+        mapear_tipo_schemaorg,
     )
     from camoufox.async_api import AsyncCamoufox
     import signal
     import re
 
     async def _run():
+        # La señal de detener pertenece al módulo original y puede quedar en
+        # True después de una ejecución interrumpida. Cada job debe arrancar
+        # limpio para no detenerse silenciosamente a mitad del listado.
+        adondevivir_source.detener = False
         todas_raw = []
+
+        async def emit_progress(**payload):
+            if not progress_callback:
+                return True
+            return await asyncio.to_thread(progress_callback, payload)
+
+        async def extraer_listado_con_limite(page, contexto: str):
+            """Evita que un selector del portal deje un job activo sin avance."""
+            try:
+                return await asyncio.wait_for(extraer_listado(page), timeout=60)
+            except TimeoutError as exc:
+                raise RuntimeError(
+                    f"Adondevivir no terminó de extraer {contexto} en 60 segundos"
+                ) from exc
+
+        async def obtener_paginas_con_limite(page):
+            try:
+                return await asyncio.wait_for(obtener_numero_paginas(page), timeout=45)
+            except TimeoutError as exc:
+                raise RuntimeError(
+                    "Adondevivir no pudo determinar la cantidad de páginas en 45 segundos"
+                ) from exc
+
+        def estandarizar_lote(raw_items):
+            fecha_extraccion = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            estandarizadas = []
+            for prop in raw_items:
+                try:
+                    if prop.get("tipo") and not any(
+                        palabra in prop["tipo"]
+                        for palabra in ["Casa", "Departamento", "Terreno", "Local", "Oficina", "Alojamiento"]
+                    ):
+                        prop["tipo"] = mapear_tipo_schemaorg(prop["tipo"])
+                    mapeada = mapear_a_formato_remax(prop)
+                    std = estandarizar(mapeada, fecha_extraccion, "ADondevivir")
+                    std["fuente"] = "adondevivir"
+                    std["datos_crudos"] = {
+                        k: str(v) if not isinstance(v, (dict, list, type(None))) else v
+                        for k, v in prop.items()
+                    }
+                    estandarizadas.append(std)
+                except Exception as exc:
+                    logger.warning(f"[adondevivir] Error estandarizando: {exc}")
+            return estandarizadas
         try:
             signal.signal(signal.SIGINT, manejar_sigint)
         except (ValueError, RuntimeError):
             pass
+
+        await emit_progress(
+            percent=0,
+            processed=0,
+            message="Adondevivir: iniciando navegador seguro",
+        )
 
         async with AsyncCamoufox(
             headless=False,
@@ -56,94 +118,172 @@ def _ejecutar_scraping(max_paginas: int = 0) -> list[Dict[str, Any]]:
             page = await browser.new_page()
             await page.set_viewport_size({"width": 1920, "height": 1080})
 
-            # FASE 1: Cargar primera página para obtener total de páginas
+            # FASE 1: Cargar primera pÃƒÆ’Ã‚Â¡gina para obtener total de pÃƒÆ’Ã‚Â¡ginas
             print("=" * 60)
             print("SCRAPER ADONDEVIVIR")
             print("=" * 60)
 
+            await emit_progress(
+                percent=1,
+                processed=0,
+                message="Adondevivir: navegador listo; cargando listado inicial",
+            )
             exito = await navegar_con_cloudflare(page, LISTING_URL, timeout=30)
             if not exito:
-                print("[!] No se pudo cargar la página inicial")
-                return []
+                print("[!] No se pudo cargar la pÃƒÆ’Ã‚Â¡gina inicial")
+                raise RuntimeError("Adondevivir no cargó el listado inicial")
 
-            props_pagina1 = await extraer_listado(page)
+            await emit_progress(
+                percent=1,
+                processed=0,
+                message="Adondevivir: listado inicial cargado; extrayendo propiedades",
+            )
+            props_pagina1 = await extraer_listado_con_limite(page, "la página 1")
+            if not props_pagina1:
+                diagnostico = await page.evaluate("""
+                    () => ({
+                        title: document.title,
+                        url: location.href,
+                        anchorsDetalle: document.querySelectorAll('a[href*="/propiedades/"]').length,
+                        dataToPosting: document.querySelectorAll('[data-to-posting]').length,
+                        cardsPorClase: document.querySelectorAll('[class*="posting-card"]').length,
+                        texto: (document.body?.innerText || '').slice(0, 180)
+                    })
+                """)
+                resumen = (
+                    "Adondevivir: listado sin tarjetas "
+                    f"(enlaces={diagnostico.get('anchorsDetalle', 0)}, "
+                    f"data-to-posting={diagnostico.get('dataToPosting', 0)}, "
+                    f"clases={diagnostico.get('cardsPorClase', 0)})."
+                )
+                await emit_progress(percent=1, processed=0, message=resumen)
+                raise RuntimeError(
+                    f"{resumen} Título: {diagnostico.get('title', '')}."
+                )
             todas_raw.extend(props_pagina1)
             print(f"  [Pagina 1]: {len(props_pagina1)} props")
+            await emit_progress(
+                percent=2,
+                processed=len(todas_raw),
+                message=(
+                    "Adondevivir: página 1, "
+                    f"{len(props_pagina1)} propiedades detectadas"
+                ),
+            )
+            if batch_callback and props_pagina1:
+                guardado = await asyncio.to_thread(
+                    batch_callback, estandarizar_lote(props_pagina1)
+                )
+                await emit_progress(
+                    percent=2,
+                    processed=guardado.get("total", len(todas_raw)),
+                )
 
-            # Determinar total de páginas desde el HTML
-            total_paginas = 1
-            try:
-                html = await page.content()
-                pag_match = re.search(r'de\s+(\d+)\s+resultados', html)
-                if pag_match:
-                    total_results = int(pag_match.group(1))
-                    total_paginas = max(1, (total_results + PROPS_POR_PAGINA - 1) // PROPS_POR_PAGINA)
-                    print(f"  Resultados totales: {total_results} -> {total_paginas} páginas")
-            except Exception:
-                pass
+            # Usar el detector robusto del scraper principal.
+            total_paginas = await obtener_paginas_con_limite(page)
+            print(f"  Total de paginas detectadas: {total_paginas}")
+            if not await emit_progress(
+                percent=2,
+                processed=len(todas_raw),
+                message=f"Adondevivir: {total_paginas} paginas detectadas",
+            ):
+                return todas_raw
 
             if max_paginas > 0:
                 total_paginas = min(total_paginas, max_paginas)
 
-            # Resto de páginas
+            # Resto de pÃƒÆ’Ã‚Â¡ginas
             for pagina in range(2, total_paginas + 1):
-                if detener:
+                if adondevivir_source.detener:
+                    break
+
+                # Delay aleatorio entre paginas para reducir deteccion de Cloudflare
+                delay = random.uniform(2.0, 6.0)
+                await asyncio.sleep(delay)
+
+                if not await emit_progress(
+                    percent=max(2, int(((pagina - 1) / max(total_paginas, 1)) * 70)),
+                    processed=len(todas_raw),
+                    message=f"Adondevivir: leyendo pagina {pagina} de {total_paginas}",
+                ):
                     break
                 url_pagina = f"https://www.adondevivir.com/inmuebles-en-venta-en-arequipa-pagina-{pagina}.html"
                 print(f"\n[Pagina {pagina}/{total_paginas}]...")
-                exito = await navegar_con_cloudflare(page, url_pagina, timeout=30)
+                exito = await navegar_con_cloudflare(page, url_pagina)
                 if not exito:
                     continue
-                props = await extraer_listado(page)
+                props = await extraer_listado_con_limite(page, f"la página {pagina}")
                 todas_raw.extend(props)
                 print(f"  -> {len(props)} props (total: {len(todas_raw)})")
+                guardado = None
+                if batch_callback and props:
+                    guardado = await asyncio.to_thread(
+                        batch_callback, estandarizar_lote(props)
+                    )
+                await emit_progress(
+                    percent=max(2, int((pagina / max(total_paginas, 1)) * 70)),
+                    processed=len(todas_raw),
+                    message=(
+                        f"Adondevivir: página {pagina}, "
+                        f"{len(props)} propiedades detectadas"
+                    ),
+                )
 
-            # FASE 2: Detalles para coordenadas
-            props_a_visitar = [p for p in todas_raw
-                              if not p.get("latitud") or not p.get("longitud")
-                              or not p.get("tipo")]
-            if props_a_visitar and not detener:
+            # FASE 2: Detalles para coordenadas, tipo e imagen persistida.
+            props_a_visitar = [
+                p for p in todas_raw
+                if not p.get("latitud")
+                or not p.get("longitud")
+                or not p.get("tipo")
+                or not p.get("imagen_url")
+                or "blob.core.windows.net" not in str(p.get("imagen_url"))
+            ]
+            if props_a_visitar and not adondevivir_source.detener:
                 print(f"\nFASE 2: Detalles ({len(props_a_visitar)} props)...")
+                detalle_pendientes = []
                 for i, prop in enumerate(props_a_visitar, 1):
-                    if detener:
+                    if adondevivir_source.detener:
                         break
                     url = prop.get("url", "")
                     if not url:
                         continue
+                    if i == 1 or i % 10 == 0:
+                        if not await emit_progress(
+                            percent=70 + int(((i - 1) / max(len(props_a_visitar), 1)) * 29),
+                            processed=len(todas_raw),
+                            message=f"Adondevivir: completando detalles {i} de {len(props_a_visitar)}",
+                        ):
+                            break
                     print(f"  [{i}/{len(props_a_visitar)}] Visitando detalle...")
-                    lat, lng, tipo_prop = await extraer_coordenadas_desde_detalle(page, url)
+                    lat, lng, tipo_prop, imagen_url = await extraer_coordenadas_desde_detalle(page, url)
                     if lat and lng:
                         prop["latitud"] = lat
                         prop["longitud"] = lng
                     if tipo_prop:
                         prop["tipo"] = tipo_prop
+                    imagen_origen = imagen_url or prop.get("imagen_url")
+                    if imagen_origen and "blob.core.windows.net" not in str(imagen_origen):
+                        imagen_blob = subir_imagen_a_blob(imagen_origen, prop)
+                        if imagen_blob:
+                            prop["imagen_url"] = imagen_blob
+                    elif imagen_origen:
+                        prop["imagen_url"] = imagen_origen
+
+                    detalle_pendientes.append(prop)
+                    if update_callback and len(detalle_pendientes) >= 10:
+                        await asyncio.to_thread(
+                            update_callback, estandarizar_lote(detalle_pendientes)
+                        )
+                        detalle_pendientes.clear()
+
+                if update_callback and detalle_pendientes:
+                    await asyncio.to_thread(
+                        update_callback, estandarizar_lote(detalle_pendientes)
+                    )
 
             await page.close()
 
-        # Post-procesamiento: mapear y estandarizar
-        from scrapi.adondevivir_scraper import mapear_tipo_schemaorg
-        for prop in todas_raw:
-            if prop.get("tipo") and not any(
-                palabra in prop["tipo"]
-                for palabra in ["Casa", "Departamento", "Terreno", "Local", "Oficina", "Alojamiento"]
-            ):
-                prop["tipo"] = mapear_tipo_schemaorg(prop["tipo"])
-
-        fecha_extraccion = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        estandarizadas = []
-        for prop in todas_raw:
-            try:
-                # Primero mapear al formato REMAX, luego estandarizar
-                mapeada = mapear_a_formato_remax(prop)
-                std = estandarizar(mapeada, fecha_extraccion, "ADondevivir")
-                std['fuente'] = 'adondevivir'
-                std['datos_crudos'] = {k: str(v) if not isinstance(v, (dict, list, type(None))) else v
-                                       for k, v in prop.items()}
-                estandarizadas.append(std)
-            except Exception as e:
-                logger.warning(f"[adondevivir] Error estandarizando: {e}")
-
-        return estandarizadas
+        return estandarizar_lote(todas_raw)
 
     return asyncio.run(_run())
 
@@ -161,7 +301,7 @@ class ScraperAdondevivirSkill(BaseSkill):
     parameters_schema = {
         'max_paginas': {
             'type': 'integer',
-            'description': 'Máximo de páginas a scrapear. 0 = todas (default: 0).',
+            'description': 'MÃƒÆ’Ã‚Â¡ximo de pÃƒÆ’Ã‚Â¡ginas a scrapear. 0 = todas (default: 0).',
             'required': False,
         },
     }
@@ -176,16 +316,46 @@ class ScraperAdondevivirSkill(BaseSkill):
     ) -> SkillResult:
         try:
             max_paginas = params.get('max_paginas', 0)
-            propiedades = _ejecutar_scraping(max_paginas)
+            progress_callback = (context or {}).get('progress_callback')
+            incremental = {
+                'total': 0,
+                'nuevas': 0,
+                'actualizadas': 0,
+                'errores': 0,
+            }
+
+            def guardar_lote(propiedades_lote):
+                resultado_lote = guardar_propiedades(
+                    propiedades_lote, fuente='adondevivir'
+                )
+                for key in incremental:
+                    incremental[key] += int(resultado_lote.get(key, 0) or 0)
+                return incremental.copy()
+
+            def actualizar_lote(propiedades_lote):
+                return guardar_propiedades(
+                    propiedades_lote, fuente='adondevivir'
+                )
+
+            propiedades = _ejecutar_scraping(
+                max_paginas,
+                progress_callback=progress_callback,
+                batch_callback=guardar_lote,
+                update_callback=actualizar_lote,
+            )
 
             if not propiedades:
-                return SkillResult.ok(
-                    data={'portal': 'adondevivir', 'total': 0, 'nuevas': 0, 'actualizadas': 0},
-                    message='No se encontraron propiedades en Adondevivir',
+                return SkillResult.error(
+                    message=(
+                        'Adondevivir no devolvió propiedades. Revise la '
+                        'navegación, Cloudflare y los logs de extracción.'
+                    ),
                     skill_name=self.name,
                 )
 
-            resultado = guardar_propiedades(propiedades, fuente='adondevivir')
+            # Persistencia final idempotente para consolidar los Ãºltimos detalles.
+            guardar_propiedades(propiedades, fuente='adondevivir')
+            resultado = incremental
 
             return SkillResult.ok(
                 data={
@@ -201,7 +371,7 @@ class ScraperAdondevivirSkill(BaseSkill):
             )
 
         except Exception as e:
-            logger.exception(f"[adondevivir] Error en ejecución: {e}")
+            logger.exception(f"[adondevivir] Error en ejecuciÃƒÆ’Ã‚Â³n: {e}")
             return SkillResult.error(
                 message=f"Error en scraper Adondevivir: {e}",
                 skill_name=self.name,

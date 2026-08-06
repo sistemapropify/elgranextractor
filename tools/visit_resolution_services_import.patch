@@ -1,0 +1,14 @@
+diff --git a/webapp/lead_intelligence/services.py b/webapp/lead_intelligence/services.py
+--- a/webapp/lead_intelligence/services.py
++++ b/webapp/lead_intelligence/services.py
+@@ -20,9 +20,10 @@ from .contextual_analysis import ANALYSIS_VERSION, conversation_hash
+ from .conversation_analysis import analyze_chat_history, milestone_within_days
+ from .models import (
+     AnalysisRun,
+     LeadConversationAssessment,
+     LeadConversationReview,
+ )
++from .visit_resolution import apply_visit_resolutions
+ 
+ 
+ LEAD_RESULT_STAGES = {

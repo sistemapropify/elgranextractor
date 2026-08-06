@@ -132,3 +132,7 @@ node_modules/
 # Test archives / cache
 *.tar.gz
 *.har
+webapp/camoufox_session*  
+"~$*.xlsx"  
+"outputs/event_export/*.xlsx"  
+"*.ndjson"  

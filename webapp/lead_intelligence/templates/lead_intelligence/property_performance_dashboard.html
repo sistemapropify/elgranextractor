@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Rendimiento por propiedades | Prometeo{% endblock %}
+{% block extra_css %}<style>{% include "lead_intelligence/_dashboard_styles.html" %}{% include "lead_intelligence/_property_dashboard_styles.html" %}</style>{% endblock %}
+{% block content %}
+<main class="pli-page">
+  <header class="pli-head pli-property-head">
+    <div>
+      <div class="pli-kicker">Marketing &amp; prospección</div>
+      <h1>Rendimiento por propiedades</h1>
+      <p>Captación, atención y conversión de los leads vinculados a cada propiedad.</p>
+    </div>
+    <form class="pli-property-filter" method="get">
+      <div><label for="from">Desde</label><input id="from" name="from" type="date" value="{{ date_from|date:'Y-m-d' }}"></div>
+      <div><label for="to">Hasta</label><input id="to" name="to" type="date" value="{{ date_to|date:'Y-m-d' }}"></div>
+      <div><label for="portfolio">Portafolio</label><select id="portfolio" name="portfolio"><option value="all"{% if filters.portfolio == 'all' %} selected{% endif %}>Todas</option><option value="own"{% if filters.portfolio == 'own' %} selected{% endif %}>Propify</option><option value="external"{% if filters.portfolio == 'external' %} selected{% endif %}>Agentes externos</option><option value="unknown"{% if filters.portfolio == 'unknown' %} selected{% endif %}>Sin clasificar</option></select></div>
+      <div><label for="district">Distrito</label><select id="district" name="district"><option value="">Todos</option>{% for value in filter_options.districts %}<option value="{{ value }}"{% if filters.district == value %} selected{% endif %}>{{ value }}</option>{% endfor %}</select></div>
+      <div><label for="property_type">Tipo</label><select id="property_type" name="property_type"><option value="">Todos</option>{% for value in filter_options.property_types %}<option value="{{ value }}"{% if filters.property_type == value %} selected{% endif %}>{{ value }}</option>{% endfor %}</select></div>
+      <div><label for="operation">Operación</label><select id="operation" name="operation"><option value="">Todas</option>{% for value in filter_options.operations %}<option value="{{ value }}"{% if filters.operation == value %} selected{% endif %}>{{ value }}</option>{% endfor %}</select></div>
+      <div><label for="status">Estado</label><select id="status" name="status"><option value="">Todos</option>{% for value in filter_options.statuses %}<option value="{{ value }}"{% if filters.status == value %} selected{% endif %}>{{ value }}</option>{% endfor %}</select></div>
+      <div><label for="sort">Ordenar</label><select id="sort" name="sort"><option value="leads_desc"{% if filters.sort == 'leads_desc' %} selected{% endif %}>Más leads</option><option value="qualified_desc"{% if filters.sort == 'qualified_desc' %} selected{% endif %}>Más calificados</option><option value="visits_desc"{% if filters.sort == 'visits_desc' %} selected{% endif %}>Más visitas</option><option value="conversion_desc"{% if filters.sort == 'conversion_desc' %} selected{% endif %}>Mejor conversión</option><option value="unattended_desc"{% if filters.sort == 'unattended_desc' %} selected{% endif %}>Esperando respuesta</option><option value="code"{% if filters.sort == 'code' %} selected{% endif %}>Código</option></select></div>
+      <div class="pli-property-search"><label for="q">Buscar</label><input id="q" name="q" type="search" value="{{ filters.query }}" placeholder="Código, título o responsable"></div>
+      <button class="pli-submit" type="submit">Actualizar</button>
+    </form>
+  </header>
+
+  {% include "lead_intelligence/_analysis_tabs.html" %}
+
+  {% if not collection_found %}<div class="pli-note pli-note-danger"><strong>No se encontró la colección propiedadespropify.</strong> No es posible construir el inventario.</div>{% endif %}
+
+  <section class="pli-property-kpis">
+    <article class="pli-card"><small>Propiedades</small><strong>{{ summary.properties }}</strong><span>{{ summary.own_properties }} Propify · {{ summary.external_properties }} externas · {{ summary.unclassified_properties }} sin clasificar</span></article>
+    <article class="pli-card"><small>Leads únicos</small><strong>{{ summary.unique_leads }}</strong><span>{{ summary.property_lead_links }} vínculos lead–propiedad</span></article>
+    <article class="pli-card"><small>Sin leads</small><strong>{{ summary.properties_without_leads }}</strong><span>Propiedades sin captación en el periodo</span></article>
+    <article class="pli-card{% if summary.properties_with_unattended %} pli-property-kpi-warning{% endif %}"><small>Requieren atención</small><strong>{{ summary.properties_with_unattended }}</strong><span>Propiedades con leads esperando al agente</span></article>
+  </section>
+
+  <section class="pli-card pli-section pli-property-comparison">
+    <div class="pli-section-head"><div><h2>Propify frente a agentes externos</h2><p>Los leads son vínculos por propiedad; un lead asociado a varias propiedades aparece en cada una.</p></div><span class="pli-chip">{{ date_from|date:'d/m/Y' }} — {{ date_to|date:'d/m/Y' }}</span></div>
+    <div class="pli-table-wrap"><table class="pli-table"><thead><tr><th>Portafolio</th><th>Propiedades</th><th>Leads vinculados</th><th>Calificados</th><th>Conversión</th><th>Visitas registradas</th><th>Tasa de visita</th></tr></thead><tbody>{% for row in portfolio_comparison %}<tr><td>{{ row.label }}</td><td>{{ row.properties }}</td><td>{{ row.leads }}</td><td>{{ row.qualified }}</td><td>{{ row.qualification_pct }}%</td><td>{{ row.visits }}</td><td>{{ row.visit_pct }}%</td></tr>{% endfor %}</tbody></table></div>
+  </section>
+
+  <section class="pli-property-list" aria-label="Propiedades y sus métricas de leads">
+    {% for property in page_obj %}
+    <article class="pli-card pli-property-card">
+      <div class="pli-property-media">
+        {% if property.image_url %}<img src="{{ property.image_url }}" alt="Fotografía de {{ property.code }}" loading="lazy">{% else %}<div class="pli-property-placeholder"><span>Sin foto</span><b>{{ property.code }}</b></div>{% endif %}
+      </div>
+      <div class="pli-property-info">
+        <div class="pli-property-title"><div><span class="pli-property-code">{{ property.code }}</span><h2>{{ property.title }}</h2></div><span class="pli-property-origin pli-property-origin-{{ property.portfolio_key }}">{{ property.portfolio_label }}</span></div>
+        <div class="pli-property-tags"><span>{{ property.property_type }}</span><span>{{ property.operation_type }}</span><span>{{ property.district }}</span><span>{{ property.status }}</span></div>
+        <div class="pli-property-bottom"><strong>{{ property.price_display }}</strong><span>Responsable: {{ property.responsible }}</span></div>
+      </div>
+      <div class="pli-property-matrix">
+        <div><small>Leads</small><strong>{{ property.lead_count }}</strong><span>100%</span></div>
+        <div><small>Contactados</small><strong>{{ property.contacted }}</strong><span>{{ property.contacted_pct }}%</span></div>
+        <div><small>Bidireccionales</small><strong>{{ property.bidirectional }}</strong><span>{{ property.bidirectional_pct }}%</span></div>
+        <div><small>Calificados IA</small><strong>{{ property.qualified }}</strong><span>{{ property.qualified_pct }}%</span></div>
+        <div><small>Intención visita</small><strong>{{ property.visit_intent }}</strong><span>{{ property.visit_intent_pct }}%</span></div>
+        <div><small>Visita registrada</small><strong>{{ property.visit_registered }}</strong><span>{{ property.visit_registered_pct }}%</span></div>
+        <div class="pli-property-wait"><small>Esperando agente</small><strong>{{ property.unattended }}</strong><span>{{ property.unattended_pct }}%</span></div>
+      </div>
+    </article>
+    {% empty %}
+    <div class="pli-card pli-property-empty"><strong>No hay propiedades para estos filtros.</strong><span>Prueba retirando algún filtro o ampliando el periodo.</span></div>
+    {% endfor %}
+  </section>
+
+  {% if page_obj.paginator.num_pages > 1 %}<nav class="pli-pagination" aria-label="Paginación de propiedades">{% if page_obj.has_previous %}<a href="?{{ query_without_page }}&amp;page={{ page_obj.previous_page_number }}">Anterior</a>{% endif %}<span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>{% if page_obj.has_next %}<a href="?{{ query_without_page }}&amp;page={{ page_obj.next_page_number }}">Siguiente</a>{% endif %}</nav>{% endif %}
+
+  <div class="pli-note pli-note-info"><strong>Reglas de atribución.</strong> Un lead pertenece a una propiedad mediante <code>lead_properties</code>. Una visita solo cuenta cuando coinciden el mismo <code>lead_id</code>, el mismo <code>property_id</code> y el tipo de evento es “Visita”. Los eventos con lead nulo no se contabilizan.</div>
+</main>
+{% endblock %}

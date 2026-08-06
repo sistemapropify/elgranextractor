@@ -50,6 +50,11 @@ AGENT_DESCRIPTIONS: Dict[str, str] = {
         "Gestiona los requerimientos de clientes/compradores y su cruce con el inventario. "
         "Úsalo cuando la consulta es sobre lo que un cliente busca, no sobre el inventario en sí."
     ),
+    "agente_inteligencia_leads": (
+        "Analiza conversaciones completas de leads y explica con evidencia su "
+        "calificación, intención de visita, atención y seguimiento. Úsalo para "
+        "auditar por qué un lead fue clasificado o revisar su chat."
+    ),
 }
 
 # Templates para fallback por embeddings (mismos que antes)
@@ -93,6 +98,13 @@ _DEFAULT_SUPERVISOR_TEMPLATES: Dict[str, List[str]] = {
         'tengo matches nuevos',
         'qué matches tengo pendientes',
         'propiedades que match con mis clientes',
+    ],
+    'agente_inteligencia_leads': [
+        'por qué este lead aparece calificado',
+        'analiza la conversación del lead',
+        'este cliente realmente quiere visitar',
+        'qué evidencia tiene la intención de visita',
+        'audita la clasificación de este lead',
     ],
 }
 

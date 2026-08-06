@@ -302,21 +302,31 @@
                 <span class="stat-label">Estado</span>
                 <span class="stat-value" id="statEstado">
                     {% if ultimo_job %}
-                        {{ ultimo_job.get_estado_display }}
+                        {{ ultimo_job.estado_display }}
                     {% else %}
                         Inactivo
                     {% endif %}
                 </span>
             </div>
             <div class="stat-card">
-                <span class="stat-label">Portal actual</span>
+                <span class="stat-label">Portal en ejecución</span>
                 <span class="stat-value" id="statPortal">
                     {{ ultimo_job.portal_actual|default:'—' }}
                 </span>
             </div>
             <div class="stat-card">
+                <span class="stat-label">Origen de la ejecución</span>
+                <span class="stat-value" id="statOrigen" style="font-size:14px;">
+                    {{ ultimo_job.origen_display|default:'—' }}
+                </span>
+            </div>
+            <div class="stat-card">
                 <span class="stat-label">Progreso</span>
                 <span class="stat-value" id="statProgreso">{{ ultimo_job.progreso|default:0 }}%</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label"><i class="bi bi-search"></i> Detectadas</span>
+                <span class="stat-value" id="statDetectadas">{{ ultimo_job.detectadas_display|default:0 }}</span>
             </div>
             <div class="stat-card">
                 <span class="stat-label"><i class="bi bi-check-circle" style="color:var(--terminal-success)"></i> Nuevas</span>
@@ -463,9 +473,14 @@ function control(action) {
         method: 'POST',
         body: formData,
     })
-    .then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
-        return r.json();
+    .then(async r => {
+        const data = await r.json();
+        if (!r.ok) {
+            const error = new Error(data.error || `HTTP ${r.status}: ${r.statusText}`);
+            error.data = data;
+            throw error;
+        }
+        return data;
     })
     .then(data => {
         if (data.success) {
@@ -478,12 +493,17 @@ function control(action) {
             } else if (action === 'resume') {
                 updateUI('running');
             } else if (action === 'stop') {
-                updateUI('idle');
+                updateUI('stopped');
             }
         }
     })
     .catch(err => {
-        appendLog('error', `❌ Error al conectar: ${err.message}`);
+        if (err.data && err.data.job_id) {
+            currentJobId = err.data.job_id;
+            updateUI(err.data.estado || 'running');
+            if (err.data.estado === 'running') connectSSE(currentJobId);
+        }
+        appendLog('error', `❌ ${err.message}`);
         console.error('Control error:', err);
     });
 }
@@ -498,7 +518,19 @@ function connectSSE(jobId) {
         const data = JSON.parse(e.data);
 
         if (data.type === 'job_end') {
-            appendLog('info', `✅ Scraping completado: ${data.nuevas} nuevas, ${data.actualizadas} actualizadas, ${data.errores} errores`);
+            const endLabels = {
+                completed: ['success', '✅ Scraping completado'],
+                stopped: ['warning', '⏹️ Scraping detenido'],
+                error: ['error', '❌ Scraping finalizado con error'],
+            };
+            const endLabel = endLabels[data.estado] || ['info', 'ℹ️ Scraping finalizado'];
+            appendLog(
+                endLabel[0],
+                `${endLabel[1]}: ${data.total} detectadas, ${data.nuevas} nuevas, ${data.actualizadas} actualizadas, ${data.errores} errores`
+            );
+            if (data.mensaje_error) {
+                appendLog('error', data.mensaje_error);
+            }
             updateUI(data.estado);
             eventSource.close();
             eventSource = null;
@@ -548,28 +580,36 @@ function updateUI(estado) {
     const dot = document.getElementById('statusDot');
     const title = document.getElementById('terminalTitle');
 
-    btnStart.disabled = (estado === 'running');
+    btnStart.disabled = (estado === 'running' || estado === 'paused');
     btnStop.disabled = (estado !== 'running');
     btnPause.disabled = (estado !== 'running');
 
     if (estado === 'running') {
+        btnStart.innerHTML = '<i class="bi bi-play-fill"></i> En ejecución';
         btnPause.style.display = '';
         btnResume.style.display = 'none';
         dot.className = 'terminal-badge running';
         title.textContent = 'Ejecutando...';
     } else if (estado === 'paused') {
+        btnStart.innerHTML = '<i class="bi bi-play-fill"></i> En pausa';
         btnPause.style.display = 'none';
         btnResume.style.display = '';
         btnResume.disabled = false;
+        btnStop.disabled = false;
         dot.className = 'terminal-badge paused';
         title.textContent = '⏸️ Pausado';
     } else {
+        btnStart.innerHTML = '<i class="bi bi-play-fill"></i> Iniciar nueva ejecución';
         btnPause.style.display = '';
         btnResume.style.display = 'none';
         btnStart.disabled = false;
         btnStop.disabled = true;
         dot.className = 'terminal-badge stopped';
-        title.textContent = estado === 'completed' ? '✅ Completado' : '⏹️ Detenido';
+        title.textContent =
+            estado === 'completed' ? '✅ Completado' :
+            estado === 'error' ? '❌ Error' :
+            estado === 'stopped' ? '⏹️ Detenido' :
+            'Esperando acción...';
     }
 
     document.getElementById('statEstado').textContent =
@@ -583,14 +623,21 @@ function updateUI(estado) {
 function loadStats(jobId) {
     if (!jobId) return;
     fetch(`/ingestas/scraping/status/${jobId}/`)
-        .then(r => r.json())
+        .then(r => {
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return r.json();
+        })
         .then(data => {
+            updateUI(data.estado);
+            document.getElementById('statDetectadas').textContent = data.detectadas || 0;
             document.getElementById('statNuevas').textContent = data.nuevas || 0;
             document.getElementById('statActualizadas').textContent = data.actualizadas || 0;
             document.getElementById('statErrores').textContent = data.errores || 0;
             document.getElementById('statProgreso').textContent = (data.progreso || 0) + '%';
             document.getElementById('statPortal').textContent = data.portal_actual || '—';
-        });
+            document.getElementById('statOrigen').textContent = data.origen || '—';
+        })
+        .catch(err => console.warn('No se pudo actualizar el estado:', err));
 }
 
 // ── Tabla ──
@@ -599,6 +646,8 @@ function loadTable() {
     const distrito = document.getElementById('filterDistrito').value;
     const tipo = document.getElementById('filterTipo').value;
     const params = new URLSearchParams();
+    params.set('page', '1');
+    params.set('limit', '100');
     if (fuente) params.set('fuente', fuente);
     if (distrito) params.set('distrito', distrito);
     if (tipo) params.set('tipo', tipo);
@@ -617,12 +666,20 @@ document.addEventListener('DOMContentLoaded', function() {
     // Auto-refresh tabla cada 10s
     setInterval(loadTable, 10000);
 
-    // Si hay un job activo, conectar SSE
-    {% if ultimo_job and ultimo_job.estado == 'running' %}
+    // Restaurar siempre el último estado conocido.
+    {% if ultimo_job %}
     currentJobId = {{ ultimo_job.id }};
+    updateUI('{{ ultimo_job.estado_efectivo|escapejs }}');
+    loadStats(currentJobId);
+    {% if ultimo_job.estado == 'running' %}
     connectSSE(currentJobId);
-    updateUI('running');
     {% endif %}
+    {% endif %}
+
+    // Mantener estado y contadores sincronizados después de recargar.
+    setInterval(function() {
+        if (currentJobId) loadStats(currentJobId);
+    }, 3000);
 });
 </script>
 {% endblock %}

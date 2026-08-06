@@ -250,9 +250,11 @@ class ScraperUrbaniaSkill(BaseSkill):
             propiedades = _ejecutar_scraping(max_paginas)
 
             if not propiedades:
-                return SkillResult.ok(
-                    data={'portal': 'urbania', 'total': 0, 'nuevas': 0, 'actualizadas': 0},
-                    message='No se encontraron propiedades en Urbania',
+                return SkillResult.error(
+                    message=(
+                        'Urbania no devolvió propiedades. Revise la navegación, '
+                        'el bloqueo del portal y los logs de extracción.'
+                    ),
                     skill_name=self.name,
                 )
 

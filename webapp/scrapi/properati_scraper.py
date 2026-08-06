@@ -6,10 +6,12 @@ import signal
 import sys
 import unicodedata
 from datetime import datetime
+from urllib.request import Request, urlopen
+from urllib.error import URLError, HTTPError
 from camoufox.async_api import AsyncCamoufox
-
+from captura.azure_storage import upload_bytes
 # ============================================================
-# CONFIGURACIÓN
+# CONFIGURACIÃ“N
 # ============================================================
 BASE_URL = "https://www.properati.com.pe/s/arequipa"  # Pagina 1
 TOTAL_PAGINAS = 30  # Properati muestra ~30 paginas para Arequipa
@@ -440,7 +442,7 @@ def manejar_sigint(sig, frame):
 def parsear_fecha_publicacion(texto):
     """
     Convierte texto de fecha de publicacion a un formato estandar.
-    Ej: "Publicado hace 2 días" -> "hace 2 días"
+    Ej: "Publicado hace 2 dÃ­as" -> "hace 2 dÃ­as"
     Ej: "Publicado 23 may. 2022" -> "2022-05-23"
     """
     if not texto:
@@ -532,7 +534,139 @@ def extraer_coordenadas_desde_html(html_content):
         except (ValueError, TypeError):
             pass
 
-    return None, None
+    # Properati puede serializar coordenadas con comillas escapadas,
+    # claves lat/lng, orden inverso o como GeoJSON.
+    searchable = html_content.replace(r'\"', '"').replace('&quot;', '"').replace('&#34;', '"')
+    number = r'"?\s*(-?\d{1,3}(?:[.,]\d+)?)\s*"?'
+    for lat_name, lng_name in (
+        ('latitude', 'longitude'), ('latitud', 'longitud'),
+        ('lat', 'lng'), ('lat', 'lon'),
+    ):
+        lat_key = rf'"?{lat_name}"?\s*:\s*'
+        lng_key = rf'"?{lng_name}"?\s*:\s*'
+        patterns = (
+            (rf'{lat_key}{number}.{{0,300}}?{lng_key}{number}', False),
+            (rf'{lng_key}{number}.{{0,300}}?{lat_key}{number}', True),
+        )
+        for coordinate_pattern, reversed_order in patterns:
+            candidate = re.search(
+                coordinate_pattern, searchable, re.IGNORECASE | re.DOTALL
+            )
+            if not candidate:
+                continue
+            first, second = candidate.groups()
+            try:
+                lat = float((second if reversed_order else first).replace(',', '.'))
+                lng = float((first if reversed_order else second).replace(',', '.'))
+                if -18.5 < lat < -0.1 and -81.5 < lng < -68.5:
+                    return lat, lng
+            except (ValueError, TypeError):
+                pass
+
+    geojson = re.search(
+        r'"coordinates"\s*:\s*\[\s*'
+        r'(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\]',
+        searchable,
+        re.IGNORECASE,
+    )
+    if geojson:
+        try:
+            lng = float(geojson.group(1))
+            lat = float(geojson.group(2))
+            if -18.5 < lat < -0.1 and -81.5 < lng < -68.5:
+                return lat, lng
+        except (ValueError, TypeError):
+            pass
+
+        return None, None
+
+
+def extraer_imagen_desde_html(html_content):
+    """
+    Extrae una imagen principal desde la ficha de Properati.
+    Intenta varias fuentes porque el portal cambia selectores con frecuencia:
+    - og:image / twitter:image
+    - JSON-LD (image o thumbnailUrl)
+    - HTML del carousel / galeria
+    """
+    if not html_content:
+        return None
+
+    patrones = [
+        r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']',
+        r'<meta[^>]+name=["\']twitter:image["\'][^>]+content=["\']([^"\']+)["\']',
+        r'"image"\s*:\s*"([^"]+)"',
+        r'"thumbnailUrl"\s*:\s*"([^"]+)"',
+        r'"contentUrl"\s*:\s*"([^"]+)"',
+        r'<img[^>]+src=["\']([^"\']+)["\'][^>]*(?:property-image|gallery|carousel|cover)',
+        r'<source[^>]+srcset=["\']([^"\']+)["\']',
+    ]
+
+    for patron in patrones:
+        match = re.search(patron, html_content, re.IGNORECASE | re.DOTALL)
+        if not match:
+            continue
+        url = (match.group(1) or "").strip()
+        if not url:
+            continue
+        if url.startswith("//"):
+            url = "https:" + url
+        if url.startswith("/"):
+            url = SITE_DOMAIN + url
+        if url.startswith("http"):
+            return url
+
+    return None
+
+
+def subir_imagen_a_blob(imagen_url, prop):
+    """
+    Descarga una imagen remota y la sube al contenedor propiedadesimagenes.
+    Devuelve la URL del blob si tuvo éxito.
+    """
+    if not imagen_url:
+        return None
+
+    try:
+        req = Request(imagen_url, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36'
+        })
+        with urlopen(req, timeout=25) as resp:
+            content_type = resp.headers.get_content_type() or 'image/jpeg'
+            content = resp.read()
+
+        if not content:
+            return None
+
+        ext = 'jpg'
+        lowered = (content_type or '').lower()
+        if 'png' in lowered:
+            ext = 'png'
+        elif 'webp' in lowered:
+            ext = 'webp'
+        elif 'gif' in lowered:
+            ext = 'gif'
+        elif 'jpeg' in lowered or 'jpg' in lowered:
+            ext = 'jpg'
+
+        prop_id = str(prop.get('ID') or 'sin_id').strip()
+        safe_id = re.sub(r'[^A-Za-z0-9_-]+', '_', prop_id)[:60]
+        blob_name = f"propiedades/{safe_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{ext}"
+        blob_url = upload_bytes(
+            content,
+            blob_name=blob_name,
+            container_name='propiedadesimagenes',
+            content_type=content_type,
+            metadata={
+                'fuente': 'properati',
+                'id_origen': prop_id,
+                'imagen_origen': imagen_url,
+            },
+        )
+        return blob_url
+    except Exception as e:
+        print(f"   [WARN] No se pudo subir imagen a Blob: {e}")
+        return None
 
 
 async def extraer_listado(page):
@@ -677,11 +811,11 @@ async def extraer_listado(page):
         area = ''
         if feats:
             m_dorm = re.search(r'(\d+)\s*(?:hab|dorm|cuartos)', feats, re.IGNORECASE)
-            m_bano = re.search(r'(\d+)\s*(?:bañ|ba\u00f1os|banos|ba\u00f1o)', feats, re.IGNORECASE)
-            m_area = re.search(r'(\d+[.,]?\d*)\s*m[²2]', feats, re.IGNORECASE)
+            m_bano = re.search(r'(\d+)\s*(?:baÃ±|ba\u00f1os|banos|ba\u00f1o)', feats, re.IGNORECASE)
+            m_area = re.search(r'(\d+[.,]?\d*)\s*m[Â²2]', feats, re.IGNORECASE)
             if m_dorm: dormitorios = m_dorm.group(1)
             if m_bano: banos = m_bano.group(1)
-            if m_area: area = m_area.group(1).replace(',', '.') + ' m²'
+            if m_area: area = m_area.group(1).replace(',', '.') + ' mÂ²'
 
         fecha = parsear_fecha_publicacion(item['fecha_publicacion'])
 
@@ -715,7 +849,10 @@ async def extraer_detalle(page, prop):
     if not url:
         return
 
-    if prop.get('Coordenadas'):
+    # El listado puede traer coordenadas pero no imagen. En ese caso todavia
+    # debemos abrir la ficha para completar y respaldar la imagen en Blob.
+    imagen_actual = str(prop.get('Imagen URL') or '')
+    if prop.get('Coordenadas') and '/propiedadesimagenes/' in imagen_actual:
         return
 
     try:
@@ -723,6 +860,18 @@ async def extraer_detalle(page, prop):
         await page.wait_for_timeout(2000)
 
         html_content = await page.content()
+        # Priorizar la imagen obtenida en el listado y usar el detalle como respaldo.
+        imagen_url = prop.get('Imagen URL') or extraer_imagen_desde_html(html_content)
+        if imagen_url:
+            blob_url = subir_imagen_a_blob(imagen_url, prop)
+            if blob_url:
+                prop['Imagen URL'] = blob_url
+                prop['Imagen URL Original'] = imagen_url
+                print(f"   [OK] Imagen subida a Blob: {blob_url}")
+            elif not prop.get('Imagen URL'):
+                prop['Imagen URL'] = imagen_url
+                print(f"   [OK] Imagen: {imagen_url}")
+
         lat, lng = extraer_coordenadas_desde_html(html_content)
 
         if lat is not None and lng is not None:
@@ -867,3 +1016,9 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         print("\n[!] Interrupcion por teclado. El Excel se guardo con el progreso actual.")
         sys.exit(0)
+
+
+
+
+
+

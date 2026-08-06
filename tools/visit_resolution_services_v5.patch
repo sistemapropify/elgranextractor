@@ -1,0 +1,57 @@
+diff --git a/webapp/lead_intelligence/services.py b/webapp/lead_intelligence/services.py
+--- a/webapp/lead_intelligence/services.py
++++ b/webapp/lead_intelligence/services.py
+@@ -20,9 +20,10 @@ from .contextual_analysis import ANALYSIS_VERSION, conversation_hash
+ from .conversation_analysis import analyze_chat_history, milestone_within_days
+ from .models import (
+     AnalysisRun,
+     LeadConversationAssessment,
+     LeadConversationReview,
+ )
++from .visit_resolution import apply_visit_resolutions
+ 
+ 
+ LEAD_RESULT_STAGES = {
+@@ -430,5 +431,4 @@ def _lead_result_rows(date_from, date_to, lead_id=None):
+                 ) AS agent_name,
+                 COALESCE(ls.name, 'Sin estado') AS status_name,
+-                COALESCE(cl.name, 'Sin canal') AS channel_name,
+-                visit.first_visit_at
++                COALESCE(cl.name, 'Sin canal') AS channel_name
+             FROM dbo.lead l
+@@ -438,8 +438,2 @@ def _lead_result_rows(date_from, date_to, lead_id=None):
+             LEFT JOIN dbo.canal_lead cl ON cl.id = l.canal_lead_id
+-            OUTER APPLY (
+-                SELECT MIN(e.created_at) AS first_visit_at
+-                FROM dbo.[event] e
+-                INNER JOIN dbo.event_type et ON et.id = e.event_type_id
+-                WHERE e.lead_id = l.id AND LOWER(et.name) = 'visita'
+-            ) visit
+             WHERE {" AND ".join(where)}
+@@ -447,4 +441,5 @@ def _lead_result_rows(date_from, date_to, lead_id=None):
+             """,
+             params,
+         )
+-        return _dict_rows(cursor)
++        rows = _dict_rows(cursor)
++    return apply_visit_resolutions(rows)
+@@ -1453,4 +1448,3 @@ def get_management_dashboard(
+                 ) AS cohort_date,
+                 l.chat_history,
+-                visit.first_visit_at,
+                 l.assigned_to_id AS agent_id,
+@@ -1462,8 +1456,2 @@ def get_management_dashboard(
+             LEFT JOIN dbo.[user] u ON u.id = l.assigned_to_id
+-            OUTER APPLY (
+-                SELECT MIN(e.created_at) AS first_visit_at
+-                FROM dbo.[event] e
+-                INNER JOIN dbo.event_type et ON et.id = e.event_type_id
+-                WHERE e.lead_id = l.id AND LOWER(et.name) = 'visita'
+-            ) visit
+             WHERE CAST(
+@@ -1521,4 +1509,5 @@ def get_management_dashboard(
+         data_quality.update(_one(cursor))
+ 
++    conversation_rows = apply_visit_resolutions(conversation_rows)
+     assessments = _assessment_map(conversation_rows)
+     assignment_timelines = _load_assignment_timelines(conversation_rows)

@@ -1,0 +1,34 @@
+diff --git a/webapp/lead_intelligence/property_dashboard.py b/webapp/lead_intelligence/property_dashboard.py
+--- a/webapp/lead_intelligence/property_dashboard.py
++++ b/webapp/lead_intelligence/property_dashboard.py
+@@ -13,0 +13,1 @@
++from .visit_resolution import resolve_visits_for_leads
+@@ -161,21 +162,11 @@
+ def _load_visit_pairs(property_ids, lead_ids):
+     if not property_ids or not lead_ids:
+         return set()
+-    property_placeholders = ", ".join(["%s"] * len(property_ids))
+-    lead_placeholders = ", ".join(["%s"] * len(lead_ids))
+-    with connections["propifai"].cursor() as cursor:
+-        cursor.execute(
+-            f"""
+-            SELECT DISTINCT e.property_id, e.lead_id
+-            FROM dbo.[event] e
+-            INNER JOIN dbo.event_type et ON et.id = e.event_type_id
+-            INNER JOIN dbo.lead l ON l.id = e.lead_id
+-            WHERE e.property_id IN ({property_placeholders})
+-              AND e.lead_id IN ({lead_placeholders})
+-              AND e.lead_id IS NOT NULL
+-              AND LOWER(LTRIM(RTRIM(et.name))) = 'visita'
+-              AND e.created_at >= COALESCE(l.date_entry, l.created_at)
+-            """,
+-            [*property_ids, *lead_ids],
+-        )
+-        return {(int(row[0]), int(row[1])) for row in cursor.fetchall()}
++    selected_properties = {int(property_id) for property_id in property_ids}
++    return {
++        (int(row["event_property_id"]), int(row["resolved_lead_id"]))
++        for row in resolve_visits_for_leads(lead_ids)
++        if row.get("event_property_id") is not None
++        and int(row["event_property_id"]) in selected_properties
++    }

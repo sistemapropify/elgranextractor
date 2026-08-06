@@ -1,0 +1,28 @@
+diff --git a/webapp/lead_intelligence/services.py b/webapp/lead_intelligence/services.py
+--- a/webapp/lead_intelligence/services.py
++++ b/webapp/lead_intelligence/services.py
+@@ -431,21 +431,15 @@ def _lead_result_rows(date_from, date_to, lead_id=None):
+                 ) AS agent_name,
+                 COALESCE(ls.name, 'Sin estado') AS status_name,
+-                COALESCE(cl.name, 'Sin canal') AS channel_name,
+-                visit.first_visit_at
++                COALESCE(cl.name, 'Sin canal') AS channel_name
+             FROM dbo.lead l
+             LEFT JOIN dbo.contact c ON c.id = l.contact_id
+             LEFT JOIN dbo.[user] u ON u.id = l.assigned_to_id
+             LEFT JOIN dbo.lead_status ls ON ls.id = l.lead_status_id
+             LEFT JOIN dbo.canal_lead cl ON cl.id = l.canal_lead_id
+-            OUTER APPLY (
+-                SELECT MIN(e.created_at) AS first_visit_at
+-                FROM dbo.[event] e
+-                INNER JOIN dbo.event_type et ON et.id = e.event_type_id
+-                WHERE e.lead_id = l.id AND LOWER(et.name) = 'visita'
+-            ) visit
+             WHERE {" AND ".join(where)}
+             ORDER BY COALESCE(l.date_entry, l.created_at) DESC, l.id DESC
+             """,
+             params,
+         )
+-        return _dict_rows(cursor)
++        rows = _dict_rows(cursor)
++    return apply_visit_resolutions(rows)

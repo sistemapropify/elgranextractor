@@ -17,6 +17,7 @@ from .services import SugeridorCampos, EjecutorMigraciones, ProcesadorExcel
 from .services_api import obtener_propiedades_externas
 from .models import CampoDinamico, MapeoFuente, PropiedadRaw, MigracionPendiente
 from .procesamiento_ia import ProcesadorExcelIA, LoggerDetallado, CargadorArchivo
+from captura.azure_storage import AzureStorageError, generate_read_sas_url
 
 
 # Utilidades de logging
@@ -1626,12 +1627,177 @@ def test_camoufox_import(request):
 
 import json
 import time as time_module
+import threading
+import subprocess
+from pathlib import Path
+from datetime import timedelta
+from django.conf import settings
+from django.db import transaction
+from django.db.models import Q
 from django.http import JsonResponse, StreamingHttpResponse
 from django.views.generic import TemplateView, View, ListView
 from django.db.models import Count
 from django.utils import timezone
 
 from .models import PropiedadesCompetencia, ScrapingJob, ScrapingLog
+
+
+SCRAPING_ACTIVE_STATES = ('running', 'paused')
+SCRAPING_DEFAULT_PORTALS = ('remax', 'adondevivir', 'properati', 'urbania')
+SCRAPING_PORTAL_LABELS = {
+    'remax': 'Remax',
+    'properati': 'Properati',
+    'adondevivir': 'Adondevivir',
+    'urbania': 'Urbania',
+}
+SCRAPING_STALE_AFTER_SECONDS = int(
+    os.environ.get('SCRAPING_STALE_AFTER_SECONDS', '21600')
+)
+
+
+def _decorate_scraping_job(job):
+    """Añade datos de presentación sin duplicar lógica en las plantillas."""
+    if not job:
+        return job
+
+    parametros = job.parametros or {}
+    portales = parametros.get('portales') or SCRAPING_DEFAULT_PORTALS
+    portales = [str(portal).lower() for portal in portales]
+    resultados = parametros.get('resultados_por_portal') or {}
+
+    job.origen_display = ', '.join(
+        SCRAPING_PORTAL_LABELS.get(portal, portal.title())
+        for portal in portales
+    )
+    job.detectadas_display = (
+        job.total_propiedades
+        or job.procesadas
+        or (job.nuevas + job.actualizadas + job.errores)
+    )
+    job.estado_efectivo = job.estado
+    job.estado_display = job.get_estado_display()
+    job.mensaje_error_display = job.mensaje_error
+    if job.estado == 'completed' and job.detectadas_display <= 0:
+        job.estado_efectivo = 'error'
+        job.estado_display = 'Error: sin resultados'
+        job.mensaje_error_display = (
+            job.mensaje_error
+            or 'La ejecución terminó sin detectar ninguna propiedad.'
+        )
+    job.portales_detalle = [
+        {
+            'nombre': SCRAPING_PORTAL_LABELS.get(portal, portal.title()),
+            'estado': (resultados.get(portal) or {}).get('estado'),
+            'detectadas': (resultados.get(portal) or {}).get('detectadas'),
+        }
+        for portal in portales
+    ]
+    return job
+
+
+def _terminate_scraping_browsers():
+    """Cierra Camoufox asociado a perfiles del scraper y libera sus locks."""
+    base_dir = Path(settings.BASE_DIR).resolve()
+    profiles = [
+        profile for profile in base_dir.iterdir()
+        if profile.is_dir()
+        and (
+            profile.name == "camoufox_session"
+            or profile.name.startswith("camoufox_session_")
+        )
+    ]
+    if not profiles:
+        return 0
+
+    terminated = 0
+    if os.name == "nt":
+        script = r"""
+$profileRoot = [System.IO.Path]::GetFullPath($env:SCRAPER_PROFILE_ROOT)
+$targets = Get-CimInstance Win32_Process | Where-Object {
+    $_.Name -eq 'camoufox.exe' -and
+    $_.CommandLine -and
+    $_.CommandLine -like ('*' + $profileRoot + '\camoufox_session*')
+}
+foreach ($target in $targets) {
+    & taskkill.exe /PID $target.ProcessId /T /F 2>$null | Out-Null
+    Write-Output $target.ProcessId
+}
+"""
+        env = os.environ.copy()
+        env["SCRAPER_PROFILE_ROOT"] = str(base_dir)
+        try:
+            completed = subprocess.run(
+                ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+                capture_output=True,
+                text=True,
+                timeout=20,
+                env=env,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                check=False,
+            )
+            terminated = len([
+                line for line in completed.stdout.splitlines()
+                if line.strip().isdigit()
+            ])
+        except (OSError, subprocess.SubprocessError):
+            terminated = 0
+
+    for profile in profiles:
+        profile_path = profile.resolve()
+        for lock_name in (
+            "parent.lock",
+            "lock",
+            ".parentlock",
+            "SingletonLock",
+            "SingletonCookie",
+            "SingletonSocket",
+        ):
+            lock_path = (profile / lock_name).resolve()
+            if profile_path not in lock_path.parents:
+                continue
+            try:
+                lock_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+    return terminated
+
+
+def _reconcile_stale_scraping_jobs():
+    """Cierra jobs que sobrevivieron al proceso que los estaba ejecutando."""
+    cutoff = timezone.now() - timedelta(seconds=SCRAPING_STALE_AFTER_SECONDS)
+    return ScrapingJob.objects.filter(
+        estado__in=SCRAPING_ACTIVE_STATES,
+        completado_en__isnull=True,
+    ).filter(
+        Q(iniciado_en__lt=cutoff)
+        | Q(iniciado_en__isnull=True, creado_en__lt=cutoff)
+    ).update(
+        estado='error',
+        completado_en=timezone.now(),
+        mensaje_error=(
+            'Ejecución huérfana detectada: no reportó actividad dentro '
+            'del tiempo máximo permitido.'
+        ),
+    )
+
+
+def _launch_scraping_job(job_id):
+    """Usa Celery con broker real; conserva threading solo para desarrollo."""
+    from colas.scraping_tasks import scraping_task, scraping_task_run
+
+    broker_url = str(getattr(settings, 'CELERY_BROKER_URL', '') or '')
+    if broker_url and broker_url != 'memory://':
+        scraping_task.delay(job_id)
+        return 'celery'
+
+    thread = threading.Thread(
+        target=scraping_task_run,
+        args=(job_id,),
+        daemon=True,
+        name=f'scraping-job-{job_id}',
+    )
+    thread.start()
+    return 'thread'
 
 
 class ScrapingDashboardView(TemplateView):
@@ -1641,8 +1807,11 @@ class ScrapingDashboardView(TemplateView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
 
+        _reconcile_stale_scraping_jobs()
+
         # Último job activo o más reciente
         ultimo_job = ScrapingJob.objects.order_by('-creado_en').first()
+        _decorate_scraping_job(ultimo_job)
 
         # Estadísticas por portal
         stats_por_portal = PropiedadesCompetencia.objects.values('fuente').annotate(
@@ -1653,7 +1822,9 @@ class ScrapingDashboardView(TemplateView):
         total = sum(stats.values())
 
         # Jobs recientes
-        jobs_recientes = ScrapingJob.objects.order_by('-creado_en')[:10]
+        jobs_recientes = list(ScrapingJob.objects.order_by('-creado_en')[:10])
+        for recent_job in jobs_recientes:
+            _decorate_scraping_job(recent_job)
 
         ctx.update({
             'ultimo_job': ultimo_job,
@@ -1667,8 +1838,6 @@ class ScrapingDashboardView(TemplateView):
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 
-import threading
-
 @method_decorator(csrf_exempt, name='dispatch')
 class ScrapingControlView(View):
     """Controla la ejecución del scraping: start, pause, resume, stop."""
@@ -1681,30 +1850,95 @@ class ScrapingControlView(View):
             portales_str = request.POST.get('portales', '')
             portales = [p.strip() for p in portales_str.split(',') if p.strip()]
 
-            # Crear nuevo job
-            job = ScrapingJob.objects.create(
-                estado='running',
-                parametros={'portales': portales or None},
-            )
+            _reconcile_stale_scraping_jobs()
+            with transaction.atomic():
+                active_job = ScrapingJob.objects.select_for_update().filter(
+                    estado__in=SCRAPING_ACTIVE_STATES
+                ).order_by('-creado_en').first()
+                if active_job:
+                    return JsonResponse(
+                        {
+                            'success': False,
+                            'error': (
+                                f'Ya existe un scraping #{active_job.id} '
+                                f'en estado {active_job.get_estado_display()}.'
+                            ),
+                            'job_id': active_job.id,
+                            'estado': active_job.estado,
+                        },
+                        status=409,
+                    )
 
-            # Ejecutar en un hilo separado (sin Celery)
-            from colas.scraping_tasks import scraping_task_run
-            t = threading.Thread(target=scraping_task_run, args=(job.id,), daemon=True)
-            t.start()
+                # Si una ejecución previa murió, Camoufox puede dejar su
+                # perfil bloqueado. No hay job activo, por lo que es seguro
+                # cerrar solo esos procesos y liberar sus locks antes de crear
+                # el contexto persistente del siguiente trabajo.
+                stale_browsers_terminated = _terminate_scraping_browsers()
+                job = ScrapingJob.objects.create(
+                    estado='running',
+                    iniciado_en=timezone.now(),
+                    parametros={'portales': portales or None},
+                )
 
-            return JsonResponse({'success': True, 'job_id': job.id})
+            try:
+                execution_mode = _launch_scraping_job(job.id)
+            except Exception as exc:
+                ScrapingJob.objects.filter(id=job.id).update(
+                    estado='error',
+                    completado_en=timezone.now(),
+                    mensaje_error=f'No se pudo iniciar el ejecutor: {exc}',
+                )
+                return JsonResponse(
+                    {
+                        'success': False,
+                        'error': 'No se pudo iniciar el ejecutor de scraping.',
+                        'job_id': job.id,
+                        'estado': 'error',
+                    },
+                    status=503,
+                )
+            return JsonResponse({
+                'success': True,
+                'job_id': job.id,
+                'estado': job.estado,
+                'execution_mode': execution_mode,
+                'stale_browsers_terminated': stale_browsers_terminated,
+            })
 
         elif action == 'pause' and job_id:
-            ScrapingJob.objects.filter(id=job_id).update(estado='paused')
-            return JsonResponse({'success': True})
+            updated = ScrapingJob.objects.filter(
+                id=job_id, estado='running'
+            ).update(estado='paused')
+            return JsonResponse({
+                'success': bool(updated),
+                'estado': 'paused' if updated else None,
+                'error': '' if updated else 'El trabajo no está ejecutándose.',
+            }, status=200 if updated else 409)
 
         elif action == 'resume' and job_id:
-            ScrapingJob.objects.filter(id=job_id).update(estado='running')
-            return JsonResponse({'success': True})
+            updated = ScrapingJob.objects.filter(
+                id=job_id, estado='paused'
+            ).update(estado='running')
+            return JsonResponse({
+                'success': bool(updated),
+                'estado': 'running' if updated else None,
+                'error': '' if updated else 'El trabajo no está pausado.',
+            }, status=200 if updated else 409)
 
         elif action == 'stop' and job_id:
-            ScrapingJob.objects.filter(id=job_id).update(estado='stopped')
-            return JsonResponse({'success': True})
+            updated = ScrapingJob.objects.filter(
+                id=job_id, estado__in=SCRAPING_ACTIVE_STATES
+            ).update(
+                estado='stopped',
+                completado_en=timezone.now(),
+            )
+            terminated_browsers = _terminate_scraping_browsers() if updated else 0
+            return JsonResponse({
+                'success': bool(updated),
+                'estado': 'stopped' if updated else None,
+                'browsers_terminated': terminated_browsers,
+                'error': '' if updated else 'El trabajo ya había finalizado.',
+            }, status=200 if updated else 409)
 
         return JsonResponse({'success': False, 'error': 'Acción inválida'})
 
@@ -1738,13 +1972,15 @@ class ScrapingStreamView(View):
                 # Verificar si el job terminó
                 job = ScrapingJob.objects.filter(id=job_id).first()
                 if job and job.estado in ('completed', 'error', 'stopped'):
+                    _decorate_scraping_job(job)
                     data = json.dumps({
                         'type': 'job_end',
-                        'estado': job.estado,
+                        'estado': job.estado_efectivo,
                         'nuevas': job.nuevas,
                         'actualizadas': job.actualizadas,
                         'errores': job.errores,
-                        'total': job.total_propiedades,
+                        'total': job.detectadas_display,
+                        'mensaje_error': job.mensaje_error_display,
                     })
                     yield f"data: {data}\n\n"
                     break
@@ -1764,22 +2000,28 @@ class ScrapingStatusView(View):
     """Retorna JSON con el estado actual del job."""
 
     def get(self, request, job_id):
+        _reconcile_stale_scraping_jobs()
         job = ScrapingJob.objects.filter(id=job_id).first()
         if not job:
             return JsonResponse({'error': 'Job no encontrado'}, status=404)
 
         ultimos_logs = ScrapingLog.objects.filter(job=job).order_by('-id')[:50]
+        _decorate_scraping_job(job)
 
         return JsonResponse({
             'id': job.id,
-            'estado': job.estado,
+            'estado': job.estado_efectivo,
             'portal_actual': job.portal_actual,
             'progreso': job.progreso,
             'total_propiedades': job.total_propiedades,
+            'detectadas': job.detectadas_display,
             'procesadas': job.procesadas,
             'nuevas': job.nuevas,
             'actualizadas': job.actualizadas,
             'errores': job.errores,
+            'origen': job.origen_display,
+            'portales': job.portales_detalle,
+            'mensaje_error': job.mensaje_error_display,
             'iniciado_en': job.iniciado_en.isoformat() if job.iniciado_en else None,
             'completado_en': job.completado_en.isoformat() if job.completado_en else None,
             'ultimos_logs': [
@@ -1794,11 +2036,18 @@ class ScrapingStatusView(View):
 
 
 class ScrapingPropiedadesView(ListView):
-    """Tabla filtrable de propiedades scrapeadas. Muestra TODOS los registros."""
+    """Tabla filtrable y paginada de propiedades scrapeadas."""
     model = PropiedadesCompetencia
     template_name = 'ingestas/scraping_tabla.html'
     context_object_name = 'propiedades'
-    paginate_by = 9999
+    paginate_by = 100
+
+    def get_paginate_by(self, queryset):
+        try:
+            requested = int(self.request.GET.get('limit', self.paginate_by))
+        except (TypeError, ValueError):
+            requested = self.paginate_by
+        return max(20, min(requested, 250))
 
     def get_queryset(self):
         qs = PropiedadesCompetencia.objects.all()
@@ -1811,10 +2060,21 @@ class ScrapingPropiedadesView(ListView):
             qs = qs.filter(distrito__icontains=distrito)
         if tipo:
             qs = qs.filter(tipo_inmueble=tipo)
-        return qs.order_by('-fecha_extraccion')
+        # Las inserciones más recientes siempre aparecen arriba. El ID
+        # descendente resuelve de forma estable los lotes que comparten fecha.
+        return qs.order_by('-fecha_extraccion', '-id')
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        for propiedad in ctx.get('propiedades', []):
+            propiedad.imagen_display_url = None
+            if propiedad.imagen_url:
+                try:
+                    propiedad.imagen_display_url = generate_read_sas_url(
+                        propiedad.imagen_url, expiry_minutes=30
+                    )
+                except AzureStorageError:
+                    propiedad.imagen_display_url = None
         ctx['fuentes'] = PropiedadesCompetencia.objects.values_list(
             'fuente', flat=True
         ).distinct().order_by('fuente')
@@ -1835,5 +2095,8 @@ class ScrapingHistorialView(TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx['jobs'] = ScrapingJob.objects.order_by('-creado_en')[:50]
+        jobs = list(ScrapingJob.objects.order_by('-creado_en')[:50])
+        for job in jobs:
+            _decorate_scraping_job(job)
+        ctx['jobs'] = jobs
         return ctx

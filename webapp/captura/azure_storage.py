@@ -3,30 +3,32 @@ Utilidades para almacenar documentos crudos en Azure Blob Storage.
 """
 import os
 import logging
+from datetime import timedelta
+from urllib.parse import urlparse
 from django.utils import timezone
 from django.conf import settings
 
 try:
-    from azure.storage.blob import BlobServiceClient, ContentSettings
+    from azure.storage.blob import BlobServiceClient, BlobSasPermissions, ContentSettings, generate_blob_sas
     AZURE_AVAILABLE = True
 except ImportError:
     AZURE_AVAILABLE = False
-    logging.warning("azure-storage-blob no está instalado. Instalar con: pip install azure-storage-blob")
+    logging.warning("azure-storage-blob no estÃ¡ instalado. Instalar con: pip install azure-storage-blob")
 
 logger = logging.getLogger(__name__)
 
 
 class AzureStorageError(Exception):
-    """Excepción personalizada para errores de Azure Storage."""
+    """ExcepciÃ³n personalizada para errores de Azure Storage."""
     pass
 
 
 def get_blob_service_client():
     """
-    Crea y retorna un cliente de BlobServiceClient usando la cadena de conexión.
+    Crea y retorna un cliente de BlobServiceClient usando la cadena de conexiÃ³n.
     """
     if not AZURE_AVAILABLE:
-        raise AzureStorageError("azure-storage-blob no está instalado")
+        raise AzureStorageError("azure-storage-blob no estÃ¡ instalado")
     
     connection_string = settings.AZURE_STORAGE_CONNECTION_STRING
     if not connection_string:
@@ -72,7 +74,7 @@ def ensure_container_exists(container_name=None):
 
 def upload_raw_content(content, fuente_id, timestamp=None, tipo_documento='html', metadata=None):
     """
-    Sube contenido crudo (HTML, PDF, texto extraído) a Azure Blob Storage.
+    Sube contenido crudo (HTML, PDF, texto extraÃ­do) a Azure Blob Storage.
     
     Args:
         content (str|bytes): Contenido a subir (texto o binario).
@@ -82,16 +84,16 @@ def upload_raw_content(content, fuente_id, timestamp=None, tipo_documento='html'
         metadata (dict, optional): Metadatos adicionales para el blob.
     
     Returns:
-        dict: Información del blob subido {'url': str, 'nombre': str}.
+        dict: InformaciÃ³n del blob subido {'url': str, 'nombre': str}.
     """
     if settings.RAW_HTML_STORAGE != 'blob_storage':
-        logger.warning("RAW_HTML_STORAGE no está configurado como 'blob_storage'. No se subirá a Azure.")
+        logger.warning("RAW_HTML_STORAGE no estÃ¡ configurado como 'blob_storage'. No se subirÃ¡ a Azure.")
         return None
     
     if timestamp is None:
         timestamp = timezone.now()
     
-    # Determinar extensión del archivo
+    # Determinar extensiÃ³n del archivo
     extensiones = {
         'html': 'html',
         'pdf_nativo': 'pdf',
@@ -102,7 +104,7 @@ def upload_raw_content(content, fuente_id, timestamp=None, tipo_documento='html'
     }
     extension = extensiones.get(tipo_documento, 'txt')
     
-    # Formato del nombre del blob: fuentes/{fuente_id}/{año}/{mes}/{dia}/{timestamp}_{fuente_id}.{ext}
+    # Formato del nombre del blob: fuentes/{fuente_id}/{aÃ±o}/{mes}/{dia}/{timestamp}_{fuente_id}.{ext}
     date_path = timestamp.strftime("%Y/%m/%d")
     timestamp_str = timestamp.strftime("%Y%m%d_%H%M%S")
     blob_name = f"fuentes/{fuente_id}/{date_path}/{timestamp_str}_{fuente_id}.{extension}"
@@ -157,7 +159,7 @@ def upload_raw_content(content, fuente_id, timestamp=None, tipo_documento='html'
         return {
             'url': blob_url,
             'nombre': blob_name,
-            'tamaño': len(content_bytes),
+            'tamaÃ±o': len(content_bytes),
             'tipo': tipo_documento,
         }
         
@@ -232,7 +234,7 @@ def upload_pdf_binario(pdf_content: bytes, fuente_id: int, timestamp=None, metad
         metadata (dict, optional): Metadatos adicionales.
     
     Returns:
-        dict: Información del blob subido.
+        dict: InformaciÃ³n del blob subido.
     """
     return upload_raw_content(
         pdf_content,
@@ -273,7 +275,7 @@ def upload_file(file_path, blob_name=None, container_name=None, content_type=Non
         with open(file_path, 'rb') as file_data:
             blob_client.upload_blob(file_data, overwrite=True)
         
-        # Actualizar content type si se especificó
+        # Actualizar content type si se especificÃ³
         if content_type:
             blob_client.set_http_headers(ContentSettings(content_type=content_type))
         
@@ -284,6 +286,61 @@ def upload_file(file_path, blob_name=None, container_name=None, content_type=Non
         raise AzureStorageError(f"Error al subir archivo: {e}")
 
 
+def upload_bytes(content_bytes, blob_name, container_name=None, content_type=None, metadata=None):
+    """
+    Sube contenido binario directamente a Azure Blob Storage.
+    """
+    if not isinstance(content_bytes, (bytes, bytearray)):
+        raise AzureStorageError("upload_bytes requiere bytes o bytearray")
+
+    try:
+        if container_name is None:
+            container_client = ensure_container_exists()
+        else:
+            container_client = ensure_container_exists(container_name)
+
+        blob_client = container_client.get_blob_client(blob_name)
+        blob_client.upload_blob(content_bytes, overwrite=True)
+
+        if content_type:
+            blob_client.set_http_headers(ContentSettings(content_type=content_type))
+
+        if metadata:
+            blob_client.set_blob_metadata({k: str(v) for k, v in metadata.items()})
+
+        logger.info(f"Bytes subidos a Azure Blob Storage: {blob_name} ({len(content_bytes)} bytes)")
+        return blob_client.url
+    except Exception as e:
+        logger.error(f"Error al subir bytes a Azure Storage: {e}")
+        raise AzureStorageError(f"Error al subir bytes: {e}")
+
+
+def generate_read_sas_url(blob_url, expiry_minutes=30):
+    """Genera una URL temporal de solo lectura para un blob privado."""
+    if not blob_url:
+        return None
+
+    parsed = urlparse(blob_url)
+    path_parts = parsed.path.lstrip('/').split('/', 1)
+    if len(path_parts) != 2:
+        raise AzureStorageError("URL de blob invalida")
+    container_name, blob_name = path_parts
+
+    service = get_blob_service_client()
+    credential = service.credential
+    account_key = getattr(credential, 'account_key', None)
+    if not account_key:
+        raise AzureStorageError("La credencial no permite generar SAS")
+
+    token = generate_blob_sas(
+        account_name=service.account_name,
+        container_name=container_name,
+        blob_name=blob_name,
+        account_key=account_key,
+        permission=BlobSasPermissions(read=True),
+        expiry=timezone.now() + timedelta(minutes=expiry_minutes),
+    )
+    return f"{parsed.scheme}://{parsed.netloc}{parsed.path}?{token}"
 def delete_blob(blob_name, container_name=None):
     """
     Elimina un blob de Azure Storage.
@@ -293,7 +350,7 @@ def delete_blob(blob_name, container_name=None):
         container_name (str, optional): Nombre del contenedor.
     
     Returns:
-        bool: True si se eliminó correctamente.
+        bool: True si se eliminÃ³ correctamente.
     """
     try:
         if container_name is None:

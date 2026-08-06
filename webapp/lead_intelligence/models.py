@@ -257,3 +257,48 @@ class LeadConversationReview(models.Model):
                 name="pli_review_ver_stage_result",
             )
         ]
+
+
+class LeadEventResolution(models.Model):
+    class Status(models.TextChoices):
+        CONFIRMED = "confirmed", "Confirmado"
+        MANUAL_REVIEW = "manual_review", "Revisión manual"
+        UNRESOLVED = "unresolved", "Sin resolver"
+
+    source_event_id = models.BigIntegerField(db_index=True)
+    source_lead_id = models.BigIntegerField(null=True, blank=True, db_index=True)
+    source_contact_id = models.BigIntegerField(null=True, blank=True, db_index=True)
+    source_property_id = models.BigIntegerField(null=True, blank=True, db_index=True)
+    event_created_at = models.DateTimeField(null=True, blank=True)
+    event_scheduled_at = models.DateTimeField(null=True, blank=True)
+    resolution_method = models.CharField(max_length=40, db_index=True)
+    resolution_status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        db_index=True,
+    )
+    confidence = models.DecimalField(max_digits=5, decimal_places=4, default=0)
+    candidate_count = models.PositiveIntegerField(default=0)
+    evidence = models.JSONField(default=dict)
+    resolver_version = models.CharField(max_length=40, db_index=True)
+    resolved_at = models.DateTimeField(db_index=True)
+
+    class Meta:
+        db_table = "prometeo_lead_event_resolution"
+        ordering = ["-resolved_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["source_event_id", "resolver_version"],
+                name="pli_unique_event_resolution_version",
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=["source_lead_id", "resolution_status"],
+                name="pli_event_lead_status",
+            ),
+            models.Index(
+                fields=["resolver_version", "resolution_status"],
+                name="pli_event_ver_status",
+            ),
+        ]

@@ -1,0 +1,83 @@
+diff --git a/webapp/lead_intelligence/services.py b/webapp/lead_intelligence/services.py
+--- a/webapp/lead_intelligence/services.py
++++ b/webapp/lead_intelligence/services.py
+@@ -20,9 +20,10 @@ from .contextual_analysis import ANALYSIS_VERSION, conversation_hash
+ from .conversation_analysis import analyze_chat_history, milestone_within_days
+ from .models import (
+     AnalysisRun,
+     LeadConversationAssessment,
+     LeadConversationReview,
+ )
++from .visit_resolution import apply_visit_resolutions
+ 
+ 
+ LEAD_RESULT_STAGES = {
+@@ -426,25 +427,19 @@ def _lead_result_rows(date_from, date_to, lead_id=None):
+                 COALESCE(
+                     NULLIF(LTRIM(RTRIM(CONCAT(u.first_name, ' ', u.last_name))), ''),
+                     u.username,
+                     'Sin asignar'
+                 ) AS agent_name,
+                 COALESCE(ls.name, 'Sin estado') AS status_name,
+-                COALESCE(cl.name, 'Sin canal') AS channel_name,
+-                visit.first_visit_at
++                COALESCE(cl.name, 'Sin canal') AS channel_name
+             FROM dbo.lead l
+             LEFT JOIN dbo.contact c ON c.id = l.contact_id
+             LEFT JOIN dbo.[user] u ON u.id = l.assigned_to_id
+             LEFT JOIN dbo.lead_status ls ON ls.id = l.lead_status_id
+             LEFT JOIN dbo.canal_lead cl ON cl.id = l.canal_lead_id
+-            OUTER APPLY (
+-                SELECT MIN(e.created_at) AS first_visit_at
+-                FROM dbo.[event] e
+-                INNER JOIN dbo.event_type et ON et.id = e.event_type_id
+-                WHERE e.lead_id = l.id AND LOWER(et.name) = 'visita'
+-            ) visit
+             WHERE {" AND ".join(where)}
+             ORDER BY COALESCE(l.date_entry, l.created_at) DESC, l.id DESC
+             """,
+             params,
+         )
+-        return _dict_rows(cursor)
++        rows = _dict_rows(cursor)
++    return apply_visit_resolutions(rows)
+@@ -1448,29 +1443,22 @@ def get_management_dashboard(
+                 CAST(
+                     SWITCHOFFSET(COALESCE(l.date_entry, l.created_at), '-05:00')
+                     AS date
+                 ) AS cohort_date,
+                 l.chat_history,
+-                visit.first_visit_at,
+                 l.assigned_to_id AS agent_id,
+                 COALESCE(
+                     NULLIF(LTRIM(RTRIM(CONCAT(u.first_name, ' ', u.last_name))), ''),
+                     u.username,
+                     'Sin asignar'
+                 ) AS agent_name
+             FROM dbo.lead l
+             LEFT JOIN dbo.[user] u ON u.id = l.assigned_to_id
+-            OUTER APPLY (
+-                SELECT MIN(e.created_at) AS first_visit_at
+-                FROM dbo.[event] e
+-                INNER JOIN dbo.event_type et ON et.id = e.event_type_id
+-                WHERE e.lead_id = l.id AND LOWER(et.name) = 'visita'
+-            ) visit
+             WHERE CAST(
+                 SWITCHOFFSET(COALESCE(l.date_entry, l.created_at), '-05:00')
+                 AS date
+             ) BETWEEN %s AND %s
+             """,
+             [date_from, date_to],
+         )
+         conversation_rows = _dict_rows(cursor)
+@@ -1517,8 +1505,9 @@ def get_management_dashboard(
+             )
+             """,
+             [date_from, date_to, date_from, date_to],
+         )
+         data_quality.update(_one(cursor))
+ 
++    conversation_rows = apply_visit_resolutions(conversation_rows)
+     assessments = _assessment_map(conversation_rows)
+     assignment_timelines = _load_assignment_timelines(conversation_rows)
+     conversation_metrics = []

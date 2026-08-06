@@ -1,0 +1,15 @@
+diff --git a/webapp/lead_intelligence/services.py b/webapp/lead_intelligence/services.py
+--- a/webapp/lead_intelligence/services.py
++++ b/webapp/lead_intelligence/services.py
+@@ -1449,1 +1449,0 @@
+-                visit.first_visit_at,
+@@ -1458,6 +1457,0 @@
+-            OUTER APPLY (
+-                SELECT MIN(e.created_at) AS first_visit_at
+-                FROM dbo.[event] e
+-                INNER JOIN dbo.event_type et ON et.id = e.event_type_id
+-                WHERE e.lead_id = l.id AND LOWER(et.name) = 'visita'
+-            ) visit
+@@ -1518,1 +1511,2 @@
++    conversation_rows = apply_visit_resolutions(conversation_rows)
+     assessments = _assessment_map(conversation_rows)

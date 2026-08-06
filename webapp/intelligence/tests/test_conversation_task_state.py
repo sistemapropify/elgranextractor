@@ -43,6 +43,34 @@ class ConversationTaskStateTests(SimpleTestCase):
         self.assertIsNone(updated)
         self.assertEqual(effective, "Ahora muéstrame departamentos en Yanahuara")
 
+    def test_busco_property_query_with_filters_replaces_school_task(self):
+        task = ConversationTaskState.from_message(
+            "Propiedades ideales para construir un colegio"
+        )
+        message = "busco departamento de mas de 150000 dolares en cayma"
+
+        effective, updated, relationship = ConversationTaskState.resolve(
+            {ConversationTaskState.METADATA_KEY: task},
+            message,
+        )
+
+        self.assertEqual(relationship, "new_task")
+        self.assertIsNone(updated)
+        self.assertEqual(effective, message)
+
+    def test_depas_query_replaces_school_task(self):
+        task = ConversationTaskState.from_message(
+            "Propiedades ideales para construir un colegio"
+        )
+
+        _, updated, relationship = ConversationTaskState.resolve(
+            {ConversationTaskState.METADATA_KEY: task},
+            "quiero ver depas en Cayma",
+        )
+
+        self.assertEqual(relationship, "new_task")
+        self.assertIsNone(updated)
+
     def test_simple_query_has_no_pending_task(self):
         self.assertIsNone(
             ConversationTaskState.from_message("Muéstrame terrenos en Cayma")

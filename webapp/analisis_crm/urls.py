@@ -20,9 +20,19 @@ urlpatterns = [
         name='analysis_quality',
     ),
     path(
+        'propiedades/',
+        intelligence_views.property_performance_dashboard,
+        name='property_performance',
+    ),
+    path(
         'calidad-motor/revisar/',
         intelligence_views.conversation_review,
         name='conversation_review',
+    ),
+    path(
+        'calidad-motor/ejecutar/',
+        intelligence_views.run_analysis,
+        name='run_analysis',
     ),
     path('resultados/', intelligence_views.lead_results, name='lead_results'),
     path('resultados/<int:lead_id>/', intelligence_views.lead_conversation, name='lead_conversation'),

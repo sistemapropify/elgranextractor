@@ -21,6 +21,18 @@ BASE_DIR = Path(__file__).resolve().parent
 env = environ.Env()
 environ.Env.read_env(BASE_DIR / '.env')
 
+# Consolas de Windows usan cp1252 por defecto; los chats de leads contienen
+# emojis que rompen los logs con UnicodeEncodeError ('charmap' codec can't
+# encode ...). Forzamos UTF-8 con sustitución para que nunca se corte el flujo
+# de procesamiento ni las llamadas a la IA.
+for _stream_name in ("stdout", "stderr"):
+    _stream = getattr(__import__("sys"), _stream_name, None)
+    if _stream is not None and hasattr(_stream, "reconfigure"):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except (ValueError, OSError):
+            pass
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/

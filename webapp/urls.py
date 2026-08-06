@@ -90,6 +90,7 @@ urlpatterns = [
     # El app_name='intelligence' está definido en intelligence/urls.py
     path('api/v1/intelligence/', include(('intelligence.urls', 'intelligence'), namespace='intelligence-api')),
     # Vistas HTML de intelligence (sin api/v1/ para acceso directo)
+    path('intelligence/whatsapp-initial-responder/', include(('n8n_bridge.dashboard_urls', 'property_bot_dashboard'), namespace='property-bot-dashboard')),
     path('intelligence/', include(('intelligence.urls', 'intelligence'), namespace='intelligence-web')),
     
     # Meta Ads - Dashboard de campañas publicitarias de Meta

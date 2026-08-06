@@ -7,7 +7,9 @@ import sys
 import os
 import unicodedata
 from datetime import datetime
+from urllib.request import Request, urlopen
 from camoufox.async_api import AsyncCamoufox
+from captura.azure_storage import upload_bytes
 
 # Forzar UTF-8 en salida estandar (Windows cp1252 no puede con emojis)
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -365,7 +367,7 @@ def mapear_a_formato_remax(prop):
         "Longitud": lng,
         "Coordenadas": f"{lat},{lng}" if lat and lng else "",
         "URL Propiedad": prop.get("url") or "",
-        "Imagen URL": "",
+        "Imagen URL": prop.get("imagen_url") or "",
         "Oficina": "",
         "Agente": (prop.get("publicado_por") or "").strip(),
         "Serv. Agua": "",
@@ -391,25 +393,38 @@ def manejar_sigint(sig, frame):
     detener = True
 
 
-async def esperar_cloudflare(page, timeout=30):
-    """Espera a que Cloudflare resuelva el challenge."""
+async def esperar_cloudflare(page, timeout=120):
+    """
+    Espera a que Cloudflare resuelva el challenge.
+    Timeout aumentado a 120s para dar tiempo a resolver captcha manualmente
+    si el navegador no es headless.
+    """
     start = __import__('time').time()
     while __import__('time').time() - start < timeout:
         try:
             title = await page.title()
-            if "cloudflare" not in title.lower() and "just a moment" not in title.lower():
-                return True
+            title_lower = title.lower()
+            if "cloudflare" in title_lower or "just a moment" in title_lower:
+                await asyncio.sleep(2)
+                continue
+            return True
         except Exception:
-            pass
-        await asyncio.sleep(1)
+            await asyncio.sleep(1)
     return False
 
 
-async def navegar_con_cloudflare(page, url, timeout=30):
-    """Navega a una URL esperando que Cloudflare se resuelva."""
+async def navegar_con_cloudflare(page, url, timeout=120):
+    """Navega a una URL esperando que Cloudflare se resuelva.
+    
+    Returns:
+        False si Cloudflare no se resolvio o hubo error de navegacion.
+    """
     try:
-        await page.goto(url, wait_until="domcontentloaded", timeout=60000)
-        await esperar_cloudflare(page, timeout)
+        await page.goto(url, wait_until="domcontentloaded", timeout=90000)
+        cf_ok = await esperar_cloudflare(page, timeout)
+        if not cf_ok:
+            print(f"  [!] Cloudflare no se resolvio en {timeout}s para {url}")
+            return False
         await asyncio.sleep(3)
         return True
     except Exception as e:
@@ -471,7 +486,7 @@ async def extraer_coordenadas_desde_detalle(page, url):
     """Navega a una pagina de detalle y extrae coordenadas de mapLatOf/mapLngOf (base64)."""
     exito = await navegar_con_cloudflare(page, url, timeout=30)
     if not exito:
-        return None, None, ""
+        return None, None, "", None
 
     await asyncio.sleep(2)
 
@@ -487,7 +502,7 @@ async def extraer_coordenadas_desde_detalle(page, url):
         )
         if tipo_match:
             texto_tipo = tipo_match.group(1).strip()
-            tipo_prop = texto_tipo.split("\u00b7")[0].split("·")[0].strip()
+            tipo_prop = texto_tipo.split("\u00b7")[0].split("Â·")[0].strip()
 
         if not tipo_prop:
             bread_match = re.search(
@@ -499,7 +514,7 @@ async def extraer_coordenadas_desde_detalle(page, url):
 
         if not tipo_prop:
             re_match = re.search(
-                r"'realEstateType':\s*\{\s*\"name\":\s*\"([^\"]+)\"",
+                r"""["']realEstateType["']\s*:\s*\{\s*["']name["']\s*:\s*["']([^"']+)["']""",
                 html_content
             )
             if re_match:
@@ -524,12 +539,18 @@ async def extraer_coordenadas_desde_detalle(page, url):
                 lat = geo_match.group(1)
                 lng = geo_match.group(2)
 
-        return lat, lng, tipo_prop
+        imagen_url = extraer_imagen_desde_html(html_content)
+        if imagen_url:
+            if imagen_url.startswith("/"):
+                imagen_url = BASE_URL + imagen_url
+            if imagen_url.startswith("//"):
+                imagen_url = "https:" + imagen_url
+        return lat, lng, tipo_prop, imagen_url
 
     except Exception as e:
         print(f"    [!] Error extrayendo coordenadas de detalle: {e}")
 
-    return None, None, tipo_prop
+    return None, None, tipo_prop, None
 
 
 def mapear_tipo_schemaorg(tipo_schema):
@@ -546,16 +567,146 @@ def mapear_tipo_schemaorg(tipo_schema):
     return tipo_schema
 
 
+def extraer_imagen_desde_html(html_content):
+    """Extrae una imagen principal desde la ficha o listado de Adondevivir."""
+    if not html_content:
+        return None
+
+    patrones = [
+        r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']',
+        r'<meta[^>]+name=["\']twitter:image["\'][^>]+content=["\']([^"\']+)["\']',
+        r'"image"\s*:\s*"([^"]+)"',
+        r'"thumbnailUrl"\s*:\s*"([^"]+)"',
+        r'"contentUrl"\s*:\s*"([^"]+)"',
+        r'<img[^>]+src=["\']([^"\']+)["\'][^>]*(?:posting|card|gallery|carousel|cover)',
+    ]
+
+    for patron in patrones:
+        match = re.search(patron, html_content, re.IGNORECASE | re.DOTALL)
+        if not match:
+            continue
+        url = (match.group(1) or "").strip()
+        if not url:
+            continue
+        if url.startswith("//"):
+            url = "https:" + url
+        if url.startswith("/"):
+            url = BASE_URL + url
+        if url.startswith("http"):
+            return url
+
+    return None
+
+
+def subir_imagen_a_blob(imagen_url, prop):
+    """Descarga una imagen remota y la sube al contenedor propiedadesimagenes."""
+    if not imagen_url:
+        return None
+
+    try:
+        req = Request(
+            imagen_url,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+                )
+            },
+        )
+        with urlopen(req, timeout=25) as resp:
+            content_type = resp.headers.get_content_type() or "image/jpeg"
+            content = resp.read()
+
+        if not content:
+            return None
+
+        ext = "jpg"
+        lowered = (content_type or "").lower()
+        if "png" in lowered:
+            ext = "png"
+        elif "webp" in lowered:
+            ext = "webp"
+        elif "gif" in lowered:
+            ext = "gif"
+        elif "jpeg" in lowered or "jpg" in lowered:
+            ext = "jpg"
+
+        prop_id = str(prop.get("id") or "sin_id").strip()
+        safe_id = re.sub(r'[^A-Za-z0-9_-]+', '_', prop_id)[:60]
+        blob_name = f"propiedades/{safe_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{ext}"
+        blob_url = upload_bytes(
+            content,
+            blob_name=blob_name,
+            container_name='propiedadesimagenes',
+            content_type=content_type,
+            metadata={
+                'fuente': 'adondevivir',
+                'id_origen': prop_id,
+                'imagen_origen': imagen_url,
+            },
+        )
+        return blob_url
+    except Exception as e:
+        print(f"   [WARN] No se pudo subir imagen a Blob: {e}")
+        return None
+
+
+async def _evaluate_with_timeout(page, js_code, timeout=30):
+    """Ejecuta page.evaluate con un timeout para evitar que se cuelgue."""
+    try:
+        return await asyncio.wait_for(
+            page.evaluate(js_code),
+            timeout=timeout
+        )
+    except asyncio.TimeoutError:
+        print(f"  [!] evaluate() timed out after {timeout}s")
+        return None
+    except Exception as e:
+        print(f"  [!] evaluate() error: {e}")
+        return None
+
+
 async def extraer_listado(page):
     """Extrae todas las propiedades de la pagina actual del listado."""
-    await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+    # scrollTo() devuelve undefined; retornar true explícitamente evita
+    # confundir un desplazamiento válido con un fallo de evaluate().
+    scroll_ok = await _evaluate_with_timeout(
+        page,
+        "() => { window.scrollTo(0, document.body.scrollHeight); return true; }",
+        timeout=15,
+    )
+    if scroll_ok is None:
+        print("  [!] Scroll fallo, posible pagina bloqueada. Saltando pagina.")
+        return []
     await asyncio.sleep(3)
-    await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+    await _evaluate_with_timeout(
+        page,
+        "() => { window.scrollTo(0, document.body.scrollHeight); return true; }",
+        timeout=15,
+    )
     await asyncio.sleep(2)
 
-    cards_data = await page.evaluate("""
+    cards_data = await _evaluate_with_timeout(page, """
         () => {
-            const cards = document.querySelectorAll('[data-qa^="posting"]');
+            // Navent cambió el contenedor de los avisos: el atributo data-qa
+            // puede estar solo en los hijos, mientras que la tarjeta ahora usa
+            // esta clase con hash estable. Conservamos ambos formatos.
+            const directCards = Array.from(document.querySelectorAll(
+                '[data-to-posting], [class*="posting-card-layout"]'
+            )).filter(card => card.getAttribute('data-to-posting'));
+            // Como último respaldo, cada aviso público tiene un enlace de
+            // detalle. Subimos hasta su contenedor y deduplicamos tarjetas.
+            const seen = new Set(directCards);
+            const cards = [...directCards];
+            document.querySelectorAll('a[href*="/propiedades/"]').forEach(link => {
+                const card = link.closest(
+                    '[data-to-posting], [class*="posting-card-layout"], [class*="postingCard"]'
+                ) || link.parentElement;
+                if (card && !seen.has(card)) {
+                    seen.add(card);
+                    cards.push(card);
+                }
+            });
             const results = [];
 
             cards.forEach(card => {
@@ -586,7 +737,7 @@ async def extraer_listado(page):
                     featureItems.forEach(item => {
                         const text = item.textContent.trim();
                         const lower = text.toLowerCase();
-                        if (lower.includes('m²') || lower.includes('m2')) {
+                        if (lower.includes('mÂ²') || lower.includes('m2')) {
                             if (lower.includes('total')) {
                                 areaTotal = text;
                             } else {
@@ -594,7 +745,7 @@ async def extraer_listado(page):
                             }
                         } else if (lower.includes('dorm') || lower.includes('habitac')) {
                             dormitorios = text;
-                        } else if (lower.includes('bañ') || lower.includes('ban')) {
+                        } else if (lower.includes('baÃ±') || lower.includes('ban')) {
                             banos = text;
                         } else if (lower.includes('estacion')) {
                             estacionamientos = text;
@@ -607,6 +758,18 @@ async def extraer_listado(page):
 
                 const descEl = card.querySelector('[data-qa="POSTING_CARD_DESCRIPTION"]');
                 const description = descEl ? descEl.textContent.trim() : '';
+
+                let image = '';
+                const imgEl = card.querySelector('img');
+                if (imgEl) {
+                    image = imgEl.getAttribute('src') || imgEl.getAttribute('data-src') || '';
+                    if (!image) {
+                        const srcset = imgEl.getAttribute('srcset') || '';
+                        if (srcset) {
+                            image = srcset.split(',')[0].trim().split(' ')[0] || '';
+                        }
+                    }
+                }
 
                 const publisherEl = card.querySelector('[data-qa="POSTING_CARD_PUBLISHER"]');
                 let publisher = '';
@@ -627,7 +790,9 @@ async def extraer_listado(page):
                     title = linkEl.getAttribute('title') || linkEl.textContent.trim();
                 }
 
-                const url = toPosting ? 'https://www.adondevivir.com' + toPosting : '';
+                const url = toPosting
+                    ? 'https://www.adondevivir.com' + toPosting
+                    : (linkEl ? linkEl.href : '');
 
                 let lat = '', lng = '', tipoSchema = '';
                 const script = card.querySelector('script[type="application/ld+json"]');
@@ -664,6 +829,7 @@ async def extraer_listado(page):
                     ubicacion: location,
                     descripcion: description,
                     publicado_por: publisher || publisherDev,
+                    imagen_url: image,
                     area: area,
                     area_total: areaTotal,
                     dormitorios: dormitorios,
@@ -677,6 +843,10 @@ async def extraer_listado(page):
             return results;
         }
     """)
+
+    if not cards_data:
+        print("  Cards: 0")
+        return []
 
     for card in cards_data:
         soles_str = card.get("precio_soles", "")
@@ -742,11 +912,12 @@ async def obtener_numero_paginas(page):
 async def obtener_total_propiedades(page):
     """Obtiene el total de propiedades del texto del listado."""
     try:
-        texto = await page.evaluate("() => document.body.innerText")
-        patron = r'(\d[\d,]*)\s*propiedades?'
-        match = re.search(patron, texto, re.IGNORECASE)
-        if match:
-            return int(match.group(1).replace(',', ''))
+        texto = await _evaluate_with_timeout(page, "() => document.body.innerText", timeout=20)
+        if texto:
+            patron = r'(\d[\d,]*)\s*propiedades?'
+            match = re.search(patron, texto, re.IGNORECASE)
+            if match:
+                return int(match.group(1).replace(',', ''))
     except Exception:
         pass
 
@@ -763,6 +934,7 @@ async def obtener_total_propiedades(page):
 
 
 async def main():
+    import random as _random
     signal.signal(signal.SIGINT, manejar_sigint)
     global detener
 
@@ -785,7 +957,7 @@ async def main():
         print(f"{'=' * 70}")
 
         print(f"\n[Pagina 1] Navegando...")
-        await navegar_con_cloudflare(page, LISTING_URL, timeout=30)
+        await navegar_con_cloudflare(page, LISTING_URL)
 
         total_paginas = await obtener_numero_paginas(page)
         print(f"Total de paginas detectadas: {total_paginas}")
@@ -803,10 +975,13 @@ async def main():
             if detener:
                 break
 
+            # Delay aleatorio entre paginas para evitar rate limiting de Cloudflare
+            await asyncio.sleep(_random.uniform(2.0, 6.0))
+
             url_pagina = f"https://www.adondevivir.com/inmuebles-en-venta-en-arequipa-pagina-{pagina}.html"
             print(f"\n[Pagina {pagina}] Navegando...")
 
-            exito = await navegar_con_cloudflare(page, url_pagina, timeout=30)
+            exito = await navegar_con_cloudflare(page, url_pagina)
             if not exito:
                 print(f"  [!] Error al cargar pagina {pagina}, saltando...")
                 continue
@@ -822,9 +997,14 @@ async def main():
         # ============================================================
         # FASE 2: Visitar detalles para propiedades sin coordenadas
         # ============================================================
-        props_a_visitar = [p for p in todas_las_propiedades
-                          if not p.get("latitud") or not p.get("longitud")
-                          or not p.get("tipo")]
+        props_a_visitar = [
+            p for p in todas_las_propiedades
+            if not p.get("latitud")
+            or not p.get("longitud")
+            or not p.get("tipo")
+            or not p.get("imagen_url")
+            or "blob.core.windows.net" not in str(p.get("imagen_url"))
+        ]
 
         if props_a_visitar and not detener:
             print(f"\n{'=' * 70}")
@@ -841,7 +1021,7 @@ async def main():
                     continue
 
                 print(f"  [{i}/{len(props_a_visitar)}] Visitando detalle...")
-                lat, lng, tipo_prop = await extraer_coordenadas_desde_detalle(page, url)
+                lat, lng, tipo_prop, imagen_url = await extraer_coordenadas_desde_detalle(page, url)
 
                 cambios = []
                 if lat and lng:
@@ -851,6 +1031,15 @@ async def main():
                 if tipo_prop:
                     prop["tipo"] = tipo_prop
                     cambios.append(f"tipo={tipo_prop}")
+
+                imagen_origen = imagen_url or prop.get("imagen_url")
+                if imagen_origen and "blob.core.windows.net" not in str(imagen_origen):
+                    imagen_blob = subir_imagen_a_blob(imagen_origen, prop)
+                    if imagen_blob:
+                        prop["imagen_url"] = imagen_blob
+                        cambios.append("imagen=blob")
+                elif imagen_origen:
+                    prop["imagen_url"] = imagen_origen
 
                 if cambios:
                     print(f"    [OK] {'; '.join(cambios)}")

@@ -92,7 +92,9 @@ class LLMService:
         system_prompt: str = "",
         stream: bool = False,
         caller_app: str = "",
-        endpoint: str = ""
+        endpoint: str = "",
+        response_format: Optional[Dict[str, str]] = None,
+        max_tokens: Optional[int] = None
     ) -> Tuple[bool, str, Optional[Dict]]:
         """
         Llama a la API de DeepSeek.
@@ -169,9 +171,17 @@ class LLMService:
             "model": cls.DEEPSEEK_MODEL,
             "messages": api_messages,
             "temperature": cls.TEMPERATURE,
-            "max_tokens": cls.MAX_TOKENS,
+            "max_tokens": (
+                max_tokens if max_tokens is not None else cls.MAX_TOKENS
+            ),
             "stream": stream
         }
+        # Modo JSON forzado: el modelo deepseek-v4-flash es de razonamiento y,
+        # sin esto, agota max_tokens en reasoning_content devolviendo content
+        # vacío (falsos fallos y reintentos). Con json_object responde JSON
+        # completo y válido.
+        if response_format:
+            payload["response_format"] = response_format
         
         start_time = time.time()
         
@@ -224,12 +234,14 @@ class LLMService:
                 return True, "OK", {"stream_response": response}
             
             else:
-                # Modo normal (no streaming)
+                # Modo normal (no streaming). timeout amplio: con max_tokens
+                # mayores y el modelo de razonamiento, algunas respuestas
+                # tardan 30-60 s; 30 s generaba falsos "Read timed out".
                 response = requests.post(
                     cls.DEEPSEEK_API_URL,
                     headers=cls._get_headers(),
                     json=payload,
-                    timeout=30
+                    timeout=120
                 )
                 
                 duration_ms = int((time.time() - start_time) * 1000)
@@ -1085,9 +1097,15 @@ INSTRUCCIONES:
             {"role": "user", "content": f"Texto a analizar:\n{text}"}
         ]
         
+        # max_tokens amplio: el modelo deepseek-v4-flash razona primero
+        # (reasoning_content) y con el límite global de 2000 a veces agota el
+        # presupuesto antes de emitir el JSON (content vacío). Con 4096 alcanza
+        # a razonar y devolver la respuesta estructurada completa.
         success, api_message, api_response = cls._call_deepseek_api(
             messages=messages,
-            system_prompt=system_prompt
+            system_prompt=system_prompt,
+            response_format={"type": "json_object"},
+            max_tokens=4096,
         )
         
         if not success:

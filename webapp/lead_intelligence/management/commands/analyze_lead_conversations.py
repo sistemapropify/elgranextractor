@@ -1,3 +1,4 @@
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 
@@ -18,6 +19,23 @@ from lead_intelligence.models import AnalysisRun, LeadConversationAssessment
 from lead_intelligence.services import _lead_result_rows
 
 
+# Señal de cancelación cooperativa: el dashboard puede pedir detener una
+# ejecución en curso sin matar el proceso (corta el gasto de tokens).
+_cancel_event = threading.Event()
+
+
+def request_cancel():
+    _cancel_event.set()
+
+
+def reset_cancel():
+    _cancel_event.clear()
+
+
+def is_cancel_requested():
+    return _cancel_event.is_set()
+
+
 class Command(BaseCommand):
     help = (
         "Analiza incrementalmente chat_history con IA. El CRM se consulta "
@@ -35,6 +53,8 @@ class Command(BaseCommand):
 
     @staticmethod
     def _process_row(row, *, force, dry_run, existing_keys):
+        if _cancel_event.is_set():
+            return "cancelled", None
         close_old_connections()
         try:
             raw_history = row["chat_history"]
@@ -184,7 +204,7 @@ class Command(BaseCommand):
                 model_version=LLMService.DEEPSEEK_MODEL,
             )
 
-        analyzed = skipped = failed = 0
+        analyzed = skipped = failed = cancelled = 0
         with ThreadPoolExecutor(max_workers=workers) as executor:
             futures = [
                 executor.submit(
@@ -198,14 +218,16 @@ class Command(BaseCommand):
             ]
             for future in as_completed(futures):
                 status, error = future.result()
-                if status == "analyzed":
+                if status == "cancelled":
+                    cancelled += 1
+                elif status == "analyzed":
                     analyzed += 1
                 elif status == "skipped":
                     skipped += 1
                 else:
                     failed += 1
                     self.stderr.write(error)
-                processed = analyzed + skipped + failed
+                processed = analyzed + skipped + failed + cancelled
                 if run is not None and processed % 10 == 0:
                     (
                         AnalysisRun.objects.using("default")
@@ -219,17 +241,23 @@ class Command(BaseCommand):
                     )
 
         if run is not None:
-            run.status = AnalysisRun.Status.COMPLETED
-            run.completed_at = timezone.now()
-            run.heartbeat_at = run.completed_at
             run.leads_analyzed = analyzed
             run.leads_skipped = skipped
             run.leads_failed = failed
-            run.error_summary = (
-                f"{failed} conversaciones fallidas; pueden reintentarse."
-                if failed
-                else ""
-            )
+            if _cancel_event.is_set():
+                run.status = AnalysisRun.Status.FAILED
+                run.completed_at = timezone.now()
+                run.heartbeat_at = run.completed_at
+                run.error_summary = "Cancelada por el usuario desde el dashboard."
+            else:
+                run.status = AnalysisRun.Status.COMPLETED
+                run.completed_at = timezone.now()
+                run.heartbeat_at = run.completed_at
+                run.error_summary = (
+                    f"{failed} conversaciones fallidas; pueden reintentarse."
+                    if failed
+                    else ""
+                )
             run.save(
                 using="default",
                 update_fields=[
@@ -245,6 +273,7 @@ class Command(BaseCommand):
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"Analizados: {analyzed}; omitidos: {skipped}; fallidos: {failed}."
+                f"Analizados: {analyzed}; omitidos: {skipped}; fallidos: {failed}; "
+                f"cancelados: {cancelled}."
             )
         )

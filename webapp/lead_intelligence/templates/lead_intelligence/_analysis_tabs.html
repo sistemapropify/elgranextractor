@@ -3,4 +3,5 @@
   <a class="pli-tab{% if active_tab == 'cohorts' %} active{% endif %}" href="{% url 'analisis_crm:cohorts' %}?from={{ date_from|date:'Y-m-d' }}&amp;to={{ date_to|date:'Y-m-d' }}">Cohortes</a>
   <a class="pli-tab{% if active_tab == 'attention' %} active{% endif %}" href="{% url 'analisis_crm:attention_quality' %}?from={{ date_from|date:'Y-m-d' }}&amp;to={{ date_to|date:'Y-m-d' }}">Calidad de atención</a>
   <a class="pli-tab{% if active_tab == 'engine' %} active{% endif %}" href="{% url 'analisis_crm:analysis_quality' %}?from={{ date_from|date:'Y-m-d' }}&amp;to={{ date_to|date:'Y-m-d' }}">Calidad del motor IA</a>
+  <a class="pli-tab{% if active_tab == 'properties' %} active{% endif %}" href="{% url 'analisis_crm:property_performance' %}?from={{ date_from|date:'Y-m-d' }}&amp;to={{ date_to|date:'Y-m-d' }}">Propiedades</a>
 </nav>

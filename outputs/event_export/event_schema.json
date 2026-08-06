@@ -1,0 +1,1019 @@
+{
+  "row_count": 734,
+  "columns": [
+    {
+      "position": 1,
+      "name": "id",
+      "type": "bigint",
+      "max_length": null,
+      "nullable": "NO"
+    },
+    {
+      "position": 2,
+      "name": "created_at",
+      "type": "datetimeoffset",
+      "max_length": null,
+      "nullable": "NO"
+    },
+    {
+      "position": 3,
+      "name": "updated_at",
+      "type": "datetimeoffset",
+      "max_length": null,
+      "nullable": "NO"
+    },
+    {
+      "position": 4,
+      "name": "code",
+      "type": "nvarchar",
+      "max_length": 50,
+      "nullable": "YES"
+    },
+    {
+      "position": 5,
+      "name": "title",
+      "type": "nvarchar",
+      "max_length": 255,
+      "nullable": "NO"
+    },
+    {
+      "position": 6,
+      "name": "description",
+      "type": "nvarchar",
+      "max_length": -1,
+      "nullable": "YES"
+    },
+    {
+      "position": 7,
+      "name": "tracing",
+      "type": "nvarchar",
+      "max_length": -1,
+      "nullable": "YES"
+    },
+    {
+      "position": 8,
+      "name": "start_time",
+      "type": "datetimeoffset",
+      "max_length": null,
+      "nullable": "NO"
+    },
+    {
+      "position": 9,
+      "name": "end_time",
+      "type": "datetimeoffset",
+      "max_length": null,
+      "nullable": "YES"
+    },
+    {
+      "position": 10,
+      "name": "status",
+      "type": "nvarchar",
+      "max_length": 20,
+      "nullable": "NO"
+    },
+    {
+      "position": 11,
+      "name": "is_active",
+      "type": "bit",
+      "max_length": null,
+      "nullable": "NO"
+    },
+    {
+      "position": 12,
+      "name": "assigned_agent_id",
+      "type": "bigint",
+      "max_length": null,
+      "nullable": "YES"
+    },
+    {
+      "position": 13,
+      "name": "contact_id",
+      "type": "bigint",
+      "max_length": null,
+      "nullable": "YES"
+    },
+    {
+      "position": 14,
+      "name": "created_by_id",
+      "type": "bigint",
+      "max_length": null,
+      "nullable": "YES"
+    },
+    {
+      "position": 15,
+      "name": "event_type_id",
+      "type": "bigint",
+      "max_length": null,
+      "nullable": "YES"
+    },
+    {
+      "position": 16,
+      "name": "property_id",
+      "type": "bigint",
+      "max_length": null,
+      "nullable": "YES"
+    },
+    {
+      "position": 17,
+      "name": "updated_by_id",
+      "type": "bigint",
+      "max_length": null,
+      "nullable": "YES"
+    },
+    {
+      "position": 18,
+      "name": "lead_id",
+      "type": "bigint",
+      "max_length": null,
+      "nullable": "YES"
+    },
+    {
+      "position": 19,
+      "name": "match_id",
+      "type": "bigint",
+      "max_length": null,
+      "nullable": "YES"
+    },
+    {
+      "position": 20,
+      "name": "proposal_id",
+      "type": "bigint",
+      "max_length": null,
+      "nullable": "YES"
+    },
+    {
+      "position": 21,
+      "name": "completed",
+      "type": "bit",
+      "max_length": null,
+      "nullable": "NO"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "constraint": "event_assigned_agent_id_97426fe6_fk_user_id",
+      "source_column": "assigned_agent_id",
+      "target_table": "user",
+      "target_column": "id"
+    },
+    {
+      "constraint": "event_contact_id_a5841551_fk_contact_id",
+      "source_column": "contact_id",
+      "target_table": "contact",
+      "target_column": "id"
+    },
+    {
+      "constraint": "event_created_by_id_108e2d6d_fk_user_id",
+      "source_column": "created_by_id",
+      "target_table": "user",
+      "target_column": "id"
+    },
+    {
+      "constraint": "event_event_type_id_f521c6ee_fk_event_type_id",
+      "source_column": "event_type_id",
+      "target_table": "event_type",
+      "target_column": "id"
+    },
+    {
+      "constraint": "event_property_id_352bbcea_fk_property_id",
+      "source_column": "property_id",
+      "target_table": "property",
+      "target_column": "id"
+    },
+    {
+      "constraint": "event_updated_by_id_b0eeb4d4_fk_user_id",
+      "source_column": "updated_by_id",
+      "target_table": "user",
+      "target_column": "id"
+    },
+    {
+      "constraint": "event_lead_id_f08b4963_fk_lead_id",
+      "source_column": "lead_id",
+      "target_table": "lead",
+      "target_column": "id"
+    },
+    {
+      "constraint": "event_match_id_ad53a3b6_fk_match_id",
+      "source_column": "match_id",
+      "target_table": "match",
+      "target_column": "id"
+    },
+    {
+      "constraint": "event_proposal_id_70c8c894_fk_proposal_id",
+      "source_column": "proposal_id",
+      "target_table": "proposal",
+      "target_column": "id"
+    }
+  ],
+  "related_columns": {
+    "user": [
+      {
+        "position": 1,
+        "name": "id",
+        "type": "bigint"
+      },
+      {
+        "position": 2,
+        "name": "password",
+        "type": "nvarchar"
+      },
+      {
+        "position": 3,
+        "name": "last_login",
+        "type": "datetimeoffset"
+      },
+      {
+        "position": 4,
+        "name": "is_superuser",
+        "type": "bit"
+      },
+      {
+        "position": 5,
+        "name": "username",
+        "type": "nvarchar"
+      },
+      {
+        "position": 6,
+        "name": "first_name",
+        "type": "nvarchar"
+      },
+      {
+        "position": 7,
+        "name": "last_name",
+        "type": "nvarchar"
+      },
+      {
+        "position": 8,
+        "name": "email",
+        "type": "nvarchar"
+      },
+      {
+        "position": 9,
+        "name": "is_staff",
+        "type": "bit"
+      },
+      {
+        "position": 10,
+        "name": "is_active",
+        "type": "bit"
+      },
+      {
+        "position": 11,
+        "name": "date_joined",
+        "type": "datetimeoffset"
+      },
+      {
+        "position": 12,
+        "name": "external_id",
+        "type": "nvarchar"
+      },
+      {
+        "position": 13,
+        "name": "email_verified",
+        "type": "bit"
+      },
+      {
+        "position": 14,
+        "name": "phone_verified",
+        "type": "bit"
+      },
+      {
+        "position": 15,
+        "name": "role_id",
+        "type": "bigint"
+      },
+      {
+        "position": 16,
+        "name": "status",
+        "type": "nvarchar"
+      }
+    ],
+    "contact": [
+      {
+        "position": 1,
+        "name": "id",
+        "type": "bigint"
+      },
+      {
+        "position": 2,
+        "name": "created_at",
+        "type": "datetimeoffset"
+      },
+      {
+        "position": 3,
+        "name": "updated_at",
+        "type": "datetimeoffset"
+      },
+      {
+        "position": 4,
+        "name": "document_type",
+        "type": "nvarchar"
+      },
+      {
+        "position": 5,
+        "name": "document_number",
+        "type": "nvarchar"
+      },
+      {
+        "position": 6,
+        "name": "birth_date",
+        "type": "date"
+      },
+      {
+        "position": 7,
+        "name": "gender",
+        "type": "nvarchar"
+      },
+      {
+        "position": 8,
+        "name": "phone",
+        "type": "nvarchar"
+      },
+      {
+        "position": 9,
+        "name": "email",
+        "type": "nvarchar"
+      },
+      {
+        "position": 10,
+        "name": "photo",
+        "type": "nvarchar"
+      },
+      {
+        "position": 11,
+        "name": "contact_type",
+        "type": "nvarchar"
+      },
+      {
+        "position": 12,
+        "name": "is_active",
+        "type": "bit"
+      },
+      {
+        "position": 13,
+        "name": "created_by_id",
+        "type": "bigint"
+      },
+      {
+        "position": 14,
+        "name": "updated_by_id",
+        "type": "bigint"
+      },
+      {
+        "position": 15,
+        "name": "first_name",
+        "type": "nvarchar"
+      },
+      {
+        "position": 16,
+        "name": "last_name",
+        "type": "nvarchar"
+      },
+      {
+        "position": 17,
+        "name": "address",
+        "type": "nvarchar"
+      },
+      {
+        "position": 18,
+        "name": "business_name",
+        "type": "nvarchar"
+      },
+      {
+        "position": 19,
+        "name": "person_type",
+        "type": "nvarchar"
+      },
+      {
+        "position": 20,
+        "name": "position",
+        "type": "nvarchar"
+      }
+    ],
+    "event_type": [
+      {
+        "position": 1,
+        "name": "id",
+        "type": "bigint"
+      },
+      {
+        "position": 2,
+        "name": "created_at",
+        "type": "datetimeoffset"
+      },
+      {
+        "position": 3,
+        "name": "updated_at",
+        "type": "datetimeoffset"
+      },
+      {
+        "position": 4,
+        "name": "name",
+        "type": "nvarchar"
+      },
+      {
+        "position": 5,
+        "name": "is_active",
+        "type": "bit"
+      },
+      {
+        "position": 6,
+        "name": "created_by_id",
+        "type": "bigint"
+      },
+      {
+        "position": 7,
+        "name": "updated_by_id",
+        "type": "bigint"
+      }
+    ],
+    "property": [
+      {
+        "position": 1,
+        "name": "id",
+        "type": "bigint"
+      },
+      {
+        "position": 2,
+        "name": "created_at",
+        "type": "datetimeoffset"
+      },
+      {
+        "position": 3,
+        "name": "updated_at",
+        "type": "datetimeoffset"
+      },
+      {
+        "position": 4,
+        "name": "wp_post_id",
+        "type": "int"
+      },
+      {
+        "position": 5,
+        "name": "wp_slug",
+        "type": "nvarchar"
+      },
+      {
+        "position": 6,
+        "name": "wp_last_sync",
+        "type": "datetimeoffset"
+      },
+      {
+        "position": 7,
+        "name": "is_project",
+        "type": "bit"
+      },
+      {
+        "position": 8,
+        "name": "project_name",
+        "type": "nvarchar"
+      },
+      {
+        "position": 9,
+        "name": "uuid",
+        "type": "char"
+      },
+      {
+        "position": 10,
+        "name": "title",
+        "type": "nvarchar"
+      },
+      {
+        "position": 11,
+        "name": "description",
+        "type": "nvarchar"
+      },
+      {
+        "position": 12,
+        "name": "price",
+        "type": "numeric"
+      },
+      {
+        "position": 13,
+        "name": "maintenance_fee",
+        "type": "numeric"
+      },
+      {
+        "position": 14,
+        "name": "map_address",
+        "type": "nvarchar"
+      },
+      {
+        "position": 15,
+        "name": "display_address",
+        "type": "nvarchar"
+      },
+      {
+        "position": 16,
+        "name": "latitude",
+        "type": "numeric"
+      },
+      {
+        "position": 17,
+        "name": "longitude",
+        "type": "numeric"
+      },
+      {
+        "position": 18,
+        "name": "registry_number",
+        "type": "nvarchar"
+      },
+      {
+        "position": 19,
+        "name": "contact_id",
+        "type": "bigint"
+      },
+      {
+        "position": 20,
+        "name": "created_by_id",
+        "type": "bigint"
+      },
+      {
+        "position": 21,
+        "name": "currency_id",
+        "type": "bigint"
+      },
+      {
+        "position": 22,
+        "name": "district_id",
+        "type": "bigint"
+      },
+      {
+        "position": 23,
+        "name": "operation_type_id",
+        "type": "bigint"
+      },
+      {
+        "position": 24,
+        "name": "payment_method_id",
+        "type": "bigint"
+      },
+      {
+        "position": 25,
+        "name": "property_condition_id",
+        "type": "bigint"
+      },
+      {
+        "position": 26,
+        "name": "property_status_id",
+        "type": "bigint"
+      },
+      {
+        "position": 27,
+        "name": "property_subtype_id",
+        "type": "bigint"
+      },
+      {
+        "position": 28,
+        "name": "property_type_id",
+        "type": "bigint"
+      },
+      {
+        "position": 29,
+        "name": "responsible_id",
+        "type": "bigint"
+      },
+      {
+        "position": 30,
+        "name": "updated_by_id",
+        "type": "bigint"
+      },
+      {
+        "position": 31,
+        "name": "urbanization_id",
+        "type": "bigint"
+      },
+      {
+        "position": 32,
+        "name": "code",
+        "type": "nvarchar"
+      },
+      {
+        "position": 33,
+        "name": "parent_project_id",
+        "type": "bigint"
+      },
+      {
+        "position": 34,
+        "name": "is_visible",
+        "type": "bit"
+      },
+      {
+        "position": 35,
+        "name": "video_url",
+        "type": "nvarchar"
+      },
+      {
+        "position": 36,
+        "name": "colisting_status",
+        "type": "nvarchar"
+      },
+      {
+        "position": 37,
+        "name": "typology_id",
+        "type": "bigint"
+      },
+      {
+        "position": 38,
+        "name": "notes",
+        "type": "nvarchar"
+      },
+      {
+        "position": 39,
+        "name": "zonification",
+        "type": "nvarchar"
+      },
+      {
+        "position": 40,
+        "name": "contract_type",
+        "type": "nvarchar"
+      },
+      {
+        "position": 41,
+        "name": "colisting_notes",
+        "type": "nvarchar"
+      },
+      {
+        "position": 42,
+        "name": "is_verified",
+        "type": "bit"
+      },
+      {
+        "position": 43,
+        "name": "address_ia_marketing",
+        "type": "nvarchar"
+      },
+      {
+        "position": 44,
+        "name": "description_ia_marketing",
+        "type": "nvarchar"
+      },
+      {
+        "position": 45,
+        "name": "features_ia_marketing",
+        "type": "nvarchar"
+      },
+      {
+        "position": 46,
+        "name": "title_ia_marketing",
+        "type": "nvarchar"
+      },
+      {
+        "position": 47,
+        "name": "slug",
+        "type": "nvarchar"
+      },
+      {
+        "position": 48,
+        "name": "media_preview_url",
+        "type": "nvarchar"
+      },
+      {
+        "position": 49,
+        "name": "media_preview_title",
+        "type": "nvarchar"
+      },
+      {
+        "position": 50,
+        "name": "media_drive_url",
+        "type": "nvarchar"
+      }
+    ],
+    "lead": [
+      {
+        "position": 1,
+        "name": "id",
+        "type": "bigint"
+      },
+      {
+        "position": 2,
+        "name": "created_at",
+        "type": "datetimeoffset"
+      },
+      {
+        "position": 3,
+        "name": "updated_at",
+        "type": "datetimeoffset"
+      },
+      {
+        "position": 4,
+        "name": "source_detail",
+        "type": "nvarchar"
+      },
+      {
+        "position": 5,
+        "name": "notes",
+        "type": "nvarchar"
+      },
+      {
+        "position": 6,
+        "name": "date_entry",
+        "type": "datetimeoffset"
+      },
+      {
+        "position": 7,
+        "name": "id_chatwoot",
+        "type": "nvarchar"
+      },
+      {
+        "position": 8,
+        "name": "date_last_message",
+        "type": "datetimeoffset"
+      },
+      {
+        "position": 9,
+        "name": "user_last_message",
+        "type": "nvarchar"
+      },
+      {
+        "position": 10,
+        "name": "is_active",
+        "type": "bit"
+      },
+      {
+        "position": 11,
+        "name": "area_id",
+        "type": "bigint"
+      },
+      {
+        "position": 12,
+        "name": "assigned_to_id",
+        "type": "bigint"
+      },
+      {
+        "position": 13,
+        "name": "canal_lead_id",
+        "type": "bigint"
+      },
+      {
+        "position": 14,
+        "name": "contact_id",
+        "type": "bigint"
+      },
+      {
+        "position": 15,
+        "name": "created_by_id",
+        "type": "bigint"
+      },
+      {
+        "position": 16,
+        "name": "lead_status_id",
+        "type": "bigint"
+      },
+      {
+        "position": 17,
+        "name": "updated_by_id",
+        "type": "bigint"
+      },
+      {
+        "position": 18,
+        "name": "username",
+        "type": "nvarchar"
+      },
+      {
+        "position": 19,
+        "name": "budget",
+        "type": "numeric"
+      },
+      {
+        "position": 20,
+        "name": "financing",
+        "type": "nvarchar"
+      },
+      {
+        "position": 21,
+        "name": "meta_ad_id",
+        "type": "nvarchar"
+      },
+      {
+        "position": 22,
+        "name": "meta_campaign_id",
+        "type": "nvarchar"
+      },
+      {
+        "position": 23,
+        "name": "meta_form_id",
+        "type": "nvarchar"
+      },
+      {
+        "position": 24,
+        "name": "meta_lead_id",
+        "type": "nvarchar"
+      },
+      {
+        "position": 25,
+        "name": "score",
+        "type": "smallint"
+      },
+      {
+        "position": 26,
+        "name": "source",
+        "type": "nvarchar"
+      },
+      {
+        "position": 27,
+        "name": "temperature",
+        "type": "nvarchar"
+      },
+      {
+        "position": 28,
+        "name": "timeline",
+        "type": "nvarchar"
+      },
+      {
+        "position": 29,
+        "name": "chatwoot_inbox_id",
+        "type": "nvarchar"
+      },
+      {
+        "position": 30,
+        "name": "chatwoot_label",
+        "type": "nvarchar"
+      },
+      {
+        "position": 31,
+        "name": "chatwoot_labels",
+        "type": "nvarchar"
+      },
+      {
+        "position": 32,
+        "name": "last_message_text",
+        "type": "nvarchar"
+      },
+      {
+        "position": 33,
+        "name": "unread_count",
+        "type": "int"
+      },
+      {
+        "position": 34,
+        "name": "ctwa_clid",
+        "type": "nvarchar"
+      },
+      {
+        "position": 35,
+        "name": "meta_campaign_ref_id",
+        "type": "bigint"
+      },
+      {
+        "position": 36,
+        "name": "meta_ad_ref_id",
+        "type": "bigint"
+      },
+      {
+        "position": 37,
+        "name": "chat_history",
+        "type": "nvarchar"
+      }
+    ],
+    "match": [
+      {
+        "position": 1,
+        "name": "id",
+        "type": "bigint"
+      },
+      {
+        "position": 2,
+        "name": "created_at",
+        "type": "datetimeoffset"
+      },
+      {
+        "position": 3,
+        "name": "updated_at",
+        "type": "datetimeoffset"
+      },
+      {
+        "position": 4,
+        "name": "match_status",
+        "type": "nvarchar"
+      },
+      {
+        "position": 5,
+        "name": "message",
+        "type": "nvarchar"
+      },
+      {
+        "position": 6,
+        "name": "created_by_id",
+        "type": "bigint"
+      },
+      {
+        "position": 7,
+        "name": "lead_id",
+        "type": "bigint"
+      },
+      {
+        "position": 8,
+        "name": "property_id",
+        "type": "bigint"
+      },
+      {
+        "position": 9,
+        "name": "requested_by_user_id",
+        "type": "bigint"
+      },
+      {
+        "position": 10,
+        "name": "updated_by_id",
+        "type": "bigint"
+      },
+      {
+        "position": 11,
+        "name": "requirement_id",
+        "type": "bigint"
+      },
+      {
+        "position": 12,
+        "name": "requirementmatch_id",
+        "type": "bigint"
+      }
+    ],
+    "proposal": [
+      {
+        "position": 1,
+        "name": "id",
+        "type": "bigint"
+      },
+      {
+        "position": 2,
+        "name": "created_at",
+        "type": "datetimeoffset"
+      },
+      {
+        "position": 3,
+        "name": "updated_at",
+        "type": "datetimeoffset"
+      },
+      {
+        "position": 4,
+        "name": "responded_at",
+        "type": "datetimeoffset"
+      },
+      {
+        "position": 5,
+        "name": "amount",
+        "type": "numeric"
+      },
+      {
+        "position": 6,
+        "name": "status",
+        "type": "nvarchar"
+      },
+      {
+        "position": 7,
+        "name": "message",
+        "type": "nvarchar"
+      },
+      {
+        "position": 8,
+        "name": "response_message",
+        "type": "nvarchar"
+      },
+      {
+        "position": 9,
+        "name": "created_by_id",
+        "type": "bigint"
+      },
+      {
+        "position": 10,
+        "name": "currency_id",
+        "type": "bigint"
+      },
+      {
+        "position": 11,
+        "name": "lead_id",
+        "type": "bigint"
+      },
+      {
+        "position": 12,
+        "name": "payment_method_id",
+        "type": "bigint"
+      },
+      {
+        "position": 13,
+        "name": "property_id",
+        "type": "bigint"
+      },
+      {
+        "position": 14,
+        "name": "requested_by_user_id",
+        "type": "bigint"
+      },
+      {
+        "position": 15,
+        "name": "responded_by_user_id",
+        "type": "bigint"
+      },
+      {
+        "position": 16,
+        "name": "updated_by_id",
+        "type": "bigint"
+      },
+      {
+        "position": 17,
+        "name": "requirement_match_id",
+        "type": "bigint"
+      }
+    ]
+  }
+}

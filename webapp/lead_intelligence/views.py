@@ -5,16 +5,21 @@ from django.contrib import messages
 from django.core.paginator import Paginator
 from django.http import Http404, HttpResponseForbidden, JsonResponse
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_GET, require_POST
 
 from intelligence.permissions import get_user_profile
 
+from .contextual_analysis import ANALYSIS_VERSION
+from .models import AnalysisRun
+from .property_dashboard import get_property_dashboard
 from .services import (
     LEAD_RESULT_STAGES,
     get_analysis_quality_dashboard,
     get_attention_quality_dashboard,
+    get_hourly_agent_matrix,
     get_lead_conversation,
     get_lead_results,
     get_management_dashboard,
@@ -33,6 +38,42 @@ def _parameters(request):
     except ValueError:
         cohort_date = None
     return date_from, date_to, cohort_date
+
+
+RUN_STALE_MINUTES = 10
+
+
+def _stale_cutoff():
+    return timezone.now() - timedelta(minutes=RUN_STALE_MINUTES)
+
+
+def _has_fresh_running_run(*, clean_stale=False):
+    """True si hay una ejecución en curso con latido reciente.
+
+    Con ``clean_stale=True`` además marca como fallidas las ejecuciones cuyo
+    último latido es antiguo (quedaron en ``running`` por una interrupción,
+    p. ej. reinicio del servidor o timeout de la petición), para que el botón
+    "Ejecutar evaluación IA" no quede bloqueado para siempre.
+    """
+    qs = AnalysisRun.objects.using("default").filter(
+        status=AnalysisRun.Status.RUNNING,
+        rules_version=ANALYSIS_VERSION,
+    )
+    cutoff = _stale_cutoff()
+    if clean_stale:
+        stale_ids = list(
+            qs.filter(heartbeat_at__lt=cutoff).values_list("pk", flat=True)
+        )
+        if stale_ids:
+            AnalysisRun.objects.using("default").filter(pk__in=stale_ids).update(
+                status=AnalysisRun.Status.FAILED,
+                completed_at=timezone.now(),
+                error_summary=(
+                    "Ejecución interrumpida (latido vencido); marcada como "
+                    "fallida para permitir relanzar."
+                ),
+            )
+    return qs.filter(heartbeat_at__gte=cutoff).exists()
 
 
 def management_access_required(view_func):
@@ -80,6 +121,9 @@ def cohorts_dashboard(request):
     if cohort_date > today:
         cohort_date = today
     context = get_management_dashboard(cohort_date, cohort_date, cohort_date)
+    context["hourly_matrix"] = get_hourly_agent_matrix(
+        cohort_date, cohort_date
+    )
     context["previous_day"] = cohort_date - timedelta(days=1)
     context["next_day"] = (
         cohort_date + timedelta(days=1) if cohort_date < today else None
@@ -111,11 +155,34 @@ def attention_quality_dashboard(request):
 def analysis_quality_dashboard(request):
     date_from, date_to, _ = _parameters(request)
     context = get_analysis_quality_dashboard(date_from, date_to)
+    context["analysis_running"] = _has_fresh_running_run()
     context["title"] = "Calidad del motor IA"
     context["active_tab"] = "engine"
     return render(
         request,
         "lead_intelligence/analysis_quality_dashboard.html",
+        context,
+    )
+
+
+@management_access_required
+def property_performance_dashboard(request):
+    date_from, date_to, _ = _parameters(request)
+    context = get_property_dashboard(date_from, date_to, request.GET)
+    page_obj = Paginator(context.pop("cards"), 18).get_page(request.GET.get("page"))
+    query = request.GET.copy()
+    query.pop("page", None)
+    context.update(
+        {
+            "page_obj": page_obj,
+            "query_without_page": query.urlencode(),
+            "title": "Rendimiento por propiedades",
+            "active_tab": "properties",
+        }
+    )
+    return render(
+        request,
+        "lead_intelligence/property_performance_dashboard.html",
         context,
     )
 
@@ -152,6 +219,128 @@ def conversation_review(request):
     ):
         next_url = "/analisis-crm/calidad-motor/"
     return redirect(next_url)
+
+
+@management_access_required
+@require_POST
+def run_analysis(request):
+    """Dispara el análisis IA (DeepSeek) de conversaciones de leads.
+
+    Con un broker Celery real la ejecución se encola en segundo plano; con el
+    broker memory:// actual se ejecuta el comando de forma síncrona para que el
+    botón funcione siempre. El comando es incremental y registra su progreso en
+    ``AnalysisRun`` (modelo ``lead_intelligence.AnalysisRun``).
+    """
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    from colas.celery import app as celery_app
+
+    from .tasks import analizar_conversaciones_lead
+    from .management.commands.analyze_lead_conversations import reset_cancel
+
+    date_from, date_to, _ = _parameters(request)
+    force = request.POST.get("force") == "1"
+    period = f"{date_from.isoformat()} → {date_to.isoformat()}"
+    back_url = (
+        f"{reverse('analisis_crm:analysis_quality')}"
+        f"?from={date_from.isoformat()}&to={date_to.isoformat()}"
+    )
+
+    already_running = _has_fresh_running_run(clean_stale=True)
+    if already_running:
+        messages.error(
+            request,
+            "Ya hay una ejecución del analizador en curso. "
+            "Usa “Detener ejecución” o espera a que termine antes de lanzar otra.",
+        )
+        return redirect(back_url)
+
+    # Limpiar cualquier señal de cancelación previa antes de iniciar.
+    reset_cancel()
+
+    broker = str(getattr(celery_app.conf, "broker_url", "") or "")
+    async_capable = not broker.startswith("memory")
+    if async_capable:
+        analizar_conversaciones_lead.delay(
+            date_from=date_from.isoformat(),
+            date_to=date_to.isoformat(),
+            force=force,
+        )
+        messages.success(
+            request,
+            f"Análisis IA encolado para el periodo {period}. "
+            "Consulta el progreso en “Ejecuciones del analizador”.",
+        )
+    else:
+        # Broker memory:// (sin worker distribuible): ejecutamos el análisis en
+        # un hilo en segundo plano para que el botón responda al instante y el
+        # progreso se vea en "Ejecuciones del analizador" (latido cada 10 leads).
+        from threading import Thread
+
+        def _ejecutar_analisis():
+            from django.db import close_old_connections
+
+            close_old_connections()
+            try:
+                buf = StringIO()
+                call_command(
+                    "analyze_lead_conversations",
+                    date_from=date_from.isoformat(),
+                    date_to=date_to.isoformat(),
+                    force=force,
+                    stdout=buf,
+                    stderr=buf,
+                )
+            finally:
+                close_old_connections()
+
+        Thread(target=_ejecutar_analisis, daemon=True).start()
+        messages.success(
+            request,
+            f"Análisis IA iniciado en segundo plano para el periodo {period}. "
+            "Consulta el progreso en “Ejecuciones del analizador”.",
+        )
+
+    return redirect(back_url)
+
+
+@management_access_required
+@require_POST
+def cancel_analysis(request):
+    """Detiene cooperativamente la ejecución de análisis en curso.
+
+    Marca las corridas activas como fallidas y activa la señal de cancelación
+    para que el comando deje de llamar a DeepSeek (corta el gasto de tokens).
+    """
+    from .management.commands.analyze_lead_conversations import request_cancel
+
+    request_cancel()
+    updated = AnalysisRun.objects.using("default").filter(
+        status=AnalysisRun.Status.RUNNING,
+        rules_version=ANALYSIS_VERSION,
+    ).update(
+        status=AnalysisRun.Status.FAILED,
+        completed_at=timezone.now(),
+        error_summary="Cancelada por el usuario desde el dashboard.",
+    )
+    messages.success(
+        request,
+        f"Ejecución en curso detenida ({updated} corrida marcada como cancelada). "
+        "El botón ya puede volver a ejecutarse.",
+    )
+    date_from_raw = request.POST.get("from", "").strip()
+    date_to_raw = request.POST.get("to", "").strip()
+    back_url = reverse("analisis_crm:analysis_quality")
+    try:
+        date_from = date.fromisoformat(date_from_raw) if date_from_raw else None
+        date_to = date.fromisoformat(date_to_raw) if date_to_raw else None
+    except ValueError:
+        date_from = date_to = None
+    if date_from and date_to:
+        back_url += f"?from={date_from.isoformat()}&to={date_to.isoformat()}"
+    return redirect(back_url)
 
 
 @management_access_required

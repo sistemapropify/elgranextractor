@@ -1,6 +1,6 @@
 import json
 from collections import Counter
-from datetime import date, timedelta, timezone as datetime_timezone
+from datetime import date, datetime, timedelta, timezone as datetime_timezone
 
 from django.db import connections
 from django.utils import timezone
@@ -18,12 +18,17 @@ from .attention_quality import (
     validate_initial_request_items,
 )
 from .contextual_analysis import ANALYSIS_VERSION, conversation_hash
-from .conversation_analysis import analyze_chat_history, milestone_within_days
+from .conversation_analysis import (
+    LIMA_TIMEZONE,
+    analyze_chat_history,
+    milestone_within_days,
+)
 from .models import (
     AnalysisRun,
     LeadConversationAssessment,
     LeadConversationReview,
 )
+from .visit_resolution import apply_visit_resolutions
 
 
 LEAD_RESULT_STAGES = {
@@ -429,25 +434,105 @@ def _lead_result_rows(date_from, date_to, lead_id=None):
                     'Sin asignar'
                 ) AS agent_name,
                 COALESCE(ls.name, 'Sin estado') AS status_name,
-                COALESCE(cl.name, 'Sin canal') AS channel_name,
-                visit.first_visit_at
+                COALESCE(cl.name, 'Sin canal') AS channel_name
             FROM dbo.lead l
             LEFT JOIN dbo.contact c ON c.id = l.contact_id
             LEFT JOIN dbo.[user] u ON u.id = l.assigned_to_id
             LEFT JOIN dbo.lead_status ls ON ls.id = l.lead_status_id
             LEFT JOIN dbo.canal_lead cl ON cl.id = l.canal_lead_id
-            OUTER APPLY (
-                SELECT MIN(e.created_at) AS first_visit_at
-                FROM dbo.[event] e
-                INNER JOIN dbo.event_type et ON et.id = e.event_type_id
-                WHERE e.lead_id = l.id AND LOWER(et.name) = 'visita'
-            ) visit
             WHERE {" AND ".join(where)}
             ORDER BY COALESCE(l.date_entry, l.created_at) DESC, l.id DESC
             """,
             params,
         )
-        return _dict_rows(cursor)
+        rows = _dict_rows(cursor)
+    return apply_visit_resolutions(rows)
+
+
+# Horario de atención de negocio: 09:00 a 18:00 (hora de Perú). La hora 18
+# (hasta las 18:59) se considera dentro del horario; ajustar estos límites
+# si cambia la política de atención.
+WORKING_HOURS_START = 9
+WORKING_HOURS_END = 18
+
+
+def _hour_of_day(value):
+    """Hora (0-23) en America/Lima del timestamp de ingreso de un lead."""
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        try:
+            parsed = datetime.fromisoformat(str(value))
+        except (TypeError, ValueError):
+            return None
+    if parsed is None:
+        return None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        parsed = parsed.replace(tzinfo=datetime_timezone.utc)
+    return parsed.astimezone(LIMA_TIMEZONE).hour
+
+
+def get_hourly_agent_matrix(date_from, date_to):
+    """Matriz de distribución horaria (0-23) de ingresos por agente asignado.
+
+    Devuelve, para el periodo, la cantidad de leads que ingresaron en cada hora
+    (America/Lima) descompuesta por el agente asignado al lead, con totales por
+    agente, por hora y general, más el resumen dentro/fuera del horario de
+    atención (09:00-18:00).
+    """
+    rows = _lead_result_rows(date_from, date_to)
+    agent_cells = {}
+    hour_totals = [0] * 24
+    grand_total = 0
+    working = 0
+    outside = 0
+    for row in rows:
+        hour = _hour_of_day(row.get("entered_at"))
+        if hour is None:
+            continue
+        agent = row.get("agent_name") or "Sin asignar"
+        cell = agent_cells.setdefault(agent, {})
+        cell[hour] = cell.get(hour, 0) + 1
+        hour_totals[hour] += 1
+        grand_total += 1
+        if WORKING_HOURS_START <= hour <= WORKING_HOURS_END:
+            working += 1
+        else:
+            outside += 1
+
+    def _is_working(hour):
+        return WORKING_HOURS_START <= hour <= WORKING_HOURS_END
+
+    agent_rows = [
+        {
+            "agent": agent,
+            "cells": [
+                {
+                    "count": agent_cells[agent].get(hour, 0),
+                    "working": _is_working(hour),
+                }
+                for hour in range(24)
+            ],
+            "total": sum(agent_cells[agent].get(hour, 0) for hour in range(24)),
+        }
+        for agent in sorted(agent_cells)
+    ]
+    return {
+        "hours": [
+            {
+                "label": f"{hour:02d}:00",
+                "working": _is_working(hour),
+                "total": hour_totals[hour],
+            }
+            for hour in range(24)
+        ],
+        "agent_rows": agent_rows,
+        "grand_total": grand_total,
+        "working": working,
+        "outside": outside,
+        "working_pct": _percentage(working, grand_total),
+        "outside_pct": _percentage(outside, grand_total),
+    }
 
 
 def _assessment_map(rows):
@@ -1451,7 +1536,6 @@ def get_management_dashboard(
                     AS date
                 ) AS cohort_date,
                 l.chat_history,
-                visit.first_visit_at,
                 l.assigned_to_id AS agent_id,
                 COALESCE(
                     NULLIF(LTRIM(RTRIM(CONCAT(u.first_name, ' ', u.last_name))), ''),
@@ -1460,12 +1544,6 @@ def get_management_dashboard(
                 ) AS agent_name
             FROM dbo.lead l
             LEFT JOIN dbo.[user] u ON u.id = l.assigned_to_id
-            OUTER APPLY (
-                SELECT MIN(e.created_at) AS first_visit_at
-                FROM dbo.[event] e
-                INNER JOIN dbo.event_type et ON et.id = e.event_type_id
-                WHERE e.lead_id = l.id AND LOWER(et.name) = 'visita'
-            ) visit
             WHERE CAST(
                 SWITCHOFFSET(COALESCE(l.date_entry, l.created_at), '-05:00')
                 AS date
@@ -1520,6 +1598,7 @@ def get_management_dashboard(
         )
         data_quality.update(_one(cursor))
 
+    conversation_rows = apply_visit_resolutions(conversation_rows)
     assessments = _assessment_map(conversation_rows)
     assignment_timelines = _load_assignment_timelines(conversation_rows)
     conversation_metrics = []
