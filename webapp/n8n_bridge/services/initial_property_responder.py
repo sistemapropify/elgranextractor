@@ -69,14 +69,8 @@ def _response_from_record(record, duplicate=False):
     }
 
 
-def process_initial_message(payload, *, ignore_schedule=False):
-    """Procesa el primer mensaje de un hilo con lógica real one-shot.
-
-    `ignore_schedule` solo es usado por el emulador de pruebas para saltar la
-    ventana horaria (por defecto False → producción intacta). Todo lo demás
-    (idempotencia, one-shot, guardias, persistencia y memoria episódica) es
-    idéntico al endpoint real.
-    """
+def process_initial_message(payload):
+    """Procesa el primer mensaje de un hilo con lógica real one-shot."""
     started = time.monotonic()
     message_id = str(payload.get("message_id") or "").strip()
     text = str(payload.get("text") or "").strip()
@@ -107,7 +101,7 @@ def process_initial_message(payload, *, ignore_schedule=False):
         return _persist_ignore(message_id, thread_id, digest, normalized_phone, text, config, schedule, "HUMAN_TAKEOVER", started, contact_name=contact_name)
     if not config.enabled:
         return _persist_ignore(message_id, thread_id, digest, normalized_phone, text, config, schedule, "BOT_DISABLED", started, contact_name=contact_name)
-    if not schedule["inside"] and not ignore_schedule:
+    if not schedule["inside"]:
         return _persist_ignore(message_id, thread_id, digest, normalized_phone, text, config, schedule, "OUTSIDE_SCHEDULE", started, contact_name=contact_name)
     if config.require_external_conversation_id and not external_id:
         return _persist_ignore(message_id, thread_id, digest, normalized_phone, text, config, schedule, "MISSING_CONVERSATION_ID", started, contact_name=contact_name)

@@ -253,9 +253,8 @@ def property_bot_emulator_reply(request):
     (`process_initial_message`): idempotencia, one-shot, guardias, persistencia
     en `PropertyBotInitialResponse` y memoria episódica.
 
-    Recibe `phone` y `name` para replicar el payload real de n8n. Única
-    excepción: se ignora el límite de horario (ignore_schedule) para poder
-    probar a cualquier hora; todo lo demás es 100% la lógica de producción.
+    El emulador NO tiene reglas propias: recibe `phone` y `name` y delega el
+    100% de la decisión a la lógica de producción (sin ningún flag adicional).
     """
     import json
     from uuid import uuid4
@@ -306,7 +305,7 @@ def property_bot_emulator_reply(request):
                 ch for ch in str(payload.get("phone") or "") if ch.isdigit()
             )
             payload["external_conversation_id"] = f"emulador:{digits}"
-        return JsonResponse(process_initial_message(payload, ignore_schedule=True))
+        return JsonResponse(process_initial_message(payload))
 
     text = str(request.POST.get("message") or "").strip()
     name = str(request.POST.get("name") or "").strip()
@@ -362,5 +361,5 @@ def property_bot_emulator_reply(request):
         "human_takeover": human_takeover,
     }
     return JsonResponse(
-        process_initial_message(payload, ignore_schedule=True)
+        process_initial_message(payload)
     )
