@@ -611,6 +611,9 @@ def _prepare_lead_result(row, assessment=None, assignment_timeline=None):
     analysis = _apply_contextual_assessment(
         analyze_chat_history(row.pop("chat_history")), assessment
     )
+    # El cursor de pyodbc devuelve entered_at como naive (UTC). Se marca como
+    # aware-UTC para que el filtro |localtime lo convierta a hora de Perú.
+    row["entered_at"] = _utc_datetime(row.get("entered_at"))
     first_name = (row.pop("first_name") or "").strip()
     last_name = (row.pop("last_name") or "").strip()
     business_name = (row.pop("business_name") or "").strip()
