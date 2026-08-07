@@ -185,7 +185,7 @@
 </main>
 <script>
 (function(){
-  var url = "{% url 'analisis_crm:analysis_progress' %}";
+  var url = "{% url 'analisis_crm:analysis_progress' %}?from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}";
   var terminal = document.getElementById('runTerminal');
   var lastCount = 0;
   var lastRunId = null;

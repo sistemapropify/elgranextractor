@@ -16,6 +16,8 @@ class AnalysisRun(models.Model):
     run_type = models.CharField(max_length=20, choices=RunType.choices)
     status = models.CharField(max_length=20, choices=Status.choices)
     started_at = models.DateTimeField()
+    date_from = models.DateField(null=True, blank=True)
+    date_to = models.DateField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
     heartbeat_at = models.DateTimeField(null=True, blank=True)
     leads_total = models.PositiveIntegerField(default=0)

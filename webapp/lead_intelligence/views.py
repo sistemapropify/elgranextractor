@@ -172,17 +172,44 @@ def analysis_progress_api(request):
 
     from lead_intelligence.models import AnalysisRun, AnalysisRunStep
 
+    from datetime import date as date_cls
+
     run_id = request.GET.get("run_id", "").strip()
+    from_raw = request.GET.get("from", "").strip()
+    to_raw = request.GET.get("to", "").strip()
+
+    def _parse_period(value):
+        try:
+            return date_cls.fromisoformat(value)
+        except (TypeError, ValueError):
+            return None
+
+    period_from = _parse_period(from_raw)
+    period_to = _parse_period(to_raw)
+
     if run_id:
         run = AnalysisRun.objects.using("default").filter(pk=run_id).first()
     else:
+        # 1) Ejecución en curso (siempre visible en vivo).
         run = (
             AnalysisRun.objects.using("default")
             .filter(status=AnalysisRun.Status.RUNNING)
             .order_by("-started_at")
             .first()
         )
-        if run is None:
+        # 2) Sin ejecución en curso: run del periodo filtrado (coherente con KPIs).
+        if run is None and period_from and period_to:
+            run = (
+                AnalysisRun.objects.using("default")
+                .filter(
+                    date_from=period_from,
+                    date_to=period_to,
+                )
+                .order_by("-started_at")
+                .first()
+            )
+        # 3) Sin periodo filtrado: último run global.
+        if run is None and not (period_from and period_to):
             run = (
                 AnalysisRun.objects.using("default")
                 .order_by("-started_at")

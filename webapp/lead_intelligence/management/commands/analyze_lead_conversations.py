@@ -153,6 +153,8 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         lead_id = options["lead_id"]
+        date_from = None
+        date_to = None
         if lead_id:
             rows = _lead_result_rows(None, None, lead_id=lead_id)
         else:
@@ -204,6 +206,8 @@ class Command(BaseCommand):
                 started_at=interrupted_at,
                 heartbeat_at=interrupted_at,
                 leads_total=len(rows),
+                date_from=date_from,
+                date_to=date_to,
                 rules_version=ANALYSIS_VERSION,
                 model_version=LLMService.DEEPSEEK_MODEL,
             )
