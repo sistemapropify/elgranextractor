@@ -29,11 +29,18 @@ from .services import (
 
 
 def _parameters(request):
-    date_from, date_to = normalized_period(
-        request.GET.get("from"), request.GET.get("to")
-    )
+    # El botón "Ejecutar evaluación IA" hace POST con las fechas en el body;
+    # los GET solo llevan fechas en la querystring. Se lee POST primero y se
+    # cae a GET, para que las fechas filtradas siempre se respeten.
+    date_from_raw = request.POST.get("from") or request.GET.get("from")
+    date_to_raw = request.POST.get("to") or request.GET.get("to")
+    date_from, date_to = normalized_period(date_from_raw, date_to_raw)
     try:
-        cohort_raw = request.GET.get("cohort", "").strip()
+        cohort_raw = (
+            request.POST.get("cohort")
+            or request.GET.get("cohort")
+            or ""
+        ).strip()
         cohort_date = date.fromisoformat(cohort_raw) if cohort_raw else None
     except ValueError:
         cohort_date = None
