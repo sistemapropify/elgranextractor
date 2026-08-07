@@ -205,6 +205,19 @@ def analyze_chat_history(raw_history) -> dict:
             }
         )
 
+    # La ingestión externa (Chatwoot/n8n) a veces graba el mismo mensaje dos
+    # veces en chat_history (mismo emisor, texto y timestamp). Se deduplican
+    # para que la cronología de los leads y las métricas no cuenten duplicados.
+    seen = set()
+    deduped = []
+    for item in messages:
+        key = (item["sender"], item["text"], item["timestamp"])
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+    messages = deduped
+
     messages.sort(key=lambda item: (item["timestamp"], item["position"]))
 
     lead_messages = [item for item in messages if item["sender"] == "lead"]
