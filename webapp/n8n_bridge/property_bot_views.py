@@ -79,6 +79,30 @@ def _client_ip(request):
 def property_bot_dashboard(request):
     config = get_bot_configuration()
     if request.method == "POST":
+        section = request.POST.get("section", "schedule")
+
+        # Edición de plantillas de mensaje (independiente del horario).
+        if section == "templates":
+            from n8n_bridge.services.initial_property_renderer import TEMPLATES
+
+            before = dict(config.message_templates or {})
+            new_templates = {}
+            for ptype, default in TEMPLATES.items():
+                raw = request.POST.get(f"message_templates_{ptype}")
+                new_templates[ptype] = (raw or default).strip()
+            config.message_templates = new_templates
+            config.updated_by = _request_user(request)
+            config.save()
+            PropertyBotControlAudit.objects.create(
+                action="templates_update",
+                previous_value=before,
+                new_value=dict(new_templates),
+                actor=_request_user(request),
+                ip_address=_client_ip(request),
+            )
+            messages.success(request, "Plantillas de mensaje actualizadas.")
+            return redirect("property-bot-dashboard:dashboard")
+
         before = {
             "enabled": config.enabled,
             "start": config.start_time.strftime("%H:%M"),

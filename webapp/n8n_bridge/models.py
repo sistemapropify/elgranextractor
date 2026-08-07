@@ -9,6 +9,12 @@ from django.db import models
 def default_property_bot_types():
     return ["casa", "departamento", "terreno", "local_comercial"]
 
+
+def default_message_templates():
+    from n8n_bridge.services.initial_property_renderer import TEMPLATES
+    return dict(TEMPLATES)
+
+
 class PropertyBotConfiguration(models.Model):
     """Configuración operacional singleton del respondedor inicial."""
 
@@ -21,6 +27,7 @@ class PropertyBotConfiguration(models.Model):
     enabled_property_types = models.JSONField(
         default=default_property_bot_types
     )
+    message_templates = models.JSONField(default=default_message_templates)
     updated_at = models.DateTimeField(auto_now=True)
     updated_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,

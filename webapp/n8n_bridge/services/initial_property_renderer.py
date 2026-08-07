@@ -36,10 +36,17 @@ def format_feature(feature):
     raise ValueError(f"Característica no permitida: {field}")
 
 
-def render_initial_response(data):
+def render_initial_response(data, config=None):
     values = {"location": data["location"], "price": format_price(data["price"])}
     if data["property_type"] == "terreno":
         values["area"] = format_feature(data["features"][0])
     else:
         values["features"] = " y ".join(format_feature(item) for item in data["features"][:2])
-    return TEMPLATES[data["property_type"]].format(**values)
+
+    # Plantillas personalizadas (editables desde el dashboard) si existen.
+    templates = TEMPLATES
+    if config is not None:
+        custom = getattr(config, "message_templates", None)
+        if isinstance(custom, dict) and custom.get(data["property_type"]):
+            templates = custom
+    return templates[data["property_type"]].format(**values)

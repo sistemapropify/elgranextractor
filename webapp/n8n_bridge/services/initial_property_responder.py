@@ -131,7 +131,7 @@ def process_initial_message(payload):
     valid, reason = validate_property_payload(data)
     if not valid:
         return _persist_ignore(message_id, thread_id, digest, normalized_phone, text, config, schedule, reason, started, property_code=code, evidence=data, contact_name=contact_name)
-    reply = render_initial_response(data)
+    reply = render_initial_response(data, config)
     if not validate_rendered_response(reply, data):
         return _persist_ignore(message_id, thread_id, digest, normalized_phone, text, config, schedule, "VALIDATION_FAILED", started, property_code=code, evidence=data, contact_name=contact_name)
 

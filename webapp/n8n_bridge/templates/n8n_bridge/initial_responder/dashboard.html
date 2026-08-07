@@ -13,6 +13,14 @@
   .metric-grid article.kpi-total{background:#0f4c3a;border-color:#0f4c3a;color:#fff}
   .metric-grid article.kpi-total span,.metric-grid article.kpi-total small{color:#cfe9df}
   .lead-name{font-size:11px;color:#6b7d77;margin-top:2px}
+  .templates-form{display:grid;gap:14px;margin-top:14px}
+  .template-row{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+  .template-row label{display:grid;gap:6px;font-size:13px}
+  .template-row small{color:#6d8079;font-weight:400}
+  .template-row textarea{width:100%;padding:10px;border:1px solid #a8c1b8;border-radius:8px;font-family:inherit;font-size:13px;line-height:1.5;resize:vertical}
+  .template-help{background:#fdf6e3;border:1px solid #e6d3a3;border-radius:8px;padding:10px 12px;font-size:12px;color:#7a5c13}
+  .templates-form button{border:0;border-radius:8px;background:#135f4b;color:white;padding:11px 16px;font-weight:700;justify-self:start}
+  code{background:#edf2f0;border-radius:4px;padding:1px 5px;font-size:12px}
 </style>
 <div class="bot-shell">
   <header class="bot-header">
@@ -27,6 +35,21 @@
       <label>Fin<input type="time" name="end_time" value="{{ config.end_time|time:'H:i' }}" required></label>
       <div class="clock"><small>Hora en {{ schedule.timezone }}</small><strong>{{ schedule.local_now|date:'H:i:s' }}</strong></div>
       <button type="submit">Guardar configuración</button>
+    </form>
+  </section>
+
+  <section class="control-card">
+    <div class="section-title"><div><h2>Plantillas de mensaje</h2><p>Mensaje que envía el bot cuando responde una propiedad. Los marcadores se reemplazan con datos reales.</p></div></div>
+    <form method="post" class="templates-form">{% csrf_token %}
+      <input type="hidden" name="section" value="templates">
+      <div class="template-row">
+        <label>Casa<small>Marcadores: <code>{location}</code> · <code>{features}</code> · <code>{price}</code></small><textarea name="message_templates_casa" rows="6">{{ config.message_templates.casa }}</textarea></label>
+        <label>Departamento<small>Marcadores: <code>{location}</code> · <code>{features}</code> · <code>{price}</code></small><textarea name="message_templates_departamento" rows="6">{{ config.message_templates.departamento }}</textarea></label>
+        <label>Terreno<small>Marcadores: <code>{location}</code> · <code>{area}</code> · <code>{price}</code></small><textarea name="message_templates_terreno" rows="6">{{ config.message_templates.terreno }}</textarea></label>
+        <label>Local comercial<small>Marcadores: <code>{location}</code> · <code>{features}</code> · <code>{price}</code></small><textarea name="message_templates_local_comercial" rows="6">{{ config.message_templates.local_comercial }}</textarea></label>
+      </div>
+      <p class="template-help">⚠️ Requisitos para que el mensaje no se rechace automáticamente: debe contener <strong>«¡Gracias por escribirnos!»</strong> una sola vez, el texto <strong>«Apenas uno de nuestros asesores esté disponible»</strong> y el marcador <strong>{location}</strong>.</p>
+      <button type="submit">Guardar plantillas</button>
     </form>
   </section>
 
