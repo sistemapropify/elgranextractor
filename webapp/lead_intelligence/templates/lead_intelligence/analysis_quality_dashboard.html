@@ -1,7 +1,22 @@
 {% extends "base.html" %}
 {% load tz %}
 {% block title %}Calidad del motor IA | Prometeo{% endblock %}
-{% block extra_css %}<style>{% include "lead_intelligence/_dashboard_styles.html" %}</style>{% endblock %}
+{% block extra_css %}<style>{% include "lead_intelligence/_dashboard_styles.html" %}</style><style>
+  .pli-run-terminal{margin-top:16px;border-top:1px solid var(--pli-line);padding-top:14px}
+  .pli-run-counters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+  .pli-run-counter{background:var(--pli-soft);border:1px solid var(--pli-line);border-radius:10px;padding:8px 14px;min-width:96px}
+  .pli-run-counter small{display:block;font-size:11px;color:var(--pli-muted)}
+  .pli-run-counter strong{font-size:20px;color:var(--pli-ink)}
+  .pli-run-counter.ok strong{color:#1a7f37}
+  .pli-run-counter.skip strong{color:#9a6700}
+  .pli-run-counter.bad strong{color:#cf222e}
+  .pli-run-track{height:8px;border-radius:999px;background:#e6ebf2;overflow:hidden;margin-bottom:10px}
+  .pli-run-fill{height:100%;background:linear-gradient(90deg,#3157d5,#1a7f37);border-radius:999px;transition:width .6s ease}
+  .pli-terminal{background:#0d1117;color:#c9d1d9;border:1px solid #30363d;border-radius:10px;padding:12px;font-family:Consolas,Menlo,monospace;font-size:12.5px;line-height:1.55;height:280px;overflow:auto;white-space:pre-wrap;word-break:break-word;margin:0}
+  .pli-terminal .pli-term-dim{color:#6e7681}
+  .pli-terminal .pli-term-ok{color:#3fb950}
+  .pli-terminal .pli-term-bad{color:#f85149}
+</style>{% endblock %}
 {% block content %}
 <main class="pli-page">
   <header class="pli-head">
@@ -39,10 +54,23 @@
       {% endif %}
     </form>
     {% if analysis_running %}
-      <div class="pli-note pli-note-info pli-run-note"><strong>Hay una ejecución en curso.</strong> Puedes detenerla con “⏹ Detener ejecución”. El progreso se muestra en “Ejecuciones del analizador”.</div>
+      <div class="pli-note pli-note-info pli-run-note"><strong>Hay una ejecución en curso.</strong> Puedes detenerla con “⏹ Detener ejecución”.</div>
     {% else %}
       <div class="pli-note pli-run-note"><strong>Consejo:</strong> elige un periodo acotado. La primera corrida de un periodo amplio con muchos pendientes puede tardar varios minutos.</div>
     {% endif %}
+
+    <div class="pli-run-terminal">
+      <div class="pli-section-head"><div><h2>Progreso en vivo</h2><p>Terminal de la ejecución y contadores en tiempo real.</p></div><span class="pli-chip pli-run-status" id="runStatusChip">sin ejecución</span></div>
+      <div class="pli-run-counters">
+        <div class="pli-run-counter"><small>Total leads</small><strong id="cntTotal">—</strong></div>
+        <div class="pli-run-counter"><small>Procesados</small><strong id="cntProcessed">—</strong></div>
+        <div class="pli-run-counter ok"><small>Analizados ✓</small><strong id="cntAnalyzed">—</strong></div>
+        <div class="pli-run-counter skip"><small>Omitidos</small><strong id="cntSkipped">—</strong></div>
+        <div class="pli-run-counter bad"><small>Fallidos ✗</small><strong id="cntFailed">—</strong></div>
+      </div>
+      <div class="pli-run-track"><div class="pli-run-fill" id="runFill" style="width:0%"></div></div>
+      <pre class="pli-terminal" id="runTerminal"><span class="pli-term-dim">Esperando ejecución…</span></pre>
+    </div>
   </section>
 
   <section class="pli-grid-6">
@@ -155,4 +183,72 @@
     </div>
   </section>
 </main>
+<script>
+(function(){
+  var url = "{% url 'analisis_crm:analysis_progress' %}";
+  var terminal = document.getElementById('runTerminal');
+  var lastCount = 0;
+  var lastRunId = null;
+  var polling = true;
+
+  function esc(s){ var d=document.createElement('div'); d.textContent = (s==null?'':String(s)); return d.innerHTML; }
+  function fmtTime(iso){
+    if(!iso) return '';
+    var d = new Date(iso), p = function(n){ return String(n).padStart(2,'0'); };
+    return p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());
+  }
+  function lineHTML(step){
+    var t = fmtTime(step.created_at);
+    var msg = step.message ? ' · ' + esc(step.message) : '';
+    switch(step.status){
+      case 'started':   return '<span class="pli-term-dim">['+t+'] ▶ '+esc(step.message)+'</span>';
+      case 'completed': return '<span class="pli-term-ok">['+t+'] ✔ '+esc(step.message)+'</span>';
+      case 'cancelled': return '<span class="pli-term-bad">['+t+'] ⏹ '+esc(step.message)+'</span>';
+      case 'analyzed':  return '<span class="pli-term-ok">['+t+'] ✓ LEAD #'+step.lead_id+' analizado</span>';
+      case 'skipped':   return '<span class="pli-term-dim">['+t+'] ⏭ LEAD #'+step.lead_id+' omitido</span>';
+      case 'failed':    return '<span class="pli-term-bad">['+t+'] ✗ LEAD #'+step.lead_id+' fallido'+msg+'</span>';
+      default:          return '<span>['+t+'] '+esc(step.status)+msg+'</span>';
+    }
+  }
+
+  function render(data){
+    var run = data.run;
+    var fill = document.getElementById('runFill');
+    var chip = document.getElementById('runStatusChip');
+    if(!run){
+      chip.textContent = 'sin ejecución';
+      ['cntTotal','cntProcessed','cntAnalyzed','cntSkipped','cntFailed'].forEach(function(id){ document.getElementById(id).textContent='—'; });
+      fill.style.width = '0%';
+      return;
+    }
+    if(run.id !== lastRunId){ lastRunId = run.id; lastCount = 0; }
+    chip.textContent = run.status_label || run.status;
+    document.getElementById('cntTotal').textContent = run.leads_total;
+    document.getElementById('cntProcessed').textContent = run.processed;
+    document.getElementById('cntAnalyzed').textContent = run.leads_analyzed;
+    document.getElementById('cntSkipped').textContent = run.leads_skipped;
+    document.getElementById('cntFailed').textContent = run.leads_failed;
+    fill.style.width = (run.progress_pct||0) + '%';
+    if(data.steps && data.steps.length > lastCount){
+      var html = '';
+      for(var i=0;i<data.steps.length;i++){ html += lineHTML(data.steps[i]) + '\n'; }
+      terminal.innerHTML = html;
+      lastCount = data.steps.length;
+      terminal.scrollTop = terminal.scrollHeight;
+    }
+    if(run.status === 'completed' || run.status === 'failed'){
+      polling = false;
+    }
+  }
+
+  async function tick(){
+    try{
+      var res = await fetch(url, {headers:{'X-Requested-With':'XMLHttpRequest'}});
+      render(await res.json());
+    }catch(e){}
+    if(polling){ setTimeout(tick, 2000); }
+  }
+  tick();
+})();
+</script>
 {% endblock %}

@@ -33,6 +33,22 @@ class AnalysisRun(models.Model):
         ordering = ["-started_at"]
 
 
+class AnalysisRunStep(models.Model):
+    """Paso del log en vivo de una ejecución (terminal de progreso)."""
+
+    run = models.ForeignKey(
+        AnalysisRun, on_delete=models.CASCADE, related_name="steps"
+    )
+    lead_id = models.PositiveIntegerField(null=True, blank=True)
+    status = models.CharField(max_length=20, default="processed")
+    message = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "prometeo_analysis_run_step"
+        ordering = ["created_at", "id"]
+
+
 class LeadDiagnosis(models.Model):
     class Severity(models.TextChoices):
         CRITICAL = "critical", "Crítica"

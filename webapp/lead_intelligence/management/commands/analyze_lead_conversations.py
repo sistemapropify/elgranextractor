@@ -15,7 +15,11 @@ from lead_intelligence.contextual_analysis import (
     conversation_hash,
 )
 from lead_intelligence.conversation_analysis import analyze_chat_history
-from lead_intelligence.models import AnalysisRun, LeadConversationAssessment
+from lead_intelligence.models import (
+    AnalysisRun,
+    AnalysisRunStep,
+    LeadConversationAssessment,
+)
 from lead_intelligence.services import _lead_result_rows
 
 
@@ -203,20 +207,29 @@ class Command(BaseCommand):
                 rules_version=ANALYSIS_VERSION,
                 model_version=LLMService.DEEPSEEK_MODEL,
             )
+            AnalysisRunStep.objects.using("default").create(
+                run=run,
+                status="started",
+                message=(
+                    f"Ejecución iniciada · {len(rows)} leads · "
+                    f"workers={workers} · modelo={LLMService.DEEPSEEK_MODEL}"
+                ),
+            )
 
         analyzed = skipped = failed = cancelled = 0
         with ThreadPoolExecutor(max_workers=workers) as executor:
-            futures = [
+            future_to_row = {
                 executor.submit(
                     self._process_row,
                     row,
                     force=options["force"],
                     dry_run=options["dry_run"],
                     existing_keys=existing_keys,
-                )
+                ): row
                 for row in rows
-            ]
-            for future in as_completed(futures):
+            }
+            for future in as_completed(future_to_row):
+                row = future_to_row[future]
                 status, error = future.result()
                 if status == "cancelled":
                     cancelled += 1
@@ -227,8 +240,15 @@ class Command(BaseCommand):
                 else:
                     failed += 1
                     self.stderr.write(error)
+                if run is not None:
+                    AnalysisRunStep.objects.using("default").create(
+                        run=run,
+                        lead_id=row["id"],
+                        status=status,
+                        message=error or "",
+                    )
                 processed = analyzed + skipped + failed + cancelled
-                if run is not None and processed % 10 == 0:
+                if run is not None and processed % 5 == 0:
                     (
                         AnalysisRun.objects.using("default")
                         .filter(pk=run.pk)
@@ -269,6 +289,14 @@ class Command(BaseCommand):
                     "leads_failed",
                     "error_summary",
                 ],
+            )
+            AnalysisRunStep.objects.using("default").create(
+                run=run,
+                status="cancelled" if _cancel_event.is_set() else "completed",
+                message=(
+                    f"Fin · analizados={analyzed}, omitidos={skipped}, "
+                    f"fallidos={failed}, cancelados={cancelled}"
+                ),
             )
 
         self.stdout.write(

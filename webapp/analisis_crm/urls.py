@@ -39,6 +39,11 @@ urlpatterns = [
         intelligence_views.cancel_analysis,
         name='cancel_analysis',
     ),
+    path(
+        'calidad-motor/progreso/',
+        intelligence_views.analysis_progress_api,
+        name='analysis_progress',
+    ),
     path('resultados/', intelligence_views.lead_results, name='lead_results'),
     path('resultados/<int:lead_id>/', intelligence_views.lead_conversation, name='lead_conversation'),
     path('api/management/summary/', intelligence_views.management_summary_api, name='management_summary_api'),

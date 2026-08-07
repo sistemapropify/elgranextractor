@@ -166,6 +166,78 @@ def analysis_quality_dashboard(request):
 
 
 @management_access_required
+def analysis_progress_api(request):
+    """API en vivo del progreso de la evaluación (terminal + contadores)."""
+    from django.http import JsonResponse
+
+    from lead_intelligence.models import AnalysisRun, AnalysisRunStep
+
+    run_id = request.GET.get("run_id", "").strip()
+    if run_id:
+        run = AnalysisRun.objects.using("default").filter(pk=run_id).first()
+    else:
+        run = (
+            AnalysisRun.objects.using("default")
+            .filter(status=AnalysisRun.Status.RUNNING)
+            .order_by("-started_at")
+            .first()
+        )
+        if run is None:
+            run = (
+                AnalysisRun.objects.using("default")
+                .order_by("-started_at")
+                .first()
+            )
+    if run is None:
+        return JsonResponse({"run": None})
+
+    processed = run.leads_analyzed + run.leads_skipped + run.leads_failed
+    steps = list(
+        AnalysisRunStep.objects.using("default")
+        .filter(run=run)
+        .order_by("created_at", "id")[:400]
+    )
+    return JsonResponse(
+        {
+            "run": {
+                "id": run.pk,
+                "status": run.status,
+                "status_label": run.get_status_display(),
+                "leads_total": run.leads_total,
+                "leads_analyzed": run.leads_analyzed,
+                "leads_skipped": run.leads_skipped,
+                "leads_failed": run.leads_failed,
+                "processed": processed,
+                "progress_pct": (
+                    round(processed / run.leads_total * 100)
+                    if run.leads_total
+                    else 0
+                ),
+                "started_at": (
+                    run.started_at.isoformat() if run.started_at else None
+                ),
+                "completed_at": (
+                    run.completed_at.isoformat() if run.completed_at else None
+                ),
+                "heartbeat_at": (
+                    run.heartbeat_at.isoformat() if run.heartbeat_at else None
+                ),
+                "error_summary": run.error_summary,
+            },
+            "steps": [
+                {
+                    "status": step.status,
+                    "lead_id": step.lead_id,
+                    "message": step.message,
+                    "created_at": step.created_at.isoformat(),
+                }
+                for step in steps
+            ],
+        }
+    )
+
+
+@management_access_required
 def property_performance_dashboard(request):
     date_from, date_to, _ = _parameters(request)
     context = get_property_dashboard(date_from, date_to, request.GET)
