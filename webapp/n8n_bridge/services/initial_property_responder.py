@@ -78,6 +78,19 @@ def process_initial_message(payload):
     external_id = str(payload.get("external_conversation_id") or "").strip()
     contact_name = str(payload.get("contact_name") or "").strip()
 
+    # Modo shadow_live (opcional, RESPONSE_INTELLIGENCE_SHADOW=1): genera un
+    # borrador IA en un hilo daemon sin enviar nada ni alterar esta respuesta.
+    if text:
+        try:
+            from response_intelligence.shadow import spawn_shadow_draft
+
+            spawn_shadow_draft(
+                client_message=text,
+                thread_id=external_id or phone,
+            )
+        except Exception:  # noqa: BLE001
+            pass
+
     existing = PropertyBotInitialResponse.objects.filter(message_id=message_id).first()
     if existing:
         return _response_from_record(existing, duplicate=True)
