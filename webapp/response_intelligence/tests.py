@@ -66,13 +66,19 @@ class _FakeManager:
         return _FakeQS(self._items)
 
 
-def _example(pk, category, client="", agent=""):
-    return SimpleNamespace(
+def _example(pk, category, client="", agent="", **extra):
+    """Fake de CuratedExample con los campos que el ORM usa en los filtros."""
+    data = dict(
         pk=pk,
         intent_category=category,
         client_message=client or "¿cuánto cuesta?",
         agent_response=agent or "El precio es US$ 100,000.",
+        approved=True,
+        active=True,
+        updated_at=1,
     )
+    data.update(extra)
+    return SimpleNamespace(**data)
 
 
 class CurationServiceTests(SimpleTestCase):
@@ -107,8 +113,8 @@ class PromptAssemblyTests(SimpleTestCase):
         self.assertGreaterEqual(score, 1)
 
     @mock.patch("response_intelligence.prompt_assembly.BusinessRule.objects", new_callable=lambda: _FakeManager([
-        SimpleNamespace(category="prohibicion", rule_text="Nunca negociar precio"),
-        SimpleNamespace(category="tono", rule_text="Responder en español"),
+        SimpleNamespace(category="prohibicion", rule_text="Nunca negociar precio", active=True),
+        SimpleNamespace(category="tono", rule_text="Responder en español", active=True),
     ]))
     def test_build_system_prompt_incluye_reglas(self, _objects):
         prompt = PromptAssemblyService.build_system_prompt()
@@ -128,16 +134,89 @@ class PromptAssemblyTests(SimpleTestCase):
         self.assertTrue(selected)
         self.assertTrue(all(e.intent_category == "precio" for e in selected))
 
+    @mock.patch.object(
+        PromptAssemblyService, "build_system_prompt", return_value="SISTEMA"
+    )
     @mock.patch.object(PromptAssemblyService, "select_few_shot", return_value=[])
     @mock.patch.object(
         PromptAssemblyService,
         "fetch_live_property_data",
         return_value={"success": False},
     )
-    def test_assemble_armar_prompt(self, _fetch, _few_shot):
+    def test_assemble_armar_prompt(self, _fetch, _few_shot, _sys):
         result = PromptAssemblyService.assemble("¿cuánto cuesta?")
         self.assertIn("¿cuánto cuesta?", result["user_prompt"])
         self.assertEqual(result["property_data_used"], [])
+
+
+from response_intelligence.guardrails import (  # noqa: E402
+    block_summary,
+    is_escalation,
+    mentions_discount,
+    mentions_property_data,
+    validate_generated_response,
+)
+
+
+class GuardrailsTests(SimpleTestCase):
+    """Guardrails deterministas (spec §7) — puros, sin BD."""
+
+    def test_escalamiento_abogado(self):
+        self.assertTrue(is_escalation("necesito hablar con un abogado"))
+
+    def test_escalamiento_denuncia(self):
+        self.assertTrue(is_escalation("voy a poner una denuncia"))
+
+    def test_no_escalamiento_normal(self):
+        self.assertFalse(is_escalation("¿cuál es el precio?"))
+
+    def test_mentions_price_without_currency(self):
+        self.assertTrue(mentions_property_data("El precio es 120,000 soles"))
+
+    def test_mentions_area_m2(self):
+        self.assertTrue(mentions_property_data("Tiene 85 m2 de área"))
+
+    def test_mentions_location(self):
+        self.assertTrue(mentions_property_data("Está en la Av. Ejército"))
+
+    def test_mentions_property_data_false_para_saludo(self):
+        self.assertFalse(mentions_property_data("Hola, gracias por tu mensaje"))
+
+    def test_discount_porcentaje(self):
+        self.assertTrue(mentions_discount("Te puedo hacer un 5% de descuento"))
+
+    def test_discount_verbo_rebaja(self):
+        self.assertTrue(mentions_discount("podría bajar el precio"))
+
+    def test_no_discount_normal(self):
+        self.assertFalse(mentions_discount("El precio es S/ 120,000"))
+
+    def test_validate_hallucination_sin_datos(self):
+        result = validate_generated_response(
+            "El precio es S/ 100,000 y tiene 80 m2", []
+        )
+        self.assertTrue(result["hallucination"])
+        self.assertTrue(result["blocked"])
+        self.assertIn("Alucinación", result["reasons"][0])
+
+    def test_validate_con_datos_no_alucina(self):
+        result = validate_generated_response(
+            "El precio es S/ 100,000", [{"code": "PROP000261"}]
+        )
+        self.assertFalse(result["hallucination"])
+        self.assertFalse(result["blocked"])
+
+    def test_validate_negocia_precio_bloquea(self):
+        result = validate_generated_response(
+            "Puedo ofrecerte 10% de descuento", [{"code": "PROP000261"}]
+        )
+        self.assertTrue(result["discount"])
+        self.assertTrue(result["blocked"])
+
+    def test_block_summary(self):
+        result = validate_generated_response("El precio es S/ 100,000", [])
+        self.assertIn("Alucinación", block_summary(result))
+        self.assertEqual(block_summary({"blocked": False}), "")
 
 
 class ShadowTests(SimpleTestCase):

@@ -27,7 +27,14 @@ def maybe_generate_shadow_draft(
     intent_category="",
     property_code="",
 ):
-    """Genera un draft shadow_live de forma segura (nunca lanza)."""
+    """Genera un draft shadow_live de forma segura (nunca lanza).
+
+    Guardrails (spec §7): si el mensaje del cliente es de escalamiento/riesgo
+    legal, el motor NUNCA genera con IA — se registra el draft con
+    ``auto_escalation=True`` y respuesta vacía (la plantilla sigue respondiendo
+    con "un agente te contactará"). Tras generar, se validan alucinaciones y
+    negociación de precio con regex.
+    """
     if not shadow_mode_enabled():
         return None
     if not client_message or not str(client_message).strip():
@@ -37,11 +44,32 @@ def maybe_generate_shadow_draft(
         from intelligence.services.llm import LLMService
 
         from .curation import CurationService
+        from .guardrails import block_summary, is_escalation, validate_generated_response
         from .models import BotResponseDraft
         from .prompt_assembly import PromptAssemblyService
 
         text = str(client_message).strip()[:2000]
         intent = intent_category or CurationService._detect_category(text)
+
+        # Escalamiento: nunca generar con IA (spec §7).
+        if is_escalation(text):
+            draft = BotResponseDraft.objects.using("default").create(
+                source_lead_id=lead_id or 0,
+                client_message=text,
+                intent_category=intent,
+                prompt_snapshot={"guardrail": "escalamiento"},
+                generated_response="",
+                property_data_used=[],
+                mode=BotResponseDraft.Mode.SHADOW_LIVE,
+                model_version=LLMService.DEEPSEEK_MODEL,
+                trace_id=f"bot_draft:{0}",
+                auto_escalation=True,
+                blocked_reason="Mensaje de escalamiento/riesgo legal: la plantilla responde con aviso a agente",
+            )
+            draft.trace_id = f"bot_draft:{draft.pk}"
+            draft.save(using="default", update_fields=["trace_id"])
+            return draft
+
         assembled = PromptAssemblyService.assemble(
             client_message=text,
             intent_category=intent,
@@ -76,7 +104,23 @@ def maybe_generate_shadow_draft(
             release_trace_id(token)
         if ok:
             draft.generated_response = response
-            draft.save(using="default", update_fields=["generated_response"])
+            # Validación determinista post-generación (spec §7).
+            validation = validate_generated_response(
+                response, draft.property_data_used
+            )
+            draft.auto_hallucination = validation["hallucination"]
+            draft.auto_discount = validation["discount"]
+            if validation["blocked"]:
+                draft.blocked_reason = block_summary(validation)
+            draft.save(
+                using="default",
+                update_fields=[
+                    "generated_response",
+                    "auto_hallucination",
+                    "auto_discount",
+                    "blocked_reason",
+                ],
+            )
         return draft
     except Exception as exc:  # noqa: BLE001
         logger.warning("shadow_live no generó borrador (thread=%s): %s", thread_id, exc)

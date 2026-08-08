@@ -62,13 +62,42 @@ class Command(BaseCommand):
         if not targets:
             return row["id"], "skipped"
 
+        from response_intelligence.guardrails import (
+            block_summary,
+            is_escalation,
+            validate_generated_response,
+        )
+
         property_code = Command._property_code_from_messages(messages)
         created = 0
+        escalations = 0
         for target in targets:
             text = str(target.get("text") or "").strip()
             if not text:
                 continue
             intent_category = CurationService._detect_category(text)
+
+            # Guardrail (spec §7): escalamiento nunca genera con IA.
+            if is_escalation(text):
+                if not dry_run:
+                    draft = BotResponseDraft.objects.using("default").create(
+                        source_lead_id=row["id"],
+                        client_message=text,
+                        intent_category=intent_category,
+                        prompt_snapshot={"guardrail": "escalamiento"},
+                        generated_response="",
+                        property_data_used=[],
+                        mode=mode,
+                        model_version=LLMService.DEEPSEEK_MODEL,
+                        trace_id=f"bot_draft:{0}",
+                        auto_escalation=True,
+                        blocked_reason="Mensaje de escalamiento/riesgo legal: la plantilla responde con aviso a agente",
+                    )
+                    draft.trace_id = f"bot_draft:{draft.pk}"
+                    draft.save(using="default", update_fields=["trace_id"])
+                escalations += 1
+                continue
+
             assembled = PromptAssemblyService.assemble(
                 client_message=text,
                 intent_category=intent_category,
@@ -109,9 +138,29 @@ class Command(BaseCommand):
                 continue
             draft.generated_response = response
             draft.trace_id = f"bot_draft:{draft.pk}"
-            draft.save(using="default", update_fields=["generated_response", "trace_id"])
+            # Validación determinista post-generación (spec §7).
+            validation = validate_generated_response(
+                response, draft.property_data_used
+            )
+            draft.auto_hallucination = validation["hallucination"]
+            draft.auto_discount = validation["discount"]
+            if validation["blocked"]:
+                draft.blocked_reason = block_summary(validation)
+            draft.save(
+                using="default",
+                update_fields=[
+                    "generated_response",
+                    "trace_id",
+                    "auto_hallucination",
+                    "auto_discount",
+                    "blocked_reason",
+                ],
+            )
             created += 1
-        return row["id"], f"created={created}"
+        detail = f"created={created}"
+        if escalations:
+            detail += f", escalamientos={escalations}"
+        return row["id"], detail
 
     def handle(self, *args, **options):
         mode = options["mode"]

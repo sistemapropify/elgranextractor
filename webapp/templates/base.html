@@ -1354,9 +1354,15 @@
                 </ul>
             </li>
             <li>
-                <a href="/analisis-crm/" class="{% if '/analisis-crm/' in request.path %}active{% endif %}">
+                <a href="/analisis-crm/" class="{% if '/analisis-crm/' in request.path and '/calidad-motor-ia/' not in request.path %}active{% endif %}">
                     <i class="bi bi-graph-up-arrow"></i>
                     <span>Inteligencia de Leads</span>
+                </a>
+            </li>
+            <li>
+                <a href="/analisis-crm/calidad-motor-ia/" class="{% if '/analisis-crm/calidad-motor-ia/' in request.path %}active{% endif %}">
+                    <i class="bi bi-robot"></i>
+                    <span>Motor IA de Respuestas</span>
                 </a>
             </li>
             <li>

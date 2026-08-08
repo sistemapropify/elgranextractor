@@ -47,6 +47,13 @@
   </section>
 
   <section class="pli-grid">
+    <article class="pli-card pli-kpi"><small>Guardrails auto · escalamiento</small><strong>{{ kpis.auto_escalations }} ({{ kpis.auto_escalation_pct }}%)</strong><span>mensajes que NO se generaron con IA</span></article>
+    <article class="pli-card pli-kpi"><small>Guardrails auto · alucinación</small><strong>{{ kpis.auto_hallucinations }} ({{ kpis.auto_hallucination_pct }}%)</strong><span>mencionan datos sin property_data_used</span></article>
+    <article class="pli-card pli-kpi"><small>Guardrails auto · negocia precio</small><strong>{{ kpis.auto_discounts }} ({{ kpis.auto_discount_pct }}%)</strong><span>regex sobre descuentos / %</span></article>
+    <article class="pli-card pli-kpi"><small>Drafts bloqueados</small><strong>{{ kpis.auto_blocked }}</strong><span>no aptos para envío automático</span></article>
+  </section>
+
+  <section class="pli-grid">
     <article class="pli-card">
       <div class="pli-section-head"><div><h2>Cola de revisión de drafts</h2><p>Compara lo que el motor IA habría respondido contra lo esperado.</p></div><span class="pli-chip">{{ pending|length }} pendientes</span></div>
       {% if pending %}
@@ -57,7 +64,17 @@
                 <span class="pli-lead-id">LEAD #{{ draft.source_lead_id }} · {{ draft.mode }} · {{ draft.intent_category|default:"sin categoría" }}</span>
                 <div><strong>Cliente:</strong><div class="pli-draft">{{ draft.client_message }}</div></div>
                 <div><strong>Respuesta del motor:</strong><div class="pli-draft">{{ draft.generated_response|default:"—" }}</div></div>
-                <div class="pli-badges"><span class="pli-badge">modelo {{ draft.model_version }}</span><span class="pli-badge">trace {{ draft.trace_id }}</span></div>
+                <div class="pli-badges">
+                  <span class="pli-badge">modelo {{ draft.model_version }}</span><span class="pli-badge">trace {{ draft.trace_id }}</span>
+                  {% if draft.auto_escalation %}<span class="pli-badge amber" title="No se generó con IA: escalamiento">escalamiento</span>{% endif %}
+                  {% if draft.auto_hallucination %}<span class="pli-badge amber" title="Menciona datos sin property_data_used">alucinación auto</span>{% endif %}
+                  {% if draft.auto_discount %}<span class="pli-badge amber" title="Negocia precio (prohibido)">negocia precio</span>{% endif %}
+                  {% if draft.blocked_reason %}<span class="pli-badge" style="background:#fdecea;color:#b42318" title="{{ draft.blocked_reason }}">bloqueado</span>{% endif %}
+                </div>
+                {% if draft.blocked_reason %}<div class="pli-review-result" style="color:#b42318">⛔ {{ draft.blocked_reason }}</div>{% endif %}
+                {% if draft.source_lead_id %}
+                  <a class="pli-promote" style="display:inline-block;text-decoration:none;text-align:center;margin-top:8px" href="{% url 'analisis_crm:lead_conversation' draft.source_lead_id %}">Abrir conversación del lead</a>
+                {% endif %}
               </div>
               <div class="pli-review-actions">
                 <form method="post" action="{% url 'response_intelligence:evaluate_draft' %}">
@@ -97,8 +114,50 @@
         <p>Aún no hay drafts.</p>
       {% endif %}
       <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--pli-line)">
-        <div class="pli-section-head"><h2>Banco few-shot</h2><span class="pli-chip">{{ curated.approved }}/{{ curated.total }} aprobados</span></div>
+        <div class="pli-section-head">
+          <h2>Banco few-shot</h2>
+          <span class="pli-chip">{{ curated.approved }}/{{ curated.total }} aprobados</span>
+        </div>
         <p>Ejemplos activos y aprobados que se inyectan en el prompt. Límite sugerido ~50-60 por categoría.</p>
+        <form method="post" action="{% url 'response_intelligence:suggest_candidates' %}" style="margin:10px 0">
+          {% csrf_token %}
+          <button class="pli-promote" type="submit">Sugerir candidatos desde evaluaciones "adequate"</button>
+        </form>
+        {% if curated_examples %}
+          <div style="display:grid;gap:10px;margin-top:10px">
+            {% for ex in curated_examples %}
+              <div style="border:1px solid var(--pli-line);border-radius:10px;padding:10px">
+                <div class="pli-badges" style="margin-bottom:4px">
+                  <span class="pli-badge">{{ ex.intent_category }}</span>
+                  <span class="pli-badge {% if ex.approved %}green{% else %}amber{% endif %}">{% if ex.approved %}aprobado{% else %}pendiente{% endif %}</span>
+                  <span class="pli-badge">lead #{{ ex.source_lead_id }}</span>
+                  {% if not ex.active %}<span class="pli-badge amber">inactivo</span>{% endif %}
+                </div>
+                <div style="font-size:12px;color:var(--pli-muted)">CLIENTE:</div>
+                <div class="pli-draft">{{ ex.client_message|default:"—" }}</div>
+                <div style="font-size:12px;color:var(--pli-muted)">RESPUESTA:</div>
+                <div class="pli-draft">{{ ex.agent_response|default:"—" }}</div>
+                <div style="display:flex;gap:8px;margin-top:8px">
+                  {% if not ex.approved %}
+                    <form method="post" action="{% url 'response_intelligence:approve_example' %}">
+                      {% csrf_token %}
+                      <input type="hidden" name="example_id" value="{{ ex.pk }}">
+                      <button class="pli-good" type="submit">Aprobar</button>
+                    </form>
+                  {% endif %}
+                  <form method="post" action="{% url 'response_intelligence:toggle_example' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="example_id" value="{{ ex.pk }}">
+                    <input type="hidden" name="active" value="{% if ex.active %}0{% else %}1{% endif %}">
+                    <button class="pli-neutral" type="submit">{% if ex.active %}Desactivar{% else %}Activar{% endif %}</button>
+                  </form>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p>No hay ejemplos curados aún. Usa "Sugerir candidatos" o promueve un draft bien evaluado.</p>
+        {% endif %}
       </div>
     </article>
   </section>

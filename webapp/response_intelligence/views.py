@@ -77,3 +77,74 @@ def promote_draft(request):
     except Exception as exc:  # noqa: BLE001
         messages.error(request, f"Error al promover: {exc}")
     return redirect("response_intelligence:dashboard")
+
+
+@management_access_required
+@require_POST
+def approve_example(request):
+    """Aprueba un ejemplo curado (lo habilita para few-shot en producción)."""
+    example = get_object_or_404(
+        CuratedExample.objects.using("default"),
+        pk=request.POST.get("example_id"),
+    )
+    try:
+        CurationService.approve_example(
+            example.pk, approved_by=getattr(request, "current_user", None)
+        )
+        messages.success(request, f"Ejemplo #{example.pk} aprobado y activado.")
+    except Exception as exc:  # noqa: BLE001
+        messages.error(request, f"Error al aprobar: {exc}")
+    return redirect("response_intelligence:dashboard")
+
+
+@management_access_required
+@require_POST
+def toggle_example(request):
+    """Activa/desactiva un ejemplo sin borrarlo (versionado)."""
+    example = get_object_or_404(
+        CuratedExample.objects.using("default"),
+        pk=request.POST.get("example_id"),
+    )
+    active = request.POST.get("active") == "1"
+    try:
+        CurationService.toggle_active(example.pk, active)
+        messages.success(
+            request,
+            f"Ejemplo #{example.pk} {'activado' if active else 'desactivado'}.",
+        )
+    except Exception as exc:  # noqa: BLE001
+        messages.error(request, f"Error al cambiar estado: {exc}")
+    return redirect("response_intelligence:dashboard")
+
+
+@management_access_required
+@require_POST
+def suggest_candidates(request):
+    """Propone candidatos few-shot desde evaluaciones 'adequate' de lead_intelligence.
+
+    Ejecuta CurationService.suggest_candidates y crea un CuratedExample
+    (approved=False) por cada candidato, para aprobación humana.
+    """
+    try:
+        candidates = CurationService.suggest_candidates(
+            min_score=80, limit=50
+        )
+        if not candidates:
+            messages.info(request, "No hay candidatos nuevos para curar.")
+            return redirect("response_intelligence:dashboard")
+        created = 0
+        for candidate in candidates:
+            try:
+                CurationService.promote_to_curated(
+                    candidate["assessment_id"],
+                    intent_category=candidate["category"],
+                )
+                created += 1
+            except Exception:  # noqa: BLE001
+                continue
+        messages.success(
+            request, f"{created} candidatos few-shot creados (pendientes de aprobación)."
+        )
+    except Exception as exc:  # noqa: BLE001
+        messages.error(request, f"Error al sugerir candidatos: {exc}")
+    return redirect("response_intelligence:dashboard")

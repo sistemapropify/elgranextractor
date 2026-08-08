@@ -112,6 +112,12 @@ class BotResponseDraft(models.Model):
     trace_id = models.CharField(max_length=64, blank=True, default="", db_index=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
+    # Guardrails deterministas automáticos (spec §7), auditables en el dashboard.
+    auto_escalation = models.BooleanField(default=False, db_index=True)
+    auto_hallucination = models.BooleanField(default=False, db_index=True)
+    auto_discount = models.BooleanField(default=False, db_index=True)
+    blocked_reason = models.CharField(max_length=255, blank=True, default="")
+
     class Meta:
         db_table = "prometeo_bot_response_draft"
         ordering = ["-created_at"]

@@ -111,7 +111,15 @@ def management_access_required(view_func):
 
 @management_access_required
 def management_dashboard(request):
-    date_from, date_to, _ = _parameters(request)
+    # Al abrir sin filtros, el resumen gerencial muestra el día de hoy (hoy→hoy);
+    # si el usuario ya eligió un periodo, se respeta su selección.
+    date_from_raw = request.POST.get("from") or request.GET.get("from")
+    date_to_raw = request.POST.get("to") or request.GET.get("to")
+    if not date_from_raw and not date_to_raw:
+        today = timezone.localdate()
+        date_from, date_to = today, today
+    else:
+        date_from, date_to, _ = _parameters(request)
     context = get_management_dashboard(date_from, date_to, None)
     context["title"] = "Inteligencia de Leads"
     context["active_tab"] = "overview"

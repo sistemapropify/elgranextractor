@@ -1911,6 +1911,10 @@ def get_ai_costs_by_lead(date_from, date_to):
             tokens=Sum("total_tokens"),
             calls=Count("id"),
         )
+        # Sin un order_by explícito, Django usa Meta.ordering (-created_at) y
+        # Azure SQL rechaza ORDER BY sobre columna que no está en el GROUP BY
+        # (error 8127). Ordenamos por trace_id, que sí está agrupado.
+        .order_by("trace_id")
     )
     costs = {}
     for row in rows:

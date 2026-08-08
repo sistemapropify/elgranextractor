@@ -21,4 +21,14 @@ class NoDbTestRunner(DiscoverRunner):
     """DiscoverRunner que no configura ni crea bases de datos de test."""
 
     databases = set()
-    top_level = WEBAPP_DIR
+
+    def __init__(self, *args, **kwargs):
+        # ``DiscoverRunner.__init__`` fija ``self.top_level = None`` por defecto y
+        # pisaría el atributo de clase. ``manage.py test`` además pasa ``top_level=None``
+        # explícitamente en las opciones, así que hay que reemplazar el ``None``, no
+        # solo hacer ``setdefault``. Lo forzamos a la carpeta ``webapp`` para que las
+        # etiquetas se resuelvan como ``response_intelligence.*`` y no como
+        # ``webapp.response_intelligence.*`` (rompe la resolución de ``app_label``).
+        if not kwargs.get("top_level"):
+            kwargs["top_level"] = WEBAPP_DIR
+        super().__init__(*args, **kwargs)

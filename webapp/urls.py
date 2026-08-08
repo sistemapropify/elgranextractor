@@ -82,7 +82,9 @@ urlpatterns = [
     path('analisis-crm/', include('analisis_crm.urls')),  # Habilitado para desarrollo
 
     # Motor de respuestas IA - dashboard de calidad (sandbox/shadow)
-    path('prometeo/', include('response_intelligence.urls')),
+    # Vive bajo el mismo prefijo analisis-crm/ para que quede junto al panel
+    # de calidad de conversaciones que ya se usa (calidad-motor).
+    path('analisis-crm/', include('response_intelligence.urls')),
     
     # Eventos - Dashboard de análisis de eventos
     path('eventos/', include('eventos.urls')),

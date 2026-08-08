@@ -20,4 +20,19 @@ urlpatterns = [
         views.promote_draft,
         name="promote_draft",
     ),
+    path(
+        "calidad-motor-ia/aprobar-ejemplo/",
+        views.approve_example,
+        name="approve_example",
+    ),
+    path(
+        "calidad-motor-ia/toggle-ejemplo/",
+        views.toggle_example,
+        name="toggle_example",
+    ),
+    path(
+        "calidad-motor-ia/sugerir-candidatos/",
+        views.suggest_candidates,
+        name="suggest_candidates",
+    ),
 ]

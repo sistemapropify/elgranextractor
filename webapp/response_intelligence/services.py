@@ -37,6 +37,14 @@ def get_response_dashboard(limit: int = 150):
     tone = evals.filter(tone_flag=True).count()
     incorrect = evals.filter(verdict=BotResponseEvaluation.Verdict.INCORRECT).count()
 
+    # Guardrails automáticos (spec §7): agregados sobre todos los drafts.
+    drafts_qs = BotResponseDraft.objects.using("default")
+    total_drafts_all = drafts_qs.count()
+    auto_escalations = drafts_qs.filter(auto_escalation=True).count()
+    auto_hallucinations = drafts_qs.filter(auto_hallucination=True).count()
+    auto_discounts = drafts_qs.filter(auto_discount=True).count()
+    auto_blocked = drafts_qs.exclude(blocked_reason="").count()
+
     kpis = {
         "total_drafts": len(drafts),
         "pending": len(pending),
@@ -45,6 +53,14 @@ def get_response_dashboard(limit: int = 150):
         "hallucination_pct": _safe_pct(hallucination, total_evals),
         "tone_pct": _safe_pct(tone, total_evals),
         "incorrect_pct": _safe_pct(incorrect, total_evals),
+        "total_drafts_all": total_drafts_all,
+        "auto_escalations": auto_escalations,
+        "auto_hallucinations": auto_hallucinations,
+        "auto_discounts": auto_discounts,
+        "auto_blocked": auto_blocked,
+        "auto_escalation_pct": _safe_pct(auto_escalations, total_drafts_all),
+        "auto_hallucination_pct": _safe_pct(auto_hallucinations, total_drafts_all),
+        "auto_discount_pct": _safe_pct(auto_discounts, total_drafts_all),
     }
 
     by_category = {
@@ -64,6 +80,11 @@ def get_response_dashboard(limit: int = 150):
         .filter(approved=True, active=True)
         .count(),
     }
+    curated_examples = list(
+        CuratedExample.objects.using("default").order_by(
+            "-approved", "-created_at"
+        )[:60]
+    )
 
     return {
         "drafts": drafts,
@@ -72,6 +93,7 @@ def get_response_dashboard(limit: int = 150):
         "kpis": kpis,
         "by_category": by_category,
         "curated": curated,
+        "curated_examples": curated_examples,
     }
 
 
