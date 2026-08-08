@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Calidad del motor IA · Propifai{% endblock %}
+{% block content %}
+<style>
+  .pli-page{--pli-ink:#172033;--pli-muted:#667085;--pli-line:#e5e9f0;--pli-brand:#3157d5;--pli-soft:#f5f7fb;max-width:1600px;margin:0 auto;padding:28px 24px 48px;color:var(--pli-ink)}
+  .pli-page h1{font-size:26px;margin:2px 0}
+  .pli-page h2{font-size:18px;margin:0}
+  .pli-page p{color:var(--pli-muted)}
+  .pli-grid-6{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin:18px 0}
+  .pli-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .pli-card{background:#fff;border:1px solid var(--pli-line);border-radius:14px;box-shadow:0 6px 20px rgba(23,32,51,.06);padding:16px}
+  .pli-kpi small{color:var(--pli-muted);text-transform:uppercase;font-size:11px;letter-spacing:.04em}
+  .pli-kpi strong{display:block;font-size:24px;margin:4px 0}
+  .pli-kpi span{font-size:12px;color:var(--pli-muted)}
+  .pli-section-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}
+  .pli-chip{background:var(--pli-soft);border:1px solid var(--pli-line);border-radius:999px;padding:4px 10px;font-size:12px;color:var(--pli-muted)}
+  .pli-review-list{display:grid;gap:14px}
+  .pli-review-row{border:1px solid var(--pli-line);border-radius:12px;padding:14px;background:#fff}
+  .pli-review-main{display:grid;gap:6px}
+  .pli-lead-id{font-size:11px;color:var(--pli-muted);text-transform:uppercase}
+  .pli-review-result{background:var(--pli-soft);border-radius:8px;padding:8px 10px;font-size:13px}
+  .pli-badge{display:inline-block;border-radius:999px;padding:3px 8px;font-size:11px;background:#eef2ff;color:#3157d5}
+  .pli-badge.amber{background:#fff7e6;color:#9a6700}
+  .pli-badge.green{background:#e6f6ec;color:#1a7f37}
+  .pli-draft{white-space:pre-wrap;font-size:13px;background:var(--pli-soft);border-radius:8px;padding:10px;margin:4px 0}
+  .pli-review-actions form{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+  .pli-review-actions input[type=text]{grid-column:1/4;padding:8px;border:1px solid var(--pli-line);border-radius:8px}
+  .pli-review-actions label{font-size:12px;color:var(--pli-muted);display:flex;align-items:center;gap:6px}
+  .pli-review-actions select{padding:8px;border:1px solid var(--pli-line);border-radius:8px}
+  .pli-review-actions button{border:0;border-radius:8px;padding:9px;font-weight:700;color:#fff;cursor:pointer}
+  .pli-good{background:#1a7f37}.pli-bad{background:#b42318}.pli-neutral{background:#9a6700}
+  .pli-promote{background:#3157d5;color:#fff;border:0;border-radius:8px;padding:9px;font-weight:700;cursor:pointer;margin-top:8px}
+</style>
+<main class="pli-page">
+  <header style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:6px">
+    <div><span style="color:#3157d5;font-weight:700;text-transform:uppercase;font-size:12px">Motor IA · Fase 2</span><h1>Calidad del motor de respuestas</h1><p>Borradores generados (few-shot + RAG) y revisión humana antes de producción.</p></div>
+    <span class="pli-chip">{{ kpis.total_drafts }} drafts</span>
+  </header>
+
+  <section class="pli-grid-6">
+    <article class="pli-card pli-kpi"><small>Drafts</small><strong>{{ kpis.total_drafts }}</strong><span>{{ kpis.pending }} pendientes de revisar</span></article>
+    <article class="pli-card pli-kpi"><small>Revisados</small><strong>{{ kpis.reviewed }}</strong><span>evaluaciones humanas</span></article>
+    <article class="pli-card pli-kpi"><small>Enviaría (%)</small><strong>{{ kpis.would_send_pct }}%</strong><span>umbral sugerido ≥ 90%</span></article>
+    <article class="pli-card pli-kpi"><small>Alucinación (%)</small><strong>{{ kpis.hallucination_pct }}%</strong><span>umbral ≤ 2%</span></article>
+    <article class="pli-card pli-kpi"><small>Tono fuera de marca (%)</small><strong>{{ kpis.tone_pct }}%</strong><span>umbral ≤ 5%</span></article>
+    <article class="pli-card pli-kpi"><small>Costo IA</small><strong>${{ ai_cost.total_usd|floatformat:4 }}</strong><span>{{ ai_cost.calls }} llamadas · {{ ai_cost.avg_usd|floatformat:5 }}/resp</span></article>
+  </section>
+
+  <section class="pli-grid">
+    <article class="pli-card">
+      <div class="pli-section-head"><div><h2>Cola de revisión de drafts</h2><p>Compara lo que el motor IA habría respondido contra lo esperado.</p></div><span class="pli-chip">{{ pending|length }} pendientes</span></div>
+      {% if pending %}
+        <div class="pli-review-list">
+          {% for draft in pending %}
+            <article class="pli-review-row">
+              <div class="pli-review-main">
+                <span class="pli-lead-id">LEAD #{{ draft.source_lead_id }} · {{ draft.mode }} · {{ draft.intent_category|default:"sin categoría" }}</span>
+                <div><strong>Cliente:</strong><div class="pli-draft">{{ draft.client_message }}</div></div>
+                <div><strong>Respuesta del motor:</strong><div class="pli-draft">{{ draft.generated_response|default:"—" }}</div></div>
+                <div class="pli-badges"><span class="pli-badge">modelo {{ draft.model_version }}</span><span class="pli-badge">trace {{ draft.trace_id }}</span></div>
+              </div>
+              <div class="pli-review-actions">
+                <form method="post" action="{% url 'response_intelligence:evaluate_draft' %}">
+                  {% csrf_token %}
+                  <input type="hidden" name="draft_id" value="{{ draft.pk }}">
+                  <label><input type="checkbox" name="would_send" value="1"> Enviaría tal cual</label>
+                  <label><input type="checkbox" name="hallucination" value="1"> ¿Alucina?</label>
+                  <label><input type="checkbox" name="tone" value="1"> ¿Tono fuera de marca?</label>
+                  <input type="text" name="notes" placeholder="Comentario opcional">
+                  <button class="pli-good" name="verdict" value="correct">Correcto</button>
+                  <button class="pli-neutral" name="verdict" value="acceptable_with_adjustment">Aceptable con ajuste</button>
+                  <button class="pli-bad" name="verdict" value="incorrect">Incorrecto</button>
+                </form>
+                <form method="post" action="{% url 'response_intelligence:promote_draft' %}">
+                  {% csrf_token %}
+                  <input type="hidden" name="draft_id" value="{{ draft.pk }}">
+                  <button class="pli-promote" type="submit">Promover a ejemplo few-shot</button>
+                </form>
+              </div>
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p>No hay borradores pendientes. Ejecuta <code>generate_draft_responses --mode=sandbox</code> para crear la cola.</p>
+      {% endif %}
+    </article>
+
+    <article class="pli-card">
+      <div class="pli-section-head"><div><h2>Distribución por categoría</h2><p>Drafts generados por tipo de intención.</p></div></div>
+      {% if by_category %}
+        {% for category, total in by_category.items %}
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--pli-line);font-size:13px">
+            <span>{{ category }}</span><strong>{{ total }}</strong>
+          </div>
+        {% endfor %}
+      {% else %}
+        <p>Aún no hay drafts.</p>
+      {% endif %}
+      <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--pli-line)">
+        <div class="pli-section-head"><h2>Banco few-shot</h2><span class="pli-chip">{{ curated.approved }}/{{ curated.total }} aprobados</span></div>
+        <p>Ejemplos activos y aprobados que se inyectan en el prompt. Límite sugerido ~50-60 por categoría.</p>
+      </div>
+    </article>
+  </section>
+</main>
+{% endblock %}

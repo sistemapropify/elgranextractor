@@ -167,6 +167,32 @@ class CurationService:
         return example
 
     @classmethod
+    def promote_to_curated_from_draft(cls, draft, approved_by=None) -> CuratedExample:
+        """Crea un CuratedExample desde un draft bien evaluado (cierra el loop).
+
+        Usa el mensaje del cliente y la respuesta generada por el motor como par
+        few-shot. Queda ``approved=False`` hasta la revisión humana.
+        """
+        from .models import BotResponseDraft
+
+        if not draft.generated_response:
+            raise ValueError("El draft no tiene respuesta generada para promover.")
+        category = draft.intent_category or cls._detect_category(draft.client_message)
+        example, _created = CuratedExample.objects.using("default").update_or_create(
+            source_lead_id=draft.source_lead_id,
+            intent_category=category,
+            defaults={
+                "client_message": draft.client_message,
+                "agent_response": draft.generated_response,
+                "quality_scores": {},
+                "approved": False,
+                "approved_by": approved_by,
+                "approved_at": None,
+            },
+        )
+        return example
+
+    @classmethod
     def approve_example(cls, example_id: int, approved_by=None) -> CuratedExample:
         """Aprueba un ejemplo curado (lo habilita para few-shot)."""
         example = CuratedExample.objects.using("default").get(pk=example_id)
