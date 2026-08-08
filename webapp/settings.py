@@ -92,6 +92,7 @@ INSTALLED_APPS = [
     'market_analysis',
     'analisis_crm',
     'lead_intelligence',
+    'response_intelligence',  # Motor de respuestas IA (few-shot + RAG) + sandbox
     'eventos',
     'intelligence',
     'meta_ads',  # Habilitado para desarrollo - dashboard de Meta Ads

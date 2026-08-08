@@ -1118,6 +1118,42 @@ INSTRUCCIONES:
             return False, "No se pudo extraer datos estructurados", None
         
         return True, "Datos extraídos exitosamente", extracted_data
+
+    @classmethod
+    def generate_response(
+        cls,
+        system_prompt: str,
+        user_prompt: str,
+        *,
+        trace_id: str = "",
+        max_tokens: int = 600,
+    ) -> Tuple[bool, str, str]:
+        """Genera una respuesta en texto libre (no JSON) para el motor de respuestas IA.
+
+        Si se indica ``trace_id``, lo vincula en el contexto durante la llamada
+        para que el costo se agregue con el mismo mecanismo que el costo por lead.
+        Devuelve ``(success, message, response_text)``.
+        """
+        from intelligence.learning.trace_context import bind_trace_id, release_trace_id
+
+        token = bind_trace_id(trace_id) if trace_id else None
+        try:
+            success, api_message, api_response = cls._call_deepseek_api(
+                messages=[{"role": "user", "content": user_prompt}],
+                system_prompt=system_prompt,
+                max_tokens=max_tokens,
+            )
+        finally:
+            release_trace_id(token)
+
+        if not success:
+            return False, api_message, ""
+        content = (
+            api_response.get("content", "")
+            if isinstance(api_response, dict)
+            else str(api_response or "")
+        )
+        return True, "OK", str(content).strip()
     
     @classmethod
     def generate_streaming_response(
