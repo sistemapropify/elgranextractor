@@ -165,6 +165,18 @@ def analysis_quality_dashboard(request):
     context["analysis_running"] = _has_fresh_running_run()
     context["title"] = "Calidad del motor IA"
     context["active_tab"] = "engine"
+
+    # Costo IA por lead y resumen del periodo (trace_id="lead:{id}").
+    from lead_intelligence.services import ai_cost_summary, get_ai_costs_by_lead
+
+    costs_by_lead = get_ai_costs_by_lead(date_from, date_to)
+    context["ai_costs_by_lead"] = costs_by_lead
+    context["ai_cost_summary"] = ai_cost_summary(
+        date_from, date_to, costs_by_lead
+    )
+    # Adjunta el costo IA a cada caso de la cola de revisión (por lead_id).
+    for item in context.get("review_queue", []):
+        item["ai_cost"] = costs_by_lead.get(item.get("lead_id"))
     return render(
         request,
         "lead_intelligence/analysis_quality_dashboard.html",
@@ -231,10 +243,24 @@ def analysis_progress_api(request):
         .filter(run=run)
         .order_by("created_at", "id")[:400]
     )
+
+    # Costo IA del periodo en vivo (mismo criterio que el dashboard).
+    from lead_intelligence.services import ai_cost_summary
+
+    cost_from = period_from or (run.date_from if run else None)
+    cost_to = period_to or (run.date_to if run else None)
+    cost_summary = (
+        ai_cost_summary(cost_from, cost_to)
+        if cost_from and cost_to
+        else {"total_usd": 0, "leads_with_cost": 0, "avg_usd_per_lead": 0}
+    )
     return JsonResponse(
         {
             "run": {
                 "id": run.pk,
+                "cost_total_usd": cost_summary["total_usd"],
+                "cost_leads": cost_summary["leads_with_cost"],
+                "cost_avg_usd": cost_summary["avg_usd_per_lead"],
                 "status": run.status,
                 "status_label": run.get_status_display(),
                 "leads_total": run.leads_total,

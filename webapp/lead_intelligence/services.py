@@ -1883,3 +1883,58 @@ def normalized_period(date_from_raw, date_to_raw):
     if (date_to - date_from).days > 90:
         date_from = date_to - timedelta(days=90)
     return date_from, date_to
+
+
+def get_ai_costs_by_lead(date_from, date_to):
+    """Costo IA (USD) por lead evaluado a partir de AIConsumptionLog.
+
+    Las llamadas de evaluación quedan etiquetadas con trace_id="lead:{id}"
+    (bind_trace_id en analyze_lead_conversations), por lo que se suma
+    estimated_cost_usd agrupando por trace_id dentro del periodo.
+    Devuelve {lead_id: {"cost_usd": float, "tokens": int, "calls": int}}.
+    """
+    from django.db.models import Count, Sum
+
+    from intelligence.models import AIConsumptionLog
+
+    rows = (
+        AIConsumptionLog.objects.using("default")
+        .filter(
+            success=True,
+            trace_id__startswith="lead:",
+            created_at__date__gte=date_from,
+            created_at__date__lte=date_to,
+        )
+        .values("trace_id")
+        .annotate(
+            cost=Sum("estimated_cost_usd"),
+            tokens=Sum("total_tokens"),
+            calls=Count("id"),
+        )
+    )
+    costs = {}
+    for row in rows:
+        try:
+            lead_id = int(row["trace_id"].split(":", 1)[1])
+        except (ValueError, IndexError):
+            continue
+        costs[lead_id] = {
+            "cost_usd": float(row["cost"] or 0),
+            "tokens": int(row["tokens"] or 0),
+            "calls": int(row["calls"] or 0),
+        }
+    return costs
+
+
+def ai_cost_summary(date_from, date_to, costs_by_lead=None):
+    """Resumen de costo IA del periodo: total USD, nº leads con costo y promedio."""
+    costs = costs_by_lead
+    if costs is None:
+        costs = get_ai_costs_by_lead(date_from, date_to)
+    total = sum(item["cost_usd"] for item in costs.values())
+    leads = len(costs)
+    return {
+        "total_usd": total,
+        "leads_with_cost": leads,
+        "avg_usd_per_lead": (total / leads) if leads else 0.0,
+    }

@@ -60,6 +60,10 @@ class Command(BaseCommand):
         if _cancel_event.is_set():
             return "cancelled", None
         close_old_connections()
+        # Vincula todas las llamadas LLM de este lead a un trace_id único
+        # ("lead:{id}") para poder sumar el costo IA por lead desde AIConsumptionLog.
+        from intelligence.learning.trace_context import bind_trace_id, release_trace_id
+        trace_token = bind_trace_id(f"lead:{row['id']}")
         try:
             raw_history = row["chat_history"]
             history_hash = conversation_hash(raw_history)
@@ -150,6 +154,7 @@ class Command(BaseCommand):
             return "failed", f"Lead {row['id']}: {exc}"
         finally:
             close_old_connections()
+            release_trace_id(trace_token)
 
     def handle(self, *args, **options):
         lead_id = options["lead_id"]

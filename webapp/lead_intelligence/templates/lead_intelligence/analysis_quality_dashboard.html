@@ -67,6 +67,7 @@
         <div class="pli-run-counter ok"><small>Analizados ✓</small><strong id="cntAnalyzed">—</strong></div>
         <div class="pli-run-counter skip"><small>Omitidos</small><strong id="cntSkipped">—</strong></div>
         <div class="pli-run-counter bad"><small>Fallidos ✗</small><strong id="cntFailed">—</strong></div>
+        <div class="pli-run-counter"><small>Costo IA</small><strong id="cntCost">${{ ai_cost_summary.total_usd|floatformat:5 }}</strong></div>
       </div>
       <div class="pli-run-track"><div class="pli-run-fill" id="runFill" style="width:0%"></div></div>
       <pre class="pli-terminal" id="runTerminal"><span class="pli-term-dim">Esperando ejecución…</span></pre>
@@ -126,6 +127,7 @@
               {% for reason in item.review_reasons %}<span class="pli-badge amber">{{ reason }}</span>{% empty %}<span class="pli-badge green">Muestra de control</span>{% endfor %}
             </div>
             {% if item.reason %}<p>{{ item.reason }}</p>{% endif %}
+            {% if item.ai_cost %}<div class="pli-review-result"><strong>Costo IA:</strong> ${{ item.ai_cost.cost_usd|floatformat:5 }} · {{ item.ai_cost.tokens }} tokens · {{ item.ai_cost.calls }} llamada{{ item.ai_cost.calls|pluralize }}</div>{% endif %}
             {% if item.unsupported_request_items %}<p><strong>Supuestos no sustentados por el bloque inicial:</strong> {{ item.unsupported_request_items|join:", " }}</p>{% endif %}
             {% if item.review %}
               <div class="pli-review-result"><strong>Última revisión:</strong> {{ item.review.get_verdict_display }} · valor humano: {{ item.review.human_value }}{% if item.review.notes %} · {{ item.review.notes }}{% endif %}</div>
@@ -217,7 +219,7 @@
     var chip = document.getElementById('runStatusChip');
     if(!run){
       chip.textContent = 'sin ejecución';
-      ['cntTotal','cntProcessed','cntAnalyzed','cntSkipped','cntFailed'].forEach(function(id){ document.getElementById(id).textContent='—'; });
+      ['cntTotal','cntProcessed','cntAnalyzed','cntSkipped','cntFailed','cntCost'].forEach(function(id){ document.getElementById(id).textContent='—'; });
       fill.style.width = '0%';
       return;
     }
@@ -228,6 +230,8 @@
     document.getElementById('cntAnalyzed').textContent = run.leads_analyzed;
     document.getElementById('cntSkipped').textContent = run.leads_skipped;
     document.getElementById('cntFailed').textContent = run.leads_failed;
+    var cost = run.cost_total_usd != null ? run.cost_total_usd : 0;
+    document.getElementById('cntCost').textContent = '$' + Number(cost).toFixed(5);
     fill.style.width = (run.progress_pct||0) + '%';
     if(data.steps && data.steps.length > lastCount){
       var html = '';

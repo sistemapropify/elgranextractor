@@ -1,7 +1,9 @@
-from django.db import models
-from django.core.validators import MinValueValidator, MaxValueValidator
-from typing import Tuple
+import os
 import uuid
+from typing import Tuple
+
+from django.core.validators import MaxValueValidator, MinValueValidator
+from django.db import models
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -948,9 +950,14 @@ class AIConsumptionLog(models.Model):
         - Input: $0.14 por 1M tokens (deepseek-chat)
         - Output: $0.28 por 1M tokens (deepseek-chat)
         """
-        # Precios DeepSeek (deepseek-chat)
-        PRICE_INPUT_PER_1M = 0.14
-        PRICE_OUTPUT_PER_1M = 0.28
+        # Precios DeepSeek por 1M de tokens, configurables por entorno.
+        # Default: deepseek-chat ($0.14 input / $0.28 output por 1M).
+        PRICE_INPUT_PER_1M = float(
+            os.environ.get("DEEPSEEK_PRICE_INPUT_PER_1M", "0.14")
+        )
+        PRICE_OUTPUT_PER_1M = float(
+            os.environ.get("DEEPSEEK_PRICE_OUTPUT_PER_1M", "0.28")
+        )
         
         cost_input = (prompt_tokens / 1_000_000) * PRICE_INPUT_PER_1M
         cost_output = (completion_tokens / 1_000_000) * PRICE_OUTPUT_PER_1M
