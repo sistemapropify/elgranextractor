@@ -15,6 +15,21 @@ logger = logging.getLogger(__name__)
 
 
 def shadow_mode_enabled() -> bool:
+    """¿Está activo el shadow_live?
+
+    Prioridad: el interruptor persistente (MotorAIControl, BD ``default``) si
+    existe una fila; si no existe, cae a la variable de entorno
+    ``RESPONSE_INTELLIGENCE_SHADOW``. Así el switch del dashboard manda sin
+    reiniciar el proceso.
+    """
+    try:
+        from .models import MotorAIControl
+
+        control = MotorAIControl.objects.using("default").first()
+        if control is not None:
+            return bool(control.shadow_live_enabled)
+    except Exception:  # noqa: BLE001 - la BD puede no estar disponible aún
+        pass
     value = os.environ.get("RESPONSE_INTELLIGENCE_SHADOW", "0").strip().lower()
     return value in {"1", "true", "yes", "on"}
 

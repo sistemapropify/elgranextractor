@@ -18,8 +18,11 @@ from .services import get_ai_cost_summary_for_drafts, get_response_dashboard
 @management_access_required
 def response_dashboard(request):
     """Dashboard de calidad del motor IA: cola de revisión + KPIs + gate."""
+    from .shadow import shadow_mode_enabled
+
     context = get_response_dashboard()
     context["ai_cost"] = get_ai_cost_summary_for_drafts()
+    context["shadow_enabled"] = shadow_mode_enabled()
     context["title"] = "Calidad del motor IA de respuestas"
     context["active_tab"] = "engine_ai"
     return render(
@@ -147,4 +150,33 @@ def suggest_candidates(request):
         )
     except Exception as exc:  # noqa: BLE001
         messages.error(request, f"Error al sugerir candidatos: {exc}")
+    return redirect("response_intelligence:dashboard")
+
+
+@management_access_required
+@require_POST
+def toggle_shadow(request):
+    """Activa/desactiva el shadow_live en vivo (switch persistente en BD default).
+
+    No envía nada a WhatsApp: solo hace que el respondedor nocturno genere un
+    borrador IA por cada mensaje real para auditar en el dashboard.
+    """
+    from .models import MotorAIControl
+
+    try:
+        control, _created = MotorAIControl.objects.using("default").get_or_create(
+            pk=1,
+            defaults={"shadow_live_enabled": True},
+        )
+        control.shadow_live_enabled = not control.shadow_live_enabled
+        control.updated_by = getattr(request, "current_user", None)
+        control.save(using="default")
+        estado = "ACTIVADO" if control.shadow_live_enabled else "DESACTIVADO"
+        messages.success(
+            request,
+            f"Shadow en vivo {estado}. El motor generará borradores "
+            f"{'para auditar' if control.shadow_live_enabled else 'solo si la variable de entorno lo permite'}.",
+        )
+    except Exception as exc:  # noqa: BLE001
+        messages.error(request, f"Error al cambiar el switch: {exc}")
     return redirect("response_intelligence:dashboard")

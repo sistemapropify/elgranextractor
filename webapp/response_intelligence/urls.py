@@ -35,4 +35,9 @@ urlpatterns = [
         views.suggest_candidates,
         name="suggest_candidates",
     ),
+    path(
+        "calidad-motor-ia/toggle-shadow/",
+        views.toggle_shadow,
+        name="toggle_shadow",
+    ),
 ]

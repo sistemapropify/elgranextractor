@@ -172,3 +172,29 @@ class BotResponseEvaluation(models.Model):
 
     def __str__(self):
         return f"eval#{self.pk} → {self.verdict} (draft#{self.draft_id})"
+
+
+class MotorAIControl(models.Model):
+    """Interruptor persistente del Motor IA (BD ``default``).
+
+    Permite activar/desactivar el shadow_live desde el dashboard sin depender
+    solo de variables de entorno ni reiniciar el proceso. Es un singleton: la
+    primera fila es la vigente. ``shadow_mode_enabled()`` la consulta y, si no
+    existe, cae al valor de la variable ``RESPONSE_INTELLIGENCE_SHADOW``.
+    """
+
+    shadow_live_enabled = models.BooleanField(default=False)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="motor_ai_controls",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "prometeo_motor_ai_control"
+
+    def __str__(self):
+        return f"MotorIA shadow_live={'ON' if self.shadow_live_enabled else 'OFF'}"

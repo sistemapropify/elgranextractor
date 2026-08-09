@@ -37,6 +37,19 @@
     <span class="pli-chip">{{ kpis.total_drafts }} drafts</span>
   </header>
 
+  <section class="pli-card pli-section" style="display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap">
+    <div>
+      <div class="pli-section-head"><h2>Shadow en vivo</h2><span class="pli-chip {% if shadow_enabled %}pli-badge green{% else %}pli-badge amber{% endif %}">{{ shadow_enabled|yesno:"ACTIVO,APAGADO" }}</span></div>
+      <p style="margin:0">Genera un borrador IA por cada mensaje real entrante, <strong>sin enviar nada</strong> al cliente (la plantilla sigue respondiendo igual). Solo lo ves tú en esta cola de revisión.</p>
+    </div>
+    <form method="post" action="{% url 'response_intelligence:toggle_shadow' %}">
+      {% csrf_token %}
+      <button class="{% if shadow_enabled %}pli-bad{% else %}pli-good{% endif %}" type="submit" style="border:0;border-radius:8px;padding:10px 16px;font-weight:700;color:#fff;cursor:pointer">
+        {{ shadow_enabled|yesno:"Desactivar shadow,Activar shadow" }}
+      </button>
+    </form>
+  </section>
+
   <section class="pli-grid-6">
     <article class="pli-card pli-kpi"><small>Drafts</small><strong>{{ kpis.total_drafts }}</strong><span>{{ kpis.pending }} pendientes de revisar</span></article>
     <article class="pli-card pli-kpi"><small>Revisados</small><strong>{{ kpis.reviewed }}</strong><span>evaluaciones humanas</span></article>
