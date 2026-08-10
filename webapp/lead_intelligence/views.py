@@ -194,7 +194,14 @@ def analysis_quality_dashboard(request):
 
 @management_access_required
 def analysis_progress_api(request):
-    """API en vivo del progreso de la evaluación (terminal + contadores)."""
+    """API en vivo del progreso de la evaluación (terminal + contadores).
+
+    - Modo en vivo (default): devuelve el run en curso (o del periodo) con sus
+      steps, como antes.
+    - Modo histórico (``hist=1`` + ``from``/``to``): devuelve el detalle de cada
+      evaluación individual por lead de TODOS los runs del periodo (manuales,
+      programadas y tiempo real), con su ``run_type`` y ``run_started_at``.
+    """
     from django.http import JsonResponse
 
     from lead_intelligence.models import AnalysisRun, AnalysisRunStep
@@ -204,6 +211,76 @@ def analysis_progress_api(request):
     run_id = request.GET.get("run_id", "").strip()
     from_raw = request.GET.get("from", "").strip()
     to_raw = request.GET.get("to", "").strip()
+    historical = request.GET.get("hist", "").strip() in {"1", "true", "yes"}
+
+    if historical:
+        period_from = (
+            date_cls.fromisoformat(from_raw) if from_raw else None
+        )
+        period_to = (
+            date_cls.fromisoformat(to_raw) if to_raw else None
+        )
+        qs = AnalysisRun.objects.using("default")
+        if period_from and period_to:
+            qs = qs.filter(date_from=period_from, date_to=period_to)
+        runs = list(qs.order_by("-started_at")[:200])
+        run_ids = [r.pk for r in runs]
+        steps = []
+        if run_ids:
+            steps = list(
+                AnalysisRunStep.objects.using("default")
+                .filter(run_id__in=run_ids)
+                .order_by("-created_at", "-id")[:500]
+            )
+        # Mapa run_id → metadatos del run (para etiquetar cada step con su tipo).
+        run_meta = {
+            r.pk: {
+                "run_type": r.run_type,
+                "run_type_label": r.get_run_type_display(),
+                "run_started_at": (
+                    r.started_at.isoformat() if r.started_at else None
+                ),
+            }
+            for r in runs
+        }
+        return JsonResponse(
+            {
+                "run": None,
+                "historical": True,
+                "runs": [
+                    {
+                        "id": r.pk,
+                        "run_type": r.run_type,
+                        "run_type_label": r.get_run_type_display(),
+                        "run_started_at": (
+                            r.started_at.isoformat() if r.started_at else None
+                        ),
+                        "status": r.status,
+                        "leads_analyzed": r.leads_analyzed,
+                        "leads_skipped": r.leads_skipped,
+                        "leads_failed": r.leads_failed,
+                        "error_summary": r.error_summary,
+                    }
+                    for r in runs
+                ],
+                "steps": [
+                    {
+                        "run_id": step.run_id,
+                        "run_type": (run_meta.get(step.run_id) or {}).get(
+                            "run_type", ""
+                        ),
+                        "run_started_at": (run_meta.get(step.run_id) or {}).get(
+                            "run_started_at"
+                        ),
+                        "lead_id": step.lead_id,
+                        "status": step.status,
+                        "message": step.message,
+                        "created_at": step.created_at.isoformat(),
+                    }
+                    for step in steps
+                ],
+            }
+        )
 
     def _parse_period(value):
         try:
@@ -266,6 +343,8 @@ def analysis_progress_api(request):
         {
             "run": {
                 "id": run.pk,
+                "run_type": run.run_type,
+                "run_type_label": run.get_run_type_display(),
                 "cost_total_usd": cost_summary["total_usd"],
                 "cost_leads": cost_summary["leads_with_cost"],
                 "cost_avg_usd": cost_summary["avg_usd_per_lead"],

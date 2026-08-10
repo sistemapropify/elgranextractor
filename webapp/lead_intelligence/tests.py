@@ -759,3 +759,141 @@ class ManagementApiTests(SimpleTestCase):
 
         self.assertEqual(response.status_code, 403)
         dashboard_mock.assert_not_called()
+
+
+class EvaluationChannelsTests(SimpleTestCase):
+    """Tests del pipeline de evaluación incremental (canal programada + tiempo real)."""
+
+    def _structural(self, **overrides):
+        data = {
+            "messages": [{"sender": "lead", "text": "hola"}],
+            "contacted": False,
+            "bidirectional": False,
+            "qualified": False,
+            "visit_intent": False,
+        }
+        data.update(overrides)
+        return data
+
+    def test_min_stage_entered_acepta_cualquier_lead(self):
+        from .management.commands.analyze_lead_conversations import Command
+
+        self.assertTrue(
+            Command._min_stage_ok("entered", self._structural(contacted=False))
+        )
+
+    def test_min_stage_contacted_requiere_respuesta_agente(self):
+        from .management.commands.analyze_lead_conversations import Command
+
+        self.assertTrue(
+            Command._min_stage_ok("contacted", self._structural(contacted=True))
+        )
+        self.assertFalse(
+            Command._min_stage_ok("contacted", self._structural(contacted=False))
+        )
+
+    def test_min_stage_bidirectional_requiere_etapa_avanzada(self):
+        from .management.commands.analyze_lead_conversations import Command
+
+        self.assertTrue(
+            Command._min_stage_ok(
+                "bidirectional", self._structural(bidirectional=True)
+            )
+        )
+        self.assertTrue(
+            Command._min_stage_ok(
+                "bidirectional", self._structural(qualified=True)
+            )
+        )
+        self.assertTrue(
+            Command._min_stage_ok(
+                "bidirectional", self._structural(visit_intent=True)
+            )
+        )
+        # Un lead solo-contactado NO pasa el filtro de tiempo real (≥bidireccional).
+        self.assertFalse(
+            Command._min_stage_ok(
+                "bidirectional", self._structural(contacted=True)
+            )
+        )
+
+    def test_assessment_summary_incluye_decisiones(self):
+        from .management.commands.analyze_lead_conversations import Command
+
+        summary = Command._assessment_summary(
+            {
+                "qualified_status": "confirmed",
+                "visit_intent_status": "not_confirmed",
+                "first_response_status": "adequate",
+            }
+        )
+        self.assertIn("calificación=confirmed", summary)
+        self.assertIn("visita=not_confirmed", summary)
+        self.assertIn("primeraRespuesta=adequate", summary)
+
+    def test_assessment_summary_vacio_sin_decisiones(self):
+        from .management.commands.analyze_lead_conversations import Command
+
+        self.assertEqual(Command._assessment_summary({}), "evaluado")
+
+
+class AnalysisProgressHistoricalApiTests(SimpleTestCase):
+    """Modo histórico de analysis_progress_api (detalle por lead del periodo)."""
+
+    def setUp(self):
+        self.factory = RequestFactory()
+
+    @patch("lead_intelligence.models.AnalysisRun.objects")
+    @patch("lead_intelligence.models.AnalysisRunStep.objects")
+    def test_historical_returns_steps_with_run_type(self, step_objects_mock, run_objects_mock):
+        from lead_intelligence.views import analysis_progress_api
+
+        run = Mock(
+            pk=1,
+            run_type="daily",
+            get_run_type_display=Mock(return_value="Diario"),
+            started_at=datetime(2026, 8, 10, 9, 0, tzinfo=datetime_timezone.utc),
+            status="completed",
+            leads_analyzed=3,
+            leads_skipped=1,
+            leads_failed=0,
+            error_summary="",
+        )
+        step = Mock(
+            run_id=1,
+            lead_id=123,
+            status="analyzed",
+            message="calificación=confirmed · visita=confirmed",
+            created_at=datetime(2026, 8, 10, 9, 5, tzinfo=datetime_timezone.utc),
+        )
+
+        run_qs = Mock()
+        run_qs.filter.return_value = run_qs
+        # order_by devuelve una lista real para que [:] funcione en el slice.
+        run_qs.order_by.return_value = [run]
+
+        step_qs = Mock()
+        step_qs.filter.return_value = step_qs
+        step_qs.order_by.return_value = [step]
+
+        run_objects_mock.using.return_value = run_qs
+        step_objects_mock.using.return_value = step_qs
+
+        request = self.factory.get(
+            "/analisis-crm/calidad-motor/progreso/?hist=1&from=2026-08-10&to=2026-08-10"
+        )
+        request.user = Mock(is_authenticated=False, is_superuser=False)
+        request.current_user = Mock()
+        request.current_user.intelligence_profile = Mock(
+            level=5, allowed_domains=["gerencia"]
+        )
+
+        response = analysis_progress_api(request)
+
+        self.assertIsInstance(response, JsonResponse)
+        data = json.loads(response.content.decode("utf-8"))
+        self.assertTrue(data["historical"])
+        self.assertEqual(data["runs"][0]["run_type"], "daily")
+        self.assertEqual(data["steps"][0]["run_type"], "daily")
+        self.assertEqual(data["steps"][0]["lead_id"], 123)
+        self.assertIn("calificación=confirmed", data["steps"][0]["message"])

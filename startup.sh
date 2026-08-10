@@ -70,8 +70,22 @@ echo "  ✓ Migrations applied."
 # ── Return to wwwroot for gunicorn context ──
 cd /home/site/wwwroot
 
+# ── SSH Server (para comandos remotos / cron de evaluación de leads) ──
+# Requerido por `az webapp ssh --command` (GitHub Actions de los canales
+# programado 09:00/21:00 y tiempo real cada 15 min). El sshd corre en
+# background; gunicorn sigue siendo el proceso principal. No falla el
+# arranque si sshd no está disponible en la imagen.
+echo "[4/5] Starting SSH server for remote commands..."
+if command -v sshd &> /dev/null; then
+    mkdir -p /home/LogFiles/ssh
+    sshd 2>/dev/null &
+    echo "  ✓ SSH server started (pid $!)"
+else
+    echo "  ⚠ sshd no encontrado; comandos remotos vía SSH no disponibles"
+fi
+
 # ── Start Gunicorn ──
-echo "[4/5] Starting Gunicorn..."
+echo "[5/5] Starting Gunicorn..."
 echo "  Port: ${PORT:-8000}"
 echo "  Workers: 2 (max-requests: 1000, jitter: 50)"
 echo "  Timeout: 600s (lazy model load)"

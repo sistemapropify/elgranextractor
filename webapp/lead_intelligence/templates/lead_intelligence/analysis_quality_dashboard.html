@@ -60,7 +60,7 @@
     {% endif %}
 
     <div class="pli-run-terminal">
-      <div class="pli-section-head"><div><h2>Progreso en vivo</h2><p>Terminal de la ejecución y contadores en tiempo real.</p></div><span class="pli-chip pli-run-status" id="runStatusChip">sin ejecución</span></div>
+      <div class="pli-section-head"><div><h2>Progreso en vivo</h2><p>Terminal de la ejecución y contadores en tiempo real. La terminal refleja qué se analiza ahora (manual, programada o tiempo real).</p></div><span class="pli-chip pli-run-status" id="runStatusChip">sin ejecución</span><span class="pli-chip" id="runTypeChip" style="display:none"></span></div>
       <div class="pli-run-counters">
         <div class="pli-run-counter"><small>Total leads</small><strong id="cntTotal">—</strong></div>
         <div class="pli-run-counter"><small>Procesados</small><strong id="cntProcessed">—</strong></div>
@@ -162,14 +162,33 @@
   </section>
 
   <section class="pli-card pli-section">
+    <div class="pli-section-head">
+      <div><h2>Evaluaciones por lead del periodo</h2><p>Detalle de cada evaluación individual por lead (manual, programada 09:00/21:00 y tiempo real ≥bidireccional).</p></div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <label style="font-size:12px;color:var(--pli-muted)"><input type="checkbox" id="filtroProgramadas"> Solo programadas</label>
+        <label style="font-size:12px;color:var(--pli-muted)"><input type="checkbox" id="filtroTiempoReal"> Solo tiempo real</label>
+      </div>
+    </div>
+    <div class="pli-table-wrap">
+      <table class="pli-table" id="tablaEvaluaciones">
+        <thead><tr><th>Hora</th><th>Tipo</th><th>Lead</th><th>Estado</th><th>Detalle</th></tr></thead>
+        <tbody>
+          <tr><td colspan="5" style="color:var(--pli-muted)">Cargando evaluaciones del periodo…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="pli-card pli-section">
     <div class="pli-section-head"><div><h2>Ejecuciones del analizador</h2><p>Historial interno; no genera escrituras en dbpropify_be.</p></div></div>
     <div class="pli-table-wrap">
       <table class="pli-table">
-        <thead><tr><th>Inicio</th><th>Estado</th><th>Progreso</th><th>Analizados</th><th>Omitidos</th><th>Fallidos</th><th>Versión / modelo</th><th>Último latido</th><th>Observación</th></tr></thead>
+        <thead><tr><th>Inicio</th><th>Tipo</th><th>Estado</th><th>Progreso</th><th>Analizados</th><th>Omitidos</th><th>Fallidos</th><th>Versión / modelo</th><th>Último latido</th><th>Observación</th></tr></thead>
         <tbody>
           {% for run in runs %}
             <tr>
               <td>{{ run.started_at|localtime|date:"d/m/Y H:i:s" }}</td>
+              <td>{{ run.get_run_type_display }}</td>
               <td>{{ run.get_status_display }}</td>
               <td>{{ run.processed }}/{{ run.leads_total }} · {{ run.progress_pct }}%</td>
               <td>{{ run.leads_analyzed }}</td>
@@ -179,7 +198,7 @@
               <td>{{ run.heartbeat_at|localtime|date:"d/m/Y H:i:s"|default:"—" }}</td>
               <td>{{ run.error_summary|default:"Sin errores" }}</td>
             </tr>
-          {% empty %}<tr><td colspan="9">La versión actual todavía no registra ejecuciones.</td></tr>{% endfor %}
+          {% empty %}<tr><td colspan="10">La versión actual todavía no registra ejecuciones.</td></tr>{% endfor %}
         </tbody>
       </table>
     </div>
@@ -213,18 +232,30 @@
     }
   }
 
+  var typeChip = document.getElementById('runTypeChip');
+  function typeLabel(run_type){
+    if(run_type === 'daily') return 'Programada';
+    if(run_type === 'incremental') return 'Tiempo real';
+    if(run_type === 'manual') return 'Manual';
+    return '';
+  }
+
   function render(data){
     var run = data.run;
     var fill = document.getElementById('runFill');
     var chip = document.getElementById('runStatusChip');
     if(!run){
       chip.textContent = 'sin ejecución';
+      typeChip.style.display = 'none';
       ['cntTotal','cntProcessed','cntAnalyzed','cntSkipped','cntFailed','cntCost'].forEach(function(id){ document.getElementById(id).textContent='—'; });
       fill.style.width = '0%';
       return;
     }
     if(run.id !== lastRunId){ lastRunId = run.id; lastCount = 0; }
     chip.textContent = run.status_label || run.status;
+    var tlabel = typeLabel(run.run_type);
+    if(tlabel){ typeChip.textContent = tlabel; typeChip.style.display = ''; }
+    else { typeChip.style.display = 'none'; }
     document.getElementById('cntTotal').textContent = run.leads_total;
     document.getElementById('cntProcessed').textContent = run.processed;
     document.getElementById('cntAnalyzed').textContent = run.leads_analyzed;
@@ -253,6 +284,58 @@
     if(polling){ setTimeout(tick, 2000); }
   }
   tick();
+
+  // ── Detalle de evaluaciones por lead del periodo (modo histórico) ──
+  var histUrl = "{% url 'analisis_crm:analysis_progress' %}?hist=1&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}";
+  var tabla = document.getElementById('tablaEvaluaciones');
+  var filtroP = document.getElementById('filtroProgramadas');
+  var filtroTR = document.getElementById('filtroTiempoReal');
+  var histData = [];
+
+  function typeBadge(rt){
+    var label = typeLabel(rt);
+    if(rt === 'daily') return '<span class="pli-badge" style="background:#e6f6ec;color:#1a7f37">'+(label||'Programada')+'</span>';
+    if(rt === 'incremental') return '<span class="pli-badge" style="background:#eef2ff;color:#3157d5">'+(label||'Tiempo real')+'</span>';
+    return '<span class="pli-badge">'+(label||rt||'—')+'</span>';
+  }
+  function renderHist(){
+    var body = tabla ? tabla.querySelector('tbody') : null;
+    if(!body) return;
+    var rows = histData.filter(function(s){
+      if(filtroP.checked && s.run_type !== 'daily') return false;
+      if(filtroTR.checked && s.run_type !== 'incremental') return false;
+      return true;
+    });
+    if(!rows.length){
+      body.innerHTML = '<tr><td colspan="5" style="color:var(--pli-muted)">No hay evaluaciones individuales en este periodo'+
+        ((filtroP.checked||filtroTR.checked)?' con los filtros aplicados.':'')+'</td></tr>';
+      return;
+    }
+    body.innerHTML = rows.map(function(s){
+      var st = s.status || 'processed';
+      var detalle = s.message ? esc(s.message) : '';
+      var linkBase = "{% url 'analisis_crm:lead_conversation' 999999 %}".replace('999999', String(s.lead_id||0));
+      return '<tr>'+
+        '<td>'+fmtTime(s.created_at)+'</td>'+
+        '<td>'+typeBadge(s.run_type)+'</td>'+
+        '<td><a href="'+linkBase+'">LEAD #'+(s.lead_id||'—')+'</a></td>'+
+        '<td>'+esc(st)+'</td>'+
+        '<td style="color:var(--pli-muted);font-size:12px">'+detalle+'</td>'+
+        '</tr>';
+    }).join('');
+  }
+  function loadHist(){
+    fetch(histUrl, {headers:{'X-Requested-With':'XMLHttpRequest'}})
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        histData = (data && data.steps) || [];
+        renderHist();
+      })
+      .catch(function(){});
+  }
+  if(filtroP){ filtroP.addEventListener('change', renderHist); }
+  if(filtroTR){ filtroTR.addEventListener('change', renderHist); }
+  loadHist();
 })();
 </script>
 {% endblock %}

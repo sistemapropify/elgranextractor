@@ -1,0 +1,33 @@
+# Canal TIEMPO REAL de evaluación IA de leads (≥bidireccional, calificados,
+# intención de visita, en visita). Barrido cada 15 minutos.
+# Ejecuta el comando directamente en el App Service vía SSH. Solo re-evalúa
+# los leads de la ventana (6h) cuyo history_hash cambió; los sin cambios se
+# omiten (regla de oro, sin gasto DeepSeek).
+name: Evaluar leads - tiempo real (cada 15 min)
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  evaluar-leads-tiempo-real:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_BD7ACFF66075413F896FF528B42CABC0 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_0FA92F15F0804AE197DC2EECF943B7DB }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_C521A0DD71BB48CE88443464F4F718FB }}
+
+      - name: Run evaluación tiempo real (≥bidireccional, 6h)
+        run: |
+          az webapp ssh \
+            --resource-group rg-elgranextractor \
+            --name granextractorservice \
+            --command "cd /home/site/wwwroot/webapp && (source /home/site/wwwroot/antenv/bin/activate 2>/dev/null || source /antenv/bin/activate 2>/dev/null || true) && python manage.py analyze_lead_conversations --stages bidirectional --lookback-hours 6 --workers 2"

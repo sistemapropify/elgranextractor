@@ -1,6 +1,6 @@
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import date
+from datetime import date, timedelta
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import close_old_connections, transaction
@@ -20,7 +20,7 @@ from lead_intelligence.models import (
     AnalysisRunStep,
     LeadConversationAssessment,
 )
-from lead_intelligence.services import _lead_result_rows
+from lead_intelligence.services import _lead_result_rows, _utc_datetime
 
 
 # Señal de cancelación cooperativa: el dashboard puede pedir detener una
@@ -54,9 +54,51 @@ class Command(BaseCommand):
         parser.add_argument("--workers", type=int, default=4)
         parser.add_argument("--force", action="store_true")
         parser.add_argument("--dry-run", action="store_true")
+        # Canal de evaluación: "entered" (programada: entrantes/contactados) o
+        # "bidirectional" (tiempo real: ≥bidireccional). Default "entered"
+        # preserva el comportamiento manual actual.
+        parser.add_argument(
+            "--stages",
+            default="entered",
+            choices=["entered", "contacted", "bidirectional"],
+        )
+        # Ventana temporal en horas (corridas programadas/tiempo real). Con
+        # lookback > 0 se ignora --from/--to y se evalúan las últimas N horas.
+        parser.add_argument("--lookback-hours", type=int, default=0)
 
     @staticmethod
-    def _process_row(row, *, force, dry_run, existing_keys):
+    def _min_stage_ok(stage: str, structural: dict) -> bool:
+        """¿Cumple el lead la etapa mínima pedida?
+
+        - "entered": cualquier lead con mensajes útiles.
+        - "contacted": el agente respondió.
+        - "bidirectional": el lead respondió tras el agente o avanzó a
+          calificado / intención de visita / visita (≥bidireccional).
+        """
+        if stage == "bidirectional":
+            return bool(
+                structural.get("bidirectional")
+                or structural.get("qualified")
+                or structural.get("visit_intent")
+            )
+        if stage == "contacted":
+            return bool(structural.get("contacted"))
+        return True
+
+    @staticmethod
+    def _assessment_summary(assessment: dict) -> str:
+        """Resumen breve del resultado para la terminal de detalle por lead."""
+        parts = []
+        if assessment.get("qualified_status"):
+            parts.append(f"calificación={assessment['qualified_status']}")
+        if assessment.get("visit_intent_status"):
+            parts.append(f"visita={assessment['visit_intent_status']}")
+        if assessment.get("first_response_status"):
+            parts.append(f"primeraRespuesta={assessment['first_response_status']}")
+        return " · ".join(parts) if parts else "evaluado"
+
+    @staticmethod
+    def _process_row(row, *, force, dry_run, existing_keys, stages="entered"):
         if _cancel_event.is_set():
             return "cancelled", None
         close_old_connections()
@@ -67,11 +109,16 @@ class Command(BaseCommand):
         try:
             raw_history = row["chat_history"]
             history_hash = conversation_hash(raw_history)
+            # Regla de oro: nunca re-evaluar sin cambios (mismo hash + misma
+            # versión del motor) — no se llama a DeepSeek ni se crea step.
             if (row["id"], history_hash) in existing_keys and not force:
                 return "skipped", None
 
             structural = analyze_chat_history(raw_history)
             if not structural["messages"]:
+                return "skipped", None
+            # Filtro por etapa mínima del canal (programada vs tiempo real).
+            if not Command._min_stage_ok(stages, structural):
                 return "skipped", None
 
             skill = AnalizarConversacionLeadSkill()
@@ -87,7 +134,7 @@ class Command(BaseCommand):
                 assessment["first_response_status"] = "not_applicable"
                 assessment["first_response_evidence"] = []
             if dry_run:
-                return "analyzed", None
+                return "analyzed", Command._assessment_summary(assessment)
 
             with transaction.atomic(using="default"):
                 (
@@ -149,7 +196,7 @@ class Command(BaseCommand):
                         },
                     )
                 )
-            return "analyzed", None
+            return "analyzed", Command._assessment_summary(assessment)
         except Exception as exc:
             return "failed", f"Lead {row['id']}: {exc}"
         finally:
@@ -158,10 +205,31 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         lead_id = options["lead_id"]
+        stages = options["stages"]
+        lookback_hours = options["lookback_hours"] or 0
         date_from = None
         date_to = None
+
         if lead_id:
             rows = _lead_result_rows(None, None, lead_id=lead_id)
+        elif lookback_hours > 0:
+            # Canal programado/tiempo real: últimas N horas. Se consulta por
+            # rango de días (mismo filtro SQL que los dashboards) y luego se
+            # acota en Python por marca de tiempo para no depender de la hora
+            # exacta del servidor ni de la conversión de zona horaria.
+            now = timezone.now()
+            cutoff = now - timedelta(hours=lookback_hours)
+            date_from = timezone.localdate(cutoff)
+            date_to = timezone.localdate(now)
+            rows = _lead_result_rows(date_from, date_to)
+            rows = [
+                row
+                for row in rows
+                if (
+                    _utc_datetime(row.get("entered_at")) is not None
+                    and _utc_datetime(row.get("entered_at")) >= cutoff
+                )
+            ]
         else:
             if not options["date_from"] or not options["date_to"]:
                 raise CommandError("Indica --from y --to, o utiliza --lead-id.")
@@ -171,6 +239,15 @@ class Command(BaseCommand):
             except ValueError as exc:
                 raise CommandError("Las fechas deben usar YYYY-MM-DD.") from exc
             rows = _lead_result_rows(date_from, date_to)
+
+        # Tipo de ejecución para la terminal: INCREMENTAL (tiempo real
+        # ≥bidireccional), DAILY (programada entrantes/contactados) o MANUAL.
+        if lookback_hours > 0 and stages == "bidirectional":
+            run_type = AnalysisRun.RunType.INCREMENTAL
+        elif lookback_hours > 0:
+            run_type = AnalysisRun.RunType.DAILY
+        else:
+            run_type = AnalysisRun.RunType.MANUAL
 
         if options["limit"] > 0:
             rows = rows[: options["limit"]]
@@ -206,7 +283,7 @@ class Command(BaseCommand):
                 )
             )
             run = AnalysisRun.objects.using("default").create(
-                run_type=AnalysisRun.RunType.MANUAL,
+                run_type=run_type,
                 status=AnalysisRun.Status.RUNNING,
                 started_at=interrupted_at,
                 heartbeat_at=interrupted_at,
@@ -234,12 +311,13 @@ class Command(BaseCommand):
                     force=options["force"],
                     dry_run=options["dry_run"],
                     existing_keys=existing_keys,
+                    stages=stages,
                 ): row
                 for row in rows
             }
             for future in as_completed(future_to_row):
                 row = future_to_row[future]
-                status, error = future.result()
+                status, detail = future.result()
                 if status == "cancelled":
                     cancelled += 1
                 elif status == "analyzed":
@@ -248,13 +326,15 @@ class Command(BaseCommand):
                     skipped += 1
                 else:
                     failed += 1
-                    self.stderr.write(error)
+                    self.stderr.write(detail)
                 if run is not None:
                     AnalysisRunStep.objects.using("default").create(
                         run=run,
                         lead_id=row["id"],
                         status=status,
-                        message=error or "",
+                        # Detalle individual por lead (resumen del assessment)
+                        # para la terminal "Evaluaciones por lead del periodo".
+                        message=detail or "",
                     )
                 processed = analyzed + skipped + failed + cancelled
                 if run is not None and processed % 5 == 0:

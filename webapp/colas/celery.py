@@ -7,6 +7,7 @@ y broker temporal, con planes de migración a Redis en el futuro.
 
 import os
 from celery import Celery
+from celery.schedules import crontab
 from django.conf import settings
 
 # Establecer el módulo de configuración de Django predeterminado
@@ -118,6 +119,21 @@ app.conf.update(
             'schedule': 604800.0,  # Cada 7 días (semanal)
             'options': {'queue': 'default'},
             'kwargs': {'dry_run': False},
+        },
+        # Evaluación IA de leads (lead_intelligence)
+        # Canal programado: entrantes y contactados (los que faltan evaluar).
+        'evaluar-leads-entrantes-contactados-09-21': {
+            'task': 'lead_intelligence.tasks.evaluar_leads_programada',
+            'schedule': crontab(hour='9,21', minute=0),  # 09:00 y 21:00 America/Lima
+            'options': {'queue': 'analisis'},
+            'kwargs': {'lookback_hours': 24, 'stages': 'entered', 'workers': 2},
+        },
+        # Canal tiempo real: leads ≥bidireccional que cambiaron (cada 15 min).
+        'evaluar-leads-bidireccionales-tiempo-real': {
+            'task': 'lead_intelligence.tasks.evaluar_leads_tiempo_real',
+            'schedule': crontab(minute='*/15'),
+            'options': {'queue': 'analisis'},
+            'kwargs': {'lookback_hours': 6, 'stages': 'bidirectional', 'workers': 2},
         },
     },
     
