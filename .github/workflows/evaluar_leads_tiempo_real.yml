@@ -25,6 +25,9 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_0FA92F15F0804AE197DC2EECF943B7DB }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_C521A0DD71BB48CE88443464F4F718FB }}
 
+      - name: Install webapp CLI extension (para az webapp ssh --command)
+        run: az extension add --name webapp --upgrade --yes
+
       - name: Run evaluación tiempo real (≥bidireccional, 6h)
         run: |
           az webapp ssh \
