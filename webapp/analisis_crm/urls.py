@@ -1,6 +1,7 @@
 from django.urls import path
 from . import views
 from lead_intelligence import views as intelligence_views
+from lead_intelligence import analytics_api as lead_analytics_api
 
 app_name = 'analisis_crm'
 
@@ -47,6 +48,9 @@ urlpatterns = [
     path('resultados/', intelligence_views.lead_results, name='lead_results'),
     path('resultados/<int:lead_id>/', intelligence_views.lead_conversation, name='lead_conversation'),
     path('api/management/summary/', intelligence_views.management_summary_api, name='management_summary_api'),
+    path('api/hourly-agent-matrix/', lead_analytics_api.hourly_agent_matrix_api, name='hourly_agent_matrix_api'),
+    path('api/attention-quality/', lead_analytics_api.attention_quality_api, name='attention_quality_api'),
+    path('api/property-dashboard/', lead_analytics_api.property_dashboard_api, name='property_dashboard_api'),
     path('leads/', views.lead_list, name='lead_list'),
     path('leads/<int:pk>/', views.lead_detail, name='lead_detail'),
     path('analytics/', views.analytics, name='analytics'),

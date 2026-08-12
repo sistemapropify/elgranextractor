@@ -31,6 +31,7 @@ PUBLIC_PATHS = [
     r'^/intelligence/chat-web/',    # Chat web API (público, autenticación por user_id)
     r'^/matching/',              # Matching dashboard y calendario (público)
     r'^/canvas/api/',            # Canvas API (las vistas manejan autenticación internamente con JSON 401)
+    r'^/analisis-crm/api/',      # API de inteligencia de leads (las vistas manejan auth: sesión gerencia o X-Analytics-API-Key)
 ]
 
 
