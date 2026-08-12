@@ -9,12 +9,18 @@
 # Reusa de views.py: analytics_access_required (sesión gerencia O API key,
 # ya existía ahí junto a management_access_required, que extiende) y
 # _parameters (parseo de from/to/cohort compartido por todos los dashboards).
+import json
+
 from django.http import JsonResponse
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_POST
 
 from .property_dashboard import get_property_dashboard
 from .services import get_attention_quality_dashboard, get_hourly_agent_matrix
-from .views import _parameters, analytics_access_required
+from .views import (
+    _has_fresh_running_run,
+    _parameters,
+    analytics_access_required,
+)
 
 
 @analytics_access_required
@@ -78,4 +84,89 @@ def property_dashboard_api(request):
             "portfolio_comparison": data["portfolio_comparison"],
             "collection_found": data["collection_found"],
         }
+    )
+
+
+@analytics_access_required
+@require_POST
+def evaluacion_automatica(request):
+    """Dispara una evaluación incremental de leads (canales programada/tiempo real).
+
+    Es el disparador que usa el cron de GitHub Actions (header
+    ``X-Analytics-API-Key``, mismo mecanismo que los endpoints de analítica del
+    puente externo del CRM). Cuerpo JSON opcional:
+        {"stages": "entered"|"contacted"|"bidirectional",
+         "lookback_hours": 24,
+         "workers": 2}
+    Responde 202 al instante; la evaluación corre en un hilo en segundo plano y
+    su progreso se ve en "Ejecuciones del analizador" (AnalysisRun/Steps).
+    """
+    from django.core.management import call_command
+
+    from .management.commands.analyze_lead_conversations import reset_cancel
+
+    try:
+        payload = json.loads(request.body or b"{}")
+    except (TypeError, ValueError, json.JSONDecodeError):
+        payload = {}
+
+    stages = str(payload.get("stages") or "entered")
+    if stages not in ("entered", "contacted", "bidirectional"):
+        return JsonResponse(
+            {"status": "error", "detail": "stages inválido"},
+            status=400,
+        )
+    try:
+        lookback_hours = int(payload.get("lookback_hours") or 0)
+        workers = int(payload.get("workers") or 2)
+    except (TypeError, ValueError):
+        return JsonResponse(
+            {"status": "error", "detail": "lookback_hours/workers deben ser enteros"},
+            status=400,
+        )
+    if workers < 1 or workers > 8:
+        return JsonResponse(
+            {"status": "error", "detail": "workers debe estar entre 1 y 8"},
+            status=400,
+        )
+
+    # Evita superponer evaluaciones (el cron corre cada 15 min y la programada
+    # puede tardar más de una pasada): si ya hay un run activo, se omite.
+    if _has_fresh_running_run(clean_stale=True):
+        return JsonResponse(
+            {
+                "status": "already_running",
+                "stages": stages,
+                "lookback_hours": lookback_hours,
+            },
+            status=202,
+        )
+
+    reset_cancel()
+
+    def _ejecutar():
+        from io import StringIO
+
+        from django.db import close_old_connections
+
+        close_old_connections()
+        try:
+            buf = StringIO()
+            call_command(
+                "analyze_lead_conversations",
+                stages=stages,
+                lookback_hours=lookback_hours,
+                workers=workers,
+                stdout=buf,
+                stderr=buf,
+            )
+        finally:
+            close_old_connections()
+
+    from threading import Thread
+
+    Thread(target=_ejecutar, daemon=True).start()
+    return JsonResponse(
+        {"status": "started", "stages": stages, "lookback_hours": lookback_hours},
+        status=202,
     )

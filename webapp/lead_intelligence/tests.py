@@ -897,3 +897,68 @@ class AnalysisProgressHistoricalApiTests(SimpleTestCase):
         self.assertEqual(data["steps"][0]["run_type"], "daily")
         self.assertEqual(data["steps"][0]["lead_id"], 123)
         self.assertIn("calificación=confirmed", data["steps"][0]["message"])
+
+
+class EvaluacionAutomaticaApiTests(SimpleTestCase):
+    """Endpoint que dispara la evaluación incremental (canales del cron)."""
+
+    URL = "/analisis-crm/api/evaluacion-automatica/"
+
+    def test_ruta_resuelve(self):
+        url = reverse("analisis_crm:evaluacion_automatica")
+        self.assertTrue(url.endswith("/analisis-crm/api/evaluacion-automatica/"))
+
+    @patch.dict("os.environ", {"ANALYTICS_BRIDGE_API_KEY": "clave-test"})
+    def test_sin_api_key_es_403(self):
+        from django.test import Client
+
+        resp = Client().post(self.URL, data=b"{}", content_type="application/json")
+        self.assertEqual(resp.status_code, 403)
+
+    @patch.dict("os.environ", {"ANALYTICS_BRIDGE_API_KEY": "clave-test"})
+    def test_stages_invalido_es_400(self):
+        from django.test import Client
+
+        resp = Client().post(
+            self.URL,
+            data=b'{"stages":"xx"}',
+            content_type="application/json",
+            HTTP_X_ANALYTICS_API_KEY="clave-test",
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    @patch.dict("os.environ", {"ANALYTICS_BRIDGE_API_KEY": "clave-test"})
+    @patch(
+        "lead_intelligence.analytics_api._has_fresh_running_run",
+        return_value=False,
+    )
+    @patch("threading.Thread")
+    def test_api_key_valida_dispara_202(self, thread_cls, _run):
+        from django.test import Client
+
+        resp = Client().post(
+            self.URL,
+            data=b'{"stages":"entered","lookback_hours":24,"workers":2}',
+            content_type="application/json",
+            HTTP_X_ANALYTICS_API_KEY="clave-test",
+        )
+        self.assertEqual(resp.status_code, 202)
+        self.assertEqual(resp.json().get("status"), "started")
+        self.assertTrue(thread_cls.called)
+
+    @patch.dict("os.environ", {"ANALYTICS_BRIDGE_API_KEY": "clave-test"})
+    @patch(
+        "lead_intelligence.analytics_api._has_fresh_running_run",
+        return_value=True,
+    )
+    def test_ya_en_curso_omite(self, _run):
+        from django.test import Client
+
+        resp = Client().post(
+            self.URL,
+            data=b'{"stages":"entered","lookback_hours":24}',
+            content_type="application/json",
+            HTTP_X_ANALYTICS_API_KEY="clave-test",
+        )
+        self.assertEqual(resp.status_code, 202)
+        self.assertEqual(resp.json().get("status"), "already_running")

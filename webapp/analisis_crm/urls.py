@@ -51,6 +51,11 @@ urlpatterns = [
     path('api/hourly-agent-matrix/', lead_analytics_api.hourly_agent_matrix_api, name='hourly_agent_matrix_api'),
     path('api/attention-quality/', lead_analytics_api.attention_quality_api, name='attention_quality_api'),
     path('api/property-dashboard/', lead_analytics_api.property_dashboard_api, name='property_dashboard_api'),
+    path(
+        'api/evaluacion-automatica/',
+        lead_analytics_api.evaluacion_automatica,
+        name='evaluacion_automatica',
+    ),
     path('leads/', views.lead_list, name='lead_list'),
     path('leads/<int:pk>/', views.lead_detail, name='lead_detail'),
     path('analytics/', views.analytics, name='analytics'),

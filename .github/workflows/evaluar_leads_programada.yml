@@ -1,8 +1,9 @@
 # Canal PROGRAMADA de evaluación IA de leads (entrantes + contactados).
-# Corre a las 09:00 y 21:00 hora de Perú (UTC-5) → cron en UTC: 0 2,14 * * *.
-# Ejecuta el comando directamente en el App Service (donde viven las
-# credenciales del CRM y DeepSeek) vía SSH. Solo re-evalúa leads cuyo
-# history_hash cambió (regla de oro, sin gasto DeepSeek innecesario).
+# Corre a las 09:00 y 21:00 hora de Perú (UTC-5) -> cron en UTC: 0 2,14 * * *.
+# Dispara el endpoint protegido del App Service (donde viven las credenciales
+# del CRM y DeepSeek) vía POST con X-Analytics-API-Key. La evaluación corre en
+# segundo plano dentro de la app; solo re-evalúa leads cuyo history_hash cambió
+# (regla de oro, sin gasto DeepSeek innecesario).
 name: Evaluar leads - programada (09:00/21:00)
 
 on:
@@ -11,26 +12,16 @@ on:
   workflow_dispatch:
 
 permissions:
-  id-token: write
   contents: read
 
 jobs:
   evaluar-leads-programada:
     runs-on: ubuntu-latest
     steps:
-      - name: Login to Azure
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_BD7ACFF66075413F896FF528B42CABC0 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_0FA92F15F0804AE197DC2EECF943B7DB }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_C521A0DD71BB48CE88443464F4F718FB }}
-
-      - name: Install webapp CLI extension (para az webapp ssh --command)
-        run: az extension add --name webapp --upgrade --yes
-
-      - name: Run evaluación programada (entrantes + contactados, 24h)
+      - name: Disparar evaluacion programada (entrantes + contactados, 24h)
         run: |
-          az webapp ssh \
-            --resource-group rg-elgranextractor \
-            --name granextractorservice \
-            --command "cd /home/site/wwwroot/webapp && (source /home/site/wwwroot/antenv/bin/activate 2>/dev/null || source /antenv/bin/activate 2>/dev/null || true) && python manage.py analyze_lead_conversations --stages entered --lookback-hours 24 --workers 2"
+          curl -sS --max-time 90 -X POST \
+            -H "X-Analytics-API-Key: ${{ secrets.ANALYTICS_BRIDGE_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"stages":"entered","lookback_hours":24,"workers":2}' \
+            "https://acm.propifai.com/analisis-crm/api/evaluacion-automatica/"
