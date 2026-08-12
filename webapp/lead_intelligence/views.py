@@ -1,3 +1,4 @@
+import os
 from datetime import date, timedelta
 from functools import wraps
 
@@ -105,6 +106,34 @@ def management_access_required(view_func):
         return HttpResponseForbidden(
             "Acceso reservado para gerencia y supervisión."
         )
+
+    return wrapped
+
+
+def _has_valid_analytics_api_key(request):
+    """Header X-Analytics-API-Key server-to-server (consumo externo, ej. el
+    backend DRF del CRM). Fail-closed: sin env var configurada, no hay forma
+    de pasar el chequeo por API key (solo queda la ruta de sesión).
+    """
+    expected = os.environ.get("ANALYTICS_BRIDGE_API_KEY", "")
+    if not expected:
+        return False
+    return request.headers.get("X-Analytics-API-Key", "") == expected
+
+
+def analytics_access_required(view_func):
+    """Acceso por sesión Django de gerencia (dashboard interno, ver
+    ``management_access_required``) O por API key server-to-server (consumo
+    externo). Pensado para los endpoints JSON de ``/api/...`` que además de
+    servir al dashboard propio, exponen datos a otros servicios (ej. el
+    backend DRF del CRM vía su proxy, ver README de integración).
+    """
+
+    @wraps(view_func)
+    def wrapped(request, *args, **kwargs):
+        if _has_valid_analytics_api_key(request):
+            return view_func(request, *args, **kwargs)
+        return management_access_required(view_func)(request, *args, **kwargs)
 
     return wrapped
 
@@ -614,7 +643,7 @@ def lead_conversation(request, lead_id):
     )
 
 
-@management_access_required
+@analytics_access_required
 @require_GET
 def management_summary_api(request):
     date_from, date_to, cohort_date = _parameters(request)
@@ -631,6 +660,13 @@ def management_summary_api(request):
                 {**row, "cohort_date": str(row["cohort_date"])}
                 for row in data["cohorts"]
             ],
+            "agent_load": data["agent_load"],
             "data_quality": data["data_quality"],
         }
     )
+
+
+# Los otros 3 endpoints de analítica externa (hourly-agent-matrix,
+# attention-quality, property-dashboard) viven en analytics_api.py, no acá
+# — para no seguir agrandando este archivo con vistas nuevas. Reusan
+# analytics_access_required y _parameters de este módulo.
