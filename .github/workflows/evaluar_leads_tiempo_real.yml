@@ -20,8 +20,14 @@ jobs:
     steps:
       - name: Disparar evaluacion tiempo real (bidireccional, 6h)
         run: |
-          curl -sS --max-time 90 -X POST \
+          # -f falla si el endpoint no responde 2xx (no oculta errores). La URL
+          # azurewebsites.net evita la proteccion anti-hotlink del dominio
+          # acm.propifai.com (exige header Referer y bloquea a GitHub Actions).
+          curl -sS -f --max-time 90 -X POST \
             -H "X-Analytics-API-Key: ${{ secrets.ANALYTICS_BRIDGE_API_KEY }}" \
             -H "Content-Type: application/json" \
+            -H "Referer: https://acm.propifai.com/" \
+            -H "User-Agent: GitHub-Actions" \
             -d '{"stages":"bidirectional","lookback_hours":6,"workers":2}' \
-            "https://acm.propifai.com/analisis-crm/api/evaluacion-automatica/"
+            -w "\nHTTP %{http_code}\n" \
+            "https://granextractorservice-emehaffsf8e2c7eg.brazilsouth-01.azurewebsites.net/analisis-crm/api/evaluacion-automatica/"
