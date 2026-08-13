@@ -30,9 +30,11 @@ def validate_property_payload(data):
 
 
 def validate_rendered_response(text, data):
-    return bool(
-        text
-        and text.count("¡Gracias por escribirnos!") == 1
-        and data["location"] in text
-        and "Apenas uno de nuestros asesores esté disponible" in text
-    )
+    """Valida que el render haya producido una respuesta no vacía.
+
+    Ya no exige frases literales fijas (saludo exacto, "asesor disponible"
+    ni el marcador de ubicación): esas plantillas son editables desde el
+    dashboard del bot, por lo que el responder no debe rechazar el mensaje
+    automáticamente cuando el texto aprobado no las incluya.
+    """
+    return bool(text and text.strip())
