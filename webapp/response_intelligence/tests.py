@@ -271,3 +271,104 @@ class LLMGenerateResponseTests(SimpleTestCase):
             )
         self.assertTrue(ok)
         self.assertEqual(captured["trace"], "bot_draft:42")
+
+
+class MemoryBridgePromptTests(SimpleTestCase):
+    """PromptAssemblyService.assemble con memoria conversacional (sin BD)."""
+
+    @staticmethod
+    def _ctx(messages=None, summary=""):
+        return {
+            "messages": messages or [],
+            "summary": summary,
+            "user_id": "u-1",
+            "session_id": "sess-1",
+        }
+
+    def test_extract_property_identity_es_dict(self):
+        from n8n_bridge.services.initial_property_detector import (
+            extract_property_identity,
+        )
+
+        detected = extract_property_identity(
+            "¡Hola! Más info sobre el depa (PROP000265)"
+        )
+        self.assertIsInstance(detected, dict)
+        self.assertIn("PROP000265", detected["codes"])
+
+    def test_resuelve_property_desde_contexto_de_memoria(self):
+        """Repregunta sin código: resuelve el property desde la memoria."""
+        ctx = self._ctx(
+            messages=[
+                {"role": "user", "content": "¿Cuánto cuesta PROP000265?"},
+                {"role": "assistant", "content": "El depa cuesta 120k"},
+            ],
+            summary="Cliente busca departamento.",
+        )
+        with mock.patch(
+            "response_intelligence.prompt_assembly.memory_bridge.resolve_memory",
+            return_value=(
+                SimpleNamespace(id="user"),
+                SimpleNamespace(id="conv"),
+                ctx,
+            ),
+        ), mock.patch.object(
+            PromptAssemblyService, "build_system_prompt", return_value="SISTEMA"
+        ), mock.patch.object(
+            PromptAssemblyService, "select_few_shot", return_value=[]
+        ), mock.patch.object(
+            PromptAssemblyService,
+            "fetch_live_property_data",
+            return_value={"success": False},
+        ) as fetch:
+            result = PromptAssemblyService.assemble(
+                "¿cuál es el método de pago?", lead_id=5, phone="999"
+            )
+        fetch.assert_called_once_with("PROP000265")
+        self.assertIn("Contexto de la conversación", result["user_prompt"])
+        self.assertIn("PROP000265", result["user_prompt"])
+        self.assertEqual(result["memory"]["conversation_id"], "conv")
+
+    def test_resuelve_property_desde_mensaje_actual(self):
+        with mock.patch(
+            "response_intelligence.prompt_assembly.memory_bridge.resolve_memory",
+            return_value=(None, None, {}),
+        ), mock.patch.object(
+            PromptAssemblyService, "build_system_prompt", return_value="SISTEMA"
+        ), mock.patch.object(
+            PromptAssemblyService, "select_few_shot", return_value=[]
+        ), mock.patch.object(
+            PromptAssemblyService,
+            "fetch_live_property_data",
+            return_value={"success": False},
+        ) as fetch:
+            PromptAssemblyService.assemble(
+                "Quiero info de la casa PROP000270", phone="999"
+            )
+        fetch.assert_called_once_with("PROP000270")
+
+    def test_sin_memoria_no_rompe_ni_inyecta_contexto(self):
+        with mock.patch(
+            "response_intelligence.prompt_assembly.memory_bridge.resolve_memory",
+            return_value=(None, None, {}),
+        ), mock.patch.object(
+            PromptAssemblyService, "build_system_prompt", return_value="SISTEMA"
+        ), mock.patch.object(
+            PromptAssemblyService, "select_few_shot", return_value=[]
+        ), mock.patch.object(
+            PromptAssemblyService,
+            "fetch_live_property_data",
+            return_value={"success": False},
+        ):
+            result = PromptAssemblyService.assemble("hola")
+        self.assertNotIn("Contexto de la conversación", result["user_prompt"])
+        self.assertIsNone(result["memory"]["conversation_id"])
+
+    def test_property_code_from_context_puro(self):
+        from response_intelligence import memory_bridge
+
+        ctx = self._ctx(
+            messages=[{"role": "user", "content": "¿precio de PROP 265?"}]
+        )
+        self.assertEqual(memory_bridge.property_code_from_context(ctx), "PROP000265")
+        self.assertEqual(memory_bridge._normalize_code("prop 7"), "PROP000007")

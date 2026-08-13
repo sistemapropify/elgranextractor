@@ -6,6 +6,9 @@ Reglas de negocio + ejemplos curados + datos de propiedad en vivo (SELECT al CRM
 
 import re
 
+from n8n_bridge.services.initial_property_detector import extract_property_identity
+
+from . import memory_bridge
 from .curation import CurationService
 from .models import BusinessRule, CuratedExample
 
@@ -110,8 +113,24 @@ class PromptAssemblyService:
     # Ensamblado final
     # ------------------------------------------------------------------ #
     @classmethod
-    def assemble(cls, client_message: str, intent_category: str = "", property_code: str = "") -> dict:
+    def assemble(
+        cls,
+        client_message: str,
+        intent_category: str = "",
+        property_code: str = "",
+        *,
+        lead_id=None,
+        phone=None,
+        thread_id=None,
+        app_id="motor-ia-whatsapp",
+    ) -> dict:
         """Compone el prompt final y devuelve lo inyectado para auditoría.
+
+        Incorpora el contexto conversacional real (memoria de la app
+        ``intelligence``) para no responder "amnésico". Si ``property_code`` no
+        llega, se resuelve en este orden: mensaje actual -> contexto de memoria
+        -> PropertyBotInitialResponse. Todo es fail-open: si la memoria no está
+        disponible, el prompt se arma igual que antes (sin contexto).
 
         Devuelve:
         {
@@ -120,10 +139,29 @@ class PromptAssemblyService:
           "few_shot": [{"client_message","agent_response"}, ...],
           "property_data_used": [dict, ...] | [],
           "intent_category": str,
+          "memory": {"conversation_id", "user_id", "app_id"},  # write-path
         }
         """
         system_prompt = cls.build_system_prompt()
         few_shot = cls.select_few_shot(client_message, intent_category)
+
+        # Memoria conversacional (fail-open: contexto vacío si no se puede).
+        user, conversation, context = memory_bridge.resolve_memory(
+            phone, lead_id, thread_id, app_id
+        )
+
+        # Resolución de la propiedad: mensaje -> memoria -> initial response.
+        if not property_code:
+            detected = extract_property_identity(client_message)
+            if detected.get("codes"):
+                property_code = detected["codes"][0]
+            else:
+                property_code = memory_bridge.property_code_from_context(context)
+            if not property_code:
+                property_code = memory_bridge.property_code_from_initial_response(
+                    phone, thread_id
+                )
+
         property_data_used = []
         if property_code:
             live = cls.fetch_live_property_data(property_code)
@@ -144,6 +182,29 @@ class PromptAssemblyService:
                 "\n\nEjemplos de respuestas correctas (tono y estructura a seguir):\n"
                 + "\n\n".join(rendered)
             )
+
+        # Bloque de contexto conversacional (memoria, últimos turnos + resumen).
+        conversation_block = ""
+        if context:
+            lines = []
+            for message in (context.get("messages") or [])[-6:]:
+                role_label = (
+                    "Cliente" if message.get("role") == "user" else "Asistente"
+                )
+                content = str(message.get("content") or "").strip()
+                if content:
+                    lines.append(f"{role_label}: {content}")
+            summary = str(context.get("summary") or "").strip()
+            if lines or summary:
+                parts = []
+                if lines:
+                    parts.append("\n".join(lines))
+                if summary:
+                    parts.append(f"Resumen previo: {summary}")
+                conversation_block = (
+                    "\n\nContexto de la conversación (historial previo, úsalo "
+                    "para mantener coherencia):\n" + "\n\n".join(parts)
+                )
 
         # Bloque de datos de la propiedad (RAG).
         property_block = ""
@@ -172,7 +233,7 @@ class PromptAssemblyService:
         user_prompt = (
             "El cliente escribe:\n"
             f"{client_message}\n"
-            f"{examples_block}{property_block}\n\n"
+            f"{examples_block}{conversation_block}{property_block}\n\n"
             "Responde de forma natural, breve y en español."
         )
         return {
@@ -184,4 +245,9 @@ class PromptAssemblyService:
             ],
             "property_data_used": property_data_used,
             "intent_category": intent_category,
+            "memory": {
+                "conversation_id": str(conversation.id) if conversation else None,
+                "user_id": str(user.id) if user else None,
+                "app_id": app_id,
+            },
         }

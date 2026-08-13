@@ -85,10 +85,14 @@ def maybe_generate_shadow_draft(
             draft.save(using="default", update_fields=["trace_id"])
             return draft
 
+        # shadow_live: SOLO LECTURA de la memoria (no se escribe el borrador
+        # porque no se envía). El contexto se lee aislado en app motor-ia-whatsapp.
         assembled = PromptAssemblyService.assemble(
             client_message=text,
             intent_category=intent,
             property_code=property_code,
+            lead_id=lead_id,
+            thread_id=thread_id,
         )
         draft = BotResponseDraft.objects.using("default").create(
             source_lead_id=lead_id or 0,

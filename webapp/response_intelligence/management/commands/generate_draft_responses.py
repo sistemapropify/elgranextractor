@@ -20,6 +20,7 @@ from lead_intelligence.conversation_analysis import analyze_chat_history
 from lead_intelligence.services import _lead_result_rows
 
 from response_intelligence.curation import CurationService
+from response_intelligence import memory_bridge
 from response_intelligence.models import BotResponseDraft
 from response_intelligence.prompt_assembly import PromptAssemblyService
 
@@ -102,10 +103,19 @@ class Command(BaseCommand):
                 client_message=text,
                 intent_category=intent_category,
                 property_code=property_code,
+                lead_id=row["id"],
+                phone=row.get("phone"),
+                thread_id=row.get("id_chatwoot"),
             )
+            memory_id = (assembled.get("memory") or {}).get("conversation_id")
             if dry_run:
                 created += 1
                 continue
+
+            # Escribir el turno del cliente en memoria (sandbox y production;
+            # shadow_live es solo lectura: el borrador no se envía).
+            if memory_id and mode in ("sandbox", "production"):
+                memory_bridge.save_turn(memory_id, "user", text)
 
             draft = BotResponseDraft.objects.using("default").create(
                 source_lead_id=row["id"],
@@ -138,6 +148,10 @@ class Command(BaseCommand):
                 continue
             draft.generated_response = response
             draft.trace_id = f"bot_draft:{draft.pk}"
+            # En production, la respuesta es la que se envía: se guarda también
+            # en memoria para que el siguiente turno tenga contexto completo.
+            if mode == "production" and memory_id:
+                memory_bridge.save_turn(memory_id, "assistant", response)
             # Validación determinista post-generación (spec §7).
             validation = validate_generated_response(
                 response, draft.property_data_used
