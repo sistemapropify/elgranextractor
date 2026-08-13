@@ -12,6 +12,7 @@
 import json
 
 from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
 from .property_dashboard import get_property_dashboard
@@ -87,6 +88,7 @@ def property_dashboard_api(request):
     )
 
 
+@csrf_exempt
 @analytics_access_required
 @require_POST
 def evaluacion_automatica(request):
