@@ -28,14 +28,52 @@ def _normalize_code(raw: str) -> str:
     return f"PROP{int(match.group(1)):06d}"
 
 
+def _ensure_user(identifier, channel):
+    """Crea/obtiene el User de memoria con los campos reales del modelo.
+
+    Evita el bug de ``MemoryService.get_or_create_user`` (asume un campo
+    ``level`` inexistente en ``Role`` y no puede crear usuarios nuevos). Se usa
+    como fallback solo cuando ese método falla. ``identifier`` es phone o email
+    (o sintético ``lead:{id}``); se usa también como ``username`` único.
+    """
+    from django.db import IntegrityError
+    from django.utils import timezone
+
+    from intelligence.models import Role, User
+
+    is_email = "@" in identifier
+    role = Role.objects.filter(name="Usuario Básico").first() or Role.objects.first()
+    if role is None:
+        role = Role.objects.create(
+            name="Usuario Básico",
+            default_level=1,
+            max_level=5,
+            default_domains=[],
+            capabilities={"memory": True},
+            description="Rol por defecto para usuarios nuevos",
+        )
+    now = timezone.now().isoformat()
+    defaults = {
+        "role": role,
+        "is_active": True,
+        "username": identifier,
+        "metadata": {"channels": [channel], "first_seen": now, "last_seen": now},
+    }
+    lookup = {"email": identifier} if is_email else {"phone": identifier}
+    try:
+        user, _created = User.objects.get_or_create(**lookup, defaults=defaults)
+    except IntegrityError:
+        # Carrera en threads (check -> create). Reintentar por lectura.
+        user = User.objects.get(**lookup)
+    return user
+
+
 def resolve_user(phone, lead_id):
     """Resuelve/crea el User de memoria por phone; fallback ``lead:{id}``.
 
     Fail-open: sin phone y sin lead_id -> None. No lanza.
     """
     try:
-        from django.db import IntegrityError
-
         from intelligence.services.memory import MemoryService
 
         identifier = str(phone or "").strip()
@@ -45,13 +83,10 @@ def resolve_user(phone, lead_id):
             return None
         try:
             return MemoryService.get_or_create_user(identifier, channel="whatsapp")
-        except IntegrityError:
-            # Carrera en threads (check -> create). Reintentar por lectura.
-            from intelligence.models import User
-
-            if "@" in identifier:
-                return User.objects.get(email=identifier)
-            return User.objects.get(phone=identifier)
+        except Exception:  # noqa: BLE001
+            # Bug conocido: get_or_create_user no crea usuarios nuevos porque
+            # asume Role.level (inexistente). Fallback con campos reales.
+            return _ensure_user(identifier, "whatsapp")
     except Exception:  # noqa: BLE001
         return None
 
