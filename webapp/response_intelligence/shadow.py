@@ -41,6 +41,7 @@ def maybe_generate_shadow_draft(
     thread_id="",
     intent_category="",
     property_code="",
+    phone="",
 ):
     """Genera un draft shadow_live de forma segura (nunca lanza).
 
@@ -72,7 +73,10 @@ def maybe_generate_shadow_draft(
                 source_lead_id=lead_id or 0,
                 client_message=text,
                 intent_category=intent,
-                prompt_snapshot={"guardrail": "escalamiento"},
+                prompt_snapshot={
+                    "guardrail": "escalamiento",
+                    "context": {"thread_id": thread_id, "phone": phone},
+                },
                 generated_response="",
                 property_data_used=[],
                 mode=BotResponseDraft.Mode.SHADOW_LIVE,
@@ -102,6 +106,10 @@ def maybe_generate_shadow_draft(
                 "system_prompt": assembled["system_prompt"],
                 "user_prompt": assembled["user_prompt"],
                 "few_shot": assembled["few_shot"],
+                # Contexto del hilo/teléfono para que el revisor sepa de qué
+                # lead proviene el draft (los drafts del primer mensaje no
+                # tienen lead_id en el CRM todavía).
+                "context": {"thread_id": thread_id, "phone": phone},
             },
             generated_response="",
             property_data_used=assembled["property_data_used"],

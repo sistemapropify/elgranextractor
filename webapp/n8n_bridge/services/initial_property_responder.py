@@ -87,6 +87,7 @@ def process_initial_message(payload):
             spawn_shadow_draft(
                 client_message=text,
                 thread_id=external_id or phone,
+                phone=phone,
             )
         except Exception:  # noqa: BLE001
             pass

@@ -125,6 +125,11 @@ class Command(BaseCommand):
                     "system_prompt": assembled["system_prompt"],
                     "user_prompt": assembled["user_prompt"],
                     "few_shot": assembled["few_shot"],
+                    # Contexto del lead/hilo para que el revisor sepa el origen.
+                    "context": {
+                        "thread_id": row.get("id_chatwoot"),
+                        "phone": row.get("phone"),
+                    },
                 },
                 generated_response="",
                 property_data_used=assembled["property_data_used"],

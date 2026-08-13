@@ -74,7 +74,14 @@
           {% for draft in pending %}
             <article class="pli-review-row">
               <div class="pli-review-main">
-                <span class="pli-lead-id">LEAD #{{ draft.source_lead_id }} · {{ draft.mode }} · {{ draft.intent_category|default:"sin categoría" }}</span>
+                <span class="pli-lead-id">
+                  {% if draft.prompt_snapshot.context.thread_id or draft.prompt_snapshot.context.phone %}Hilo{% else %}LEAD{% endif %} #{{ draft.source_lead_id|default:"?" }}
+                  · {{ draft.created_at|date:"d/m/Y H:i" }}
+                  · {{ draft.mode }}
+                  {% if draft.prompt_snapshot.context.thread_id %} · hilo {{ draft.prompt_snapshot.context.thread_id }}{% endif %}
+                  {% if draft.prompt_snapshot.context.phone %} · tel {{ draft.prompt_snapshot.context.phone }}{% endif %}
+                  · {{ draft.intent_category|default:"sin categoría" }}
+                </span>
                 <div><strong>Cliente:</strong><div class="pli-draft">{{ draft.client_message }}</div></div>
                 <div><strong>Respuesta del motor:</strong><div class="pli-draft">{{ draft.generated_response|default:"—" }}</div></div>
                 <div class="pli-badges">
