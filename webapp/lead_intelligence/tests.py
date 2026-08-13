@@ -962,3 +962,67 @@ class EvaluacionAutomaticaApiTests(SimpleTestCase):
         )
         self.assertEqual(resp.status_code, 202)
         self.assertEqual(resp.json().get("status"), "already_running")
+
+
+class VisitIntentApiTests(SimpleTestCase):
+    """Endpoint de intención de visita para el CRM (sin BD)."""
+
+    URL = "/analisis-crm/api/visit-intent/"
+
+    def test_ruta_resuelve(self):
+        url = reverse("analisis_crm:visit_intent_api")
+        self.assertTrue(url.endswith("/analisis-crm/api/visit-intent/"))
+
+    @patch.dict("os.environ", {"ANALYTICS_BRIDGE_API_KEY": "clave-test"})
+    def test_sin_api_key_es_403(self):
+        from django.test import Client
+
+        resp = Client().get(
+            self.URL + "?from=2026-08-01&to=2026-08-13"
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    @patch.dict("os.environ", {"ANALYTICS_BRIDGE_API_KEY": "clave-test"})
+    @patch(
+        "lead_intelligence.analytics_api.get_visit_intent_leads",
+        return_value=[
+            {
+                "lead_id": 3384,
+                "contact_name": "Elia Flores",
+                "phone": "+51994607186",
+                "agent_id": 3,
+                "agent_name": "Carlos Torres",
+                "status_name": "Interesado en vender",
+                "entered_at": "2026-08-13T13:43:58-05:00",
+                "visit_intent_status": "confirmed",
+                "visit_intent_confidence": 0.85,
+                "visit_intent_at": "2026-08-13T14:02:11-05:00",
+                "visit_intent_evidence": [
+                    {
+                        "message_index": 4,
+                        "sender": "lead",
+                        "text": "Sí, quisiera visitarlo mañana",
+                        "timestamp": "2026-08-13T14:02:11-05:00",
+                    }
+                ],
+                "property_id": 99,
+                "property_code": "PROP000099",
+                "property_title": "Terreno ideal",
+                "visit_registered": False,
+            }
+        ],
+    )
+    def test_con_api_key_devuelve_payload(self, _service):
+        from django.test import Client
+
+        resp = Client().get(
+            self.URL + "?from=2026-08-01&to=2026-08-13",
+            HTTP_X_ANALYTICS_API_KEY="clave-test",
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["count"], 1)
+        self.assertEqual(data["items"][0]["lead_id"], 3384)
+        self.assertEqual(data["items"][0]["visit_intent_status"], "confirmed")
+        self.assertTrue(data["items"][0]["visit_intent_evidence"])
+        _service.assert_called_once()

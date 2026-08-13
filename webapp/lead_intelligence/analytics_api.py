@@ -10,18 +10,27 @@
 # ya existía ahí junto a management_access_required, que extiende) y
 # _parameters (parseo de from/to/cohort compartido por todos los dashboards).
 import json
+from datetime import datetime, time as dt_time
 
+from django.db import connections
 from django.http import JsonResponse
+from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
+from .models import LeadConversationAssessment
 from .property_dashboard import get_property_dashboard
-from .services import get_attention_quality_dashboard, get_hourly_agent_matrix
+from .services import (
+    _dict_rows,
+    get_attention_quality_dashboard,
+    get_hourly_agent_matrix,
+)
 from .views import (
     _has_fresh_running_run,
     _parameters,
     analytics_access_required,
 )
+from .visit_resolution import resolve_visits_for_leads
 
 
 @analytics_access_required
@@ -171,4 +180,153 @@ def evaluacion_automatica(request):
     return JsonResponse(
         {"status": "started", "stages": stages, "lookback_hours": lookback_hours},
         status=202,
+    )
+
+
+def get_visit_intent_leads(date_from, date_to, status="confirmed", agent_id=None, limit=100):
+    """Leads con intención de visita confirmada por la IA, enriquecidos con el CRM.
+
+    Fuente: ``LeadConversationAssessment`` (BD default) con
+    ``visit_intent_status`` (resultado del análisis IA/determinista de
+    lead_intelligence). Se enriquece con el lead del CRM (contacto, agente,
+    estado, propiedad vía ``lead_properties``) y si la visita ya quedó
+    registrada (``resolve_visits_for_leads``).
+    """
+    start = datetime.combine(date_from, dt_time.min)
+    end = datetime.combine(date_to, dt_time.max)
+    qs = (
+        LeadConversationAssessment.objects.using("default")
+        .filter(
+            visit_intent_status=status,
+            analyzed_at__gte=start,
+            analyzed_at__lte=end,
+        )
+        .order_by("-analyzed_at")
+    )
+    # Último assessment por lead (misma versión del motor).
+    by_lead = {}
+    for assessment in qs:
+        by_lead.setdefault(assessment.source_lead_id, assessment)
+    lead_ids = list(by_lead.keys())
+    if not lead_ids:
+        return []
+
+    placeholders = ", ".join(["%s"] * len(lead_ids))
+    with connections["propifai"].cursor() as cursor:
+        cursor.execute(
+            f"""
+            SELECT
+                l.id,
+                COALESCE(l.date_entry, l.created_at) AS entered_at,
+                l.assigned_to_id AS agent_id,
+                c.first_name, c.last_name, c.phone,
+                COALESCE(ls.name, 'Sin estado') AS status_name,
+                COALESCE(
+                    NULLIF(LTRIM(RTRIM(CONCAT(u.first_name, ' ', u.last_name))), ''),
+                    u.username, 'Sin asignar'
+                ) AS agent_name,
+                lp.property_id,
+                p.code AS property_code,
+                p.title AS property_title
+            FROM dbo.lead l
+            LEFT JOIN dbo.contact c ON c.id = l.contact_id
+            LEFT JOIN dbo.[user] u ON u.id = l.assigned_to_id
+            LEFT JOIN dbo.lead_status ls ON ls.id = l.lead_status_id
+            LEFT JOIN dbo.lead_properties lp ON lp.lead_id = l.id
+            LEFT JOIN dbo.property p ON p.id = lp.property_id
+            WHERE l.id IN ({placeholders})
+            """,
+            lead_ids,
+        )
+        rows = _dict_rows(cursor)
+    row_by_lead = {int(r["id"]): r for r in rows}
+
+    visit_pairs = {
+        int(row["resolved_lead_id"])
+        for row in resolve_visits_for_leads(lead_ids, persist=False)
+        if row.get("resolved_lead_id") is not None
+    }
+
+    items = []
+    for lead_id in lead_ids:
+        assessment = by_lead[lead_id]
+        row = row_by_lead.get(int(lead_id), {})
+        if (
+            agent_id
+            and row.get("agent_id") is not None
+            and int(row["agent_id"]) != int(agent_id)
+        ):
+            continue
+        evidence = assessment.visit_intent_evidence or []
+        visit_intent_at = (
+            evidence[0].get("timestamp")
+            if evidence and evidence[0].get("timestamp")
+            else (
+                assessment.analyzed_at.isoformat()
+                if assessment.analyzed_at
+                else None
+            )
+        )
+        contact = " ".join(
+            part
+            for part in (
+                str(row.get("first_name") or ""),
+                str(row.get("last_name") or ""),
+            )
+            if part.strip()
+        )
+        items.append(
+            {
+                "lead_id": int(lead_id),
+                "contact_name": contact,
+                "phone": str(row.get("phone") or ""),
+                "agent_id": row.get("agent_id"),
+                "agent_name": str(row.get("agent_name") or ""),
+                "status_name": str(row.get("status_name") or ""),
+                "entered_at": row.get("entered_at"),
+                "visit_intent_status": assessment.visit_intent_status,
+                "visit_intent_confidence": float(assessment.visit_intent_confidence),
+                "visit_intent_at": visit_intent_at,
+                "visit_intent_evidence": evidence,
+                "property_id": row.get("property_id"),
+                "property_code": str(row.get("property_code") or ""),
+                "property_title": str(row.get("property_title") or ""),
+                "visit_registered": int(lead_id) in visit_pairs,
+            }
+        )
+    items.sort(key=lambda item: item["visit_intent_at"] or "", reverse=True)
+    return items[:limit]
+
+
+@analytics_access_required
+@require_GET
+def visit_intent_api(request):
+    """Leads con intención de visita confirmada por la IA (consumo del CRM).
+
+    Params: ``from``/``to`` (periodo, filtra por ``analyzed_at``), ``agent``
+    (id de agente asignado), ``status`` (default ``confirmed``), ``limit``.
+    Auth: header ``X-Analytics-API-Key`` o sesión de gerencia.
+    """
+    date_from, date_to, _ = _parameters(request)
+    status = request.GET.get("status", "confirmed")
+    if status not in {"confirmed", "ambiguous", "not_confirmed"}:
+        status = "confirmed"
+    agent_id = request.GET.get("agent") or None
+    try:
+        limit = int(request.GET.get("limit") or 100)
+    except (TypeError, ValueError):
+        limit = 100
+    limit = max(1, min(limit, 500))
+    items = get_visit_intent_leads(
+        date_from, date_to, status=status, agent_id=agent_id, limit=limit
+    )
+    return JsonResponse(
+        {
+            "generated_at": timezone.now().isoformat(),
+            "date_from": str(date_from),
+            "date_to": str(date_to),
+            "status": status,
+            "count": len(items),
+            "items": items,
+        }
     )

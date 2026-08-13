@@ -56,6 +56,11 @@ urlpatterns = [
         lead_analytics_api.evaluacion_automatica,
         name='evaluacion_automatica',
     ),
+    path(
+        'api/visit-intent/',
+        lead_analytics_api.visit_intent_api,
+        name='visit_intent_api',
+    ),
     path('leads/', views.lead_list, name='lead_list'),
     path('leads/<int:pk>/', views.lead_detail, name='lead_detail'),
     path('analytics/', views.analytics, name='analytics'),
