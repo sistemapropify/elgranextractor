@@ -12,7 +12,12 @@
     </form>
   </header>
   {% include "lead_intelligence/_analysis_tabs.html" %}
-  <section class="pli-grid-6">
+  <section class="pli-funnel-rail">
+    <div class="pli-source-stack">
+      {% for src in source_counts %}
+      <div class="pli-source-card"><small>{{ src.label }}</small><strong>{{ src.count }}</strong><span>{{ src.pct }}% del total</span></div>
+      {% endfor %}
+    </div>
     <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=entered&amp;from={{ date_from|date:'Y-m-d' }}&amp;to={{ date_to|date:'Y-m-d' }}"><small>Ingresaron</small><strong>{{ selected_cohort.entered|default:0 }}</strong><span>Base del embudo: 100% · {{ date_from|date:"d/m/Y" }} — {{ date_to|date:"d/m/Y" }}</span></a>
     <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=contacted&amp;from={{ date_from|date:'Y-m-d' }}&amp;to={{ date_to|date:'Y-m-d' }}"><small>Contactados</small><strong>{{ selected_cohort.contacted|default:0 }}</strong><span>{{ selected_cohort.contacted_pct|default:0 }}% de {{ selected_cohort.entered|default:0 }} ingresos recibió respuesta del agente.</span></a>
     <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=bidirectional&amp;from={{ date_from|date:'Y-m-d' }}&amp;to={{ date_to|date:'Y-m-d' }}"><small>Bidireccionales</small><strong>{{ selected_cohort.bidirectional|default:0 }}</strong><span>{{ selected_cohort.bidirectional_pct|default:0 }}% de {{ selected_cohort.entered|default:0 }} ingresos respondió después del agente.</span></a>
@@ -33,7 +38,12 @@
       <div><h2>Embudo · Captaciones</h2><p>Propietarios que quieren vender su propiedad (campaña Meta «Captaciones…»).</p></div>
       <span class="pli-chip">{{ captaciones_cohort.entered|default:0 }} leads</span>
     </div>
-    <div class="pli-grid-6">
+    <div class="pli-funnel-rail">
+      <div class="pli-source-stack">
+        {% for src in captaciones_source_counts %}
+        <div class="pli-source-card"><small>{{ src.label }}</small><strong>{{ src.count }}</strong><span>{{ src.pct }}% del total</span></div>
+        {% endfor %}
+      </div>
       <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=entered&segment=captaciones&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}"><small>Ingresaron</small><strong>{{ captaciones_cohort.entered|default:0 }}</strong><span>Base del embudo: 100% · {{ date_from|date:"d/m/Y" }} — {{ date_to|date:"d/m/Y" }}</span></a>
       <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=contacted&segment=captaciones&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}"><small>Contactados</small><strong>{{ captaciones_cohort.contacted|default:0 }}</strong><span>{{ captaciones_cohort.contacted_pct|default:0 }}% de {{ captaciones_cohort.entered|default:0 }} ingresos recibió respuesta del agente.</span></a>
       <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=bidirectional&segment=captaciones&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}"><small>Bidireccionales</small><strong>{{ captaciones_cohort.bidirectional|default:0 }}</strong><span>{{ captaciones_cohort.bidirectional_pct|default:0 }}% de {{ captaciones_cohort.entered|default:0 }} ingresos respondió después del agente.</span></a>
@@ -47,7 +57,12 @@
       <div><h2>Embudo · Compradores</h2><p>Personas que buscan comprar (campaña Meta «PROP…»).</p></div>
       <span class="pli-chip">{{ compradores_cohort.entered|default:0 }} leads</span>
     </div>
-    <div class="pli-grid-6">
+    <div class="pli-funnel-rail">
+      <div class="pli-source-stack">
+        {% for src in compradores_source_counts %}
+        <div class="pli-source-card"><small>{{ src.label }}</small><strong>{{ src.count }}</strong><span>{{ src.pct }}% del total</span></div>
+        {% endfor %}
+      </div>
       <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=entered&segment=compradores&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}"><small>Ingresaron</small><strong>{{ compradores_cohort.entered|default:0 }}</strong><span>Base del embudo: 100% · {{ date_from|date:"d/m/Y" }} — {{ date_to|date:"d/m/Y" }}</span></a>
       <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=contacted&segment=compradores&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}"><small>Contactados</small><strong>{{ compradores_cohort.contacted|default:0 }}</strong><span>{{ compradores_cohort.contacted_pct|default:0 }}% de {{ compradores_cohort.entered|default:0 }} ingresos recibió respuesta del agente.</span></a>
       <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=bidirectional&segment=compradores&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}"><small>Bidireccionales</small><strong>{{ compradores_cohort.bidirectional|default:0 }}</strong><span>{{ compradores_cohort.bidirectional_pct|default:0 }}% de {{ compradores_cohort.entered|default:0 }} ingresos respondió después del agente.</span></a>
@@ -61,7 +76,12 @@
       <div><h2>Embudo · Sin campaña / Otros</h2><p>Leads sin campaña Meta asignada o con un nombre de campaña no clasificable.</p></div>
       <span class="pli-chip">{{ otros_cohort.entered|default:0 }} leads</span>
     </div>
-    <div class="pli-grid-6">
+    <div class="pli-funnel-rail">
+      <div class="pli-source-stack">
+        {% for src in otros_source_counts %}
+        <div class="pli-source-card"><small>{{ src.label }}</small><strong>{{ src.count }}</strong><span>{{ src.pct }}% del total</span></div>
+        {% endfor %}
+      </div>
       <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=entered&segment=otros&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}"><small>Ingresaron</small><strong>{{ otros_cohort.entered|default:0 }}</strong><span>Base del embudo: 100% · {{ date_from|date:"d/m/Y" }} — {{ date_to|date:"d/m/Y" }}</span></a>
       <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=contacted&segment=otros&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}"><small>Contactados</small><strong>{{ otros_cohort.contacted|default:0 }}</strong><span>{{ otros_cohort.contacted_pct|default:0 }}% de {{ otros_cohort.entered|default:0 }} ingresos recibió respuesta del agente.</span></a>
       <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=bidirectional&segment=otros&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}"><small>Bidireccionales</small><strong>{{ otros_cohort.bidirectional|default:0 }}</strong><span>{{ otros_cohort.bidirectional_pct|default:0 }}% de {{ otros_cohort.entered|default:0 }} ingresos respondió después del agente.</span></a>

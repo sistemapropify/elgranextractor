@@ -1605,6 +1605,56 @@ def _funnel_from_metrics(metrics):
     return funnel
 
 
+SOURCE_LABELS = [
+    ("meta_ad", "Meta Ad"),
+    ("whatsapp", "Whatsapp"),
+    ("web", "Web"),
+    ("referido", "Referido"),
+    ("manual", "Ingreso manual"),
+]
+
+
+def _source_category(source):
+    """Clasifica el origen de un lead según el campo ``source`` de la tabla lead.
+
+    Coincidencia por subcadena (insensible a mayúsculas):
+    - contiene "meta" → Meta Ad
+    - contiene "whatsapp" → Whatsapp
+    - contiene "web" o "form" → Web
+    - contiene "referido" → Referido
+    - resto (incluido vacío/NULL) → Ingreso manual
+    """
+    value = (source or "").strip().lower()
+    if "meta" in value:
+        return "meta_ad"
+    if "whatsapp" in value:
+        return "whatsapp"
+    if "web" in value or "form" in value:
+        return "web"
+    if "referido" in value:
+        return "referido"
+    return "manual"
+
+
+def _source_counts(metrics, total=None):
+    """Devuelve las 5 tarjetas de origen con count y pct sobre el total.
+
+    El porcentaje se calcula sobre el total de leads del embudo (``entered``).
+    """
+    if total is None:
+        total = len(metrics)
+    counts = Counter(_source_category(metric["source"]) for metric in metrics)
+    return [
+        {
+            "key": key,
+            "label": label,
+            "count": counts.get(key, 0),
+            "pct": round(counts.get(key, 0) / total * 100, 1) if total else 0,
+        }
+        for key, label in SOURCE_LABELS
+    ]
+
+
 def get_management_dashboard(
     date_from: date, date_to: date, cohort_date: date | None
 ):
@@ -1641,6 +1691,7 @@ def get_management_dashboard(
                     AS date
                 ) AS cohort_date,
                 l.chat_history,
+                l.source,
                 l.assigned_to_id AS agent_id,
                 COALESCE(
                     NULLIF(LTRIM(RTRIM(CONCAT(u.first_name, ' ', u.last_name))), ''),
@@ -1729,6 +1780,8 @@ def get_management_dashboard(
                 "cohort_date": row["cohort_date"],
                 "campaign_name": row.get("campaign_name"),
                 "campaign_segment": _campaign_segment(row.get("campaign_name")),
+                "source": row.get("source"),
+                "source_category": _source_category(row.get("source")),
                 "first_visit_at": row["first_visit_at"],
                 "agent_id": responsible["agent_id"],
                 "agent_name": responsible["agent_name"],
@@ -1827,6 +1880,30 @@ def get_management_dashboard(
         ]
     )
     otros_cohort = _funnel_from_metrics(
+        [
+            metric
+            for metric in selected_metrics
+            if metric["campaign_segment"] == "otros"
+        ]
+    )
+
+    # Distribución por origen (campo source) para cada embudo.
+    source_counts = _source_counts(selected_metrics)
+    captaciones_source_counts = _source_counts(
+        [
+            metric
+            for metric in selected_metrics
+            if metric["campaign_segment"] == "captaciones"
+        ]
+    )
+    compradores_source_counts = _source_counts(
+        [
+            metric
+            for metric in selected_metrics
+            if metric["campaign_segment"] == "compradores"
+        ]
+    )
+    otros_source_counts = _source_counts(
         [
             metric
             for metric in selected_metrics
@@ -1941,6 +2018,10 @@ def get_management_dashboard(
         "captaciones_cohort": captaciones_cohort,
         "compradores_cohort": compradores_cohort,
         "otros_cohort": otros_cohort,
+        "source_counts": source_counts,
+        "captaciones_source_counts": captaciones_source_counts,
+        "compradores_source_counts": compradores_source_counts,
+        "otros_source_counts": otros_source_counts,
         "agent_load": agent_load,
         "data_quality": data_quality,
     }

@@ -669,6 +669,10 @@ def management_summary_api(request):
             "captaciones_cohort": data["captaciones_cohort"],
             "compradores_cohort": data["compradores_cohort"],
             "otros_cohort": data["otros_cohort"],
+            "source_counts": data["source_counts"],
+            "captaciones_source_counts": data["captaciones_source_counts"],
+            "compradores_source_counts": data["compradores_source_counts"],
+            "otros_source_counts": data["otros_source_counts"],
             "cohorts": [
                 {**row, "cohort_date": str(row["cohort_date"])}
                 for row in data["cohorts"]
