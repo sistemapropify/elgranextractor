@@ -15,7 +15,7 @@
   <section class="pli-funnel-rail">
     <div class="pli-source-stack">
       {% for src in source_counts %}
-      <div class="pli-source-card"><small>{{ src.label }}</small><strong>{{ src.count }}</strong><span>{{ src.pct }}% del total</span></div>
+      <div class="pli-source-card"><strong>{{ src.count }}</strong><small>{{ src.label }}</small></div>
       {% endfor %}
     </div>
     <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=entered&amp;from={{ date_from|date:'Y-m-d' }}&amp;to={{ date_to|date:'Y-m-d' }}"><small>Ingresaron</small><strong>{{ selected_cohort.entered|default:0 }}</strong><span>Base del embudo: 100% · {{ date_from|date:"d/m/Y" }} — {{ date_to|date:"d/m/Y" }}</span></a>
@@ -41,7 +41,7 @@
     <div class="pli-funnel-rail">
       <div class="pli-source-stack">
         {% for src in captaciones_source_counts %}
-        <div class="pli-source-card"><small>{{ src.label }}</small><strong>{{ src.count }}</strong><span>{{ src.pct }}% del total</span></div>
+        <div class="pli-source-card"><strong>{{ src.count }}</strong><small>{{ src.label }}</small></div>
         {% endfor %}
       </div>
       <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=entered&segment=captaciones&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}"><small>Ingresaron</small><strong>{{ captaciones_cohort.entered|default:0 }}</strong><span>Base del embudo: 100% · {{ date_from|date:"d/m/Y" }} — {{ date_to|date:"d/m/Y" }}</span></a>
@@ -60,7 +60,7 @@
     <div class="pli-funnel-rail">
       <div class="pli-source-stack">
         {% for src in compradores_source_counts %}
-        <div class="pli-source-card"><small>{{ src.label }}</small><strong>{{ src.count }}</strong><span>{{ src.pct }}% del total</span></div>
+        <div class="pli-source-card"><strong>{{ src.count }}</strong><small>{{ src.label }}</small></div>
         {% endfor %}
       </div>
       <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=entered&segment=compradores&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}"><small>Ingresaron</small><strong>{{ compradores_cohort.entered|default:0 }}</strong><span>Base del embudo: 100% · {{ date_from|date:"d/m/Y" }} — {{ date_to|date:"d/m/Y" }}</span></a>
@@ -79,7 +79,7 @@
     <div class="pli-funnel-rail">
       <div class="pli-source-stack">
         {% for src in otros_source_counts %}
-        <div class="pli-source-card"><small>{{ src.label }}</small><strong>{{ src.count }}</strong><span>{{ src.pct }}% del total</span></div>
+        <div class="pli-source-card"><strong>{{ src.count }}</strong><small>{{ src.label }}</small></div>
         {% endfor %}
       </div>
       <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=entered&segment=otros&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}"><small>Ingresaron</small><strong>{{ otros_cohort.entered|default:0 }}</strong><span>Base del embudo: 100% · {{ date_from|date:"d/m/Y" }} — {{ date_to|date:"d/m/Y" }}</span></a>
