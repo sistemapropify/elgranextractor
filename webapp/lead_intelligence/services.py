@@ -393,7 +393,7 @@ def build_daily_incoming(metrics_by_date, date_from, date_to):
     return series
 
 
-def _lead_result_rows(date_from, date_to, lead_id=None):
+def _lead_result_rows(date_from, date_to, lead_id=None, segment=None):
     params = []
     where = []
     if lead_id is not None:
@@ -434,12 +434,14 @@ def _lead_result_rows(date_from, date_to, lead_id=None):
                     'Sin asignar'
                 ) AS agent_name,
                 COALESCE(ls.name, 'Sin estado') AS status_name,
-                COALESCE(cl.name, 'Sin canal') AS channel_name
+                COALESCE(cl.name, 'Sin canal') AS channel_name,
+                mc.name AS campaign_name
             FROM dbo.lead l
             LEFT JOIN dbo.contact c ON c.id = l.contact_id
             LEFT JOIN dbo.[user] u ON u.id = l.assigned_to_id
             LEFT JOIN dbo.lead_status ls ON ls.id = l.lead_status_id
             LEFT JOIN dbo.canal_lead cl ON cl.id = l.canal_lead_id
+            LEFT JOIN dbo.meta_campaign mc ON mc.id = l.meta_campaign_ref_id
             WHERE {" AND ".join(where)}
             ORDER BY COALESCE(l.date_entry, l.created_at) DESC, l.id DESC
             """,
@@ -634,6 +636,14 @@ def _prepare_lead_result(row, assessment=None, assignment_timeline=None):
     row["assignment_timeline"] = assignment_timeline
     row["media_gap_risk"] = possible_missing_media(analysis["messages"])
     row["visit_registered"] = row["first_visit_at"] is not None
+    row["campaign_segment"] = _campaign_segment(row.get("campaign_name"))
+    row["campaign_label"] = (
+        "Captaciones"
+        if row["campaign_segment"] == "captaciones"
+        else "Compradores"
+        if row["campaign_segment"] == "compradores"
+        else "Otros"
+    )
     row["never_contacted"] = (
         analysis["first_lead_at"] is not None and not analysis["contacted"]
     )
@@ -649,10 +659,12 @@ def _prepare_lead_result(row, assessment=None, assignment_timeline=None):
     return row
 
 
-def get_lead_results(date_from, date_to, stage):
+def get_lead_results(date_from, date_to, stage, segment=None):
     """Return lead cards for one dashboard stage using SELECT-only CRM access."""
     if stage not in LEAD_RESULT_STAGES:
         stage = "entered"
+    if segment not in ("captaciones", "compradores", "otros"):
+        segment = None
     rows = _lead_result_rows(date_from, date_to)
     assessments = _assessment_map(rows)
     leads = [
@@ -662,12 +674,19 @@ def get_lead_results(date_from, date_to, stage):
         )
         for row in rows
     ]
+    if segment is not None:
+        leads = [
+            lead
+            for lead in leads
+            if lead.get("campaign_segment") == segment
+        ]
     if stage != "entered":
         leads = [lead for lead in leads if lead.get(stage)]
     return {
         "leads": leads,
         "stage": stage,
         "stage_label": LEAD_RESULT_STAGES[stage],
+        "segment": segment,
     }
 
 
@@ -1503,6 +1522,89 @@ def save_conversation_review(
     return review
 
 
+def _campaign_segment(campaign_name):
+    """Clasifica un lead por el nombre de su campaña Meta (meta_campaign.name).
+
+    - "captaciones": propietarios que quieren vender → el nombre de la campaña
+      empieza con "Captaciones".
+    - "compradores": personas que buscan comprar → el nombre empieza con "PROP".
+    - "otros": sin campaña o con un nombre no clasificable.
+    """
+    name = (campaign_name or "").strip().lower()
+    if name.startswith("captaciones"):
+        return "captaciones"
+    if name.startswith("prop"):
+        return "compradores"
+    return "otros"
+
+
+def _funnel_from_metrics(metrics):
+    """Construye el embudo de leads (Ingresaron → Visita registrada).
+
+    Reutilizado para el embudo general y para cada segmento de campaña
+    (Captaciones / Compradores). Los porcentajes se calculan sobre la base
+    ``entered`` del propio grupo de métricas.
+    """
+    funnel = {
+        "entered": len(metrics),
+        "unattended": sum(metric["unattended"] for metric in metrics),
+        "attention_overdue": sum(
+            metric["attention_overdue"] for metric in metrics
+        ),
+        "never_contacted_overdue": sum(
+            metric["first_lead_at"] is not None
+            and not metric["contacted"]
+            and metric["attention_overdue"]
+            for metric in metrics
+        ),
+        "never_contacted": sum(
+            metric["first_lead_at"] is not None and not metric["contacted"]
+            for metric in metrics
+        ),
+        "contacted": sum(metric["contacted"] for metric in metrics),
+        "bidirectional": sum(
+            metric["bidirectional"] for metric in metrics
+        ),
+        "context_analyzed": sum(
+            metric["context_assessment"] is not None
+            for metric in metrics
+        ),
+        "context_pending": sum(
+            metric["context_analysis_pending"]
+            for metric in metrics
+        ),
+        "qualified": sum(metric["qualified"] for metric in metrics),
+        "visit_intent": sum(
+            metric["visit_intent"] for metric in metrics
+        ),
+        "visit_registered": sum(
+            metric["first_visit_at"] is not None for metric in metrics
+        ),
+    }
+    entered = funnel["entered"]
+    funnel["context_unavailable"] = max(
+        entered
+        - funnel["context_analyzed"]
+        - funnel["context_pending"],
+        0,
+    )
+    for key in ("context_analyzed", "context_pending", "context_unavailable"):
+        funnel[f"{key}_pct"] = (
+            round(funnel[key] / entered * 100, 1) if entered else 0
+        )
+    for key in (
+        "contacted",
+        "bidirectional",
+        "qualified",
+        "visit_intent",
+        "visit_registered",
+    ):
+        funnel[f"{key}_pct"] = (
+            round(funnel[key] / entered * 100, 1) if entered else 0
+        )
+    return funnel
+
+
 def get_management_dashboard(
     date_from: date, date_to: date, cohort_date: date | None
 ):
@@ -1544,9 +1646,11 @@ def get_management_dashboard(
                     NULLIF(LTRIM(RTRIM(CONCAT(u.first_name, ' ', u.last_name))), ''),
                     u.username,
                     'Sin asignar'
-                ) AS agent_name
+                ) AS agent_name,
+                mc.name AS campaign_name
             FROM dbo.lead l
             LEFT JOIN dbo.[user] u ON u.id = l.assigned_to_id
+            LEFT JOIN dbo.meta_campaign mc ON mc.id = l.meta_campaign_ref_id
             WHERE CAST(
                 SWITCHOFFSET(COALESCE(l.date_entry, l.created_at), '-05:00')
                 AS date
@@ -1623,6 +1727,8 @@ def get_management_dashboard(
             {
                 "lead_id": row["id"],
                 "cohort_date": row["cohort_date"],
+                "campaign_name": row.get("campaign_name"),
+                "campaign_segment": _campaign_segment(row.get("campaign_name")),
                 "first_visit_at": row["first_visit_at"],
                 "agent_id": responsible["agent_id"],
                 "agent_name": responsible["agent_name"],
@@ -1700,63 +1806,33 @@ def get_management_dashboard(
         for metric in conversation_metrics
         if cohort_date is None or metric["cohort_date"] == cohort_date
     ]
-    selected_cohort = {
-        "entered": len(selected_metrics),
-        "unattended": sum(metric["unattended"] for metric in selected_metrics),
-        "attention_overdue": sum(
-            metric["attention_overdue"] for metric in selected_metrics
-        ),
-        "never_contacted_overdue": sum(
-            metric["first_lead_at"] is not None
-            and not metric["contacted"]
-            and metric["attention_overdue"]
+    selected_cohort = _funnel_from_metrics(selected_metrics)
+
+    # Embudos por segmento de campaña Meta (meta_campaign.name):
+    # - "Captaciones": propietarios que quieren vender su propiedad.
+    # - "Compradores": personas que buscan comprar.
+    # - "otros": sin campaña o con un nombre no clasificable.
+    captaciones_cohort = _funnel_from_metrics(
+        [
+            metric
             for metric in selected_metrics
-        ),
-        "never_contacted": sum(
-            metric["first_lead_at"] is not None and not metric["contacted"]
-            for metric in selected_metrics
-        ),
-        "contacted": sum(metric["contacted"] for metric in selected_metrics),
-        "bidirectional": sum(
-            metric["bidirectional"] for metric in selected_metrics
-        ),
-        "context_analyzed": sum(
-            metric["context_assessment"] is not None
-            for metric in selected_metrics
-        ),
-        "context_pending": sum(
-            metric["context_analysis_pending"]
-            for metric in selected_metrics
-        ),
-        "qualified": sum(metric["qualified"] for metric in selected_metrics),
-        "visit_intent": sum(
-            metric["visit_intent"] for metric in selected_metrics
-        ),
-        "visit_registered": sum(
-            metric["first_visit_at"] is not None for metric in selected_metrics
-        ),
-    }
-    entered = selected_cohort["entered"]
-    selected_cohort["context_unavailable"] = max(
-        entered
-        - selected_cohort["context_analyzed"]
-        - selected_cohort["context_pending"],
-        0,
+            if metric["campaign_segment"] == "captaciones"
+        ]
     )
-    for key in ("context_analyzed", "context_pending", "context_unavailable"):
-        selected_cohort[f"{key}_pct"] = (
-            round(selected_cohort[key] / entered * 100, 1) if entered else 0
-        )
-    for key in (
-        "contacted",
-        "bidirectional",
-        "qualified",
-        "visit_intent",
-        "visit_registered",
-    ):
-        selected_cohort[f"{key}_pct"] = (
-            round(selected_cohort[key] / entered * 100, 1) if entered else 0
-        )
+    compradores_cohort = _funnel_from_metrics(
+        [
+            metric
+            for metric in selected_metrics
+            if metric["campaign_segment"] == "compradores"
+        ]
+    )
+    otros_cohort = _funnel_from_metrics(
+        [
+            metric
+            for metric in selected_metrics
+            if metric["campaign_segment"] == "otros"
+        ]
+    )
 
     agent_groups = {}
     for metric in conversation_metrics:
@@ -1862,6 +1938,9 @@ def get_management_dashboard(
         "incoming_leads": incoming_leads,
         "cohorts": cohorts,
         "selected_cohort": selected_cohort,
+        "captaciones_cohort": captaciones_cohort,
+        "compradores_cohort": compradores_cohort,
+        "otros_cohort": otros_cohort,
         "agent_load": agent_load,
         "data_quality": data_quality,
     }

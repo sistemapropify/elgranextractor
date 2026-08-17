@@ -36,6 +36,7 @@
           {% if lead.unattended %}<div><small>Esperando respuesta</small><span>{{ lead.unattended_label }}</span></div>{% endif %}
         </div>
         <div class="pli-badges">
+          {% if lead.campaign_segment == "captaciones" %}<span class="pli-badge" style="background:#e6f6ee;color:#067647">Captaciones</span>{% elif lead.campaign_segment == "compradores" %}<span class="pli-badge" style="background:#eef4ff;color:#3157d5">Compradores</span>{% elif lead.campaign_segment == "otros" %}<span class="pli-badge" style="background:#eef0f3;color:#475467">Sin campaña</span>{% endif %}
           {% if lead.contacted %}<span class="pli-badge">Contactado</span>{% endif %}
           {% if lead.bidirectional %}<span class="pli-badge">Bidireccional</span>{% endif %}
           {% if lead.qualified %}<span class="pli-badge green">Calificado</span>{% endif %}

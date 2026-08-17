@@ -24,6 +24,52 @@
     <strong>Cómo leer estos KPI</strong>
     <span>Todos los porcentajes usan como base los {{ selected_cohort.entered|default:0 }} leads ingresados. La IA ya evaluó {{ selected_cohort.context_analyzed|default:0 }} ({{ selected_cohort.context_analyzed_pct|default:0 }}%); quedan {{ selected_cohort.context_pending|default:0 }} pendientes y {{ selected_cohort.context_unavailable|default:0 }} sin conversación válida. Los pendientes todavía no tienen veredicto y no forman parte de los {{ selected_cohort.qualified|default:0 }} calificados ni de las {{ selected_cohort.visit_intent|default:0 }} intenciones confirmadas.</span>
   </div>
+  <div class="pli-section-head" style="margin-top:28px">
+    <div><h2>Embudos por tipo de lead</h2><p>El mismo embudo segmentado según la campaña Meta de origen. <strong>Captaciones</strong> = propietarios que quieren vender · <strong>Compradores</strong> = personas que buscan comprar.</p></div>
+    <span class="pli-chip">{{ date_from|date:"d/m/Y" }} — {{ date_to|date:"d/m/Y" }}</span>
+  </div>
+  <section class="pli-card pli-section">
+    <div class="pli-section-head">
+      <div><h2>Embudo · Captaciones</h2><p>Propietarios que quieren vender su propiedad (campaña Meta «Captaciones…»).</p></div>
+      <span class="pli-chip">{{ captaciones_cohort.entered|default:0 }} leads</span>
+    </div>
+    <div class="pli-grid-6">
+      <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=entered&segment=captaciones&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}"><small>Ingresaron</small><strong>{{ captaciones_cohort.entered|default:0 }}</strong><span>Base del embudo: 100% · {{ date_from|date:"d/m/Y" }} — {{ date_to|date:"d/m/Y" }}</span></a>
+      <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=contacted&segment=captaciones&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}"><small>Contactados</small><strong>{{ captaciones_cohort.contacted|default:0 }}</strong><span>{{ captaciones_cohort.contacted_pct|default:0 }}% de {{ captaciones_cohort.entered|default:0 }} ingresos recibió respuesta del agente.</span></a>
+      <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=bidirectional&segment=captaciones&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}"><small>Bidireccionales</small><strong>{{ captaciones_cohort.bidirectional|default:0 }}</strong><span>{{ captaciones_cohort.bidirectional_pct|default:0 }}% de {{ captaciones_cohort.entered|default:0 }} ingresos respondió después del agente.</span></a>
+      <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=qualified&segment=captaciones&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}"><small>Calificados por IA</small><strong>{{ captaciones_cohort.qualified|default:0 }}</strong><span>{{ captaciones_cohort.qualified_pct|default:0 }}% de {{ captaciones_cohort.entered|default:0 }} ingresos tiene interés concreto confirmado.</span></a>
+      <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=visit_intent&segment=captaciones&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}"><small>Intención de visita confirmada en chat</small><strong>{{ captaciones_cohort.visit_intent|default:0 }}</strong><span>{{ captaciones_cohort.visit_intent_pct|default:0 }}% de {{ captaciones_cohort.entered|default:0 }} ingresos aceptó o propuso una visita.</span></a>
+      <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=visit_registered&segment=captaciones&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}"><small>Visita registrada</small><strong>{{ captaciones_cohort.visit_registered|default:0 }}</strong><span>{{ captaciones_cohort.visit_registered_pct|default:0 }}% de {{ captaciones_cohort.entered|default:0 }} ingresos tiene evento oficial.</span></a>
+    </div>
+  </section>
+  <section class="pli-card pli-section">
+    <div class="pli-section-head">
+      <div><h2>Embudo · Compradores</h2><p>Personas que buscan comprar (campaña Meta «PROP…»).</p></div>
+      <span class="pli-chip">{{ compradores_cohort.entered|default:0 }} leads</span>
+    </div>
+    <div class="pli-grid-6">
+      <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=entered&segment=compradores&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}"><small>Ingresaron</small><strong>{{ compradores_cohort.entered|default:0 }}</strong><span>Base del embudo: 100% · {{ date_from|date:"d/m/Y" }} — {{ date_to|date:"d/m/Y" }}</span></a>
+      <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=contacted&segment=compradores&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}"><small>Contactados</small><strong>{{ compradores_cohort.contacted|default:0 }}</strong><span>{{ compradores_cohort.contacted_pct|default:0 }}% de {{ compradores_cohort.entered|default:0 }} ingresos recibió respuesta del agente.</span></a>
+      <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=bidirectional&segment=compradores&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}"><small>Bidireccionales</small><strong>{{ compradores_cohort.bidirectional|default:0 }}</strong><span>{{ compradores_cohort.bidirectional_pct|default:0 }}% de {{ compradores_cohort.entered|default:0 }} ingresos respondió después del agente.</span></a>
+      <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=qualified&segment=compradores&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}"><small>Calificados por IA</small><strong>{{ compradores_cohort.qualified|default:0 }}</strong><span>{{ compradores_cohort.qualified_pct|default:0 }}% de {{ compradores_cohort.entered|default:0 }} ingresos tiene interés concreto confirmado.</span></a>
+      <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=visit_intent&segment=compradores&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}"><small>Intención de visita confirmada en chat</small><strong>{{ compradores_cohort.visit_intent|default:0 }}</strong><span>{{ compradores_cohort.visit_intent_pct|default:0 }}% de {{ compradores_cohort.entered|default:0 }} ingresos aceptó o propuso una visita.</span></a>
+      <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=visit_registered&segment=compradores&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}"><small>Visita registrada</small><strong>{{ compradores_cohort.visit_registered|default:0 }}</strong><span>{{ compradores_cohort.visit_registered_pct|default:0 }}% de {{ compradores_cohort.entered|default:0 }} ingresos tiene evento oficial.</span></a>
+    </div>
+  </section>
+  <section class="pli-card pli-section">
+    <div class="pli-section-head">
+      <div><h2>Embudo · Sin campaña / Otros</h2><p>Leads sin campaña Meta asignada o con un nombre de campaña no clasificable.</p></div>
+      <span class="pli-chip">{{ otros_cohort.entered|default:0 }} leads</span>
+    </div>
+    <div class="pli-grid-6">
+      <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=entered&segment=otros&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}"><small>Ingresaron</small><strong>{{ otros_cohort.entered|default:0 }}</strong><span>Base del embudo: 100% · {{ date_from|date:"d/m/Y" }} — {{ date_to|date:"d/m/Y" }}</span></a>
+      <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=contacted&segment=otros&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}"><small>Contactados</small><strong>{{ otros_cohort.contacted|default:0 }}</strong><span>{{ otros_cohort.contacted_pct|default:0 }}% de {{ otros_cohort.entered|default:0 }} ingresos recibió respuesta del agente.</span></a>
+      <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=bidirectional&segment=otros&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}"><small>Bidireccionales</small><strong>{{ otros_cohort.bidirectional|default:0 }}</strong><span>{{ otros_cohort.bidirectional_pct|default:0 }}% de {{ otros_cohort.entered|default:0 }} ingresos respondió después del agente.</span></a>
+      <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=qualified&segment=otros&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}"><small>Calificados por IA</small><strong>{{ otros_cohort.qualified|default:0 }}</strong><span>{{ otros_cohort.qualified_pct|default:0 }}% de {{ otros_cohort.entered|default:0 }} ingresos tiene interés concreto confirmado.</span></a>
+      <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=visit_intent&segment=otros&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}"><small>Intención de visita confirmada en chat</small><strong>{{ otros_cohort.visit_intent|default:0 }}</strong><span>{{ otros_cohort.visit_intent_pct|default:0 }}% de {{ otros_cohort.entered|default:0 }} ingresos aceptó o propuso una visita.</span></a>
+      <a class="pli-card pli-kpi pli-kpi-link" href="{% url 'analisis_crm:lead_results' %}?stage=visit_registered&segment=otros&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}"><small>Visita registrada</small><strong>{{ otros_cohort.visit_registered|default:0 }}</strong><span>{{ otros_cohort.visit_registered_pct|default:0 }}% de {{ otros_cohort.entered|default:0 }} ingresos tiene evento oficial.</span></a>
+    </div>
+  </section>
   <section class="pli-card pli-section">
     <div class="pli-section-head">
       <div><h2>Leads entrantes por día</h2><p>Ingresos diarios en hora de Perú dentro del periodo seleccionado.</p></div>

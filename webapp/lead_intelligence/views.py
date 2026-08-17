@@ -605,10 +605,20 @@ def lead_results(request):
         date_from, date_to, _ = _parameters(request)
         origin = "overview"
     stage = request.GET.get("stage", "entered")
-    result = get_lead_results(date_from, date_to, stage)
+    segment = request.GET.get("segment", "").strip() or None
+    result = get_lead_results(date_from, date_to, stage, segment=segment)
     page_obj = Paginator(result.pop("leads"), 24).get_page(request.GET.get("page"))
     query = request.GET.copy()
     query.pop("page", None)
+    segment_title = (
+        "Captaciones · "
+        if segment == "captaciones"
+        else "Compradores · "
+        if segment == "compradores"
+        else "Sin campaña · "
+        if segment == "otros"
+        else ""
+    )
     return render(
         request,
         "lead_intelligence/lead_results.html",
@@ -622,7 +632,7 @@ def lead_results(request):
             "query_without_page": query.urlencode(),
             "current_query": request.GET.urlencode(),
             "stage_options": LEAD_RESULT_STAGES,
-            "title": f"{result['stage_label']} · Leads",
+            "title": f"{segment_title}{result['stage_label']} · Leads",
         },
     )
 
@@ -656,6 +666,9 @@ def management_summary_api(request):
             "overview": data["overview"],
             "incoming_leads": data["incoming_leads"],
             "selected_cohort": data["selected_cohort"],
+            "captaciones_cohort": data["captaciones_cohort"],
+            "compradores_cohort": data["compradores_cohort"],
+            "otros_cohort": data["otros_cohort"],
             "cohorts": [
                 {**row, "cohort_date": str(row["cohort_date"])}
                 for row in data["cohorts"]
