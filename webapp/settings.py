@@ -141,6 +141,12 @@ WSGI_APPLICATION = 'wsgi.application'
 # Custom user model
 AUTH_USER_MODEL = 'intelligence.User'
 
+# Autenticación: el login real vive en /login/ (intelligence.login_view).
+# Forzar LOGIN_URL evita que Django redirija a /accounts/login/ (por defecto),
+# que no está implementado y producía 404 "Not Found".
+LOGIN_URL = '/login/'
+LOGIN_REDIRECT_URL = '/intelligence/skills/dashboard/'
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

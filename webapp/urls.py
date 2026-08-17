@@ -81,9 +81,9 @@ urlpatterns = [
     # Análisis CRM - Dashboard de leads
     path('analisis-crm/', include('analisis_crm.urls')),  # Habilitado para desarrollo
 
-    # Motor de respuestas IA - dashboard de calidad (sandbox/shadow)
-    # Vive bajo el mismo prefijo analisis-crm/ para que quede junto al panel
-    # de calidad de conversaciones que ya se usa (calidad-motor).
+    # Motor de respuestas IA - dashboard de calidad (sandbox/shadow).
+    # Vive bajo el mismo prefijo analisis-crm/ para quedar junto al panel de
+    # calidad de conversaciones (calidad-motor): /analisis-crm/calidad-motor-ia/
     path('analisis-crm/', include('response_intelligence.urls')),
     
     # Eventos - Dashboard de análisis de eventos
@@ -105,6 +105,9 @@ urlpatterns = [
     path('register/', intelligence_views.register_view, name='register'),
     path('login/', intelligence_views.login_view, name='login'),
     path('logout/', intelligence_views.logout_view, name='logout'),
+    # Alias para LOGIN_URL por defecto de Django (/accounts/login/): antes
+    # daba 404 "Not Found" porque esa ruta no existía (login real en /login/).
+    path('accounts/login/', intelligence_views.login_view, name='accounts_login'),
     
     # Prospects - Captura de prospectos inmobiliarios
     path('prospects/', include('prospects.urls')),

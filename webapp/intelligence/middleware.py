@@ -18,6 +18,7 @@ from .authentication import get_authenticated_user
 PUBLIC_PATHS = [
     r'^/$',                      # Página principal (landing page pública)
     r'^/login/?$',
+    r'^/accounts/login/?$',   # Alias del login (LOGIN_URL por defecto de Django)
     r'^/register/?$',
     r'^/api/',
     r'^/admin/',
