@@ -2,7 +2,6 @@
 Vista para el dashboard exacto de Meta Ads - Diseño 100% igual al HTML proporcionado
 """
 from django.views.generic import TemplateView
-from django.contrib.auth.mixins import LoginRequiredMixin
 from django.utils import timezone
 from datetime import datetime, timedelta
 from meta_ads.models import MetaCampaign, MetaCampaignInsight
@@ -10,7 +9,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-class MetaDashboardExactoView(LoginRequiredMixin, TemplateView):
+class MetaDashboardExactoView(TemplateView):
     """Vista del dashboard exacto con diseño proporcionado"""
     template_name = 'meta_ads/dashboard_exacto_final.html'
     

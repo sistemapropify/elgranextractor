@@ -2,7 +2,6 @@
 Vistas para el dashboard de Meta Ads.
 """
 from django.views.generic import TemplateView, View
-from django.contrib.auth.mixins import LoginRequiredMixin
 from django.utils import timezone
 from django.db.models import Sum, Avg, F, Q
 from django.shortcuts import redirect
@@ -15,7 +14,7 @@ import os
 from .models import MetaCampaign, MetaCampaignInsight
 
 
-class MetaDashboardView(LoginRequiredMixin, TemplateView):
+class MetaDashboardView(TemplateView):
     """
     Vista para el dashboard de métricas de Meta Ads.
     
@@ -25,7 +24,6 @@ class MetaDashboardView(LoginRequiredMixin, TemplateView):
     - Gráfico de gasto diario
     """
     template_name = 'meta_ads/dashboard.html'
-    login_url = '/admin/login/'
     
     def get_context_data(self, **kwargs):
         """
@@ -305,12 +303,11 @@ class MetaDashboardView(LoginRequiredMixin, TemplateView):
         }
 
 
-class MetaHistoricalAnalysisView(LoginRequiredMixin, TemplateView):
+class MetaHistoricalAnalysisView(TemplateView):
     """
     Vista para el análisis histórico detallado.
     """
     template_name = 'meta_ads/historical_analysis.html'
-    login_url = '/admin/login/'
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -333,12 +330,11 @@ class MetaHistoricalAnalysisView(LoginRequiredMixin, TemplateView):
         return context
 
 
-class MetaCampaignListView(LoginRequiredMixin, TemplateView):
+class MetaCampaignListView(TemplateView):
     """
     Vista para listar todas las campañas.
     """
     template_name = 'meta_ads/campaign_list.html'
-    login_url = '/admin/login/'
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -360,12 +356,11 @@ class MetaCampaignListView(LoginRequiredMixin, TemplateView):
         return context
 
 
-class MetaSyncView(LoginRequiredMixin, View):
+class MetaSyncView(View):
     """
     Vista para sincronización manual de datos.
     """
     template_name = 'meta_ads/sync.html'
-    login_url = '/admin/login/'
     
     def get(self, request, *args, **kwargs):
         """

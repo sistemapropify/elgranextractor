@@ -3,7 +3,6 @@ Vista para el dashboard rediseñado de Meta Ads.
 Extiende la funcionalidad existente con cálculos adicionales para el nuevo diseño.
 """
 from django.views.generic import TemplateView
-from django.contrib.auth.mixins import LoginRequiredMixin
 from django.utils import timezone
 from django.db.models import Sum, Avg, F, Q
 from datetime import datetime, timedelta
@@ -207,7 +206,7 @@ class MetaDashboardRedisenoView(MetaDashboardView):
             return 420, 94
 
 
-class MetaCampaignDetailView(LoginRequiredMixin, TemplateView):
+class MetaCampaignDetailView(TemplateView):
     """
     Vista de detalle de una campaña que muestra sus anuncios.
     """
