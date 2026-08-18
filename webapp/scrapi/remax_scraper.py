@@ -6,6 +6,7 @@ import signal
 import sys
 from datetime import datetime
 from camoufox.async_api import AsyncCamoufox
+from scrapi.camoufox_launcher import camoufox_kwargs
 
 BASE_URL = "https://www.remax.pe/web/search/all/propertys/list/?departament__in=4&page={}"
 SITE_DOMAIN = "https://www.remax.pe"
@@ -564,11 +565,10 @@ async def main():
     signal.signal(signal.SIGINT, manejar_sigint)
 
     async with AsyncCamoufox(
-        headless=False,
-        os='windows',
-        humanize=True,
-        persistent_context=True,
-        user_data_dir='./camoufox_session',
+        **camoufox_kwargs(
+            persistent_context=True,
+            user_data_dir='./camoufox_session',
+        ),
     ) as browser:
 
         page = await browser.new_page()

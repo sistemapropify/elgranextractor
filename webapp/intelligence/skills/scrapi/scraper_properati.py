@@ -41,6 +41,7 @@ def _ejecutar_scraping(
         mapear_a_formato_remax,
     )
     from camoufox.async_api import AsyncCamoufox
+    from scrapi.camoufox_launcher import camoufox_kwargs
     import signal
 
     async def _run():
@@ -79,9 +80,7 @@ def _ejecutar_scraping(
             pass
 
         async with AsyncCamoufox(
-            headless=False,
-            os='windows',
-            humanize=True,
+            **camoufox_kwargs(),
         ) as browser:
             page = await browser.new_page()
             await page.set_viewport_size({"width": 1920, "height": 1080})

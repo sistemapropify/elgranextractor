@@ -35,6 +35,7 @@ def _ejecutar_scraping(max_paginas: int = 0) -> list[Dict[str, Any]]:
         navegar_con_cloudflare, manejar_sigint, detener,
     )
     from camoufox.async_api import AsyncCamoufox
+    from scrapi.camoufox_launcher import camoufox_kwargs
     import signal
 
     async def _run():
@@ -46,11 +47,10 @@ def _ejecutar_scraping(max_paginas: int = 0) -> list[Dict[str, Any]]:
             pass  # No disponible en hilos secundarios
 
         async with AsyncCamoufox(
-            headless=False,
-            os='windows',
-            humanize=True,
-            persistent_context=True,
-            user_data_dir='./camoufox_session',
+            **camoufox_kwargs(
+                persistent_context=True,
+                user_data_dir='./camoufox_session',
+            ),
         ) as browser:
             page = await browser.new_page()
             await page.set_viewport_size({"width": 1920, "height": 1080})

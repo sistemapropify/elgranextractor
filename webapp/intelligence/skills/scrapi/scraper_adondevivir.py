@@ -44,6 +44,7 @@ def _ejecutar_scraping(
         mapear_tipo_schemaorg,
     )
     from camoufox.async_api import AsyncCamoufox
+    from scrapi.camoufox_launcher import camoufox_kwargs
     import signal
     import re
 
@@ -109,11 +110,10 @@ def _ejecutar_scraping(
         )
 
         async with AsyncCamoufox(
-            headless=False,
-            os='windows',
-            humanize=True,
-            persistent_context=True,
-            user_data_dir='./camoufox_session_adondevivir',
+            **camoufox_kwargs(
+                persistent_context=True,
+                user_data_dir='./camoufox_session_adondevivir',
+            ),
         ) as browser:
             page = await browser.new_page()
             await page.set_viewport_size({"width": 1920, "height": 1080})

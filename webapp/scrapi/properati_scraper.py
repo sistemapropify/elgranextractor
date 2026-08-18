@@ -9,6 +9,7 @@ from datetime import datetime
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 from camoufox.async_api import AsyncCamoufox
+from scrapi.camoufox_launcher import camoufox_kwargs
 from captura.azure_storage import upload_bytes
 # ============================================================
 # CONFIGURACIÃ“N
@@ -928,9 +929,7 @@ async def main():
     signal.signal(signal.SIGINT, manejar_sigint)
 
     async with AsyncCamoufox(
-        headless=False,
-        os='windows',
-        humanize=True,
+        **camoufox_kwargs(),
     ) as browser:
 
         page = await browser.new_page()

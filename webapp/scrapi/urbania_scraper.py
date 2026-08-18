@@ -7,6 +7,7 @@ import sys
 import json
 from datetime import datetime
 from camoufox.async_api import AsyncCamoufox
+from scrapi.camoufox_launcher import camoufox_kwargs
 
 # ============================================================
 # CONFIGURACIÓN
@@ -312,11 +313,10 @@ async def main():
     signal.signal(signal.SIGINT, manejar_sigint)
 
     async with AsyncCamoufox(
-        headless=False,
-        os='windows',
-        humanize=True,
-        persistent_context=True,
-        user_data_dir='./camoufox_session_urbania',
+        **camoufox_kwargs(
+            persistent_context=True,
+            user_data_dir='./camoufox_session_urbania',
+        ),
     ) as browser:
 
         page = await browser.new_page()

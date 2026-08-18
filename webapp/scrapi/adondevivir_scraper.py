@@ -9,6 +9,7 @@ import unicodedata
 from datetime import datetime
 from urllib.request import Request, urlopen
 from camoufox.async_api import AsyncCamoufox
+from scrapi.camoufox_launcher import camoufox_kwargs
 from captura.azure_storage import upload_bytes
 
 # Forzar UTF-8 en salida estandar (Windows cp1252 no puede con emojis)
@@ -945,7 +946,7 @@ async def main():
     print(f"Fecha: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     print("=" * 70)
 
-    async with AsyncCamoufox(headless=False, os='windows', humanize=True) as browser:
+    async with AsyncCamoufox(**camoufox_kwargs()) as browser:
         context = await browser.new_context()
         page = await context.new_page()
 
