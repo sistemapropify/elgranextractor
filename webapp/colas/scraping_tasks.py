@@ -21,6 +21,21 @@ logger = logging.getLogger(__name__)
 ORDEN_DEFECTO = ['remax', 'adondevivir', 'properati', 'urbania']
 
 
+def _error_camoufox_no_reintentable(resultado) -> bool:
+    """Detecta fallos permanentes del host que un reintento no puede reparar."""
+    message = str(getattr(resultado, 'message', '') or '').lower()
+    permanent_markers = (
+        'camoufoxsystemdependencyerror',
+        'faltan dependencias linux',
+        'libgtk-3.so.0',
+        'libx11-xcb.so.1',
+        'libasound.so.2',
+        'xpcomglueload error',
+        "couldn't load xpcom",
+    )
+    return any(marker in message for marker in permanent_markers)
+
+
 def _resultado_portal_valido(resultado) -> bool:
     """Solo acepta como éxito una extracción que detectó propiedades."""
     data = resultado.data or {}
@@ -265,6 +280,13 @@ def _run_scraping(job_id: int):
                     context={'progress_callback': reportar_progreso},
                 )
                 if resultado.success:
+                    break
+                if _error_camoufox_no_reintentable(resultado):
+                    _crear_log(
+                        job, 'error',
+                        'Camoufox no se reintentará: faltan dependencias nativas en el servidor.',
+                        portal=portal,
+                    )
                     break
                 if attempt < max_attempts:
                     terminated = 0

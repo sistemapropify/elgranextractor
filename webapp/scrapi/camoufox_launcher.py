@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ctypes
 import sys
 import time
 from pathlib import Path
@@ -104,9 +105,39 @@ def ensure_camoufox_installed() -> Path:
                 pass
 
 
+class CamoufoxSystemDependencyError(RuntimeError):
+    """El host Linux no tiene las bibliotecas nativas de Camoufox."""
+
+
+def ensure_camoufox_system_dependencies() -> None:
+    """Valida las librerías del navegador antes de intentar lanzarlo."""
+    if not is_headless_server():
+        return
+
+    required = (
+        ('libgtk-3.so.0', 'libgtk-3-0/libgtk-3-0t64'),
+        ('libX11-xcb.so.1', 'libx11-xcb1'),
+        ('libasound.so.2', 'libasound2/libasound2t64'),
+    )
+    missing = []
+    for library, package in required:
+        try:
+            ctypes.CDLL(library)
+        except OSError:
+            missing.append(f'{library} ({package})')
+
+    if missing:
+        raise CamoufoxSystemDependencyError(
+            'Camoufox no puede iniciar: faltan dependencias Linux: '
+            + ', '.join(missing)
+            + '. Revise la etapa [2/6] del startup de Azure.'
+        )
+
+
 def camoufox_kwargs(**overrides) -> dict:
     """Prepara el browser y devuelve opciones validas para AsyncCamoufox."""
     ensure_camoufox_installed()
+    ensure_camoufox_system_dependencies()
     kwargs = dict(_DEFAULTS, headless=is_headless_server())
     kwargs.update(overrides)
     return kwargs

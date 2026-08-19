@@ -16,6 +16,23 @@ class CamoufoxLauncherTests(unittest.TestCase):
         self.assertTrue(options["headless"])
         self.assertNotIn("data_dir", options)
 
+    def test_kwargs_validate_system_dependencies(self):
+        with (
+            patch.object(launcher, 'ensure_camoufox_installed'),
+            patch.object(launcher, 'ensure_camoufox_system_dependencies') as check,
+        ):
+            launcher.camoufox_kwargs(headless=True)
+
+        check.assert_called_once_with()
+
+    def test_missing_linux_library_fails_before_browser_launch(self):
+        with (
+            patch.object(launcher, 'is_headless_server', return_value=True),
+            patch.object(launcher.ctypes, 'CDLL', side_effect=OSError),
+        ):
+            with self.assertRaises(launcher.CamoufoxSystemDependencyError):
+                launcher.ensure_camoufox_system_dependencies()
+
     def test_existing_browser_skips_download(self):
         browser = Path("/tmp/camoufox/browser")
         with patch.object(launcher, "_installed_path", return_value=browser):

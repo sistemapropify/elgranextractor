@@ -54,12 +54,33 @@ fi
 # Oryx instala el paquete camoufox desde requirements.txt, pero el binario
 # del navegador (fork de Firefox) se descarga por separado con `camoufox fetch`.
 # En el contenedor Linux no hay display; Camoufox corre en headless=True (ver
-# scrapi/camoufox_launcher.py). Ningún fallo aquí debe tumbar la web: el
-# launcher también descarga el binario bajo demanda antes de cada scraping.
+# scrapi/camoufox_launcher.py). Si falta una librería nativa, el arranque falla
+# explícitamente para no publicar un scraper que nunca podrá ejecutarse.
 echo "[2/6] Preparing Camoufox browser for scrapers..."
-# Librerías de sistema que necesita el Firefox de Camoufox.
-CAMOUFOX_APT_DEPS="libasound2 libatk1.0-0 libatk-bridge2.0-0 libcairo2 libcups2 libdbus-1-3 libdrm2 libgbm1 libglib2.0-0 libgtk-3-0 libnspr4 libnss3 libpango-1.0-0 libx11-6 libxcb1 libxcomposite1 libxdamage1 libxext6 libxfixes3 libxkbcommon0 libxrandr2 libxshmfence1 fonts-liberation xdg-utils"
-apt-get install -y -qq $CAMOUFOX_APT_DEPS 2>/dev/null || true
+# Librerías mínimas oficiales. Se instalan por familias porque Ubuntu 24.04
+# renombró algunos paquetes con sufijo t64; una alternativa inexistente no
+# debe cancelar la instalación completa (ese era el fallo anterior).
+apt-get update -qq
+install_one_of() {
+    for package_name in "$@"; do
+        if DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends "$package_name"; then
+            return 0
+        fi
+    done
+    return 1
+}
+install_one_of libgtk-3-0 libgtk-3-0t64
+install_one_of libx11-xcb1
+install_one_of libasound2 libasound2t64
+ldconfig
+
+for required_library in libgtk-3.so.0 libX11-xcb.so.1 libasound.so.2; do
+    if ! ldconfig -p | grep -q "$required_library"; then
+        echo "  ✗ Missing Camoufox runtime library: $required_library" >&2
+        exit 1
+    fi
+done
+echo "  ✓ Camoufox native libraries available."
 
 # Camoufox usa platformdirs.user_cache_dir('camoufox'); no admite --data-dir.
 # Forzamos el cache de Linux a /home, que es persistente en App Service.

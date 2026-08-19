@@ -6,6 +6,7 @@ from django.test import SimpleTestCase
 
 from colas.scraping_tasks import (
     _actualizar_contadores,
+    _error_camoufox_no_reintentable,
     _resultado_portal_valido,
 )
 from ingestas.views import _decorate_scraping_job
@@ -76,6 +77,19 @@ class ScrapingJobReportingTests(SimpleTestCase):
         self.assertEqual(job.estado_efectivo, "error")
         self.assertEqual(job.estado_display, "Error: sin resultados")
         self.assertIn("sin detectar", job.mensaje_error_display)
+
+    def test_missing_linux_library_is_not_retried(self):
+        result = SimpleNamespace(
+            message=(
+                "XPCOMGlueLoad error: libgtk-3.so.0: "
+                "cannot open shared object file"
+            )
+        )
+        self.assertTrue(_error_camoufox_no_reintentable(result))
+
+    def test_transient_browser_failure_can_be_retried(self):
+        result = SimpleNamespace(message="Timeout esperando respuesta del portal")
+        self.assertFalse(_error_camoufox_no_reintentable(result))
 
     def test_success_without_detected_properties_is_not_valid(self):
         result = SimpleNamespace(
