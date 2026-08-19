@@ -586,7 +586,13 @@
 </style>
 
 <!-- Google Maps API -->
-<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&libraries=drawing,places,geometry&callback=onGoogleMapsLoaded" async defer></script>
+<script>
+window.onGoogleMapsLoaded = function() {
+    window.googleMapsApiReady = true;
+    if (typeof window.initMap === 'function') window.initMap();
+};
+</script>
+<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&libraries=places,geometry&callback=onGoogleMapsLoaded" async defer></script>
 {% endblock %}
 
 {% block content %}
@@ -762,7 +768,9 @@
 // ============================================================
 
 let map;
-let drawingManager;
+let mapInitializationStarted = false;
+let drawingManager = null;
+let renderedZoneOverlays = [];
 let selectedShape = null;
 let currentZoneData = null;
 let markers = [];
@@ -846,6 +854,9 @@ function getCookie(name) {
 // ============================================================
 
 function initMap() {
+    if (mapInitializationStarted) return;
+    mapInitializationStarted = true;
+
     // Coordenadas de Arequipa
     const arequipa = { lat: -16.4090, lng: -71.5375 };
 
@@ -869,67 +880,73 @@ function initMap() {
         }
     });
 
-    // Inicializar DrawingManager
-    drawingManager = new google.maps.drawing.DrawingManager({
-        drawingMode: null,
-        drawingControl: false,
-        polygonOptions: {
-            fillColor: ZONE_COLORS.fillNew,
-            fillOpacity: 0.4,
-            strokeColor: ZONE_COLORS.new,
-            strokeWeight: 2,
-            editable: true,
-            draggable: true
-        },
-        rectangleOptions: {
-            fillColor: ZONE_COLORS.fillNew,
-            fillOpacity: 0.4,
-            strokeColor: ZONE_COLORS.new,
-            strokeWeight: 2,
-            editable: true,
-            draggable: true
-        },
-        circleOptions: {
-            fillColor: ZONE_COLORS.fillNew,
-            fillOpacity: 0.4,
-            strokeColor: ZONE_COLORS.new,
-            strokeWeight: 2,
-            editable: true,
-            draggable: true
-        },
-        markerOptions: {
-            draggable: true,
-            animation: google.maps.Animation.DROP
-        }
-    });
+    // La Drawing Library fue retirada por Google en mayo de 2026.
+    // La visualización de zonas no debe depender de las herramientas de dibujo.
+    const drawingAvailable = Boolean(
+        google.maps.drawing &&
+        google.maps.drawing.DrawingManager &&
+        google.maps.drawing.OverlayType
+    );
 
-    drawingManager.setMap(map);
-
-    // Eventos de dibujo
-    google.maps.event.addListener(drawingManager, 'overlaycomplete', function(event) {
-        if (selectedShape) {
-            selectedShape.setMap(null);
-        }
-        selectedShape = event.overlay;
-        selectedShape.type = event.type;
-
-        // Remover listeners de edición anteriores
-        google.maps.event.clearListeners(selectedShape, 'click');
-
-        // Click para seleccionar
-        google.maps.event.addListener(selectedShape, 'click', function() {
-            selectShape(this);
+    if (drawingAvailable) {
+        drawingManager = new google.maps.drawing.DrawingManager({
+            drawingMode: null,
+            drawingControl: false,
+            polygonOptions: {
+                fillColor: ZONE_COLORS.fillNew,
+                fillOpacity: 0.4,
+                strokeColor: ZONE_COLORS.new,
+                strokeWeight: 2,
+                editable: true,
+                draggable: true
+            },
+            rectangleOptions: {
+                fillColor: ZONE_COLORS.fillNew,
+                fillOpacity: 0.4,
+                strokeColor: ZONE_COLORS.new,
+                strokeWeight: 2,
+                editable: true,
+                draggable: true
+            },
+            circleOptions: {
+                fillColor: ZONE_COLORS.fillNew,
+                fillOpacity: 0.4,
+                strokeColor: ZONE_COLORS.new,
+                strokeWeight: 2,
+                editable: true,
+                draggable: true
+            },
+            markerOptions: {
+                draggable: true,
+                animation: google.maps.Animation.DROP
+            }
         });
+        drawingManager.setMap(map);
 
-        // Desactivar modo dibujo
-        drawingManager.setDrawingMode(null);
-        resetDrawButtons();
-
-        // Extraer coordenadas
-        updateZoneDataFromShape(selectedShape);
-
-        showAlert('Forma dibujada. Asigna un nombre y guarda.', 'success');
-    });
+        google.maps.event.addListener(drawingManager, 'overlaycomplete', function(event) {
+            if (selectedShape) selectedShape.setMap(null);
+            selectedShape = event.overlay;
+            selectedShape.type = event.type;
+            google.maps.event.clearListeners(selectedShape, 'click');
+            google.maps.event.addListener(selectedShape, 'click', function() {
+                selectShape(this);
+            });
+            drawingManager.setDrawingMode(null);
+            resetDrawButtons();
+            updateZoneDataFromShape(selectedShape);
+            showAlert('Forma dibujada. Asigna un nombre y guarda.', 'success');
+        });
+        setupDrawButtons();
+    } else {
+        document.querySelectorAll('.btn-draw').forEach(function(btn) {
+            btn.disabled = true;
+            btn.title = 'Herramienta de dibujo en migración';
+        });
+        showAlert(
+            'Los cuadrantes existentes están disponibles. La creación y edición está temporalmente deshabilitada mientras se migra la herramienta de dibujo.',
+            'warning'
+        );
+    }
 
     // Cargar zonas existentes
     loadZones();
@@ -938,9 +955,6 @@ function initMap() {
 
     // Configurar búsqueda de dirección
     setupAddressSearch();
-
-    // Configurar botones de dibujo
-    setupDrawButtons();
 
     // Configurar guardado
     setupSaveZone();
@@ -1215,6 +1229,11 @@ function renderZonesList(zones) {
 }
 
 function renderExistingZones(zones) {
+    renderedZoneOverlays.forEach(function(overlay) {
+        overlay.setMap(null);
+    });
+    renderedZoneOverlays = [];
+
     zones.forEach(function(zone) {
         if (zone.coordenadas || zone.geom) {
             try {
@@ -1277,6 +1296,7 @@ function renderExistingZones(zones) {
                     }
                 };
                 labelOverlay.setMap(map);
+                renderedZoneOverlays.push(polygon, labelOverlay);
 
                 // Al hacer click en el polígono, seleccionar
                 google.maps.event.addListener(polygon, 'click', function() {
