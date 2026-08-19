@@ -65,6 +65,14 @@ jobs:
           source antenv/bin/activate
           python -c "import os, sys; sys.path.insert(0, 'webapp'); os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'settings'); from wsgi import application; print('Azure WSGI startup validated')"
 
+      - name: Validate deployment startup script
+        run: |
+          bash -n startup.sh
+          test -f webapp/manage.py
+          grep -Fq 'libgtk-3.so.0' startup.sh
+          grep -Fq 'libX11-xcb.so.1' startup.sh
+          grep -Fq 'libasound.so.2' startup.sh
+
       # Build the deployment artifact without generated browser profiles,
       # duplicated projects, logs, or other runtime-only data.
       - name: Upload artifact for deployment jobs
@@ -90,7 +98,7 @@ jobs:
       # If you prefer to disable the Oryx build process during deployment, follow these steps:
       # 1. Remove the SCM_DO_BUILD_DURING_DEPLOYMENT app setting from your Azure App Service Environment variables.
       # 2. Refer to sample workflows for alternative deployment strategies: https://github.com/Azure/actions-workflow-samples/tree/master/AppService
-      
+
 
   deploy:
     runs-on: ubuntu-latest
@@ -104,7 +112,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: python-app
-      
+
       - name: Login to Azure
         uses: azure/login@v2
         with:
@@ -159,6 +167,20 @@ jobs:
         with:
           app-name: 'granextractorservice'
           slot-name: 'Production'
+
+      - name: Configure and verify the Azure startup command
+        if: success()
+        run: |
+          az webapp config set \
+            --resource-group rg-elgranextractor \
+            --name granextractorservice \
+            --startup-file "bash startup.sh" \
+            --output none
+          STARTUP_COMMAND=$(az webapp config show \
+            --resource-group rg-elgranextractor \
+            --name granextractorservice \
+            --query appCommandLine -o tsv)
+          test "$STARTUP_COMMAND" = "bash startup.sh"
 
       - name: Verify deployment
         if: success()

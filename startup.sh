@@ -13,6 +13,15 @@ echo "  Propifai — Startup Script"
 echo "  $(date -u)"
 echo "=========================================="
 
+# Azure/Oryx puede ejecutar desde /home/site/wwwroot o desde un directorio
+# temporal /tmp/8dee*. La ubicación del propio script es la fuente fiable.
+APP_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ ! -f "$APP_ROOT/webapp/manage.py" ]; then
+    echo "  ✗ No se encontró webapp/manage.py bajo $APP_ROOT" >&2
+    exit 1
+fi
+echo "[PRE] Application root: $APP_ROOT"
+
 # ── Production Mode ──
 # FIX-504: Evita precarga del modelo de embeddings (1GB RAM, ~20s) en startup.
 # El modelo se carga lazy en la primera solicitud que lo requiera.
@@ -20,10 +29,10 @@ export PRODUCTION=true
 echo "[PRE] Modo PRODUCTION activado — embeddings lazy load"
 
 # ── Python Path ──
-export PYTHONPATH="/home/site/wwwroot:/home/site/wwwroot/webapp${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONPATH="$APP_ROOT:$APP_ROOT/webapp${PYTHONPATH:+:$PYTHONPATH}"
 
 # ── Activate Virtual Environment ──
-ANTENV_DIR="/home/site/wwwroot/antenv"
+ANTENV_DIR="$APP_ROOT/antenv"
 if [ -d "$ANTENV_DIR" ]; then
     source "$ANTENV_DIR/bin/activate"
     echo "[PRE] Virtual environment activated: $ANTENV_DIR"
@@ -105,7 +114,7 @@ echo "  ✓ Camoufox setup finished."
 # Si la copia falla, el directorio queda vacio y todos los
 # archivos estaticos devuelven 404 (MIME type text/html).
 echo "[3/6] Collecting static files..."
-cd /home/site/wwwroot/webapp
+cd "$APP_ROOT/webapp"
 python manage.py collectstatic --noinput 2>&1
 test -f staticfiles/canvas/css/canvas.css
 test -f staticfiles/canvas/js/canvas_engine.js
@@ -118,7 +127,7 @@ python manage.py migrate --noinput 2>&1
 echo "  ✓ Migrations applied."
 
 # ── Return to wwwroot for gunicorn context ──
-cd /home/site/wwwroot
+cd "$APP_ROOT"
 
 # ── Start Gunicorn ──
 echo "[5/6] Starting Gunicorn..."
