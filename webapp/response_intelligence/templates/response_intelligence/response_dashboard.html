@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load tz %}
 {% block title %}Calidad del motor IA · Propifai{% endblock %}
 {% block content %}
 <style>
@@ -15,25 +16,55 @@
   .pli-section-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}
   .pli-chip{background:var(--pli-soft);border:1px solid var(--pli-line);border-radius:999px;padding:4px 10px;font-size:12px;color:var(--pli-muted)}
   .pli-review-list{display:grid;gap:14px}
-  .pli-review-row{border:1px solid var(--pli-line);border-radius:12px;padding:14px;background:#fff}
-  .pli-review-main{display:grid;gap:6px}
-  .pli-lead-id{font-size:11px;color:var(--pli-muted);text-transform:uppercase}
+  .pli-review-row{border:1px solid var(--pli-line);border-radius:18px;padding:14px;background:linear-gradient(180deg,#ffffff 0%,#fbfcff 100%);display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:16px;align-items:start}
+  .pli-review-main{display:grid;gap:10px}
+  .pli-lead-id{font-size:11px;color:var(--pli-muted);text-transform:uppercase;letter-spacing:.05em}
   .pli-review-result{background:var(--pli-soft);border-radius:8px;padding:8px 10px;font-size:13px}
   .pli-badge{display:inline-block;border-radius:999px;padding:3px 8px;font-size:11px;background:#eef2ff;color:#3157d5}
   .pli-badge.amber{background:#fff7e6;color:#9a6700}
   .pli-badge.green{background:#e6f6ec;color:#1a7f37}
-  .pli-draft{white-space:pre-wrap;font-size:13px;background:var(--pli-soft);border-radius:8px;padding:10px;margin:4px 0}
-  .pli-review-actions form{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
-  .pli-review-actions input[type=text]{grid-column:1/4;padding:8px;border:1px solid var(--pli-line);border-radius:8px}
+  .pli-draft{white-space:pre-wrap;font-size:13px;background:var(--pli-soft);border-radius:12px;padding:10px;margin:4px 0;border:1px solid #e8edf6}
+  .pli-review-actions{position:sticky;top:14px;background:#fff;border:1px solid var(--pli-line);border-radius:14px;padding:12px}
+  .pli-review-actions::before{content:"Evaluación";display:block;font-size:13px;font-weight:800;margin-bottom:4px}
+  .pli-review-actions form{display:grid;grid-template-columns:1fr;gap:7px;margin-top:8px}
+  .pli-review-actions input[type=text]{grid-column:1;padding:8px;border:1px solid var(--pli-line);border-radius:8px}
   .pli-review-actions label{font-size:12px;color:var(--pli-muted);display:flex;align-items:center;gap:6px}
   .pli-review-actions select{padding:8px;border:1px solid var(--pli-line);border-radius:8px}
   .pli-review-actions button{border:0;border-radius:8px;padding:9px;font-weight:700;color:#fff;cursor:pointer}
   .pli-good{background:#1a7f37}.pli-bad{background:#b42318}.pli-neutral{background:#9a6700}
   .pli-promote{background:#3157d5;color:#fff;border:0;border-radius:8px;padding:9px;font-weight:700;cursor:pointer;margin-top:8px}
+  .pli-phone-compare{display:grid;grid-template-columns:repeat(2,minmax(320px,1fr));gap:16px;align-items:start}
+  .pli-phone-card{position:relative;overflow:hidden;background:#0b141a;border:7px solid #000;border-radius:24px;padding:10px;box-shadow:0 12px 30px rgba(0,0,0,.32);color:#e5e7eb;height:460px;width:100%;box-sizing:border-box}
+  .pli-phone-card::before{content:"";position:absolute;left:50%;top:10px;transform:translateX(-50%);width:110px;height:18px;border-radius:999px;background:rgba(255,255,255,.08)}
+  .pli-phone-header{display:flex;justify-content:space-between;align-items:center;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#8696a0;margin:18px 4px 7px}
+  .pli-phone-screen{background:#0b141a;border-radius:18px;padding:10px;height:390px;overflow-y:auto;display:block;color:#e9edef;border:1px solid #1f2c34;scrollbar-color:#37474f #0b141a}
+  .pli-phone-screen .pli-draft{background:#ffffff;margin:0}
+  .pli-bubbles{display:grid;gap:8px}
+  .pli-bubble{max-width:78%;padding:6px 8px;border-radius:8px;font-size:12.5px;line-height:16.5px;color:#e9edef;word-wrap:break-word;box-shadow:0 1px 0.5px rgba(0,0,0,.13);margin:1px 6px;display:flex;flex-direction:column;white-space:pre-wrap}
+  .pli-bubble.lead{background:#202c33;border-top-left-radius:0;justify-self:flex-start;align-self:flex-start;max-width:84%}
+  .pli-bubble.agent{background:#005c4b;border-top-right-radius:0;justify-self:flex-end;align-self:flex-end;max-width:84%;border-color:#005c4b}
+  .pli-bubble.system{background:#182229;color:#f5c451;max-width:88%}
+  .pli-thread-details{margin-top:10px}
+  .pli-thread-details summary{cursor:pointer;color:var(--pli-brand);font-weight:700}
+  .pli-thread-timeline{margin-top:12px;display:grid;gap:8px;max-height:420px;overflow:auto;padding-right:4px}
+  .pli-thread-event{display:grid;gap:3px;padding:10px 12px;border-radius:14px;border:1px solid #e5e9f0;background:#fff}
+  .pli-thread-event.lead{border-left:4px solid #3157d5}
+  .pli-thread-event.agent{border-left:4px solid #1a7f37}
+  .pli-thread-event.activity{border-left:4px solid #9a6700}
+  .pli-thread-meta{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:var(--pli-muted);text-transform:uppercase}
+  .pli-thread-empty{font-size:13px;color:var(--pli-muted);padding:8px 0}
+  .pli-mini-note{font-size:12px;color:#8696a0}
+  .pli-top-tools{display:grid;grid-template-columns:minmax(280px,.75fr) minmax(520px,1.25fr);gap:16px;margin:16px 0}
+  .pli-category-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .pli-category-item{display:flex;justify-content:space-between;padding:10px 12px;border:1px solid var(--pli-line);border-radius:10px;font-size:13px;background:var(--pli-soft)}
+  @media (max-width: 1100px){
+    .pli-grid,.pli-grid-6,.pli-phone-compare,.pli-top-tools,.pli-review-row{grid-template-columns:1fr}
+    .pli-review-actions{position:static}
+  }
 </style>
 <main class="pli-page">
   <header style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:6px">
-    <div><span style="color:#3157d5;font-weight:700;text-transform:uppercase;font-size:12px">Motor IA · Fase 2</span><h1>Calidad del motor de respuestas</h1><p>Borradores generados (few-shot + RAG) y revisión humana antes de producción.</p></div>
+    <div><span style="color:#3157d5;font-weight:700;text-transform:uppercase;font-size:12px">Motor IA · Fase 2</span><h1>Calidad del motor de respuestas</h1><p>Borradores generados (few-shot + RAG) y revisión humana antes de producción. Cada tarjeta compara la IA sombra contra el hilo real completo.</p></div>
     <span class="pli-chip">{{ kpis.total_drafts }} drafts</span>
   </header>
 
@@ -66,9 +97,30 @@
     <article class="pli-card pli-kpi"><small>Drafts bloqueados</small><strong>{{ kpis.auto_blocked }}</strong><span>no aptos para envío automático</span></article>
   </section>
 
-  <section class="pli-grid">
+  <section class="pli-top-tools">
     <article class="pli-card">
-      <div class="pli-section-head"><div><h2>Cola de revisión de drafts</h2><p>Compara lo que el motor IA habría respondido contra lo esperado.</p></div><span class="pli-chip">{{ pending|length }} pendientes</span></div>
+      <div class="pli-section-head"><div><h2>Distribución por categoría</h2><p>Drafts generados por tipo de intención.</p></div></div>
+      {% if by_category %}
+        <div class="pli-category-list">
+          {% for category, total in by_category.items %}
+            <div class="pli-category-item"><span>{{ category }}</span><strong>{{ total }}</strong></div>
+          {% endfor %}
+        </div>
+      {% else %}<p>Aún no hay drafts.</p>{% endif %}
+    </article>
+    <article class="pli-card">
+      <div class="pli-section-head"><div><h2>Banco few-shot</h2><p>Ejemplos activos y aprobados que se inyectan en el prompt.</p></div><span class="pli-chip">{{ curated.approved }}/{{ curated.total }} aprobados</span></div>
+      <form method="post" action="{% url 'response_intelligence:suggest_candidates' %}" style="margin:10px 0">
+        {% csrf_token %}
+        <button class="pli-promote" type="submit">Sugerir candidatos desde evaluaciones "adequate"</button>
+      </form>
+      {% if not curated_examples %}<p>No hay ejemplos curados aún. Usa "Sugerir candidatos" o promueve un draft bien evaluado.</p>{% else %}<p>{{ curated_examples|length }} ejemplos disponibles.</p>{% endif %}
+    </article>
+  </section>
+
+  <section>
+    <article class="pli-card">
+      <div class="pli-section-head"><div><h2>Cola de revisión de drafts</h2><p>Compara la respuesta IA con el hilo humano y abre la cronología completa cuando necesites contrastar todo el contexto.</p></div><span class="pli-chip">{{ pending|length }} pendientes</span></div>
       {% if pending %}
         <div class="pli-review-list">
           {% for draft in pending %}
@@ -82,8 +134,70 @@
                   {% if draft.prompt_snapshot.context.phone %} · tel {{ draft.prompt_snapshot.context.phone }}{% endif %}
                   · {{ draft.intent_category|default:"sin categoría" }}
                 </span>
-                <div><strong>Cliente:</strong><div class="pli-draft">{{ draft.client_message }}</div></div>
-                <div><strong>Respuesta del motor:</strong><div class="pli-draft">{{ draft.generated_response|default:"—" }}</div></div>
+
+                <div class="pli-phone-compare">
+                  <section class="pli-phone-card">
+                    <div class="pli-phone-header">
+                      <span>Motor IA sombra</span>
+                      <span>{{ draft.model_version }}</span>
+                    </div>
+                    <div class="pli-phone-screen">
+                      <div class="pli-bubbles">
+                        {% if draft.shadow_context.shadow_messages %}
+                          {% for message in draft.shadow_context.shadow_messages %}
+                            <div class="pli-bubble {% if message.sender == 'agent' %}agent{% else %}lead{% endif %}">{{ message.text|urlize|linebreaksbr }}{% if message.timestamp %}<small style="align-self:flex-end;color:#aebac1;margin-top:3px">{{ message.timestamp|localtime|date:"H:i" }}</small>{% endif %}</div>
+                          {% endfor %}
+                        {% else %}
+                          <div class="pli-bubble lead">{{ draft.client_message }}</div>
+                          <div class="pli-bubble agent">{{ draft.generated_response|default:"—" }}</div>
+                        {% endif %}
+                      </div>
+                    </div>
+                  </section>
+
+                  <section class="pli-phone-card">
+                    <div class="pli-phone-header">
+                      <span>Hilo real</span>
+                      <span>{% if draft.shadow_context.available and draft.shadow_context.thread.total_messages %}{{ draft.shadow_context.thread.total_messages }} msgs{% else %}sin contexto{% endif %}</span>
+                    </div>
+                    <div class="pli-phone-screen">
+                      {% if draft.shadow_context.available and draft.shadow_context.thread.messages %}
+                        <div class="pli-bubbles">
+                          {% for message in draft.shadow_context.thread.messages %}
+                            <div class="pli-bubble {% if message.sender == 'agent' %}agent{% else %}lead{% endif %}">{{ message.text|urlize|linebreaksbr }}{% if message.timestamp %}<small style="align-self:flex-end;color:#aebac1;margin-top:3px">{{ message.timestamp|localtime|date:"H:i" }}</small>{% endif %}</div>
+                          {% endfor %}
+                        </div>
+                      {% else %}
+                        <div class="pli-thread-empty">No hay conversación disponible para este draft.</div>
+                      {% endif %}
+                    </div>
+                  </section>
+                </div>
+
+                <details class="pli-thread-details">
+                  <summary>Ver cronología técnica (mensajes + actividades CRM)</summary>
+                  <div class="pli-thread-timeline">
+                    {% if draft.shadow_context.available and draft.shadow_context.thread.timeline_events %}
+                      {% for event in draft.shadow_context.thread.timeline_events %}
+                        <div class="pli-thread-event {% if event.event_type == 'activity' %}activity{% elif event.sender == 'agent' %}agent{% else %}lead{% endif %}">
+                          <div class="pli-thread-meta">
+                            <span>{% if event.event_type == 'activity' %}{{ event.activity_label }}{% else %}{% if event.sender == 'lead' %}Cliente{% else %}Agente{% endif %}{% endif %}</span>
+                            <time>{{ event.timestamp|localtime|date:"d/m/Y H:i:s" }}</time>
+                          </div>
+                          {% if event.event_type == 'activity' %}
+                            {% if event.description %}<div>{{ event.description }}</div>{% endif %}
+                            {% if event.detail %}<div>{{ event.detail }}</div>{% endif %}
+                          {% else %}
+                            <div>{{ event.text|urlize|linebreaksbr }}</div>
+                          {% endif %}
+                        </div>
+                      {% endfor %}
+                    {% else %}
+                      <div class="pli-thread-empty">Sin cronología disponible.</div>
+                    {% endif %}
+                  </div>
+                </details>
+
                 <div class="pli-badges">
                   <span class="pli-badge">modelo {{ draft.model_version }}</span><span class="pli-badge">trace {{ draft.trace_id }}</span>
                   {% if draft.auto_escalation %}<span class="pli-badge amber" title="No se generó con IA: escalamiento">escalamiento</span>{% endif %}
@@ -122,64 +236,6 @@
       {% endif %}
     </article>
 
-    <article class="pli-card">
-      <div class="pli-section-head"><div><h2>Distribución por categoría</h2><p>Drafts generados por tipo de intención.</p></div></div>
-      {% if by_category %}
-        {% for category, total in by_category.items %}
-          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--pli-line);font-size:13px">
-            <span>{{ category }}</span><strong>{{ total }}</strong>
-          </div>
-        {% endfor %}
-      {% else %}
-        <p>Aún no hay drafts.</p>
-      {% endif %}
-      <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--pli-line)">
-        <div class="pli-section-head">
-          <h2>Banco few-shot</h2>
-          <span class="pli-chip">{{ curated.approved }}/{{ curated.total }} aprobados</span>
-        </div>
-        <p>Ejemplos activos y aprobados que se inyectan en el prompt. Límite sugerido ~50-60 por categoría.</p>
-        <form method="post" action="{% url 'response_intelligence:suggest_candidates' %}" style="margin:10px 0">
-          {% csrf_token %}
-          <button class="pli-promote" type="submit">Sugerir candidatos desde evaluaciones "adequate"</button>
-        </form>
-        {% if curated_examples %}
-          <div style="display:grid;gap:10px;margin-top:10px">
-            {% for ex in curated_examples %}
-              <div style="border:1px solid var(--pli-line);border-radius:10px;padding:10px">
-                <div class="pli-badges" style="margin-bottom:4px">
-                  <span class="pli-badge">{{ ex.intent_category }}</span>
-                  <span class="pli-badge {% if ex.approved %}green{% else %}amber{% endif %}">{% if ex.approved %}aprobado{% else %}pendiente{% endif %}</span>
-                  <span class="pli-badge">lead #{{ ex.source_lead_id }}</span>
-                  {% if not ex.active %}<span class="pli-badge amber">inactivo</span>{% endif %}
-                </div>
-                <div style="font-size:12px;color:var(--pli-muted)">CLIENTE:</div>
-                <div class="pli-draft">{{ ex.client_message|default:"—" }}</div>
-                <div style="font-size:12px;color:var(--pli-muted)">RESPUESTA:</div>
-                <div class="pli-draft">{{ ex.agent_response|default:"—" }}</div>
-                <div style="display:flex;gap:8px;margin-top:8px">
-                  {% if not ex.approved %}
-                    <form method="post" action="{% url 'response_intelligence:approve_example' %}">
-                      {% csrf_token %}
-                      <input type="hidden" name="example_id" value="{{ ex.pk }}">
-                      <button class="pli-good" type="submit">Aprobar</button>
-                    </form>
-                  {% endif %}
-                  <form method="post" action="{% url 'response_intelligence:toggle_example' %}">
-                    {% csrf_token %}
-                    <input type="hidden" name="example_id" value="{{ ex.pk }}">
-                    <input type="hidden" name="active" value="{% if ex.active %}0{% else %}1{% endif %}">
-                    <button class="pli-neutral" type="submit">{% if ex.active %}Desactivar{% else %}Activar{% endif %}</button>
-                  </form>
-                </div>
-              </div>
-            {% endfor %}
-          </div>
-        {% else %}
-          <p>No hay ejemplos curados aún. Usa "Sugerir candidatos" o promueve un draft bien evaluado.</p>
-        {% endif %}
-      </div>
-    </article>
   </section>
 </main>
 {% endblock %}

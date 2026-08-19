@@ -5,6 +5,12 @@ Todo se lee de la BD ``default``. El CRM solo se consulta con SELECT.
 
 from django.db.models import Count, Q, Sum
 
+from lead_intelligence.conversation_analysis import normalize_text
+from lead_intelligence.services import (
+    get_lead_conversation,
+    get_lead_conversation_by_identity,
+)
+
 from response_intelligence.models import (
     BotResponseDraft,
     BotResponseEvaluation,
@@ -14,6 +20,97 @@ from response_intelligence.models import (
 
 def _safe_pct(part, total):
     return round(part / total * 100) if total else 0
+
+
+def _find_trigger_message(messages, client_message):
+    """Locate the lead message that triggered a draft, if possible."""
+
+    target = normalize_text(client_message)
+    if not target:
+        return None, None
+    for index, message in enumerate(messages or []):
+        if message.get("sender") != "lead":
+            continue
+        if normalize_text(message.get("text")) == target:
+            return index, message
+    return None, None
+
+
+def _build_shadow_context(draft, conversation, shadow_drafts=None):
+    """Attach a comparison payload for the dashboard."""
+
+    if not conversation:
+        return {
+            "available": False,
+            "trigger_index": None,
+            "trigger_message": None,
+            "human_reply": None,
+            "human_replies": [],
+            "excerpt": [],
+            "shadow_messages": [],
+            "thread": {},
+        }
+
+    messages = conversation.get("messages") or []
+    trigger_index, trigger_message = _find_trigger_message(
+        messages, draft.client_message
+    )
+    if trigger_index is None:
+        trigger_index = next(
+            (index for index, item in enumerate(messages) if item.get("sender") == "lead"),
+            None,
+        )
+        trigger_message = messages[trigger_index] if trigger_index is not None else None
+
+    human_replies = []
+    if trigger_index is not None:
+        human_replies = [
+            message
+            for message in messages[trigger_index + 1 :]
+            if message.get("sender") == "agent"
+        ]
+
+    excerpt = []
+    if trigger_index is not None:
+        start = max(0, trigger_index - 2)
+        end = min(len(messages), trigger_index + 6)
+        excerpt = messages[start:end]
+    else:
+        excerpt = messages[:8]
+
+    draft_by_message = {}
+    for item in shadow_drafts or [draft]:
+        key = normalize_text(getattr(item, "client_message", ""))
+        if key and key not in draft_by_message:
+            draft_by_message[key] = item
+
+    shadow_messages = []
+    for message in messages:
+        if message.get("sender") != "lead":
+            continue
+        shadow_messages.append(message)
+        matching_draft = draft_by_message.get(normalize_text(message.get("text")))
+        if matching_draft:
+            shadow_messages.append(
+                {
+                    "sender": "agent",
+                    "text": getattr(matching_draft, "generated_response", "") or "",
+                    "timestamp": getattr(matching_draft, "created_at", None),
+                    "shadow": True,
+                    "draft_id": getattr(matching_draft, "pk", None),
+                }
+            )
+
+    return {
+        "available": True,
+        "trigger_index": trigger_index,
+        "trigger_message": trigger_message,
+        "human_reply": human_replies[0] if human_replies else None,
+        "human_replies": human_replies[:3],
+        "excerpt": excerpt,
+        "shadow_messages": shadow_messages,
+        "thread": conversation,
+    }
 
 
 def get_response_dashboard(limit: int = 150):
@@ -85,6 +182,33 @@ def get_response_dashboard(limit: int = 150):
             "-approved", "-created_at"
         )[:60]
     )
+
+    conversation_cache = {}
+    drafts_by_lead = {}
+    for item in drafts:
+        if item.source_lead_id:
+            drafts_by_lead.setdefault(item.source_lead_id, []).append(item)
+    for draft in pending:
+        lead_id = draft.source_lead_id
+        prompt_snapshot = draft.prompt_snapshot or {}
+        prompt_context = prompt_snapshot.get("context") or {}
+        thread_id = prompt_context.get("thread_id")
+        phone = prompt_context.get("phone")
+        cache_key = ("lead", lead_id) if lead_id else ("identity", thread_id, phone)
+        if cache_key not in conversation_cache:
+            if lead_id:
+                conversation_cache[cache_key] = get_lead_conversation(lead_id)
+            else:
+                conversation_cache[cache_key] = get_lead_conversation_by_identity(
+                    thread_id=thread_id,
+                    phone=phone,
+                )
+        conversation = conversation_cache.get(cache_key)
+        draft.shadow_context = _build_shadow_context(
+            draft,
+            conversation,
+            shadow_drafts=drafts_by_lead.get(lead_id, [draft]) if lead_id else [draft],
+        )
 
     return {
         "drafts": drafts,

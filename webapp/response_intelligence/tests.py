@@ -219,6 +219,31 @@ class GuardrailsTests(SimpleTestCase):
         self.assertEqual(block_summary({"blocked": False}), "")
 
 
+class ShadowContextTests(SimpleTestCase):
+    def test_build_shadow_context_includes_human_followup(self):
+        from types import SimpleNamespace
+
+        from .services import _build_shadow_context
+
+        draft = SimpleNamespace(client_message="Hola, quiero más info")
+        conversation = {
+            "messages": [
+                {"sender": "lead", "text": "Hola, quiero más info", "timestamp": 1},
+                {"sender": "agent", "text": "Claro, te comparto los detalles", "timestamp": 2},
+                {"sender": "lead", "text": "Perfecto, gracias", "timestamp": 3},
+            ],
+            "timeline_events": [],
+            "total_messages": 3,
+        }
+
+        context = _build_shadow_context(draft, conversation)
+
+        self.assertTrue(context["available"])
+        self.assertEqual(context["trigger_index"], 0)
+        self.assertEqual(context["human_reply"]["text"], "Claro, te comparto los detalles")
+        self.assertEqual(context["thread"]["total_messages"], 3)
+
+
 class ShadowTests(SimpleTestCase):
     def test_shadow_mode_apagado_por_defecto(self):
         with mock.patch.dict(os.environ, {"RESPONSE_INTELLIGENCE_SHADOW": "0"}, clear=False):
@@ -232,6 +257,47 @@ class ShadowTests(SimpleTestCase):
         with mock.patch.dict(os.environ, {"RESPONSE_INTELLIGENCE_SHADOW": "0"}, clear=False):
             self.assertIsNone(maybe_generate_shadow_draft(client_message="hola"))
 
+
+    def test_codigo_prop_usa_plantilla_y_no_llm(self):
+        objects = mock.Mock()
+        objects.using.return_value = objects
+        stored = SimpleNamespace(pk=105, trace_id="", save=mock.Mock())
+        objects.create.return_value = stored
+        decision = {
+            "success": True,
+            "reason_code": "ANSWER_READY",
+            "property_code": "PROP000262",
+            "data": {
+                "code": "PROP000262",
+                "title": "HOTEL EQUIPADO EN VENTA RIVERO - CERCADO",
+                "property_type": "hotel",
+                "location": "Arequipa",
+                "price": {"amount": 650000, "currency": "USD"},
+                "features": [{"field": "built_area", "value": 468}],
+            },
+            "reply_text": "PLANTILLA VERIFICADA",
+            "evidence": {},
+        }
+        with mock.patch(
+            "response_intelligence.shadow.shadow_mode_enabled",
+            return_value=True,
+        ), mock.patch(
+            "response_intelligence.models.BotResponseDraft.objects",
+            objects,
+        ), mock.patch(
+            "n8n_bridge.services.initial_property_config.get_bot_configuration"
+        ), mock.patch(
+            "n8n_bridge.services.initial_property_decision."
+            "decide_initial_property_response",
+            return_value=decision,
+        ), mock.patch.object(LLMService, "generate_response") as generate:
+            result = maybe_generate_shadow_draft(
+                client_message="Más info del hotel (PROP000262)"
+            )
+        self.assertIs(result, stored)
+        generate.assert_not_called()
+        self.assertEqual(objects.create.call_args.kwargs["generated_response"], "PLANTILLA VERIFICADA")
+        self.assertEqual(objects.create.call_args.kwargs["model_version"], "deterministic-template-v1")
 
 class GenerateCommandTests(SimpleTestCase):
     def test_property_code_from_messages(self):

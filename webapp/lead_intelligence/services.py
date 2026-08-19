@@ -38,6 +38,9 @@ LEAD_RESULT_STAGES = {
     "qualified": "Calificados",
     "visit_intent": "Intención de visita",
     "visit_registered": "Visita registrada",
+    "unconfirmed_contact": "Sin contacto confirmado",
+    "no_valid_conversation": "Sin conversación verificable",
+    "empty_chat_history": "chat_history vacío",
     "never_contacted": "Sin primera respuesta",
     "unattended": "Esperando al agente",
     "attention_overdue": "Atención vencida >24 h",
@@ -647,6 +650,22 @@ def _prepare_lead_result(row, assessment=None, assignment_timeline=None):
     row["never_contacted"] = (
         analysis["first_lead_at"] is not None and not analysis["contacted"]
     )
+    row["unconfirmed_contact"] = not analysis["contacted"]
+    row["no_valid_conversation"] = not bool(analysis["messages"])
+    if analysis["is_null"]:
+        row["contact_issue_reason"] = "Sin chat_history"
+    elif analysis["empty_history"]:
+        row["contact_issue_reason"] = "chat_history vacío"
+    elif not analysis["valid_json"]:
+        row["contact_issue_reason"] = "chat_history con JSON inválido"
+    elif analysis["total_messages"] == 0 and analysis["unknown_senders"]:
+        row["contact_issue_reason"] = "Remitentes no reconocidos"
+    elif analysis["total_messages"] == 0:
+        row["contact_issue_reason"] = "Sin mensajes verificables"
+    elif row["never_contacted"]:
+        row["contact_issue_reason"] = "Cliente escribió; sin respuesta confirmada"
+    else:
+        row["contact_issue_reason"] = ""
     grounded_items, unsupported_items = validate_initial_request_items(
         analysis["messages"],
         assessment.unanswered_request_items if assessment else [],
@@ -659,12 +678,15 @@ def _prepare_lead_result(row, assessment=None, assignment_timeline=None):
     return row
 
 
-def get_lead_results(date_from, date_to, stage, segment=None):
+def get_lead_results(date_from, date_to, stage, segment=None, source=None):
     """Return lead cards for one dashboard stage using SELECT-only CRM access."""
     if stage not in LEAD_RESULT_STAGES:
         stage = "entered"
     if segment not in ("captaciones", "compradores", "otros"):
         segment = None
+    valid_sources = {key for key, _label in SOURCE_LABELS}
+    if source not in valid_sources:
+        source = None
     rows = _lead_result_rows(date_from, date_to)
     assessments = _assessment_map(rows)
     leads = [
@@ -680,6 +702,11 @@ def get_lead_results(date_from, date_to, stage, segment=None):
             for lead in leads
             if lead.get("campaign_segment") == segment
         ]
+    if source is not None:
+        leads = [
+            lead for lead in leads
+            if _source_category(lead.get("source")) == source
+        ]
     if stage != "entered":
         leads = [lead for lead in leads if lead.get(stage)]
     return {
@@ -687,6 +714,8 @@ def get_lead_results(date_from, date_to, stage, segment=None):
         "stage": stage,
         "stage_label": LEAD_RESULT_STAGES[stage],
         "segment": segment,
+        "source": source,
+        "source_label": dict(SOURCE_LABELS).get(source, ""),
     }
 
 
@@ -722,6 +751,43 @@ def get_lead_conversation(lead_id):
     )
     return lead
 
+
+def get_lead_conversation_by_identity(thread_id=None, phone=None):
+    """Resolve the current CRM lead by Chatwoot thread or WhatsApp number.
+
+    Read-only fallback used by shadow_live drafts that were created without a
+    source_lead_id.  The Chatwoot id is authoritative; phone is only a fallback.
+    """
+
+    thread_value = str(thread_id or "").strip()
+    phone_value = "".join(character for character in str(phone or "") if character.isdigit())
+    where = []
+    params = []
+    if thread_value:
+        where.append("CAST(l.id_chatwoot AS varchar(100)) = %s")
+        params.append(thread_value)
+    if phone_value:
+        where.append(
+            "RIGHT(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(c.phone, '+', ''), "
+            "' ', ''), '-', ''), '(', ''), ')', ''), 9) = RIGHT(%s, 9)"
+        )
+        params.append(phone_value)
+    if not where:
+        return None
+
+    with connections["propifai"].cursor() as cursor:
+        cursor.execute(
+            f"""
+            SELECT TOP 1 l.id
+            FROM dbo.lead l
+            LEFT JOIN dbo.contact c ON c.id = l.contact_id
+            WHERE {" OR ".join(where)}
+            ORDER BY COALESCE(l.date_entry, l.created_at) DESC, l.id DESC
+            """,
+            params,
+        )
+        row = cursor.fetchone()
+    return get_lead_conversation(row[0]) if row else None
 
 def _display_name(row):
     first_name = (row.get("first_name") or "").strip()
@@ -1560,6 +1626,12 @@ def _funnel_from_metrics(metrics):
         "never_contacted": sum(
             metric["first_lead_at"] is not None and not metric["contacted"]
             for metric in metrics
+        ),
+        "unconfirmed_contact": sum(
+            not metric["contacted"] for metric in metrics
+        ),
+        "no_valid_conversation": sum(
+            not bool(metric["messages"]) for metric in metrics
         ),
         "contacted": sum(metric["contacted"] for metric in metrics),
         "bidirectional": sum(
