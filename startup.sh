@@ -89,6 +89,12 @@ prepare_camoufox() {
     install_one_of libasound2 libasound2t64 || true
     ldconfig 2>/dev/null || true
 
+    for required_library in libgtk-3.so.0 libX11-xcb.so.1 libasound.so.2; do
+        if ! ldconfig -p 2>/dev/null | grep -q "$required_library"; then
+            echo "[$(date -u)] WARNING: missing Camoufox runtime library: $required_library"
+        fi
+    done
+
     if python -c "from camoufox.pkgman import camoufox_path; print(camoufox_path(download_if_missing=False))" >/dev/null 2>&1; then
         echo "[$(date -u)] Camoufox browser already available; fetch skipped."
     else
