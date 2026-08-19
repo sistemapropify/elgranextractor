@@ -52,21 +52,29 @@ fi
 
 # ── Install Camoufox browser for scrapers (headless in production) ──
 # Oryx instala el paquete camoufox desde requirements.txt, pero el binario
-# del navegador (fork de Firefox) se descarga por separado. En el contenedor
-# Linux no hay display; Camoufox corre en headless=True (ver
-# scrapi/camoufox_launcher.py). Ningún fallo aquí debe tumbar la web.
+# del navegador (fork de Firefox) se descarga por separado con `camoufox fetch`.
+# En el contenedor Linux no hay display; Camoufox corre en headless=True (ver
+# scrapi/camoufox_launcher.py). Ningún fallo aquí debe tumbar la web: el
+# launcher también descarga el binario bajo demanda antes de cada scraping.
 echo "[2/6] Preparing Camoufox browser for scrapers..."
 # Librerías de sistema que necesita el Firefox de Camoufox.
 CAMOUFOX_APT_DEPS="libasound2 libatk1.0-0 libatk-bridge2.0-0 libcairo2 libcups2 libdbus-1-3 libdrm2 libgbm1 libglib2.0-0 libgtk-3-0 libnspr4 libnss3 libpango-1.0-0 libx11-6 libxcb1 libxcomposite1 libxdamage1 libxext6 libxfixes3 libxkbcommon0 libxrandr2 libxshmfence1 fonts-liberation xdg-utils"
 apt-get install -y -qq $CAMOUFOX_APT_DEPS 2>/dev/null || true
 
+# Mismo data_dir que usa scrapi/camoufox_launcher.py. Se puede forzar con la
+# App Setting CAMOUFOX_DATA_DIR. $HOME persiste en App Service (/home), así que
+# el binario sobrevive reinicios y despliegues.
+export CAMOUFOX_DATA_DIR="${CAMOUFOX_DATA_DIR:-$HOME/.local/share/camoufox}"
 # Descargar el binario del navegador (solo la primera vez; $HOME persiste).
-CAMOUFOX_CACHE="${HOME}/.cache/camoufox"
-if [ -d "$CAMOUFOX_CACHE" ] && [ -n "$(ls -A "$CAMOUFOX_CACHE" 2>/dev/null)" ]; then
+# `timeout 180` limita el bloqueo del boot: si no termina a tiempo, gunicorn
+# arranca igual y el launcher (scrapi/camoufox_launcher.py) reintentará la
+# descarga bajo demanda antes del scraping.
+if [ -d "$CAMOUFOX_DATA_DIR/official/stable" ]; then
     echo "  ✓ Camoufox browser already downloaded, skipping fetch."
 else
     echo "  ⏳ Downloading Camoufox browser (first time only, ~200MB)..."
-    python -m camoufox fetch 2>&1 || echo "  ⚠ Camoufox fetch failed; check logs."
+    timeout 180 python -m camoufox --data-dir "$CAMOUFOX_DATA_DIR" fetch 2>&1 \
+        || echo "  ⚠ Camoufox fetch failed/timeout; the launcher will retry on demand."
 fi
 echo "  ✓ Camoufox setup finished."
 
