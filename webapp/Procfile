@@ -1,4 +1,4 @@
 # FIX-OOM: 2 workers, 600s timeout, 1000 max-requests para evitar leaks
 # NOTA: No usar test -f para validar staticfiles. collectstatic ya garantiza
 # que los archivos existen. Si collectstatic falla, gunicorn no arranca por el &&.
-web: python webapp/manage.py collectstatic --noinput && ( (python -m camoufox fetch >/home/camoufox_fetch.log 2>&1 || true) & ) && gunicorn webapp.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 600 --access-logfile '-' --error-logfile '-' --max-requests 1000 --max-requests-jitter 50
+web: export XDG_CACHE_HOME=${XDG_CACHE_HOME:-/home/.cache} && python webapp/manage.py collectstatic --noinput && ( (python -m camoufox fetch >/home/camoufox_fetch.log 2>&1 || true) & ) && gunicorn webapp.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 600 --access-logfile '-' --error-logfile '-' --max-requests 1000 --max-requests-jitter 50

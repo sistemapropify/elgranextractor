@@ -61,21 +61,22 @@ echo "[2/6] Preparing Camoufox browser for scrapers..."
 CAMOUFOX_APT_DEPS="libasound2 libatk1.0-0 libatk-bridge2.0-0 libcairo2 libcups2 libdbus-1-3 libdrm2 libgbm1 libglib2.0-0 libgtk-3-0 libnspr4 libnss3 libpango-1.0-0 libx11-6 libxcb1 libxcomposite1 libxdamage1 libxext6 libxfixes3 libxkbcommon0 libxrandr2 libxshmfence1 fonts-liberation xdg-utils"
 apt-get install -y -qq $CAMOUFOX_APT_DEPS 2>/dev/null || true
 
-# Mismo data_dir que usa scrapi/camoufox_launcher.py. Se puede forzar con la
-# App Setting CAMOUFOX_DATA_DIR. $HOME persiste en App Service (/home), así que
-# el binario sobrevive reinicios y despliegues.
-export CAMOUFOX_DATA_DIR="${CAMOUFOX_DATA_DIR:-$HOME/.local/share/camoufox}"
-# Descargar el binario del navegador (solo la primera vez; $HOME persiste).
+# Camoufox usa platformdirs.user_cache_dir('camoufox'); no admite --data-dir.
+# Forzamos el cache de Linux a /home, que es persistente en App Service.
+export XDG_CACHE_HOME="${XDG_CACHE_HOME:-/home/.cache}"
+CAMOUFOX_CACHE="$XDG_CACHE_HOME/camoufox"
+# Descargar el binario del navegador (solo la primera vez).
 # `timeout 180` limita el bloqueo del boot: si no termina a tiempo, gunicorn
 # arranca igual y el launcher (scrapi/camoufox_launcher.py) reintentará la
 # descarga bajo demanda antes del scraping.
-if [ -d "$CAMOUFOX_DATA_DIR/official/stable" ]; then
+if python -c "from camoufox.pkgman import camoufox_path; print(camoufox_path(download_if_missing=False))" >/dev/null 2>&1; then
     echo "  ✓ Camoufox browser already downloaded, skipping fetch."
 else
     echo "  ⏳ Downloading Camoufox browser (first time only, ~200MB)..."
-    timeout 180 python -m camoufox --data-dir "$CAMOUFOX_DATA_DIR" fetch 2>&1 \
+    timeout 180 python -m camoufox fetch 2>&1 \
         || echo "  ⚠ Camoufox fetch failed/timeout; the launcher will retry on demand."
 fi
+echo "  Camoufox cache: $CAMOUFOX_CACHE"
 echo "  ✓ Camoufox setup finished."
 
 # ── Collect Static Files ──
