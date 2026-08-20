@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ctypes
+import os
 import sys
 import time
 from pathlib import Path
@@ -109,11 +110,13 @@ class CamoufoxSystemDependencyError(RuntimeError):
     """El host Linux no tiene las bibliotecas nativas de Camoufox."""
 
 
-def ensure_camoufox_system_dependencies() -> None:
-    """Valida las librerías del navegador antes de intentar lanzarlo."""
-    if not is_headless_server():
-        return
+_CAMOUFOX_DEPS_INSTALLING = Path('/tmp/propifai-camoufox-deps.installing')
+_CAMOUFOX_DEPS_WAIT_SECONDS = int(
+    os.environ.get('CAMOUFOX_DEPS_WAIT_SECONDS', '360')
+)
 
+
+def _missing_camoufox_dependencies() -> list[str]:
     required = (
         ('libgtk-3.so.0', 'libgtk-3-0/libgtk-3-0t64'),
         ('libX11-xcb.so.1', 'libx11-xcb1'),
@@ -125,14 +128,29 @@ def ensure_camoufox_system_dependencies() -> None:
             ctypes.CDLL(library)
         except OSError:
             missing.append(f'{library} ({package})')
+    return missing
+
+
+def ensure_camoufox_system_dependencies() -> None:
+    """Espera la instalacion de startup y valida las librerias nativas."""
+    if not is_headless_server():
+        return
+
+    missing = _missing_camoufox_dependencies()
+    if missing and _CAMOUFOX_DEPS_INSTALLING.exists():
+        deadline = time.monotonic() + _CAMOUFOX_DEPS_WAIT_SECONDS
+        while missing and time.monotonic() < deadline:
+            time.sleep(2)
+            missing = _missing_camoufox_dependencies()
+            if not _CAMOUFOX_DEPS_INSTALLING.exists() and missing:
+                break
 
     if missing:
         raise CamoufoxSystemDependencyError(
             'Camoufox no puede iniciar: faltan dependencias Linux: '
             + ', '.join(missing)
-            + '. Revise la etapa [2/6] del startup de Azure.'
+            + '. Revise /home/LogFiles/camoufox-deps.log.'
         )
-
 
 def camoufox_kwargs(**overrides) -> dict:
     """Prepara el browser y devuelve opciones validas para AsyncCamoufox."""

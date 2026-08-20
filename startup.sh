@@ -64,6 +64,32 @@ fi
 # scrapi/camoufox_launcher.py prepara Camoufox al iniciar un job.
 echo "[2/6] Camoufox deferred to scraper execution."
 
+# Instalar en segundo plano las bibliotecas nativas requeridas por Camoufox.
+# Gunicorn puede iniciar de inmediato; el launcher espera este marcador antes
+# de abrir el navegador. /tmp se recrea en cada arranque del contenedor.
+CAMOUFOX_DEPS_LOG="/home/LogFiles/camoufox-deps.log"
+CAMOUFOX_DEPS_INSTALLING="/tmp/propifai-camoufox-deps.installing"
+CAMOUFOX_DEPS_READY="/tmp/propifai-camoufox-deps.ready"
+mkdir -p /home/LogFiles
+rm -f "$CAMOUFOX_DEPS_READY"
+touch "$CAMOUFOX_DEPS_INSTALLING"
+(
+    set +e
+    echo "[$(date -u)] Installing Camoufox native dependencies..."
+    timeout 180 apt-get update -qq
+    if timeout 300 apt-get install -y -qq         libgtk-3-0 libx11-xcb1 libasound2; then
+        touch "$CAMOUFOX_DEPS_READY"
+        echo "[$(date -u)] Camoufox native dependencies installed."
+    elif timeout 300 apt-get install -y -qq         libgtk-3-0t64 libx11-xcb1 libasound2t64; then
+        touch "$CAMOUFOX_DEPS_READY"
+        echo "[$(date -u)] Camoufox t64 native dependencies installed."
+    else
+        echo "[$(date -u)] ERROR installing Camoufox native dependencies."
+    fi
+    rm -f "$CAMOUFOX_DEPS_INSTALLING"
+) >> "$CAMOUFOX_DEPS_LOG" 2>&1 &
+echo "  Camoufox native dependency installation started in background."
+
 # ── Collect Static Files ──
 # NOTA: No usar --clear porque borra STATIC_ROOT antes de copiar.
 # Si la copia falla, el directorio queda vacio y todos los

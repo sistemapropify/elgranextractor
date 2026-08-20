@@ -70,6 +70,8 @@ jobs:
           bash -n startup.sh
           test -f webapp/manage.py
           grep -Fq 'Camoufox deferred to scraper execution' startup.sh
+          grep -Fq 'propifai-camoufox-deps.installing' startup.sh
+          grep -Fq 'libgtk-3-0' startup.sh
           grep -Fq 'timeout 90 python manage.py migrate' startup.sh
           grep -Fq 'exec gunicorn' startup.sh
           ! grep -Fq 'prepare_camoufox' startup.sh

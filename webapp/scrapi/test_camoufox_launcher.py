@@ -33,6 +33,25 @@ class CamoufoxLauncherTests(unittest.TestCase):
             with self.assertRaises(launcher.CamoufoxSystemDependencyError):
                 launcher.ensure_camoufox_system_dependencies()
 
+    def test_waits_for_background_dependency_installation(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            marker = Path(temp_dir) / "camoufox-deps.installing"
+            marker.touch()
+
+            def finish_install(_seconds):
+                marker.unlink()
+
+            with (
+                patch.object(launcher, "is_headless_server", return_value=True),
+                patch.object(launcher, "_CAMOUFOX_DEPS_INSTALLING", marker),
+                patch.object(
+                    launcher,
+                    "_missing_camoufox_dependencies",
+                    side_effect=[["libgtk-3.so.0"], []],
+                ),
+                patch.object(launcher.time, "sleep", side_effect=finish_install),
+            ):
+                launcher.ensure_camoufox_system_dependencies()
     def test_existing_browser_skips_download(self):
         browser = Path("/tmp/camoufox/browser")
         with patch.object(launcher, "_installed_path", return_value=browser):
