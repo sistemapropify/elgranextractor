@@ -471,12 +471,29 @@ function control(action) {
         formData.append('job_id', currentJobId);
     }
 
+    const requestController = new AbortController();
+    const requestTimeout = setTimeout(() => requestController.abort(), 20000);
+    if (action === 'start') {
+        document.getElementById('btnStart').disabled = true;
+        document.getElementById('terminalTitle').textContent = 'Iniciando...';
+    }
+
     fetch('/ingestas/scraping/control/', {
         method: 'POST',
         body: formData,
+        signal: requestController.signal,
     })
     .then(async r => {
-        const data = await r.json();
+        const raw = await r.text();
+        let data;
+        try {
+            data = JSON.parse(raw);
+        } catch (parseError) {
+            console.error('Respuesta no JSON del control:', r.status, raw);
+            throw new Error(
+                `El servidor no devolvió JSON (HTTP ${r.status || 'sin respuesta'}).`
+            );
+        }
         if (!r.ok) {
             const error = new Error(data.error || `HTTP ${r.status}: ${r.statusText}`);
             error.data = data;
@@ -504,12 +521,17 @@ function control(action) {
             currentJobId = err.data.job_id;
             updateUI(err.data.estado || 'running');
             if (err.data.estado === 'running') connectSSE(currentJobId);
+        } else if (action === 'start') {
+            updateUI('inactive');
         }
-        appendLog('error', `❌ ${err.message}`);
+        const message = err.name === 'AbortError'
+            ? 'El servidor tardó más de 20 segundos en iniciar el trabajo.'
+            : err.message;
+        appendLog('error', `❌ ${message}`);
         console.error('Control error:', err);
-    });
+    })
+    .finally(() => clearTimeout(requestTimeout));
 }
-
 // ── SSE ──
 function connectSSE(jobId) {
     if (eventSource) eventSource.close();

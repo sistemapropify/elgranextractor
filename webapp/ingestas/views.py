@@ -1767,7 +1767,7 @@ def _reconcile_stale_scraping_jobs():
     cutoff = timezone.now() - timedelta(seconds=SCRAPING_STALE_AFTER_SECONDS)
     stale_ids = list(
         ScrapingJob.objects.filter(
-            estado='running',
+            estado__in=SCRAPING_ACTIVE_STATES,
             completado_en__isnull=True,
         ).filter(
             Q(iniciado_en__lt=cutoff)
@@ -1782,18 +1782,30 @@ def _reconcile_stale_scraping_jobs():
         estado='error',
         completado_en=timezone.now(),
         mensaje_error=(
-            'Ejecucion huerfana detectada: no produjo logs ni progreso '
+            'Ejecución huérfana detectada: no produjo logs ni progreso '
             'durante el intervalo de actividad permitido.'
         ),
     )
 
 def _launch_scraping_job(job_id):
-    """Usa Celery con broker real; conserva threading solo para desarrollo."""
+    """Despacha sin bloquear la respuesta HTTP del dashboard.
+
+    El modo no se infiere del broker: tener una URL Redis configurada no
+    garantiza que exista un worker disponible y `delay()` puede retener la
+    petición hasta el timeout de Azure. El scraper usa un hilo local por
+    defecto. Celery solo se activa explícitamente cuando hay worker dedicado.
+    """
     from colas.scraping_tasks import scraping_task, scraping_task_run
 
-    broker_url = str(getattr(settings, 'CELERY_BROKER_URL', '') or '')
-    if broker_url and broker_url != 'memory://':
-        scraping_task.delay(job_id)
+    execution_mode = str(
+        getattr(
+            settings,
+            'SCRAPING_EXECUTION_MODE',
+            os.environ.get('SCRAPING_EXECUTION_MODE', 'thread'),
+        ) or 'thread'
+    ).strip().lower()
+    if execution_mode == 'celery':
+        scraping_task.apply_async(args=(job_id,), retry=False)
         return 'celery'
 
     thread = threading.Thread(
@@ -1804,7 +1816,6 @@ def _launch_scraping_job(job_id):
     )
     thread.start()
     return 'thread'
-
 
 class ScrapingDashboardView(TemplateView):
     """Dashboard principal de scraping con terminal, controles y tabla."""

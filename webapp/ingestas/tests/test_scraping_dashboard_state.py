@@ -22,6 +22,9 @@ class ScrapingDashboardStateTests(SimpleTestCase):
     def test_reconcile_marks_old_active_jobs_as_error(self, job_model):
         queryset = MagicMock()
         queryset.filter.return_value = queryset
+        queryset.exclude.return_value = queryset
+        queryset.values_list.return_value = queryset
+        queryset.distinct.return_value = [7, 8]
         queryset.update.return_value = 2
         job_model.objects.filter.return_value = queryset
 
@@ -47,13 +50,27 @@ class ScrapingDashboardStateTests(SimpleTestCase):
         thread_class.assert_called_once()
         thread.start.assert_called_once_with()
 
-    @override_settings(CELERY_BROKER_URL="redis://broker:6379/0")
-    @patch("colas.scraping_tasks.scraping_task.delay")
-    def test_real_broker_uses_celery(self, delay):
+    @override_settings(
+        CELERY_BROKER_URL="redis://broker:6379/0",
+        SCRAPING_EXECUTION_MODE="celery",
+    )
+    @patch("colas.scraping_tasks.scraping_task.apply_async")
+    def test_explicit_celery_mode_uses_celery(self, apply_async):
         mode = _launch_scraping_job(42)
 
         self.assertEqual(mode, "celery")
-        delay.assert_called_once_with(42)
+        apply_async.assert_called_once_with(args=(42,), retry=False)
+
+    @override_settings(
+        CELERY_BROKER_URL="redis://broker:6379/0",
+        SCRAPING_EXECUTION_MODE="thread",
+    )
+    @patch("ingestas.views.threading.Thread")
+    def test_redis_url_does_not_force_blocking_celery_dispatch(self, thread_class):
+        mode = _launch_scraping_job(42)
+
+        self.assertEqual(mode, "thread")
+        thread_class.return_value.start.assert_called_once_with()
 
     @patch("ingestas.views.ScrapingJob")
     def test_pause_requires_running_job(self, job_model):
