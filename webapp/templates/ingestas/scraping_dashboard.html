@@ -452,6 +452,7 @@
 <script>
 let currentJobId = null;
 let eventSource = null;
+let tableRequest = null;
 
 // ── Control ──
 function control(action) {
@@ -647,15 +648,30 @@ function loadTable() {
     const tipo = document.getElementById('filterTipo').value;
     const params = new URLSearchParams();
     params.set('page', '1');
-    params.set('limit', '100');
+    params.set('limit', '25');
     if (fuente) params.set('fuente', fuente);
     if (distrito) params.set('distrito', distrito);
     if (tipo) params.set('tipo', tipo);
 
-    fetch(`/ingestas/scraping/propiedades/?${params.toString()}`)
-        .then(r => r.text())
+    if (tableRequest) tableRequest.abort();
+    tableRequest = new AbortController();
+    fetch('/ingestas/scraping/propiedades/?' + params.toString(), {
+        signal: tableRequest.signal,
+    })
+        .then(r => {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.text();
+        })
         .then(html => {
             document.getElementById('tablaBody').innerHTML = html;
+        })
+        .catch(err => {
+            if (err.name !== 'AbortError') {
+                console.warn('No se pudo actualizar la tabla:', err);
+            }
+        })
+        .finally(() => {
+            tableRequest = null;
         });
 }
 

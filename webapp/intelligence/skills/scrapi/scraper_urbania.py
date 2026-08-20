@@ -13,7 +13,7 @@ import asyncio
 import logging
 import re
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any, Callable, Dict
 
 from intelligence.skills.base import BaseSkill, SkillResult
 from .db_utils import guardar_propiedades
@@ -137,28 +137,43 @@ def _estandarizar_urbania(prop: dict, fecha_extraccion: str) -> dict:
     }
 
 
-def _ejecutar_scraping(max_paginas: int = 0) -> list[Dict[str, Any]]:
-    """
-    Ejecuta el scraping de Urbania y retorna lista de propiedades estandarizadas.
-    
-    Args:
-        max_paginas: Máximo de páginas a scrapear. 0 = todas.
-    
-    Returns:
-        Lista de dicts con formato estandarizado listo para guardar en DB.
-    """
+def _ejecutar_scraping(
+    max_paginas: int = 0,
+    start_page: int = 1,
+    progress_callback: Callable[[Dict[str, Any]], bool] | None = None,
+    batch_callback: Callable[[list[Dict[str, Any]]], Dict[str, int]] | None = None,
+) -> list[Dict[str, Any]]:
+    """Scrapea Urbania por pagina, persistiendo y reportando cada lote."""
+    from scrapi import urbania_scraper as urbania_source
     from scrapi.urbania_scraper import (
-        TOTAL_PAGINAS, GUARDAR_CADA_N_PAGINAS, BASE_PATTERN,
-        extraer_listado, extraer_detalle,
-        navegar_con_cloudflare, manejar_sigint, detener,
+        TOTAL_PAGINAS, BASE_PATTERN, extraer_listado, extraer_detalle,
+        navegar_con_cloudflare, manejar_sigint,
     )
     from camoufox.async_api import AsyncCamoufox
     from scrapi.camoufox_launcher import camoufox_kwargs
     import signal
 
     async def _run():
+        urbania_source.detener = False
         todas_raw = []
         paginas = max_paginas if max_paginas > 0 else TOTAL_PAGINAS
+        pagina_inicial = max(1, min(int(start_page or 1), paginas))
+
+        async def emit_progress(**payload):
+            if not progress_callback:
+                return True
+            return await asyncio.to_thread(progress_callback, payload)
+
+        def estandarizar_lote(raw_items):
+            fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            resultado = []
+            for prop in raw_items:
+                try:
+                    resultado.append(_estandarizar_urbania(prop, fecha))
+                except Exception as exc:
+                    logger.warning("[urbania] Error estandarizando: %s", exc)
+            return resultado
+
         try:
             signal.signal(signal.SIGINT, manejar_sigint)
         except (ValueError, RuntimeError):
@@ -172,52 +187,71 @@ def _ejecutar_scraping(max_paginas: int = 0) -> list[Dict[str, Any]]:
         ) as browser:
             page = await browser.new_page()
             await page.set_viewport_size({"width": 1920, "height": 1080})
-
-            print("=" * 60)
-            print(f"SCRAPER URBANIA - {paginas} paginas")
-            print("=" * 60)
-
-            for n in range(1, paginas + 1):
-                if detener:
+            for n in range(pagina_inicial, paginas + 1):
+                if urbania_source.detener:
                     break
-                url = BASE_PATTERN.format(n)
-                print(f"\n[Pagina {n}/{paginas}]: {url}")
+                if not await emit_progress(
+                    percent=int(((n - 1) / max(paginas, 1)) * 99),
+                    processed=len(todas_raw),
+                    message=f'Urbania: leyendo pagina {n} de {paginas}',
+                ):
+                    break
                 try:
-                    await navegar_con_cloudflare(page, url)
+                    await navegar_con_cloudflare(page, BASE_PATTERN.format(n))
                     props = await extraer_listado(page)
+                    total_lote = len(props)
+                    completadas = []
+                    for indice, prop in enumerate(props, 1):
+                        if urbania_source.detener:
+                            break
+                        await extraer_detalle(page, prop)
+                        await asyncio.sleep(0.35)
+                        completadas.append(prop)
+                        if indice == 1 or indice % 10 == 0:
+                            if not await emit_progress(
+                                percent=int(((n - 1) / max(paginas, 1)) * 99),
+                                processed=len(todas_raw) + indice,
+                                message=(
+                                    f'Urbania: completando detalles de la '
+                                    f'pagina {n} ({indice}/{len(props)})'
+                                ),
+                            ):
+                                urbania_source.detener = True
+                                break
+                    props = completadas
                     todas_raw.extend(props)
-                    print(f"   -> {len(props)} props (total: {len(todas_raw)})")
-                except Exception as e:
-                    print(f"   [ERROR] Pagina {n}: {e}")
-
-            # FASE 2: Detalles para coordenadas
-            if todas_raw and not detener:
-                print(f"\nFASE 2: Detalles ({len(todas_raw)} props)...")
-                for i, prop in enumerate(todas_raw):
-                    if detener:
-                        break
-                    prop_id = prop.get('ID', '')
-                    ubic = prop.get('Ubicacion', '')
-                    print(f"  [{i+1}/{len(todas_raw)}] ID: {prop_id} - {ubic}")
-                    await extraer_detalle(page, prop)
-                    await asyncio.sleep(0.5)
-
+                    if batch_callback and props:
+                        lote = estandarizar_lote(props)
+                        if lote:
+                            saved = await asyncio.to_thread(batch_callback, lote)
+                            if saved and not await emit_progress(
+                                percent=int((n / max(paginas, 1)) * 99),
+                                processed=saved.get('total', len(todas_raw)),
+                                nuevas=saved.get('nuevas', 0),
+                                actualizadas=saved.get('actualizadas', 0),
+                                errores=saved.get('errores', 0),
+                                checkpoint_page=(n if len(props) == total_lote else None),
+                                message=(
+                                    f"Urbania: {saved.get('total', 0)} procesadas "
+                                    f"({saved.get('nuevas', 0)} nuevas)"
+                                ),
+                            ):
+                                break
+                except Exception as exc:
+                    raise RuntimeError(
+                        f"Urbania fallo en pagina {n}; checkpoint previo conservado"
+                    ) from exc
             await page.close()
 
-        # Estandarizar
-        fecha_extraccion = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        estandarizadas = []
-        for prop in todas_raw:
-            try:
-                std = _estandarizar_urbania(prop, fecha_extraccion)
-                estandarizadas.append(std)
-            except Exception as e:
-                logger.warning(f"[urbania] Error estandarizando: {e}")
-
+        estandarizadas = estandarizar_lote(todas_raw)
+        await emit_progress(
+            percent=99,
+            processed=len(estandarizadas),
+            message='Urbania: consolidando resultados finales',
+        )
         return estandarizadas
 
     return asyncio.run(_run())
-
 
 class ScraperUrbaniaSkill(BaseSkill):
     name = "scraper_urbania"
@@ -247,24 +281,36 @@ class ScraperUrbaniaSkill(BaseSkill):
     ) -> SkillResult:
         try:
             max_paginas = params.get('max_paginas', 0)
-            propiedades = _ejecutar_scraping(max_paginas)
+            start_page = params.get('start_page', 1)
+            progress_callback = (context or {}).get('progress_callback')
+            incremental = {'total': 0, 'nuevas': 0, 'actualizadas': 0, 'errores': 0}
 
+            def guardar_lote(propiedades_lote):
+                resultado_lote = guardar_propiedades(
+                    propiedades_lote, fuente='urbania'
+                )
+                for key in incremental:
+                    incremental[key] += int(resultado_lote.get(key, 0) or 0)
+                return incremental.copy()
+
+            propiedades = _ejecutar_scraping(
+                max_paginas,
+                start_page=start_page,
+                progress_callback=progress_callback,
+                batch_callback=guardar_lote,
+            )
             if not propiedades:
                 return SkillResult.error(
                     message=(
-                        'Urbania no devolvió propiedades. Revise la navegación, '
-                        'el bloqueo del portal y los logs de extracción.'
+                        'Urbania no devolvio propiedades. Revise la navegacion, '
+                        'el bloqueo del portal y los logs de extraccion.'
                     ),
                     skill_name=self.name,
                 )
-
-            resultado = guardar_propiedades(propiedades, fuente='urbania')
-
+            guardar_propiedades(propiedades, fuente='urbania')
+            resultado = incremental
             return SkillResult.ok(
-                data={
-                    'portal': 'urbania',
-                    **resultado,
-                },
+                data={'portal': 'urbania', **resultado},
                 message=(
                     f"Urbania: {resultado['nuevas']} nuevas, "
                     f"{resultado['actualizadas']} actualizadas, "
@@ -272,10 +318,9 @@ class ScraperUrbaniaSkill(BaseSkill):
                 ),
                 skill_name=self.name,
             )
-
-        except Exception as e:
-            logger.exception(f"[urbania] Error en ejecución: {e}")
+        except Exception as exc:
+            logger.exception("[urbania] Error en ejecucion: %s", exc)
             return SkillResult.error(
-                message=f"Error en scraper Urbania: {e}",
+                message=f"Error en scraper Urbania: {exc}",
                 skill_name=self.name,
             )

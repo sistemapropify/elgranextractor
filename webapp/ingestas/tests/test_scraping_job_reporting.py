@@ -155,6 +155,33 @@ class ScrapingJobReportingTests(SimpleTestCase):
         self.assertFalse(result.success)
 
     @patch(
+        "intelligence.skills.scrapi.scraper_urbania.guardar_propiedades",
+        return_value={"total": 1, "nuevas": 1, "actualizadas": 0, "errores": 0},
+    )
+    @patch("intelligence.skills.scrapi.scraper_urbania._ejecutar_scraping")
+    def test_urbania_wires_incremental_progress_and_checkpoint(
+        self, scrape, _guardar
+    ):
+        lote = [{"id_origen": "urbania-1"}]
+        progreso = MagicMock(return_value=True)
+
+        def ejecutar(_max_paginas, **kwargs):
+            kwargs["batch_callback"](lote)
+            return lote
+
+        scrape.side_effect = ejecutar
+        result = ScraperUrbaniaSkill().execute(
+            {"max_paginas": 5, "start_page": 3},
+            context={"progress_callback": progreso},
+        )
+
+        self.assertTrue(result.success)
+        self.assertEqual(result.data["total"], 1)
+        _, kwargs = scrape.call_args
+        self.assertEqual(kwargs["start_page"], 3)
+        self.assertIs(kwargs["progress_callback"], progreso)
+        self.assertTrue(callable(kwargs["batch_callback"]))
+    @patch(
         "intelligence.skills.scrapi.scraper_adondevivir._ejecutar_scraping",
         return_value=[],
     )

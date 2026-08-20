@@ -46,6 +46,8 @@ python manage.py collectstatic --noinput --clear 2>&1 || echo "Collectstatic omi
 echo "Iniciando Gunicorn en puerto ${PORT:-8000}..."
 gunicorn --bind=0.0.0.0:${PORT:-8000} \
          --workers=2 \
+         --worker-class=gthread \
+         --threads=4 \
          --timeout=120 \
          --access-logfile=- \
          --error-logfile=- \
