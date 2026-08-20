@@ -34,3 +34,10 @@ class ProperatiCoordinateExtractionTests(SimpleTestCase):
             ),
             (None, None),
         )
+    def test_returns_empty_tuple_when_coordinates_are_absent(self):
+        self.assertEqual(
+            extraer_coordenadas_desde_html(
+                '<html><body><img src="property.jpg"></body></html>'
+            ),
+            (None, None),
+        )

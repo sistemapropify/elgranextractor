@@ -579,7 +579,7 @@ def extraer_coordenadas_desde_html(html_content):
         except (ValueError, TypeError):
             pass
 
-        return None, None
+    return None, None
 
 
 def extraer_imagen_desde_html(html_content):
