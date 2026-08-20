@@ -69,9 +69,10 @@ jobs:
         run: |
           bash -n startup.sh
           test -f webapp/manage.py
-          grep -Fq 'libgtk-3.so.0' startup.sh
-          grep -Fq 'libX11-xcb.so.1' startup.sh
-          grep -Fq 'libasound.so.2' startup.sh
+          grep -Fq 'Camoufox deferred to scraper execution' startup.sh
+          grep -Fq 'timeout 90 python manage.py migrate' startup.sh
+          grep -Fq 'exec gunicorn' startup.sh
+          ! grep -Fq 'prepare_camoufox' startup.sh
 
       # Build the deployment artifact without generated browser profiles,
       # duplicated projects, logs, or other runtime-only data.

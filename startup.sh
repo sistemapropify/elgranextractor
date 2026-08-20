@@ -59,69 +59,38 @@ else
     echo "  ✓ ODBC Driver already installed, skipping."
 fi
 
-# ── Install Camoufox browser for scrapers (headless in production) ──
-# Oryx instala el paquete camoufox desde requirements.txt, pero el binario
-# del navegador (fork de Firefox) se descarga por separado con `camoufox fetch`.
-# En el contenedor Linux no hay display; Camoufox corre en headless=True (ver
-# scrapi/camoufox_launcher.py). La disponibilidad web no debe depender de la
-# instalación del navegador del scraper.
-echo "[2/6] Scheduling Camoufox preparation (non-blocking)..."
-export XDG_CACHE_HOME="${XDG_CACHE_HOME:-/home/.cache}"
-CAMOUFOX_CACHE="$XDG_CACHE_HOME/camoufox"
-CAMOUFOX_BOOT_LOG="${HOME}/LogFiles/camoufox-startup.log"
-mkdir -p "$(dirname "$CAMOUFOX_BOOT_LOG")"
+# ── Camoufox ──
+# No instalar paquetes ni descargar navegadores durante el arranque web.
+# scrapi/camoufox_launcher.py prepara Camoufox al iniciar un job.
+echo "[2/6] Camoufox deferred to scraper execution."
 
-prepare_camoufox() {
-    echo "[$(date -u)] Preparing native Camoufox dependencies..."
-    apt-get update -qq 2>&1 || true
-
-    install_one_of() {
-        for package_name in "$@"; do
-            if DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends "$package_name"; then
-                return 0
-            fi
-        done
-        return 1
-    }
-
-    install_one_of libgtk-3-0 libgtk-3-0t64 || true
-    install_one_of libx11-xcb1 || true
-    install_one_of libasound2 libasound2t64 || true
-    ldconfig 2>/dev/null || true
-
-    for required_library in libgtk-3.so.0 libX11-xcb.so.1 libasound.so.2; do
-        if ! ldconfig -p 2>/dev/null | grep -q "$required_library"; then
-            echo "[$(date -u)] WARNING: missing Camoufox runtime library: $required_library"
-        fi
-    done
-
-    if python -c "from camoufox.pkgman import camoufox_path; print(camoufox_path(download_if_missing=False))" >/dev/null 2>&1; then
-        echo "[$(date -u)] Camoufox browser already available; fetch skipped."
-    else
-        echo "[$(date -u)] Browser not cached; download deferred to scraper execution."
-    fi
-}
-
-prepare_camoufox >> "$CAMOUFOX_BOOT_LOG" 2>&1 &
-echo "  ✓ Camoufox preparation running in background; web startup continues."
-echo "  Camoufox cache: $CAMOUFOX_CACHE"
 # ── Collect Static Files ──
 # NOTA: No usar --clear porque borra STATIC_ROOT antes de copiar.
 # Si la copia falla, el directorio queda vacio y todos los
 # archivos estaticos devuelven 404 (MIME type text/html).
-echo "[3/6] Collecting static files..."
+echo "[3/6] Verifying static files from build artifact..."
 cd "$APP_ROOT/webapp"
-python manage.py collectstatic --noinput 2>&1
-test -f staticfiles/canvas/css/canvas.css
-test -f staticfiles/canvas/js/canvas_engine.js
-test -f staticfiles/canvas/js/canvas_gallery.js
-echo "  ✓ Static files collected."
+if [ -f staticfiles/canvas/css/canvas.css ] \
+  && [ -f staticfiles/canvas/js/canvas_engine.js ] \
+  && [ -f staticfiles/canvas/js/canvas_gallery.js ]; then
+    echo "  Static files already present; collectstatic skipped."
+else
+    echo "  Static artifact incomplete; running bounded collectstatic..."
+    if timeout 90 python manage.py collectstatic --noinput 2>&1; then
+        echo "  Static files collected."
+    else
+        echo "  WARNING: collectstatic failed or timed out; startup continues."
+    fi
+fi
 
 # ── Run Migrations ──
-echo "[4/6] Running database migrations..."
-python manage.py migrate --noinput 2>&1
-echo "  ✓ Migrations applied."
-
+# Un problema transitorio de SQL no debe mantener offline el proceso HTTP.
+echo "[4/6] Running bounded database migrations..."
+if timeout 90 python manage.py migrate --noinput 2>&1; then
+    echo "  Migrations applied."
+else
+    echo "  WARNING: migrations failed or timed out; startup continues."
+fi
 # ── Return to wwwroot for gunicorn context ──
 cd "$APP_ROOT"
 
