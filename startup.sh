@@ -97,11 +97,11 @@ cd "$APP_ROOT"
 # ── Start Gunicorn ──
 echo "[5/6] Starting Gunicorn..."
 echo "  Port: ${PORT:-8000}"
-echo "  Workers: 2 (max-requests: 1000, jitter: 50)"
+echo "  Workers: 1 (memory-safe Azure mode)"
 echo "  Timeout: 600s (lazy model load)"
 exec gunicorn webapp.wsgi:application \
     --bind=0.0.0.0:${PORT:-8000} \
-    --workers=2 \
+    --workers=1 \
     --timeout=600 \
     --max-requests=1000 \
     --max-requests-jitter=50 \

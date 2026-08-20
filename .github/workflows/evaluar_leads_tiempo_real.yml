@@ -28,6 +28,6 @@ jobs:
             -H "Content-Type: application/json" \
             -H "Referer: https://acm.propifai.com/" \
             -H "User-Agent: GitHub-Actions" \
-            -d '{"stages":"bidirectional","lookback_hours":6,"workers":2}' \
+            -d '{"stages":"bidirectional","lookback_hours":6,"workers":1}' \
             -w "\nHTTP %{http_code}\n" \
             "https://granextractorservice-emehaffsf8e2c7eg.brazilsouth-01.azurewebsites.net/analisis-crm/api/evaluacion-automatica/"

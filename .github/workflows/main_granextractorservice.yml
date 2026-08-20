@@ -185,6 +185,7 @@ jobs:
             --resource-group rg-elgranextractor \
             --name granextractorservice \
             --startup-file "bash startup.sh" \
+            --always-on true \
             --output none
           STARTUP_COMMAND=$(az webapp config show \
             --resource-group rg-elgranextractor \
