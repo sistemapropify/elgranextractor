@@ -466,6 +466,7 @@ function control(action) {
             .map(cb => cb.value);
         if (checked.length === 0) { alert('Selecciona al menos un portal'); return; }
         formData.append('portales', checked.join(','));
+        appendLog('info', 'Portales seleccionados: ' + checked.join(', '));
     } else {
         formData.append('job_id', currentJobId);
     }

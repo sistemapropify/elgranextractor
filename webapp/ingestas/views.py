@@ -1651,7 +1651,7 @@ SCRAPING_PORTAL_LABELS = {
     'urbania': 'Urbania',
 }
 SCRAPING_STALE_AFTER_SECONDS = int(
-    os.environ.get('SCRAPING_STALE_AFTER_SECONDS', '21600')
+    os.environ.get('SCRAPING_STALE_AFTER_SECONDS', '900')
 )
 
 
@@ -1763,23 +1763,29 @@ foreach ($target in $targets) {
 
 
 def _reconcile_stale_scraping_jobs():
-    """Cierra jobs que sobrevivieron al proceso que los estaba ejecutando."""
+    """Cierra ejecuciones running sin actividad reciente verificable."""
     cutoff = timezone.now() - timedelta(seconds=SCRAPING_STALE_AFTER_SECONDS)
-    return ScrapingJob.objects.filter(
-        estado__in=SCRAPING_ACTIVE_STATES,
-        completado_en__isnull=True,
-    ).filter(
-        Q(iniciado_en__lt=cutoff)
-        | Q(iniciado_en__isnull=True, creado_en__lt=cutoff)
-    ).update(
+    stale_ids = list(
+        ScrapingJob.objects.filter(
+            estado='running',
+            completado_en__isnull=True,
+        ).filter(
+            Q(iniciado_en__lt=cutoff)
+            | Q(iniciado_en__isnull=True, creado_en__lt=cutoff)
+        ).exclude(
+            logs__timestamp__gte=cutoff
+        ).values_list('id', flat=True).distinct()
+    )
+    if not stale_ids:
+        return 0
+    return ScrapingJob.objects.filter(id__in=stale_ids).update(
         estado='error',
         completado_en=timezone.now(),
         mensaje_error=(
-            'Ejecución huérfana detectada: no reportó actividad dentro '
-            'del tiempo máximo permitido.'
+            'Ejecucion huerfana detectada: no produjo logs ni progreso '
+            'durante el intervalo de actividad permitido.'
         ),
     )
-
 
 def _launch_scraping_job(job_id):
     """Usa Celery con broker real; conserva threading solo para desarrollo."""

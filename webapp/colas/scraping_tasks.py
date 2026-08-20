@@ -162,7 +162,11 @@ def _run_scraping(job_id: int):
     job.iniciado_en = timezone.now()
     job.save()
 
-    _crear_log(job, 'info', f'🚀 Scraping iniciado con {len(portales)} portales')
+    _crear_log(
+        job,
+        'info',
+        f"🚀 Portales seleccionados ({len(portales)}): {', '.join(portales)}",
+    )
     total_portales = len(portales)
     successful_portals = 0
     failed_portals = []
@@ -259,7 +263,7 @@ def _run_scraping(job_id: int):
             # pueden quedar temporalmente sin respuesta al iniciar Camoufox;
             # el segundo intento usa el mismo checkpoint confirmado.
             max_attempts = 3 if portal == 'properati' else (
-                2 if portal == 'adondevivir' else 1
+                2 if portal in ('adondevivir', 'urbania') else 1
             )
             resultado = None
             for attempt in range(1, max_attempts + 1):
@@ -290,7 +294,7 @@ def _run_scraping(job_id: int):
                     break
                 if attempt < max_attempts:
                     terminated = 0
-                    if portal == 'adondevivir':
+                    if portal in ('adondevivir', 'urbania'):
                         # Un arranque de contexto persistente que venció su
                         # timeout puede dejar Camoufox vivo y el perfil
                         # bloqueado. Antes de reintentar liberamos únicamente

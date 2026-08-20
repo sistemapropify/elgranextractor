@@ -179,12 +179,18 @@ def _ejecutar_scraping(
         except (ValueError, RuntimeError):
             pass
 
-        async with AsyncCamoufox(
-            **camoufox_kwargs(
-                persistent_context=True,
-                user_data_dir='./camoufox_session_urbania',
-            ),
-        ) as browser:
+        if not await emit_progress(
+            percent=1,
+            processed=0,
+            message='Urbania: preparando navegador Camoufox',
+        ):
+            return []
+
+        browser_options = await asyncio.wait_for(
+            asyncio.to_thread(camoufox_kwargs, timeout=120000),
+            timeout=180,
+        )
+        async with AsyncCamoufox(**browser_options) as browser:
             page = await browser.new_page()
             await page.set_viewport_size({"width": 1920, "height": 1080})
             for n in range(pagina_inicial, paginas + 1):
