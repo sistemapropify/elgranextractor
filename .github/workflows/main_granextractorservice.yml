@@ -168,6 +168,15 @@ jobs:
           app-name: 'granextractorservice'
           slot-name: 'Production'
 
+      # El zip deploy puede tardar mas que la ventana de cinco minutos de la
+      # asercion OIDC inicial. Solicitar una credencial nueva antes de usar az.
+      - name: Refresh Azure login after deployment
+        if: success()
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_BD7ACFF66075413F896FF528B42CABC0 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_0FA92F15F0804AE197DC2EECF943B7DB }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_C521A0DD71BB48CE88443464F4F718FB }}
       - name: Configure and verify the Azure startup command
         if: success()
         run: |
@@ -187,23 +196,29 @@ jobs:
         run: |
           echo "Deployment completed successfully"
           echo "App URL: https://granextractorservice-emehaffsf8e2c7eg.brazilsouth-01.azurewebsites.net"
+          http_status() {
+            local output_file="$1"
+            local url="$2"
+            local status
+            status=$(curl -sS -o "$output_file" -w "%{http_code}" \
+              --connect-timeout 5 --max-time 10 "$url" 2>/dev/null) || true
+            echo "${status:-000}"
+          }
+
           for i in {1..20}; do
-            HEALTH_STATUS=$(curl -s -o /tmp/health-response.json -w "%{http_code}" \
-              --max-time 20 \
-              https://granextractorservice-emehaffsf8e2c7eg.brazilsouth-01.azurewebsites.net/api/v1/intelligence/health/ \
-              || echo "000")
-            CSS_STATUS=$(curl -s -o /tmp/chat-workspace.css -w "%{http_code}" \
-              --max-time 20 \
-              https://granextractorservice-emehaffsf8e2c7eg.brazilsouth-01.azurewebsites.net/static/intelligence/chat-workspace.css \
-              || echo "000")
-            JS_STATUS=$(curl -s -o /tmp/chat.js -w "%{http_code}" \
-              --max-time 20 \
-              https://granextractorservice-emehaffsf8e2c7eg.brazilsouth-01.azurewebsites.net/static/intelligence/chat.js \
-              || echo "000")
-            LOGO_STATUS=$(curl -s -o /tmp/logo-propify.png -w "%{http_code}" \
-              --max-time 20 \
-              https://granextractorservice-emehaffsf8e2c7eg.brazilsouth-01.azurewebsites.net/static/intelligence/img/logo-propify.png \
-              || echo "000")
+            HEALTH_STATUS=$(http_status /tmp/health-response.json \
+              https://granextractorservice-emehaffsf8e2c7eg.brazilsouth-01.azurewebsites.net/api/v1/intelligence/health/)
+            CSS_STATUS="pending"
+            JS_STATUS="pending"
+            LOGO_STATUS="pending"
+            if [ "$HEALTH_STATUS" = "200" ]; then
+              CSS_STATUS=$(http_status /tmp/chat-workspace.css \
+                https://granextractorservice-emehaffsf8e2c7eg.brazilsouth-01.azurewebsites.net/static/intelligence/chat-workspace.css)
+              JS_STATUS=$(http_status /tmp/chat.js \
+                https://granextractorservice-emehaffsf8e2c7eg.brazilsouth-01.azurewebsites.net/static/intelligence/chat.js)
+              LOGO_STATUS=$(http_status /tmp/logo-propify.png \
+                https://granextractorservice-emehaffsf8e2c7eg.brazilsouth-01.azurewebsites.net/static/intelligence/img/logo-propify.png)
+            fi
             echo "Check $i/20 - health=$HEALTH_STATUS css=$CSS_STATUS js=$JS_STATUS logo=$LOGO_STATUS"
             if [ "$HEALTH_STATUS" = "200" ] \
               && [ "$CSS_STATUS" = "200" ] \
@@ -216,12 +231,25 @@ jobs:
             sleep 15
           done
           echo "Application or static assets did not become healthy"
-          echo "=== Last 50 log entries ==="
-          az webapp log tail \
-            --name granextractorservice \
-            --resource-group rg-elgranextractor || true
           exit 1
 
+      # El health-check puede durar varios minutos. Renovar OIDC otra vez para
+      # que la obtencion de logs no falle con AADSTS700024.
+      - name: Refresh Azure login for diagnostics
+        if: failure()
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_BD7ACFF66075413F896FF528B42CABC0 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_0FA92F15F0804AE197DC2EECF943B7DB }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_C521A0DD71BB48CE88443464F4F718FB }}
+
+      - name: Capture App Service logs after failed verification
+        if: failure()
+        run: |
+          echo "=== Last App Service log entries ==="
+          timeout 90 az webapp log tail \
+            --name granextractorservice \
+            --resource-group rg-elgranextractor || true
       - name: Logout from Azure
         if: always()
         run: |
