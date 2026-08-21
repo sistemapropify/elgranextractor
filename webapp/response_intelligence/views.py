@@ -5,6 +5,7 @@ consulta con SELECT. Reutiliza el patrón de ``lead_intelligence``.
 """
 
 from django.contrib import messages
+from django.db import OperationalError, close_old_connections
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
@@ -15,13 +16,24 @@ from .models import BotResponseDraft, BotResponseEvaluation, CuratedExample
 from .services import get_ai_cost_summary_for_drafts, get_response_dashboard
 
 
+def _load_dashboard_context():
+    """Carga lecturas del dashboard y recupera una desconexión ODBC transitoria."""
+    for attempt in range(2):
+        try:
+            context = get_response_dashboard()
+            context["ai_cost"] = get_ai_cost_summary_for_drafts()
+            return context
+        except OperationalError:
+            close_old_connections()
+            if attempt:
+                raise
+
 @management_access_required
 def response_dashboard(request):
     """Dashboard de calidad del motor IA: cola de revisión + KPIs + gate."""
     from .shadow import shadow_mode_enabled
 
-    context = get_response_dashboard()
-    context["ai_cost"] = get_ai_cost_summary_for_drafts()
+    context = _load_dashboard_context()
     context["shadow_enabled"] = shadow_mode_enabled()
     context["title"] = "Calidad del motor IA de respuestas"
     context["active_tab"] = "engine_ai"

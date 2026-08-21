@@ -438,3 +438,35 @@ class MemoryBridgePromptTests(SimpleTestCase):
         )
         self.assertEqual(memory_bridge.property_code_from_context(ctx), "PROP000265")
         self.assertEqual(memory_bridge._normalize_code("prop 7"), "PROP000007")
+
+
+class DashboardConnectionRecoveryTests(SimpleTestCase):
+    @mock.patch("response_intelligence.views.close_old_connections")
+    @mock.patch("response_intelligence.views.get_ai_cost_summary_for_drafts")
+    @mock.patch("response_intelligence.views.get_response_dashboard")
+    def test_retries_once_after_transient_operational_error(
+        self, dashboard, cost, close_connections
+    ):
+        from django.db import OperationalError
+        from .views import _load_dashboard_context
+
+        dashboard.side_effect = [OperationalError("08S01"), {"kpis": {}}]
+        cost.return_value = {"total_usd": 0, "calls": 0, "avg_usd": 0}
+        context = _load_dashboard_context()
+        self.assertEqual(context["kpis"], {})
+        self.assertEqual(dashboard.call_count, 2)
+        close_connections.assert_called_once_with()
+
+    @mock.patch("response_intelligence.views.close_old_connections")
+    @mock.patch("response_intelligence.views.get_response_dashboard")
+    def test_reraises_when_second_attempt_also_fails(
+        self, dashboard, close_connections
+    ):
+        from django.db import OperationalError
+        from .views import _load_dashboard_context
+
+        dashboard.side_effect = OperationalError("08S01")
+        with self.assertRaises(OperationalError):
+            _load_dashboard_context()
+        self.assertEqual(dashboard.call_count, 2)
+        self.assertEqual(close_connections.call_count, 2)
