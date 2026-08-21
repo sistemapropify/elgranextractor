@@ -1632,7 +1632,7 @@ import subprocess
 from pathlib import Path
 from datetime import timedelta
 from django.conf import settings
-from django.db import transaction
+from django.db import connection, transaction
 from django.db.models import Q
 from django.http import JsonResponse, StreamingHttpResponse
 from django.views.generic import TemplateView, View, ListView
@@ -1817,6 +1817,25 @@ def _launch_scraping_job(job_id):
     thread.start()
     return 'thread'
 
+def _acquire_scraping_start_lock() -> bool:
+    """Serializa el inicio entre todas las instancias de Azure/SQL Server."""
+    if connection.vendor not in ('microsoft', 'mssql'):
+        return True
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            DECLARE @result int;
+            EXEC @result = sp_getapplock
+                @Resource = 'propifai:scraping:start',
+                @LockMode = 'Exclusive',
+                @LockOwner = 'Transaction',
+                @LockTimeout = 0;
+            SELECT @result;
+            """
+        )
+        row = cursor.fetchone()
+    return bool(row and int(row[0]) >= 0)
+
 class ScrapingDashboardView(TemplateView):
     """Dashboard principal de scraping con terminal, controles y tabla."""
     template_name = 'ingestas/scraping_dashboard.html'
@@ -1869,6 +1888,15 @@ class ScrapingControlView(View):
 
             _reconcile_stale_scraping_jobs()
             with transaction.atomic():
+                if not _acquire_scraping_start_lock():
+                    return JsonResponse(
+                        {
+                            'success': False,
+                            'error': 'Otra solicitud está iniciando un scraping. Espere unos segundos.',
+                            'estado': 'starting',
+                        },
+                        status=409,
+                    )
                 active_job = ScrapingJob.objects.select_for_update().filter(
                     estado__in=SCRAPING_ACTIVE_STATES
                 ).order_by('-creado_en').first()

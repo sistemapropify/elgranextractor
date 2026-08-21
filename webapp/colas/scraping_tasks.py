@@ -8,11 +8,13 @@ Crea ScrapingLog por cada propiedad procesada para el terminal en vivo.
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from datetime import datetime
 from typing import Dict, Any, List
 
 from celery import shared_task
+from django.db import close_old_connections
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
@@ -142,6 +144,38 @@ def _crear_log(job, nivel: str, mensaje: str, portal: str = None,
     return log.id
 
 
+def _start_portal_heartbeat(job_id: int, portal: str, interval: int = 30):
+    """Mantiene vivo el job y hace observable una skill bloqueante."""
+    from ingestas.models import ScrapingJob
+
+    stop_event = threading.Event()
+    started = time.monotonic()
+
+    def beat():
+        close_old_connections()
+        try:
+            while not stop_event.wait(interval):
+                job = ScrapingJob.objects.filter(id=job_id).first()
+                if not job or job.estado not in ('running', 'paused'):
+                    return
+                elapsed = int(time.monotonic() - started)
+                _crear_log(
+                    job,
+                    'info',
+                    f'⏱️ {portal.upper()} continúa activo · {elapsed}s transcurridos',
+                    portal=portal,
+                )
+        finally:
+            close_old_connections()
+
+    heartbeat = threading.Thread(
+        target=beat,
+        daemon=True,
+        name=f'scraping-heartbeat-{job_id}-{portal}',
+    )
+    heartbeat.start()
+    return stop_event, heartbeat
+
 def _run_scraping(job_id: int):
     """
     Lógica principal de scraping. Llamada desde Celery task o desde threading.
@@ -165,7 +199,7 @@ def _run_scraping(job_id: int):
     _crear_log(
         job,
         'info',
-        f"🚀 Portales seleccionados ({len(portales)}): {', '.join(portales)}",
+        f"🚀 Trabajo #{job.id} · Portales seleccionados ({len(portales)}): {', '.join(portales)}",
     )
     total_portales = len(portales)
     successful_portals = 0
@@ -279,10 +313,17 @@ def _run_scraping(job_id: int):
                     'errores': job.errores,
                 }
                 skill = _instanciar_skill(portal)
-                resultado = skill.execute(
-                    {'max_paginas': 0, 'start_page': start_page},
-                    context={'progress_callback': reportar_progreso},
+                heartbeat_stop, heartbeat_thread = _start_portal_heartbeat(
+                    job.id, portal
                 )
+                try:
+                    resultado = skill.execute(
+                        {'max_paginas': 0, 'start_page': start_page},
+                        context={'progress_callback': reportar_progreso},
+                    )
+                finally:
+                    heartbeat_stop.set()
+                    heartbeat_thread.join(timeout=2)
                 if resultado.success:
                     break
                 if _error_camoufox_no_reintentable(resultado):

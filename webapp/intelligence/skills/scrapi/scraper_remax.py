@@ -18,7 +18,11 @@ from .db_utils import guardar_propiedades
 logger = logging.getLogger(__name__)
 
 
-def _ejecutar_scraping(max_paginas: int = 0) -> list[Dict[str, Any]]:
+def _ejecutar_scraping(
+    max_paginas: int = 0,
+    start_page: int = 1,
+    progress_callback=None,
+) -> list[Dict[str, Any]]:
     """
     Ejecuta el scraping de Remax y retorna lista de propiedades estandarizadas.
     
@@ -28,6 +32,14 @@ def _ejecutar_scraping(max_paginas: int = 0) -> list[Dict[str, Any]]:
     Returns:
         Lista de dicts con formato estandarizado listo para guardar en DB.
     """
+    def report(payload):
+        if not progress_callback:
+            return True
+        try:
+            return progress_callback(payload) is not False
+        except Exception:
+            logger.exception('[remax] Error reportando progreso')
+            return True
     # Importar funciones del scraper original (reutilizar, no duplicar)
     from scrapi.remax_scraper import (
         TOTAL_PAGES, GUARDAR_CADA_N_PAGINAS,
@@ -46,12 +58,14 @@ def _ejecutar_scraping(max_paginas: int = 0) -> list[Dict[str, Any]]:
         except (ValueError, RuntimeError):
             pass  # No disponible en hilos secundarios
 
+        report({'percent': 0, 'message': 'Remax: preparando navegador Camoufox'})
         async with AsyncCamoufox(
             **camoufox_kwargs(
                 persistent_context=True,
                 user_data_dir='./camoufox_session',
             ),
         ) as browser:
+            report({'percent': 1, 'message': 'Remax: navegador listo; abriendo listados'})
             page = await browser.new_page()
             await page.set_viewport_size({"width": 1920, "height": 1080})
 
@@ -59,7 +73,7 @@ def _ejecutar_scraping(max_paginas: int = 0) -> list[Dict[str, Any]]:
             print(f"SCRAPER REMAX - {paginas} paginas")
             print("=" * 60)
 
-            for n in range(1, paginas + 1):
+            for n in range(max(1, start_page), paginas + 1):
                 if detener:
                     break
                 from scrapi.remax_scraper import BASE_URL
@@ -70,6 +84,15 @@ def _ejecutar_scraping(max_paginas: int = 0) -> list[Dict[str, Any]]:
                     props = await extraer_listado(page)
                     todas_raw.extend(props)
                     print(f"   -> {len(props)} props (total: {len(todas_raw)})")
+                    if not report({
+                        'percent': max(2, int((n / paginas) * 45)),
+                        'processed': len(todas_raw),
+                        'message': (
+                            f'Remax: página {n}/{paginas} · '
+                            f'{len(todas_raw)} propiedades detectadas'
+                        ),
+                    }):
+                        break
                 except Exception as e:
                     print(f"   [ERROR] Pagina {n}: {e}")
 
@@ -83,6 +106,15 @@ def _ejecutar_scraping(max_paginas: int = 0) -> list[Dict[str, Any]]:
                     prop_id = prop.get('ID', '')
                     print(f"  [{i+1}/{len(todas_raw)}] ID: {prop_id} - {distrito}")
                     await extraer_detalle(page, prop)
+                    if i == 0 or (i + 1) % 10 == 0 or i + 1 == len(todas_raw):
+                        report({
+                            'percent': 45 + int(((i + 1) / len(todas_raw)) * 50),
+                            'processed': len(todas_raw),
+                            'message': (
+                                f'Remax: completando detalles {i + 1}/'
+                                f'{len(todas_raw)}'
+                            ),
+                        })
                     await asyncio.sleep(0.5)
 
             await page.close()
@@ -134,7 +166,11 @@ class ScraperRemaxSkill(BaseSkill):
     ) -> SkillResult:
         try:
             max_paginas = params.get('max_paginas', 0)
-            propiedades = _ejecutar_scraping(max_paginas)
+            start_page = params.get('start_page', 1)
+            progress_callback = (context or {}).get('progress_callback')
+            propiedades = _ejecutar_scraping(
+                max_paginas, start_page, progress_callback
+            )
 
             if not propiedades:
                 return SkillResult.error(
