@@ -209,7 +209,7 @@ jobs:
             echo "${status:-000}"
           }
 
-          for i in {1..20}; do
+          for i in {1..45}; do
             HEALTH_STATUS=$(http_status /tmp/health-response.json \
               https://granextractorservice-emehaffsf8e2c7eg.brazilsouth-01.azurewebsites.net/api/v1/intelligence/health/)
             CSS_STATUS="pending"
@@ -223,7 +223,7 @@ jobs:
               LOGO_STATUS=$(http_status /tmp/logo-propify.png \
                 https://granextractorservice-emehaffsf8e2c7eg.brazilsouth-01.azurewebsites.net/static/intelligence/img/logo-propify.png)
             fi
-            echo "Check $i/20 - health=$HEALTH_STATUS css=$CSS_STATUS js=$JS_STATUS logo=$LOGO_STATUS"
+            echo "Check $i/45 - health=$HEALTH_STATUS css=$CSS_STATUS js=$JS_STATUS logo=$LOGO_STATUS"
             if [ "$HEALTH_STATUS" = "200" ] \
               && [ "$CSS_STATUS" = "200" ] \
               && [ "$JS_STATUS" = "200" ] \
@@ -234,7 +234,7 @@ jobs:
             fi
             sleep 15
           done
-          echo "Application or static assets did not become healthy"
+          echo "Application or static assets did not become healthy after the 15-minute stabilization window"
           exit 1
 
       # El health-check puede durar varios minutos. Renovar OIDC otra vez para
