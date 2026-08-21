@@ -122,14 +122,25 @@ else
     fi
 fi
 
-# ── Run Migrations ──
-# Un problema transitorio de SQL no debe mantener offline el proceso HTTP.
-echo "[4/6] Running bounded database migrations..."
-if timeout 90 python manage.py migrate --noinput 2>&1; then
-    echo "  Migrations applied."
-else
-    echo "  WARNING: migrations failed or timed out; startup continues."
-fi
+# ── Run Migrations (non-blocking) ──
+# No bloquear el arranque web: si SQL tarda o el driver ODBC aun se instala
+# en segundo plano, migrar en background evita el ContainerTimeout (230s).
+# Gunicorn arranca de inmediato y responde al health check (que no usa BD);
+# las migraciones terminan en paralelo. Se conserva el timeout 90.
+echo "[4/6] Scheduling database migrations (non-blocking)..."
+MIGRATE_LOG="/home/LogFiles/migrate.log"
+mkdir -p /home/LogFiles
+(
+    set +e
+    cd "$APP_ROOT/webapp"
+    echo "[$(date -u)] Running bounded migrations..."
+    if timeout 90 python manage.py migrate --noinput 2>&1; then
+        echo "[$(date -u)] Migrations applied."
+    else
+        echo "[$(date -u)] WARNING: migrations failed or timed out; startup continues."
+    fi
+) >> "$MIGRATE_LOG" 2>&1 &
+echo "  Migrations running in background (log: $MIGRATE_LOG)."
 # ── Return to wwwroot for gunicorn context ──
 cd "$APP_ROOT"
 
