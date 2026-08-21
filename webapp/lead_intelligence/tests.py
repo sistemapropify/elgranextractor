@@ -204,6 +204,19 @@ class ConversationAnalysisTests(SimpleTestCase):
         self.assertFalse(result["qualified"])
         self.assertEqual(result["first_response_seconds"], 300)
 
+    def test_propibot_counts_as_agent_response(self):
+        result = analyze_chat_history(
+            [
+                self.message("lead", "Quiero más detalles", 0),
+                self.message("bot", "Claro, te comparto la información", 5),
+            ]
+        )
+        self.assertEqual(result["total_messages"], 2)
+        self.assertEqual(result["agent_messages"], 1)
+        self.assertEqual(result["last_sender"], "agent")
+        self.assertTrue(result["contacted"])
+        self.assertFalse(result["unattended"])
+        self.assertEqual(result["unknown_senders"], 0)
     def test_lead_agent_lead_is_bidirectional(self):
         result = analyze_chat_history(
             [
@@ -618,6 +631,16 @@ class ContextualAnalysisTests(SimpleTestCase):
             )
         )
 
+
+class ConversationHashVersionTests(SimpleTestCase):
+    def test_bot_sender_uses_new_parser_fingerprint(self):
+        from .contextual_analysis import conversation_hash
+
+        lead_only = [{"sender": "lead", "text": "Hola"}]
+        with_bot = lead_only + [{"sender": "bot", "text": "Hola, te ayudo"}]
+        with_agent = lead_only + [{"sender": "agent", "text": "Hola, te ayudo"}]
+        self.assertNotEqual(conversation_hash(with_bot), conversation_hash(with_agent))
+        self.assertEqual(conversation_hash(lead_only), conversation_hash(lead_only))
 
 class ConversationReviewTests(SimpleTestCase):
     def test_correct_review_copies_current_ai_value(self):

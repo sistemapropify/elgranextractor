@@ -12,7 +12,8 @@ from django.utils.dateparse import parse_datetime
 
 
 LIMA_TIMEZONE = ZoneInfo("America/Lima")
-RECOGNIZED_SENDERS = {"lead", "agent"}
+SENDER_ALIASES = {"lead": "lead", "agent": "agent", "bot": "agent"}
+RECOGNIZED_SENDERS = set(SENDER_ALIASES)
 NEGATIVE_INTEREST_PATTERNS = (
     r"\bno\s+(?:me\s+)?interesa\b",
     r"\b(?:numero|número|contacto)\s+equivocado\b",
@@ -192,6 +193,7 @@ def analyze_chat_history(raw_history) -> dict:
         if sender not in RECOGNIZED_SENDERS:
             unknown_senders += 1
             continue
+        sender = SENDER_ALIASES[sender]
         timestamp = _timestamp(item.get("timestamp"))
         if timestamp is None:
             messages_without_valid_timestamp += 1
