@@ -46,23 +46,31 @@ elif [ -d "/antenv" ]; then
     echo "[PRE] Virtual environment activated: /antenv"
 fi
 
-# ── Install ODBC Driver 18 for SQL Server ──
-echo "[1/6] Installing ODBC Driver 18 for SQL Server..."
-if ! command -v sqlcmd &> /dev/null && ! odbcinst -j &> /dev/null 2>&1; then
+# ── Install ODBC Driver 18 for SQL Server (non-blocking) ──
+# Un contenedor frio no tiene el driver: apt-get update + apt-get install
+# pueden tardar varios minutos y superar el limite de arranque de Azure
+# (230s) provocando ContainerTimeout y 503. Se instala en segundo plano;
+# la app ya reintenta las lecturas ODBC si el driver no esta listo aun.
+echo "[1/6] Scheduling ODBC Driver 18 install (non-blocking)..."
+ODBC_INSTALL_LOG="/home/LogFiles/odbc-install.log"
+mkdir -p /home/LogFiles
+(
+    set +e
+    if command -v sqlcmd &> /dev/null || odbcinst -j &> /dev/null 2>&1; then
+        echo "[$(date -u)] ODBC Driver already installed, skipping."
+        exit 0
+    fi
+    echo "[$(date -u)] Installing ODBC Driver 18..."
     curl -sSL https://packages.microsoft.com/keys/microsoft.asc | apt-key add - 2>/dev/null || true
     curl -sSL https://packages.microsoft.com/config/ubuntu/22.04/prod.list > /etc/apt/sources.list.d/mssql-release.list 2>/dev/null || true
-    apt-get update -qq 2>/dev/null || true
-    ACCEPT_EULA=Y apt-get install -y -qq msodbcsql18 unixodbc-dev 2>/dev/null || true
-    echo "  ODBC Driver 18 installation attempted."
-    # Verify installation
-    if odbcinst -j &> /dev/null; then
-        echo "  ✓ ODBC Driver installed successfully."
+    timeout 180 apt-get update -qq
+    if ACCEPT_EULA=Y timeout 300 apt-get install -y -qq msodbcsql18 unixodbc-dev; then
+        echo "[$(date -u)] ✓ ODBC Driver installed successfully."
     else
-        echo "  ⚠ ODBC Driver installation may have failed. Check logs."
+        echo "[$(date -u)] ⚠ ODBC Driver installation failed; app will retry."
     fi
-else
-    echo "  ✓ ODBC Driver already installed, skipping."
-fi
+) >> "$ODBC_INSTALL_LOG" 2>&1 &
+echo "  ODBC Driver install started in background (log: $ODBC_INSTALL_LOG)."
 
 # ── Camoufox ──
 # No instalar paquetes ni descargar navegadores durante el arranque web.
