@@ -1,3 +1,4 @@
+import json
 import sys
 import tempfile
 import types
@@ -52,6 +53,34 @@ class CamoufoxLauncherTests(unittest.TestCase):
                 patch.object(launcher.time, "sleep", side_effect=finish_install),
             ):
                 launcher.ensure_camoufox_system_dependencies()
+    def test_dead_install_owner_is_replaced_without_waiting(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            install_dir = Path(temp_dir) / 'camoufox'
+            lock = install_dir / '.propifai-fetch.lock'
+            browser = install_dir / 'browsers' / 'official' / 'stable'
+            lock.mkdir(parents=True)
+            (lock / 'owner.json').write_text(
+                json.dumps({'pid': 999999, 'boot_id': 'same-boot'}),
+                encoding='utf-8',
+            )
+            browser.mkdir(parents=True)
+            pkgman = types.ModuleType('camoufox.pkgman')
+            pkgman.camoufox_path = lambda download_if_missing=True: browser
+
+            with (
+                patch.object(
+                    launcher, '_installed_path', side_effect=[None, None, None]
+                ),
+                patch.object(launcher, 'get_install_dir', return_value=install_dir),
+                patch.object(launcher, '_boot_id', return_value='same-boot'),
+                patch.object(launcher.os, 'kill', side_effect=OSError),
+                patch.object(launcher.time, 'sleep') as sleep,
+                patch.dict(sys.modules, {'camoufox.pkgman': pkgman}),
+            ):
+                self.assertEqual(launcher.ensure_camoufox_installed(), browser)
+
+            sleep.assert_not_called()
+            self.assertFalse(lock.exists())
     def test_existing_browser_skips_download(self):
         browser = Path("/tmp/camoufox/browser")
         with patch.object(launcher, "_installed_path", return_value=browser):

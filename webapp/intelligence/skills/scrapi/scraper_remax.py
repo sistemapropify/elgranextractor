@@ -40,6 +40,8 @@ def _ejecutar_scraping(
         except Exception:
             logger.exception('[remax] Error reportando progreso')
             return True
+    report({'percent': 0, 'message': 'Remax: cargando motor de navegador'})
+
     # Importar funciones del scraper original (reutilizar, no duplicar)
     from scrapi.remax_scraper import (
         TOTAL_PAGES, GUARDAR_CADA_N_PAGINAS,

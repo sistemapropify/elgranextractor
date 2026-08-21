@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ctypes
+import json
 import os
 import sys
 import time
@@ -10,8 +11,8 @@ from pathlib import Path
 
 
 _DEFAULTS = {"os": "windows", "humanize": True}
-_FETCH_TIMEOUT = 900
-_STALE_LOCK = 1800
+_FETCH_TIMEOUT = int(os.environ.get("CAMOUFOX_FETCH_TIMEOUT", "180"))
+_STALE_LOCK = int(os.environ.get("CAMOUFOX_STALE_LOCK_SECONDS", "120"))
 
 
 def is_headless_server() -> bool:
@@ -41,6 +42,38 @@ def _installed_path() -> Path | None:
         return None
 
 
+def _boot_id() -> str:
+    try:
+        return Path('/proc/sys/kernel/random/boot_id').read_text().strip()
+    except OSError:
+        return ''
+
+
+def _lock_owner_alive(lock: Path) -> bool:
+    """Comprueba si el instalador que creó el lock sigue vivo."""
+    owner_file = lock / 'owner.json'
+    try:
+        owner = json.loads(owner_file.read_text(encoding='utf-8'))
+        pid = int(owner.get('pid', 0))
+        owner_boot = str(owner.get('boot_id', ''))
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return False
+    if owner_boot and _boot_id() and owner_boot != _boot_id():
+        return False
+    try:
+        os.kill(pid, 0)
+        return pid > 0
+    except (OSError, ValueError):
+        return False
+
+
+def _remove_install_lock(lock: Path) -> None:
+    try:
+        (lock / 'owner.json').unlink(missing_ok=True)
+        lock.rmdir()
+    except OSError:
+        pass
+
 def ensure_camoufox_installed() -> Path:
     """Instala el browser con la API que Camoufox usa internamente.
 
@@ -61,6 +94,10 @@ def ensure_camoufox_installed() -> Path:
     while True:
         try:
             lock.mkdir()
+            (lock / 'owner.json').write_text(
+                json.dumps({'pid': os.getpid(), 'boot_id': _boot_id()}),
+                encoding='utf-8',
+            )
             owns_lock = True
             break
         except FileExistsError:
@@ -68,11 +105,17 @@ def ensure_camoufox_installed() -> Path:
             if installed is not None:
                 return installed
             try:
-                if time.time() - lock.stat().st_mtime > _STALE_LOCK:
-                    lock.rmdir()
-                    continue
+                lock_age = time.time() - lock.stat().st_mtime
             except OSError:
-                pass
+                lock_age = 0
+            owner_file = lock / 'owner.json'
+            dead_owner = owner_file.exists() and not _lock_owner_alive(lock)
+            legacy_stale = (
+                not owner_file.exists() and lock_age >= min(_STALE_LOCK, 5)
+            )
+            if dead_owner or legacy_stale:
+                _remove_install_lock(lock)
+                continue
             if time.monotonic() - started >= _FETCH_TIMEOUT:
                 raise RuntimeError(
                     "Camoufox no termino de instalarse dentro de "
@@ -100,10 +143,7 @@ def ensure_camoufox_installed() -> Path:
         ) from exc
     finally:
         if owns_lock:
-            try:
-                lock.rmdir()
-            except OSError:
-                pass
+            _remove_install_lock(lock)
 
 
 class CamoufoxSystemDependencyError(RuntimeError):
