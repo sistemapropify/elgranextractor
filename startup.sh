@@ -28,6 +28,11 @@ echo "[PRE] Application root: $APP_ROOT"
 export PRODUCTION=true
 echo "[PRE] Modo PRODUCTION activado — embeddings lazy load"
 
+# Cache persistente del navegador entre reinicios de App Service.
+export XDG_CACHE_HOME="/home/.cache"
+mkdir -p "$XDG_CACHE_HOME"
+echo "[PRE] Camoufox cache: $XDG_CACHE_HOME"
+
 # ── Python Path ──
 export PYTHONPATH="$APP_ROOT:$APP_ROOT/webapp${PYTHONPATH:+:$PYTHONPATH}"
 

@@ -63,6 +63,10 @@ def _ejecutar_scraping(
         report({'percent': 0, 'message': 'Remax: preparando navegador Camoufox'})
         async with AsyncCamoufox(
             **camoufox_kwargs(
+                _progress_callback=lambda message: report({
+                    'percent': 0,
+                    'message': message,
+                }),
                 persistent_context=True,
                 user_data_dir='./camoufox_session',
             ),

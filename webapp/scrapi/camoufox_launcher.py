@@ -5,6 +5,7 @@ from __future__ import annotations
 import ctypes
 import json
 import os
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -74,7 +75,16 @@ def _remove_install_lock(lock: Path) -> None:
     except OSError:
         pass
 
-def ensure_camoufox_installed() -> Path:
+def _notify(progress_callback, message: str) -> None:
+    if not progress_callback:
+        return
+    try:
+        progress_callback(message)
+    except Exception:
+        pass
+
+
+def ensure_camoufox_installed(progress_callback=None) -> Path:
     """Instala el browser con la API que Camoufox usa internamente.
 
     No se pasa ``data_dir``: ese argumento no existe ni en ``AsyncCamoufox``
@@ -83,6 +93,7 @@ def ensure_camoufox_installed() -> Path:
     """
     installed = _installed_path()
     if installed is not None:
+        _notify(progress_callback, f'Camoufox: navegador encontrado en {installed}')
         return installed
 
     install_dir = get_install_dir()
@@ -129,13 +140,34 @@ def ensure_camoufox_installed() -> Path:
         if installed is not None:
             return installed
 
-        print(f"[camoufox] Descargando navegador en {install_dir}...")
-        from camoufox.pkgman import camoufox_path
-
-        installed = Path(camoufox_path(download_if_missing=True))
+        _notify(
+            progress_callback,
+            f'Camoufox: descargando navegador en {install_dir} '
+            f'(límite {_FETCH_TIMEOUT}s)',
+        )
+        completed = subprocess.run(
+            [sys.executable, '-m', 'camoufox', 'fetch'],
+            capture_output=True,
+            text=True,
+            timeout=_FETCH_TIMEOUT,
+            check=False,
+        )
+        if completed.returncode != 0:
+            detail = (completed.stderr or completed.stdout or '').strip()[-1000:]
+            raise RuntimeError(
+                f'camoufox fetch terminó con código {completed.returncode}: {detail}'
+            )
+        installed = _installed_path()
+        if installed is None:
+            raise RuntimeError('camoufox fetch terminó sin registrar un navegador activo')
         if not installed.exists():
             raise RuntimeError(f"Camoufox devolvio una ruta inexistente: {installed}")
+        _notify(progress_callback, f'Camoufox: descarga completada en {installed}')
         return installed
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            f'La descarga de Camoufox excedió el límite de {_FETCH_TIMEOUT} segundos.'
+        ) from exc
     except Exception as exc:
         raise RuntimeError(
             "No se pudo instalar el navegador Camoufox en el servidor "
@@ -171,7 +203,7 @@ def _missing_camoufox_dependencies() -> list[str]:
     return missing
 
 
-def ensure_camoufox_system_dependencies() -> None:
+def ensure_camoufox_system_dependencies(progress_callback=None) -> None:
     """Espera la instalacion de startup y valida las librerias nativas."""
     if not is_headless_server():
         return
@@ -194,8 +226,9 @@ def ensure_camoufox_system_dependencies() -> None:
 
 def camoufox_kwargs(**overrides) -> dict:
     """Prepara el browser y devuelve opciones validas para AsyncCamoufox."""
-    ensure_camoufox_installed()
-    ensure_camoufox_system_dependencies()
+    progress_callback = overrides.pop('_progress_callback', None)
+    ensure_camoufox_system_dependencies(progress_callback)
+    ensure_camoufox_installed(progress_callback)
     kwargs = dict(_DEFAULTS, headless=is_headless_server())
     kwargs.update(overrides)
     return kwargs

@@ -24,7 +24,7 @@ class CamoufoxLauncherTests(unittest.TestCase):
         ):
             launcher.camoufox_kwargs(headless=True)
 
-        check.assert_called_once_with()
+        check.assert_called_once_with(None)
 
     def test_missing_linux_library_fails_before_browser_launch(self):
         with (
@@ -69,7 +69,7 @@ class CamoufoxLauncherTests(unittest.TestCase):
 
             with (
                 patch.object(
-                    launcher, '_installed_path', side_effect=[None, None, None]
+                    launcher, '_installed_path', side_effect=[None, None, None, browser]
                 ),
                 patch.object(launcher, 'get_install_dir', return_value=install_dir),
                 patch.object(launcher, '_boot_id', return_value='same-boot'),
@@ -91,13 +91,12 @@ class CamoufoxLauncherTests(unittest.TestCase):
             install_dir = Path(temp_dir) / "camoufox"
             browser = install_dir / "browsers" / "official" / "stable"
             browser.mkdir(parents=True)
-            pkgman = types.ModuleType("camoufox.pkgman")
-            pkgman.camoufox_path = lambda download_if_missing=True: browser
+            completed = types.SimpleNamespace(returncode=0, stderr='', stdout='')
 
             with (
-                patch.object(launcher, "_installed_path", side_effect=[None, None]),
+                patch.object(launcher, "_installed_path", side_effect=[None, None, browser]),
                 patch.object(launcher, "get_install_dir", return_value=install_dir),
-                patch.dict(sys.modules, {"camoufox.pkgman": pkgman}),
+                patch.object(launcher.subprocess, 'run', return_value=completed),
             ):
                 self.assertEqual(launcher.ensure_camoufox_installed(), browser)
 
