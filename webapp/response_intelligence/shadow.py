@@ -11,6 +11,8 @@ import logging
 import os
 import threading
 
+from django.db import OperationalError, close_old_connections
+
 logger = logging.getLogger(__name__)
 
 
@@ -34,7 +36,7 @@ def shadow_mode_enabled() -> bool:
     return value in {"1", "true", "yes", "on"}
 
 
-def maybe_generate_shadow_draft(
+def _generate_shadow_draft_once(
     *,
     lead_id=None,
     client_message="",
@@ -50,6 +52,9 @@ def maybe_generate_shadow_draft(
     ``auto_escalation=True`` y respuesta vacía (la plantilla sigue respondiendo
     con "un agente te contactará"). Tras generar, se validan alucinaciones y
     negociación de precio con regex.
+
+    Un ``OperationalError`` (corte ODBC transitorio) se propaga para que el
+    wrapper ``maybe_generate_shadow_draft`` cierre conexiones y reintente una vez.
     """
     if not shadow_mode_enabled():
         return None
@@ -143,15 +148,66 @@ def maybe_generate_shadow_draft(
                 using="default",
                 update_fields=[
                     "generated_response",
+                    "trace_id",
                     "auto_hallucination",
                     "auto_discount",
                     "blocked_reason",
                 ],
             )
         return draft
+    except OperationalError:
+        # Se propaga para que el wrapper reintente con una conexión nueva.
+        raise
     except Exception as exc:  # noqa: BLE001
         logger.warning("shadow_live no generó borrador (thread=%s): %s", thread_id, exc)
         return None
+
+
+def maybe_generate_shadow_draft(
+    *,
+    lead_id=None,
+    client_message="",
+    thread_id="",
+    intent_category="",
+    property_code="",
+    phone="",
+):
+    """Genera un draft shadow_live en un hilo daemon de forma robusta.
+
+    El hilo daemon no hereda la conexión del request; al correr tras devolver
+    la respuesta, la conexión ODBC del worker puede estar cerrada o cortarse
+    de forma transitoria. Se fuerza una conexión nueva y, ante un corte ODBC,
+    se reintenta una vez (mismo patrón que el dashboard), para que el borrador
+    no se pierda silenciosamente.
+    """
+    if not client_message or not str(client_message).strip():
+        return None
+    for attempt in range(2):
+        try:
+            close_old_connections()
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            return _generate_shadow_draft_once(
+                lead_id=lead_id,
+                client_message=client_message,
+                thread_id=thread_id,
+                intent_category=intent_category,
+                property_code=property_code,
+                phone=phone,
+            )
+        except OperationalError:
+            if attempt:
+                logger.warning(
+                    "shadow_live: corte ODBC persistente, borrador no generado (thread=%s)",
+                    thread_id,
+                )
+                return None
+            logger.warning(
+                "shadow_live: corte ODBC en hilo, reintentando (thread=%s)",
+                thread_id,
+            )
+    return None
 
 
 def spawn_shadow_draft(**kwargs):
