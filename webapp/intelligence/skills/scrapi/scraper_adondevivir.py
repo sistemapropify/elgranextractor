@@ -255,6 +255,7 @@ def _ejecutar_scraping(
                         ):
                             break
                     print(f"  [{i}/{len(props_a_visitar)}] Visitando detalle...")
+                    await emit_progress(message=f'Adondevivir: [{i}/{len(props_a_visitar)}] abriendo {url}')
                     lat, lng, tipo_prop, imagen_url = await extraer_coordenadas_desde_detalle(page, url)
                     if lat and lng:
                         prop["latitud"] = lat

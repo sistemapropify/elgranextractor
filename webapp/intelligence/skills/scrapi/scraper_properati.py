@@ -174,6 +174,7 @@ def _ejecutar_scraping(
                         prop_id = prop.get('ID', '')
                         ubic = prop.get('Ubicacion', '')
                         print(f"  [{i+1}/{len(incompletas)}] ID: {prop_id} - {ubic}")
+                        await emit_progress(message=f'Properati: [{i+1}/{len(incompletas)}] ID: {prop_id} - {ubic}')
                         await extraer_detalle(page, prop)
                         await asyncio.sleep(0.5)
 

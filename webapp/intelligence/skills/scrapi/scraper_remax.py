@@ -85,6 +85,7 @@ def _ejecutar_scraping(
                 from scrapi.remax_scraper import BASE_URL
                 url = BASE_URL.format(n)
                 print(f"\n[Pagina {n}/{paginas}]: {url}")
+                report({'message': f'Remax: abriendo [Pagina {n}/{paginas}]: {url}'})
                 try:
                     await navegar_con_cloudflare(page, url)
                     props = await extraer_listado(page)
@@ -111,6 +112,7 @@ def _ejecutar_scraping(
                     distrito = prop.get('Distrito', '')
                     prop_id = prop.get('ID', '')
                     print(f"  [{i+1}/{len(todas_raw)}] ID: {prop_id} - {distrito}")
+                    report({'message': f'Remax: [{i+1}/{len(todas_raw)}] ID: {prop_id} - {distrito}'})
                     await extraer_detalle(page, prop)
                     if i == 0 or (i + 1) % 10 == 0 or i + 1 == len(todas_raw):
                         report({

@@ -210,6 +210,7 @@ def _ejecutar_scraping(
                     for indice, prop in enumerate(props, 1):
                         if urbania_source.detener:
                             break
+                        await emit_progress(message=f'Urbania: [{indice}/{len(props)}] detalle ID {prop.get("ID", "")} - {prop.get("Distrito", "")}')
                         await extraer_detalle(page, prop)
                         await asyncio.sleep(0.35)
                         completadas.append(prop)
