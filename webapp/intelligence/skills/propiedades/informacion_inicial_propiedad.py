@@ -132,6 +132,14 @@ class InformacionInicialPropiedadSkill(BaseSkill):
             "description": row.get("description") or "",
             "property_type": property_type,
             "location": public_location(row),
+            # Dirección textual completa (calle + urbanización + distrito) para
+            # que el respondedor pueda matchear hints por ubicación, p. ej.
+            # "terreno atrás del Real Plaza" contra la dirección real.
+            "map_address": " ".join(filter(None, [
+                str(row.get("display_address") or "").strip(),
+                str(row.get("urbanization_name") or "").strip(),
+                str(row.get("district_name") or "").strip(),
+            ])),
             "price": {
                 "amount": row.get("price"),
                 "currency": normalize_currency(row.get("currency_name")),

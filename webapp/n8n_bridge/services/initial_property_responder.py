@@ -134,13 +134,29 @@ def process_initial_message(payload):
 
     data = skill_result.data
     data_clean = _json_safe(data)
-    # El hint de título es válido si coincide con el TÍTULO o con la DESCRIPCIÓN
-    # de la propiedad (el cliente puede referirse a la propiedad por el nombre
-    # del proyecto o por un dato de la descripción, no solo por el título).
-    title_ok = title_is_consistent(identity["title_hint"], data["title"])
-    desc_ok = title_is_consistent(identity["title_hint"], data.get("description") or "")
-    if identity["title_hint"] and not title_ok and not desc_ok:
-        return _persist_ignore(message_id, thread_id, digest, normalized_phone, text, config, schedule, "TITLE_CODE_MISMATCH", started, property_code=code, evidence={"title_hint": identity["title_hint"], "property_title": data["title"], "property_description": data.get("description") or ""}, contact_name=contact_name)
+    # El hint es consistente si coincide con el TÍTULO, la DESCRIPCIÓN, la
+    # DIRECCIÓN (map_address) o el CÓDIGO de la propiedad. El cliente suele
+    # referirse a la propiedad por su ubicación ("atrás del Real Plaza"), un
+    # dato de la descripción o el propio código, no solo por el título.
+    hint = identity["title_hint"]
+    title_ok = title_is_consistent(hint, data["title"])
+    desc_ok = title_is_consistent(hint, data.get("description") or "")
+    addr_ok = title_is_consistent(hint, data.get("map_address") or "")
+    code_upper = str(data.get("code") or "").upper()
+    hint_upper = str(hint).upper()
+    code_ok = bool(hint) and (code_upper in hint_upper or hint_upper in code_upper)
+    if hint and not (title_ok or desc_ok or addr_ok or code_ok):
+        return _persist_ignore(
+            message_id, thread_id, digest, normalized_phone, text, config, schedule,
+            "TITLE_CODE_MISMATCH", started, property_code=code,
+            evidence={
+                "title_hint": hint,
+                "property_title": data["title"],
+                "property_description": data.get("description") or "",
+                "map_address": data.get("map_address") or "",
+            },
+            contact_name=contact_name,
+        )
     # Sin restricción de tipo: se responde cualquier tipo de propiedad
     # (casa, departamento, terreno, local comercial, "Otros"/hotel, etc.).
     # Solo se responden propiedades en estado "Disponible" (property_status_name).
