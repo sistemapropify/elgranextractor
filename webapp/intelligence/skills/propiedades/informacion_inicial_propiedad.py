@@ -108,19 +108,16 @@ class InformacionInicialPropiedadSkill(BaseSkill):
             return SkillResult.error("Código duplicado", {"reason_code": "PROPERTY_NOT_FOUND"}, self.name)
 
         row = dict(zip(columns, rows[0]))
-        property_type = normalize_property_type(row.get("property_type_name"))
-        if not property_type:
-            return SkillResult.error(
-                "Tipo de propiedad no soportado",
-                {"reason_code": "UNSUPPORTED_PROPERTY_TYPE"},
-                self.name,
-            )
+        # Sin restricción de tipo: cualquier propiedad se puede responder.
+        # Los tipos no reconocidos (p. ej. "Otros"/hotel) se tratan como "otro".
+        property_type = normalize_property_type(row.get("property_type_name")) or "otro"
 
         feature_order = {
             "casa": ("bedrooms", "built_area", "bathrooms"),
             "departamento": ("bedrooms", "built_area", "bathrooms"),
             "terreno": ("land_area",),
             "local_comercial": ("built_area", "bathrooms", "garage_spaces"),
+            "otro": ("built_area", "bedrooms", "bathrooms"),
         }[property_type]
         features = [
             {"field": field, "value": row[field], "source": f"property_specs.{field}"}

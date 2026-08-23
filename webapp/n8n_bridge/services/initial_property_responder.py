@@ -141,8 +141,8 @@ def process_initial_message(payload):
     desc_ok = title_is_consistent(identity["title_hint"], data.get("description") or "")
     if identity["title_hint"] and not title_ok and not desc_ok:
         return _persist_ignore(message_id, thread_id, digest, normalized_phone, text, config, schedule, "TITLE_CODE_MISMATCH", started, property_code=code, evidence={"title_hint": identity["title_hint"], "property_title": data["title"], "property_description": data.get("description") or ""}, contact_name=contact_name)
-    if data["property_type"] not in (config.enabled_property_types or []):
-        return _persist_ignore(message_id, thread_id, digest, normalized_phone, text, config, schedule, "UNSUPPORTED_PROPERTY_TYPE", started, property_code=code, contact_name=contact_name)
+    # Sin restricción de tipo: se responde cualquier tipo de propiedad
+    # (casa, departamento, terreno, local comercial, "Otros"/hotel, etc.).
     # Solo se responden propiedades en estado "Disponible" (property_status_name).
     # La visibilidad (is_visible) ya no bloquea: si está disponible, el bot responde.
     status = str(data.get("property_status") or "").lower().strip()
