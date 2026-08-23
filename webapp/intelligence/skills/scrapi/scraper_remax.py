@@ -3,12 +3,21 @@ ScraperRemaxSkill — Skill independiente.
 
 Scrapea propiedades de Remax.pe y las guarda en PropiedadesCompetencia.
 Reutiliza la lógica de extracción de scrapi/remax_scraper.py.
+
+Anti-cuelgue: el arranque de Camoufox con perfil persistente puede colgarse
+si un run anterior fue matado y dejó locks stale en ./camoufox_session.
+Por eso se limpian locks viejos antes de lanzar y se pone un timeout de
+arranque + un timeout total (configurables por env):
+    CAMOUFOX_LAUNCH_TIMEOUT  (default 600s)
+    CAMOUFOX_TOTAL_TIMEOUT   (default 2700s = 45min)
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import time as _time
 from datetime import datetime
 from typing import Any, Dict
 
@@ -16,6 +25,34 @@ from intelligence.skills.base import BaseSkill, SkillResult
 from .db_utils import guardar_propiedades
 
 logger = logging.getLogger(__name__)
+
+# Timeouts (evitan que el scraper se quede "activo" colgado para siempre)
+CAMOUFOX_LAUNCH_TIMEOUT = int(os.environ.get('CAMOUFOX_LAUNCH_TIMEOUT', '600'))
+CAMOUFOX_TOTAL_TIMEOUT = int(os.environ.get('CAMOUFOX_TOTAL_TIMEOUT', '2700'))
+LOCK_STALE_SECONDS = int(os.environ.get('CAMOUFOX_LOCK_STALE_SECONDS', '120'))
+
+
+def _limpiar_locks_stale(profile_dir: str, max_age_s: int = LOCK_STALE_SECONDS) -> None:
+    """Borra locks de Firefox/Camoufox viejos de un perfil persistente.
+
+    Un run matado (huérfano) deja `parent.lock`/`SingletonLock` y el arranque
+    siguiente de Camoufox puede colgarse esperando ese lock. Solo se borran
+    locks con más de `max_age_s` segundos de antigüedad para no romper un
+    perfil que esté en uso por otro proceso.
+    """
+    try:
+        if not os.path.isdir(profile_dir):
+            return
+        for nombre in ('parent.lock', 'SingletonLock', 'lock', '.parentlock'):
+            p = os.path.join(profile_dir, nombre)
+            try:
+                if os.path.exists(p) and (os.path.getmtime(p) + max_age_s) < _time.time():
+                    os.remove(p)
+                    print(f'[remax] Lock stale eliminado: {p}')
+            except OSError:
+                pass
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def _ejecutar_scraping(
@@ -25,10 +62,10 @@ def _ejecutar_scraping(
 ) -> list[Dict[str, Any]]:
     """
     Ejecuta el scraping de Remax y retorna lista de propiedades estandarizadas.
-    
+
     Args:
         max_paginas: Máximo de páginas a scrapear. 0 = todas.
-    
+
     Returns:
         Lista de dicts con formato estandarizado listo para guardar en DB.
     """
@@ -52,16 +89,9 @@ def _ejecutar_scraping(
     from scrapi.camoufox_launcher import camoufox_kwargs
     import signal
 
-    async def _run():
-        todas_raw = []
-        paginas = max_paginas if max_paginas > 0 else TOTAL_PAGES
-        try:
-            signal.signal(signal.SIGINT, manejar_sigint)
-        except (ValueError, RuntimeError):
-            pass  # No disponible en hilos secundarios
-
-        report({'percent': 0, 'message': 'Remax: preparando navegador Camoufox'})
-        async with AsyncCamoufox(
+    async def _abrir_navegador():
+        # __aenter__ en un await para poder ponerle timeout de arranque
+        return await AsyncCamoufox(
             **camoufox_kwargs(
                 _progress_callback=lambda message: report({
                     'percent': 0,
@@ -70,8 +100,49 @@ def _ejecutar_scraping(
                 persistent_context=True,
                 user_data_dir='./camoufox_session',
             ),
-        ) as browser:
-            report({'percent': 1, 'message': 'Remax: navegador listo; abriendo listados'})
+        ).__aenter__()
+
+    async def _run():
+        todas_raw = []
+        paginas = max_paginas if max_paginas > 0 else TOTAL_PAGES
+        try:
+            signal.signal(signal.SIGINT, manejar_sigint)
+        except (ValueError, RuntimeError):
+            pass  # No disponible en hilos secundarios
+
+        t0 = _time.monotonic()
+        report({
+            'percent': 0,
+            'message': (
+                f'Remax: lanzando navegador Camoufox '
+                f'(timeout {CAMOUFOX_LAUNCH_TIMEOUT}s)...'
+            ),
+        })
+        try:
+            browser = await asyncio.wait_for(
+                _abrir_navegador(), timeout=CAMOUFOX_LAUNCH_TIMEOUT
+            )
+        except asyncio.TimeoutError:
+            report({
+                'message': (
+                    f'Remax: ERROR — el navegador no arrancó en '
+                    f'{CAMOUFOX_LAUNCH_TIMEOUT}s (perfil bloqueado o colgado). '
+                    f'Se limpiaron locks stale de ./camoufox_session. Reintente.'
+                ),
+            })
+            raise RuntimeError(
+                f'Camoufox no arrancó en {CAMOUFOX_LAUNCH_TIMEOUT}s para REMAX '
+                f'(perfil ./camoufox_session bloqueado o navegador colgado).'
+            )
+
+        try:
+            report({
+                'percent': 1,
+                'message': (
+                    f'Remax: navegador listo en {int(_time.monotonic() - t0)}s; '
+                    f'abriendo listados'
+                ),
+            })
             page = await browser.new_page()
             await page.set_viewport_size({"width": 1920, "height": 1080})
 
@@ -126,6 +197,8 @@ def _ejecutar_scraping(
                     await asyncio.sleep(0.5)
 
             await page.close()
+        finally:
+            await browser.__aexit__(None, None, None)
 
         # Estandarizar todas las propiedades
         fecha_extraccion = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -143,7 +216,19 @@ def _ejecutar_scraping(
 
         return estandarizadas
 
-    return asyncio.run(_run())
+    # Limpiar locks stale del perfil persistente (cuelgues de runs anteriores)
+    _limpiar_locks_stale('./camoufox_session')
+
+    # Timeout total de seguridad: nunca quedarse "activo" indefinidamente
+    try:
+        return asyncio.run(
+            asyncio.wait_for(_run(), timeout=CAMOUFOX_TOTAL_TIMEOUT)
+        )
+    except asyncio.TimeoutError:
+        raise RuntimeError(
+            f'REMAX superó el timeout total de {CAMOUFOX_TOTAL_TIMEOUT}s '
+            f'sin terminar. Se canceló para no quedar colgado.'
+        )
 
 
 class ScraperRemaxSkill(BaseSkill):
