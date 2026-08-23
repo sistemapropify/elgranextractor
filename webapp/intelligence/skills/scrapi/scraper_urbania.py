@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import re
+import time as _time
 from datetime import datetime
 from typing import Any, Callable, Dict
 
@@ -19,6 +21,10 @@ from intelligence.skills.base import BaseSkill, SkillResult
 from .db_utils import guardar_propiedades
 
 logger = logging.getLogger(__name__)
+
+# Anti-cuelgue: timeouts (mismo criterio que REMAX). Perfil efímero (sin user_data_dir).
+CAMOUFOX_LAUNCH_TIMEOUT = int(os.environ.get('CAMOUFOX_LAUNCH_TIMEOUT', '600'))
+CAMOUFOX_TOTAL_TIMEOUT = int(os.environ.get('CAMOUFOX_TOTAL_TIMEOUT', '2700'))
 
 
 def _estandarizar_urbania(prop: dict, fecha_extraccion: str) -> dict:
@@ -179,10 +185,14 @@ def _ejecutar_scraping(
         except (ValueError, RuntimeError):
             pass
 
+        t0 = _time.monotonic()
         if not await emit_progress(
             percent=1,
             processed=0,
-            message='Urbania: preparando navegador Camoufox',
+            message=(
+                f'Urbania: lanzando navegador Camoufox '
+                f'(timeout {CAMOUFOX_LAUNCH_TIMEOUT}s)'
+            ),
         ):
             return []
 
@@ -258,7 +268,16 @@ def _ejecutar_scraping(
         )
         return estandarizadas
 
-    return asyncio.run(_run())
+    # Timeout total: nunca quedarse "activo" indefinidamente
+    try:
+        return asyncio.run(
+            asyncio.wait_for(_run(), timeout=CAMOUFOX_TOTAL_TIMEOUT)
+        )
+    except asyncio.TimeoutError:
+        raise RuntimeError(
+            f'URBANIA superó el timeout total de {CAMOUFOX_TOTAL_TIMEOUT}s '
+            f'sin terminar. Se canceló para no quedar colgado.'
+        )
 
 class ScraperUrbaniaSkill(BaseSkill):
     name = "scraper_urbania"

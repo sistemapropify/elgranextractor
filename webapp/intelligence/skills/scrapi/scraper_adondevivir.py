@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import random
+import time as _time
 from datetime import datetime
 from typing import Any, Dict, Callable
 
@@ -17,6 +19,28 @@ from intelligence.skills.base import BaseSkill, SkillResult
 from .db_utils import guardar_propiedades
 
 logger = logging.getLogger(__name__)
+
+# Anti-cuelgue: timeouts y limpieza de locks stale (mismo criterio que REMAX)
+CAMOUFOX_LAUNCH_TIMEOUT = int(os.environ.get('CAMOUFOX_LAUNCH_TIMEOUT', '600'))
+CAMOUFOX_TOTAL_TIMEOUT = int(os.environ.get('CAMOUFOX_TOTAL_TIMEOUT', '2700'))
+LOCK_STALE_SECONDS = int(os.environ.get('CAMOUFOX_LOCK_STALE_SECONDS', '120'))
+
+
+def _limpiar_locks_stale(profile_dir: str, max_age_s: int = LOCK_STALE_SECONDS) -> None:
+    """Borra locks de Firefox/Camoufox viejos de un perfil persistente."""
+    try:
+        if not os.path.isdir(profile_dir):
+            return
+        for nombre in ('parent.lock', 'SingletonLock', 'lock', '.parentlock'):
+            p = os.path.join(profile_dir, nombre)
+            try:
+                if os.path.exists(p) and (os.path.getmtime(p) + max_age_s) < _time.time():
+                    os.remove(p)
+                    print(f'[adondevivir] Lock stale eliminado: {p}')
+            except OSError:
+                pass
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def _ejecutar_scraping(
@@ -103,10 +127,14 @@ def _ejecutar_scraping(
         except (ValueError, RuntimeError):
             pass
 
+        t0 = _time.monotonic()
         await emit_progress(
             percent=0,
             processed=0,
-            message="Adondevivir: iniciando navegador seguro",
+            message=(
+                "Adondevivir: lanzando navegador seguro "
+                f"(timeout {CAMOUFOX_LAUNCH_TIMEOUT}s)"
+            ),
         )
 
         async with AsyncCamoufox(
@@ -286,7 +314,19 @@ def _ejecutar_scraping(
 
         return estandarizar_lote(todas_raw)
 
-    return asyncio.run(_run())
+    # Limpiar locks stale del perfil persistente (cuelgues de runs anteriores)
+    _limpiar_locks_stale('./camoufox_session_adondevivir')
+
+    # Timeout total: nunca quedarse "activo" indefinidamente
+    try:
+        return asyncio.run(
+            asyncio.wait_for(_run(), timeout=CAMOUFOX_TOTAL_TIMEOUT)
+        )
+    except asyncio.TimeoutError:
+        raise RuntimeError(
+            f'ADONDEVIVIR superó el timeout total de {CAMOUFOX_TOTAL_TIMEOUT}s '
+            f'sin terminar. Se canceló para no quedar colgado.'
+        )
 
 
 class ScraperAdondevivirSkill(BaseSkill):
