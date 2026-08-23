@@ -29,7 +29,8 @@ from django.db.models import Q, Count, Avg
 from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
-from django.http import StreamingHttpResponse
+from django.views.decorators.http import require_POST
+from django.http import StreamingHttpResponse, JsonResponse
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import AllowAny
@@ -3353,6 +3354,56 @@ def skills_dashboard_view(request):
         'nocache_pct': round(100 - cache_hit_rate, 1),
     }
     return render(request, 'intelligence/skills_dashboard.html', context)
+
+
+# ── SPEC Eval Harness: endpoints JSON para las tabs del dashboard ──────
+
+
+def skills_evolution_data(request, skill_name):
+    """JSON para el gráfico de la tab Evolución (métricas diarias + versiones)."""
+    from .models import SkillDailyMetric, SkillVersion
+
+    metrics = SkillDailyMetric.objects.filter(skill_name=skill_name).order_by("date")[:30]
+    versions = SkillVersion.objects.filter(skill_name=skill_name).order_by("created_at")
+    return JsonResponse({
+        "dates": [m.date.isoformat() for m in metrics],
+        "success_rate": [m.success_rate for m in metrics],
+        "latency_p95": [m.latency_p95_ms for m in metrics],
+        "version_markers": [v.created_at.date().isoformat() for v in versions],
+    })
+
+
+def skills_eval_confusion_matrix(request):
+    """JSON para la tab Colisiones, del último run (pares erróneos)."""
+    from .models import SkillEvalRun
+
+    last_run = SkillEvalRun.objects.order_by("-run_at").first()
+    if not last_run:
+        return JsonResponse({"pairs": []})
+    bad = last_run.results.filter(is_correct=False).select_related("case")
+    pairs = {}
+    for r in bad:
+        key = (r.case.expected_skill, r.predicted_skill)
+        pairs[key] = pairs.get(key, 0) + 1
+    return JsonResponse({
+        "pairs": [
+            {"expected": k[0], "predicted": k[1], "count": v}
+            for k, v in pairs.items()
+        ]
+    })
+
+
+@require_POST
+def trigger_skill_eval_run(request):
+    """Dispara run_skill_evals (management command) y devuelve el resultado."""
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    notes = request.POST.get("notes", "desde dashboard")
+    buf = StringIO()
+    call_command("run_skill_evals", notes=notes, stdout=buf)
+    return JsonResponse({"ok": True, "output": buf.getvalue()})
 
 
 @level_required(2)

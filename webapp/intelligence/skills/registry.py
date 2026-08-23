@@ -168,6 +168,21 @@ class SkillRegistry:
 
         self._skills[skill_class.name] = skill_instance
         self._skill_classes[skill_class.name] = skill_class
+
+        # Snapshot de versión para tracking de evolución (SPEC eval harness).
+        # Crea fila nueva SOLO si cambió description/schema/category/level.
+        # Fail-open: si la BD no está disponible (arranque/tabla sin migrar)
+        # el registro de la skill NO debe fallar por esto.
+        try:
+            from intelligence.models import SkillVersion
+
+            SkillVersion.snapshot_if_changed(skill_instance)
+        except Exception:  # noqa: BLE001
+            logger.debug(
+                "[SkillRegistry] No se pudo versionar skill '%s' (BD no disponible?)",
+                skill_class.name,
+            )
+
         logger.info(
             f"Skill registrada: '{skill_class.name}' "
             f"(categoría: {skill_class.category}, nivel: {skill_class.access_level})"
@@ -180,6 +195,7 @@ class SkillRegistry:
         intent: str,
         user_level: int = 1,
         active_context: Optional[Dict[str, Any]] = None,
+        return_score: bool = False,
     ) -> Optional[BaseSkill]:
         """
         Dada una intención extraída por el LLM, retorna la skill más adecuada.
@@ -194,12 +210,30 @@ class SkillRegistry:
             intent: Texto de intención del usuario
             user_level: Nivel de acceso del usuario
             active_context: Dict con contexto activo (opcional)
+            return_score: Si True, retorna (skill, score) en vez de solo skill.
+                Lo usa el eval harness (SPEC Fase 2) para correlacionar
+                acierto/error con el score del router.
 
         Returns:
-            Instancia de BaseSkill o None si no hay skill adecuada
+            Instancia de BaseSkill o None si no hay skill adecuada.
+            Con return_score=True: tupla (skill, score) — score es 0.0 si no hay skill.
         """
+        skill, score = self._find_best_skill_with_score(
+            intent, user_level=user_level, active_context=active_context
+        )
+        if return_score:
+            return skill, score
+        return skill
+
+    def _find_best_skill_with_score(
+        self,
+        intent: str,
+        user_level: int = 1,
+        active_context: Optional[Dict[str, Any]] = None,
+    ) -> tuple:
+        """Cuerpo interno de find_best_skill; siempre retorna (skill, score)."""
         if not intent or not intent.strip():
-            return None
+            return None, 0.0
 
         # ── 1. PRIMARIO: Routing semántico ──
         router = get_router(threshold=self.MIN_CONFIDENCE_THRESHOLD)
@@ -221,7 +255,7 @@ class SkillRegistry:
                     f"[SkillRegistry] Skill por router semántico: "
                     f"'{skill.name}' (score: {routing_result.score:.4f})"
                 )
-                return skill
+                return skill, routing_result.score
 
         # ── 2. FALLBACK: Keyword matching existente ──
         intent_lower = intent.lower().strip()
@@ -241,7 +275,7 @@ class SkillRegistry:
         all_tokens_short = set(t for t in re.findall(r'\b\w+\b', intent_lower))
 
         if not intent_tokens and not mensaje_menciona_distrito:
-            return None
+            return None, 0.0
 
         es_consulta_propiedades = bool(
             intent_tokens & _KEYWORDS_PROPIEDADES
@@ -290,13 +324,17 @@ class SkillRegistry:
 
         if best_score >= self.MIN_CONFIDENCE_THRESHOLD:
             logger.debug(f"[Keyword] Skill: '{best_skill.name}' (score: {best_score:.2f})")
-            return best_skill
+            return best_skill, best_score
 
         logger.debug(
             f"[SkillRegistry] Sin skill (keyword: {best_score:.2f}, "
             f"semantic: {routing_result.score:.4f})"
         )
-        return None
+        return None, 0.0
+
+    def get_router_threshold(self) -> float:
+        """Retorna el umbral de confianza actual del router (SPEC eval harness)."""
+        return float(self.MIN_CONFIDENCE_THRESHOLD)
 
     def get_by_name(self, name: str) -> Optional[BaseSkill]:
         """

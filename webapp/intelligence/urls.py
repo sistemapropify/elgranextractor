@@ -78,6 +78,10 @@ urlpatterns = [
     path('chat-workflows/<uuid:flow_id>/toggle/', views.conversation_flow_toggle, name='conversation_flow_toggle'),
     # Skills Dashboard (SPEC-011) — ANTES de skills/<str:skill_name>/ para evitar captura genérica
     path('skills/dashboard/', views.skills_dashboard_view, name='skills_dashboard'),
+    # SPEC Eval Harness — endpoints JSON de las tabs (evolution, colisiones, run-eval)
+    path('skills/dashboard/evolution/<str:skill_name>/', views.skills_evolution_data, name='skills_evolution_data'),
+    path('skills/dashboard/confusion-matrix/', views.skills_eval_confusion_matrix, name='skills_confusion_matrix'),
+    path('skills/dashboard/run-eval/', views.trigger_skill_eval_run, name='skills_trigger_eval'),
     path('skills/create/', views.skill_create_view, name='skill_create'),
     path('skills/metrics/global/', views.skill_metrics_view, name='skill_metrics_global'),
     path('skills/metrics/', views.skill_metrics, name='skill_metrics'),

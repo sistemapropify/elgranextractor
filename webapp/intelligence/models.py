@@ -786,6 +786,67 @@ class ConversationFlowState(models.Model):
         return f"Estado de {self.conversation} en {self.flow.name}: {self.current_state}"
 
 
+class SkillVersion(models.Model):
+    """Snapshot de la definición de una skill en un momento dado.
+
+    Se crea una fila nueva SOLO cuando cambia el contenido relevante
+    (description, parameters_schema, category, access_level, is_active).
+    Permite correlacionar el rendimiento histórico con la versión exacta
+    de la skill que se estaba ejecutando.
+    """
+
+    skill_name = models.CharField(max_length=100, db_index=True)
+    version_hash = models.CharField(max_length=16)  # sha256[:16] del contenido
+    description = models.TextField()
+    category = models.CharField(max_length=50)
+    access_level = models.IntegerField()
+    parameters_schema = models.JSONField()
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "intelligence_skill_version"
+        verbose_name = "Versión de Skill"
+        verbose_name_plural = "Versiones de Skills"
+        indexes = [
+            models.Index(fields=["skill_name", "-created_at"]),
+        ]
+        unique_together = [("skill_name", "version_hash")]
+
+    @staticmethod
+    def compute_hash(skill) -> str:
+        import hashlib
+        import json
+
+        payload = json.dumps({
+            "description": skill.description,
+            "category": skill.category,
+            "access_level": skill.access_level,
+            "parameters_schema": skill.parameters_schema,
+        }, sort_keys=True, default=str)
+        return hashlib.sha256(payload.encode()).hexdigest()[:16]
+
+    @classmethod
+    def snapshot_if_changed(cls, skill) -> "SkillVersion":
+        """Llamar en cada registro/arranque de Django (apps.py ready())."""
+        new_hash = cls.compute_hash(skill)
+        last = cls.objects.filter(skill_name=skill.name).order_by("-created_at").first()
+        if last and last.version_hash == new_hash:
+            return last
+        return cls.objects.create(
+            skill_name=skill.name,
+            version_hash=new_hash,
+            description=skill.description,
+            category=skill.category,
+            access_level=skill.access_level,
+            parameters_schema=skill.parameters_schema,
+            is_active=skill.is_active,
+        )
+
+    def __str__(self):
+        return f"{self.skill_name}@{self.version_hash}"
+
+
 class SkillExecution(models.Model):
     """Registro de ejecución de una skill para persistencia a largo plazo y dashboard."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -804,6 +865,10 @@ class SkillExecution(models.Model):
     error_message = models.TextField(null=True, blank=True)
     cached = models.BooleanField(default=False)
     executed_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    skill_version = models.ForeignKey(
+        SkillVersion, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="executions",
+    )
 
     class Meta:
         db_table = 'intelligence_skill_execution'
@@ -819,6 +884,87 @@ class SkillExecution(models.Model):
 
     def __str__(self):
         return f"Skill {self.skill_name} - {self.status} ({self.executed_at.strftime('%d/%m/%Y %H:%M') if self.executed_at else 'sin fecha'})"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MODELOS: Skill Evaluation Harness (SPEC) — eval set de enrutamiento + scorecard
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class SkillEvalCase(models.Model):
+    """Caso de prueba: query real -> skill que DEBERÍA seleccionarse."""
+
+    query = models.TextField()
+    expected_skill = models.CharField(max_length=100, db_index=True)
+    notes = models.CharField(max_length=255, blank=True)
+    active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "intelligence_skill_eval_case"
+        verbose_name = "Caso de Eval de Enrutamiento"
+        verbose_name_plural = "Casos de Eval de Enrutamiento"
+
+    def __str__(self):
+        return f"{self.query[:40]} -> {self.expected_skill}"
+
+
+class SkillEvalRun(models.Model):
+    """Resultado de correr todo el eval set una vez (snapshot)."""
+
+    run_at = models.DateTimeField(auto_now_add=True)
+    total_cases = models.IntegerField()
+    correct = models.IntegerField()
+    accuracy = models.FloatField()
+    threshold_used = models.FloatField()
+    notes = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        db_table = "intelligence_skill_eval_run"
+        verbose_name = "Run de Eval de Enrutamiento"
+        verbose_name_plural = "Runs de Eval de Enrutamiento"
+        ordering = ["-run_at"]
+
+    def __str__(self):
+        return f"Eval {self.run_at:%Y-%m-%d %H:%M} acc={self.accuracy:.2%}"
+
+
+class SkillEvalResult(models.Model):
+    """Detalle por caso dentro de un run — para la matriz de confusión."""
+
+    run = models.ForeignKey(SkillEvalRun, on_delete=models.CASCADE, related_name="results")
+    case = models.ForeignKey(SkillEvalCase, on_delete=models.CASCADE)
+    predicted_skill = models.CharField(max_length=100)
+    is_correct = models.BooleanField()
+    similarity_score = models.FloatField(null=True)
+
+    class Meta:
+        db_table = "intelligence_skill_eval_result"
+        verbose_name = "Resultado de Eval"
+        verbose_name_plural = "Resultados de Eval"
+
+
+class SkillDailyMetric(models.Model):
+    """Métrica agregada diaria por skill (tabla, no vista SQL en vivo)."""
+
+    skill_name = models.CharField(max_length=100, db_index=True)
+    date = models.DateField(db_index=True)
+    executions = models.IntegerField(default=0)
+    success_count = models.IntegerField(default=0)
+    error_count = models.IntegerField(default=0)
+    cached_count = models.IntegerField(default=0)
+    latency_p50_ms = models.FloatField(null=True)
+    latency_p95_ms = models.FloatField(null=True)
+    success_rate = models.FloatField(default=0.0)
+
+    class Meta:
+        db_table = "intelligence_skill_daily_metric"
+        verbose_name = "Métrica Diaria de Skill"
+        verbose_name_plural = "Métricas Diarias de Skills"
+        unique_together = [("skill_name", "date")]
+
+    def __str__(self):
+        return f"{self.skill_name} {self.date} rate={self.success_rate:.0%}"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
