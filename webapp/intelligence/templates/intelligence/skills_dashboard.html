@@ -772,7 +772,10 @@
     // ── Colisiones: matriz de fallos del último run ──
     function loadConfusion() {
         fetch('{% url "intelligence:skills_confusion_matrix" %}')
-            .then(function(r) { return r.json(); })
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
             .then(function(d) {
                 var tbody = document.getElementById('confusion-tbody');
                 if (!tbody) return;
@@ -788,7 +791,10 @@
                         '<td class="sd-text-small">' + p.count + '</td></tr>';
                 }).join('');
             })
-            .catch(function() {});
+            .catch(function(e) {
+                var tbody = document.getElementById('confusion-tbody');
+                if (tbody) tbody.innerHTML = '<tr><td colspan="3" class="sd-text-small">Error al cargar colisiones: ' + (e && e.message ? e.message : e) + '</td></tr>';
+            });
     }
 
     // ── Ejecutar eval (POST con CSRF) ──
@@ -807,14 +813,21 @@
             body: fd,
             headers: { 'X-CSRFToken': csrf ? csrf.value : '' }
         })
-            .then(function(r) { return r.json(); })
+            .then(function(r) {
+                return r.text().then(function(txt) {
+                    if (r.ok && txt.trim().indexOf('{') === 0) {
+                        return JSON.parse(txt);
+                    }
+                    throw new Error('HTTP ' + r.status + ' (respuesta no JSON):\n' + txt.slice(0, 300));
+                });
+            })
             .then(function(d) {
                 if (out) out.textContent = d.output || JSON.stringify(d);
                 if (btn) { btn.disabled = false; btn.textContent = '▶ Ejecutar Eval'; }
                 loadConfusion();
             })
             .catch(function(e) {
-                if (out) out.textContent = 'Error: ' + e;
+                if (out) out.textContent = 'Error: ' + (e && e.message ? e.message : e);
                 if (btn) { btn.disabled = false; btn.textContent = '▶ Ejecutar Eval'; }
             });
     }
