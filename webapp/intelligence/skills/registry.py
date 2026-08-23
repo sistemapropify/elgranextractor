@@ -310,6 +310,20 @@ class SkillRegistry:
         """
         return self._skills.get(name)
 
+    def get_skill_info(self, name: str) -> Optional[Dict[str, Any]]:
+        """
+        Metadata detallada de una skill (schema) o None si no existe.
+
+        Args:
+            name: Nombre de la skill (snake_case)
+
+        Returns:
+            Dict con el schema de la skill (name, description, category,
+            access_level, is_active, ...) o None si no está registrada.
+        """
+        skill = self._skills.get(name)
+        return skill.get_schema() if skill is not None else None
+
     # ── Listado ───────────────────────────────────────────────────────────
 
     def list_available(self, user_level: int = 1) -> List[Dict[str, Any]]:
