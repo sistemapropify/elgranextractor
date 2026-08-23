@@ -134,12 +134,19 @@ def process_initial_message(payload):
 
     data = skill_result.data
     data_clean = _json_safe(data)
-    if identity["title_hint"] and not title_is_consistent(identity["title_hint"], data["title"]):
-        return _persist_ignore(message_id, thread_id, digest, normalized_phone, text, config, schedule, "TITLE_CODE_MISMATCH", started, property_code=code, evidence={"title_hint": identity["title_hint"], "property_title": data["title"]}, contact_name=contact_name)
+    # El hint de título es válido si coincide con el TÍTULO o con la DESCRIPCIÓN
+    # de la propiedad (el cliente puede referirse a la propiedad por el nombre
+    # del proyecto o por un dato de la descripción, no solo por el título).
+    title_ok = title_is_consistent(identity["title_hint"], data["title"])
+    desc_ok = title_is_consistent(identity["title_hint"], data.get("description") or "")
+    if identity["title_hint"] and not title_ok and not desc_ok:
+        return _persist_ignore(message_id, thread_id, digest, normalized_phone, text, config, schedule, "TITLE_CODE_MISMATCH", started, property_code=code, evidence={"title_hint": identity["title_hint"], "property_title": data["title"], "property_description": data.get("description") or ""}, contact_name=contact_name)
     if data["property_type"] not in (config.enabled_property_types or []):
         return _persist_ignore(message_id, thread_id, digest, normalized_phone, text, config, schedule, "UNSUPPORTED_PROPERTY_TYPE", started, property_code=code, contact_name=contact_name)
+    # Solo se responden propiedades en estado "Disponible" (property_status_name).
+    # La visibilidad (is_visible) ya no bloquea: si está disponible, el bot responde.
     status = str(data.get("property_status") or "").lower().strip()
-    if data.get("is_visible") is False or status in BLOCKED_STATUSES:
+    if status != "disponible":
         return _persist_ignore(message_id, thread_id, digest, normalized_phone, text, config, schedule, "PROPERTY_NOT_PUBLISHABLE", started, property_code=code, contact_name=contact_name)
 
     valid, reason = validate_property_payload(data)

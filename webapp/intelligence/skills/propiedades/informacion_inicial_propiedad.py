@@ -76,7 +76,7 @@ class InformacionInicialPropiedadSkill(BaseSkill):
         query = """
             SELECT TOP 2
                 p.id, p.code, p.title, p.price, p.display_address,
-                p.is_visible, pt.name AS property_type_name,
+                p.description, p.is_visible, pt.name AS property_type_name,
                 c.name AS currency_name, d.name AS district_name,
                 u.name AS urbanization_name, ps.bedrooms, ps.bathrooms,
                 ps.built_area, ps.land_area, ps.garage_spaces,
@@ -132,6 +132,7 @@ class InformacionInicialPropiedadSkill(BaseSkill):
             "property_id": int(row["id"]),
             "code": row["code"],
             "title": row.get("title") or "",
+            "description": row.get("description") or "",
             "property_type": property_type,
             "location": public_location(row),
             "price": {
