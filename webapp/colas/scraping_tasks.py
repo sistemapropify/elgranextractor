@@ -145,11 +145,13 @@ def _crear_log(job, nivel: str, mensaje: str, portal: str = None,
 
 
 def _start_portal_heartbeat(job_id: int, portal: str, interval: int = 30):
-    """Mantiene vivo el job y hace observable una skill bloqueante."""
+    """Mantiene vivo el job SIN escribir mensajes. El 'continúa activo' era
+    ruido que no reflejaba progreso real y confundía: se eliminó. Los trabajos
+    bloqueados los manejan el watchdog de huérfanas y los timeouts de los
+    scrapers (que ya reportan progreso real por etapas)."""
     from ingestas.models import ScrapingJob
 
     stop_event = threading.Event()
-    started = time.monotonic()
 
     def beat():
         close_old_connections()
@@ -158,13 +160,6 @@ def _start_portal_heartbeat(job_id: int, portal: str, interval: int = 30):
                 job = ScrapingJob.objects.filter(id=job_id).first()
                 if not job or job.estado not in ('running', 'paused'):
                     return
-                elapsed = int(time.monotonic() - started)
-                _crear_log(
-                    job,
-                    'info',
-                    f'⏱️ {portal.upper()} continúa activo · {elapsed}s transcurridos',
-                    portal=portal,
-                )
         finally:
             close_old_connections()
 
