@@ -3,7 +3,11 @@
 Todo se lee de la BD ``default``. El CRM solo se consulta con SELECT.
 """
 
+from datetime import datetime, time as dtime, timedelta, timezone as dt_timezone
+from zoneinfo import ZoneInfo
+
 from django.db.models import Count, Q, Sum
+from django.utils import timezone
 
 from lead_intelligence.conversation_analysis import normalize_text
 from lead_intelligence.services import (
@@ -113,11 +117,32 @@ def _build_shadow_context(draft, conversation, shadow_drafts=None):
     }
 
 
-def get_response_dashboard(limit: int = 150):
-    """Datos del dashboard: cola de revisión, KPIs y distribución por categoría."""
-    drafts = list(
-        BotResponseDraft.objects.using("default").order_by("-created_at")[:limit]
-    )
+def _local_day_start_utc(day):
+    """Inicio del día (Perú) convertido a UTC, para filtrar created_at.
+
+    ``created_at`` se almacena en UTC (USE_TZ=True); los días del filtro se
+    interpretan en la zona local de la app (America/Lima).
+    """
+    tz = ZoneInfo("America/Lima")
+    local = datetime.combine(day, dtime.min, tzinfo=tz)
+    return local.astimezone(dt_timezone.utc)
+
+
+def get_response_dashboard(limit: int = 150, date_from=None, date_to=None):
+    """Datos del dashboard: cola de revisión, KPIs y distribución por categoría.
+
+    ``date_from``/``date_to`` son ``datetime.date`` en hora local (Perú) e
+    inclusivos (``date_to`` incluye todo su día). Sin fechas, se devuelve todo
+    el historial (capado por ``limit``); la vista decide el default "hoy".
+    """
+    base_qs = BotResponseDraft.objects.using("default")
+    if date_from is not None:
+        base_qs = base_qs.filter(created_at__gte=_local_day_start_utc(date_from))
+    if date_to is not None:
+        base_qs = base_qs.filter(
+            created_at__lt=_local_day_start_utc(date_to + timedelta(days=1))
+        )
+    drafts = list(base_qs.order_by("-created_at")[:limit])
     draft_ids = [d.pk for d in drafts]
     evaluated = {
         ev.draft_id: ev
@@ -127,15 +152,22 @@ def get_response_dashboard(limit: int = 150):
     }
     pending = [d for d in drafts if d.pk not in evaluated]
 
-    evals = BotResponseEvaluation.objects.using("default").all()
+    eval_range = {}
+    if date_from is not None:
+        eval_range["draft__created_at__gte"] = _local_day_start_utc(date_from)
+    if date_to is not None:
+        eval_range["draft__created_at__lt"] = _local_day_start_utc(
+            date_to + timedelta(days=1)
+        )
+    evals = BotResponseEvaluation.objects.using("default").filter(**eval_range)
     total_evals = evals.count()
     would_send = evals.filter(would_send=True).count()
     hallucination = evals.filter(hallucination_flag=True).count()
     tone = evals.filter(tone_flag=True).count()
     incorrect = evals.filter(verdict=BotResponseEvaluation.Verdict.INCORRECT).count()
 
-    # Guardrails automáticos (spec §7): agregados sobre todos los drafts.
-    drafts_qs = BotResponseDraft.objects.using("default")
+    # Guardrails automáticos (spec §7): agregados sobre el rango seleccionado.
+    drafts_qs = base_qs
     total_drafts_all = drafts_qs.count()
     auto_escalations = drafts_qs.filter(auto_escalation=True).count()
     auto_hallucinations = drafts_qs.filter(auto_hallucination=True).count()
@@ -163,8 +195,7 @@ def get_response_dashboard(limit: int = 150):
     by_category = {
         item["intent_category"]: item["total"]
         for item in (
-            BotResponseDraft.objects.using("default")
-            .filter(intent_category__in=CuratedExample.IntentCategory.values)
+            base_qs.filter(intent_category__in=CuratedExample.IntentCategory.values)
             .values("intent_category")
             .annotate(total=Count("id"))
             .order_by("-total")
@@ -221,17 +252,26 @@ def get_response_dashboard(limit: int = 150):
     }
 
 
-def get_ai_cost_summary_for_drafts():
-    """Costo IA total/promedio de los drafts (trace_id='bot_draft:*')."""
+def get_ai_cost_summary_for_drafts(date_from=None, date_to=None):
+    """Costo IA total/promedio de los drafts (trace_id='bot_draft:*').
+
+    Acepta el mismo rango de fechas que el dashboard para que el KPI coincida
+    con la cola visible; sin fechas agrega todo el historial.
+    """
     from intelligence.models import AIConsumptionLog
 
-    qs = (
-        AIConsumptionLog.objects.using("default")
-        .filter(success=True, trace_id__startswith="bot_draft:")
-        .aggregate(total=Sum("estimated_cost_usd"), calls=Count("id"))
+    qs = AIConsumptionLog.objects.using("default").filter(
+        success=True, trace_id__startswith="bot_draft:"
     )
-    total = float(qs["total"] or 0)
-    calls = int(qs["calls"] or 0)
+    if date_from is not None:
+        qs = qs.filter(created_at__gte=_local_day_start_utc(date_from))
+    if date_to is not None:
+        qs = qs.filter(
+            created_at__lt=_local_day_start_utc(date_to + timedelta(days=1))
+        )
+    agg = qs.aggregate(total=Sum("estimated_cost_usd"), calls=Count("id"))
+    total = float(agg["total"] or 0)
+    calls = int(agg["calls"] or 0)
     return {
         "total_usd": total,
         "calls": calls,

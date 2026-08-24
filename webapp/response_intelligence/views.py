@@ -4,9 +4,12 @@ Hermano de ``analisis_crm``: vive en Prometeo (BD ``default``) y el CRM solo se
 consulta con SELECT. Reutiliza el patrón de ``lead_intelligence``.
 """
 
+from datetime import datetime
+
 from django.contrib import messages
 from django.db import OperationalError, close_old_connections
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from lead_intelligence.views import management_access_required
@@ -21,24 +24,62 @@ from .models import (
 from .services import get_ai_cost_summary_for_drafts, get_response_dashboard
 
 
-def _load_dashboard_context():
+def _load_dashboard_context(date_from=None, date_to=None):
     """Carga lecturas del dashboard y recupera una desconexión ODBC transitoria."""
     for attempt in range(2):
         try:
-            context = get_response_dashboard()
-            context["ai_cost"] = get_ai_cost_summary_for_drafts()
+            context = get_response_dashboard(date_from=date_from, date_to=date_to)
+            context["ai_cost"] = get_ai_cost_summary_for_drafts(
+                date_from=date_from, date_to=date_to
+            )
             return context
         except OperationalError:
             close_old_connections()
             if attempt:
                 raise
 
+
+def _parse_date_param(raw):
+    """Parsea ?desde=YYYY-MM-DD a datetime.date; None si vacío o inválido."""
+    if not raw:
+        return None
+    try:
+        return datetime.strptime(str(raw).strip(), "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _resolve_date_range(request):
+    """Resuelve el rango de fechas del dashboard (hora local de Perú).
+
+    - Sin parámetros → SOLO HOY (default: la página carga rápido).
+    - ?desde=YYYY-MM-DD&hasta=YYYY-MM-DD → rango seleccionado (inclusivo).
+    - ?rango=todo → todo el historial (sin filtro de fechas).
+    """
+    today = timezone.localdate()
+    if request.GET.get("rango") == "todo":
+        return None, None, "Todo el historial"
+    desde = _parse_date_param(request.GET.get("desde"))
+    hasta = _parse_date_param(request.GET.get("hasta"))
+    if desde or hasta:
+        desde = desde or today
+        hasta = hasta or today
+        if desde > hasta:
+            desde, hasta = hasta, desde
+        label = f"del {desde:%d/%m/%Y} al {hasta:%d/%m/%Y}"
+        return desde, hasta, label
+    return today, today, "Hoy"
+
 @management_access_required
 def response_dashboard(request):
     """Dashboard de calidad del motor IA: cola de revisión + KPIs + gate."""
     from .shadow import shadow_mode_enabled
 
-    context = _load_dashboard_context()
+    date_from, date_to, filter_label = _resolve_date_range(request)
+    context = _load_dashboard_context(date_from=date_from, date_to=date_to)
+    context["date_from_iso"] = date_from.isoformat() if date_from else ""
+    context["date_to_iso"] = date_to.isoformat() if date_to else ""
+    context["filter_label"] = filter_label
     context["shadow_enabled"] = shadow_mode_enabled()
     context["title"] = "Calidad del motor IA de respuestas"
     context["active_tab"] = "engine_ai"

@@ -68,6 +68,18 @@
     <span class="pli-chip">{{ kpis.total_drafts }} drafts</span>
   </header>
 
+  <form method="get" action="" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#fff;border:1px solid var(--pli-line);border-radius:14px;padding:10px 14px;margin:12px 0">
+    <span class="pli-chip">Rango: {{ filter_label }}</span>
+    <label style="font-size:12px;color:var(--pli-muted);display:flex;align-items:center;gap:6px">Desde
+      <input type="date" name="desde" value="{{ date_from_iso }}" style="padding:7px;border:1px solid var(--pli-line);border-radius:8px">
+    </label>
+    <label style="font-size:12px;color:var(--pli-muted);display:flex;align-items:center;gap:6px">Hasta
+      <input type="date" name="hasta" value="{{ date_to_iso }}" style="padding:7px;border:1px solid var(--pli-line);border-radius:8px">
+    </label>
+    <button type="submit" class="pli-good" style="border:0;border-radius:8px;padding:8px 14px;font-weight:700;color:#fff;cursor:pointer">Filtrar</button>
+    <a href="?rango=todo" class="pli-chip" style="text-decoration:none">Ver todo</a>
+  </form>
+
   <section class="pli-card pli-section" style="display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap">
     <div>
       <div class="pli-section-head"><h2>Shadow en vivo</h2><span class="pli-chip {% if shadow_enabled %}pli-badge green{% else %}pli-badge amber{% endif %}">{{ shadow_enabled|yesno:"ACTIVO,APAGADO" }}</span></div>
