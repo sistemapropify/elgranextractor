@@ -33,7 +33,7 @@
   .pli-review-actions button{border:0;border-radius:8px;padding:9px;font-weight:700;color:#fff;cursor:pointer}
   .pli-good{background:#1a7f37}.pli-bad{background:#b42318}.pli-neutral{background:#9a6700}
   .pli-promote{background:#3157d5;color:#fff;border:0;border-radius:8px;padding:9px;font-weight:700;cursor:pointer;margin-top:8px}
-  .pli-phone-compare{display:grid;grid-template-columns:repeat(2,minmax(320px,1fr));gap:16px;align-items:start}
+  .pli-phone-compare{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
   .pli-phone-card{position:relative;overflow:hidden;background:#0b141a;border:7px solid #000;border-radius:24px;padding:10px;box-shadow:0 12px 30px rgba(0,0,0,.32);color:#e5e7eb;height:460px;width:100%;box-sizing:border-box}
   .pli-phone-card::before{content:"";position:absolute;left:50%;top:10px;transform:translateX(-50%);width:110px;height:18px;border-radius:999px;background:rgba(255,255,255,.08)}
   .pli-phone-header{display:flex;justify-content:space-between;align-items:center;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#8696a0;margin:18px 4px 7px}
@@ -58,8 +58,11 @@
   .pli-category-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
   .pli-category-item{display:flex;justify-content:space-between;padding:10px 12px;border:1px solid var(--pli-line);border-radius:10px;font-size:13px;background:var(--pli-soft)}
   @media (max-width: 1100px){
-    .pli-grid,.pli-grid-6,.pli-phone-compare,.pli-top-tools,.pli-review-row{grid-template-columns:1fr}
+    .pli-grid,.pli-grid-6,.pli-top-tools,.pli-review-row{grid-template-columns:1fr}
     .pli-review-actions{position:static}
+  }
+  @media (max-width: 700px){
+    .pli-phone-compare{grid-template-columns:1fr}
   }
 </style>
 <main class="pli-page">
