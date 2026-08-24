@@ -16,6 +16,16 @@ from decimal import Decimal
 from django.db import OperationalError, close_old_connections
 
 logger = logging.getLogger(__name__)
+from .shadow_context import (
+    draft_event_key,
+    draft_identity_key,
+    find_trigger_index,
+    identity_key,
+    message_event_key,
+    property_code_as_of,
+    shadow_history_before,
+)
+
 
 
 def _json_safe(value):
@@ -88,6 +98,124 @@ def _generate_shadow_draft_once(
 
         text = str(client_message).strip()[:2000]
         intent = intent_category or CurationService._detect_category(text)
+        from lead_intelligence.services import (
+            get_lead_conversation,
+            get_lead_conversation_by_identity,
+        )
+
+        try:
+            conversation = (
+                get_lead_conversation(lead_id)
+                if lead_id
+                else get_lead_conversation_by_identity(thread_id=thread_id, phone=phone)
+            )
+        except Exception:  # CRM temporalmente no disponible: continúa sin historial.
+            conversation = None
+        messages = list((conversation or {}).get("messages") or [])
+        resolved_lead_id = (conversation or {}).get("id") or lead_id or 0
+        target_index = find_trigger_index(messages, text)
+        if target_index is None:
+            target_message = {
+                "sender": "lead",
+                "text": text,
+                "timestamp": None,
+                "position": len(messages),
+            }
+            messages.append(target_message)
+            target_index = len(messages) - 1
+        else:
+            target_message = messages[target_index]
+
+        if not property_code:
+            property_code = property_code_as_of(messages, target_index)
+
+        wanted_identities = {
+            identity_key(lead_id=resolved_lead_id),
+            identity_key(thread_id=thread_id, phone=phone),
+        }
+        try:
+            recent_drafts = list(
+                BotResponseDraft.objects.using("default")
+                .filter(mode=BotResponseDraft.Mode.SHADOW_LIVE)
+                .order_by("-created_at", "-id")[:1000]
+            )
+        except (TypeError, OperationalError):
+            recent_drafts = []
+        existing_drafts = [
+            item
+            for item in reversed(recent_drafts)
+            if getattr(item, "source_lead_id", 0) == resolved_lead_id
+            or draft_identity_key(item) in wanted_identities
+        ]
+        event_key = message_event_key(
+            lead_id=resolved_lead_id,
+            thread_id=thread_id,
+            phone=phone,
+            message=target_message,
+            index=target_index,
+        )
+        duplicate = next(
+            (item for item in existing_drafts if draft_event_key(item) == event_key),
+            None,
+        )
+        if duplicate is not None:
+            return duplicate
+        shadow_history = shadow_history_before(
+            messages, target_index, existing_drafts
+        )
+        event_context = {
+            "thread_id": thread_id,
+            "phone": phone,
+            "event_key": event_key,
+            "source_position": target_message.get("position", target_index),
+            "source_timestamp": _json_safe(target_message.get("timestamp")),
+            "active_property_code": property_code,
+        }
+        lead_id = resolved_lead_id
+        # Un código explícito inicia/cambia la propiedad activa y usa exactamente
+        # la misma decisión determinista del respondedor nocturno.
+        from n8n_bridge.services.initial_property_config import get_bot_configuration
+        from n8n_bridge.services.initial_property_decision import (
+            decide_initial_property_response,
+        )
+        from n8n_bridge.services.initial_property_detector import extract_property_identity
+
+        identity = extract_property_identity(text)
+        if identity["codes"]:
+            decision = decide_initial_property_response(
+                text,
+                get_bot_configuration(),
+                {"thread_id": thread_id, "phone": phone},
+            )
+            verified_data = decision.get("data") or {}
+            response = decision.get("reply_text") or ""
+            reason = decision.get("reason_code") or "DECISION_FAILED"
+            draft = BotResponseDraft.objects.using("default").create(
+                source_lead_id=lead_id or 0,
+                client_message=text,
+                intent_category=intent,
+                prompt_snapshot={
+                    "decision": reason,
+                    "evidence": decision.get("evidence") or {},
+                    "context": event_context,
+                },
+                generated_response=response,
+                property_data_used=_json_safe(
+                    [verified_data] if verified_data else []
+                ),
+                mode=BotResponseDraft.Mode.SHADOW_LIVE,
+                model_version="deterministic-template-v1",
+                trace_id="",
+                auto_hallucination=False,
+                blocked_reason=(
+                    "" if decision.get("success") else f"Decisión determinista: {reason}"
+                ),
+            )
+            draft.trace_id = f"bot_draft:{draft.pk}"
+            draft.save(using="default", update_fields=["trace_id"])
+            return draft
+
+
 
         # Escalamiento: nunca generar con IA (spec §7).
         if is_escalation(text):
@@ -97,7 +225,7 @@ def _generate_shadow_draft_once(
                 intent_category=intent,
                 prompt_snapshot={
                     "guardrail": "escalamiento",
-                    "context": {"thread_id": thread_id, "phone": phone},
+                    "context": event_context,
                 },
                 generated_response="",
                 property_data_used=[],
@@ -120,9 +248,7 @@ def _generate_shadow_draft_once(
             source_lead_id=lead_id or 0,
             client_message=text,
             intent_category=intent,
-            prompt_snapshot={
-                "context": {"thread_id": thread_id, "phone": phone},
-            },
+            prompt_snapshot={"context": event_context},
             generated_response="",
             property_data_used=[],
             mode=BotResponseDraft.Mode.SHADOW_LIVE,
@@ -140,6 +266,8 @@ def _generate_shadow_draft_once(
                 property_code=property_code,
                 lead_id=lead_id,
                 thread_id=thread_id,
+                phone=phone,
+                conversation_messages=shadow_history,
             )
             draft.intent_category = assembled["intent_category"] or intent
             # Sanitizar a JSON-safe: SQL Server devuelve Decimal (precios) que
@@ -149,7 +277,7 @@ def _generate_shadow_draft_once(
                 "system_prompt": assembled["system_prompt"],
                 "user_prompt": assembled["user_prompt"],
                 "few_shot": assembled["few_shot"],
-                "context": {"thread_id": thread_id, "phone": phone},
+                "context": event_context,
             }
             draft.save(
                 using="default",

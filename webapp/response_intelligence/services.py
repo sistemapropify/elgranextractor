@@ -9,7 +9,6 @@ from zoneinfo import ZoneInfo
 from django.db.models import Count, Q, Sum
 from django.utils import timezone
 
-from lead_intelligence.conversation_analysis import normalize_text
 from lead_intelligence.services import (
     get_lead_conversation,
     get_lead_conversation_by_identity,
@@ -21,23 +20,21 @@ from response_intelligence.models import (
     CuratedExample,
 )
 
+from response_intelligence.shadow_context import (
+    assign_drafts_to_lead_messages,
+    draft_context,
+    find_trigger_index,
+    source_position,
+)
 
 def _safe_pct(part, total):
     return round(part / total * 100) if total else 0
 
 
-def _find_trigger_message(messages, client_message):
-    """Locate the lead message that triggered a draft, if possible."""
-
-    target = normalize_text(client_message)
-    if not target:
-        return None, None
-    for index, message in enumerate(messages or []):
-        if message.get("sender") != "lead":
-            continue
-        if normalize_text(message.get("text")) == target:
-            return index, message
-    return None, None
+def _find_trigger_message(messages, client_message, stored_position=None):
+    """Locate the exact lead message that triggered a draft."""
+    index = find_trigger_index(messages, client_message, stored_position=stored_position)
+    return (index, messages[index]) if index is not None else (None, None)
 
 
 def _build_shadow_context(draft, conversation, shadow_drafts=None):
@@ -57,7 +54,8 @@ def _build_shadow_context(draft, conversation, shadow_drafts=None):
 
     messages = conversation.get("messages") or []
     trigger_index, trigger_message = _find_trigger_message(
-        messages, draft.client_message
+        messages, draft.client_message,
+        stored_position=source_position(draft),
     )
     if trigger_index is None:
         trigger_index = next(
@@ -82,18 +80,15 @@ def _build_shadow_context(draft, conversation, shadow_drafts=None):
     else:
         excerpt = messages[:8]
 
-    draft_by_message = {}
-    for item in shadow_drafts or [draft]:
-        key = normalize_text(getattr(item, "client_message", ""))
-        if key and key not in draft_by_message:
-            draft_by_message[key] = item
-
+    assigned_drafts = assign_drafts_to_lead_messages(
+        messages, shadow_drafts or [draft]
+    )
     shadow_messages = []
-    for message in messages:
+    for index, message in enumerate(messages):
         if message.get("sender") != "lead":
             continue
         shadow_messages.append(message)
-        matching_draft = draft_by_message.get(normalize_text(message.get("text")))
+        matching_draft = assigned_drafts.get(index)
         if matching_draft:
             shadow_messages.append(
                 {
@@ -215,14 +210,18 @@ def get_response_dashboard(limit: int = 150, date_from=None, date_to=None):
     )
 
     conversation_cache = {}
-    drafts_by_lead = {}
-    for item in drafts:
-        if item.source_lead_id:
-            drafts_by_lead.setdefault(item.source_lead_id, []).append(item)
+    # La tarjeta debe mostrar el hilo sombra completo, no solo los drafts que
+    # caben en el filtro de fecha/paginación actual.
+    related_drafts = list(
+        BotResponseDraft.objects.using("default")
+        .filter(mode=BotResponseDraft.Mode.SHADOW_LIVE)
+        .order_by("-created_at", "-id")[:2000]
+    )
+    related_drafts.reverse()
+
     for draft in pending:
         lead_id = draft.source_lead_id
-        prompt_snapshot = draft.prompt_snapshot or {}
-        prompt_context = prompt_snapshot.get("context") or {}
+        prompt_context = draft_context(draft)
         thread_id = prompt_context.get("thread_id")
         phone = prompt_context.get("phone")
         cache_key = ("lead", lead_id) if lead_id else ("identity", thread_id, phone)
@@ -235,10 +234,26 @@ def get_response_dashboard(limit: int = 150, date_from=None, date_to=None):
                     phone=phone,
                 )
         conversation = conversation_cache.get(cache_key)
+
+        phone_digits = "".join(ch for ch in str(phone or "") if ch.isdigit())[-9:]
+        comparison_drafts = []
+        for item in related_drafts:
+            item_context = draft_context(item)
+            item_phone = "".join(
+                ch for ch in str(item_context.get("phone") or "") if ch.isdigit()
+            )[-9:]
+            same_lead = bool(lead_id and item.source_lead_id == lead_id)
+            same_thread = bool(
+                thread_id and str(item_context.get("thread_id") or "") == str(thread_id)
+            )
+            same_phone = bool(phone_digits and item_phone == phone_digits)
+            if same_lead or same_thread or same_phone:
+                comparison_drafts.append(item)
+
         draft.shadow_context = _build_shadow_context(
             draft,
             conversation,
-            shadow_drafts=drafts_by_lead.get(lead_id, [draft]) if lead_id else [draft],
+            shadow_drafts=comparison_drafts or [draft],
         )
 
     return {

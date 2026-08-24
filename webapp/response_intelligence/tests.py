@@ -244,6 +244,76 @@ class ShadowContextTests(SimpleTestCase):
         self.assertEqual(context["thread"]["total_messages"], 3)
 
 
+class ShadowConversationStateTests(SimpleTestCase):
+    def test_active_property_changes_when_new_code_appears(self):
+        from .shadow_context import property_code_as_of
+
+        messages = [
+            {"sender": "lead", "text": "Info PROP000270", "position": 0},
+            {"sender": "agent", "text": "Respuesta humana", "position": 1},
+            {"sender": "lead", "text": "Ahora info PROP000253", "position": 2},
+            {"sender": "lead", "text": "¿Es esquina?", "position": 3},
+        ]
+
+        self.assertEqual(property_code_as_of(messages, 0), "PROP000270")
+        self.assertEqual(property_code_as_of(messages, 2), "PROP000253")
+        self.assertEqual(property_code_as_of(messages, 3), "PROP000253")
+
+    def test_repeated_texts_keep_distinct_shadow_answers(self):
+        from .services import _build_shadow_context
+
+        conversation = {
+            "messages": [
+                {"sender": "lead", "text": "Más información", "timestamp": 1, "position": 4},
+                {"sender": "agent", "text": "Respuesta humana uno", "timestamp": 2, "position": 5},
+                {"sender": "lead", "text": "Más información", "timestamp": 3, "position": 9},
+            ]
+        }
+        first = SimpleNamespace(
+            pk=1,
+            client_message="Más información",
+            generated_response="Respuesta sombra uno",
+            created_at=1,
+            prompt_snapshot={"context": {"source_position": 4}},
+        )
+        second = SimpleNamespace(
+            pk=2,
+            client_message="Más información",
+            generated_response="Respuesta sombra dos",
+            created_at=2,
+            prompt_snapshot={"context": {"source_position": 9}},
+        )
+
+        context = _build_shadow_context(second, conversation, [first, second])
+        shadow_answers = [
+            item["text"] for item in context["shadow_messages"] if item.get("shadow")
+        ]
+        self.assertEqual(
+            shadow_answers, ["Respuesta sombra uno", "Respuesta sombra dos"]
+        )
+        self.assertEqual(context["trigger_index"], 2)
+
+    def test_shadow_history_excludes_human_answers(self):
+        from .shadow_context import shadow_history_before
+
+        messages = [
+            {"sender": "lead", "text": "Info PROP000099", "position": 0},
+            {"sender": "agent", "text": "DATO DEL HUMANO", "position": 1},
+            {"sender": "lead", "text": "¿Tiene medidas?", "position": 2},
+        ]
+        prior = SimpleNamespace(
+            pk=1,
+            client_message="Info PROP000099",
+            generated_response="RESPUESTA SOMBRA",
+            created_at=1,
+            prompt_snapshot={"context": {"source_position": 0}},
+        )
+
+        history = shadow_history_before(messages, 2, [prior])
+        rendered = " ".join(item["content"] for item in history)
+        self.assertIn("RESPUESTA SOMBRA", rendered)
+        self.assertNotIn("DATO DEL HUMANO", rendered)
+
 class ShadowTests(SimpleTestCase):
     def test_shadow_mode_apagado_por_defecto(self):
         with mock.patch.dict(os.environ, {"RESPONSE_INTELLIGENCE_SHADOW": "0"}, clear=False):
@@ -438,6 +508,40 @@ class MemoryBridgePromptTests(SimpleTestCase):
         )
         self.assertEqual(memory_bridge.property_code_from_context(ctx), "PROP000265")
         self.assertEqual(memory_bridge._normalize_code("prop 7"), "PROP000007")
+
+
+    def test_current_code_overrides_stale_property_and_uses_shadow_history(self):
+        ctx = self._ctx(
+            messages=[
+                {"role": "user", "content": "Info PROP000270"},
+                {"role": "assistant", "content": "RESPUESTA HUMANA ANTIGUA"},
+            ]
+        )
+        shadow_history = [
+            {"role": "user", "content": "Info PROP000270"},
+            {"role": "assistant", "content": "RESPUESTA SOMBRA ANTERIOR"},
+        ]
+        with mock.patch(
+            "response_intelligence.prompt_assembly.memory_bridge.resolve_memory",
+            return_value=(None, None, ctx),
+        ), mock.patch.object(
+            PromptAssemblyService, "build_system_prompt", return_value="SISTEMA"
+        ), mock.patch.object(
+            PromptAssemblyService, "select_few_shot", return_value=[]
+        ), mock.patch.object(
+            PromptAssemblyService,
+            "fetch_live_property_data",
+            return_value={"success": False},
+        ) as fetch:
+            result = PromptAssemblyService.assemble(
+                "Ahora quiero PROP000253",
+                property_code="PROP000270",
+                conversation_messages=shadow_history,
+            )
+
+        fetch.assert_called_once_with("PROP000253")
+        self.assertIn("RESPUESTA SOMBRA ANTERIOR", result["user_prompt"])
+        self.assertNotIn("RESPUESTA HUMANA ANTIGUA", result["user_prompt"])
 
 
 class DashboardConnectionRecoveryTests(SimpleTestCase):

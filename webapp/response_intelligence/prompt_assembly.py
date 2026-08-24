@@ -123,6 +123,7 @@ class PromptAssemblyService:
         phone=None,
         thread_id=None,
         app_id="motor-ia-whatsapp",
+        conversation_messages=None,
     ) -> dict:
         """Compone el prompt final y devuelve lo inyectado para auditoría.
 
@@ -150,13 +151,12 @@ class PromptAssemblyService:
             phone, lead_id, thread_id, app_id
         )
 
-        # Resolución de la propiedad: mensaje -> memoria -> initial response.
-        if not property_code:
-            detected = extract_property_identity(client_message)
-            if detected.get("codes"):
-                property_code = detected["codes"][0]
-            else:
-                property_code = memory_bridge.property_code_from_context(context)
+        # Un código explícito en el mensaje actual siempre cambia el contexto.
+        detected = extract_property_identity(client_message)
+        if detected.get("codes"):
+            property_code = detected["codes"][0]
+        elif not property_code:
+            property_code = memory_bridge.property_code_from_context(context)
             if not property_code:
                 property_code = memory_bridge.property_code_from_initial_response(
                     phone, thread_id
@@ -183,9 +183,27 @@ class PromptAssemblyService:
                 + "\n\n".join(rendered)
             )
 
-        # Bloque de contexto conversacional (memoria, últimos turnos + resumen).
+        # En shadow_live se usa lead -> respuesta sombra, sin respuestas humanas.
+        # La memoria normal se conserva para los demás modos.
         conversation_block = ""
-        if context:
+        if conversation_messages is not None:
+            lines = []
+            for message in conversation_messages[-16:]:
+                role_label = (
+                    "Cliente"
+                    if message.get("role") == "user"
+                    else "Asistente sombra"
+                )
+                content = str(message.get("content") or "").strip()
+                if content:
+                    lines.append(f"{role_label}: {content}")
+            if lines:
+                conversation_block = (
+                    "\n\nContexto de la conversación sombra (continúa este hilo; "
+                    "no repitas saludos ni vuelvas a pedir datos ya presentes):\n"
+                    + "\n".join(lines)
+                )
+        elif context:
             lines = []
             for message in (context.get("messages") or [])[-6:]:
                 role_label = (

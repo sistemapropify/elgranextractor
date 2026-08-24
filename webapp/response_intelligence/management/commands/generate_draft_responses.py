@@ -7,7 +7,6 @@ Nivel 1 (sandbox): genera drafts sobre conversaciones históricas sin enviar nad
 El CRM se lee solo con SELECT; los drafts se persisten en la BD ``default``.
 """
 
-import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from django.core.management.base import BaseCommand, CommandError
@@ -25,7 +24,12 @@ from response_intelligence.models import BotResponseDraft
 from response_intelligence.prompt_assembly import PromptAssemblyService
 from response_intelligence.shadow import _json_safe
 
-PROPERTY_CODE_RE = re.compile(r"\bPROP\d{6,9}\b", re.IGNORECASE)
+from response_intelligence.shadow_context import (
+    assign_drafts_to_lead_messages,
+    message_event_key,
+    property_code_as_of,
+    shadow_history_before,
+)
 
 
 class Command(BaseCommand):
@@ -50,11 +54,7 @@ class Command(BaseCommand):
 
     @staticmethod
     def _property_code_from_messages(messages) -> str:
-        for message in messages:
-            match = PROPERTY_CODE_RE.search(str(message.get("text") or ""))
-            if match:
-                return match.group(0).upper()
-        return ""
+        return property_code_as_of(messages)
 
     @staticmethod
     def _process_lead(row, *, mode, all_messages, include_first_message, dry_run):
@@ -62,15 +62,22 @@ class Command(BaseCommand):
         analysis = analyze_chat_history(row["chat_history"])
         messages = analysis.get("messages") or []
         client_messages = [m for m in messages if m.get("sender") == "lead"]
-        # El primer mensaje lo responde el bot determinista de plantillas:
-        # el motor IA interviene desde el segundo mensaje del lead.
-        targets = client_messages[1:] if all_messages else (client_messages[1:2] or [])
-        # Backfill total: si el lead solo tiene el primer mensaje (el 23/08 el
-        # shadow en vivo falló en silencio con Decimal), analizarlo igualmente.
-        if not targets and include_first_message:
-            targets = client_messages[:1]
+        if mode == BotResponseDraft.Mode.SHADOW_LIVE:
+            # Shadow representa la conversación alternativa completa.
+            targets = client_messages
+        else:
+            targets = client_messages[1:] if all_messages else (client_messages[1:2] or [])
+            if not targets and include_first_message:
+                targets = client_messages[:1]
         if not targets:
             return row["id"], "skipped"
+
+        existing_drafts = list(
+            BotResponseDraft.objects.using("default")
+            .filter(source_lead_id=row["id"], mode=mode)
+            .order_by("created_at", "id")
+        )
+        assigned_drafts = assign_drafts_to_lead_messages(messages, existing_drafts)
 
         from response_intelligence.guardrails import (
             block_summary,
@@ -78,20 +85,39 @@ class Command(BaseCommand):
             validate_generated_response,
         )
 
-        property_code = Command._property_code_from_messages(messages)
         created = 0
         escalations = 0
         for target in targets:
+            target_index = next(
+                index for index, message in enumerate(messages) if message is target
+            )
             text = str(target.get("text") or "").strip()
             if not text:
                 continue
-            # Idempotencia: no duplicar un draft ya existente para el mismo
-            # lead+mensaje (permite re-correr backfills sin duplicados).
-            if BotResponseDraft.objects.using("default").filter(
-                source_lead_id=row["id"], client_message=text
-            ).exists():
+            event_key = message_event_key(
+                lead_id=row["id"],
+                thread_id=row.get("id_chatwoot"),
+                phone=row.get("phone"),
+                message=target,
+                index=target_index,
+            )
+            # Una ocurrencia concreta se procesa una sola vez; textos repetidos
+            # en posiciones distintas siguen siendo turnos diferentes.
+            if target_index in assigned_drafts:
                 continue
+            property_code = property_code_as_of(messages, target_index)
+            shadow_history = shadow_history_before(
+                messages, target_index, existing_drafts
+            )
             intent_category = CurationService._detect_category(text)
+            event_context = {
+                "thread_id": row.get("id_chatwoot"),
+                "phone": row.get("phone"),
+                "event_key": event_key,
+                "source_position": target.get("position", target_index),
+                "source_timestamp": _json_safe(target.get("timestamp")),
+                "active_property_code": property_code,
+            }
 
             # Guardrail (spec §7): escalamiento nunca genera con IA.
             if is_escalation(text):
@@ -100,7 +126,10 @@ class Command(BaseCommand):
                         source_lead_id=row["id"],
                         client_message=text,
                         intent_category=intent_category,
-                        prompt_snapshot={"guardrail": "escalamiento"},
+                        prompt_snapshot={
+                            "guardrail": "escalamiento",
+                            "context": event_context,
+                        },
                         generated_response="",
                         property_data_used=[],
                         mode=mode,
@@ -111,6 +140,7 @@ class Command(BaseCommand):
                     )
                     draft.trace_id = f"bot_draft:{draft.pk}"
                     draft.save(using="default", update_fields=["trace_id"])
+                    existing_drafts.append(draft)
                 escalations += 1
                 continue
 
@@ -121,6 +151,9 @@ class Command(BaseCommand):
                 lead_id=row["id"],
                 phone=row.get("phone"),
                 thread_id=row.get("id_chatwoot"),
+                conversation_messages=(
+                    shadow_history if mode == BotResponseDraft.Mode.SHADOW_LIVE else None
+                ),
             )
             memory_id = (assembled.get("memory") or {}).get("conversation_id")
             if dry_run:
@@ -141,10 +174,7 @@ class Command(BaseCommand):
                     "user_prompt": assembled["user_prompt"],
                     "few_shot": assembled["few_shot"],
                     # Contexto del lead/hilo para que el revisor sepa el origen.
-                    "context": {
-                        "thread_id": row.get("id_chatwoot"),
-                        "phone": row.get("phone"),
-                    },
+                    "context": event_context,
                 },
                 generated_response="",
                 # Sanitizar a JSON-safe: SQL Server devuelve Decimal (precios)
@@ -167,6 +197,7 @@ class Command(BaseCommand):
                 draft.generated_response = ""
                 draft.trace_id = f"bot_draft:{draft.pk}"
                 draft.save(using="default", update_fields=["trace_id"])
+                existing_drafts.append(draft)
                 continue
             draft.generated_response = response
             draft.trace_id = f"bot_draft:{draft.pk}"
@@ -193,6 +224,7 @@ class Command(BaseCommand):
                 ],
             )
             created += 1
+            existing_drafts.append(draft)
         detail = f"created={created}"
         if escalations:
             detail += f", escalamientos={escalations}"

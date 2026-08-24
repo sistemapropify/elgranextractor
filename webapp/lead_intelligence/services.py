@@ -760,31 +760,41 @@ def get_lead_conversation_by_identity(thread_id=None, phone=None):
     """
 
     thread_value = str(thread_id or "").strip()
-    phone_value = "".join(character for character in str(phone or "") if character.isdigit())
-    where = []
-    params = []
-    if thread_value:
-        where.append("CAST(l.id_chatwoot AS varchar(100)) = %s")
-        params.append(thread_value)
-    if phone_value:
-        where.append(
-            "RIGHT(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(c.phone, '+', ''), "
-            "' ', ''), '-', ''), '(', ''), ')', ''), 9) = RIGHT(%s, 9)"
-        )
-        params.append(phone_value)
-    if not where:
-        return None
+    phone_value = "".join(
+        character for character in str(phone or "") if character.isdigit()
+    )
 
+    # El hilo exacto es autoritativo. Antes se combinaba con teléfono mediante
+    # OR y SQL Server podía devolver otro lead más reciente del mismo contacto.
+    if thread_value:
+        with connections["propifai"].cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT TOP 1 l.id
+                FROM dbo.lead l
+                WHERE CAST(l.id_chatwoot AS varchar(100)) = %s
+                ORDER BY COALESCE(l.date_entry, l.created_at) DESC, l.id DESC
+                """,
+                [thread_value],
+            )
+            row = cursor.fetchone()
+        if row:
+            return get_lead_conversation(row[0])
+
+    if not phone_value:
+        return None
     with connections["propifai"].cursor() as cursor:
         cursor.execute(
-            f"""
+            """
             SELECT TOP 1 l.id
             FROM dbo.lead l
             LEFT JOIN dbo.contact c ON c.id = l.contact_id
-            WHERE {" OR ".join(where)}
+            WHERE RIGHT(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+                c.phone, '+', ''), ' ', ''), '-', ''), '(', ''), ')', ''), 9)
+                = RIGHT(%s, 9)
             ORDER BY COALESCE(l.date_entry, l.created_at) DESC, l.id DESC
             """,
-            params,
+            [phone_value],
         )
         row = cursor.fetchone()
     return get_lead_conversation(row[0]) if row else None
