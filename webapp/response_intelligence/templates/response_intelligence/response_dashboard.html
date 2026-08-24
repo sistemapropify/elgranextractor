@@ -194,6 +194,24 @@
                 <div class="pli-phone-compare">
                   <section class="pli-phone-card">
                     <div class="pli-phone-header">
+                      <span>Hilo real</span>
+                      <span>{% if draft.shadow_context.available and draft.shadow_context.thread.total_messages %}{{ draft.shadow_context.thread.total_messages }} msgs{% else %}sin contexto{% endif %}</span>
+                    </div>
+                    <div class="pli-phone-screen">
+                      {% if draft.shadow_context.available and draft.shadow_context.thread.messages %}
+                        <div class="pli-bubbles">
+                          {% for message in draft.shadow_context.thread.messages %}
+                            <div class="pli-bubble {% if message.sender == 'agent' %}agent{% else %}lead{% endif %}">{{ message.text|urlize|linebreaksbr }}{% if message.timestamp %}<small style="align-self:flex-end;color:#aebac1;margin-top:3px">{{ message.timestamp|localtime|date:"H:i" }}</small>{% endif %}</div>
+                          {% endfor %}
+                        </div>
+                      {% else %}
+                        <div class="pli-thread-empty">No hay conversación disponible para este draft.</div>
+                      {% endif %}
+                    </div>
+                  </section>
+
+                  <section class="pli-phone-card">
+                    <div class="pli-phone-header">
                       <span>Motor IA sombra</span>
                       <span>{{ draft.model_version }}</span>
                     </div>
@@ -208,24 +226,6 @@
                           <div class="pli-bubble agent">{{ draft.generated_response|default:"—" }}</div>
                         {% endif %}
                       </div>
-                    </div>
-                  </section>
-
-                  <section class="pli-phone-card">
-                    <div class="pli-phone-header">
-                      <span>Hilo real</span>
-                      <span>{% if draft.shadow_context.available and draft.shadow_context.thread.total_messages %}{{ draft.shadow_context.thread.total_messages }} msgs{% else %}sin contexto{% endif %}</span>
-                    </div>
-                    <div class="pli-phone-screen">
-                      {% if draft.shadow_context.available and draft.shadow_context.thread.messages %}
-                        <div class="pli-bubbles">
-                          {% for message in draft.shadow_context.thread.messages %}
-                            <div class="pli-bubble {% if message.sender == 'agent' %}agent{% else %}lead{% endif %}">{{ message.text|urlize|linebreaksbr }}{% if message.timestamp %}<small style="align-self:flex-end;color:#aebac1;margin-top:3px">{{ message.timestamp|localtime|date:"H:i" }}</small>{% endif %}</div>
-                          {% endfor %}
-                        </div>
-                      {% else %}
-                        <div class="pli-thread-empty">No hay conversación disponible para este draft.</div>
-                      {% endif %}
                     </div>
                   </section>
                 </div>
