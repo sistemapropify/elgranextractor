@@ -233,13 +233,32 @@ def create_rule(request):
     return redirect("response_intelligence:dashboard")
 
 
+def _get_rule_or_redirect(request, rule_id):
+    """Resuelve una regla o redirige con mensaje (evita 404 crudo si el id
+    ya no existe, llegó vacío o la página estaba desactualizada)."""
+    try:
+        rule_id = int(rule_id)
+    except (TypeError, ValueError):
+        messages.error(request, "Regla inválida: falta el identificador.")
+        return None
+    rule = BusinessRule.objects.using("default").filter(pk=rule_id).first()
+    if rule is None:
+        messages.error(
+            request,
+            f"La regla #{rule_id} ya no existe (fue eliminada o la página "
+            "estaba desactualizada). Recarga la página.",
+        )
+        return None
+    return rule
+
+
 @management_access_required
 @require_POST
 def toggle_rule(request):
     """Activa/desactiva una regla de negocio."""
-    rule = get_object_or_404(
-        BusinessRule.objects.using("default"), pk=request.POST.get("rule_id")
-    )
+    rule = _get_rule_or_redirect(request, request.POST.get("rule_id"))
+    if rule is None:
+        return redirect("response_intelligence:dashboard")
     try:
         rule.active = not rule.active
         rule.save(using="default")
@@ -257,9 +276,9 @@ def toggle_rule(request):
 @require_POST
 def delete_rule(request):
     """Elimina una regla de negocio (no se inyectará más al prompt)."""
-    rule = get_object_or_404(
-        BusinessRule.objects.using("default"), pk=request.POST.get("rule_id")
-    )
+    rule = _get_rule_or_redirect(request, request.POST.get("rule_id"))
+    if rule is None:
+        return redirect("response_intelligence:dashboard")
     try:
         pk = rule.pk
         rule.delete(using="default")
