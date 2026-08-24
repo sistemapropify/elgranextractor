@@ -10,10 +10,27 @@ y nunca lanza: cualquier fallo solo se registra (la migración debe estar aplica
 import logging
 import os
 import threading
+from datetime import date, datetime
+from decimal import Decimal
 
 from django.db import OperationalError, close_old_connections
 
 logger = logging.getLogger(__name__)
+
+
+def _json_safe(value):
+    """Convierte valores no serializables a JSON (Decimal, fechas) para poder
+    guardarlos en campos JSONField. Los precios/áreas vienen como Decimal de
+    SQL Server y rompían el guardado del draft en silencio (ej. 23/08)."""
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    return value
 
 
 def shadow_mode_enabled() -> bool:
@@ -125,7 +142,9 @@ def _generate_shadow_draft_once(
                 thread_id=thread_id,
             )
             draft.intent_category = assembled["intent_category"] or intent
-            draft.property_data_used = assembled["property_data_used"]
+            # Sanitizar a JSON-safe: SQL Server devuelve Decimal (precios) que
+            # rompía el guardado del draft en silencio.
+            draft.property_data_used = _json_safe(assembled["property_data_used"])
             draft.prompt_snapshot = {
                 "system_prompt": assembled["system_prompt"],
                 "user_prompt": assembled["user_prompt"],

@@ -23,6 +23,7 @@ from response_intelligence.curation import CurationService
 from response_intelligence import memory_bridge
 from response_intelligence.models import BotResponseDraft
 from response_intelligence.prompt_assembly import PromptAssemblyService
+from response_intelligence.shadow import _json_safe
 
 PROPERTY_CODE_RE = re.compile(r"\bPROP\d{6,9}\b", re.IGNORECASE)
 
@@ -132,7 +133,9 @@ class Command(BaseCommand):
                     },
                 },
                 generated_response="",
-                property_data_used=assembled["property_data_used"],
+                # Sanitizar a JSON-safe: SQL Server devuelve Decimal (precios)
+                # que rompe el guardado del draft.
+                property_data_used=_json_safe(assembled["property_data_used"]),
                 mode=mode,
                 model_version=LLMService.DEEPSEEK_MODEL,
                 trace_id=f"bot_draft:{0}",  # se corrige tras crear con el id real
