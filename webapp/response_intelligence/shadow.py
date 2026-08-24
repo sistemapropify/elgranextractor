@@ -94,30 +94,20 @@ def _generate_shadow_draft_once(
             draft.save(using="default", update_fields=["trace_id"])
             return draft
 
-        # shadow_live: SOLO LECTURA de la memoria (no se escribe el borrador
-        # porque no se envía). El contexto se lee aislado en app motor-ia-whatsapp.
-        assembled = PromptAssemblyService.assemble(
-            client_message=text,
-            intent_category=intent,
-            property_code=property_code,
-            lead_id=lead_id,
-            thread_id=thread_id,
-        )
+        # TODO lead entrante DEBE generar un borrador visible. El borrador se
+        # crea PRIMERO (con contexto mínimo) para que, si el armado del prompt
+        # o la llamada IA fallan, el borrador quede en la cola marcado con el
+        # error (blocked_reason) en lugar de desaparecer en silencio (como
+        # pasó el 23/08, cuando entraron leads y el Motor IA no creó nada).
         draft = BotResponseDraft.objects.using("default").create(
             source_lead_id=lead_id or 0,
             client_message=text,
-            intent_category=assembled["intent_category"] or intent,
+            intent_category=intent,
             prompt_snapshot={
-                "system_prompt": assembled["system_prompt"],
-                "user_prompt": assembled["user_prompt"],
-                "few_shot": assembled["few_shot"],
-                # Contexto del hilo/teléfono para que el revisor sepa de qué
-                # lead proviene el draft (los drafts del primer mensaje no
-                # tienen lead_id en el CRM todavía).
                 "context": {"thread_id": thread_id, "phone": phone},
             },
             generated_response="",
-            property_data_used=assembled["property_data_used"],
+            property_data_used=[],
             mode=BotResponseDraft.Mode.SHADOW_LIVE,
             model_version=LLMService.DEEPSEEK_MODEL,
             trace_id="",
@@ -125,9 +115,41 @@ def _generate_shadow_draft_once(
         draft.trace_id = f"bot_draft:{draft.pk}"
         draft.save(using="default", update_fields=["trace_id"])
 
+        # Armado de contexto (propiedad/RAG/memoria) para el prompt.
+        try:
+            assembled = PromptAssemblyService.assemble(
+                client_message=text,
+                intent_category=intent,
+                property_code=property_code,
+                lead_id=lead_id,
+                thread_id=thread_id,
+            )
+            draft.intent_category = assembled["intent_category"] or intent
+            draft.property_data_used = assembled["property_data_used"]
+            draft.prompt_snapshot = {
+                "system_prompt": assembled["system_prompt"],
+                "user_prompt": assembled["user_prompt"],
+                "few_shot": assembled["few_shot"],
+                "context": {"thread_id": thread_id, "phone": phone},
+            }
+            draft.save(
+                using="default",
+                update_fields=["intent_category", "property_data_used", "prompt_snapshot"],
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception(
+                "shadow_live: falló el armado de contexto (draft=%s, thread=%s)",
+                draft.pk, thread_id,
+            )
+            draft.blocked_reason = (
+                f"Fallo al armar contexto del borrador: {type(exc).__name__}: {exc}"
+            )
+            draft.save(using="default", update_fields=["blocked_reason"])
+            return draft
+
         token = bind_trace_id(f"bot_draft:{draft.pk}")
         try:
-            ok, _msg, response = LLMService.generate_response(
+            ok, msg, response = LLMService.generate_response(
                 system_prompt=assembled["system_prompt"],
                 user_prompt=assembled["user_prompt"],
                 max_tokens=600,
@@ -154,6 +176,13 @@ def _generate_shadow_draft_once(
                     "blocked_reason",
                 ],
             )
+        else:
+            # El Motor IA respondió con error: el borrador se deja visible y
+            # marcado (el lead no se pierde en silencio).
+            draft.blocked_reason = (
+                f"El Motor IA no generó respuesta: {msg or 'sin mensaje'}"
+            )
+            draft.save(using="default", update_fields=["blocked_reason"])
         return draft
     except OperationalError:
         # Se propaga para que el wrapper reintente con una conexión nueva.
