@@ -274,6 +274,32 @@ def create_rule(request):
     return redirect("response_intelligence:dashboard")
 
 
+@management_access_required
+@require_POST
+def edit_rule(request):
+    """Edita el texto y/o la categoría de una regla de negocio existente."""
+    rule = _get_rule_or_redirect(request, request.POST.get("rule_id"))
+    if rule is None:
+        return redirect("response_intelligence:dashboard")
+    rule_text = request.POST.get("rule_text", "").strip()
+    category = request.POST.get("category", "")
+    try:
+        if not rule_text:
+            raise ValueError("El texto de la regla no puede estar vacío")
+        if category not in BusinessRule.Category.values:
+            raise ValueError("Categoría inválida")
+        rule.rule_text = rule_text
+        rule.category = category
+        rule.save(using="default")
+        messages.success(
+            request,
+            f"Regla #{rule.pk} actualizada (aplica al prompt de los próximos drafts).",
+        )
+    except Exception as exc:  # noqa: BLE001
+        messages.error(request, f"Error al actualizar la regla: {exc}")
+    return redirect("response_intelligence:dashboard")
+
+
 def _get_rule_or_redirect(request, rule_id):
     """Resuelve una regla o redirige con mensaje (evita 404 crudo si el id
     ya no existe, llegó vacío o la página estaba desactualizada)."""

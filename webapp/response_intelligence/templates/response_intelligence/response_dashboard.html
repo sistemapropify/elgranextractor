@@ -154,10 +154,25 @@
       {% if business_rules %}
         <div style="display:grid;gap:8px">
           {% for rule in business_rules %}
-            <div class="pli-category-item" style="grid-template-columns:auto 140px minmax(0,1fr) auto auto;align-items:center;gap:10px">
+            <div class="pli-category-item" style="grid-template-columns:auto 140px minmax(0,1fr) auto auto auto;align-items:center;gap:10px">
               <span class="pli-badge {% if rule.active %}green{% else %}amber{% endif %}">{{ rule.get_category_display }}</span>
               <span class="pli-badge">{{ rule.active|yesno:"ACTIVA,INACTIVA" }}</span>
               <span style="font-size:13px;color:var(--pli-ink)">{{ rule.rule_text }}</span>
+              <details style="margin:0">
+                <summary style="cursor:pointer;list-style:none;background:#eef2ff;color:#3157d5;border:0;border-radius:8px;padding:6px 10px;font-weight:700;font-size:12px;text-align:center" title="Editar texto y categoría">Editar</summary>
+                <form method="post" action="{% url 'response_intelligence:edit_rule' %}" style="display:grid;grid-template-columns:180px minmax(0,1fr) auto auto;gap:8px;margin-top:8px;position:absolute;left:0;right:0;z-index:5;background:#fff;border:1px solid var(--pli-line);border-radius:10px;padding:10px;box-shadow:0 8px 20px rgba(23,32,51,.12)">
+                  {% csrf_token %}
+                  <input type="hidden" name="rule_id" value="{{ rule.pk }}">
+                  <select name="category" style="padding:8px;border:1px solid var(--pli-line);border-radius:8px">
+                    {% for value, label in business_rule_categories %}
+                      <option value="{{ value }}" {% if rule.category == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                  <input type="text" name="rule_text" value="{{ rule.rule_text }}" required style="padding:8px;border:1px solid var(--pli-line);border-radius:8px">
+                  <button class="pli-promote" type="submit" style="border:0;border-radius:8px;padding:8px 12px;font-weight:700;color:#fff;cursor:pointer">Guardar</button>
+                  <button type="button" class="pli-neutral" onclick="this.closest('details').open=false" style="border:0;border-radius:8px;padding:8px 12px;font-weight:700;color:#fff;cursor:pointer">Cancelar</button>
+                </form>
+              </details>
               <form method="post" action="{% url 'response_intelligence:toggle_rule' %}" style="margin:0">
                 {% csrf_token %}
                 <input type="hidden" name="rule_id" value="{{ rule.pk }}">

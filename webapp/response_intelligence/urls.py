@@ -56,4 +56,9 @@ urlpatterns = [
         views.delete_rule,
         name="delete_rule",
     ),
+    path(
+        "calidad-motor-ia/reglas/editar/",
+        views.edit_rule,
+        name="edit_rule",
+    ),
 ]
