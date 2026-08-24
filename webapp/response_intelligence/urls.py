@@ -40,4 +40,20 @@ urlpatterns = [
         views.toggle_shadow,
         name="toggle_shadow",
     ),
+    # Reglas de negocio del motor (prompt del sistema)
+    path(
+        "calidad-motor-ia/reglas/crear/",
+        views.create_rule,
+        name="create_rule",
+    ),
+    path(
+        "calidad-motor-ia/reglas/toggle/",
+        views.toggle_rule,
+        name="toggle_rule",
+    ),
+    path(
+        "calidad-motor-ia/reglas/eliminar/",
+        views.delete_rule,
+        name="delete_rule",
+    ),
 ]

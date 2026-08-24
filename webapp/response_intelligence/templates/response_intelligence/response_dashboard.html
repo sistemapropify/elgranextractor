@@ -120,6 +120,62 @@
 
   <section>
     <article class="pli-card">
+      <div class="pli-section-head"><div><h2>Reglas del motor (prompt del sistema)</h2><p>Reglas de negocio que se inyectan al prompt IA: prohibiciones, tono y escalamiento. Activa = se aplica a los próximos drafts.</p></div><span class="pli-chip">{{ business_rules|length }} reglas</span></div>
+
+      <div class="pli-section-head" style="margin-top:10px">
+        <h2 style="font-size:15px">Agregar regla</h2>
+      </div>
+      <form method="post" action="{% url 'response_intelligence:create_rule' %}" style="display:grid;grid-template-columns:180px minmax(0,1fr) auto;gap:8px;margin:8px 0 16px">
+        {% csrf_token %}
+        <select name="category" style="padding:8px;border:1px solid var(--pli-line);border-radius:8px">
+          {% for value, label in business_rule_categories %}
+            <option value="{{ value }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+        <input type="text" name="rule_text" placeholder="Ej. Nunca prometer visitas el mismo día" required style="padding:8px;border:1px solid var(--pli-line);border-radius:8px">
+        <button class="pli-good" type="submit" style="border:0;border-radius:8px;padding:9px 14px;font-weight:700;color:#fff;cursor:pointer">Crear</button>
+      </form>
+
+      {% if business_rules %}
+        <div style="display:grid;gap:8px">
+          {% for rule in business_rules %}
+            <div class="pli-category-item" style="grid-template-columns:auto 140px minmax(0,1fr) auto auto;align-items:center;gap:10px">
+              <span class="pli-badge {% if rule.active %}green{% else %}amber{% endif %}">{{ rule.get_category_display }}</span>
+              <span class="pli-badge">{{ rule.active|yesno:"ACTIVA,INACTIVA" }}</span>
+              <span style="font-size:13px;color:var(--pli-ink)">{{ rule.rule_text }}</span>
+              <form method="post" action="{% url 'response_intelligence:toggle_rule' %}" style="margin:0">
+                {% csrf_token %}
+                <input type="hidden" name="rule_id" value="{{ rule.pk }}">
+                <button type="submit" class="{% if rule.active %}pli-neutral{% else %}pli-good{% endif %}" style="border:0;border-radius:8px;padding:6px 10px;font-weight:700;color:#fff;cursor:pointer">{{ rule.active|yesno:"Desactivar,Activar" }}</button>
+              </form>
+              <form method="post" action="{% url 'response_intelligence:delete_rule' %}" style="margin:0" onsubmit="return confirm('¿Eliminar esta regla? Dejará de inyectarse al prompt.')">
+                {% csrf_token %}
+                <input type="hidden" name="rule_id" value="{{ rule.pk }}">
+                <button type="submit" class="pli-bad" style="border:0;border-radius:8px;padding:6px 10px;font-weight:700;color:#fff;cursor:pointer">Eliminar</button>
+              </form>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p>No hay reglas configuradas. Crea la primera con el formulario de arriba.</p>
+      {% endif %}
+
+      <details style="margin-top:12px">
+        <summary style="cursor:pointer;color:var(--pli-brand);font-weight:700">¿Qué son los guardrails deterministas?</summary>
+        <p class="pli-mini-note" style="margin:8px 0 0;line-height:1.5">
+          Además de estas reglas (que se inyectan como texto al modelo), el motor aplica
+          <strong>guardrails en código</strong> que se ejecutan SIEMPRE y no dependen de que el modelo obedezca:
+          <strong>escalamiento</strong> (palabras como "abogado", "denuncia", "urgente" → nunca genera con IA),
+          <strong>alucinación</strong> (menciona precio/m²/dirección sin datos reales de la propiedad → se bloquea) y
+          <strong>negociación de precio</strong> (regex de descuentos/porcentajes → se bloquea).
+          Estas reglas en código se modifican en <code>response_intelligence/guardrails.py</code> y no desde esta página.
+        </p>
+      </details>
+    </article>
+  </section>
+
+  <section>
+    <article class="pli-card">
       <div class="pli-section-head"><div><h2>Cola de revisión de drafts</h2><p>Compara la respuesta IA con el hilo humano y abre la cronología completa cuando necesites contrastar todo el contexto.</p></div><span class="pli-chip">{{ pending|length }} pendientes</span></div>
       {% if pending %}
         <div class="pli-review-list">

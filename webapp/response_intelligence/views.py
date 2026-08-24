@@ -12,7 +12,12 @@ from django.views.decorators.http import require_POST
 from lead_intelligence.views import management_access_required
 
 from .curation import CurationService
-from .models import BotResponseDraft, BotResponseEvaluation, CuratedExample
+from .models import (
+    BotResponseDraft,
+    BotResponseEvaluation,
+    BusinessRule,
+    CuratedExample,
+)
 from .services import get_ai_cost_summary_for_drafts, get_response_dashboard
 
 
@@ -37,6 +42,11 @@ def response_dashboard(request):
     context["shadow_enabled"] = shadow_mode_enabled()
     context["title"] = "Calidad del motor IA de respuestas"
     context["active_tab"] = "engine_ai"
+    # Reglas de negocio activas + todas (para gestionarlas desde el dashboard).
+    context["business_rules"] = list(
+        BusinessRule.objects.using("default").order_by("category", "id")
+    )
+    context["business_rule_categories"] = BusinessRule.Category.choices
     return render(
         request,
         "response_intelligence/response_dashboard.html",
@@ -191,4 +201,69 @@ def toggle_shadow(request):
         )
     except Exception as exc:  # noqa: BLE001
         messages.error(request, f"Error al cambiar el switch: {exc}")
+    return redirect("response_intelligence:dashboard")
+
+
+# --------------------------------------------------------------------------- #
+# Reglas de negocio del motor (se inyectan al prompt del sistema)
+# --------------------------------------------------------------------------- #
+@management_access_required
+@require_POST
+def create_rule(request):
+    """Crea una regla de negocio que se inyecta al prompt del sistema."""
+    rule_text = request.POST.get("rule_text", "").strip()
+    category = request.POST.get("category", "")
+    try:
+        if not rule_text:
+            raise ValueError("El texto de la regla no puede estar vacío")
+        if category not in BusinessRule.Category.values:
+            raise ValueError("Categoría inválida")
+        rule = BusinessRule.objects.using("default").create(
+            rule_text=rule_text,
+            category=category,
+            active=True,
+        )
+        messages.success(
+            request,
+            f"Regla #{rule.pk} creada en '{rule.get_category_display()}'. "
+            "Aplica al prompt de los próximos drafts.",
+        )
+    except Exception as exc:  # noqa: BLE001
+        messages.error(request, f"Error al crear la regla: {exc}")
+    return redirect("response_intelligence:dashboard")
+
+
+@management_access_required
+@require_POST
+def toggle_rule(request):
+    """Activa/desactiva una regla de negocio."""
+    rule = get_object_or_404(
+        BusinessRule.objects.using("default"), pk=request.POST.get("rule_id")
+    )
+    try:
+        rule.active = not rule.active
+        rule.save(using="default")
+        messages.success(
+            request,
+            f"Regla #{rule.pk} {'activada' if rule.active else 'desactivada'} "
+            "(deja de inyectarse al prompt).",
+        )
+    except Exception as exc:  # noqa: BLE001
+        messages.error(request, f"Error al cambiar la regla: {exc}")
+    return redirect("response_intelligence:dashboard")
+
+
+@management_access_required
+@require_POST
+def delete_rule(request):
+    """Elimina una regla de negocio (no se inyectará más al prompt)."""
+    rule = get_object_or_404(
+        BusinessRule.objects.using("default"), pk=request.POST.get("rule_id")
+    )
+    try:
+        pk = rule.pk
+        rule.delete(using="default")
+        messages.success(request, f"Regla #{pk} eliminada.")
+    except Exception as exc:  # noqa: BLE001
+        messages.error(request, f"Error al eliminar la regla: {exc}")
     return redirect("response_intelligence:dashboard")
