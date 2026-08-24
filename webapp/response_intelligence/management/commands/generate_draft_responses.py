@@ -42,6 +42,10 @@ class Command(BaseCommand):
         parser.add_argument("--limit", type=int, default=0)
         parser.add_argument("--workers", type=int, default=4)
         parser.add_argument("--all-messages", action="store_true", help="Genera un draft por cada mensaje de cliente después del primero.")
+        parser.add_argument("--include-first-message", action="store_true",
+                            help="Incluye el primer mensaje del lead (normalmente lo atiende la plantilla "
+                                 "determinista). Útil para backfills: garantiza que TODO lead entrante genere "
+                                 "un draft en el shadow, no solo los que tienen 2+ mensajes.")
         parser.add_argument("--dry-run", action="store_true")
 
     @staticmethod
@@ -53,7 +57,7 @@ class Command(BaseCommand):
         return ""
 
     @staticmethod
-    def _process_lead(row, *, mode, all_messages, dry_run):
+    def _process_lead(row, *, mode, all_messages, include_first_message, dry_run):
         close_old_connections()
         analysis = analyze_chat_history(row["chat_history"])
         messages = analysis.get("messages") or []
@@ -61,6 +65,10 @@ class Command(BaseCommand):
         # El primer mensaje lo responde el bot determinista de plantillas:
         # el motor IA interviene desde el segundo mensaje del lead.
         targets = client_messages[1:] if all_messages else (client_messages[1:2] or [])
+        # Backfill total: si el lead solo tiene el primer mensaje (el 23/08 el
+        # shadow en vivo falló en silencio con Decimal), analizarlo igualmente.
+        if not targets and include_first_message:
+            targets = client_messages[:1]
         if not targets:
             return row["id"], "skipped"
 
@@ -76,6 +84,12 @@ class Command(BaseCommand):
         for target in targets:
             text = str(target.get("text") or "").strip()
             if not text:
+                continue
+            # Idempotencia: no duplicar un draft ya existente para el mismo
+            # lead+mensaje (permite re-correr backfills sin duplicados).
+            if BotResponseDraft.objects.using("default").filter(
+                source_lead_id=row["id"], client_message=text
+            ).exists():
                 continue
             intent_category = CurationService._detect_category(text)
 
@@ -210,6 +224,7 @@ class Command(BaseCommand):
                     row,
                     mode=mode,
                     all_messages=options["all_messages"],
+                    include_first_message=options["include_first_message"],
                     dry_run=options["dry_run"],
                 ): row
                 for row in rows
