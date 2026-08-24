@@ -24,12 +24,15 @@ def extract_property_identity(text):
 
 _CAPTACION_PATTERNS = (
     r"quiero\s+vender",
-    r"vender\s+(?:mi|una\s+|un\s+|el\s+|la\s+)?(?:propiedad|casa|departamento|depa|terreno|local)",
-    r"estoy\s+vendiendo",
-    r"\bvendo\s+(?:mi\s+|una\s+|un\s+|el\s+|la\s+)?(?:propiedad|casa|departamento|depa|terreno|local)",
+    r"vender\s+(?:mi|una\s+|un\s+|el\s+|la\s+)?(?:propiedad|casa|departamento|depa|terreno|lote|local|inmueble|predio)",
+    r"estoy\s+(?:vendiendo|ofreciendo)",
+    r"\bvendo\s+(?:mi\s+|una\s+|un\s+|el\s+|la\s+)?(?:propiedad|casa|departamento|depa|terreno|lote|local|inmueble|predio)",
     r"poner\s+(?:mi\s+|en\s+venta)",
+    r"pongo\s+(?:mi\s+|en\s+venta)",
     r"tasaci[oó]n",
-    r"cu[aá]nto\s+(?:vale|me\s+(?:dan|ofrecen|pagar[ií]an))\s+(?:mi\s+|mi\s+propiedad|por\s+mi\s+)?(?:casa|departamento|depa|terreno|local|propiedad)?",
+    r"cu[aá]nto\s+(?:vale|me\s+(?:dan|ofrecen|pagar[ií]an))\s+(?:mi\s+|mi\s+propiedad|por\s+mi\s+)?(?:casa|departamento|depa|terreno|lote|local|propiedad|inmueble)?",
+    r"tengo\s+(?:un|una|unos|unas)\s+[a-záéíóúñ]+\s+en\s+venta",
+    r"(?:casa|departamento|depa|terreno|lote|local|propiedad|inmueble|predio)\s+en\s+venta",
 )
 _CAPTACION_RE = re.compile("|".join(_CAPTACION_PATTERNS), re.IGNORECASE)
 
