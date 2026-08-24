@@ -887,12 +887,13 @@ class SkillExecution(models.Model):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# MODELOS: Skill Evaluation Harness (SPEC) — eval set de enrutamiento + scorecard
+# MODELOS SPEC EVAL HARNESS — Eval set de enrutamiento + scorecard diario
+# (Fases 2 y 3). Migración: 0026_skill_eval_harness.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
 class SkillEvalCase(models.Model):
-    """Caso de prueba: query real -> skill que DEBERÍA seleccionarse."""
+    """Caso del eval set: una consulta real y la skill que DEBERÍA ganar."""
 
     query = models.TextField()
     expected_skill = models.CharField(max_length=100, db_index=True)
@@ -906,11 +907,11 @@ class SkillEvalCase(models.Model):
         verbose_name_plural = "Casos de Eval de Enrutamiento"
 
     def __str__(self):
-        return f"{self.query[:40]} -> {self.expected_skill}"
+        return f"[{self.expected_skill}] {self.query[:60]}"
 
 
 class SkillEvalRun(models.Model):
-    """Resultado de correr todo el eval set una vez (snapshot)."""
+    """Una corrida completa del eval set contra find_best_skill."""
 
     run_at = models.DateTimeField(auto_now_add=True)
     total_cases = models.IntegerField()
@@ -926,11 +927,11 @@ class SkillEvalRun(models.Model):
         ordering = ["-run_at"]
 
     def __str__(self):
-        return f"Eval {self.run_at:%Y-%m-%d %H:%M} acc={self.accuracy:.2%}"
+        return f"Run {self.run_at:%Y-%m-%d %H:%M} · {self.accuracy:.0%}"
 
 
 class SkillEvalResult(models.Model):
-    """Detalle por caso dentro de un run — para la matriz de confusión."""
+    """Resultado por caso de un SkillEvalRun."""
 
     run = models.ForeignKey(SkillEvalRun, on_delete=models.CASCADE, related_name="results")
     case = models.ForeignKey(SkillEvalCase, on_delete=models.CASCADE)
@@ -943,9 +944,15 @@ class SkillEvalResult(models.Model):
         verbose_name = "Resultado de Eval"
         verbose_name_plural = "Resultados de Eval"
 
+    def __str__(self):
+        return f"{self.case.expected_skill} → {self.predicted_skill} ({'OK' if self.is_correct else 'FAIL'})"
+
 
 class SkillDailyMetric(models.Model):
-    """Métrica agregada diaria por skill (tabla, no vista SQL en vivo)."""
+    """Scorecard diario por skill: ejecuciones, % éxito y latencias p50/p95.
+
+    Se alimenta con compute_daily_skill_metrics (usa percentiles, no AVG).
+    """
 
     skill_name = models.CharField(max_length=100, db_index=True)
     date = models.DateField(db_index=True)
@@ -964,7 +971,7 @@ class SkillDailyMetric(models.Model):
         unique_together = [("skill_name", "date")]
 
     def __str__(self):
-        return f"{self.skill_name} {self.date} rate={self.success_rate:.0%}"
+        return f"{self.skill_name} {self.date:%Y-%m-%d} · {self.success_rate:.0%}"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

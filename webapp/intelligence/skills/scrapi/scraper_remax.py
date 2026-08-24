@@ -90,17 +90,30 @@ def _ejecutar_scraping(
     import signal
 
     async def _abrir_navegador():
-        # __aenter__ en un await para poder ponerle timeout de arranque
-        return await AsyncCamoufox(
-            **camoufox_kwargs(
-                _progress_callback=lambda message: report({
-                    'percent': 0,
-                    'message': message,
-                }),
-                persistent_context=True,
-                user_data_dir='./camoufox_session',
+        # __aenter__ en un await para poder ponerle timeout de arranque.
+        # Se reporta CADA etapa del arranque para ver el proceso en vivo
+        # (dependencias -> binario -> spawn del navegador). En producción
+        # Camoufox va en headless (sin ventana), así que el dashboard es la
+        # única forma de ver que está arrancando.
+        report({
+            'percent': 0,
+            'message': 'Remax: verificando dependencias y binario de Camoufox...',
+        })
+        options = camoufox_kwargs(
+            _progress_callback=lambda message: report({
+                'percent': 0,
+                'message': f'Remax: {message}',
+            }),
+            persistent_context=True,
+            user_data_dir='./camoufox_session',
+        )
+        report({
+            'percent': 0,
+            'message': (
+                'Remax: binario listo; arrancando el proceso del navegador...'
             ),
-        ).__aenter__()
+        })
+        return await AsyncCamoufox(**options).__aenter__()
 
     async def _run():
         todas_raw = []
