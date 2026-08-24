@@ -15,9 +15,13 @@ from intelligence.agents.respuesta_inicial_whatsapp_agent import AgenteRespuesta
 from n8n_bridge.models import PropertyBotInitialResponse
 
 from .initial_property_config import get_bot_configuration, schedule_state
-from .initial_property_detector import extract_property_identity, title_is_consistent
+from .initial_property_detector import (
+    extract_property_identity,
+    title_is_consistent,
+    detect_captacion_intent,
+)
 from .initial_property_memory import save_initial_episode
-from .initial_property_renderer import render_initial_response
+from .initial_property_renderer import render_initial_response, render_captacion_response
 from .initial_property_validator import validate_property_payload, validate_rendered_response
 
 
@@ -119,6 +123,50 @@ def process_initial_message(payload):
         return _persist_ignore(message_id, thread_id, digest, normalized_phone, text, config, schedule, "OUTSIDE_SCHEDULE", started, contact_name=contact_name)
     if config.require_external_conversation_id and not external_id:
         return _persist_ignore(message_id, thread_id, digest, normalized_phone, text, config, schedule, "MISSING_CONVERSATION_ID", started, contact_name=contact_name)
+
+    # ── Captación: el cliente quiere VENDER una propiedad (no trae código PROP).
+    # Se atiende ANTES del chequeo de código para que estos leads reciban
+    # respuesta (hoy caían en NO_PROPERTY_CODE y se ignoraban).
+    if detect_captacion_intent(text):
+        reply = render_captacion_response(config)
+        latency = round((time.monotonic() - started) * 1000)
+        conversation_key = f"thread:{thread_id}"
+        try:
+            with transaction.atomic():
+                record = PropertyBotInitialResponse.objects.create(
+                    message_id=message_id,
+                    external_conversation_id=thread_id,
+                    conversation_property_key=conversation_key,
+                    phone_hash=digest,
+                    phone_last4=normalized_phone[-4:],
+                    phone=normalized_phone,
+                    contact_name=contact_name,
+                    incoming_text=text[:2000],
+                    response_text=reply,
+                    action="respond_once",
+                    reason_code="CAPTACION_SENT",
+                    evidence={"lead_type": "captacion", "intent": "vender"},
+                    bot_enabled=config.enabled,
+                    schedule_snapshot=_serialize_schedule(schedule),
+                    latency_ms=latency,
+                    responded_at=timezone.now(),
+                    review_status="pending",
+                )
+        except IntegrityError:
+            record = PropertyBotInitialResponse.objects.filter(
+                external_conversation_id=thread_id, action="respond_once"
+            ).first()
+            if record:
+                return _response_from_record(record, duplicate=True)
+            raise
+        episode = save_initial_episode(
+            phone, contact_name, text, reply,
+            {"lead_type": "captacion", "intent": "vender"},
+        )
+        if episode and episode.get("id"):
+            record.episode_id = episode["id"]
+            record.save(update_fields=["episode_id"])
+        return _response_from_record(record)
 
     identity = extract_property_identity(text)
     if not identity["codes"]:

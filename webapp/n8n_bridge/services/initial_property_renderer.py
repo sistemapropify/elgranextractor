@@ -9,6 +9,8 @@ TEMPLATES = {
     "terreno": "¡Gracias por escribirnos! 😊\nEste terreno se encuentra en {location}, tiene un área de {area} y un precio de {price}.\n\nEn este momento estamos fuera del horario de atención. Apenas uno de nuestros asesores esté disponible, continuará la conversación contigo.\n\nMientras tanto, ¿estás pensando en construir tu vivienda o te interesa conocer los parámetros para desarrollar un proyecto?",
     "local_comercial": "¡Gracias por escribirnos! 😊\nEste local comercial está ubicado en {location}, cuenta con {features} y tiene un precio de {price}.\n\nEn este momento estamos fuera del horario de atención. Apenas uno de nuestros asesores esté disponible, continuará la conversación contigo.\n\nMientras tanto, ¿qué tipo de negocio tienes pensado y qué características son indispensables para ti? Así puedo decirte si este local se adapta a lo que buscas.",
     "otro": "¡Gracias por escribirnos! 😊\nEsta propiedad está ubicada en {location}, cuenta con {features} y tiene un precio de {price}.\n\nEn este momento estamos fuera del horario de atención. Apenas uno de nuestros asesores esté disponible, continuará la conversación contigo.\n\nMientras tanto, ¿qué es indispensable para ti en esta propiedad? Así podemos decirte si cumple con lo que buscas.",
+    # Captación: el cliente quiere VENDER una propiedad (mensaje sin código PROP).
+    "captacion": "¡Hola! 👋 Claro, te ayudamos a vender tu propiedad.\nPara que uno de nuestros asesores valore tu propiedad y te contacte, cuéntanos:\n📍 Ubicación · 🏠 Tipo (casa, departamento, terreno, local) · 📐 Área · 💰 Precio referencial · 📄 Si tienes los documentos al día.\n\nTe atenderemos apenas esté disponible nuestro equipo.",
 }
 
 
@@ -51,3 +53,17 @@ def render_initial_response(data, config=None):
         if isinstance(custom, dict) and custom.get(data["property_type"]):
             templates = custom
     return templates[data["property_type"]].format(**values)
+
+
+def render_captacion_response(config=None):
+    """Plantilla para leads de captación ('quiero vender mi propiedad').
+
+    Usa la plantilla editable del dashboard si existe; si no, la literal.
+    No usa marcadores de propiedad porque no hay una propiedad referenciada.
+    """
+    templates = TEMPLATES
+    if config is not None:
+        custom = getattr(config, "message_templates", None)
+        if isinstance(custom, dict) and custom.get("captacion"):
+            templates = custom
+    return templates["captacion"]
