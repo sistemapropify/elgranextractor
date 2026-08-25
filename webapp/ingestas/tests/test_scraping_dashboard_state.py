@@ -32,7 +32,7 @@ class ScrapingDashboardStateTests(SimpleTestCase):
 
         self.assertEqual(updated, 2)
         filters = job_model.objects.filter.call_args_list[0].kwargs
-        self.assertEqual(filters["estado__in"], ("running", "paused"))
+        self.assertEqual(filters["estado__in"], ("idle", "running", "paused"))
         queryset.filter.assert_called_once()
         update = queryset.update.call_args.kwargs
         self.assertEqual(update["estado"], "error")

@@ -230,15 +230,5 @@ def camoufox_kwargs(**overrides) -> dict:
     ensure_camoufox_system_dependencies(progress_callback)
     ensure_camoufox_installed(progress_callback)
     kwargs = dict(_DEFAULTS, headless=is_headless_server())
-    if is_headless_server():
-        # En contenedores Linux (Azure App Service) el sandbox de Firefox no
-        # puede activarse (sin user namespaces) y el arranque se cuelga sin
-        # llegar a abrir el navegador. Estos flags son el fix estándar para
-        # correr Firefox/Camoufox headless en contenedores.
-        args = list(kwargs.get('args') or [])
-        for flag in ('--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'):
-            if flag not in args:
-                args.append(flag)
-        kwargs['args'] = args
     kwargs.update(overrides)
     return kwargs

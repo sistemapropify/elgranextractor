@@ -32,6 +32,10 @@ DEFAULT_SEARCH_URL = os.environ.get(
     "?category_id=1270772586445798&query=Viviendas%20en%20venta",
 )
 DEFAULT_MAX_ITEMS = int(os.environ.get("FACEBOOK_MARKETPLACE_MAX_ITEMS", "300"))
+SESSION_COOKIES_JSON = os.environ.get(
+    "FACEBOOK_MARKETPLACE_COOKIES_JSON", ""
+).strip()
+
 DEFAULT_IDLE_SCROLLS = int(os.environ.get("FACEBOOK_MARKETPLACE_IDLE_SCROLLS", "5"))
 SCROLL_WAIT_MS = int(os.environ.get("FACEBOOK_MARKETPLACE_SCROLL_WAIT_MS", "1800"))
 DETAIL_WAIT_MS = int(os.environ.get("FACEBOOK_MARKETPLACE_DETAIL_WAIT_MS", "900"))
@@ -353,8 +357,33 @@ async def scrape_marketplace(
     async with AsyncCamoufox(**kwargs) as browser:
         listing_page = await browser.new_page()
         await listing_page.set_viewport_size({"width": 1600, "height": 1000})
-        await emit(percent=1, processed=0, message="Facebook Marketplace: abriendo búsqueda en Arequipa")
-        await listing_page.goto(search_url, wait_until="domcontentloaded", timeout=120000)
+        if SESSION_COOKIES_JSON:
+            try:
+                cookies = json.loads(SESSION_COOKIES_JSON)
+                if isinstance(cookies, dict):
+                    cookies = cookies.get("cookies", [])
+                if not isinstance(cookies, list):
+                    raise ValueError("se esperaba una lista de cookies")
+                await browser.add_cookies(cookies)
+                await emit(
+                    percent=0,
+                    processed=0,
+                    message="Facebook Marketplace: sesión autorizada cargada",
+                )
+            except (TypeError, ValueError, json.JSONDecodeError) as exc:
+                raise RuntimeError(
+                    "FACEBOOK_SESSION_INVALID: el secreto de sesión no es "
+                    "JSON válido"
+                ) from exc
+
+        await emit(
+            percent=1,
+            processed=0,
+            message="Facebook Marketplace: abriendo búsqueda en Arequipa",
+        )
+        await listing_page.goto(
+            search_url, wait_until="domcontentloaded", timeout=120000
+        )
         await listing_page.wait_for_timeout(2500)
 
         initial_items = parse_listing_html(await listing_page.content())
@@ -363,14 +392,31 @@ async def scrape_marketplace(
                 percent=1,
                 processed=0,
                 message=(
-                    "Facebook Marketplace: inicia sesión en la ventana Camoufox; "
-                    f"se esperará hasta {LOGIN_WAIT_SECONDS}s."
+                    "Facebook Marketplace: inicia sesión en la ventana "
+                    f"Camoufox; se esperará hasta {LOGIN_WAIT_SECONDS}s."
                 ),
             )
             deadline = time.monotonic() + LOGIN_WAIT_SECONDS
             while time.monotonic() < deadline and not initial_items:
                 await listing_page.wait_for_timeout(3000)
-                initial_items = parse_listing_html(await listing_page.content())
+                initial_items = parse_listing_html(
+                    await listing_page.content()
+                )
+
+        if not initial_items and is_headless_server():
+            page_text = _plain(await listing_page.inner_text("body"))
+            auth_markers = (
+                "iniciar sesion",
+                "log in",
+                "correo electronico o numero de telefono",
+                "email or phone",
+            )
+            if any(marker in page_text for marker in auth_markers):
+                raise RuntimeError(
+                    "FACEBOOK_AUTH_REQUIRED: Azure no tiene una sesión "
+                    "autorizada. Configure FACEBOOK_MARKETPLACE_COOKIES_JSON "
+                    "como secreto; no se reintentará a ciegas."
+                )
 
         collected: dict[str, dict[str, Any]] = {
             item["id"]: item for item in initial_items

@@ -35,6 +35,8 @@ def _error_camoufox_no_reintentable(resultado) -> bool:
         'libgtk-3.so.0',
         'libx11-xcb.so.1',
         'libasound.so.2',
+        'facebook_auth_required',
+        'facebook_session_invalid',
         'xpcomglueload error',
         "couldn't load xpcom",
     )
@@ -149,10 +151,11 @@ def _crear_log(job, nivel: str, mensaje: str, portal: str = None,
 
 
 def _start_portal_heartbeat(job_id: int, portal: str, interval: int = 30):
-    """Mantiene vivo el job SIN escribir mensajes. El 'continúa activo' era
-    ruido que no reflejaba progreso real y confundía: se eliminó. Los trabajos
-    bloqueados los manejan el watchdog de huérfanas y los timeouts de los
-    scrapers (que ya reportan progreso real por etapas)."""
+    """Mantiene una evidencia persistente de que el portal sigue vivo.
+
+    El watchdog usa los logs recientes para distinguir un proceso lento de
+    uno huérfano, por lo que el heartbeat no puede ser solo una consulta.
+    """
     from ingestas.models import ScrapingJob
 
     stop_event = threading.Event()
@@ -164,6 +167,12 @@ def _start_portal_heartbeat(job_id: int, portal: str, interval: int = 30):
                 job = ScrapingJob.objects.filter(id=job_id).first()
                 if not job or job.estado not in ('running', 'paused'):
                     return
+                _crear_log(
+                    job,
+                    'debug',
+                    f'{portal.title()}: proceso activo; esperando el siguiente avance',
+                    portal=portal,
+                )
         finally:
             close_old_connections()
 
@@ -190,10 +199,21 @@ def _run_scraping(job_id: int):
         logger.error(f"ScrapingJob {job_id} no encontrado")
         return
 
+    # Claim compare-and-swap: solo un ejecutor puede mover idle -> running.
+    # Un segundo despacho del mismo job termina antes de abrir Camoufox.
+    claimed = ScrapingJob.objects.filter(
+        id=job_id, estado='idle'
+    ).update(estado='running', iniciado_en=timezone.now())
+    if claimed != 1:
+        logger.warning(
+            "ScrapingJob #%s ignorado: ya fue reclamado (estado=%s)",
+            job_id,
+            job.estado,
+        )
+        return
+
+    job.refresh_from_db()
     portales = (job.parametros or {}).get('portales') or ORDEN_DEFECTO
-    job.estado = 'running'
-    job.iniciado_en = timezone.now()
-    job.save()
 
     _crear_log(
         job,

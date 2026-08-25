@@ -1642,7 +1642,7 @@ from django.utils import timezone
 from .models import PropiedadesCompetencia, ScrapingJob, ScrapingLog
 
 
-SCRAPING_ACTIVE_STATES = ('running', 'paused')
+SCRAPING_ACTIVE_STATES = ('idle', 'running', 'paused')
 SCRAPING_DEFAULT_PORTALS = (
     'remax', 'adondevivir', 'properati', 'urbania',
     'facebook_marketplace',
@@ -1924,8 +1924,8 @@ class ScrapingControlView(View):
                 # el contexto persistente del siguiente trabajo.
                 stale_browsers_terminated = _terminate_scraping_browsers()
                 job = ScrapingJob.objects.create(
-                    estado='running',
-                    iniciado_en=timezone.now(),
+                    # Solo el primer ejecutor puede reclamar este trabajo.
+                    estado='idle',
                     parametros={'portales': portales or None},
                 )
 
@@ -2000,7 +2000,12 @@ class ScrapingStreamView(View):
 
     def get(self, request, job_id):
         def event_stream():
-            ultimo_id = 0
+            raw_last_id = (
+                request.headers.get('Last-Event-ID')
+                or request.GET.get('last_id')
+                or '0'
+            )
+            ultimo_id = int(raw_last_id) if str(raw_last_id).isdigit() else 0
             while True:
                 logs = ScrapingLog.objects.filter(
                     job_id=job_id, id__gt=ultimo_id
@@ -2016,7 +2021,7 @@ class ScrapingStreamView(View):
                         'propiedad_id': log.propiedad_id,
                         'timestamp': log.timestamp.strftime('%H:%M:%S'),
                     })
-                    yield f"data: {data}\n\n"
+                    yield f"id: {log.id}\ndata: {data}\n\n"
 
                 # Verificar si el job terminó
                 job = ScrapingJob.objects.filter(id=job_id).first()

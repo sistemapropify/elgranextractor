@@ -6,6 +6,7 @@ from django.test import SimpleTestCase
 
 from colas.scraping_tasks import (
     _actualizar_contadores,
+    _run_scraping,
     _error_camoufox_no_reintentable,
     _resultado_portal_valido,
 )
@@ -77,6 +78,30 @@ class ScrapingJobReportingTests(SimpleTestCase):
         self.assertEqual(job.estado_efectivo, "error")
         self.assertEqual(job.estado_display, "Error: sin resultados")
         self.assertIn("sin detectar", job.mensaje_error_display)
+
+    @patch("colas.scraping_tasks._instanciar_skill")
+    @patch("ingestas.models.ScrapingJob")
+    def test_duplicate_executor_does_not_open_browser(
+        self, job_model, instantiate_skill
+    ):
+        job = MagicMock(id=87, estado="running", parametros={})
+        job_model.objects.get.return_value = job
+        claim = job_model.objects.filter.return_value
+        claim.update.return_value = 0
+
+        _run_scraping(87)
+
+        claim.update.assert_called_once()
+        job.refresh_from_db.assert_not_called()
+
+        instantiate_skill.assert_not_called()
+    def test_facebook_auth_failure_is_not_retried(self):
+        result = SimpleNamespace(
+            message=(
+                "FACEBOOK_AUTH_REQUIRED: Azure no tiene una sesión autorizada"
+            )
+        )
+        self.assertTrue(_error_camoufox_no_reintentable(result))
 
     def test_missing_linux_library_is_not_retried(self):
         result = SimpleNamespace(

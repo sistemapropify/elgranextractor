@@ -34,11 +34,8 @@ playwright==1.52.0
 faiss-cpu==1.13.2
 pymupdf==1.27.2.3
 playwright==1.52.0
-# Camoufox: navegador stealth (fork de Firefox) usado por los scrapers
-# (scrapi/*_scraper.py e intelligence/skills/scrapi/*). Range en vez de pin
-# exacto: una vez verificado en un entorno de trabajo, fijar aquí la versión
-# instalada (p.ej. camoufox==0.4.x) para reproducibilidad.
-camoufox>=0.3.0
+# Camoufox validado localmente; fijado para que Azure use el mismo runtime.
+camoufox==0.5.4
 langgraph>=1.2.6
 scipy>=1.10.0
 # Pinned directly to the CPU-only wheel (no --extra-index-url) so uv's fast

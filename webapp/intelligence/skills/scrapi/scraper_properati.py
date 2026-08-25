@@ -112,7 +112,7 @@ def _ejecutar_scraping(
                 if not await emit_progress(
                     percent=int(((n - 1) / max(paginas, 1)) * 70),
                     processed=len(todas_raw),
-                    message=f'Properati: leyendo pÃ¡gina {n} de {paginas}',
+                    message=f'Properati: leyendo página {n} de {paginas}',
                 ):
                     break
                 url = BASE_URL if n == 1 else f"{BASE_URL}/{n}"
@@ -121,79 +121,53 @@ def _ejecutar_scraping(
                     await navegar_con_cloudflare(page, url)
                     props = await extraer_listado(page)
 
-                    # Completar cada lote antes de publicarlo en el dashboard.
-                    # Antes las coordenadas se buscaban recién después de leer
-                    # todas las páginas, por eso la tabla permanecía vacía
-                    # durante casi toda la ejecución.
+                    # Enriquecer y persistir cada ficha inmediatamente. Antes
+                    # se guardaba la pagina solo al terminar todos los detalles
+                    # y la tabla parecia congelada durante varios minutos.
                     for detail_index, prop in enumerate(props, 1):
                         if properati_source.detener:
                             break
                         # Completar tanto coordenadas como imagenes.
                         if (not prop.get('Coordenadas') or '/propiedadesimagenes/' not in str(prop.get('Imagen URL') or '')):
                             await extraer_detalle(page, prop)
-                            await asyncio.sleep(0.35)
-                        if detail_index == 1 or detail_index % 10 == 0:
-                            if not await emit_progress(
-                                percent=int(((n - 1) / max(paginas, 1)) * 99),
-                                processed=len(todas_raw) + detail_index,
-                                message=(
-                                    f'Properati: completando coordenadas de la '
-                                    f'página {n} ({detail_index}/{len(props)})'
-                                ),
-                            ):
-                                break
+                            await asyncio.sleep(0.15)
+
+                        saved = None
+                        if batch_callback:
+                            batch = estandarizar_lote([prop])
+                            if batch:
+                                saved = await asyncio.to_thread(
+                                    batch_callback, batch
+                                )
+                        if not await emit_progress(
+                            percent=int(((n - 1) / max(paginas, 1)) * 99),
+                            processed=(saved or {}).get(
+                                'total', len(todas_raw) + detail_index
+                            ),
+                            nuevas=(saved or {}).get('nuevas'),
+                            actualizadas=(saved or {}).get('actualizadas'),
+                            errores=(saved or {}).get('errores'),
+                            message=(
+                                f'Properati: página {n}/{paginas} · ficha '
+                                f'{detail_index}/{len(props)} guardada'
+                            ),
+                        ):
+                            break
 
                     todas_raw.extend(props)
                     print(f"   -> {len(props)} props (total: {len(todas_raw)})")
-                    if batch_callback and props:
-                        batch = estandarizar_lote(props)
-                        if batch:
-                            saved = await asyncio.to_thread(batch_callback, batch)
-                            if saved:
-                                if not await emit_progress(
-                                    percent=int((n / max(paginas, 1)) * 70),
-                                    processed=saved.get('total', len(todas_raw)),
-                                    nuevas=saved.get('nuevas', 0),
-                                    actualizadas=saved.get('actualizadas', 0),
-                                    errores=saved.get('errores', 0),
-                                    checkpoint_page=n,
-                                    message=(
-                                        f"Properati: {saved.get('total', 0)} "
-                                        f"procesadas ({saved.get('nuevas', 0)} nuevas)"
-                                    ),
-                                ):
-                                    break
+                    if not await emit_progress(
+                        percent=int((n / max(paginas, 1)) * 99),
+                        processed=len(todas_raw),
+                        checkpoint_page=n,
+                        message=f'Properati: página {n} completada y confirmada',
+                    ):
+                        break
                 except Exception as e:
                     print(f"   [ERROR] Pagina {n}: {e}")
                     raise RuntimeError(
                         f"Properati fallo en pagina {n}; checkpoint previo conservado"
                     ) from e
-
-            # FASE 2: Reintento de coordenadas o imagenes faltantes
-            if todas_raw:
-                incompletas = [p for p in todas_raw if not p.get('Coordenadas') or '/propiedadesimagenes/' not in str(p.get('Imagen URL') or '')]
-                if incompletas:
-                    print(f"\nFASE 2: Detalles pendientes ({len(incompletas)} props)...")
-                    for i, prop in enumerate(incompletas):
-                        if properati_source.detener:
-                            break
-                        if not await emit_progress(
-                            percent=70 + int((i / max(len(incompletas), 1)) * 29),
-                            processed=len(todas_raw),
-                            message=(
-                                f'Properati: completando detalles '
-                                f'{i + 1} de {len(incompletas)}'
-                                if i == 0 or (i + 1) % 25 == 0
-                                else ''
-                            ),
-                        ):
-                            break
-                        prop_id = prop.get('ID', '')
-                        ubic = prop.get('Ubicacion', '')
-                        print(f"  [{i+1}/{len(incompletas)}] ID: {prop_id} - {ubic}")
-                        await emit_progress(message=f'Properati: [{i+1}/{len(incompletas)}] ID: {prop_id} - {ubic}')
-                        await extraer_detalle(page, prop)
-                        await asyncio.sleep(0.5)
 
             await page.close()
 
