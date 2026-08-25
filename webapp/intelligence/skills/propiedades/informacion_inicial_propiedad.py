@@ -146,6 +146,17 @@ class InformacionInicialPropiedadSkill(BaseSkill):
                 "source": "property.price+currency.name",
             },
             "features": features,
+            # Inventario factual completo para repreguntas del mismo inmueble.
+            # features se conserva reducido a 1-2 atributos porque alimenta
+            # la plantilla inicial; los agentes conversacionales deben usar
+            # facts para no perder campos como land_area en una casa.
+            "facts": {
+                "bedrooms": row.get("bedrooms"),
+                "bathrooms": row.get("bathrooms"),
+                "built_area": row.get("built_area"),
+                "land_area": row.get("land_area"),
+                "garage_spaces": row.get("garage_spaces"),
+            },
             "is_visible": row.get("is_visible"),
             "property_status": row.get("property_status_name") or "",
         }

@@ -294,6 +294,19 @@ def _generate_shadow_draft_once(
             draft.save(using="default", update_fields=["blocked_reason"])
             return draft
 
+        # Las repreguntas factuales de una propiedad no se delegan al LLM:
+        # el agente ya consultó la ficha viva y el selector determinista limita
+        # la respuesta exactamente a los campos solicitados.
+        strict_response = str(assembled.get("strict_response") or "").strip()
+        if strict_response:
+            draft.generated_response = strict_response
+            draft.model_version = "deterministic-property-fact-v1"
+            draft.save(
+                using="default",
+                update_fields=["generated_response", "model_version"],
+            )
+            return draft
+
         token = bind_trace_id(f"bot_draft:{draft.pk}")
         try:
             ok, msg, response = LLMService.generate_response(

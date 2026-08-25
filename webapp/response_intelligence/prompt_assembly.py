@@ -5,6 +5,8 @@ Reglas de negocio + ejemplos curados + datos de propiedad en vivo (SELECT al CRM
 """
 
 import re
+import unicodedata
+from decimal import Decimal, InvalidOperation
 
 from n8n_bridge.services.initial_property_detector import extract_property_identity
 
@@ -21,6 +23,16 @@ class PromptAssemblyService:
     """Construye el prompt final y audita qué se inyectó (prompt_snapshot)."""
 
     MAX_FEW_SHOT = 6
+
+    FACT_LABELS = {
+        "land_area": "área del terreno",
+        "built_area": "área construida",
+        "bedrooms": "cantidad de dormitorios",
+        "bathrooms": "cantidad de baños",
+        "garage_spaces": "cantidad de estacionamientos",
+        "price": "precio",
+        "location": "ubicación",
+    }
 
     # ------------------------------------------------------------------ #
     # Reglas y tono
@@ -115,17 +127,94 @@ class PromptAssemblyService:
     # ------------------------------------------------------------------ #
     @staticmethod
     def fetch_live_property_data(property_code: str) -> dict:
-        """Consulta la propiedad en vivo (SELECT al CRM), como el bot de plantillas."""
-        from intelligence.skills.propiedades.informacion_inicial_propiedad import (
-            InformacionInicialPropiedadSkill,
+        """Consulta en vivo mediante el agente inmobiliario ya existente."""
+        from intelligence.agents.respuesta_inicial_whatsapp_agent import (
+            AgenteRespuestaInicialWhatsApp,
         )
 
-        result = InformacionInicialPropiedadSkill().execute(
-            {"property_code": property_code}
-        )
+        result = AgenteRespuestaInicialWhatsApp().resolve(property_code)
         if not result.success:
             return {"success": False, "reason_code": (result.metadata or {}).get("reason_code", "ERROR")}
         return {"success": True, "data": result.data}
+
+    @staticmethod
+    def _plain(value: str) -> str:
+        normalized = unicodedata.normalize("NFKD", str(value or ""))
+        return "".join(
+            character for character in normalized
+            if not unicodedata.combining(character)
+        ).lower()
+
+    @classmethod
+    def requested_property_fields(cls, client_message: str) -> list[str]:
+        """Mapea una repregunta factual a campos verificables concretos."""
+        text = cls._plain(client_message)
+        requested = []
+        patterns = (
+            ("land_area", r"\b(area|medida|metros?|m2)\b.{0,24}\b(terreno|lote)\b|\b(cuanto|cuantos)\b.{0,18}\b(de )?(terreno|lote)\b"),
+            ("built_area", r"\b(area|metros?|m2)\b.{0,20}\b(construid[ao]s?|construccion)\b|\bconstruid[ao]s?\b"),
+            ("bedrooms", r"\b(dormitorios?|habitaciones?|cuartos?)\b"),
+            ("bathrooms", r"\b(banos?|servicios? higienicos?)\b"),
+            ("garage_spaces", r"\b(cocheras?|estacionamientos?|garajes?)\b"),
+            ("price", r"\b(precio|cuesta|cost[oa]|valor)\b"),
+            ("location", r"\b(ubicacion|direccion|donde (esta|queda|se encuentra))\b"),
+        )
+        for field, pattern in patterns:
+            if re.search(pattern, text):
+                requested.append(field)
+        return requested
+
+    @staticmethod
+    def _format_number(value) -> str:
+        try:
+            number = Decimal(str(value))
+        except (InvalidOperation, TypeError, ValueError):
+            return str(value)
+        if number == number.to_integral_value():
+            return f"{int(number):,}"
+        return f"{number:,.2f}".rstrip("0").rstrip(".")
+
+    @classmethod
+    def strict_property_reply(cls, data: dict, requested_fields: list[str]) -> str:
+        """Render determinista: responde solo los campos pedidos por el lead."""
+        if not data or not requested_fields:
+            return ""
+        facts = data.get("facts") or {}
+        replies = []
+        missing = []
+        for field in requested_fields:
+            if field == "price":
+                price = data.get("price") or {}
+                value = price.get("amount")
+                if value is not None:
+                    prefix = "US$" if price.get("currency") == "USD" else "S/"
+                    replies.append(f"El precio es {prefix} {cls._format_number(value)}.")
+                else:
+                    missing.append(field)
+            elif field == "location":
+                value = str(data.get("location") or "").strip()
+                if value:
+                    replies.append(f"Se encuentra en {value}.")
+                else:
+                    missing.append(field)
+            else:
+                value = facts.get(field)
+                if value is None:
+                    missing.append(field)
+                elif field == "land_area":
+                    replies.append(f"Tiene {cls._format_number(value)} m² de terreno.")
+                elif field == "built_area":
+                    replies.append(f"Tiene {cls._format_number(value)} m² de área construida.")
+                elif field == "bedrooms":
+                    replies.append(f"Tiene {cls._format_number(value)} dormitorios.")
+                elif field == "bathrooms":
+                    replies.append(f"Tiene {cls._format_number(value)} baños.")
+                elif field == "garage_spaces":
+                    replies.append(f"Tiene {cls._format_number(value)} estacionamientos.")
+        if missing:
+            labels = ", ".join(cls.FACT_LABELS[field] for field in missing)
+            replies.append(f"No tengo verificado en la ficha {labels} de esta propiedad.")
+        return " ".join(replies)
 
     # ------------------------------------------------------------------ #
     # Ensamblado final
@@ -181,10 +270,15 @@ class PromptAssemblyService:
                 )
 
         property_data_used = []
+        requested_fields = cls.requested_property_fields(client_message)
+        strict_response = ""
         if property_code:
             live = cls.fetch_live_property_data(property_code)
             if live.get("success"):
                 property_data_used.append(live["data"])
+                strict_response = cls.strict_property_reply(
+                    live["data"], requested_fields
+                )
 
         # Bloque de ejemplo few-shot (solo si hay ejemplos aprobados).
         examples_block = ""
@@ -259,8 +353,15 @@ class PromptAssemblyService:
                     currency=price.get("currency", ""),
                 )
             )
-            for feature in (data.get("features") or []):
-                lines.append(f"- {feature.get('field', '')}: {feature.get('value', '')}")
+            facts = data.get("facts") or {}
+            fields_to_render = requested_fields or list(facts)
+            for field in fields_to_render:
+                value = facts.get(field)
+                if field == "price" or field == "location":
+                    continue
+                lines.append(
+                    f"- {field}: {value if value is not None else 'NO VERIFICADO'}"
+                )
             property_block = (
                 "\n\nDatos verificados de la propiedad consultada (NO inventes "
                 "datos fuera de esta lista):\n" + "\n".join(lines)
@@ -270,7 +371,9 @@ class PromptAssemblyService:
             "El cliente escribe:\n"
             f"{client_message}\n"
             f"{examples_block}{conversation_block}{property_block}\n\n"
-            "Responde de forma natural, breve y en español."
+            "Responde de forma natural, breve y en español. Contesta únicamente "
+            "lo preguntado en el último mensaje; no repitas precio, dormitorios, "
+            "baños ni otros datos que el cliente no haya solicitado."
         )
         return {
             "system_prompt": system_prompt,
@@ -281,6 +384,8 @@ class PromptAssemblyService:
             ],
             "property_data_used": property_data_used,
             "intent_category": intent_category,
+            "requested_fields": requested_fields,
+            "strict_response": strict_response,
             "memory": {
                 "conversation_id": str(conversation.id) if conversation else None,
                 "user_id": str(user.id) if user else None,

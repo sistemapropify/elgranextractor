@@ -149,6 +149,83 @@ class PromptAssemblyTests(SimpleTestCase):
         self.assertEqual(result["property_data_used"], [])
 
 
+    def test_detecta_area_de_terreno_en_repregunta(self):
+        fields = PromptAssemblyService.requested_property_fields(
+            "Cuanto tiene de terreno?"
+        )
+        self.assertEqual(fields, ["land_area"])
+
+    def test_respuesta_de_area_no_repite_datos_no_solicitados(self):
+        data = {
+            "price": {"amount": 500000, "currency": "USD"},
+            "facts": {
+                "land_area": 190,
+                "built_area": 360,
+                "bedrooms": 6,
+                "bathrooms": 5,
+            },
+        }
+
+        response = PromptAssemblyService.strict_property_reply(
+            data, ["land_area"]
+        )
+
+        self.assertEqual(response, "Tiene 190 m² de terreno.")
+        self.assertNotIn("500", response)
+        self.assertNotIn("dormitorios", response)
+        self.assertNotIn("baños", response)
+
+    @mock.patch.object(
+        PromptAssemblyService, "build_system_prompt", return_value="SISTEMA"
+    )
+    @mock.patch.object(PromptAssemblyService, "select_few_shot", return_value=[])
+    @mock.patch.object(
+        PromptAssemblyService,
+        "fetch_live_property_data",
+        return_value={
+            "success": True,
+            "data": {
+                "code": "PROP000096",
+                "title": "Casa en Cabaña María",
+                "property_type": "casa",
+                "location": "Cercado",
+                "price": {"amount": 500000, "currency": "USD"},
+                "facts": {
+                    "land_area": 190,
+                    "built_area": 360,
+                    "bedrooms": 6,
+                    "bathrooms": 5,
+                },
+            },
+        },
+    )
+    @mock.patch(
+        "response_intelligence.prompt_assembly.memory_bridge.resolve_memory",
+        return_value=(None, None, {}),
+    )
+    def test_repregunta_consulta_propiedad_activa_y_crea_respuesta_estricta(
+        self, _memory, fetch, _few_shot, _system
+    ):
+        result = PromptAssemblyService.assemble(
+            "Cuanto tiene de terreno?",
+            property_code="PROP000096",
+            conversation_messages=[
+                {
+                    "role": "user",
+                    "content": "Más información de PROP000096",
+                },
+            ],
+        )
+
+        fetch.assert_called_once_with("PROP000096")
+        self.assertEqual(result["requested_fields"], ["land_area"])
+        self.assertEqual(
+            result["strict_response"], "Tiene 190 m² de terreno."
+        )
+        self.assertIn("- land_area: 190", result["user_prompt"])
+        self.assertNotIn("- bedrooms:", result["user_prompt"])
+
+
 from response_intelligence.guardrails import (  # noqa: E402
     block_summary,
     is_escalation,
