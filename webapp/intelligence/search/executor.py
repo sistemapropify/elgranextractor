@@ -43,6 +43,15 @@ def _matches(actual: Any, condition: FilterCondition) -> bool:
     if actual is None:
         return False
 
+    if condition.operator == FilterOperator.IN:
+        if not isinstance(condition.value, (list, tuple, set)):
+            return False
+        left = str(actual).strip().casefold()
+        return left in {
+            str(candidate).strip().casefold()
+            for candidate in condition.value
+        }
+
     if condition.value_type in {'decimal', 'integer'}:
         try:
             left = Decimal(str(actual))
@@ -59,8 +68,6 @@ def _matches(actual: Any, condition: FilterCondition) -> bool:
         return left <= right
     if condition.operator == FilterOperator.GTE:
         return left >= right
-    if condition.operator == FilterOperator.IN:
-        return left in right
     if condition.operator == FilterOperator.ICONTAINS:
         return right in left
     return False

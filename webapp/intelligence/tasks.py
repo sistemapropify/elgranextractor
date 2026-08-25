@@ -150,7 +150,12 @@ def sincronizar_todas_colecciones_rag(self, force_full_sync: bool = False,
             if success:
                 logs.append({
                     'level': 'success',
-                    'message': f'  ✓ Sync OK: {stats.get("created",0)} creados, {stats.get("updated",0)} actualizados',
+                    'message': (
+                        f'  ✓ Sync OK: {stats.get("created",0)} creados, '
+                        f'{stats.get("updated",0)} actualizados, '
+                        f'{stats.get("pruned",0)} obsoletos eliminados, '
+                        f'{stats.get("embeddings_regenerated",0)} embeddings regenerados'
+                    ),
                     'timestamp': timezone.now().isoformat(),
                 })
             else:
@@ -160,9 +165,14 @@ def sincronizar_todas_colecciones_rag(self, force_full_sync: bool = False,
                     'timestamp': timezone.now().isoformat(),
                 })
             
-            # Reconstruir FAISS después del sync
+            # Reconstruir FAISS solo después de una sincronización íntegra.
             faiss_ok = False
+            faiss_audit = None
             try:
+                if not success:
+                    raise RuntimeError(
+                        'FAISS no se reconstruye porque la sincronización falló'
+                    )
                 logs.append({
                     'level': 'info',
                     'message': f'  Reconstruyendo índice FAISS...',
@@ -172,7 +182,11 @@ def sincronizar_todas_colecciones_rag(self, force_full_sync: bool = False,
                     collection.name,
                     RAGService.EMBEDDING_DIMENSIONS
                 )
-                faiss_ok = indexed > 0
+                faiss_audit = FAISSIndexManager.verify_collection(
+                    collection.name,
+                    RAGService.EMBEDDING_DIMENSIONS,
+                )
+                faiss_ok = bool(faiss_audit['consistent'])
                 if faiss_ok:
                     faiss_count += 1
                     message_combined = message + f' | FAISS: {indexed} vectores'
@@ -182,10 +196,10 @@ def sincronizar_todas_colecciones_rag(self, force_full_sync: bool = False,
                         'timestamp': timezone.now().isoformat(),
                     })
                 else:
-                    message_combined = message + f' | FAISS: 0 vectores'
+                    message_combined = message + f' | FAISS inconsistente: {faiss_audit}'
                     logs.append({
-                        'level': 'warn',
-                        'message': f'  ⚠ FAISS: 0 vectores (sin datos para indexar)',
+                        'level': 'error',
+                        'message': f'  ✗ FAISS inconsistente: {faiss_audit}',
                         'timestamp': timezone.now().isoformat(),
                     })
             except Exception as fe:
@@ -203,9 +217,11 @@ def sincronizar_todas_colecciones_rag(self, force_full_sync: bool = False,
                 'message': message_combined,
                 'stats': stats,
                 'faiss_rebuilt': faiss_ok,
+                'faiss_audit': faiss_audit,
             })
-            
-            if success:
+
+            collection_ok = success and faiss_ok
+            if collection_ok:
                 success_count += 1
             else:
                 error_count += 1

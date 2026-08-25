@@ -59,6 +59,7 @@ def _ejecutar_scraping(
     max_paginas: int = 0,
     start_page: int = 1,
     progress_callback=None,
+    batch_callback=None,
 ) -> list[Dict[str, Any]]:
     """
     Ejecuta el scraping de Remax y retorna lista de propiedades estandarizadas.
@@ -88,6 +89,19 @@ def _ejecutar_scraping(
     from camoufox.async_api import AsyncCamoufox
     from scrapi.camoufox_launcher import camoufox_kwargs
     import signal
+
+    def estandarizar_lote(raw_items):
+        fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        rows = []
+        for prop in raw_items:
+            try:
+                std = estandarizar(prop, fecha)
+                std['fuente'] = 'remax'
+                std['datos_crudos'] = dict(prop)
+                rows.append(std)
+            except Exception as exc:
+                logger.warning('[remax] Error estandarizando lote: %s', exc)
+        return rows
 
     async def _abrir_navegador():
         # __aenter__ en un await para poder ponerle timeout de arranque.
@@ -174,10 +188,19 @@ def _ejecutar_scraping(
                     await navegar_con_cloudflare(page, url)
                     props = await extraer_listado(page)
                     todas_raw.extend(props)
+                    saved = None
+                    if batch_callback and props:
+                        lote = estandarizar_lote(props)
+                        if lote:
+                            saved = await asyncio.to_thread(batch_callback, lote)
                     print(f"   -> {len(props)} props (total: {len(todas_raw)})")
                     if not report({
                         'percent': max(2, int((n / paginas) * 45)),
-                        'processed': len(todas_raw),
+                        'processed': (saved or {}).get('total', len(todas_raw)),
+                        'nuevas': (saved or {}).get('nuevas'),
+                        'actualizadas': (saved or {}).get('actualizadas'),
+                        'errores': (saved or {}).get('errores'),
+                        'checkpoint_page': n,
                         'message': (
                             f'Remax: página {n}/{paginas} · '
                             f'{len(todas_raw)} propiedades detectadas'
@@ -274,11 +297,29 @@ class ScraperRemaxSkill(BaseSkill):
             max_paginas = params.get('max_paginas', 0)
             start_page = params.get('start_page', 1)
             progress_callback = (context or {}).get('progress_callback')
+            incremental = {'total': 0, 'nuevas': 0, 'actualizadas': 0, 'errores': 0}
+
+            def guardar_lote(propiedades_lote):
+                resultado_lote = guardar_propiedades(propiedades_lote, fuente='remax')
+                for key in incremental:
+                    incremental[key] += int(resultado_lote.get(key, 0) or 0)
+                return incremental.copy()
+
             propiedades = _ejecutar_scraping(
-                max_paginas, start_page, progress_callback
+                max_paginas, start_page, progress_callback, guardar_lote
             )
 
             if not propiedades:
+                if int(start_page or 1) > 1:
+                    return SkillResult.ok(
+                        data={
+                            'portal': 'remax',
+                            **incremental,
+                            'resume_complete': True,
+                        },
+                        message='Remax: no quedan páginas después del checkpoint.',
+                        skill_name=self.name,
+                    )
                 return SkillResult.error(
                     message=(
                         'Remax no devolvió propiedades. Revise la navegación, '
@@ -287,7 +328,9 @@ class ScraperRemaxSkill(BaseSkill):
                     skill_name=self.name,
                 )
 
-            resultado = guardar_propiedades(propiedades, fuente='remax')
+            # Consolidación idempotente de los detalles obtenidos al final.
+            guardar_propiedades(propiedades, fuente='remax')
+            resultado = incremental
 
             return SkillResult.ok(
                 data={

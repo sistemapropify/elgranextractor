@@ -624,6 +624,15 @@ function updateUI(estado) {
         btnStop.disabled = false;
         dot.className = 'terminal-badge paused';
         title.textContent = '⏸️ Pausado';
+    } else if (estado === 'error' || estado === 'stopped') {
+        btnStart.innerHTML = '<i class="bi bi-play-fill"></i> Iniciar nueva ejecución';
+        btnPause.style.display = 'none';
+        btnResume.style.display = '';
+        btnResume.disabled = false;
+        btnStop.disabled = true;
+        btnStart.disabled = false;
+        dot.className = 'terminal-badge stopped';
+        title.textContent = estado === 'error' ? '❌ Error — puede reanudar' : '⏹️ Detenido — puede reanudar';
     } else {
         btnStart.innerHTML = '<i class="bi bi-play-fill"></i> Iniciar nueva ejecución';
         btnPause.style.display = '';

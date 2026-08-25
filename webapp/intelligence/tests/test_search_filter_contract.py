@@ -11,6 +11,42 @@ from intelligence.search.normalizer import SearchPlanNormalizer
 
 
 class SearchPlanNormalizerTests(SimpleTestCase):
+    def test_multiple_districts_use_in_with_minimum_usd_price(self):
+        for separator in (' y ', ' o ', ', '):
+            with self.subTest(separator=separator):
+                query = (
+                    f'casas en Cayma{separator}Yanahuara '
+                    'de más de 150000 dólares'
+                )
+                params = SearchPlanNormalizer.params_from_message(query)
+                plan = SearchPlanNormalizer.from_params(
+                    query=query,
+                    params=params,
+                    collections=['propiedadespropify'],
+                )
+                district = next(
+                    c for c in plan.conditions if c.logical_name == 'distrito'
+                )
+                minimum = next(
+                    c for c in plan.conditions if c.logical_name == 'precio_min'
+                )
+                self.assertEqual(params['distrito'], ['Cayma', 'Yanahuara'])
+                self.assertEqual(district.operator, FilterOperator.IN)
+                self.assertEqual(district.value, ['Cayma', 'Yanahuara'])
+                self.assertEqual(minimum.operator, FilterOperator.GTE)
+                self.assertEqual(float(minimum.value), 150000.0)
+                self.assertEqual(params['moneda'], 'USD')
+
+    def test_search_agent_fallback_does_not_collapse_district_list(self):
+        params = SearchAgent._extract_basic_intent(
+            'casas en Cerro Colorado y Cayma con más de 100000 dólares'
+        )
+
+        self.assertEqual(params['distrito'], ['Cerro Colorado', 'Cayma'])
+        self.assertEqual(params['tipo_propiedad'], 'Casa')
+        self.assertEqual(float(params['precio_min']), 100000.0)
+        self.assertEqual(params['moneda'], 'USD')
+
     def test_area_max_is_not_misclassified_as_price(self):
         params = SearchPlanNormalizer.params_from_message(
             'muéstrame terrenos en Cayma con menos de 500 metros'

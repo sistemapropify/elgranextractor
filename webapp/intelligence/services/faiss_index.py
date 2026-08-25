@@ -112,6 +112,9 @@ class FAISSIndexManager:
             logger.warning(f"No hay embeddings para construir índice de '{self.collection_name}'")
             return 0
 
+        if len(embeddings) != len(doc_ids):
+            raise ValueError("La cantidad de embeddings y document IDs no coincide")
+
         import faiss
 
         # Convertir bytes a numpy array
@@ -203,10 +206,7 @@ class FAISSIndexManager:
             if doc_id:
                 # FAISS IndexHNSWFlat usa distancia L2, no similitud coseno.
                 # Para vectores L2-normalizados: cos_sim = 1 - L2²/2
-                l2_dist = float(dist)
-                similarity = 1.0 - (l2_dist * l2_dist) / 2.0
-                if similarity < 0:
-                    similarity = 0.0
+                similarity = self.distance_to_similarity(float(dist))
                 results.append({
                     'document_id': doc_id,
                     'similarity': similarity,
@@ -214,6 +214,29 @@ class FAISSIndexManager:
                 })
 
         return results
+
+    @staticmethod
+    def distance_to_similarity(squared_l2_distance: float) -> float:
+        """Convierte la distancia L2 cuadrática de FAISS a coseno.
+
+        Para vectores normalizados, ``||a-b||² = 2 - 2*cos(a,b)``.
+        ``IndexHNSWFlat`` devuelve directamente esa distancia cuadrática.
+        """
+        return max(0.0, min(1.0, 1.0 - squared_l2_distance / 2.0))
+
+    def clear(self) -> None:
+        """Descarta el índice en memoria y sus archivos persistidos."""
+        self.index = None
+        self.id_map = {}
+        self.is_loaded = False
+        index_dir = self.get_index_dir()
+        for suffix in ('.faiss', '_id_map.pkl'):
+            path = os.path.join(index_dir, f'{self.collection_name}{suffix}')
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+            except OSError as exc:
+                logger.warning("No se pudo eliminar índice obsoleto %s: %s", path, exc)
 
     def _save(self):
         """Persiste el índice FAISS y el id_map a disco."""
@@ -287,6 +310,15 @@ class FAISSIndexManager:
                     logger.warning(f"No se pudo eliminar índice antiguo: {rm_err}")
                 return False
             
+            expected_positions = set(range(int(self.index.ntotal)))
+            if len(self.id_map) != self.index.ntotal or set(self.id_map) != expected_positions:
+                logger.warning(
+                    "Índice FAISS inconsistente para '%s': ntotal=%s, id_map=%s. Descartando.",
+                    self.collection_name, self.index.ntotal, len(self.id_map)
+                )
+                self.clear()
+                return False
+
             self.is_loaded = True
             logger.info(
                 f"Índice FAISS cargado para '{self.collection_name}': "
@@ -336,19 +368,82 @@ class FAISSIndexManager:
         instance = cls.get_instance(collection_name, dimension)
 
         # Obtener documentos con embedding de esta colección
-        docs = IntelligenceDocument.objects.filter(
+        docs = list(IntelligenceDocument.objects.filter(
             collection__name=collection_name,
             embedding__isnull=False
-        ).values_list('id', 'embedding')
+        ).values_list('id', 'embedding'))
 
         if not docs:
             logger.warning(f"No hay documentos con embedding para '{collection_name}'")
+            instance.clear()
             return 0
 
-        doc_ids = [str(doc[0]) for doc in docs]
-        embeddings = [doc[1] for doc in docs]
+        valid_docs = [
+            doc for doc in docs
+            if doc[1] is not None and len(doc[1]) == dimension * 4
+        ]
+        invalid_count = len(docs) - len(valid_docs)
+        if invalid_count:
+            logger.error(
+                "%s documentos de '%s' tienen embeddings con dimensión inválida",
+                invalid_count,
+                collection_name,
+            )
+        if not valid_docs:
+            instance.clear()
+            return 0
+
+        doc_ids = [str(doc[0]) for doc in valid_docs]
+        embeddings = [doc[1] for doc in valid_docs]
 
         return instance.build_index(embeddings, doc_ids)
+
+    @classmethod
+    def verify_collection(cls, collection_name: str, dimension: int = 384) -> Dict[str, Any]:
+        """Verifica igualdad exacta entre documentos válidos e IDs de FAISS."""
+        from ..models import IntelligenceDocument
+
+        instance = cls.get_instance(collection_name, dimension)
+        docs = list(IntelligenceDocument.objects.filter(
+            collection__name=collection_name,
+            embedding__isnull=False,
+        ).values_list('id', 'embedding'))
+        valid_ids = {
+            str(doc_id) for doc_id, embedding in docs
+            if embedding is not None and len(embedding) == dimension * 4
+        }
+        invalid_embeddings = len(docs) - len(valid_ids)
+        indexed_ids = set(instance.id_map.values()) if instance.is_loaded else set()
+        index_vectors = (
+            int(instance.index.ntotal)
+            if instance.is_loaded and instance.index is not None
+            else 0
+        )
+        index_dimension = (
+            int(instance.index.d)
+            if instance.is_loaded and instance.index is not None
+            else None
+        )
+        missing_ids = valid_ids - indexed_ids
+        extra_ids = indexed_ids - valid_ids
+        consistent = (
+            invalid_embeddings == 0
+            and index_vectors == len(valid_ids)
+            and len(indexed_ids) == len(valid_ids)
+            and not missing_ids
+            and not extra_ids
+            and (index_dimension == dimension or not valid_ids)
+        )
+        return {
+            'consistent': consistent,
+            'documents_with_embedding': len(docs),
+            'valid_embeddings': len(valid_ids),
+            'invalid_embeddings': invalid_embeddings,
+            'index_vectors': index_vectors,
+            'index_dimension': index_dimension,
+            'missing_ids': len(missing_ids),
+            'extra_ids': len(extra_ids),
+        }
 
     @classmethod
     def rebuild_all(cls, dimension: int = 384) -> Dict[str, int]:

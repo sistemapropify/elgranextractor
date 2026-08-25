@@ -31,17 +31,20 @@ DEFAULT_SEARCH_URL = os.environ.get(
     "https://www.facebook.com/marketplace/arequipa/search/"
     "?category_id=1270772586445798&query=Viviendas%20en%20venta",
 )
-DEFAULT_MAX_ITEMS = int(os.environ.get("FACEBOOK_MARKETPLACE_MAX_ITEMS", "300"))
+DEFAULT_MAX_ITEMS = int(os.environ.get("FACEBOOK_MARKETPLACE_MAX_ITEMS", "1500"))
 SESSION_COOKIES_JSON = os.environ.get(
     "FACEBOOK_MARKETPLACE_COOKIES_JSON", ""
 ).strip()
 
-DEFAULT_IDLE_SCROLLS = int(os.environ.get("FACEBOOK_MARKETPLACE_IDLE_SCROLLS", "5"))
-SCROLL_WAIT_MS = int(os.environ.get("FACEBOOK_MARKETPLACE_SCROLL_WAIT_MS", "1800"))
+DEFAULT_IDLE_SCROLLS = int(os.environ.get("FACEBOOK_MARKETPLACE_IDLE_SCROLLS", "15"))
+MIN_SCROLL_ROUNDS = int(os.environ.get("FACEBOOK_MARKETPLACE_MIN_SCROLL_ROUNDS", "20"))
+MAX_SCROLL_ROUNDS = int(os.environ.get("FACEBOOK_MARKETPLACE_MAX_SCROLL_ROUNDS", "250"))
+SCROLL_WAIT_MS = int(os.environ.get("FACEBOOK_MARKETPLACE_SCROLL_WAIT_MS", "2600"))
+SCROLL_WHEEL_BURST = int(os.environ.get("FACEBOOK_MARKETPLACE_SCROLL_WHEEL_BURST", "4"))
 DETAIL_WAIT_MS = int(os.environ.get("FACEBOOK_MARKETPLACE_DETAIL_WAIT_MS", "900"))
 LOGIN_WAIT_SECONDS = int(os.environ.get("FACEBOOK_MARKETPLACE_LOGIN_WAIT_SECONDS", "180"))
 MAX_IMAGES_PER_ITEM = int(os.environ.get("FACEBOOK_MARKETPLACE_MAX_IMAGES_PER_ITEM", "20"))
-TOTAL_TIMEOUT = int(os.environ.get("FACEBOOK_MARKETPLACE_TOTAL_TIMEOUT", "3600"))
+TOTAL_TIMEOUT = int(os.environ.get("FACEBOOK_MARKETPLACE_TOTAL_TIMEOUT", "10800"))
 PROFILE_DIR = os.environ.get(
     "FACEBOOK_MARKETPLACE_PROFILE_DIR",
     (
@@ -350,6 +353,57 @@ async def scrape_marketplace(
             return True
         return bool(await asyncio.to_thread(progress_callback, payload))
 
+    async def handle_auth_wall(page) -> bool:
+        """Cierra el aviso preliminar o falla ante el muro definitivo.
+
+        Facebook permite ver uno o dos lotes sin sesión, pero luego deja de
+        entregar resultados. Esa vista previa nunca debe marcarse como un
+        scraping completo.
+        """
+        dialogs = page.locator('[role="dialog"]')
+        for index in range(await dialogs.count()):
+            dialog = dialogs.nth(index)
+            try:
+                text = _plain(await dialog.inner_text(timeout=1500))
+            except Exception:
+                continue
+            if not any(marker in text for marker in (
+                've mas en facebook', 'inicia sesion', 'iniciar sesion',
+                'log in', 'sign up',
+            )):
+                continue
+
+            close = dialog.get_by_role(
+                'button', name=re.compile(r'^(cerrar|close)$', re.I)
+            )
+            if await close.count() and await close.first.is_visible():
+                await close.first.click()
+                await page.wait_for_timeout(600)
+                return True
+
+            if not is_headless_server():
+                await emit(
+                    percent=1,
+                    processed=0,
+                    message=(
+                        'Facebook Marketplace: inicia sesión en la ventana '
+                        f'Camoufox; se esperará hasta {LOGIN_WAIT_SECONDS}s.'
+                    ),
+                )
+                deadline = time.monotonic() + LOGIN_WAIT_SECONDS
+                while time.monotonic() < deadline:
+                    await page.wait_for_timeout(3000)
+                    if not await dialog.is_visible():
+                        return True
+
+            raise RuntimeError(
+                'FACEBOOK_AUTH_REQUIRED: Marketplace agotó la vista previa '
+                'pública y exige una sesión autenticada para seguir cargando '
+                'resultados. Configure FACEBOOK_MARKETPLACE_COOKIES_JSON o '
+                'inicie sesión en el perfil Camoufox dedicado.'
+            )
+        return False
+
     kwargs = camoufox_kwargs(
         persistent_context=True,
         user_data_dir=PROFILE_DIR,
@@ -385,6 +439,7 @@ async def scrape_marketplace(
             search_url, wait_until="domcontentloaded", timeout=120000
         )
         await listing_page.wait_for_timeout(2500)
+        await handle_auth_wall(listing_page)
 
         initial_items = parse_listing_html(await listing_page.content())
         if not initial_items and not is_headless_server():
@@ -422,19 +477,184 @@ async def scrape_marketplace(
             item["id"]: item for item in initial_items
         }
         idle_rounds = 0
-        while len(collected) < max_items and idle_rounds < DEFAULT_IDLE_SCROLLS:
+        scroll_round = 0
+        previous_height = 0
+        while (
+            len(collected) < max_items
+            and scroll_round < MAX_SCROLL_ROUNDS
+            and (
+                scroll_round < MIN_SCROLL_ROUNDS
+                or idle_rounds < DEFAULT_IDLE_SCROLLS
+            )
+        ):
+            scroll_round += 1
+            await handle_auth_wall(listing_page)
             before = len(collected)
             for item in parse_listing_html(await listing_page.content()):
                 collected.setdefault(item["id"], item)
-            idle_rounds = idle_rounds + 1 if len(collected) == before else 0
+
+            metrics = await listing_page.evaluate("""
+                () => {
+                    const anchors = [...document.querySelectorAll('a[href*="/marketplace/item/"]')];
+                    const findTarget = () => {
+                        let node = anchors.length ? anchors[anchors.length - 1].parentElement : null;
+                        while (node && node !== document.body) {
+                            const style = getComputedStyle(node);
+                            if (
+                                node.scrollHeight > node.clientHeight + 150
+                                && /(auto|scroll)/.test(style.overflowY || '')
+                            ) return node;
+                            node = node.parentElement;
+                        }
+                        const main = document.querySelector('[role="main"]');
+                        if (main) {
+                            const candidates = [main, ...main.querySelectorAll('div')]
+                                .filter(el => el.scrollHeight > el.clientHeight + 300)
+                                .sort((a, b) => b.scrollHeight - a.scrollHeight);
+                            if (candidates.length) return candidates[0];
+                        }
+                        return document.scrollingElement || document.documentElement;
+                    };
+                    const target = findTarget();
+                    return {
+                        y: target.scrollTop || window.scrollY || 0,
+                        height: target.scrollHeight || document.documentElement.scrollHeight || 0,
+                        viewport: target.clientHeight || window.innerHeight || 900,
+                        target: target === document.scrollingElement ? 'document' : (
+                            target.getAttribute('role') || target.tagName || 'container'
+                        ),
+                        visibleCards: anchors.length,
+                        scrollables: [...document.querySelectorAll('div')].filter(el => {
+                            const style = getComputedStyle(el);
+                            return el.scrollHeight > el.clientHeight + 150
+                                && /(auto|scroll)/.test(style.overflowY || '');
+                        }).length
+                    };
+                }
+            """)
+            height_grew = int(metrics.get("height", 0) or 0) > previous_height
+            previous_height = max(previous_height, int(metrics.get("height", 0) or 0))
+            if len(collected) > before or height_grew:
+                idle_rounds = 0
+            else:
+                idle_rounds += 1
+
             if not await emit(
                 percent=min(35, max(2, int(len(collected) / max(max_items, 1) * 35))),
                 processed=0,
-                message=f"Facebook Marketplace: {len(collected)} anuncios detectados; desplazando resultados",
+                message=(
+                    f"Facebook Marketplace: {len(collected)} anuncios únicos; "
+                    f"scroll {scroll_round}, espera {idle_rounds}/{DEFAULT_IDLE_SCROLLS}, "
+                    f"contenedor={metrics.get('target')}, visibles={metrics.get('visibleCards')}, "
+                    f"scrollables={metrics.get('scrollables')}"
+                ),
             ):
                 return []
-            await listing_page.evaluate("() => { window.scrollTo(0, document.body.scrollHeight); return true; }")
-            await listing_page.wait_for_timeout(SCROLL_WAIT_MS + random.randint(0, 700))
+
+            # Facebook virtualiza la grilla: saltar directamente al final suele
+            # dejar únicamente las primeras ~24 tarjetas. Un desplazamiento de
+            # viewport dispara los observadores de lazy-loading gradualmente.
+            moved = await listing_page.evaluate("""
+                ({viewport}) => {
+                    const anchors = [...document.querySelectorAll('a[href*="/marketplace/item/"]')];
+                    const last = anchors[anchors.length - 1];
+                    let target = last?.parentElement || null;
+                    while (target && target !== document.body) {
+                        const style = getComputedStyle(target);
+                        if (
+                            target.scrollHeight > target.clientHeight + 150
+                            && /(auto|scroll)/.test(style.overflowY || '')
+                        ) break;
+                        target = target.parentElement;
+                    }
+                    if (!target || target === document.body) {
+                        const main = document.querySelector('[role="main"]');
+                        const candidates = main
+                            ? [main, ...main.querySelectorAll('div')]
+                                .filter(el => el.scrollHeight > el.clientHeight + 300)
+                                .sort((a, b) => b.scrollHeight - a.scrollHeight)
+                            : [];
+                        target = candidates[0] || document.scrollingElement || document.documentElement;
+                    }
+                    const before = target.scrollTop;
+                    last?.scrollIntoView({block: 'end', behavior: 'instant'});
+                    target.scrollBy({
+                        top: Math.max(650, viewport * 0.82),
+                        left: 0,
+                        behavior: 'instant'
+                    });
+                    return target.scrollTop !== before;
+                }
+            """, {"viewport": int(metrics.get("viewport", 900) or 900)})
+
+            # Fallback de entrada real: ayuda cuando React intercepta el wheel
+            # sobre la grilla y el contenedor no expone overflow CSS estable.
+            if not moved:
+                await listing_page.mouse.move(1200, 850)
+            wheel_distance = max(700, int(metrics.get("viewport", 900) or 900))
+            for _ in range(max(1, SCROLL_WHEEL_BURST)):
+                await listing_page.mouse.wheel(0, wheel_distance)
+                await listing_page.wait_for_timeout(180 + random.randint(0, 120))
+
+            # Último recurso para las variantes donde Facebook reparte el
+            # desplazamiento entre varios contenedores React. Se desplazan
+            # simultáneamente únicamente los elementos que realmente tienen
+            # overflow vertical y la última tarjeta se vuelve a poner en vista.
+            await listing_page.evaluate("""
+                () => {
+                    const scrollables = [...document.querySelectorAll('div')].filter(el => {
+                        const style = getComputedStyle(el);
+                        return el.scrollHeight > el.clientHeight + 150
+                            && /(auto|scroll)/.test(style.overflowY || '');
+                    });
+                    for (const el of scrollables) {
+                        el.scrollTop += Math.max(600, el.clientHeight * 0.9);
+                        el.dispatchEvent(new Event('scroll', {bubbles: true}));
+                    }
+                    const anchors = document.querySelectorAll('a[href*="/marketplace/item/"]');
+                    anchors[anchors.length - 1]?.scrollIntoView({block: 'end', behavior: 'instant'});
+                    window.scrollBy(0, Math.max(700, window.innerHeight * 0.9));
+                }
+            """)
+            await listing_page.keyboard.press("PageDown")
+
+            # Muestrear varias veces: las tarjetas aparecen después del fetch y
+            # Facebook puede retirar las anteriores del DOM. `collected`
+            # conserva todos los IDs vistos durante la sesión.
+            samples = 4 if idle_rounds else 2
+            for _ in range(samples):
+                await listing_page.wait_for_timeout(
+                    max(500, SCROLL_WAIT_MS // samples) + random.randint(0, 250)
+                )
+                sample_before = len(collected)
+                for item in parse_listing_html(await listing_page.content()):
+                    collected.setdefault(item["id"], item)
+                if len(collected) > sample_before:
+                    idle_rounds = 0
+                await handle_auth_wall(listing_page)
+
+            # En algunos diseños el feed ofrece un botón explícito además del
+            # infinite scroll. Solo se pulsa cuando su texto indica resultados.
+            await listing_page.evaluate("""
+                () => {
+                    const pattern = /^(ver|mostrar|cargar|see|show|load)\\s+(m[aá]s\\s+)?(resultados?|anuncios?|listings?|results?)$/i;
+                    const candidates = [...document.querySelectorAll('[role="button"], button')];
+                    const target = candidates.find(el => pattern.test((el.innerText || '').trim()));
+                    if (target) target.click();
+                    return Boolean(target);
+                }
+            """)
+
+        if (
+            len(collected) <= len(initial_items)
+            and len(initial_items) >= 20
+            and max_items > len(initial_items)
+        ):
+            raise RuntimeError(
+                "Facebook Marketplace mantuvo el primer bloque de "
+                f"{len(initial_items)} anuncios después de {scroll_round} scrolls; "
+                "el listado no avanzó y no se marcará falsamente como completado."
+            )
 
         if not collected:
             page_text = _plain(await listing_page.inner_text("body"))

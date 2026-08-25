@@ -1811,6 +1811,8 @@ def _launch_scraping_job(job_id):
     if execution_mode == 'celery':
         scraping_task.apply_async(args=(job_id,), retry=False)
         return 'celery'
+    if execution_mode == 'watchdog':
+        return 'watchdog'
 
     thread = threading.Thread(
         target=scraping_task_run,
@@ -1965,13 +1967,39 @@ class ScrapingControlView(View):
             }, status=200 if updated else 409)
 
         elif action == 'resume' and job_id:
-            updated = ScrapingJob.objects.filter(
-                id=job_id, estado='paused'
-            ).update(estado='running')
+            job = ScrapingJob.objects.filter(id=job_id).first()
+            if not job:
+                return JsonResponse(
+                    {'success': False, 'error': 'Trabajo no encontrado.'},
+                    status=404,
+                )
+
+            if job.estado == 'paused':
+                updated = ScrapingJob.objects.filter(
+                    id=job_id, estado='paused'
+                ).update(estado='running')
+                execution_mode = 'existing'
+            elif job.estado in ('error', 'stopped'):
+                # El proceso anterior ya no está vivo: liberar Camoufox,
+                # volver el job reclamable y despachar desde sus checkpoints.
+                _terminate_scraping_browsers()
+                updated = ScrapingJob.objects.filter(
+                    id=job_id, estado__in=('error', 'stopped')
+                ).update(
+                    estado='idle',
+                    completado_en=None,
+                    mensaje_error=None,
+                    portal_actual=None,
+                )
+                execution_mode = _launch_scraping_job(job.id) if updated else None
+            else:
+                updated = 0
+                execution_mode = None
             return JsonResponse({
                 'success': bool(updated),
                 'estado': 'running' if updated else None,
-                'error': '' if updated else 'El trabajo no está pausado.',
+                'execution_mode': execution_mode,
+                'error': '' if updated else 'El trabajo no se puede reanudar en su estado actual.',
             }, status=200 if updated else 409)
 
         elif action == 'stop' and job_id:

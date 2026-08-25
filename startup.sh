@@ -144,8 +144,29 @@ echo "  Migrations running in background (log: $MIGRATE_LOG)."
 # ── Return to wwwroot for gunicorn context ──
 cd "$APP_ROOT"
 
+# ── Persistent scraping worker/watchdog ──
+# Runs outside Gunicorn, so web-worker recycling does not kill an active
+# scrape. Checkpoints are stored in SQL and recovered after container restarts.
+export SCRAPING_EXECUTION_MODE="${SCRAPING_EXECUTION_MODE:-watchdog}"
+SCRAPING_WATCHDOG_LOG="/home/LogFiles/scraping-watchdog.log"
+if [ "$SCRAPING_EXECUTION_MODE" = "watchdog" ]; then
+    echo "[5/6] Starting persistent scraping watchdog..."
+    (
+        set +e
+        cd "$APP_ROOT/webapp"
+        while true; do
+            echo "[$(date -u)] Starting scraping watchdog..."
+            python manage.py scraping_watchdog
+            exit_code=$?
+            echo "[$(date -u)] Watchdog exited ($exit_code); restarting in 10s."
+            sleep 10
+        done
+    ) >> "$SCRAPING_WATCHDOG_LOG" 2>&1 &
+    echo "  Watchdog log: $SCRAPING_WATCHDOG_LOG"
+fi
+
 # ── Start Gunicorn ──
-echo "[5/6] Starting Gunicorn..."
+echo "[6/6] Starting Gunicorn..."
 echo "  Port: ${PORT:-8000}"
 echo "  Workers: 1 (memory-safe Azure mode)"
 echo "  Timeout: 600s (lazy model load)"

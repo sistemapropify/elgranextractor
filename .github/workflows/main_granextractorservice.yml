@@ -73,6 +73,8 @@ jobs:
           grep -Fq 'propifai-camoufox-deps.installing' startup.sh
           grep -Fq 'libgtk-3-0' startup.sh
           grep -Fq 'timeout 90 python manage.py migrate' startup.sh
+          grep -Fq 'python manage.py scraping_watchdog' startup.sh
+          grep -Fq 'SCRAPING_EXECUTION_MODE' startup.sh
           grep -Fq 'exec gunicorn' startup.sh
           ! grep -Fq 'prepare_camoufox' startup.sh
 

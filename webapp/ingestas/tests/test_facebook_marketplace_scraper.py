@@ -2,6 +2,9 @@ from django.test import SimpleTestCase
 
 from colas.scraping_tasks import _instanciar_skill
 from scrapi.facebook_marketplace_scraper import (
+    DEFAULT_IDLE_SCROLLS,
+    DEFAULT_MAX_ITEMS,
+    MIN_SCROLL_ROUNDS,
     parse_detail_html,
     parse_listing_html,
     parse_price,
@@ -10,6 +13,20 @@ from scrapi.facebook_marketplace_scraper import (
 
 
 class FacebookMarketplaceParserTests(SimpleTestCase):
+    def test_infinite_scroll_defaults_do_not_stop_at_first_grid(self):
+        self.assertGreaterEqual(DEFAULT_MAX_ITEMS, 1500)
+        self.assertGreater(DEFAULT_IDLE_SCROLLS, 5)
+        self.assertGreaterEqual(MIN_SCROLL_ROUNDS, 20)
+
+    def test_auth_required_marker_is_non_retryable(self):
+        from types import SimpleNamespace
+        from colas.scraping_tasks import _error_camoufox_no_reintentable
+
+        result = SimpleNamespace(
+            message='FACEBOOK_AUTH_REQUIRED: Marketplace exige iniciar sesión'
+        )
+        self.assertTrue(_error_camoufox_no_reintentable(result))
+
     def test_listing_uses_stable_item_id_and_preserves_title_with_en(self):
         html = """
         <a href="/marketplace/item/4489921447932037/?ref=search">

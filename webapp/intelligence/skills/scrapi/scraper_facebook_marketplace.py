@@ -65,6 +65,16 @@ class ScraperFacebookMarketplaceSkill(BaseSkill):
                 skill_name=self.name,
             )
         if not rows:
+            if int(params.get("start_page") or 1) > 1:
+                return SkillResult.ok(
+                    data={
+                        "portal": "facebook_marketplace",
+                        **incremental,
+                        "resume_complete": True,
+                    },
+                    message="Facebook Marketplace: no quedan fichas después del checkpoint.",
+                    skill_name=self.name,
+                )
             return SkillResult.error(
                 message="Facebook Marketplace no devolvió anuncios procesables.",
                 skill_name=self.name,

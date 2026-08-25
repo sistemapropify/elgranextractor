@@ -653,8 +653,13 @@ def collection_sync(request, collection_id):
                         collection.name,
                         RAGService.EMBEDDING_DIMENSIONS
                     )
+                    audit = FAISSIndexManager.verify_collection(collection.name, RAGService.EMBEDDING_DIMENSIONS)
+                    if not audit['consistent']:
+                        raise RuntimeError(f"Auditoría FAISS falló: {audit}")
                 except Exception as faiss_err:
-                    logger.warning(f"No se pudo reconstruir FAISS: {faiss_err}")
+                    logger.exception("No se pudo reconstruir/verificar FAISS")
+                    messages.error(request, f'Sync de datos completado, pero FAISS falló: {faiss_err}')
+                    return redirect('intelligence:collections_dashboard')
                 
                 msg = (
                     f'Sync: {stats.get("total_processed", 0)} procesados, '
@@ -755,8 +760,12 @@ def collection_sync_all(request):
                     
                     with _SYNC_TASK_LOCK:
                         if task_id in _SYNC_TASKS:
-                            _SYNC_TASKS[task_id]['state'] = 'SUCCESS'
+                            _SYNC_TASKS[task_id]['state'] = (
+                                'SUCCESS' if result.get('success') else 'FAILURE'
+                            )
                             _SYNC_TASKS[task_id]['result'] = result
+                            if not result.get('success'):
+                                _SYNC_TASKS[task_id]['error'] = result.get('message')
                     
                     _log.info(f"[ThreadSync] Tarea {task_id} completada exitosamente")
                     
@@ -850,6 +859,9 @@ def collection_sync_status(request, task_id):
         elif async_result.state == 'SUCCESS':
             response['meta'] = async_result.result or {}
             response['result'] = async_result.result
+            if isinstance(async_result.result, dict) and not async_result.result.get('success', True):
+                response['state'] = 'FAILURE'
+                response['error'] = async_result.result.get('message', 'La sincronización terminó con errores')
         elif async_result.state == 'FAILURE':
             response['meta'] = {
                 'current': 0,
@@ -968,6 +980,15 @@ def collection_sync_api(request, collection_id):
                     collection_id=collection_id,
                     force_full_sync=force_full,
                 )
+
+            faiss_audit = None
+            if success:
+                from .services.faiss_index import FAISSIndexManager
+                FAISSIndexManager.rebuild_for_collection(collection.name, RAGService.EMBEDDING_DIMENSIONS)
+                faiss_audit = FAISSIndexManager.verify_collection(collection.name, RAGService.EMBEDDING_DIMENSIONS)
+                if not faiss_audit['consistent']:
+                    success = False
+                    message = f"Sincronización de datos correcta, auditoría FAISS fallida: {faiss_audit}"
             
             return Response({
                 'success': success,
@@ -975,6 +996,7 @@ def collection_sync_api(request, collection_id):
                 'stats': stats,
                 'collection_id': str(collection.id),
                 'collection_name': collection.name,
+                'faiss_audit': faiss_audit,
             })
         
         except IntelligenceCollection.DoesNotExist:

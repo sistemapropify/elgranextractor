@@ -59,10 +59,16 @@ class Command(BaseCommand):
             # Paso 1: Sync
             self.stdout.write(f'[{timezone.now():%H:%M:%S}] [INFO] Iniciando sincronización...')
             try:
-                success, message, stats = RAGService.sync_collection(
-                    collection_id=collection.id,
-                    force_full_sync=force
-                )
+                if collection.table_name:
+                    success, message, stats = RAGService.sync_collection_dynamic(
+                        collection_name=collection.name,
+                        force_full_sync=force,
+                    )
+                else:
+                    success, message, stats = RAGService.sync_collection(
+                        collection_id=collection.id,
+                        force_full_sync=force
+                    )
 
                 if success:
                     self.stdout.write(self.style.SUCCESS(
@@ -95,6 +101,9 @@ class Command(BaseCommand):
                     collection.name,
                     RAGService.EMBEDDING_DIMENSIONS
                 )
+                audit = FAISSIndexManager.verify_collection(collection.name, RAGService.EMBEDDING_DIMENSIONS)
+                if not audit['consistent']:
+                    raise RuntimeError(f'Auditoría FAISS falló: {audit}')
                 if indexed > 0:
                     self.stdout.write(self.style.SUCCESS(
                         f'[{timezone.now():%H:%M:%S}] [OK] FAISS: {indexed} vectores indexados'

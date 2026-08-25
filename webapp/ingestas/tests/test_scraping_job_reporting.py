@@ -19,6 +19,12 @@ from intelligence.skills.scrapi.scraper_urbania import ScraperUrbaniaSkill
 
 
 class ScrapingJobReportingTests(SimpleTestCase):
+    def test_scraping_task_has_browser_appropriate_time_limit(self):
+        from colas.scraping_tasks import scraping_task
+
+        self.assertGreaterEqual(scraping_task.time_limit, 7200)
+        self.assertGreater(scraping_task.time_limit, scraping_task.soft_time_limit)
+
     def test_history_template_compiles(self):
         self.assertIsNotNone(
             get_template("ingestas/scraping_historial.html")
@@ -130,6 +136,13 @@ class ScrapingJobReportingTests(SimpleTestCase):
             data={"total": 3, "nuevas": 1, "actualizadas": 2},
         )
 
+        self.assertTrue(_resultado_portal_valido(result))
+
+    def test_resumed_portal_with_exhausted_checkpoint_is_valid(self):
+        result = SimpleNamespace(
+            success=True,
+            data={'total': 0, 'resume_complete': True},
+        )
         self.assertTrue(_resultado_portal_valido(result))
 
     @patch("ingestas.models.ScrapingJob")

@@ -87,6 +87,16 @@ class SearchPlanNormalizer:
             value = params.get(logical_name)
             if value is None or value == '':
                 continue
+            condition_operator = operator
+            if logical_name == 'distrito' and isinstance(value, (list, tuple, set)):
+                value = [
+                    cls._coerce(item, value_type, logical_name)
+                    for item in value
+                    if str(item).strip()
+                ]
+                if not value:
+                    continue
+                condition_operator = FilterOperator.IN
             if logical_name == 'moneda':
                 value = {
                     'USD': 'Dolares',
@@ -95,8 +105,12 @@ class SearchPlanNormalizer:
             conditions.append(FilterCondition(
                 logical_name=logical_name,
                 field_name=field_name,
-                operator=operator,
-                value=cls._coerce(value, value_type, logical_name),
+                operator=condition_operator,
+                value=(
+                    value
+                    if condition_operator == FilterOperator.IN
+                    else cls._coerce(value, value_type, logical_name)
+                ),
                 value_type=value_type,
                 source=source,
                 currency=(
@@ -122,17 +136,29 @@ class SearchPlanNormalizer:
         lowered = cls._normalize_money_expressions(lowered)
         params: dict[str, Any] = {}
 
+        district_mentions = []
         for alias, district in sorted(
             DISTRICT_ALIASES.items(), key=lambda item: len(item[0]), reverse=True
         ):
-            if re.search(rf'\b{re.escape(alias)}\b', lowered):
-                params['distrito'] = district
-                break
+            match = re.search(rf'\b{re.escape(alias)}\b', lowered)
+            if match:
+                district_mentions.append((match.start(), district))
 
         for district in cls._DISTRICTS:
-            if 'distrito' not in params and district.casefold() in lowered:
-                params['distrito'] = district
-                break
+            match = re.search(
+                rf'\b{re.escape(district.casefold())}\b', lowered
+            )
+            if match:
+                district_mentions.append((match.start(), district))
+
+        districts = []
+        for _position, district in sorted(district_mentions):
+            if district not in districts:
+                districts.append(district)
+        if 'Cercado' in districts and 'Arequipa' in districts:
+            districts.remove('Arequipa')
+        if districts:
+            params['distrito'] = districts[0] if len(districts) == 1 else districts
 
         # Las frases más específicas se evalúan primero.
         for variant, normalized in sorted(

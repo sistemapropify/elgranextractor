@@ -15,6 +15,15 @@ class Command(BaseCommand):
         if not ScrapingJob.objects.filter(id=job_id).exists():
             raise CommandError(f"ScrapingJob #{job_id} no existe")
 
-        self.stdout.write(f"Reanudando ScrapingJob #{job_id}")
+        updated = ScrapingJob.objects.filter(
+            id=job_id,
+            estado__in=('error', 'stopped', 'paused'),
+        ).update(estado='idle', completado_en=None, mensaje_error=None)
+        if not updated:
+            raise CommandError(
+                f"ScrapingJob #{job_id} no está en un estado reanudable"
+            )
+
+        self.stdout.write(f"Reanudando ScrapingJob #{job_id} desde sus checkpoints")
         _run_scraping(job_id)
         self.stdout.write(self.style.SUCCESS(f"ScrapingJob #{job_id} finalizado"))

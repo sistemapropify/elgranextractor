@@ -229,7 +229,7 @@ class SearchAgent:
         return state
 
     @classmethod
-    def _extract_basic_intent(cls, message: str) -> Dict[str, str]:
+    def _extract_basic_intent(cls, message: str) -> Dict[str, Any]:
         """
         Extrae intención básica del mensaje cuando el RouterAgent no detectó skill.
 
@@ -237,22 +237,11 @@ class SearchAgent:
         - Tipo de propiedad (terreno, casa, departamento)
         - Distrito (Cayma, Yanahuara, etc.)
         """
-        params = {}
-        msg_lower = message.lower()
+        # Una única implementación contractual evita que este fallback vuelva
+        # a reducir listas de distritos o pierda operadores/moneda.
+        from ..search.normalizer import SearchPlanNormalizer
 
-        # Detectar tipo de propiedad
-        for tipo, keywords in cls._TIPO_KEYWORDS.items():
-            if any(kw in msg_lower for kw in keywords):
-                params['tipo_propiedad'] = tipo
-                break
-
-        # Detectar distrito
-        for distrito in cls._DISTRITOS:
-            if distrito.lower() in msg_lower:
-                params['distrito'] = distrito
-                break
-
-        return params
+        return SearchPlanNormalizer.params_from_message(message)
 
     @classmethod
     def _get_collections_for_skill(cls, skill_name: str) -> list:

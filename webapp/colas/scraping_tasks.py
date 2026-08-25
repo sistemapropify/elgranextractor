@@ -8,6 +8,7 @@ Crea ScrapingLog por cada propiedad procesada para el terminal en vivo.
 from __future__ import annotations
 
 import logging
+import os
 import threading
 import time
 from datetime import datetime
@@ -24,6 +25,16 @@ ORDEN_DEFECTO = [
     'remax', 'adondevivir', 'properati', 'urbania',
     'facebook_marketplace',
 ]
+
+# El límite global de Celery (5 min) no es apropiado para navegadores. Cada
+# skill mantiene su propio timeout y checkpoint; este margen permite que el
+# timeout interno cierre Camoufox y reintente limpiamente.
+SCRAPING_TASK_SOFT_TIME_LIMIT = int(
+    os.environ.get('SCRAPING_TASK_SOFT_TIME_LIMIT', '6900')
+)
+SCRAPING_TASK_TIME_LIMIT = int(
+    os.environ.get('SCRAPING_TASK_TIME_LIMIT', '7200')
+)
 
 
 def _error_camoufox_no_reintentable(resultado) -> bool:
@@ -48,7 +59,10 @@ def _resultado_portal_valido(resultado) -> bool:
     data = resultado.data or {}
     return bool(
         resultado.success
-        and int(data.get('total', 0) or 0) > 0
+        and (
+            int(data.get('total', 0) or 0) > 0
+            or bool(data.get('resume_complete'))
+        )
     )
 
 
@@ -227,6 +241,20 @@ def _run_scraping(job_id: int):
     for idx, portal in enumerate(portales, 1):
         # ── Verificar estado antes de cada portal ──
         job.refresh_from_db()
+
+        # Al reanudar un job parcial, no repetir portales que ya finalizaron.
+        resultados_previos = dict(
+            (job.parametros or {}).get('resultados_por_portal') or {}
+        )
+        if (resultados_previos.get(portal) or {}).get('estado') == 'completed':
+            successful_portals += 1
+            _crear_log(
+                job,
+                'info',
+                f'↪️ {portal.upper()} ya estaba completado; se conserva y se omite.',
+                portal=portal,
+            )
+            continue
 
         if job.estado == 'stopped':
             _crear_log(job, 'info', f'⏹️ Scraping detenido en portal {portal}')
@@ -468,7 +496,12 @@ def _run_scraping(job_id: int):
     logger.info(f"ScrapingJob #{job_id}: {resumen}")
 
 
-@shared_task(bind=True, max_retries=1)
+@shared_task(
+    bind=True,
+    max_retries=1,
+    soft_time_limit=SCRAPING_TASK_SOFT_TIME_LIMIT,
+    time_limit=SCRAPING_TASK_TIME_LIMIT,
+)
 def scraping_task(self, job_id: int):
     """
     Versión Celery de _run_scraping.

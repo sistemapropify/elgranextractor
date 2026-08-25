@@ -42,6 +42,14 @@ python manage.py migrate --noinput || echo "Migraciones omitidas o ya aplicadas"
 echo "Recolectando archivos estáticos..."
 python manage.py collectstatic --noinput --clear 2>&1 || echo "Collectstatic omitido"
 
+export SCRAPING_EXECUTION_MODE="${SCRAPING_EXECUTION_MODE:-watchdog}"
+if [ "$SCRAPING_EXECUTION_MODE" = "watchdog" ]; then
+    echo "Iniciando watchdog persistente de scraping..."
+    python manage.py scraping_watchdog &
+    SCRAPING_WATCHDOG_PID=$!
+    trap 'kill "$SCRAPING_WATCHDOG_PID" 2>/dev/null || true' EXIT TERM INT
+fi
+
 # Iniciar Gunicorn
 echo "Iniciando Gunicorn en puerto ${PORT:-8000}..."
 gunicorn --bind=0.0.0.0:${PORT:-8000} \

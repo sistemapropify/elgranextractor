@@ -624,7 +624,10 @@ class RAGService:
             'created': 0,
             'updated': 0,
             'skipped': 0,
-            'errors': 0
+            'errors': 0,
+            'pruned': 0,
+            'embeddings_regenerated': 0,
+            'source_records': 0,
         }
         
         try:
@@ -643,6 +646,8 @@ class RAGService:
                 rows = cursor.fetchall()
             
             logger.info(f"Consulta SQL devolvió {len(rows)} registros")
+            stats['source_records'] = len(rows)
+            source_ids = set()
             
             # Procesar cada registro
             for i, row in enumerate(rows):
@@ -652,6 +657,7 @@ class RAGService:
                     
                     # Extraer source_id (debe estar en los resultados)
                     source_id = str(row_dict.get('id') or row_dict.get('source_id') or i)
+                    source_ids.add(source_id)
                     
                     # Construir contenido concatenando campos de embedding
                     content_parts = []
@@ -678,9 +684,11 @@ class RAGService:
                             source_id=source_id
                         )
                         
-                        # Verificar si el contenido cambió
-                        if document.content_hash == content_hash and not force_full_sync:
+                        content_changed = document.content_hash != content_hash
+                        embedding_valid = bool(document.embedding) and len(document.embedding) == cls.EMBEDDING_DIMENSIONS * 4
+                        if not content_changed and embedding_valid and not force_full_sync:
                             stats['skipped'] += 1
+                            stats['total_processed'] += 1
                             continue
                         
                         # Actualizar documento existente
@@ -689,10 +697,12 @@ class RAGService:
                         document.metadata_json = json.dumps(cls._serialize_row_dict(row_dict))
                         
                         # Regenerar embedding si el contenido cambió o force_full_sync
-                        if document.content_hash != content_hash or force_full_sync:
+                        if content_changed or not embedding_valid or force_full_sync:
                             embedding = cls.generate_embedding(content)
-                            if embedding:
-                                document.embedding = embedding
+                            if not embedding or len(embedding) != cls.EMBEDDING_DIMENSIONS * 4:
+                                raise ValueError(f"Embedding inválido para documento {source_id}")
+                            document.embedding = embedding
+                            stats['embeddings_regenerated'] += 1
                         
                         document.save()
                         stats['updated'] += 1
@@ -701,6 +711,8 @@ class RAGService:
                     except IntelligenceDocument.DoesNotExist:
                         # Crear nuevo documento
                         embedding = cls.generate_embedding(content)
+                        if not embedding or len(embedding) != cls.EMBEDDING_DIMENSIONS * 4:
+                            raise ValueError(f"Embedding inválido para documento {source_id}")
                         
                         document = IntelligenceDocument.objects.create(
                             collection=collection,
@@ -711,6 +723,7 @@ class RAGService:
                             metadata_json=json.dumps(cls._serialize_row_dict(row_dict))
                         )
                         stats['created'] += 1
+                        stats['embeddings_regenerated'] += 1
                         logger.debug(f"Documento creado: {source_id}")
                     
                     stats['total_processed'] += 1
@@ -723,9 +736,19 @@ class RAGService:
                     logger.error(f"Error procesando registro {i}: {e}")
                     stats['errors'] += 1
             
+            if stats['errors'] == 0:
+                stale_docs = IntelligenceDocument.objects.filter(
+                    collection=collection
+                ).exclude(source_id__in=source_ids)
+                stats['pruned'] = stale_docs.count()
+                if stats['pruned']:
+                    stale_docs.delete()
+
             # Actualizar estadísticas de la colección
             collection.last_sync_at = timezone.now()
-            collection.last_sync_count = stats['total_processed']
+            collection.last_sync_count = IntelligenceDocument.objects.filter(
+                collection=collection
+            ).count()
             collection.save()
             
             logger.info(
@@ -734,7 +757,12 @@ class RAGService:
                 f"{stats['skipped']} saltados, {stats['errors']} errores"
             )
             
-            return True, "Sincronización completada exitosamente", stats
+            success = stats['errors'] == 0
+            message = (
+                "Sincronización completada exitosamente" if success
+                else "Sincronización incompleta; FAISS no debe reconstruirse"
+            )
+            return success, message, stats
             
         except IntelligenceCollection.DoesNotExist:
             return False, f"Colección con ID {collection_id} no encontrada o inactiva", stats
@@ -1357,6 +1385,7 @@ class RAGService:
                 rows = cursor.fetchall()
             
             logger.info(f"Consulta SQL devolvió {len(rows)} registros de '{table_name}'")
+            stats['source_records'] = len(rows)
             
             # Obtener field_definitions de la colección
             raw_field_defs = collection.field_definitions or {}
@@ -1391,6 +1420,8 @@ class RAGService:
             table_relationships = collection.table_relationships or []
             logger.info(f"Relaciones entre tablas configuradas: {len(table_relationships)}")
             
+            source_ids = set()
+
             # Procesar cada registro
             for i, row in enumerate(rows):
                 try:
@@ -1399,6 +1430,7 @@ class RAGService:
                     
                     # Extraer source_id usando el campo primary_key
                     source_id = str(row_dict.get(primary_key) if primary_key in row_dict else i)
+                    source_ids.add(source_id)
                     
                     # Construir field_values con TODOS los campos reales
                     # Usar _serialize_row_dict para manejar Decimal y otros tipos no serializables
@@ -1511,23 +1543,43 @@ class RAGService:
                             collection=collection,
                             source_id=source_id
                         )
-                        
+
                         # Verificar si el contenido cambió
-                        if document.content_hash == content_hash and not force_full_sync:
+                        content_changed = document.content_hash != content_hash
+                        embedding_valid = (
+                            document.embedding is not None
+                            and len(document.embedding) == cls.EMBEDDING_DIMENSIONS * 4
+                        )
+                        if (
+                            not content_changed
+                            and embedding_valid
+                            and not force_full_sync
+                        ):
                             stats['skipped'] += 1
+                            stats['total_processed'] += 1
                             continue
-                        
+
                         # Actualizar documento existente
                         document.content = content
                         document.content_hash = content_hash
                         document.field_values = field_values
-                        
-                        # Regenerar embedding si el contenido cambió o force_full_sync
-                        if document.content_hash != content_hash or force_full_sync:
+
+                        # Regenerar antes de guardar si cambió el contenido, falta
+                        # el vector, su dimensión es incorrecta o se forzó el sync.
+                        if content_changed or not embedding_valid or force_full_sync:
                             embedding = cls.generate_embedding(content, mode='passage')
-                            if embedding:
-                                document.embedding = embedding
-                        
+                            if not embedding:
+                                raise RuntimeError(
+                                    f'No se pudo generar embedding para {source_id}'
+                                )
+                            if len(embedding) != cls.EMBEDDING_DIMENSIONS * 4:
+                                raise RuntimeError(
+                                    f'Embedding inválido para {source_id}: '
+                                    f'{len(embedding)} bytes'
+                                )
+                            document.embedding = embedding
+                            stats['embeddings_regenerated'] += 1
+
                         document.save()
                         stats['updated'] += 1
                         logger.debug(f"Documento actualizado: {source_id}")
@@ -1535,6 +1587,15 @@ class RAGService:
                     except IntelligenceDocument.DoesNotExist:
                         # Crear nuevo documento
                         embedding = cls.generate_embedding(content, mode='passage')
+                        if not embedding:
+                            raise RuntimeError(
+                                f'No se pudo generar embedding para {source_id}'
+                            )
+                        if len(embedding) != cls.EMBEDDING_DIMENSIONS * 4:
+                            raise RuntimeError(
+                                f'Embedding inválido para {source_id}: '
+                                f'{len(embedding)} bytes'
+                            )
                         
                         document = IntelligenceDocument.objects.create(
                             collection=collection,
@@ -1545,6 +1606,7 @@ class RAGService:
                             field_values=field_values
                         )
                         stats['created'] += 1
+                        stats['embeddings_regenerated'] += 1
                         logger.debug(f"Documento creado: {source_id}")
                     
                     stats['total_processed'] += 1
@@ -1556,10 +1618,31 @@ class RAGService:
                 except Exception as e:
                     logger.error(f"Error procesando registro {i}: {e}")
                     stats['errors'] += 1
-            
+
+            # Podar únicamente después de leer y procesar toda la fuente sin
+            # errores. Así una caída parcial nunca borra documentos válidos.
+            if stats['errors'] == 0:
+                stale_docs = IntelligenceDocument.objects.filter(
+                    collection=collection
+                ).exclude(source_id__in=source_ids)
+                stats['pruned'] = stale_docs.count()
+                if stats['pruned']:
+                    stale_docs.delete()
+                    logger.info(
+                        "Documentos obsoletos eliminados de '%s': %s",
+                        collection.name,
+                        stats['pruned'],
+                    )
+            else:
+                logger.warning(
+                    "No se podan documentos de '%s' porque hubo %s errores",
+                    collection.name,
+                    stats['errors'],
+                )
+
             # Actualizar estadísticas de la colección
             collection.last_sync_at = timezone.now()
-            collection.last_sync_count = stats['total_processed']
+            collection.last_sync_count = IntelligenceDocument.objects.filter(collection=collection).count()
             collection.save()
             
             logger.info(
@@ -1568,21 +1651,13 @@ class RAGService:
                 f"{stats['skipped']} saltados, {stats['errors']} errores"
             )
             
-            # Reconstruir índice FAISS después de sync (si está disponible)
-            try:
-                from .faiss_index import FAISSIndexManager
-                indexed = FAISSIndexManager.rebuild_for_collection(
-                    collection.name,
-                    cls.EMBEDDING_DIMENSIONS
-                )
-                if indexed > 0:
-                    logger.info(f"Índice FAISS reconstruido para '{collection.name}': {indexed} vectores")
-            except ImportError:
-                logger.debug("FAISS no disponible, saltando reconstrucción de índice")
-            except Exception as e:
-                logger.warning(f"Error reconstruyendo índice FAISS para '{collection.name}': {e}")
-            
-            return True, "Sincronización dinámica completada exitosamente", stats
+            success = stats['errors'] == 0
+            message = (
+                "Sincronización dinámica completada exitosamente"
+                if success
+                else f"Sincronización incompleta: {stats['errors']} errores"
+            )
+            return success, message, stats
             
         except IntelligenceCollection.DoesNotExist:
             return False, f"Colección '{collection_name}' no encontrada o inactiva", stats

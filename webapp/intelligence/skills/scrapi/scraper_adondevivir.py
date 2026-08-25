@@ -45,6 +45,7 @@ def _limpiar_locks_stale(profile_dir: str, max_age_s: int = LOCK_STALE_SECONDS) 
 
 def _ejecutar_scraping(
     max_paginas: int = 0,
+    start_page: int = 1,
     progress_callback: Callable[[Dict[str, Any]], bool] | None = None,
     batch_callback: Callable[[list[Dict[str, Any]]], Dict[str, int]] | None = None,
     update_callback: Callable[[list[Dict[str, Any]]], Any] | None = None,
@@ -188,7 +189,8 @@ def _ejecutar_scraping(
                 raise RuntimeError(
                     f"{resumen} Título: {diagnostico.get('title', '')}."
                 )
-            todas_raw.extend(props_pagina1)
+            if start_page <= 1:
+                todas_raw.extend(props_pagina1)
             print(f"  [Pagina 1]: {len(props_pagina1)} props")
             await emit_progress(
                 percent=2,
@@ -198,13 +200,17 @@ def _ejecutar_scraping(
                     f"{len(props_pagina1)} propiedades detectadas"
                 ),
             )
-            if batch_callback and props_pagina1:
+            if start_page <= 1 and batch_callback and props_pagina1:
                 guardado = await asyncio.to_thread(
                     batch_callback, estandarizar_lote(props_pagina1)
                 )
                 await emit_progress(
                     percent=2,
                     processed=guardado.get("total", len(todas_raw)),
+                    nuevas=guardado.get('nuevas'),
+                    actualizadas=guardado.get('actualizadas'),
+                    errores=guardado.get('errores'),
+                    checkpoint_page=1,
                 )
 
             # Usar el detector robusto del scraper principal.
@@ -221,7 +227,7 @@ def _ejecutar_scraping(
                 total_paginas = min(total_paginas, max_paginas)
 
             # Resto de pÃƒÆ’Ã‚Â¡ginas
-            for pagina in range(2, total_paginas + 1):
+            for pagina in range(max(2, int(start_page or 1)), total_paginas + 1):
                 if adondevivir_source.detener:
                     break
 
@@ -250,7 +256,11 @@ def _ejecutar_scraping(
                     )
                 await emit_progress(
                     percent=max(2, int((pagina / max(total_paginas, 1)) * 70)),
-                    processed=len(todas_raw),
+                    processed=(guardado or {}).get('total', len(todas_raw)),
+                    nuevas=(guardado or {}).get('nuevas'),
+                    actualizadas=(guardado or {}).get('actualizadas'),
+                    errores=(guardado or {}).get('errores'),
+                    checkpoint_page=pagina,
                     message=(
                         f"Adondevivir: página {pagina}, "
                         f"{len(props)} propiedades detectadas"
@@ -357,6 +367,7 @@ class ScraperAdondevivirSkill(BaseSkill):
     ) -> SkillResult:
         try:
             max_paginas = params.get('max_paginas', 0)
+            start_page = params.get('start_page', 1)
             progress_callback = (context or {}).get('progress_callback')
             incremental = {
                 'total': 0,
@@ -380,12 +391,23 @@ class ScraperAdondevivirSkill(BaseSkill):
 
             propiedades = _ejecutar_scraping(
                 max_paginas,
+                start_page=start_page,
                 progress_callback=progress_callback,
                 batch_callback=guardar_lote,
                 update_callback=actualizar_lote,
             )
 
             if not propiedades:
+                if int(start_page or 1) > 1:
+                    return SkillResult.ok(
+                        data={
+                            'portal': 'adondevivir',
+                            **incremental,
+                            'resume_complete': True,
+                        },
+                        message='Adondevivir: no quedan páginas después del checkpoint.',
+                        skill_name=self.name,
+                    )
                 return SkillResult.error(
                     message=(
                         'Adondevivir no devolvió propiedades. Revise la '

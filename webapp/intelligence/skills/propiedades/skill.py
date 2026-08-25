@@ -32,6 +32,7 @@ from django.db import connections
 from django.db.models import Q
 
 from ...search.property_fields import canonical_property_area
+from ...search.normalizer import SearchPlanNormalizer
 
 from ...models import IntelligenceCollection, IntelligenceDocument
 from ...services.rag import RAGService
@@ -164,8 +165,9 @@ class BusquedaPropiedadesSkill(BaseSkill):
 
     parameters_schema = {
         'distrito': {
-            'type': 'string',
-            'description': 'Filtro exacto por distrito. Ej: Cayma, Yanahuara, Cercado, Cerro Colorado',
+            'type': ['string', 'array'],
+            'items': {'type': 'string'},
+            'description': 'Uno o varios distritos. Para varios usa una lista; se aplica como distrito IN (...).',
             'required': False,
         },
         'tipo_propiedad': {
@@ -354,12 +356,25 @@ class BusquedaPropiedadesSkill(BaseSkill):
         mensaje_lower = mensaje.lower().strip()
         filtros = {}
 
-        # Detectar distritos
+        # Detectar todos los distritos mencionados. Una lista representa OR/IN.
+        distritos = []
         for distrito in self.DISTRITOS_AREQUIPA:
-            if distrito in mensaje_lower:
-                # Normalizar: capitalizar primera letra
-                filtros['distrito'] = distrito.title()
-                break
+            if re.search(rf'\b{re.escape(distrito)}\b', mensaje_lower):
+                normalizado = distrito.title()
+                if normalizado not in distritos:
+                    distritos.append(normalizado)
+        if 'Cercado' in distritos and 'Arequipa' in distritos:
+            distritos.remove('Arequipa')
+        if distritos:
+            filtros['distrito'] = (
+                distritos[0] if len(distritos) == 1 else distritos
+            )
+
+        # Reutilizar el parser contractual para operadores de precio y moneda.
+        normalizados = SearchPlanNormalizer.params_from_message(mensaje)
+        for nombre in ('precio_min', 'precio_max', 'moneda'):
+            if nombre in normalizados:
+                filtros[nombre] = normalizados[nombre]
 
         # Detectar tipos de propiedad
         for tipo_normalizado, variantes in [
@@ -610,9 +625,17 @@ class BusquedaPropiedadesSkill(BaseSkill):
             filtros_auto = self._analizar_intencion(semantic_query)
             
             # Combinar filtros automáticos con los que DeepSeek haya extraído
-            # Los filtros explícitos de DeepSeek tienen prioridad
+            # Los filtros explícitos de DeepSeek tienen prioridad, salvo que el
+            # mensaje completo demuestre varios distritos: en ese caso conservar
+            # todos evita que una extracción parcial reduzca un OR/IN a uno solo.
             for key, value in filtros_auto.items():
-                if key not in params or not params.get(key):
+                if (
+                    key == 'distrito'
+                    and isinstance(value, list)
+                    and len(value) > 1
+                ):
+                    params[key] = value
+                elif key not in params or not params.get(key):
                     params[key] = value
             
             # ── Si se detectó búsqueda por nombre (titulo_contains) ──
@@ -1014,9 +1037,10 @@ class BusquedaPropiedadesSkill(BaseSkill):
         distrito = params.get('distrito')
         if distrito:
             distrito_q = Q()
-            for valor in self._valores_distrito(distrito):
-                for campo in FIELD_MAP['distrito']:
-                    distrito_q |= Q(**{f'field_values__{campo}__iexact': valor})
+            for distrito_solicitado in self._lista_distritos(distrito):
+                for valor in self._valores_distrito(distrito_solicitado):
+                    for campo in FIELD_MAP['distrito']:
+                        distrito_q |= Q(**{f'field_values__{campo}__iexact': valor})
             filter_q &= distrito_q
 
         # ── Filtro por tipo de propiedad ──
@@ -1328,7 +1352,8 @@ class BusquedaPropiedadesSkill(BaseSkill):
             coincide = False
             valores_validos = {
                 str(valor).casefold()
-                for valor in self._valores_distrito(distrito)
+                for distrito_solicitado in self._lista_distritos(distrito)
+                for valor in self._valores_distrito(distrito_solicitado)
             }
             for campo in FIELD_MAP['distrito']:
                 val = field_values.get(campo)
@@ -1395,6 +1420,20 @@ class BusquedaPropiedadesSkill(BaseSkill):
                     except (ValueError, TypeError):
                         pass
             if not coincide:
+                return False
+
+        # Moneda: el origen puede almacenar nombres o códigos.
+        moneda = params.get('moneda')
+        if moneda:
+            equivalentes = {
+                'USD': {'usd', 'dolar', 'dolares', 'dólar', 'dólares'},
+                'PEN': {'pen', 'sol', 'soles'},
+            }.get(str(moneda).strip().upper(), {str(moneda).strip().casefold()})
+            if not any(
+                field_values.get(campo) is not None
+                and str(field_values[campo]).strip().casefold() in equivalentes
+                for campo in FIELD_MAP['moneda']
+            ):
                 return False
 
         # Habitaciones exactas
@@ -1468,6 +1507,12 @@ class BusquedaPropiedadesSkill(BaseSkill):
         valor = str(distrito).strip()
         alias = SINONIMOS_DISTRITOS.get(valor.casefold(), [])
         return list(dict.fromkeys([valor, *alias]))
+
+    @staticmethod
+    def _lista_distritos(distrito: Any) -> List[Any]:
+        if isinstance(distrito, (list, tuple, set)):
+            return [valor for valor in distrito if str(valor).strip()]
+        return [distrito]
 
     @staticmethod
     def _cumple_exacto_numerico(
