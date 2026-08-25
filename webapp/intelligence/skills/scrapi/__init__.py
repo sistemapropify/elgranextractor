@@ -9,5 +9,6 @@ Scrapers disponibles:
 - scraper_adondevivir
 - scraper_properati
 - scraper_urbania
-- scraper_orchestrator (ejecuta las 4 en secuencia)
+- scraper_facebook_marketplace
+- scraper_orchestrator (ejecuta los portales en secuencia)
 """

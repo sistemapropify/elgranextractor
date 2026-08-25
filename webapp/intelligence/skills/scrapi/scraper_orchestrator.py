@@ -28,10 +28,14 @@ SKILL_MAP = {
     'adondevivir': 'scraper_adondevivir',
     'properati': 'scraper_properati',
     'urbania': 'scraper_urbania',
+    'facebook_marketplace': 'scraper_facebook_marketplace',
 }
 
 # Orden de ejecución por defecto
-ORDEN_DEFECTO = ['remax', 'adondevivir', 'properati', 'urbania']
+ORDEN_DEFECTO = [
+    'remax', 'adondevivir', 'properati', 'urbania',
+    'facebook_marketplace',
+]
 
 
 def _instanciar_skill(portal: str):
@@ -69,7 +73,7 @@ class ScraperOrchestratorSkill(BaseSkill):
     name = "scraper_orchestrator"
     description = (
         "Ejecuta TODOS los scrapers de portales inmobiliarios en secuencia: "
-        "Remax → Adondevivir → Properati → Urbania. "
+        "Remax → Adondevivir → Properati → Urbania → Facebook Marketplace. "
         "Si un scraper falla, los otros continúan."
     )
     category = "custom"
@@ -81,7 +85,8 @@ class ScraperOrchestratorSkill(BaseSkill):
             'type': 'array',
             'description': (
                 'Lista de portales a scrapear. Default: todos. '
-                'Opciones: remax, adondevivir, properati, urbania. '
+                'Opciones: remax, adondevivir, properati, urbania, '
+                'facebook_marketplace. '
                 'Ej: ["remax", "urbania"]'
             ),
             'required': False,

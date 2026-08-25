@@ -120,6 +120,7 @@ class IntelligenceConfig(AppConfig):
             from .skills.scrapi.scraper_adondevivir import ScraperAdondevivirSkill
             from .skills.scrapi.scraper_properati import ScraperProperatiSkill
             from .skills.scrapi.scraper_urbania import ScraperUrbaniaSkill
+            from .skills.scrapi.scraper_facebook_marketplace import ScraperFacebookMarketplaceSkill
             from .skills.scrapi.scraper_orchestrator import ScraperOrchestratorSkill
 
             registry = SkillRegistry()
@@ -172,10 +173,11 @@ class IntelligenceConfig(AppConfig):
             registry.register(ScraperAdondevivirSkill)
             registry.register(ScraperProperatiSkill)
             registry.register(ScraperUrbaniaSkill)
+            registry.register(ScraperFacebookMarketplaceSkill)
             registry.register(ScraperOrchestratorSkill)
             logger.info(
                 f"Skills registradas en SkillRegistry al iniciar Django "
-                f"(incluye 20 nuevas skills multi-rol + 5 scrapi skills)"
+                f"(incluye 20 nuevas skills multi-rol + 6 scrapi skills)"
             )
         except Exception as e:
             logger.warning(f"No se pudieron registrar skills en startup: {e}")

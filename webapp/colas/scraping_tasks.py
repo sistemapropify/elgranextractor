@@ -20,7 +20,10 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 # Orden de ejecución por defecto
-ORDEN_DEFECTO = ['remax', 'adondevivir', 'properati', 'urbania']
+ORDEN_DEFECTO = [
+    'remax', 'adondevivir', 'properati', 'urbania',
+    'facebook_marketplace',
+]
 
 
 def _error_camoufox_no_reintentable(resultado) -> bool:
@@ -54,6 +57,7 @@ def _instanciar_skill(portal: str):
         'adondevivir': 'scraper_adondevivir',
         'properati': 'scraper_properati',
         'urbania': 'scraper_urbania',
+        'facebook_marketplace': 'scraper_facebook_marketplace',
     }
     skill_name = skill_map.get(portal)
     if not skill_name:
@@ -292,7 +296,7 @@ def _run_scraping(job_id: int):
             # pueden quedar temporalmente sin respuesta al iniciar Camoufox;
             # el segundo intento usa el mismo checkpoint confirmado.
             max_attempts = 3 if portal == 'properati' else (
-                2 if portal in ('adondevivir', 'urbania') else 1
+                2 if portal in ('adondevivir', 'urbania', 'facebook_marketplace') else 1
             )
             resultado = None
             for attempt in range(1, max_attempts + 1):
@@ -330,7 +334,7 @@ def _run_scraping(job_id: int):
                     break
                 if attempt < max_attempts:
                     terminated = 0
-                    if portal in ('adondevivir', 'urbania'):
+                    if portal in ('adondevivir', 'urbania', 'facebook_marketplace'):
                         # Un arranque de contexto persistente que venció su
                         # timeout puede dejar Camoufox vivo y el perfil
                         # bloqueado. Antes de reintentar liberamos únicamente

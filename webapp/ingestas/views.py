@@ -1643,12 +1643,16 @@ from .models import PropiedadesCompetencia, ScrapingJob, ScrapingLog
 
 
 SCRAPING_ACTIVE_STATES = ('running', 'paused')
-SCRAPING_DEFAULT_PORTALS = ('remax', 'adondevivir', 'properati', 'urbania')
+SCRAPING_DEFAULT_PORTALS = (
+    'remax', 'adondevivir', 'properati', 'urbania',
+    'facebook_marketplace',
+)
 SCRAPING_PORTAL_LABELS = {
     'remax': 'Remax',
     'properati': 'Properati',
     'adondevivir': 'Adondevivir',
     'urbania': 'Urbania',
+    'facebook_marketplace': 'Facebook Marketplace',
 }
 SCRAPING_STALE_AFTER_SECONDS = int(
     os.environ.get('SCRAPING_STALE_AFTER_SECONDS', '900')
