@@ -21,7 +21,11 @@ from n8n_bridge.models import (
     PropertyBotControlAudit,
     PropertyBotInitialResponse,
 )
-from n8n_bridge.services.initial_property_config import get_bot_configuration, schedule_state
+from n8n_bridge.services.initial_property_config import (
+    get_bot_configuration,
+    office_schedule_state,
+    schedule_state,
+)
 from n8n_bridge.services.initial_property_responder import process_initial_message
 
 
@@ -107,22 +111,48 @@ def property_bot_dashboard(request):
             "enabled": config.enabled,
             "start": config.start_time.strftime("%H:%M"),
             "end": config.end_time.strftime("%H:%M"),
+            "office_start": config.office_start_time.strftime("%H:%M"),
+            "office_end": config.office_end_time.strftime("%H:%M"),
+            "advisor_in": config.advisor_message_in_hours,
+            "advisor_out": config.advisor_message_out_of_hours,
         }
         try:
             start_hour, start_minute = request.POST.get("start_time", "00:00").split(":")
             end_hour, end_minute = request.POST.get("end_time", "05:00").split(":")
             config.enabled = request.POST.get("enabled") == "on"
+            office_start_hour, office_start_minute = request.POST.get(
+                "office_start_time", "09:00"
+            ).split(":")
+            office_end_hour, office_end_minute = request.POST.get(
+                "office_end_time", "18:00"
+            ).split(":")
+            advisor_in = request.POST.get("advisor_message_in_hours", "").strip()
+            advisor_out = request.POST.get("advisor_message_out_of_hours", "").strip()
+            advisor_in.format(property_reference="la propiedad")
+            advisor_out.format(property_reference="la propiedad")
             config.start_time = time(int(start_hour), int(start_minute))
             config.end_time = time(int(end_hour), int(end_minute))
+            config.office_start_time = time(
+                int(office_start_hour), int(office_start_minute)
+            )
+            config.office_end_time = time(
+                int(office_end_hour), int(office_end_minute)
+            )
+            config.advisor_message_in_hours = advisor_in
+            config.advisor_message_out_of_hours = advisor_out
             config.updated_by = _request_user(request)
             config.save()
-        except (ValueError, TypeError):
+        except (KeyError, ValueError, TypeError):
             messages.error(request, "Horario inválido.")
             return redirect("property-bot-dashboard:dashboard")
         after = {
             "enabled": config.enabled,
             "start": config.start_time.strftime("%H:%M"),
             "end": config.end_time.strftime("%H:%M"),
+            "office_start": config.office_start_time.strftime("%H:%M"),
+            "office_end": config.office_end_time.strftime("%H:%M"),
+            "advisor_in": config.advisor_message_in_hours,
+            "advisor_out": config.advisor_message_out_of_hours,
         }
         PropertyBotControlAudit.objects.create(
             action="configuration_update",
@@ -177,6 +207,7 @@ def property_bot_dashboard(request):
         "errors_pct": _pct(errors),
     }
     state = schedule_state(config)
+    office_state = office_schedule_state(config)
 
     # Interacciones agrupadas POR LEAD (conversación), no por evento.
     # Por cada conversación se muestra su decisión: si hubo respond_once se usa
@@ -231,6 +262,7 @@ def property_bot_dashboard(request):
         {
             "config": config,
             "schedule": state,
+            "office_schedule": office_state,
             "metrics": metrics,
             "interactions": interactions,
         },

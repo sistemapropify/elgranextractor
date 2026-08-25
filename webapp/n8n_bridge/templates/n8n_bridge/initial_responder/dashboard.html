@@ -21,6 +21,12 @@
   .template-help{background:#fdf6e3;border:1px solid #e6d3a3;border-radius:8px;padding:10px 12px;font-size:12px;color:#7a5c13}
   .templates-form button{border:0;border-radius:8px;background:#135f4b;color:white;padding:11px 16px;font-weight:700;justify-self:start}
   code{background:#edf2f0;border-radius:4px;padding:1px 5px;font-size:12px}
+  .office-config{grid-column:1/-1;display:grid;grid-template-columns:150px 150px 1fr 1fr;gap:16px;padding-top:16px;border-top:1px solid #d8e5e0}
+  .office-config textarea{min-height:86px;resize:vertical}
+  .office-config .office-title{grid-column:1/-1}
+  .office-config .office-title p{margin:4px 0 0;color:#6d8079;font-size:13px}
+  @media(max-width:1000px){.office-config{grid-template-columns:1fr 1fr}}
+  @media(max-width:650px){.office-config{grid-template-columns:1fr}}
 </style>
 <div class="bot-shell">
   <header class="bot-header">
@@ -31,9 +37,17 @@
   <section class="control-card">
     <form method="post" class="control-form">{% csrf_token %}
       <label class="switch-row"><span><strong>Activación general</strong><small>Apagado inmediato y persistente</small></span><input type="checkbox" name="enabled" {% if config.enabled %}checked{% endif %}><i></i></label>
-      <label>Inicio<input type="time" name="start_time" value="{{ config.start_time|time:'H:i' }}" required></label>
-      <label>Fin<input type="time" name="end_time" value="{{ config.end_time|time:'H:i' }}" required></label>
+      <label>Bot activo desde<input type="time" name="start_time" value="{{ config.start_time|time:'H:i' }}" required></label>
+      <label>Bot activo hasta<input type="time" name="end_time" value="{{ config.end_time|time:'H:i' }}" required></label>
       <div class="clock"><small>Hora en {{ schedule.timezone }}</small><strong>{{ schedule.local_now|date:'H:i:s' }}</strong></div>
+      <div class="office-config">
+        <div class="office-title"><strong>Horario humano y texto de derivación</strong><p>Independiente de la activación del bot. Estado actual: {% if office_schedule.inside %}dentro del horario de oficina{% else %}fuera del horario de oficina{% endif %}.</p></div>
+        <label>Oficina abre<input type="time" name="office_start_time" value="{{ config.office_start_time|time:'H:i' }}" required></label>
+        <label>Oficina cierra<input type="time" name="office_end_time" value="{{ config.office_end_time|time:'H:i' }}" required></label>
+        <label>Mensaje dentro del horario<textarea name="advisor_message_in_hours" required>{{ config.advisor_message_in_hours }}</textarea></label>
+        <label>Mensaje fuera del horario<textarea name="advisor_message_out_of_hours" required>{{ config.advisor_message_out_of_hours }}</textarea></label>
+        <small class="office-title">Marcador disponible: <code>{property_reference}</code> (por ejemplo: “el hotel”, “la casa” o “el terreno”).</small>
+      </div>
       <button type="submit">Guardar configuración</button>
     </form>
   </section>
@@ -42,6 +56,7 @@
     <div class="section-title"><div><h2>Plantillas de mensaje</h2><p>Mensaje que envía el bot cuando responde una propiedad. Los marcadores se reemplazan con datos reales.</p></div></div>
     <form method="post" class="templates-form">{% csrf_token %}
       <input type="hidden" name="section" value="templates">
+      <div class="template-help">Usa <code>{advisor_message}</code> dentro de una plantilla si deseas controlar exactamente dónde aparece el texto diurno/nocturno. Las plantillas antiguas se actualizan automáticamente mientras conserven el párrafo original.</div>
       <div class="template-row">
         <label>Casa<small>Marcadores: <code>{location}</code> · <code>{features}</code> · <code>{price}</code></small><textarea name="message_templates_casa" rows="6">{{ config.message_templates.casa }}</textarea></label>
         <label>Departamento<small>Marcadores: <code>{location}</code> · <code>{features}</code> · <code>{price}</code></small><textarea name="message_templates_departamento" rows="6">{{ config.message_templates.departamento }}</textarea></label>

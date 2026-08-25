@@ -9,6 +9,10 @@ import re
 from n8n_bridge.services.initial_property_detector import extract_property_identity
 
 from . import memory_bridge
+from n8n_bridge.services.initial_property_config import (
+    advisor_availability_message,
+    get_bot_configuration,
+)
 from .curation import CurationService
 from .models import BusinessRule, CuratedExample
 
@@ -44,11 +48,25 @@ class PromptAssemblyService:
             "Eres el asistente nocturno de una inmobiliaria en Arequipa, Perú. "
             "Respondes SOLO en español, con tono cercano y profesional, sin "
             "prometer nada que no esté respaldado por los datos de la propiedad "
-            "proporcionados. Si no tienes el dato, no lo inventes: di que un "
-            "asesor te dará la información exacta en horario de atención."
+            "proporcionados. Si no tienes el dato, no lo inventes y deriva la "
+            "consulta a un asesor según la regla horaria indicada."
         )
         if sections:
             base += "\n\n" + "\n\n".join(sections)
+        try:
+            config = get_bot_configuration()
+            advisor_message, office_state = advisor_availability_message(
+                config, "{property_reference}"
+            )
+            base += (
+                f" Horario humano actual: {'abierto' if office_state['inside'] else 'cerrado'} "
+                f"({office_state['start']}–{office_state['end']} {office_state['timezone']}). "
+                "Cuando debas derivar una consulta a un asesor, usa exactamente esta frase, "
+                "reemplazando {property_reference} por el tipo correcto de inmueble: "
+                f"«{advisor_message}»"
+            )
+        except Exception:
+            pass
         return base
 
     # ------------------------------------------------------------------ #

@@ -39,12 +39,37 @@ def format_feature(feature):
     raise ValueError(f"Característica no permitida: {field}")
 
 
-def render_initial_response(data, config=None):
+def _property_reference(data):
+    title = str(data.get("title") or "").strip().lower()
+    if title.startswith("hotel") or " hotel " in f" {title} ":
+        return "el hotel"
+    return {
+        "casa": "la casa",
+        "departamento": "el departamento",
+        "terreno": "el terreno",
+        "local_comercial": "el local comercial",
+    }.get(data.get("property_type"), "la propiedad")
+
+
+def render_initial_response(data, config=None, now=None):
     values = {"location": data["location"], "price": format_price(data["price"])}
     if data["property_type"] == "terreno":
         values["area"] = format_feature(data["features"][0])
     else:
         values["features"] = " y ".join(format_feature(item) for item in data["features"][:2])
+    legacy_advisor_message = (
+        "En este momento estamos fuera del horario de atención. Apenas uno de "
+        "nuestros asesores esté disponible, continuará la conversación contigo."
+    )
+    if config is not None:
+        from .initial_property_config import advisor_availability_message
+
+        advisor_message, _ = advisor_availability_message(
+            config, _property_reference(data), now=now
+        )
+    else:
+        advisor_message = legacy_advisor_message
+    values["advisor_message"] = advisor_message
 
     # Plantillas personalizadas (editables desde el dashboard) si existen.
     templates = TEMPLATES
@@ -52,7 +77,8 @@ def render_initial_response(data, config=None):
         custom = getattr(config, "message_templates", None)
         if isinstance(custom, dict) and custom.get(data["property_type"]):
             templates = custom
-    return templates[data["property_type"]].format(**values)
+    rendered = templates[data["property_type"]].format(**values)
+    return rendered.replace(legacy_advisor_message, advisor_message)
 
 
 def render_captacion_response(config=None):

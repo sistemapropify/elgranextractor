@@ -5,7 +5,10 @@ from zoneinfo import ZoneInfo
 
 from django.test import SimpleTestCase
 
-from n8n_bridge.services.initial_property_config import schedule_state
+from n8n_bridge.services.initial_property_config import (
+    office_schedule_state,
+    schedule_state,
+)
 from n8n_bridge.services.initial_property_detector import (
     extract_property_identity,
     title_is_consistent,
@@ -56,6 +59,35 @@ class InitialPropertyRendererTests(SimpleTestCase):
         self.assertTrue(valid)
         self.assertIn("área de 300 m²", render_initial_response(data))
 
+    def test_advisor_message_changes_at_office_boundaries(self):
+        config = SimpleNamespace(
+            timezone_name="America/Lima",
+            office_start_time=time(9, 0),
+            office_end_time=time(18, 0),
+            advisor_message_in_hours=(
+                "Un asesor podrá indicarle el estado de {property_reference}."
+            ),
+            advisor_message_out_of_hours=(
+                "Un asesor podrá indicarle el estado de {property_reference} "
+                "en horario de atención."
+            ),
+            message_templates=None,
+        )
+        tz = ZoneInfo("America/Lima")
+        daytime = render_initial_response(
+            self._data(),
+            config,
+            now=datetime(2026, 8, 24, 9, 0, tzinfo=tz),
+        )
+        nighttime = render_initial_response(
+            self._data(),
+            config,
+            now=datetime(2026, 8, 24, 18, 0, tzinfo=tz),
+        )
+        self.assertIn("estado de la casa.", daytime)
+        self.assertNotIn("horario de atención.", daytime)
+        self.assertIn("estado de la casa en horario de atención.", nighttime)
+
 
 class ScheduleGuardTests(SimpleTestCase):
     def test_initial_window_is_start_inclusive_end_exclusive(self):
@@ -67,6 +99,20 @@ class ScheduleGuardTests(SimpleTestCase):
         tz = ZoneInfo("America/Lima")
         self.assertTrue(schedule_state(config, datetime(2026, 8, 5, 0, 0, tzinfo=tz))["inside"])
         self.assertFalse(schedule_state(config, datetime(2026, 8, 5, 5, 0, tzinfo=tz))["inside"])
+
+    def test_office_window_is_start_inclusive_end_exclusive(self):
+        config = SimpleNamespace(
+            timezone_name="America/Lima",
+            office_start_time=time(9, 0),
+            office_end_time=time(18, 0),
+        )
+        tz = ZoneInfo("America/Lima")
+        self.assertTrue(
+            office_schedule_state(config, datetime(2026, 8, 5, 9, 0, tzinfo=tz))["inside"]
+        )
+        self.assertFalse(
+            office_schedule_state(config, datetime(2026, 8, 5, 18, 0, tzinfo=tz))["inside"]
+        )
 
 
 class EndpointContractTests(SimpleTestCase):

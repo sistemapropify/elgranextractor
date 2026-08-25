@@ -15,6 +15,16 @@ def default_message_templates():
     return dict(TEMPLATES)
 
 
+DEFAULT_ADVISOR_MESSAGE_IN_HOURS = (
+    "Un asesor podrá indicarle con exactitud el estado de {property_reference} "
+    "y absolver todas sus consultas."
+)
+DEFAULT_ADVISOR_MESSAGE_OUT_OF_HOURS = (
+    "Un asesor podrá indicarle con exactitud el estado de {property_reference} "
+    "y absolver todas sus consultas en horario de atención."
+)
+
+
 class PropertyBotConfiguration(models.Model):
     """Configuración operacional singleton del respondedor inicial."""
 
@@ -22,12 +32,20 @@ class PropertyBotConfiguration(models.Model):
     enabled = models.BooleanField(default=False)
     start_time = models.TimeField(default="00:00")
     end_time = models.TimeField(default="05:00")
+    office_start_time = models.TimeField(default="09:00")
+    office_end_time = models.TimeField(default="18:00")
     timezone_name = models.CharField(max_length=64, default="America/Lima")
     require_external_conversation_id = models.BooleanField(default=True)
     enabled_property_types = models.JSONField(
         default=default_property_bot_types
     )
     message_templates = models.JSONField(default=default_message_templates)
+    advisor_message_in_hours = models.CharField(
+        max_length=500, default=DEFAULT_ADVISOR_MESSAGE_IN_HOURS
+    )
+    advisor_message_out_of_hours = models.CharField(
+        max_length=500, default=DEFAULT_ADVISOR_MESSAGE_OUT_OF_HOURS
+    )
     updated_at = models.DateTimeField(auto_now=True)
     updated_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
