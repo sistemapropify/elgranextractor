@@ -24,6 +24,16 @@ DEFAULT_ADVISOR_MESSAGE_OUT_OF_HOURS = (
     "y absolver todas sus consultas en horario de atención."
 )
 
+CAPTACION_DELAY_CHOICES = (
+    (60, "1 minuto"),
+    (300, "5 minutos"),
+    (900, "15 minutos"),
+    (1800, "30 minutos"),
+    (3600, "1 hora"),
+    (7200, "2 horas"),
+)
+CAPTACION_DELAY_SECONDS = {value for value, _label in CAPTACION_DELAY_CHOICES}
+
 
 class PropertyBotConfiguration(models.Model):
     """Configuración operacional singleton del respondedor inicial."""
@@ -40,6 +50,10 @@ class PropertyBotConfiguration(models.Model):
         default=default_property_bot_types
     )
     message_templates = models.JSONField(default=default_message_templates)
+    captacion_delay_seconds = models.PositiveIntegerField(
+        choices=CAPTACION_DELAY_CHOICES,
+        default=60,
+    )
     advisor_message_in_hours = models.CharField(
         max_length=500, default=DEFAULT_ADVISOR_MESSAGE_IN_HOURS
     )

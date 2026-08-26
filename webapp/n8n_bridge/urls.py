@@ -6,6 +6,7 @@ from . import property_bot_views
 app_name = 'n8n_bridge'
 
 urlpatterns = [
+    path('property-bot/v1/confirm-captacion-delivery/', property_bot_views.confirm_captacion_delivery, name='confirm_captacion_delivery'),
     path('ping/', views.ping, name='ping'),
     path('message/', views.lead_message, name='lead_message'),
     path('reset/', views.reset_session, name='reset_session'),

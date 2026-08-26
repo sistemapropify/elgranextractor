@@ -3,7 +3,10 @@ from types import SimpleNamespace
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TestCase
+from django.utils import timezone
+
+from n8n_bridge.models import CAPTACION_DELAY_CHOICES, PropertyBotConfiguration
 
 from n8n_bridge.services.initial_property_config import (
     office_schedule_state,
@@ -14,6 +17,10 @@ from n8n_bridge.services.initial_property_detector import (
     title_is_consistent,
 )
 from n8n_bridge.services.initial_property_renderer import render_initial_response
+from n8n_bridge.services.initial_property_responder import (
+    confirm_scheduled_captacion,
+    process_initial_message,
+)
 from n8n_bridge.services.initial_property_validator import validate_property_payload
 
 
@@ -138,3 +145,94 @@ class EndpointContractTests(SimpleTestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["action"], "respond_once")
+
+
+class CaptacionDelayTests(TestCase):
+    def setUp(self):
+        self.config = PropertyBotConfiguration.objects.create(
+            singleton_key=1,
+            enabled=True,
+            start_time=time(0, 0),
+            end_time=time(0, 0),
+            require_external_conversation_id=True,
+            captacion_delay_seconds=900,
+        )
+
+    @patch("n8n_bridge.services.initial_property_responder.save_initial_episode")
+    def test_captacion_returns_persisted_delayed_delivery_contract(self, save_episode):
+        save_episode.return_value = None
+        before = timezone.now()
+
+        result = process_initial_message(
+            {
+                "message_id": "wamid-captacion-1",
+                "external_conversation_id": "thread-captacion-1",
+                "phone": "+51999999999",
+                "text": "Hola, quiero vender mi propiedad",
+            }
+        )
+
+        self.assertEqual(result["action"], "respond_once")
+        self.assertEqual(result["reason_code"], "CAPTACION_SCHEDULED")
+        self.assertEqual(result["delivery_mode"], "delayed")
+        self.assertEqual(result["reply_text"], "")
+        self.assertTrue(result["cancel_if_agent_replied"])
+        self.assertEqual(result["configured_delay_seconds"], 900)
+        self.assertGreaterEqual(result["delay_seconds"], 899)
+        self.assertLessEqual(result["delay_seconds"], 900)
+        self.assertGreater(datetime.fromisoformat(result["send_not_before"]), before)
+
+    @patch("n8n_bridge.services.initial_property_responder.save_initial_episode")
+    def test_duplicate_uses_same_deadline_instead_of_restarting_delay(self, save_episode):
+        save_episode.return_value = None
+        payload = {
+            "message_id": "wamid-captacion-2",
+            "external_conversation_id": "thread-captacion-2",
+            "phone": "+51999999998",
+            "text": "Vendo mi terreno",
+        }
+        first = process_initial_message(payload)
+        duplicate = process_initial_message(payload)
+
+        self.assertEqual(duplicate["reason_code"], "DUPLICATE_MESSAGE")
+        self.assertEqual(duplicate["send_not_before"], first["send_not_before"])
+        self.assertLessEqual(duplicate["delay_seconds"], first["delay_seconds"])
+
+    @patch("n8n_bridge.services.initial_property_responder.save_initial_episode")
+    def test_agent_reply_cancels_scheduled_template(self, save_episode):
+        save_episode.return_value = None
+        scheduled = process_initial_message(
+            {
+                "message_id": "wamid-captacion-cancel",
+                "external_conversation_id": "thread-captacion-cancel",
+                "phone": "+51999999996",
+                "text": "Quiero vender mi casa",
+            }
+        )
+
+        result = confirm_scheduled_captacion(scheduled["interaction_id"], True)
+
+        self.assertEqual(result["action"], "ignore")
+        self.assertEqual(result["reason_code"], "CAPTACION_CANCELLED_AGENT_REPLIED")
+        self.assertEqual(result["reply_text"], "")
+        self.assertFalse(result["delivery_ready"])
+
+    def test_only_supported_selector_delays_are_exposed(self):
+        self.assertEqual(
+            [seconds for seconds, _label in CAPTACION_DELAY_CHOICES],
+            [60, 300, 900, 1800, 3600, 7200],
+        )
+
+    def test_non_captacion_response_has_no_delay(self):
+        result = process_initial_message(
+            {
+                "message_id": "wamid-question-1",
+                "external_conversation_id": "thread-question-1",
+                "phone": "+51999999997",
+                "text": "Hola, quisiera información",
+            }
+        )
+
+        self.assertEqual(result["action"], "ignore")
+        self.assertEqual(result["delivery_mode"], "immediate")
+        self.assertEqual(result["delay_seconds"], 0)

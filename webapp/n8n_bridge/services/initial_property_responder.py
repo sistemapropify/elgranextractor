@@ -4,7 +4,8 @@ import hashlib
 import hmac
 import logging
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+from math import ceil
 from decimal import Decimal
 
 from django.conf import settings
@@ -62,15 +63,80 @@ def _serialize_schedule(state):
 
 
 def _response_from_record(record, duplicate=False):
-    return {
+    scheduled = record.reason_code == "CAPTACION_SCHEDULED"
+    response = {
         "success": True,
         "action": record.action,
-        "reply_text": record.response_text if record.action == "respond_once" else "",
+        # Una captación programada no entrega todavía el texto: n8n debe
+        # confirmarla al vencer el plazo, después de revisar si respondió un humano.
+        "reply_text": record.response_text if record.action == "respond_once" and not scheduled else "",
         "reason_code": "DUPLICATE_MESSAGE" if duplicate else record.reason_code,
         "interaction_id": str(record.id),
         "property_code": record.property_code,
         "bot_finished_for_conversation": record.action == "respond_once",
     }
+    send_not_before = (record.evidence or {}).get("send_not_before")
+    if send_not_before:
+        try:
+            scheduled_at = datetime.fromisoformat(send_not_before)
+            remaining = max(0, ceil((scheduled_at - timezone.now()).total_seconds()))
+        except (TypeError, ValueError):
+            remaining = 0
+        response.update(
+            {
+                "delivery_mode": "delayed",
+                "delay_seconds": remaining,
+                "configured_delay_seconds": (record.evidence or {}).get(
+                    "configured_delay_seconds", remaining
+                ),
+                "send_not_before": send_not_before,
+                "delivery_ready": False,
+                "cancel_if_agent_replied": True,
+            }
+        )
+    else:
+        response.update({"delivery_mode": "immediate", "delay_seconds": 0})
+    return response
+
+
+def confirm_scheduled_captacion(interaction_id, conversation_has_agent_reply):
+    """Libera o cancela una captación al vencer su espera.
+
+    El integrador debe consultar la conversación justo antes de llamar esta
+    función y declarar si ya existe una respuesta de cualquier agente humano.
+    """
+    with transaction.atomic():
+        record = PropertyBotInitialResponse.objects.select_for_update().get(
+            id=interaction_id
+        )
+        if record.reason_code == "CAPTACION_CANCELLED_AGENT_REPLIED":
+            return _response_from_record(record)
+        if record.reason_code == "CAPTACION_SENT":
+            response = _response_from_record(record)
+            response["delivery_ready"] = True
+            return response
+        if record.reason_code != "CAPTACION_SCHEDULED":
+            raise ValueError("La interacción no es una captación programada")
+
+        if conversation_has_agent_reply:
+            record.action = "ignore"
+            record.reason_code = "CAPTACION_CANCELLED_AGENT_REPLIED"
+            record.evidence = {**(record.evidence or {}), "cancelled_by_agent_reply": True}
+            record.save(update_fields=["action", "reason_code", "evidence"])
+            response = _response_from_record(record)
+            response.update({"delivery_mode": "cancelled", "delivery_ready": False})
+            return response
+
+        send_not_before = datetime.fromisoformat(record.evidence["send_not_before"])
+        if timezone.now() < send_not_before:
+            return _response_from_record(record)
+
+        record.reason_code = "CAPTACION_SENT"
+        record.responded_at = timezone.now()
+        record.save(update_fields=["reason_code", "responded_at"])
+        response = _response_from_record(record)
+        response.update({"delivery_mode": "immediate", "delivery_ready": True, "delay_seconds": 0})
+        return response
 
 
 def process_initial_message(payload):
@@ -129,6 +195,8 @@ def process_initial_message(payload):
     # respuesta (hoy caían en NO_PROPERTY_CODE y se ignoraban).
     if detect_captacion_intent(text):
         reply = render_captacion_response(config)
+        delay_seconds = config.captacion_delay_seconds
+        send_not_before = timezone.now() + timedelta(seconds=delay_seconds)
         latency = round((time.monotonic() - started) * 1000)
         conversation_key = f"thread:{thread_id}"
         try:
@@ -144,12 +212,17 @@ def process_initial_message(payload):
                     incoming_text=text[:2000],
                     response_text=reply,
                     action="respond_once",
-                    reason_code="CAPTACION_SENT",
-                    evidence={"lead_type": "captacion", "intent": "vender"},
+                    reason_code="CAPTACION_SCHEDULED",
+                    evidence={
+                        "lead_type": "captacion",
+                        "intent": "vender",
+                        "configured_delay_seconds": delay_seconds,
+                        "send_not_before": send_not_before.isoformat(),
+                    },
                     bot_enabled=config.enabled,
                     schedule_snapshot=_serialize_schedule(schedule),
                     latency_ms=latency,
-                    responded_at=timezone.now(),
+                    responded_at=None,
                     review_status="pending",
                 )
         except IntegrityError:

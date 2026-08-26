@@ -17,6 +17,8 @@ from rest_framework.response import Response
 
 from intelligence.permissions import has_permission
 from n8n_bridge.models import (
+    CAPTACION_DELAY_CHOICES,
+    CAPTACION_DELAY_SECONDS,
     PropertyBotConfiguration,
     PropertyBotControlAudit,
     PropertyBotInitialResponse,
@@ -26,7 +28,10 @@ from n8n_bridge.services.initial_property_config import (
     office_schedule_state,
     schedule_state,
 )
-from n8n_bridge.services.initial_property_responder import process_initial_message
+from n8n_bridge.services.initial_property_responder import (
+    confirm_scheduled_captacion,
+    process_initial_message,
+)
 
 
 def _api_key_valid(request):
@@ -69,6 +74,33 @@ def initial_property_response(request):
     return Response(result, status=status.HTTP_200_OK)
 
 
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def confirm_captacion_delivery(request):
+    """Segundo paso obligatorio tras el Wait de n8n.
+
+    n8n debe consultar primero si cualquier agente respondió en la conversación.
+    La plantilla solo se libera cuando el plazo venció y nadie respondió.
+    """
+    if not _api_key_valid(request):
+        return Response({"success": False, "error": "API key inválida"}, status=status.HTTP_401_UNAUTHORIZED)
+    interaction_id = request.data.get("interaction_id")
+    agent_replied = request.data.get("conversation_has_agent_reply")
+    if not interaction_id or not isinstance(agent_replied, bool):
+        return Response(
+            {"success": False, "error": "interaction_id y conversation_has_agent_reply (boolean) son requeridos"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    try:
+        result = confirm_scheduled_captacion(interaction_id, agent_replied)
+    except PropertyBotInitialResponse.DoesNotExist:
+        return Response({"success": False, "error": "Interacción no encontrada"}, status=status.HTTP_404_NOT_FOUND)
+    except ValueError as exc:
+        return Response({"success": False, "error": str(exc)}, status=status.HTTP_409_CONFLICT)
+    return Response(result)
+
+
 def _request_user(request):
     return getattr(request, "current_user", None)
 
@@ -90,17 +122,26 @@ def property_bot_dashboard(request):
             from n8n_bridge.services.initial_property_renderer import TEMPLATES
 
             before = dict(config.message_templates or {})
+            before_delay = config.captacion_delay_seconds
             new_templates = {}
             for ptype, default in TEMPLATES.items():
                 raw = request.POST.get(f"message_templates_{ptype}")
                 new_templates[ptype] = (raw or default).strip()
             config.message_templates = new_templates
+            try:
+                captacion_delay = int(request.POST.get("captacion_delay_seconds", ""))
+                if captacion_delay not in CAPTACION_DELAY_SECONDS:
+                    raise ValueError
+            except (TypeError, ValueError):
+                messages.error(request, "Selecciona un tiempo válido para captación.")
+                return redirect("property-bot-dashboard:dashboard")
+            config.captacion_delay_seconds = captacion_delay
             config.updated_by = _request_user(request)
             config.save()
             PropertyBotControlAudit.objects.create(
                 action="templates_update",
-                previous_value=before,
-                new_value=dict(new_templates),
+                previous_value={"message_templates": before, "captacion_delay_seconds": before_delay},
+                new_value={"message_templates": dict(new_templates), "captacion_delay_seconds": captacion_delay},
                 actor=_request_user(request),
                 ip_address=_client_ip(request),
             )
@@ -265,6 +306,7 @@ def property_bot_dashboard(request):
             "office_schedule": office_state,
             "metrics": metrics,
             "interactions": interactions,
+            "captacion_delay_choices": CAPTACION_DELAY_CHOICES,
         },
     )
 

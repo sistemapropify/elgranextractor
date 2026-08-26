@@ -39,6 +39,7 @@ def get_bot_configuration():
             "PROPERTY_INITIAL_BOT_REQUIRE_CONVERSATION_ID", True
         ),
         "enabled_property_types": default_property_bot_types(),
+        "captacion_delay_seconds": 60,
         "advisor_message_in_hours": os.environ.get(
             "PROPERTY_ADVISOR_MESSAGE_IN_HOURS", DEFAULT_ADVISOR_MESSAGE_IN_HOURS
         ),

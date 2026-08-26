@@ -64,16 +64,20 @@ Campos que espera `process_initial_message`:
   "reason_code": "ANSWER_SENT",
   "interaction_id": "<uuid>",
   "property_code": "PROP000261",
-  "bot_finished_for_conversation": true
+  "bot_finished_for_conversation": true,
+  "delivery_mode": "immediate",
+  "delay_seconds": 0
 }
 ```
 - `action`: `respond_once` (enviar `reply_text`) o `ignore` (no enviar nada; `reply_text` vacío).
 - `bot_finished_for_conversation`: cuando es `true`, el bot ya respondió este hilo y **no debe volver a responder** (lógica one-shot).
+- Para captación, `delivery_mode` es `delayed`, `delay_seconds` indica la espera restante y `send_not_before` contiene la hora ISO exacta. En reintentos idempotentes la espera restante se recalcula, por lo que no vuelve a comenzar desde cero.
 
 ### 3.4 Reason codes (para depurar / decidir en n8n)
 | reason_code | Significado | ¿reply? |
 |---|---|---|
 | `ANSWER_SENT` | Respondió la propiedad. | ✅ |
+| `CAPTACION_SCHEDULED` | Captación aceptada; enviar en `send_not_before`. | ✅, con espera |
 | `DUPLICATE_MESSAGE` | `message_id` repetido (idempotencia). | devuelve la respuesta anterior |
 | `ALREADY_RESPONDED` | El hilo ya fue respondido antes. | ❌ |
 | `HUMAN_TAKEOVER` | El humano tomó el caso. | ❌ |
@@ -108,7 +112,9 @@ Campos que espera `process_initial_message`:
    - Método: `POST`, Content-Type `application/json`.
    - Header: `X-N8N-API-Key: <N8N_BRIDGE_API_KEY>`.
    - Body (JSON): `{ "message_id": "{{$json.message_id}}", "phone": "{{$json.phone}}", "text": "{{$json.text}}", "external_conversation_id": "{{$json.external_conversation_id}}" }`.
-3. **IF (n8n):** `$json.action === "respond_once"` → enviar `reply_text` por WhatsApp.
+3. **IF (n8n):** `$json.action === "respond_once"` → si `$json.delay_seconds > 0`, usar un nodo **Wait** hasta `send_not_before`.
+4. Después del Wait, consultar nuevamente la conversación en WhatsApp/Chatwoot para saber si cualquier agente humano respondió.
+5. Llamar `POST /api/n8n/property-bot/v1/confirm-captacion-delivery/` con `interaction_id` y `conversation_has_agent_reply` (boolean). Solo enviar el `reply_text` devuelto cuando `delivery_ready=true`. Si un agente respondió, la API devuelve `CAPTACION_CANCELLED_AGENT_REPLIED` y texto vacío.
    - `false` → no enviar nada (el agente humano atiende) o reenviar a un agente humano.
 4. **Configura el horario** en el dashboard ("Bot nocturno") o vía `PropertyBotConfiguration`: default `enabled=false`, `00:00–05:00`, `America/Lima`. **El bot no responde hasta que `enabled=true`.**
 
