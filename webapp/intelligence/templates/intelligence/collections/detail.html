@@ -1,11 +1,12 @@
+{% extends 'propifai_base.html' %}
 {% load intelligence_extras %}
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Detalle de Colección: {{ collection.name }} - Propifai Intelligence Layer</title>
-    <style>
+{% block title %}Detalle de Colección: {{ collection.name }} - Propifai Intelligence Layer{% endblock %}
+{% block extra_head %}
+
+{% endblock %}
+{% block extra_css %}
+<style>
+
         * {
             margin: 0;
             padding: 0;
@@ -407,9 +408,11 @@
             border-radius: 4px;
             border: 1px solid #30363d;
         }
-    </style>
-</head>
-<body>
+    
+</style>
+{% endblock %}
+{% block content %}
+
     <div class="container">
         <div class="header">
             <h1>📋 {{ collection.name }}</h1>
@@ -933,5 +936,5 @@
             header.setAttribute('data-sort', isAsc ? 'asc' : 'desc');
         }
     </script>
-</body>
-</html>
+
+{% endblock %}

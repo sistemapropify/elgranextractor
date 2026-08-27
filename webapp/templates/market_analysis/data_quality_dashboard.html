@@ -156,10 +156,7 @@
             }
         }
     </style>
-</head>
-<body>
-    {% extends "base.html" %}
-    
+{% endblock %}
     {% block content %}
     <div class="dashboard-header">
         <div class="container">
@@ -615,7 +612,7 @@
         document.addEventListener('DOMContentLoaded', function() {
             const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
             const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-                return new bootstrap.Tooltip(tooltipTriggerEl);
+                return new PropifaiUI.Tooltip(tooltipTriggerEl);
             });
             
             // Auto-refresh cada 5 minutos (300000 ms)
@@ -624,4 +621,3 @@
     </script>
 {% endblock %}
 
-{% block content %}

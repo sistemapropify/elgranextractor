@@ -134,6 +134,7 @@
 </main>
 {% endblock %}
 {% block extra_js %}
+<script>
 (() => {
   const element = document.getElementById('incoming-leads-data');
   const canvas = document.getElementById('incomingLeadsChart');
@@ -324,4 +325,6 @@
     tooltip.style.display = 'none';
   });
 })();
+
+</script>
 {% endblock %}

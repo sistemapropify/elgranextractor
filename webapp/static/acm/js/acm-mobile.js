@@ -313,10 +313,10 @@ document.addEventListener('DOMContentLoaded', function() {
      */
     function initBootstrapTooltips() {
         // Inicializar tooltips si Bootstrap está disponible
-        if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+        if (typeof PropifaiUI !== 'undefined' && PropifaiUI.Tooltip) {
             const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
             tooltipTriggerList.map(function (tooltipTriggerEl) {
-                return new bootstrap.Tooltip(tooltipTriggerEl);
+                return new PropifaiUI.Tooltip(tooltipTriggerEl);
             });
         }
     }

@@ -1,9 +1,12 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<title>Emulador WhatsApp · Bot nocturno</title>
+{% extends 'propifai_base.html' %}
+
+{% block title %}Emulador WhatsApp · Bot nocturno{% endblock %}
+{% block extra_head %}
+
+{% endblock %}
+{% block extra_css %}
 <style>
+
   :root{
     --bg-header: #1f2c34;
     --bg-chat: #0b141a;
@@ -184,9 +187,11 @@
     color:#fff; font-size:18px; cursor:pointer; flex-shrink:0;
     border:none;
   }
+
 </style>
-</head>
-<body>
+{% endblock %}
+{% block content %}
+
 {% csrf_token %}
 <div class="wrap">
   <div class="topbar">
@@ -361,5 +366,5 @@ input.addEventListener('keydown', (e) => {
 
 // El chat inicia vacío: el usuario escribe su propio mensaje.
 </script>
-</body>
-</html>
+
+{% endblock %}

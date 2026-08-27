@@ -1,10 +1,13 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Colecciones RAG - Propifai Intelligence Layer</title>
-    <style>
+{% extends 'propifai_base.html' %}
+
+{% block title %}Colecciones RAG - Propifai Intelligence Layer{% endblock %}
+{% block extra_head %}
+
+
+{% endblock %}
+{% block extra_css %}
+<style>
+
         * {
             margin: 0;
             padding: 0;
@@ -271,9 +274,11 @@
             padding-top: 20px;
             border-top: 1px solid #30363d;
         }
-    </style>
-</head>
-<body>
+    
+</style>
+{% endblock %}
+{% block content %}
+
     <div class="container">
         <div class="header">
             <h1>📚 Colecciones RAG</h1>
@@ -405,5 +410,5 @@
             <p>Propifai Intelligence Layer • Dashboard de Colecciones RAG • Total: {{ collections|length }} colección(es)</p>
         </div>
     </div>
-</body>
-</html>
+
+{% endblock %}

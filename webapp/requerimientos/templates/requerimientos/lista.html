@@ -5,8 +5,6 @@
 {% block title %}Requerimientos - Propifai{% endblock %}
 
 {% block extra_head %}
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 {% endblock %}
 
 {% block extra_css %}
@@ -2745,7 +2743,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         document.getElementById('modalReqPk').textContent = d.pk;
         
-        const bsModal = new bootstrap.Modal(modal);
+        const bsModal = new PropifaiUI.Modal(modal);
         bsModal.show();
     });
     
@@ -2999,7 +2997,7 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(resp => {
                 if (resp.ok) {
                     // Cerrar modal
-                    const modal = bootstrap.Modal.getInstance(document.getElementById('modalDetalleRequerimiento'));
+                    const modal = PropifaiUI.Modal.getInstance(document.getElementById('modalDetalleRequerimiento'));
                     if (modal) modal.hide();
                     
                     // Mostrar toast de éxito
@@ -3384,6 +3382,4 @@ function eliminarRequerimiento(pk) {
     });
 }
 </script>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 {% endblock %}

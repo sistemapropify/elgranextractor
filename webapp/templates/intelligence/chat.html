@@ -1,17 +1,21 @@
+{% extends 'propifai_base.html' %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="es" data-theme="salvia">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Propifai · Workspace inteligente</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="{% static 'intelligence/chat-workspace.css' %}?v=20260725-005">
-</head>
-<body>
+{% block title %}Propifai · Workspace inteligente{% endblock %}
+{% block extra_head %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="{% static 'intelligence/chat-workspace.css' %}?v=20260725-005">
+
+{% endblock %}
+{% block extra_css %}
+<style>
+
+</style>
+{% endblock %}
+{% block content %}
+
     <div class="workspace-shell" id="workspace-shell">
         <aside class="navigation-panel" id="sidebar" aria-label="Navegación principal">
             <header class="brand-row">
@@ -198,5 +202,5 @@
         };
     </script>
     <script src="{% static 'intelligence/chat.js' %}?v=20260726-009"></script>
-</body>
-</html>
+
+{% endblock %}

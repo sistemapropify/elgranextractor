@@ -1,16 +1,13 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Propiedades Propify - Catálogo</title>
-    
-    <!-- Bootstrap 5 CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Bootstrap Icons -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-    
-    <style>
+{% extends 'propifai_base.html' %}
+
+{% block title %}Propiedades Propify - Catálogo{% endblock %}
+{% block extra_head %}
+
+
+{% endblock %}
+{% block extra_css %}
+<style>
+
         * {
             margin: 0;
             padding: 0;
@@ -32,7 +29,7 @@
             --sidebar-width: 250px;
         }
 
-        .app-header {
+        .legacy-app-header {
             height: var(--header-height);
             background: #161b22;
             border-bottom: 1px solid #30363d;
@@ -46,7 +43,7 @@
             z-index: 1000;
         }
 
-        .sidebar-toggle {
+        .legacy-sidebar-toggle {
             width: 36px;
             height: 36px;
             border: 1px solid #30363d;
@@ -61,7 +58,7 @@
             transition: all 0.2s;
         }
 
-        .sidebar-toggle:hover {
+        .legacy-sidebar-toggle:hover {
             background: #58a6ff;
             color: #0d1117;
         }
@@ -85,7 +82,7 @@
             font-size: 0.9rem;
         }
 
-        .app-sidebar {
+        .legacy-app-sidebar {
             width: var(--sidebar-width);
             background: #161b22;
             border-right: 1px solid #30363d;
@@ -98,21 +95,21 @@
             transition: transform 0.3s ease;
         }
 
-        .app-sidebar.collapsed {
+        .legacy-app-sidebar.collapsed {
             transform: translateX(-100%);
         }
 
-        .sidebar-menu {
+        .legacy-sidebar-menu {
             list-style: none;
             padding: 8px 0;
             margin: 0;
         }
 
-        .sidebar-menu li {
+        .legacy-sidebar-menu li {
             margin: 0;
         }
 
-        .sidebar-menu li a {
+        .legacy-sidebar-menu li a {
             display: flex;
             align-items: center;
             gap: 10px;
@@ -124,34 +121,34 @@
             border-left: 3px solid transparent;
         }
 
-        .sidebar-menu li a:hover {
+        .legacy-sidebar-menu li a:hover {
             background: #1c2128;
             color: #58a6ff;
         }
 
-        .sidebar-menu li a.active {
+        .legacy-sidebar-menu li a.active {
             background: #1c2128;
             color: #58a6ff;
             border-left-color: #58a6ff;
             font-weight: 600;
         }
 
-        .sidebar-menu li a i {
+        .legacy-sidebar-menu li a i {
             width: 20px;
             text-align: center;
             font-size: 16px;
         }
 
-        .sidebar-menu li.has-submenu > a {
+        .legacy-sidebar-menu li.has-submenu > a {
             cursor: pointer;
         }
 
-        .sidebar-menu li.has-submenu > a .bi-chevron-down {
+        .legacy-sidebar-menu li.has-submenu > a .bi-chevron-down {
             transition: transform 0.2s;
             font-size: 12px;
         }
 
-        .sidebar-menu li.has-submenu.open > a .bi-chevron-down {
+        .legacy-sidebar-menu li.has-submenu.open > a .bi-chevron-down {
             transform: rotate(180deg);
         }
 
@@ -172,7 +169,7 @@
             font-size: 13px;
         }
 
-        .app-content {
+        .legacy-app-content {
             margin-top: var(--header-height);
             margin-left: var(--sidebar-width);
             padding: 24px;
@@ -180,18 +177,18 @@
             transition: margin-left 0.3s ease;
         }
 
-        .app-content.expanded {
+        .legacy-app-content.expanded {
             margin-left: 0;
         }
 
         @media (max-width: 768px) {
-            .app-sidebar {
+            .legacy-app-sidebar {
                 transform: translateX(-100%);
             }
-            .app-sidebar.mobile-open {
+            .legacy-app-sidebar.mobile-open {
                 transform: translateX(0);
             }
-            .app-content {
+            .legacy-app-content {
                 margin-left: 0;
             }
             .main-content {
@@ -216,15 +213,15 @@
             }
         }
 
-        .app-sidebar::-webkit-scrollbar {
+        .legacy-app-sidebar::-webkit-scrollbar {
             width: 6px;
         }
 
-        .app-sidebar::-webkit-scrollbar-track {
+        .legacy-app-sidebar::-webkit-scrollbar-track {
             background: #161b22;
         }
 
-        .app-sidebar::-webkit-scrollbar-thumb {
+        .legacy-app-sidebar::-webkit-scrollbar-thumb {
             background: #30363d;
             border-radius: 3px;
         }
@@ -655,343 +652,12 @@
             padding-top: 20px;
             border-top: 1px solid #30363d;
         }
-    </style>
-</head>
-<body>
+    
+</style>
+{% endblock %}
+{% block content %}
+
     <!-- Header -->
-    <header class="app-header">
-        <button class="sidebar-toggle" id="sidebarToggle">
-            <i class="bi bi-list"></i>
-        </button>
-        <div class="logo-container">
-            <a href="/" class="d-flex align-items-center text-decoration-none">
-                <div class="logo-placeholder">P</div>
-            </a>
-        </div>
-        <div class="ms-auto d-flex align-items-center">
-            {% if request.current_user %}
-                <span class="text-success me-2 small d-none d-md-inline" style="color: #3fb950 !important;">
-                    <i class="bi bi-person-circle"></i>
-                    {{ request.current_user.username }}
-                </span>
-                <a href="{% url 'intelligence:logout' %}?next={{ request.path }}" class="btn btn-secondary btn-sm">
-                    <i class="bi bi-box-arrow-right"></i> Cerrar sesión
-                </a>
-            {% else %}
-                <span class="small" style="color: #8b949e;">
-                    <i class="bi bi-person-circle"></i> Invitado
-                </span>
-            {% endif %}
-            {% if user.is_staff %}
-            <a href="/admin/" class="btn btn-secondary btn-sm ms-2" target="_blank">
-                <i class="bi bi-gear"></i> Admin
-            </a>
-            {% endif %}
-        </div>
-    </header>
-
-    <!-- Sidebar -->
-    <nav class="app-sidebar" id="appSidebar">
-        <ul class="sidebar-menu">
-            <li>
-                <a href="/" class="{% if request.path == '/' %}active{% endif %}">
-                    <i class="bi bi-speedometer2"></i>
-                    <span>Dashboard</span>
-                </a>
-            </li>
-            <li>
-                <a href="/fuentes-web/" class="{% if '/fuentes-web/' in request.path %}active{% endif %}">
-                    <i class="bi bi-globe"></i>
-                    <span>Fuentes Web</span>
-                </a>
-            </li>
-            <li>
-                <a href="/capturas/" class="{% if '/capturas/' in request.path %}active{% endif %}">
-                    <i class="bi bi-camera"></i>
-                    <span>Capturas</span>
-                </a>
-            </li>
-            <li>
-                <a href="/ingestas/" class="{% if '/ingestas/' in request.path %}active{% endif %}">
-                    <i class="bi bi-database"></i>
-                    <span>Ingestas</span>
-                </a>
-            </li>
-            <li>
-                <a href="/ingestas/propiedades/" class="{% if '/ingestas/propiedades/' in request.path %}active{% endif %}">
-                    <i class="bi bi-house-door"></i>
-                    <span>Propiedades</span>
-                </a>
-            </li>
-            <li class="has-submenu {% if '/prospects/' in request.path %}active{% endif %}">
-                <a href="#">
-                    <i class="bi bi-binoculars-fill"></i>
-                    <span>Prospección</span>
-                    <i class="bi bi-chevron-down ms-auto"></i>
-                </a>
-                <ul class="submenu">
-                    <li>
-                        <a href="/prospects/capture/" class="{% if '/prospects/capture/' in request.path %}active{% endif %}">
-                            <i class="bi bi-camera-fill"></i>
-                            <span>Captura</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="/prospects/" class="{% if '/prospects/' in request.path and '/capture/' not in request.path %}active{% endif %}">
-                            <i class="bi bi-list-ul"></i>
-                            <span>Lista de Prospectos</span>
-                        </a>
-                    </li>
-                </ul>
-            </li>
-            <li class="has-submenu open active">
-                <a href="#">
-                    <i class="bi bi-house-door-fill"></i>
-                    <span>Propiedades Propify</span>
-                    <i class="bi bi-chevron-down ms-auto"></i>
-                </a>
-                <ul class="submenu">
-                    <li>
-                        <a href="/propifai/dashboard/calidad/" class="{% if '/propifai/dashboard/calidad/' in request.path %}active{% endif %}">
-                            <i class="bi bi-bar-chart-line"></i>
-                            <span>Análisis de Cartera</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="/propifai/propiedades/" class="active">
-                            <i class="bi bi-list-ul"></i>
-                            <span>Lista de Propiedades</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="/propifai/dashboard/visitas/" class="{% if '/propifai/dashboard/visitas/' in request.path %}active{% endif %}">
-                            <i class="bi bi-calendar-check"></i>
-                            <span>Dashboard de Visitas</span>
-                        </a>
-                    </li>
-                </ul>
-            </li>
-            <li>
-                <a href="/requerimientos/lista/" class="{% if '/requerimientos/' in request.path %}active{% endif %}">
-                    <i class="bi bi-clipboard-check"></i>
-                    <span>Requerimientos</span>
-                </a>
-            </li>
-            <li class="has-submenu {% if '/matching/' in request.path %}active{% endif %}">
-                <a href="#">
-                    <i class="bi bi-lightning-charge-fill"></i>
-                    <span>Matching</span>
-                    <i class="bi bi-chevron-down ms-auto"></i>
-                </a>
-                <ul class="submenu">
-                    <li>
-                        <a href="/matching/masivo/" class="{% if '/matching/masivo/' in request.path %}active{% endif %}">
-                            <i class="bi bi-list-ul"></i>
-                            <span>Masivo</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="/matching/calendar/" class="{% if '/matching/calendar/' in request.path %}active{% endif %}">
-                            <i class="bi bi-calendar3"></i>
-                            <span>Calendario</span>
-                        </a>
-                    </li>
-                    <li class="has-submenu {% if '/matching/propuestas/' in request.path %}active{% endif %}">
-                        <a href="#">
-                            <i class="bi bi-whatsapp"></i>
-                            <span>Propuestas</span>
-                            <i class="bi bi-chevron-down ms-auto"></i>
-                        </a>
-                        <ul class="submenu" style="padding-left:20px;">
-                            <li>
-                                <a href="/matching/propuestas/dashboard/" class="{% if '/matching/propuestas/dashboard/' in request.path %}active{% endif %}">
-                                    <i class="bi bi-speedometer2"></i>
-                                    <span>Dashboard</span>
-                                </a>
-                            </li>
-                        </ul>
-                    </li>
-                </ul>
-            </li>
-            <li>
-                <a href="/acm/analisis/" class="{% if '/acm/' in request.path %}active{% endif %}">
-                    <i class="bi bi-graph-up"></i>
-                    <span>Análisis Comparativo (ACM)</span>
-                </a>
-            </li>
-            <li class="has-submenu {% if '/intelligence/' in request.path %}active{% endif %}">
-                <a href="#">
-                    <i class="bi bi-cpu"></i>
-                    <span>Intelligence Layer</span>
-                    <i class="bi bi-chevron-down ms-auto"></i>
-                </a>
-                <ul class="submenu">
-                    <li>
-                        <a href="/intelligence/dashboard/" class="{% if request.path == '/intelligence/' or request.path == '/intelligence/dashboard/' %}active{% endif %}">
-                            <i class="bi bi-speedometer2"></i>
-                            <span>Dashboard IA</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="/intelligence/skills/dashboard/" class="{% if '/intelligence/skills/' in request.path %}active{% endif %}">
-                            <i class="bi bi-lightning-charge-fill"></i>
-                            <span>Skills</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="/intelligence/collections/" class="{% if '/intelligence/collections/' in request.path %}active{% endif %}">
-                            <i class="bi bi-collection"></i>
-                            <span>Colecciones RAG</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="/intelligence/intent-evaluation/" class="{% if '/intelligence/intent-evaluation/' in request.path %}active{% endif %}">
-                            <i class="bi bi-bullseye"></i>
-                            <span>Evaluación de Intenciones</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="/intelligence/chat-web/" class="{% if '/intelligence/chat-web/' in request.path %}active{% endif %}">
-                            <i class="bi bi-chat-dots"></i>
-                            <span>Chat Asistente</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="/intelligence/chat-workflows/manage/" class="{% if '/intelligence/chat-workflows/' in request.path %}active{% endif %}">
-                            <i class="bi bi-arrow-repeat"></i>
-                            <span>Flujos Conversacionales</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="/intelligence/episodic-memory/" class="{% if '/intelligence/episodic-memory/' in request.path %}active{% endif %}">
-                            <i class="bi bi-memory"></i>
-                            <span>Memoria Episódica</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="/intelligence/profiles/" class="{% if '/intelligence/profiles/' in request.path %}active{% endif %}">
-                            <i class="bi bi-person-badge"></i>
-                            <span>Perfiles de IA</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="/intelligence/users/" class="{% if '/intelligence/users/' in request.path %}active{% endif %}">
-                            <i class="bi bi-people"></i>
-                            <span>Usuarios</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="/intelligence/roles/" class="{% if '/intelligence/roles/' in request.path %}active{% endif %}">
-                            <i class="bi bi-shield-lock"></i>
-                            <span>Roles</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="/intelligence/simulator/" class="{% if '/intelligence/simulator/' in request.path %}active{% endif %}">
-                            <i class="bi bi-robot"></i>
-                            <span>Simulador</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="/intelligence/stats/" class="{% if '/intelligence/stats/' in request.path %}active{% endif %}">
-                            <i class="bi bi-bar-chart-line"></i>
-                            <span>Estadísticas</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="/intelligence/logs/" class="{% if '/intelligence/logs/' in request.path %}active{% endif %}">
-                            <i class="bi bi-journal-text"></i>
-                            <span>Logs de Actividad</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="/intelligence/config/" class="{% if '/intelligence/config/' in request.path %}active{% endif %}">
-                            <i class="bi bi-gear"></i>
-                            <span>Configuraciones</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="/intelligence/errors/" class="{% if '/intelligence/errors/' in request.path %}active{% endif %}">
-                            <i class="bi bi-exclamation-triangle"></i>
-                            <span>Errores</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="/intelligence/tests/" class="{% if '/intelligence/tests/' in request.path %}active{% endif %}">
-                            <i class="bi bi-flask"></i>
-                            <span>Tests</span>
-                        </a>
-                    </li>
-                </ul>
-            </li>
-            <li class="has-submenu {% if '/meta-ads/' in request.path %}active{% endif %}">
-                <a href="#">
-                    <i class="bi bi-megaphone-fill"></i>
-                    <span>Meta Ads</span>
-                    <i class="bi bi-chevron-down ms-auto"></i>
-                </a>
-                <ul class="submenu">
-                    <li>
-                        <a href="/meta-ads/dashboard/exacto/" class="{% if '/meta-ads/dashboard/' in request.path %}active{% endif %}">
-                            <i class="bi bi-speedometer"></i>
-                            <span>Dashboard Principal</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="/meta-ads/analisis/historico/" class="{% if '/meta-ads/analisis/historico/' in request.path %}active{% endif %}">
-                            <i class="bi bi-bar-chart-line"></i>
-                            <span>Análisis Histórico</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="/meta-ads/campañas/" class="{% if '/meta-ads/campañas/' in request.path and '/dashboard/' not in request.path %}active{% endif %}">
-                            <i class="bi bi-list-ul"></i>
-                            <span>Lista de Campañas</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="/meta-ads/sincronizar/" class="{% if '/meta-ads/sincronizar/' in request.path %}active{% endif %}">
-                            <i class="bi bi-arrow-repeat"></i>
-                            <span>Sincronizar Datos</span>
-                        </a>
-                    </li>
-                </ul>
-            </li>
-            <li>
-                <a href="/analisis-crm/" class="{% if '/analisis-crm/' in request.path %}active{% endif %}">
-                    <i class="bi bi-people-fill"></i>
-                    <span>Leads CRM</span>
-                </a>
-            </li>
-            <li>
-                <a href="/eventos/" class="{% if '/eventos/' in request.path %}active{% endif %}">
-                    <i class="bi bi-calendar-event"></i>
-                    <span>Análisis de Eventos</span>
-                </a>
-            </li>
-            <li>
-                <a href="#">
-                    <i class="bi bi-search"></i>
-                    <span>Descubrimiento</span>
-                </a>
-            </li>
-            <li>
-                <a href="#">
-                    <i class="bi bi-gear"></i>
-                    <span>Configuración</span>
-                </a>
-            </li>
-            <li>
-                <a href="#">
-                    <i class="bi bi-question-circle"></i>
-                    <span>Ayuda</span>
-                </a>
-            </li>
-        </ul>
-    </nav>
-
-    <!-- Contenido principal -->
-    <main class="app-content" id="appContent">
         {{ todas_las_propiedades|json_script:"todas-propiedades-data" }}
 
         <div class="portal-container">
@@ -1226,26 +892,7 @@
                 </div>
             </div>
         </div>
-    </main>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        document.getElementById('sidebarToggle')?.addEventListener('click', function() {
-            var sidebar = document.getElementById('appSidebar');
-            var content = document.getElementById('appContent');
-            sidebar.classList.toggle('mobile-open');
-            if (window.innerWidth > 768) {
-                sidebar.classList.toggle('collapsed');
-                content.classList.toggle('expanded');
-            }
-        });
-
-        document.querySelectorAll('.has-submenu > a').forEach(function(link) {
-            link.addEventListener('click', function(e) {
-                e.preventDefault();
-                this.parentElement.classList.toggle('open');
-            });
-        });
+    <script>});
     </script>
 
     <!-- Google Maps API -->
@@ -1352,5 +999,5 @@
             document.getElementById('filter-estado').value = urlParams.get('estado') || '';
         });
     </script>
-</body>
-</html>
+
+{% endblock %}

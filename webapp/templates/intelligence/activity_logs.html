@@ -1,10 +1,13 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Logs de Actividad - PIL Dashboard</title>
-    <style>
+{% extends 'propifai_base.html' %}
+
+{% block title %}Logs de Actividad - PIL Dashboard{% endblock %}
+{% block extra_head %}
+
+
+{% endblock %}
+{% block extra_css %}
+<style>
+
         :root {
             --bg-primary: #0d1117;
             --bg-secondary: #161b22;
@@ -491,9 +494,11 @@
                 overflow-x: auto;
             }
         }
-    </style>
-</head>
-<body>
+    
+</style>
+{% endblock %}
+{% block content %}
+
     <div class="container">
         <div class="header">
             <h1>📊 Logs de Actividad del Sistema</h1>
@@ -820,5 +825,5 @@
             });
         });
     </script>
-</body>
-</html>
+
+{% endblock %}

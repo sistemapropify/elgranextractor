@@ -1,11 +1,12 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Propify — Panel de Inversión FB Ads</title>
+{% extends 'propifai_base.html' %}
+
+{% block title %}Propify — Panel de Inversión FB Ads{% endblock %}
+{% block extra_head %}
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+{% endblock %}
+{% block extra_css %}
 <style>
+
   :root {
     --bg: #0f0f0f;
     --bg2: #161616;
@@ -235,9 +236,11 @@
   .alert-action { font-size: 10px; margin-top: 3px; font-family: 'DM Mono', monospace; }
   .alert-action.bad { color: var(--red); }
   .alert-action.warn { color: var(--amber); }
+
 </style>
-</head>
-<body>
+{% endblock %}
+{% block content %}
+
 
 <div class="header">
   <div class="logo">
@@ -482,5 +485,5 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 });
 </script>
-</body>
-</html>
+
+{% endblock %}

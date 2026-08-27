@@ -736,7 +736,7 @@ async function loadPropertyDetails(propertyId) {
     content.classList.add('d-none');
     
     // Mostrar offcanvas
-    const offcanvas = new bootstrap.Offcanvas(document.getElementById('detailOffcanvas'));
+    const offcanvas = new PropifaiUI.Offcanvas(document.getElementById('detailOffcanvas'));
     offcanvas.show();
     
     try {
@@ -861,7 +861,7 @@ function setupEventListeners() {
     
     // Cerrar offcanvas
     document.getElementById('close-offcanvas').addEventListener('click', () => {
-        const offcanvas = bootstrap.Offcanvas.getInstance(document.getElementById('detailOffcanvas'));
+        const offcanvas = PropifaiUI.Offcanvas.getInstance(document.getElementById('detailOffcanvas'));
         offcanvas.hide();
     });
 }

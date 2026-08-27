@@ -276,7 +276,7 @@ function setupEventListeners() {
     
     // Botón de ayuda
     document.getElementById('btnHelp').addEventListener('click', () => {
-        new bootstrap.Modal(document.getElementById('helpModal')).show();
+        new PropifaiUI.Modal(document.getElementById('helpModal')).show();
     });
     
     // Toggle heatmap

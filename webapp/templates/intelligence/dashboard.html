@@ -1,10 +1,13 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - Propifai Intelligence Layer</title>
-    <style>
+{% extends 'propifai_base.html' %}
+
+{% block title %}Dashboard - Propifai Intelligence Layer{% endblock %}
+{% block extra_head %}
+
+
+{% endblock %}
+{% block extra_css %}
+<style>
+
         :root {
             --bg-dark: #0d1117;
             --bg-card: #161b22;
@@ -287,9 +290,11 @@
                 flex-direction: column;
             }
         }
-    </style>
-</head>
-<body>
+    
+</style>
+{% endblock %}
+{% block content %}
+
     <div class="container">
         <div class="header">
             <h1>📊 Dashboard - Propifai Intelligence Layer v1.0</h1>
@@ -514,5 +519,5 @@
             });
         });
     </script>
-</body>
-</html>
+
+{% endblock %}

@@ -1,10 +1,13 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Consumo de IA - Propifai Intelligence Layer</title>
-    <style>
+{% extends 'propifai_base.html' %}
+
+{% block title %}Consumo de IA - Propifai Intelligence Layer{% endblock %}
+{% block extra_head %}
+
+
+{% endblock %}
+{% block extra_css %}
+<style>
+
         * {
             margin: 0;
             padding: 0;
@@ -430,9 +433,11 @@
                 gap: 12px;
             }
         }
-    </style>
-</head>
-<body>
+    
+</style>
+{% endblock %}
+{% block content %}
+
     <div class="container">
         <!-- Header -->
         <div class="header">
@@ -908,5 +913,5 @@
             initCallerChart();
         });
     </script>
-</body>
-</html>
+
+{% endblock %}

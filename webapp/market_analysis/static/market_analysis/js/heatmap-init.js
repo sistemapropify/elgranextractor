@@ -66,7 +66,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Modal de ayuda
     document.getElementById('btnHelp')?.addEventListener('click', function() {
-        new bootstrap.Modal(document.getElementById('helpModal')).show();
+        new PropifaiUI.Modal(document.getElementById('helpModal')).show();
     });
     
     console.log('Eventos configurados correctamente');

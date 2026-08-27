@@ -1,19 +1,45 @@
 from django.shortcuts import render
 from django.views.generic import ListView
-from django.db.models import Count, Avg, Sum, F, Q
+from django.db import connections
+from django.db.models import Count, Avg, Sum, F, Q, Exists, IntegerField, Max, Min, OuterRef, Subquery
 from django.db.models.functions import Coalesce
 from django.db.models import FloatField, ExpressionWrapper
 from django.http import JsonResponse, HttpResponse
 from django.core.paginator import Paginator
 import json
 from datetime import date, datetime
-from .models import PropifaiProperty
+from .models import Event, PropifaiProperty
 from .mapeo_ubicaciones import (
     obtener_nombre_departamento,
     obtener_nombre_provincia,
     obtener_nombre_distrito,
     DEPARTAMENTOS, PROVINCIAS, DISTRITOS
 )
+
+
+def _annotate_event_metrics(queryset):
+    """Añade métricas de dbo.event sin asumir una relación ORM inexistente.
+
+    Event.property_id es un BigIntegerField (no ForeignKey), por lo que Django
+    no crea el lookup inverso ``event`` sobre PropifaiProperty.
+    """
+    events = Event.objects.filter(property_id=OuterRef("pk"))
+    grouped = events.values("property_id").annotate(
+        total=Count("id"),
+        first=Min("start_time"),
+        last=Max("start_time"),
+    )
+    return queryset.annotate(
+        total_eventos=Coalesce(
+            Subquery(grouped.values("total")[:1]),
+            0,
+            output_field=IntegerField(),
+        ),
+        primera_visita=Subquery(grouped.values("first")[:1]),
+        ultima_visita=Subquery(grouped.values("last")[:1]),
+        tiene_lead=Exists(events.filter(lead_id__isnull=False)),
+        tiene_propuesta=Exists(events.filter(proposal_id__isnull=False)),
+    )
 
 
 class ListaPropiedadesPropifyView(ListView):
@@ -308,23 +334,8 @@ def dashboard_calidad_cartera(request):
     """
     # Obtener todas las propiedades, ordenadas por fecha de creación descendente (más recientes primero)
     # Anotar con conteo de eventos y fechas de visitas
-    from django.db.models import Count, Min, Max, Case, When, Value, BooleanField
     propiedades = PropifaiProperty.objects.all().order_by('-created_at')
-    propiedades = propiedades.annotate(
-        total_eventos=Count('event', distinct=True),
-        primera_visita=Min('event__fecha_evento'),
-        ultima_visita=Max('event__fecha_evento'),
-        tiene_lead=Case(
-            When(event__lead_id__isnull=False, then=Value(True)),
-            default=Value(False),
-            output_field=BooleanField()
-        ),
-        tiene_propuesta=Case(
-            When(event__proposal_id__isnull=False, then=Value(True)),
-            default=Value(False),
-            output_field=BooleanField()
-        )
-    ).distinct()
+    propiedades = _annotate_event_metrics(propiedades)
     
     # Filtros desde parámetros GET
     tipo_filtro = request.GET.get('tipo', '').strip()
@@ -337,16 +348,15 @@ def dashboard_calidad_cartera(request):
     if tipo_filtro:
         # Filtrar por tipo de propiedad (property_type_id)
         # Necesitamos obtener property_type_id desde property_types donde name coincida
-        from django.db import connections
         conn_temp = connections['propifai']
         with conn_temp.cursor() as cursor:
-            cursor.execute("SELECT id FROM property_types WHERE name LIKE %s", [f'%{tipo_filtro}%'])
+            cursor.execute("SELECT id FROM property_type WHERE name LIKE %s", [f'%{tipo_filtro}%'])
             tipo_ids = [row[0] for row in cursor.fetchall()]
             if tipo_ids:
                 # Obtener IDs de propiedades que tengan esos property_type_id
                 # Construir placeholders para IN
                 placeholders = ','.join(['%s'] * len(tipo_ids))
-                query = f"SELECT id FROM properties WHERE property_type_id IN ({placeholders})"
+                query = f"SELECT id FROM property WHERE property_type_id IN ({placeholders})"
                 cursor.execute(query, tipo_ids)
                 prop_ids = [row[0] for row in cursor.fetchall()]
                 if prop_ids:
@@ -355,77 +365,81 @@ def dashboard_calidad_cartera(request):
     if distrito_filtro:
         # Filtrar por nombre de distrito (usando district_map)
         # Primero obtener district_id desde properties_district donde name coincida
-        from django.db import connections
         conn_temp = connections['propifai']
         with conn_temp.cursor() as cursor:
-            cursor.execute("SELECT id FROM properties_district WHERE name LIKE %s", [f'%{distrito_filtro}%'])
+            cursor.execute("SELECT id FROM district WHERE name LIKE %s", [f'%{distrito_filtro}%'])
             distrito_ids = [row[0] for row in cursor.fetchall()]
             if distrito_ids:
-                propiedades = propiedades.filter(district__in=distrito_ids)
+                propiedades = propiedades.filter(district_id__in=distrito_ids)
     
     if agente_filtro:
         # Filtrar por agente (responsible_id)
         # Primero obtener user_id desde users donde username coincida
-        from django.db import connections
         conn_temp = connections['propifai']
         with conn_temp.cursor() as cursor:
-            cursor.execute("SELECT id FROM users WHERE username LIKE %s", [f'%{agente_filtro}%'])
+            cursor.execute("SELECT id FROM [user] WHERE username LIKE %s", [f'%{agente_filtro}%'])
             user_ids = [row[0] for row in cursor.fetchall()]
             if user_ids:
                 # Obtener IDs de propiedades que tengan esos responsible_id
                 # Construir placeholders para IN
                 placeholders = ','.join(['%s'] * len(user_ids))
-                query = f"SELECT id FROM properties WHERE responsible_id IN ({placeholders})"
+                query = f"SELECT id FROM property WHERE responsible_id IN ({placeholders})"
                 cursor.execute(query, user_ids)
                 prop_ids = [row[0] for row in cursor.fetchall()]
                 if prop_ids:
                     propiedades = propiedades.filter(id__in=prop_ids)
 
-    # Filtro por estado (availability_status o borrador)
+    # Filtro por estado usando únicamente columnas reales de dbo.property.
     if estado_filtro and estado_filtro != 'all':
-        # Mapeo inverso de español a inglés (y borrador)
-        estado_a_ingles = {
-            'disponible': 'available',
-            'vendido': 'sold',
-            'reservado': 'reserved',
-            'catchment': 'catchment',
-            'pausado': 'paused',
-            'nodisponible': 'unavailable',
-            'borrador': 'borrador',
-            'sinestado': 'sinestado',
-        }
-        estado_ingles = estado_a_ingles.get(estado_filtro, estado_filtro)
-        
-        if estado_ingles == 'borrador':
-            propiedades = propiedades.filter(is_draft=True)
-        elif estado_ingles == 'sinestado':
-            propiedades = propiedades.filter(availability_status__isnull=True)
+        if estado_filtro == 'borrador':
+            propiedades = propiedades.filter(is_visible=False)
+        elif estado_filtro == 'sinestado':
+            propiedades = propiedades.filter(property_status_id__isnull=True)
         else:
-            propiedades = propiedades.filter(availability_status=estado_ingles)
+            aliases = {
+                'disponible': ('disponible', 'available'),
+                'vendido': ('vendido', 'sold'),
+                'reservado': ('reservado', 'reserved'),
+                'catchment': ('captacion', 'captación', 'catchment'),
+                'pausado': ('pausado', 'paused'),
+                'nodisponible': ('no disponible', 'unavailable'),
+            }
+            names = aliases.get(estado_filtro, (estado_filtro,))
+            with connections['propifai'].cursor() as cursor:
+                placeholders = ','.join(['%s'] * len(names))
+                cursor.execute(
+                    f"SELECT id FROM property_status WHERE LOWER(name) IN ({placeholders})",
+                    [name.lower() for name in names],
+                )
+                status_ids = [row[0] for row in cursor.fetchall()]
+            propiedades = propiedades.filter(property_status_id__in=status_ids)
 
     total_db = propiedades.count()
     print(f"[DEBUG] Total propiedades en DB después de filtros: {total_db}")
     print(f"[DEBUG] Filtros aplicados: tipo={tipo_filtro}, distrito={distrito_filtro}, agente={agente_filtro}, estado={estado_filtro}")
 
     # Obtener mapeos de property_types, users y distritos desde la base de datos propifai
-    from django.db import connections
     conn = connections['propifai']
     property_type_map = {}
     user_map = {}
     district_map = {}
+    property_status_map = {}
     with conn.cursor() as cursor:
         # Mapeo property_type_id -> name
-        cursor.execute("SELECT id, name FROM property_types")
+        cursor.execute("SELECT id, name FROM property_type")
         for row in cursor.fetchall():
             property_type_map[row[0]] = row[1]
         # Mapeo user id -> username
-        cursor.execute("SELECT id, username FROM users")
+        cursor.execute("SELECT id, username FROM [user]")
         for row in cursor.fetchall():
             user_map[row[0]] = row[1]
         # Mapeo district id -> name
-        cursor.execute("SELECT id, name FROM properties_district")
+        cursor.execute("SELECT id, name FROM district")
         for row in cursor.fetchall():
             district_map[str(row[0])] = row[1]  # district es string en properties
+        cursor.execute("SELECT id, name FROM property_status")
+        for row in cursor.fetchall():
+            property_status_map[row[0]] = row[1]
     
     print(f"[DEBUG] user_map size: {len(user_map)}")
     # Buscar usuarios específicos
@@ -436,7 +450,7 @@ def dashboard_calidad_cartera(request):
     # Obtener property_type_id, created_by_id y responsible_id para cada propiedad mediante consulta raw
     # Usaremos una consulta que obtenga todos los IDs necesarios
     with conn.cursor() as cursor:
-        cursor.execute("SELECT id, property_type_id, created_by_id, responsible_id, wp_post_id, wp_last_sync FROM properties")
+        cursor.execute("SELECT id, property_type_id, created_by_id, responsible_id, wp_post_id, wp_last_sync FROM property")
         prop_extras = {}
         for row in cursor.fetchall():
             prop_id, pt_id, cb_id, resp_id, wp_post_id, wp_last_sync = row
@@ -448,23 +462,37 @@ def dashboard_calidad_cartera(request):
                 'wp_last_sync': wp_last_sync,
             }
     
-    # Obtener información financiera (initial_commission_percentage) desde property_financial_info
+    # Cargar especificaciones en bloque para evitar una consulta por campo/propiedad.
+    specs_map = {}
+    with conn.cursor() as cursor:
+        cursor.execute("SELECT * FROM property_specs")
+        columns = [column[0] for column in cursor.description]
+        for row in cursor.fetchall():
+            data = dict(zip(columns, row))
+            specs_map[data['property_id']] = data
+
+    # Obtener comisión inicial desde el esquema real.
     financial_info = {}
     with conn.cursor() as cursor:
-        cursor.execute("SELECT property_id, initial_commission_percentage FROM property_financial_info")
+        cursor.execute("SELECT property_id, commission_initial FROM property_financial_info")
         for row in cursor.fetchall():
             prop_id, commission = row
             financial_info[prop_id] = commission
     
     # Calcular completitud para cada propiedad
     campos_clave = [
-        'exact_address', 'coordinates', 'land_area', 'built_area', 'price',
+        'map_address', 'coordinates', 'land_area', 'built_area', 'price',
         'bedrooms', 'bathrooms', 'description', 'district', 'title'
     ]
     
     propiedades_con_score = []
     print(f"[DEBUG] Total propiedades a procesar: {propiedades.count()}")
     for i, prop in enumerate(propiedades):
+        prop._specs_cache = specs_map.get(prop.id)
+        status_name = property_status_map.get(prop.property_status_id)
+        prop.availability_status = (status_name or '').strip().lower() or None
+        prop.is_draft = not bool(prop.is_visible)
+        prop.is_active = bool(prop.is_visible)
         completos = 0
         faltantes = []
         for campo in campos_clave:
@@ -492,8 +520,7 @@ def dashboard_calidad_cartera(request):
             status_filter = mapping.get(prop.availability_status, prop.availability_status or 'sinestado')
         prop.status_filter = status_filter
         # Atributos adicionales para las columnas del template
-        prop.real_address = getattr(prop, 'real_address', None) or prop.exact_address
-        
+
         # Determinar tipo de propiedad real desde property_types
         tipo_propiedad_valor = '—'
         prop_extras_data = prop_extras.get(prop.id)
@@ -502,6 +529,7 @@ def dashboard_calidad_cartera(request):
             if pt_id and pt_id in property_type_map:
                 tipo_propiedad_valor = property_type_map[pt_id]
         prop.property_type = tipo_propiedad_valor
+        prop.codigo_unico_propiedad = prop.code
         
         # Determinar agente (responsible_id) y usuario (created_by_id)
         agent_name = '—'
@@ -575,9 +603,13 @@ def dashboard_calidad_cartera(request):
     }
     # Estadísticas generales
     total_real = total_db  # 73
-    props_disponibles = propiedades.filter(is_draft=False, availability_status='available').count()  # solo disponibles (estado available)
-    props_borradores = propiedades.filter(is_draft=True).count()    # 4
-    props_sin_gps = propiedades.filter(coordinates__isnull=True).count()
+    available_names = {'available', 'disponible'}
+    props_disponibles = sum(
+        1 for p in propiedades_con_score
+        if not p.is_draft and p.availability_status in available_names
+    )
+    props_borradores = sum(1 for p in propiedades_con_score if p.is_draft)
+    props_sin_gps = sum(1 for p in propiedades_con_score if not p.coordinates)
     
     conteo_estados = {}
     for eng, count in status_counts.items():
@@ -590,14 +622,11 @@ def dashboard_calidad_cartera(request):
     print(f"[DEBUG] props_disponibles: {props_disponibles}")
     
     # Precio/m² mediano (solo propiedades con built_area > 0)
-    propiedades_con_precio_m2 = propiedades.filter(
-        price__isnull=False,
-        built_area__isnull=False,
-        built_area__gt=0
-    ).annotate(
-        precio_m2=ExpressionWrapper(F('price') / F('built_area'), output_field=FloatField())
-    )
-    precios_m2 = [p.precio_m2 for p in propiedades_con_precio_m2 if p.precio_m2]
+    precios_m2 = [
+        float(p.price) / float(p.built_area)
+        for p in propiedades_con_score
+        if p.price and p.built_area and p.built_area > 0
+    ]
     precio_mediano_general = sorted(precios_m2)[len(precios_m2)//2] if precios_m2 else 0
 
     # Agregados por agente (usando responsible_id)
@@ -849,11 +878,11 @@ def dashboard_calidad_cartera(request):
     
     for min_precio, max_precio, etiqueta in rangos:
         if max_precio == float('inf'):
-            props_en_rango = propiedades.filter(price__gte=min_precio)
+            props_en_rango = [p for p in propiedades_con_score if p.price and p.price >= min_precio]
         else:
-            props_en_rango = propiedades.filter(price__gte=min_precio, price__lt=max_precio)
-        
-        num_props = props_en_rango.count()
+            props_en_rango = [p for p in propiedades_con_score if p.price and min_precio <= p.price < max_precio]
+
+        num_props = len(props_en_rango)
         
         # Calcular completitud promedio para este rango
         if num_props > 0:
@@ -942,21 +971,7 @@ def property_visits_dashboard(request):
     
     # Anotar con conteo de eventos y fechas
     # Usamos event (relación inversa) porque Event tiene ForeignKey a PropifaiProperty
-    properties = properties.annotate(
-        total_eventos=Count('event', distinct=True),
-        primera_visita=Min('event__fecha_evento'),
-        ultima_visita=Max('event__fecha_evento'),
-        tiene_lead=Case(
-            When(event__lead_id__isnull=False, then=Value(True)),
-            default=Value(False),
-            output_field=BooleanField()
-        ),
-        tiene_propuesta=Case(
-            When(event__proposal_id__isnull=False, then=Value(True)),
-            default=Value(False),
-            output_field=BooleanField()
-        )
-    ).distinct()
+    properties = _annotate_event_metrics(properties)
     
     # Serializar a JSON
     properties_list = []
@@ -1056,7 +1071,7 @@ def property_timeline_api(request, property_id):
     Endpoint API que devuelve datos completos de una propiedad para el drawer
     con información de etapas y línea de tiempo.
     """
-    from .models import PropifaiProperty, Event, EventType, User
+    from .models import PropifaiProperty, Event
     from django.db import connections
     import json
     from datetime import date, datetime
@@ -1070,28 +1085,33 @@ def property_timeline_api(request, property_id):
     except PropifaiProperty.DoesNotExist:
         return JsonResponse({'error': 'Propiedad no encontrada'}, status=404)
     
-    # Obtener información básica de la propiedad
+    # Obtener información básica de la propiedad. Estos nombres corresponden al
+    # esquema actual de `property`; los alias antiguos exact_address, etc. ya no
+    # deben usarse aquí porque hacen fallar el drawer aunque el dashboard cargue.
     property_data = {
         'id': prop.id,
         'code': prop.code,
         'title': prop.title,
-        'exact_address': prop.exact_address,
-        'real_address': prop.real_address or prop.exact_address,
+        'map_address': prop.map_address,
+        'display_address': prop.display_address,
+        'real_address': prop.map_address or prop.display_address,
         'description': prop.description,
         'price': float(prop.price) if prop.price else None,
         'built_area': float(prop.built_area) if prop.built_area else None,
         'land_area': float(prop.land_area) if prop.land_area else None,
         'bedrooms': prop.bedrooms,
         'bathrooms': prop.bathrooms,
-        'availability_status': prop.availability_status,
-        'is_draft': prop.is_draft,
-        'is_active': prop.is_active,
+        'is_project': prop.is_project,
+        'is_visible': prop.is_visible,
+        'project_name': prop.project_name,
         'created_at': prop.created_at.isoformat() if prop.created_at else None,
         'updated_at': prop.updated_at.isoformat() if prop.updated_at else None,
-        'district': prop.district,
-        'urbanization': prop.urbanization,
-        'department': prop.department,
-        'province': prop.province,
+        'district': prop.district_id,
+        'latitude': float(prop.latitude) if prop.latitude is not None else None,
+        'longitude': float(prop.longitude) if prop.longitude is not None else None,
+        'maintenance_fee': float(prop.maintenance_fee) if prop.maintenance_fee else None,
+        'registry_number': prop.registry_number,
+        'video_url': prop.video_url,
     }
     
     # Obtener mapeos desde la base de datos propifai
@@ -1100,37 +1120,46 @@ def property_timeline_api(request, property_id):
         property_type_map = {}
         user_map = {}
         district_map = {}
-        
+        property_status_map = {}
+
         with conn.cursor() as cursor:
             # Mapeo property_type_id -> name
-            cursor.execute("SELECT id, name FROM property_types")
+            cursor.execute("SELECT id, name FROM property_type")
             for row in cursor.fetchall():
                 property_type_map[row[0]] = row[1]
             
             # Mapeo user id -> username
-            cursor.execute("SELECT id, username FROM users")
+            cursor.execute("SELECT id, username FROM [user]")
             for row in cursor.fetchall():
                 user_map[row[0]] = row[1]
             
             # Mapeo district id -> name
-            cursor.execute("SELECT id, name FROM properties_district")
+            cursor.execute("SELECT id, name FROM district")
             for row in cursor.fetchall():
                 district_map[str(row[0])] = row[1]
+
+            cursor.execute("SELECT id, name FROM property_status")
+            for row in cursor.fetchall():
+                property_status_map[row[0]] = row[1]
     except Exception as e:
         logger.error(f"Error al obtener mapeos de la base de datos propifai: {e}")
         # Continuar con diccionarios vacíos para no romper el flujo
         property_type_map = {}
         user_map = {}
         district_map = {}
-    
-    # Obtener información adicional desde properties table
+        property_status_map = {}
+
+    # Obtener información adicional y un inventario completo de campos. SELECT *
+    # es deliberado en este endpoint de inspección: si Propifai añade una columna,
+    # aparecerá automáticamente en la ficha sin requerir otro parche del template.
     prop_extras_data = {}
+    all_field_sections = {'property': {}, 'property_specs': {}, 'property_financial_info': {}}
     try:
         with conn.cursor() as cursor:
             cursor.execute("""
                 SELECT property_type_id, created_by_id, responsible_id,
                        wp_post_id, wp_last_sync
-                FROM properties
+                FROM property
                 WHERE id = %s
             """, [property_id])
             row = cursor.fetchone()
@@ -1142,6 +1171,11 @@ def property_timeline_api(request, property_id):
                     'wp_post_id': row[3],
                     'wp_last_sync': row[4],
                 }
+            for table_name in all_field_sections:
+                cursor.execute(f"SELECT * FROM {table_name} WHERE property_id = %s" if table_name != 'property' else "SELECT * FROM property WHERE id = %s", [property_id])
+                full_row = cursor.fetchone()
+                if full_row:
+                    all_field_sections[table_name] = dict(zip([column[0] for column in cursor.description], full_row))
     except Exception as e:
         logger.error(f"Error al obtener información adicional de properties: {e}")
         prop_extras_data = {}
@@ -1171,13 +1205,17 @@ def property_timeline_api(request, property_id):
     district_id = prop.district
     district_name = district_map.get(str(district_id), district_id) if district_id else '—'
     property_data['district_name'] = district_name
+    current_status = (property_status_map.get(prop.property_status_id) or '').strip().lower() or None
+    property_data['availability_status'] = current_status
+    property_data['is_draft'] = not bool(prop.is_visible)
+    property_data['is_active'] = bool(prop.is_visible)
     
     # Obtener información financiera
     commission = None
     try:
         with conn.cursor() as cursor:
             cursor.execute("""
-                SELECT initial_commission_percentage
+                SELECT commission_initial
                 FROM property_financial_info
                 WHERE property_id = %s
             """, [property_id])
@@ -1188,6 +1226,7 @@ def property_timeline_api(request, property_id):
         logger.error(f"Error al obtener información financiera: {e}")
         commission = None
     property_data['commission_percentage'] = commission
+    property_data['all_fields'] = all_field_sections
     
     # Función para obtener fecha en zona horaria de Perú (UTC-5) como string ISO con offset
     def to_peru_date(dt):
@@ -1213,12 +1252,9 @@ def property_timeline_api(request, property_id):
     # Obtener eventos de la propiedad
     events = Event.objects.filter(property_id=property_id).order_by('start_time')
     
-    # Resolver nombres de agentes
-    agent_ids = [e.assigned_agent_id for e in events if e.assigned_agent_id]
-    agent_map = {}
-    if agent_ids:
-        users = User.objects.filter(id__in=set(agent_ids))
-        agent_map = {u.id: f"{u.first_name} {u.last_name}".strip() for u in users}
+    # Los agentes viven en la tabla singular [user]. Reutilizar el mapa cargado
+    # arriba evita que el ORM intente consultar la tabla heredada `users`.
+    agent_map = user_map
     
     events_list = []
     for event in events:
@@ -1259,13 +1295,13 @@ def property_timeline_api(request, property_id):
     etapa_numero = 1
     
     # Lógica simplificada para determinar etapa
-    if prop.availability_status == 'sold':
+    if current_status == 'sold':
         etapa_actual = 'Cierre y venta'
         etapa_numero = 5
     elif any(event['proposal_id'] for event in events_list if event['proposal_id']):
         etapa_actual = 'Propuesta y negociación'
         etapa_numero = 4
-    elif any(event['event_type_nombre'] and 'visita' in event['event_type_nombre'].lower() for event in events_list):
+    elif any('visita' in (event.get('event_type_nombre') or '').lower() for event in events_list):
         etapa_actual = 'Visitas al inmueble'
         etapa_numero = 3
     elif prop_extras_data and prop_extras_data.get('wp_post_id'):
@@ -1329,12 +1365,12 @@ def property_timeline_api(request, property_id):
             'nombre': 'Visitas al inmueble',
             'descripcion': 'Visitas programadas con clientes potenciales',
             'estado': 'activa' if etapa_numero == 3 else ('completada' if etapa_numero > 3 else 'pendiente'),
-            'fecha_inicio': next((e['fecha_evento'] for e in events_list if 'visita' in e.get('event_type_nombre', '').lower()), None),
+            'fecha_inicio': next((e['fecha_evento'] for e in events_list if 'visita' in (e.get('event_type_nombre') or '').lower()), None),
             'duracion_dias': 7,
             'datos': {
-                'total_visitas': len([e for e in events_list if 'visita' in e.get('event_type_nombre', '').lower()]),
-                'primera_visita': next((e['fecha_evento'] for e in events_list if 'visita' in e.get('event_type_nombre', '').lower()), None),
-                'resultados_visitas': [{'fecha': e['fecha_evento'], 'resultado': 'Interesado' if e.get('lead_id') else 'No interesado'} for e in events_list if 'visita' in e.get('event_type_nombre', '').lower()][:3],
+                'total_visitas': len([e for e in events_list if 'visita' in (e.get('event_type_nombre') or '').lower()]),
+                'primera_visita': next((e['fecha_evento'] for e in events_list if 'visita' in (e.get('event_type_nombre') or '').lower()), None),
+                'resultados_visitas': [{'fecha': e['fecha_evento'], 'resultado': 'Interesado' if e.get('lead_id') else 'No interesado'} for e in events_list if 'visita' in (e.get('event_type_nombre') or '').lower()][:3],
                 'ajuste_precio': None  # Podría calcularse si hay eventos de ajuste
             }
         },
@@ -1356,12 +1392,12 @@ def property_timeline_api(request, property_id):
             'id': 5,
             'nombre': 'Cierre y venta',
             'descripcion': 'Firma de documentos y liquidación de comisión',
-            'estado': 'completada' if prop.availability_status == 'sold' else ('activa' if etapa_numero == 5 else 'pendiente'),
-            'fecha_inicio': to_peru_date(prop.updated_at) if prop.availability_status == 'sold' else None,
+            'estado': 'completada' if current_status == 'sold' else ('activa' if etapa_numero == 5 else 'pendiente'),
+            'fecha_inicio': to_peru_date(prop.updated_at) if current_status == 'sold' else None,
             'duracion_dias': 14,
             'datos': {
-                'precio_final': float(prop.price) if prop.price and prop.availability_status == 'sold' else None,
-                'fecha_firma': to_peru_date(prop.updated_at) if prop.availability_status == 'sold' else None,
+                'precio_final': float(prop.price) if prop.price and current_status == 'sold' else None,
+                'fecha_firma': to_peru_date(prop.updated_at) if current_status == 'sold' else None,
                 'comision_liquidada': commission,
                 'agente_cerro': agent_name
             }
@@ -1432,7 +1468,7 @@ def property_timeline_api(request, property_id):
             'dias_activa': dias_activa,
             'precio_m2': precio_m2,
             'total_eventos': len(events_list),
-            'total_visitas': len([e for e in events_list if 'visita' in e.get('event_type_nombre', '').lower()]),
+            'total_visitas': len([e for e in events_list if 'visita' in (e.get('event_type_nombre') or '').lower()]),
             'tiene_lead': any(e.get('lead_id') for e in events_list),
             'tiene_propuesta': any(e.get('proposal_id') for e in events_list)
         }

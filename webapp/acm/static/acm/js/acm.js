@@ -51,7 +51,7 @@ function inicializarEventos() {
     // Función para abrir el modal de Resumen ACM
     function abrirModalResumenACM() {
         actualizarResumenACM();
-        const modal = new bootstrap.Modal(document.getElementById('modalResumenACM'));
+        const modal = new PropifaiUI.Modal(document.getElementById('modalResumenACM'));
         modal.show();
     }
 
@@ -1123,7 +1123,7 @@ function mostrarToast(tipo, mensaje) {
     
     toastContainer.insertAdjacentHTML('beforeend', toastHTML);
     const toastElement = document.getElementById(toastId);
-    const toast = new bootstrap.Toast(toastElement, { delay: 3000 });
+    const toast = new PropifaiUI.Toast(toastElement, { delay: 3000 });
     toast.show();
     
     // Eliminar después de ocultar
@@ -1211,7 +1211,7 @@ function mostrarDetallePropiedad(propiedad) {
     }
     
     // Mostrar modal
-    const modal = new bootstrap.Modal(document.getElementById('modalDetallePropiedad'));
+    const modal = new PropifaiUI.Modal(document.getElementById('modalDetallePropiedad'));
     modal.show();
 }
 

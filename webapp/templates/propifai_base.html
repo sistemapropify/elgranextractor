@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -7,6 +8,8 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>{% block title %}Propifai{% endblock %}</title>
+
+    <link rel="stylesheet" href="{% static 'css/propifai-components.css' %}">
 
     {% block extra_head %}{% endblock %}
 
@@ -522,10 +525,16 @@
                 <!-- ===== GESTIÓN INMOBILIARIA ===== -->
                 <div class="nav-section-title" style="margin-top: 12px;">Gesti&oacute;n Inmobiliaria</div>
 
-                <a href="/propifai/propiedades/" class="nav-item {% if '/propifai/' in request.path %}active{% endif %}">
-                    <span class="nav-icon">&#x1F3E0;</span>
-                    <span>Propiedades Propify</span>
-                </a>
+                <div class="nav-item has-submenu {% if '/propifai/' in request.path %}active{% endif %}">
+                    <a href="#" class="nav-link submenu-toggle">
+                        <span class="nav-icon">&#x1F3E0;</span><span>Propiedades Propify</span><span class="submenu-arrow">&#x25BC;</span>
+                    </a>
+                    <div class="submenu-items">
+                        <a href="/propifai/propiedades/" class="submenu-item {% if request.path == '/propifai/propiedades/' %}active{% endif %}"><span>Lista de propiedades</span></a>
+                        <a href="/propifai/dashboard/calidad/" class="submenu-item {% if '/propifai/dashboard/calidad/' in request.path %}active{% endif %}"><span>Calidad de cartera</span></a>
+                        <a href="/propifai/trazabilidad/" class="submenu-item {% if '/propifai/trazabilidad/' in request.path %}active{% endif %}"><span>Trazabilidad de propiedades</span></a>
+                    </div>
+                </div>
 
                 <a href="/ingestas/propiedades/" class="nav-item {% if '/ingestas/' in request.path %}active{% endif %}">
                     <span class="nav-icon">&#x1F3E2;</span>
@@ -736,10 +745,21 @@
                     </div>
                 </div>
 
-                <a href="/analisis-crm/" class="nav-item {% if '/analisis-crm/' in request.path %}active{% endif %}">
-                    <span class="nav-icon">&#x1F4C8;</span>
-                    <span>Inteligencia de Leads</span>
-                </a>
+                <div class="nav-item has-submenu {% if '/analisis-crm/' in request.path or '/whatsapp-initial-responder/' in request.path %}active{% endif %}">
+                    <a href="#" class="nav-link submenu-toggle">
+                        <span class="nav-icon">&#x1F4C8;</span><span>Inteligencia de Leads</span><span class="submenu-arrow">&#x25BC;</span>
+                    </a>
+                    <div class="submenu-items">
+                        <a href="/analisis-crm/" class="submenu-item {% if request.path == '/analisis-crm/' %}active{% endif %}"><span>Resumen y embudo</span></a>
+                        <a href="/analisis-crm/cohortes/" class="submenu-item {% if '/cohortes/' in request.path %}active{% endif %}"><span>Cohortes</span></a>
+                        <a href="/analisis-crm/calidad-atencion/" class="submenu-item {% if '/calidad-atencion/' in request.path %}active{% endif %}"><span>Calidad de atenci&oacute;n</span></a>
+                        <a href="/analisis-crm/calidad-motor/" class="submenu-item {% if '/calidad-motor/' in request.path %}active{% endif %}"><span>Calidad del motor IA</span></a>
+                        <a href="/analisis-crm/propiedades/" class="submenu-item {% if '/analisis-crm/propiedades/' in request.path %}active{% endif %}"><span>Rendimiento de propiedades</span></a>
+                        <a href="/analisis-crm/calidad-motor-ia/" class="submenu-item {% if '/calidad-motor-ia/' in request.path %}active{% endif %}"><span>Motor IA de respuestas</span></a>
+                        <a href="/intelligence/whatsapp-initial-responder/" class="submenu-item {% if '/whatsapp-initial-responder/' in request.path and '/emulador/' not in request.path %}active{% endif %}"><span>Bot nocturno</span></a>
+                        <a href="/intelligence/whatsapp-initial-responder/emulador/" class="submenu-item {% if '/whatsapp-initial-responder/emulador/' in request.path %}active{% endif %}"><span>Emulador del bot nocturno</span></a>
+                    </div>
+                </div>
 
                 <!-- ===== INTELIGENCIA ARTIFICIAL ===== -->
                 <div class="nav-section-title" style="margin-top: 12px;">Inteligencia Artificial</div>
@@ -1125,6 +1145,10 @@
         })();
     </script>
 
-    {% block extra_js %}{% endblock %}
+    <script src="{% static 'js/propifai-ui.js' %}"></script>
+    {% block extra_js %}
+<script>
+</script>
+{% endblock %}
 </body>
 </html>

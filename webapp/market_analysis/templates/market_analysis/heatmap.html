@@ -672,7 +672,7 @@ function setupControls() {
 
     // Botón de ayuda
     document.getElementById('btnHelp').addEventListener('click', () => {
-        const helpModal = new bootstrap.Modal(document.getElementById('helpModal'));
+        const helpModal = new PropifaiUI.Modal(document.getElementById('helpModal'));
         helpModal.show();
     });
 
@@ -1056,7 +1056,7 @@ function setupControls() {
     var btnHelp = document.getElementById('btnHelp');
     if (btnHelp) {
         btnHelp.addEventListener('click', function() {
-            var helpModal = new bootstrap.Modal(document.getElementById('helpModal'));
+            var helpModal = new PropifaiUI.Modal(document.getElementById('helpModal'));
             helpModal.show();
         });
     }

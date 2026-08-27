@@ -1,10 +1,13 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sincronizar Colección - Propifai Intelligence Layer</title>
-    <style>
+{% extends 'propifai_base.html' %}
+
+{% block title %}Sincronizar Colección - Propifai Intelligence Layer{% endblock %}
+{% block extra_head %}
+
+
+{% endblock %}
+{% block extra_css %}
+<style>
+
         * {
             margin: 0;
             padding: 0;
@@ -230,9 +233,11 @@
             background-color: rgba(110, 118, 129, 0.2);
             color: #8b949e;
         }
-    </style>
-</head>
-<body>
+    
+</style>
+{% endblock %}
+{% block content %}
+
     <div class="container">
         <div class="header">
             <h1>🔄 Sincronizar Colección</h1>
@@ -362,5 +367,5 @@
             }, 10000);
         });
     </script>
-</body>
-</html>
+
+{% endblock %}

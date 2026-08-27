@@ -531,7 +531,7 @@
             if (data.success) {
                 alert('Fuente agregada exitosamente');
                 // Cerrar modal y recargar página
-                const modal = bootstrap.Modal.getInstance(document.getElementById('modalAgregarFuente'));
+                const modal = PropifaiUI.Modal.getInstance(document.getElementById('modalAgregarFuente'));
                 modal.hide();
                 window.location.reload();
             } else {
@@ -573,7 +573,7 @@
             </div>
         `;
 
-        const modal = new bootstrap.Modal(document.getElementById('modalDetalle'));
+        const modal = new PropifaiUI.Modal(document.getElementById('modalDetalle'));
         modal.show();
     }
 

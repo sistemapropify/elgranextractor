@@ -1,10 +1,13 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Estadísticas del Sistema - Propifai Intelligence Layer</title>
-    <style>
+{% extends 'propifai_base.html' %}
+
+{% block title %}Estadísticas del Sistema - Propifai Intelligence Layer{% endblock %}
+{% block extra_head %}
+
+
+{% endblock %}
+{% block extra_css %}
+<style>
+
         :root {
             --bg-dark: #0d1117;
             --bg-card: #161b22;
@@ -226,9 +229,11 @@
             font-style: italic;
             margin-top: 20px;
         }
-    </style>
-</head>
-<body>
+    
+</style>
+{% endblock %}
+{% block content %}
+
     <div class="container">
         <div class="header">
             <h1>📈 Estadísticas del Sistema - PIL v1.0</h1>
@@ -383,5 +388,5 @@
             window.location.reload();
         }, 30000);
     </script>
-</body>
-</html>
+
+{% endblock %}

@@ -726,7 +726,7 @@ class MatchingDashboard {
         $('#modalCamposNoCumplidos').text(camposNoCumplidos);
         
         // Mostrar modal
-        const modal = new bootstrap.Modal(document.getElementById('modalDetallePropiedad'));
+        const modal = new PropifaiUI.Modal(document.getElementById('modalDetallePropiedad'));
         modal.show();
     }
     

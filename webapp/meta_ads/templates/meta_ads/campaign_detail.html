@@ -1,11 +1,12 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Propify — Detalle de Campaña</title>
+{% extends 'propifai_base.html' %}
+
+{% block title %}Propify — Detalle de Campaña{% endblock %}
+{% block extra_head %}
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+{% endblock %}
+{% block extra_css %}
 <style>
+
   :root {
     --bg: #0f0f0f;
     --bg2: #161616;
@@ -269,9 +270,11 @@
     color: var(--red);
     margin-bottom: 24px;
   }
+
 </style>
-</head>
-<body>
+{% endblock %}
+{% block content %}
+
 
 <div class="header">
   <div class="logo">
@@ -418,5 +421,5 @@
 </div>
 {% endif %}
 
-</body>
-</html>
+
+{% endblock %}

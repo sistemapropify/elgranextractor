@@ -86,6 +86,8 @@ class PropifaiProperty(models.Model):
         Returns:
             Dict con los campos de property_specs, o None si no existe.
         """
+        if hasattr(self, "_specs_cache"):
+            return self._specs_cache
         try:
             with connections['propifai'].cursor() as cursor:
                 cursor.execute(f"""
@@ -104,7 +106,9 @@ class PropifaiProperty(models.Model):
                 row = cursor.fetchone()
                 if row:
                     columns = [desc[0] for desc in cursor.description]
-                    return dict(zip(columns, row))
+                    self._specs_cache = dict(zip(columns, row))
+                    return self._specs_cache
+            self._specs_cache = None
             return None
         except Exception as e:
             logger.error(f"Error al obtener specs para property {self.id}: {e}")

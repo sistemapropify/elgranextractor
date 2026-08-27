@@ -1,10 +1,13 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Propiedades Propify - Vista Simple</title>
-    <style>
+{% extends 'propifai_base.html' %}
+
+{% block title %}Propiedades Propify - Vista Simple{% endblock %}
+{% block extra_head %}
+
+
+{% endblock %}
+{% block extra_css %}
+<style>
+
         body {
             font-family: Arial, sans-serif;
             margin: 20px;
@@ -108,9 +111,11 @@
             font-weight: bold;
             color: #28a745;
         }
-    </style>
-</head>
-<body>
+    
+</style>
+{% endblock %}
+{% block content %}
+
     <div class="container">
         <h1>Propiedades Propify <span class="propify-badge">BASE DE DATOS PROPIFY</span></h1>
         
@@ -247,5 +252,5 @@
         // Cargar propiedades cuando la página cargue
         document.addEventListener('DOMContentLoaded', loadProperties);
     </script>
-</body>
-</html>
+
+{% endblock %}
