@@ -76,6 +76,9 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',-apple-system,Bl
 .gran-btn{padding:7px 12px;font-size:11.5px;color:var(--text-2);cursor:pointer;font-weight:500;border-right:1px solid var(--border);}
 .gran-btn:last-child{border-right:none;}
 .gran-btn.active{background:var(--blue);color:#0d1117;font-weight:700;}
+.focus-switch{display:flex;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-right:4px;}
+.focus-btn{border:0;border-right:1px solid var(--border);background:transparent;color:var(--text-2);padding:8px 12px;font:600 11.5px 'Inter',sans-serif;cursor:pointer;white-space:nowrap;}
+.focus-btn:last-child{border-right:0;}.focus-btn.active{background:var(--blue);color:#0d1117;}
 .url-line{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);}
 .url-line .lbl{font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;font-weight:700;flex-shrink:0;}
 .url-line code{font-size:11px;color:var(--blue);background:var(--surface-2);padding:4px 9px;border-radius:6px;border:1px solid var(--border);overflow-x:auto;white-space:nowrap;flex:1;}
@@ -234,7 +237,7 @@ table.heat-table{border-collapse:collapse;font-size:11.5px;width:100%;}
       <div class="page-head">
         <div>
           <h1>Análisis de agenda</h1>
-          <p>Evolución de eventos del CRM sobre <span class="mono">dbo.event</span> · agrupados por agente, tipo, estado y período · zona horaria America/Lima</p>
+          <p>{% if focus == 'created_on' %}Eventos creados/agendados durante el período, aunque ocurran en fechas posteriores{% else %}Eventos que ocurren durante el período según su fecha programada{% endif %} · <span class="mono">dbo.event</span> · America/Lima</p>
         </div>
         <div class="page-actions">
           <button class="btn">⇩ CSV</button>
@@ -244,15 +247,21 @@ table.heat-table{border-collapse:collapse;font-size:11.5px;width:100%;}
 
       <!-- filtros -->
       <form class="filters-wrap" method="get" action="/analisis-crm/agenda/">
+        <input type="hidden" name="focus" id="focus-input" value="{{ focus }}">
+        <input type="hidden" name="granularity" id="granularity-input" value="{{ granularity }}">
         <div class="filters-row">
+          <div class="focus-switch" aria-label="Enfoque temporal">
+            <button type="button" class="focus-btn {% if focus == 'scheduled_for' %}active{% endif %}" onclick="document.getElementById('focus-input').value='scheduled_for';this.form.submit()" title="Usa start_time: qué citas o visitas ocurren en el período">Agenda del período</button>
+            <button type="button" class="focus-btn {% if focus == 'created_on' %}active{% endif %}" onclick="document.getElementById('focus-input').value='created_on';this.form.submit()" title="Usa created_at: cuántos eventos fueron agendados durante el período">Agendados en el período</button>
+          </div>
           <input class="finput" name="from" type="date" value="{{ date_from|date:'Y-m-d' }}" style="width:145px" title="Fecha desde">
           <span style="color:var(--text-3)">→</span>
           <input class="finput" name="to" type="date" value="{{ date_to|date:'Y-m-d' }}" style="width:145px" title="Fecha hasta">
           <div class="gran-group" id="granGroup">
-            <button type="submit" name="granularity" value="day" class="gran-btn {% if granularity == 'day' %}active{% endif %}">Día</button>
-            <button type="submit" name="granularity" value="week" class="gran-btn {% if granularity == 'week' %}active{% endif %}">Semana</button>
-            <button type="submit" name="granularity" value="month" class="gran-btn {% if granularity == 'month' %}active{% endif %}">Mes</button>
-            <button type="submit" name="granularity" value="year" class="gran-btn {% if granularity == 'year' %}active{% endif %}">Año</button>
+            <button type="button" data-g="dia" class="gran-btn {% if granularity == 'day' %}active{% endif %}" onclick="document.getElementById('granularity-input').value='day';this.form.submit()">Día</button>
+            <button type="button" data-g="semana" class="gran-btn {% if granularity == 'week' %}active{% endif %}" onclick="document.getElementById('granularity-input').value='week';this.form.submit()">Semana</button>
+            <button type="button" data-g="mes" class="gran-btn {% if granularity == 'month' %}active{% endif %}" onclick="document.getElementById('granularity-input').value='month';this.form.submit()">Mes</button>
+            <button type="button" data-g="anio" class="gran-btn {% if granularity == 'year' %}active{% endif %}" onclick="document.getElementById('granularity-input').value='year';this.form.submit()">Año</button>
           </div>
           <select class="fsel" name="agent"><option value="">Agente responsable</option>{% for agent in agents %}<option value="{{ agent.id }}" {% if agent_filter == agent.id|stringformat:'s' %}selected{% endif %}>{{ agent.name }}</option>{% endfor %}</select>
           <select class="fsel" name="event_type"><option value="">Tipo de evento</option>{% for t in event_types %}<option value="{{ t.id }}" {% if type_filter == t.id|stringformat:'s' %}selected{% endif %}>{{ t.name }}</option>{% endfor %}</select>
@@ -276,7 +285,7 @@ table.heat-table{border-collapse:collapse;font-size:11.5px;width:100%;}
           <div class="section-head">
             <div>
               <h2>◱ Evolución temporal</h2>
-              <div class="sub">Volumen de eventos por tipo, agrupado por <span id="granLabel">semana</span> · start_time (fallback: created_at)</div>
+              <div class="sub">Volumen de eventos por tipo, agrupado por <span id="granLabel">semana</span> · {% if focus == 'created_on' %}fecha de creación (created_at){% else %}fecha programada (start_time){% endif %}</div>
             </div>
             <div class="legend-inline" id="chartLegend"></div>
           </div>
@@ -471,7 +480,8 @@ function renderChart(gran){
     </svg>`;
   document.getElementById('granLabel').textContent = GRAN_LABELS[gran];
 }
-renderChart('semana');
+const ACTIVE_GRAN = "{% if granularity == 'day' %}dia{% elif granularity == 'month' %}mes{% elif granularity == 'year' %}anio{% else %}semana{% endif %}";
+renderChart(ACTIVE_GRAN);
 
 document.getElementById('granGroup').addEventListener('click', e=>{
   const btn = e.target.closest('.gran-btn'); if(!btn) return;

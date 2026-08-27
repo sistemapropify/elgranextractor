@@ -29,7 +29,11 @@ def agenda_analysis(request):
         date_to = today
     if date_from > date_to:
         date_from, date_to = date_to, date_from
-    qs = Event.objects.filter(start_time__date__range=(date_from, date_to), is_active=True)
+    focus = request.GET.get('focus', 'scheduled_for')
+    if focus not in {'scheduled_for', 'created_on'}:
+        focus = 'scheduled_for'
+    date_field = 'created_at' if focus == 'created_on' else 'start_time'
+    qs = Event.objects.filter(**{f'{date_field}__date__range': (date_from, date_to)}, is_active=True)
     agent_id = request.GET.get('agent', '').strip()
     type_id = request.GET.get('event_type', '').strip()
     status = request.GET.get('status', '').strip()
@@ -61,7 +65,10 @@ def agenda_analysis(request):
     completed = pending = overdue = cancelled = 0
     now = timezone.now()
     for e in events:
-        p = bucket(e.start_time); periods[p] = periods.get(p, 0) + 1
+        basis_date = e.created_at if focus == 'created_on' else e.start_time
+        if not basis_date:
+            continue
+        p = bucket(basis_date); periods[p] = periods.get(p, 0) + 1
         series[granularity]['types'].setdefault(type_map.get(e.event_type_id, 'Sin tipo'), {})[p] = series[granularity]['types'].setdefault(type_map.get(e.event_type_id, 'Sin tipo'), {}).get(p, 0) + 1
         a = users.get(e.assigned_agent_id, 'Sin asignar'); by_agent.setdefault(a, [0, 0, 0]); by_agent[a][0] += 1
         t = type_map.get(e.event_type_id, 'Sin tipo'); by_type.setdefault(t, [0, 0, 0]); by_type[t][0] += 1
@@ -126,6 +133,7 @@ def agenda_analysis(request):
         'overdue': overdue, 'cancelled': cancelled, 'date_from': date_from, 'date_to': date_to,
         'granularity': granularity, 'event_types': EventType.objects.filter(is_active=True).order_by('name'),
         'agents': agent_choices, 'agent_filter': agent_id, 'type_filter': type_id, 'status_filter': status,
+        'focus': focus,
         'series_json': json.dumps(series_payload, ensure_ascii=False),
         'agents_json': json.dumps(agent_rows, ensure_ascii=False),
         'types_json': json.dumps(type_rows, ensure_ascii=False),
