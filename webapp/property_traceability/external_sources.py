@@ -48,6 +48,29 @@ def enrich_document_row(row):
     return item
 
 
+def load_user_names(ids):
+    """Resuelve el nombre completo de los usuarios (tabla [user] en dbpropify_be)."""
+    ids = [int(value) for value in ids if value is not None]
+    if not ids:
+        return {}
+    placeholders = ",".join(["%s"] * len(ids))
+    try:
+        with connections["propifai"].cursor() as cursor:
+            cursor.execute(f"""
+                SELECT id, first_name, last_name
+                FROM [user]
+                WHERE id IN ({placeholders})
+            """, ids)
+            names = {}
+            for row in _rows(cursor):
+                full = " ".join(part for part in (row.get("first_name"), row.get("last_name")) if part).strip()
+                names[row["id"]] = full or "Usuario"
+            return names
+    except Exception:
+        logger.exception("No se pudieron resolver los creadores de documentos")
+        return {}
+
+
 def _media_extension(item):
     raw = item.get("resolved_url") or item.get("file") or item.get("wp_source_url") or ""
     path = str(raw).split("?", 1)[0].split("#", 1)[0]
@@ -73,14 +96,21 @@ def fetch_external_evidence(property_ids):
                        pd.legal_reviewed_at, pd.legal_reviewed_by_id,
                        pd.legal_observation, pd.notes, pd.valid_from, pd.valid_to,
                        pd.document_scope, pd.document_type_id, pd.created_at,
-                       pd.updated_at, dt.code AS document_code, dt.name AS document_name
+                       pd.updated_at, pd.created_by_id,
+                       dt.code AS document_code, dt.name AS document_name
                 FROM property_document pd
                 LEFT JOIN document_type dt ON dt.id = pd.document_type_id
                 WHERE pd.property_id IN ({placeholders})
                 ORDER BY pd.created_at
             """, ids)
+            document_rows = []
             for row in _rows(cursor):
-                evidence[row["property_id"]]["documents"].append(enrich_document_row(row))
+                doc = enrich_document_row(row)
+                evidence[row["property_id"]]["documents"].append(doc)
+                document_rows.append(doc)
+            creator_names = load_user_names({doc.get("created_by_id") for doc in document_rows})
+            for doc in document_rows:
+                doc["created_by_name"] = creator_names.get(doc.get("created_by_id")) or ""
 
             cursor.execute(f"""
                 SELECT id, property_id, media_type, [file], thumbnail, title, label,
