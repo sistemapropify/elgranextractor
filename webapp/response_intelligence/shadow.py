@@ -76,8 +76,7 @@ def _generate_shadow_draft_once(
 
     Guardrails (spec §7): si el mensaje del cliente es de escalamiento/riesgo
     legal, el motor NUNCA genera con IA — se registra el draft con
-    ``auto_escalation=True`` y respuesta vacía (la plantilla sigue respondiendo
-    con "un agente te contactará"). Tras generar, se validan alucinaciones y
+    ``auto_escalation=True`` y respuesta vacía para revisión humana. Tras generar, se validan alucinaciones y
     negociación de precio con regex.
 
     Un ``OperationalError`` (corte ODBC transitorio) se propaga para que el
@@ -233,7 +232,7 @@ def _generate_shadow_draft_once(
                 model_version=LLMService.DEEPSEEK_MODEL,
                 trace_id=f"bot_draft:{0}",
                 auto_escalation=True,
-                blocked_reason="Mensaje de escalamiento/riesgo legal: la plantilla responde con aviso a agente",
+                blocked_reason="Mensaje de escalamiento/riesgo legal: requiere revisión humana",
             )
             draft.trace_id = f"bot_draft:{draft.pk}"
             draft.save(using="default", update_fields=["trace_id"])

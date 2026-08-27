@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Propifai · Análisis de agenda</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0d1117;
+  --bg-2:#0a0e14;
+  --card:#161b22;
+  --surface-2:#21262d;
+  --border:#30363d;
+  --text:#f0f6fc;
+  --text-2:#8b949e;
+  --text-3:#6e7681;
+  --blue:#58a6ff;
+  --green:#238636;
+  --green-light:#3fb950;
+  --amber:#d29922;
+  --red:#f85149;
+  --radius:10px;
+  --radius-lg:12px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;font-size:13px;-webkit-font-smoothing:antialiased;}
+.mono{font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;}
+::selection{background:var(--blue);color:#0d1117;}
+
+.app{display:flex;min-height:100vh;}
+
+/* representación mínima del menú lateral global existente (no forma parte de este módulo) */
+.global-nav{width:60px;flex-shrink:0;background:var(--bg-2);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding:16px 0;gap:22px;}
+.global-nav .logo{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--blue),#388bfd);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;color:#0d1117;}
+.global-nav .nav-icon{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:15px;cursor:pointer;}
+.global-nav .nav-icon.active{background:rgba(88,166,255,.15);color:var(--blue);}
+.global-nav .nav-note{margin-top:auto;writing-mode:vertical-rl;color:var(--text-3);font-size:9px;letter-spacing:.04em;padding-bottom:4px;}
+
+.main{flex:1;min-width:0;display:flex;flex-direction:column;}
+
+.topbar{height:54px;flex-shrink:0;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 22px;background:rgba(13,17,23,.7);backdrop-filter:blur(6px);}
+.breadcrumb{color:var(--text-3);font-size:12px;display:flex;align-items:center;gap:6px;}
+.breadcrumb b{color:var(--text);font-weight:600;}
+.topbar-right{display:flex;align-items:center;gap:14px;}
+.search-mini{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--text-3);font-size:12px;width:200px;}
+.avatar{width:30px;height:30px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--blue);}
+
+/* submenú horizontal de la sección Leads (no es un menú lateral nuevo) */
+.subtabs{display:flex;gap:2px;padding:0 22px;border-bottom:1px solid var(--border);background:var(--bg-2);overflow-x:auto;}
+.subtab{padding:11px 14px;font-size:12.5px;color:var(--text-2);border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap;font-weight:500;}
+.subtab:hover{color:var(--text);}
+.subtab.active{color:var(--blue);border-bottom-color:var(--blue);font-weight:600;}
+
+.page{padding:22px 22px 60px;flex:1;min-width:0;}
+
+.page-head{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;}
+.page-head h1{font-size:19px;font-weight:700;letter-spacing:-.01em;}
+.page-head p{color:var(--text-2);font-size:12.5px;margin-top:3px;}
+.page-actions{display:flex;gap:8px;}
+.btn{border:1px solid var(--border);background:var(--card);color:var(--text-2);padding:8px 13px;border-radius:8px;font-size:12.5px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px;transition:.15s;}
+.btn:hover{border-color:#3d444d;color:var(--text);}
+.btn.primary{background:var(--blue);border-color:var(--blue);color:#0d1117;font-weight:700;}
+.btn.primary:hover{background:#79b8ff;}
+.btn.green{background:var(--green);border-color:var(--green);color:#fff;}
+.btn.green:hover{background:var(--green-light);}
+
+/* ---------- filtros ---------- */
+.filters-wrap{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 14px;margin-bottom:16px;}
+.filters-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+.fsel,.finput{background:var(--surface-2);border:1px solid var(--border);color:var(--text-2);font-size:11.5px;padding:7px 10px;border-radius:7px;cursor:pointer;font-family:inherit;}
+.finput{cursor:text;color:var(--text);}
+.fsel:focus,.finput:focus{outline:2px solid var(--blue);outline-offset:1px;}
+.gran-group{display:flex;background:var(--surface-2);border:1px solid var(--border);border-radius:7px;overflow:hidden;}
+.gran-btn{padding:7px 12px;font-size:11.5px;color:var(--text-2);cursor:pointer;font-weight:500;border-right:1px solid var(--border);}
+.gran-btn:last-child{border-right:none;}
+.gran-btn.active{background:var(--blue);color:#0d1117;font-weight:700;}
+.url-line{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);}
+.url-line .lbl{font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;font-weight:700;flex-shrink:0;}
+.url-line code{font-size:11px;color:var(--blue);background:var(--surface-2);padding:4px 9px;border-radius:6px;border:1px solid var(--border);overflow-x:auto;white-space:nowrap;flex:1;}
+.active-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;min-height:14px;}
+.chip{display:flex;align-items:center;gap:6px;background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.35);color:var(--blue);padding:4px 8px 4px 10px;border-radius:20px;font-size:11px;font-weight:500;}
+.chip button{background:none;border:none;color:var(--blue);cursor:pointer;font-size:13px;line-height:1;opacity:.75;}
+.chip button:hover{opacity:1;}
+
+/* ---------- KPIs ---------- */
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px;}
+.kpi-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:13px 14px;position:relative;overflow:hidden;}
+.kpi-card::before{content:"";position:absolute;top:0;left:0;width:100%;height:2px;background:var(--accent,var(--blue));}
+.kpi-val{font-size:21px;font-weight:800;letter-spacing:-.02em;}
+.kpi-label{font-size:10.5px;color:var(--text-3);margin-top:3px;line-height:1.3;}
+.kpi-card.warn .kpi-val{color:var(--amber);}
+.kpi-card.bad .kpi-val{color:var(--red);}
+.kpi-card.good .kpi-val{color:var(--green-light);}
+
+/* ---------- secciones ---------- */
+.section{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;margin-bottom:16px;}
+.section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;}
+.section-head h2{font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px;}
+.section-head .sub{font-size:11px;color:var(--text-3);margin-top:2px;}
+.legend-inline{display:flex;gap:12px;font-size:10.5px;color:var(--text-2);align-items:center;}
+.legend-inline .dot{width:8px;height:8px;border-radius:2px;display:inline-block;margin-right:4px;}
+
+.grid-2{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;}
+@media(max-width:1100px){.grid-2{grid-template-columns:1fr;} .kpis{grid-template-columns:repeat(2,1fr);}}
+
+/* chart de evolución (líneas por tipo de evento) */
+.chart-wrap{padding:6px 4px 0;position:relative;}
+.chart-wrap svg{width:100%;height:230px;overflow:visible;}
+.chart-line{fill:none;stroke-width:2.25;transition:.2s;}
+.chart-line:hover{stroke-width:3.5;}
+.chart-dot{transition:.15s;}
+.chart-dot:hover{r:5;}
+.chart-dot title{pointer-events:none;}
+.chart-gridline{stroke:var(--border);stroke-dasharray:2 4;}
+.chart-axis-label{font-size:9.5px;fill:var(--text-3);font-family:'Inter',sans-serif;}
+.chart-ylabel{font-size:9px;fill:var(--text-3);font-family:'Inter',sans-serif;}
+
+/* tablas */
+table.data-table{width:100%;border-collapse:collapse;font-size:12px;}
+.data-table th{text-align:left;color:var(--text-3);font-weight:600;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;padding:8px 10px;border-bottom:1px solid var(--border);}
+.data-table td{padding:9px 10px;border-bottom:1px solid var(--border);color:var(--text-2);}
+.data-table tr:last-child td{border-bottom:none;}
+.data-table tr:hover td{background:rgba(255,255,255,.02);}
+.data-table td.strong{color:var(--text);font-weight:600;}
+.agent-name{display:flex;align-items:center;gap:8px;}
+.agent-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;background:var(--blue);}
+.agent-dot.unassigned{background:var(--text-3);}
+.cumpl-bar{width:70px;height:5px;border-radius:3px;background:var(--surface-2);overflow:hidden;display:inline-block;vertical-align:middle;margin-right:7px;}
+.cumpl-fill{height:100%;border-radius:3px;}
+
+/* matriz heatmap */
+.heatmap{overflow-x:auto;}
+table.heat-table{border-collapse:collapse;font-size:11.5px;width:100%;}
+.heat-table th{padding:8px 10px;font-size:10.5px;color:var(--text-3);text-transform:uppercase;letter-spacing:.03em;font-weight:600;border-bottom:1px solid var(--border);}
+.heat-table th:first-child{text-align:left;}
+.heat-table td{padding:8px 10px;text-align:center;border-bottom:1px solid var(--border);}
+.heat-table td:first-child{text-align:left;color:var(--text);font-weight:600;}
+.heat-cell{display:inline-flex;align-items:center;justify-content:center;width:34px;height:26px;border-radius:6px;font-weight:700;font-size:11.5px;}
+
+/* badges de estado */
+.badge{font-size:9.5px;font-weight:700;padding:3px 8px;border-radius:5px;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;}
+.badge.completado{background:rgba(35,134,54,.18);color:var(--green-light);}
+.badge.pendiente{background:rgba(88,166,255,.15);color:var(--blue);}
+.badge.programado{background:rgba(210,153,34,.15);color:var(--amber);}
+.badge.cancelado{background:rgba(248,81,73,.15);color:var(--red);}
+.badge.vencido{background:rgba(248,81,73,.22);color:var(--red);}
+.badge.inactivo{background:rgba(139,148,158,.15);color:var(--text-2);}
+.badge.sinestado{background:rgba(139,148,158,.1);color:var(--text-3);}
+.badge.si{background:rgba(35,134,54,.18);color:var(--green-light);}
+.badge.no{background:rgba(139,148,158,.15);color:var(--text-2);}
+
+/* agenda operativa */
+.agenda-row{display:flex;align-items:center;gap:12px;padding:11px 10px;border-bottom:1px solid var(--border);cursor:pointer;transition:.12s;}
+.agenda-row:last-child{border-bottom:none;}
+.agenda-row:hover{background:rgba(255,255,255,.025);}
+.agenda-when{width:108px;flex-shrink:0;}
+.agenda-when .d{font-size:12px;font-weight:600;}
+.agenda-when .t{font-size:10.5px;color:var(--text-3);}
+.agenda-when .nofecha{font-size:11px;color:var(--text-3);font-style:italic;}
+.agenda-type{width:110px;flex-shrink:0;font-size:11px;color:var(--text-2);}
+.agenda-title{flex:1;min-width:0;}
+.agenda-title .t{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.agenda-title .m{font-size:10.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.agenda-agent{width:120px;flex-shrink:0;font-size:11.5px;color:var(--text-2);}
+.agenda-status{width:100px;flex-shrink:0;}
+.agenda-arrow{color:var(--text-3);font-size:13px;}
+
+/* calidad de datos */
+.dq-list{display:flex;flex-direction:column;gap:8px;}
+.dq-item{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-radius:8px;background:var(--surface-2);border:1px solid var(--border);}
+.dq-item .left{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--text-2);}
+.dq-item .ic{font-size:13px;}
+.dq-item.high .ic{color:var(--red);}
+.dq-item.med .ic{color:var(--amber);}
+.dq-item .count{font-size:13px;font-weight:800;color:var(--text);background:var(--card);padding:3px 10px;border-radius:6px;border:1px solid var(--border);}
+
+/* modal detalle evento */
+.overlay{position:fixed;inset:0;background:rgba(1,4,9,.65);backdrop-filter:blur(1px);opacity:0;pointer-events:none;transition:.2s;z-index:90;}
+.overlay.open{opacity:1;pointer-events:auto;}
+.modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-46%);width:560px;max-width:92vw;max-height:86vh;overflow-y:auto;background:var(--bg-2);border:1px solid var(--border);border-radius:14px;z-index:91;opacity:0;pointer-events:none;transition:.2s;box-shadow:0 20px 60px rgba(0,0,0,.5);}
+.modal.open{opacity:1;pointer-events:auto;transform:translate(-50%,-50%);}
+.modal-head{padding:18px 20px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg-2);z-index:2;display:flex;justify-content:space-between;align-items:flex-start;}
+.modal-close{background:var(--card);border:1px solid var(--border);color:var(--text-2);width:28px;height:28px;border-radius:7px;cursor:pointer;font-size:14px;flex-shrink:0;}
+.modal-head .mcode{font-size:10.5px;color:var(--text-3);}
+.modal-head h2{font-size:16px;margin-top:2px;font-weight:700;}
+.modal-body{padding:18px 20px;}
+.mrow{display:grid;grid-template-columns:150px 1fr;gap:4px 12px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12.5px;}
+.mrow:last-child{border-bottom:none;}
+.mrow .k{color:var(--text-3);font-size:11px;text-transform:uppercase;letter-spacing:.03em;font-weight:600;}
+.mrow .v{color:var(--text);}
+.mrow .v.empty{color:var(--text-3);font-style:italic;}
+.mrow .v.mono{font-size:11px;}
+.info-banner{background:rgba(88,166,255,.08);border:1px solid rgba(88,166,255,.25);border-radius:8px;padding:9px 12px;font-size:11px;color:var(--text-2);margin-bottom:14px;}
+
+@media(max-width:900px){.global-nav{display:none;} .kpis{grid-template-columns:repeat(2,1fr);}}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <nav class="global-nav" aria-label="Navegación global del sistema">
+    <div class="logo">P</div>
+    <div class="nav-icon" title="Panel">⌂</div>
+    <div class="nav-icon" title="Propiedades">▤</div>
+    <div class="nav-icon" title="Trazabilidad">⇄</div>
+    <div class="nav-icon active" title="Leads">☰</div>
+    <div class="nav-icon" title="Marketing">◆</div>
+    <div class="nav-icon" title="Reportes">▦</div>
+    <div class="nav-note">MENÚ GLOBAL DEL SISTEMA</div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="breadcrumb">Propifai <span>/</span> Leads <span>/</span> <b>Análisis de agenda</b></div>
+      <div class="topbar-right">
+        <div class="search-mini">Buscar evento, lead, agente…</div>
+        <div class="avatar">SV</div>
+      </div>
+    </div>
+
+    <!-- submenú horizontal existente de la sección Leads -->
+    <div class="subtabs">
+      <div class="subtab">Resumen gerencial</div>
+      <div class="subtab">Embudo comercial</div>
+      <div class="subtab">Cohortes</div>
+      <div class="subtab">Calidad de atención</div>
+      <div class="subtab active">Análisis de agenda</div>
+      <div class="subtab">Resultados</div>
+    </div>
+
+    <div class="page">
+      <div class="page-head">
+        <div>
+          <h1>Análisis de agenda</h1>
+          <p>Evolución de eventos del CRM sobre <span class="mono">dbo.event</span> · agrupados por agente, tipo, estado y período · zona horaria America/Lima</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn">⇩ CSV</button>
+          <button class="btn green">⇩ Excel</button>
+        </div>
+      </div>
+
+      <!-- filtros -->
+      <form class="filters-wrap" method="get" action="/analisis-crm/agenda/">
+        <div class="filters-row">
+          <input class="finput" name="from" type="date" value="{{ date_from|date:'Y-m-d' }}" style="width:145px" title="Fecha desde">
+          <span style="color:var(--text-3)">→</span>
+          <input class="finput" name="to" type="date" value="{{ date_to|date:'Y-m-d' }}" style="width:145px" title="Fecha hasta">
+          <div class="gran-group" id="granGroup">
+            <button type="submit" name="granularity" value="day" class="gran-btn {% if granularity == 'day' %}active{% endif %}">Día</button>
+            <button type="submit" name="granularity" value="week" class="gran-btn {% if granularity == 'week' %}active{% endif %}">Semana</button>
+            <button type="submit" name="granularity" value="month" class="gran-btn {% if granularity == 'month' %}active{% endif %}">Mes</button>
+            <button type="submit" name="granularity" value="year" class="gran-btn {% if granularity == 'year' %}active{% endif %}">Año</button>
+          </div>
+          <select class="fsel" name="agent"><option value="">Agente responsable</option>{% for agent in agents %}<option value="{{ agent.id }}" {% if agent_filter == agent.id|stringformat:'s' %}selected{% endif %}>{{ agent.name }}</option>{% endfor %}</select>
+          <select class="fsel" name="event_type"><option value="">Tipo de evento</option>{% for t in event_types %}<option value="{{ t.id }}" {% if type_filter == t.id|stringformat:'s' %}selected{% endif %}>{{ t.name }}</option>{% endfor %}</select>
+          <select class="fsel" name="status"><option value="">Estado del evento</option><option value="completed" {% if status_filter == 'completed' %}selected{% endif %}>Completado</option><option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Pendiente</option><option value="cancelled" {% if status_filter == 'cancelled' %}selected{% endif %}>Cancelado</option></select>
+          <button class="btn primary" type="submit">Aplicar filtros</button>
+        </div>
+        <div class="url-line">
+          <span class="lbl">URL</span>
+          <code id="urlPreview">/leads/agenda/?from=2026-01-01&amp;to=2026-08-27&amp;granularity=week</code>
+          <button class="btn" style="padding:4px 9px;font-size:10.5px;flex-shrink:0;">Copiar enlace</button>
+        </div>
+        <div class="active-chips" id="activeChips"></div>
+      </form>
+
+      <!-- KPIs -->
+      <div class="kpis" id="kpis"></div>
+
+      <!-- evolución temporal + eventos por agente -->
+      <div class="grid-2">
+        <div class="section">
+          <div class="section-head">
+            <div>
+              <h2>◱ Evolución temporal</h2>
+              <div class="sub">Volumen de eventos por tipo, agrupado por <span id="granLabel">semana</span> · start_time (fallback: created_at)</div>
+            </div>
+            <div class="legend-inline" id="chartLegend"></div>
+          </div>
+          <div class="chart-wrap" id="chart"></div>
+        </div>
+
+        <div class="section">
+          <div class="section-head">
+            <div><h2>◐ Calidad de datos de agenda</h2><div class="sub">14 incidencias detectadas en el rango seleccionado</div></div>
+          </div>
+          <div class="dq-list">
+            <div class="dq-item med"><span class="left"><span class="ic">⚠</span>Eventos sin agente asignado</span><span class="count">9</span></div>
+            <div class="dq-item med"><span class="left"><span class="ic">⚠</span>Eventos sin tipo de evento</span><span class="count">3</span></div>
+            <div class="dq-item high"><span class="left"><span class="ic">⛔</span>Eventos sin fecha (start_time y created_at vacíos)</span><span class="count">1</span></div>
+            <div class="dq-item high"><span class="left"><span class="ic">⛔</span>start_time posterior a end_time</span><span class="count">2</span></div>
+            <div class="dq-item high"><span class="left"><span class="ic">⛔</span>Referencias a IDs inexistentes (lead / propiedad)</span><span class="count">1</span></div>
+            <div class="dq-item med"><span class="left"><span class="ic">⚠</span>Eventos inactivos (is_active = 0)</span><span class="count">6</span></div>
+            <div class="dq-item high"><span class="left"><span class="ic">⛔</span>Código de evento duplicado</span><span class="count">2</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- eventos por agente -->
+      <div class="section">
+        <div class="section-head">
+          <div><h2>◍ Eventos por agente</h2><div class="sub">Total, completados, pendientes y tasa de cumplimiento por agente responsable</div></div>
+        </div>
+        <table class="data-table">
+          <thead><tr><th>Agente</th><th>Total</th><th>Completados</th><th>Pendientes</th><th>Cumplimiento</th></tr></thead>
+          <tbody id="agentTable"></tbody>
+        </table>
+      </div>
+
+      <div class="grid-2">
+        <!-- eventos por tipo -->
+        <div class="section">
+          <div class="section-head"><div><h2>◇ Eventos por tipo</h2><div class="sub">Distribución por event_type</div></div></div>
+          <table class="data-table">
+            <thead><tr><th>Tipo de evento</th><th>Total</th><th>Completados</th><th>Pendientes</th></tr></thead>
+            <tbody id="typeTable"></tbody>
+          </table>
+        </div>
+
+        <!-- matriz agente x tipo -->
+        <div class="section">
+          <div class="section-head"><div><h2>▦ Matriz agente × tipo de evento</h2><div class="sub">Volumen de eventos por combinación</div></div></div>
+          <div class="heatmap"><table class="heat-table" id="heatTable"></table></div>
+        </div>
+      </div>
+
+      <!-- agenda operativa -->
+      <div class="section">
+        <div class="section-head">
+          <div><h2>◷ Agenda operativa</h2><div class="sub">Eventos próximos y vencidos · clic para ver el detalle completo</div></div>
+        </div>
+        <div id="agendaList"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay"></div>
+<div class="modal" id="modal"></div>
+
+<script>
+/* ---------------- KPIs ---------------- */
+const KPIS = {{ kpis_json|safe }}; /* datos reales de dbo.event */
+/*
+  {val:'214', label:'Total de eventos', accent:'var(--blue)'},
+  {val:'142', label:'Eventos completados', accent:'var(--green)', cls:'good'},
+  {val:'46', label:'Eventos pendientes', accent:'var(--blue)'},
+  {val:'18', label:'Eventos cancelados', accent:'var(--red)', cls:'bad'},
+  {val:'8', label:'Eventos vencidos', accent:'var(--red)', cls:'bad'},
+  {val:'5', label:'Agentes activos', accent:'var(--blue)'},
+  {val:'5', label:'Tipos de evento utilizados', accent:'var(--text-2)'},
+  {val:'76%', label:'Tasa de cumplimiento', accent:'var(--green)', cls:'good'},
+  {val:'1d 4h', label:'Tiempo promedio hasta completar', accent:'var(--amber)'},
+  {val:'9', label:'Eventos sin agente asignado', accent:'var(--amber)', cls:'warn'},
+]; */
+document.getElementById('kpis').innerHTML = KPIS.map(k=>`
+  <div class="kpi-card ${k.cls||''}" style="--accent:${k.accent}">
+    <div class="kpi-val">${k.val}</div>
+    <div class="kpi-label">${k.label}</div>
+  </div>`).join('');
+
+/* ---------------- evolución temporal (por tipo de evento) ---------------- */
+const PALETTE = ['#a371f7','#58a6ff','#d29922','#f85149','#3fb950','#79c0ff','#ff7b72','#56d364'];
+const LIVE_SERIES = {{ series_json|safe }};
+const EVENT_TYPES_LIST = Object.keys(LIVE_SERIES.types);
+const TYPE_COLORS = Object.fromEntries(EVENT_TYPES_LIST.map((t,i)=>[t,PALETTE[i%PALETTE.length]]));
+
+const SERIES = {dia: LIVE_SERIES, semana: LIVE_SERIES, mes: LIVE_SERIES, anio: LIVE_SERIES};
+/*
+  dia:{
+    labels:['21 ago','22 ago','23 ago','24 ago','25 ago','26 ago','27 ago'],
+    types:{
+      'Captación':[3,4,2,5,3,4,6],
+      'Visita':   [6,7,5,9,6,8,9],
+      'Llamada':  [4,5,4,6,5,5,7],
+      'Reunión':  [2,3,1,3,2,2,3],
+      'Seguimiento':[3,4,3,5,4,5,6],
+    }
+  },
+  semana:{
+    labels:['Sem 28','Sem 29','Sem 30','Sem 31'],
+    types:{
+      'Captación':[12,15,11,7],
+      'Visita':   [22,25,20,12],
+      'Llamada':  [16,18,17,9],
+      'Reunión':  [8,10,7,4],
+      'Seguimiento':[14,17,15,8],
+    }
+  },
+  mes:{
+    labels:['May','Jun','Jul','Ago'],
+    types:{
+      'Captación':[38,44,49,41],
+      'Visita':   [68,74,80,72],
+      'Llamada':  [52,58,61,55],
+      'Reunión':  [26,29,31,27],
+      'Seguimiento':[44,49,53,47],
+    }
+  },
+  anio:{
+    labels:['2024','2025','2026'],
+    types:{
+      'Captación':[310,398,205],
+      'Visita':   [520,640,340],
+      'Llamada':  [410,505,270],
+      'Reunión':  [180,224,118],
+      'Seguimiento':[350,412,215],
+    }
+  }
+}; */
+const GRAN_LABELS = {dia:'día', semana:'semana', mes:'mes', anio:'año'};
+
+document.getElementById('chartLegend').innerHTML = EVENT_TYPES_LIST.map(t=>
+  `<span><span class="dot" style="background:${TYPE_COLORS[t]}"></span>${t}</span>`).join('');
+
+function renderChart(gran){
+  const s = SERIES[gran];
+  const n = s.labels.length;
+  const allVals = EVENT_TYPES_LIST.flatMap(t=>s.types[t]);
+  const max = Math.max(...allVals);
+  const niceMax = Math.ceil(max/10)*10 || 10;
+
+  const W = 900, H = 210, padL = 30, padR = 10, padT = 10, padB = 38;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const x = i => padL + (n===1 ? plotW/2 : (i/(n-1))*plotW);
+  const y = v => padT + plotH - (v/niceMax)*plotH;
+
+  const gridLines = [0,0.25,0.5,0.75,1].map(f=>{
+    const val = Math.round(niceMax*f);
+    const yy = y(val);
+    return `<line class="chart-gridline" x1="${padL}" y1="${yy}" x2="${W-padR}" y2="${yy}"/>
+            <text class="chart-ylabel" x="${padL-6}" y="${yy+3}" text-anchor="end">${val}</text>`;
+  }).join('');
+
+  const compactDateLabel = lbl => {
+    const match = String(lbl).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return match ? `${match[3]}/${match[2]}` : lbl;
+  };
+  const MONTHS = ['','ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
+  const dateParts = lbl => {
+    const compact = compactDateLabel(lbl);
+    const match = String(compact).match(/^(\d{2})\/(\d{2})$/);
+    return match ? {day:String(Number(match[1])), month:Number(match[2])} : {day:compact, month:null};
+  };
+  const xLabels = s.labels.map((lbl,i)=>{
+    const part = dateParts(lbl);
+    const previous = i ? dateParts(s.labels[i-1]) : null;
+    const showMonth = part.month && (!previous || previous.month !== part.month);
+    return `<text class="chart-axis-label" x="${x(i)}" y="${H-18}" text-anchor="middle">${part.day}</text>`+
+           (showMonth ? `<text class="chart-axis-label" x="${x(i)}" y="${H-5}" text-anchor="middle" fill="var(--blue)">${MONTHS[part.month]}</text>` : '');
+  }).join('');
+
+  const lines = EVENT_TYPES_LIST.map(t=>{
+    const vals = s.types[t];
+    const points = vals.map((v,i)=>`${x(i)},${y(v)}`).join(' ');
+    const dots = vals.map((v,i)=>
+      `<circle class="chart-dot" cx="${x(i)}" cy="${y(v)}" r="3.5" fill="${TYPE_COLORS[t]}"><title>${t} · ${compactDateLabel(s.labels[i])}: ${v}</title></circle>`
+    ).join('');
+    return `<polyline class="chart-line" points="${points}" stroke="${TYPE_COLORS[t]}"/>${dots}`;
+  }).join('');
+
+  document.getElementById('chart').innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+      ${gridLines}
+      ${lines}
+      ${xLabels}
+    </svg>`;
+  document.getElementById('granLabel').textContent = GRAN_LABELS[gran];
+}
+renderChart('semana');
+
+document.getElementById('granGroup').addEventListener('click', e=>{
+  const btn = e.target.closest('.gran-btn'); if(!btn) return;
+  [...document.querySelectorAll('.gran-btn')].forEach(b=>b.classList.toggle('active', b===btn));
+  renderChart(btn.dataset.g);
+  const map={dia:'day',semana:'week',mes:'month',anio:'year'};
+  document.getElementById('urlPreview').textContent = `/leads/agenda/?from=2026-01-01&to=2026-08-27&granularity=${map[btn.dataset.g]}`;
+});
+
+/* ---------------- eventos por agente ---------------- */
+const AGENTS = {{ agents_json|safe }};
+/*
+  {name:'Ana Pérez', total:42, comp:31, pend:8, rate:79},
+  {name:'Carla Mamani', total:28, comp:19, pend:6, rate:72},
+  {name:'Luis Torres', total:35, comp:20, pend:11, rate:65},
+  {name:'Diego Salinas', total:15, comp:9, pend:4, rate:64},
+  {name:'Sin asignar', total:9, comp:3, pend:6, rate:33, unassigned:true},
+]; */
+document.getElementById('agentTable').innerHTML = AGENTS.map(a=>`
+  <tr>
+    <td class="strong"><span class="agent-name"><span class="agent-dot ${a.unassigned?'unassigned':''}"></span>${a.name}</span></td>
+    <td>${a.total}</td>
+    <td>${a.comp}</td>
+    <td>${a.pend}</td>
+    <td><span class="cumpl-bar"><span class="cumpl-fill" style="width:${a.rate}%;background:${a.rate>=70?'var(--green)':a.rate>=50?'var(--amber)':'var(--red)'}"></span></span>${a.rate}%</td>
+  </tr>`).join('');
+
+/* ---------------- eventos por tipo ---------------- */
+const TYPES = {{ types_json|safe }};
+/*
+  {name:'Visita', total:46, comp:32, pend:10},
+  {name:'Captación', total:38, comp:24, pend:9},
+  {name:'Llamada', total:31, comp:22, pend:7},
+  {name:'Seguimiento', total:25, comp:15, pend:8},
+  {name:'Reunión', total:18, comp:12, pend:4},
+]; */
+document.getElementById('typeTable').innerHTML = TYPES.map(t=>`
+  <tr><td class="strong">${t.name}</td><td>${t.total}</td><td>${t.comp}</td><td>${t.pend}</td></tr>`).join('');
+
+/* ---------------- matriz agente x tipo ---------------- */
+const MATRIX = {{ matrix_json|safe }};
+/*
+  'Ana Pérez':{Visita:12, 'Captación':9, Llamada:8, Reunión:3, Seguimiento:10},
+  'Luis Torres':{Visita:7, 'Captación':6, Llamada:13, Reunión:5, Seguimiento:4},
+  'Carla Mamani':{Visita:10, 'Captación':8, Llamada:6, Reunión:4, Seguimiento:8},
+  'Diego Salinas':{Visita:5, 'Captación':4, Llamada:4, Reunión:2, Seguimiento:4},
+  'Sin asignar':{Visita:2, 'Captación':1, Llamada:1, Reunión:0, Seguimiento:1},
+}; */
+const TYPE_COLS = EVENT_TYPES_LIST;
+const maxCell = Math.max(1, ...Object.values(MATRIX).flatMap(r=>Object.values(r)));
+function heatColor(v){
+  if(v===0) return {bg:'var(--surface-2)', c:'var(--text-3)'};
+  const ratio = v/maxCell;
+  const alpha = 0.15 + ratio*0.55;
+  return {bg:`rgba(88,166,255,${alpha.toFixed(2)})`, c: ratio>0.5? '#0d1117':'var(--text)'};
+}
+document.getElementById('heatTable').innerHTML = `
+  <thead><tr><th>Agente</th>${TYPE_COLS.map(c=>`<th>${c}</th>`).join('')}</tr></thead>
+  <tbody>
+    ${Object.entries(MATRIX).map(([agent,row])=>`
+      <tr><td>${agent}</td>${TYPE_COLS.map(c=>{
+        const v=row[c] || 0; const {bg,c:color}=heatColor(v);
+        return `<td><span class="heat-cell" style="background:${bg};color:${color}">${v}</span></td>`;
+      }).join('')}</tr>`).join('')}
+  </tbody>`;
+
+/* ---------------- agenda operativa ---------------- */
+const AGENDA = {{ agenda_json|safe }};
+/*
+  {code:'EVT-00231', title:'Visita a propiedad — Casa en Cayma', type:'Visita', agent:'Ana Pérez', date:'27 ago', time:'10:30', status:'programado', completed:false, lead:'L-3391', contact:'Roberto Díaz', property:'P-1024', proposal:null, match:null, creator:'María López', updater:'Ana Pérez', created:'20 ago 09:12', updated:'26 ago 17:40', tracing:'wa:+51987xxxxxx#thread-8821', desc:'Coordinar visita con el interesado para revisión presencial del inmueble.'},
+  {code:'EVT-00214', title:'Llamada de seguimiento — Depto. Yanahuara', type:'Llamada', agent:'Luis Torres', date:'26 ago', time:'16:00', status:'vencido', completed:false, lead:'L-3350', contact:'Patricia Vega', property:'P-1031', proposal:'PR-118', match:null, creator:'Luis Torres', updater:'Luis Torres', created:'19 ago 08:00', updated:'25 ago 12:10', tracing:'call:sip-4471', desc:'Confirmar interés tras la visita del fin de semana.'},
+  {code:'EVT-00198', title:'Reunión con propietario — Terreno Punta de Bombón', type:'Reunión', agent:'Sin asignar', date:'Sin fecha', time:null, status:'sinestado', completed:false, lead:'L-3298', contact:'Fernando Ríos', property:'P-1061', proposal:null, match:null, creator:'Diego Ramos', updater:'—', created:'15 ago 11:20', updated:'15 ago 11:20', tracing:null, desc:'Evento creado sin start_time definido, pendiente de reprogramación.'},
+  {code:'EVT-00256', title:'Seguimiento post-propuesta — Casa Sachaca', type:'Seguimiento', agent:'Carla Mamani', date:'28 ago', time:'09:00', status:'pendiente', completed:false, lead:'L-3402', contact:'Jorge Salas Jr.', property:'P-1025', proposal:'PR-124', match:'M-77', creator:'Carla Mamani', updater:'Carla Mamani', created:'24 ago 14:05', updated:'26 ago 09:30', tracing:'email:thread-9910', desc:'Dar seguimiento a la propuesta enviada y resolver dudas sobre financiamiento.'},
+  {code:'EVT-00187', title:'Visita realizada — Casa de playa Camaná', type:'Visita', agent:'Ana Pérez', date:'24 ago', time:'11:00', status:'completado', completed:true, lead:'L-3260', contact:'Gonzalo Puma', property:'P-1040', proposal:null, match:'M-71', creator:'Ana Pérez', updater:'Ana Pérez', created:'18 ago 10:00', updated:'24 ago 12:40', tracing:'wa:+51988xxxxxx#thread-8710', desc:'Visita completada, cliente evalúa presentar propuesta.'},
+  {code:'EVT-00241', title:'Llamada cancelada — Depto. Cerro Colorado', type:'Llamada', agent:'Diego Salinas', date:'25 ago', time:'15:30', status:'cancelado', completed:false, lead:'L-3378', contact:'Rosa Delgado', property:'P-1052', proposal:null, match:null, creator:'Diego Salinas', updater:'Diego Salinas', created:'22 ago 08:50', updated:'25 ago 15:00', tracing:'call:sip-4502', desc:'Cliente canceló, propiedad ya se encuentra en etapa de cierre.'},
+]; */
+const STATUS_MAP = {completado:'Completado',pendiente:'Pendiente',programado:'Programado',cancelado:'Cancelado',vencido:'Vencido',inactivo:'Inactivo',sinestado:'Sin estado'};
+
+document.getElementById('agendaList').innerHTML = AGENDA.map(e=>`
+  <div class="agenda-row" data-code="${e.code}">
+    <div class="agenda-when">
+      ${e.date==='Sin fecha' ? `<div class="nofecha">Sin fecha</div>` : `<div class="d">${e.date}</div><div class="t">${e.time}</div>`}
+    </div>
+    <div class="agenda-type">${e.type}</div>
+    <div class="agenda-title"><div class="t">${e.title}</div><div class="m">${e.lead} · ${e.contact}</div></div>
+    <div class="agenda-agent">${e.agent}</div>
+    <div class="agenda-status"><span class="badge ${e.status}">${STATUS_MAP[e.status]}</span></div>
+    <div class="agenda-arrow">›</div>
+  </div>`).join('');
+
+/* ---------------- filtros: chips activos (demo) ---------------- */
+const chipsEl = document.getElementById('activeChips');
+let activeAgent = '';
+function renderChips(){
+  const chips=[];
+  if(activeAgent) chips.push({label:'Agente: '+activeAgent, clear:()=>{activeAgent='';document.getElementById('fAgente').value='';renderChips();}});
+  chipsEl.innerHTML = chips.map(c=>`<span class="chip">${c.label}<button data-clear>&times;</button></span>`).join('');
+  [...chipsEl.querySelectorAll('button[data-clear]')].forEach((btn,i)=>btn.onclick=chips[i].clear);
+}
+document.getElementById('fAgente').addEventListener('change', e=>{ activeAgent = e.target.value; renderChips(); });
+renderChips();
+
+/* ---------------- modal detalle de evento (solo informativo) ---------------- */
+const overlayEl = document.getElementById('overlay');
+const modalEl = document.getElementById('modal');
+
+function openModal(code){
+  const e = AGENDA.find(x=>x.code===code); if(!e) return;
+  const field = (k,v,mono)=>`<div class="mrow"><div class="k">${k}</div><div class="v ${v?'':'empty'} ${mono?'mono':''}">${v || 'No registrado'}</div></div>`;
+  modalEl.innerHTML = `
+    <div class="modal-head">
+      <div><div class="mcode mono">${e.code}</div><h2>${e.title}</h2></div>
+      <button class="modal-close" id="modalClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="info-banner">Panel informativo — vista de solo lectura para análisis. No se permite edición manual del evento desde aquí.</div>
+      ${field('Descripción', e.desc)}
+      ${field('Tipo de evento', e.type)}
+      ${field('Agente asignado', e.agent!=='Sin asignar'?e.agent:'')}
+      ${field('Fecha de inicio', e.date!=='Sin fecha' ? e.date+' · '+e.time+' (America/Lima)' : '')}
+      ${field('Fecha de fin', e.status==='completado' ? e.date+' · '+e.time+' + 45min (America/Lima)' : '')}
+      ${field('Estado', `<span class="badge ${e.status}">${STATUS_MAP[e.status]}</span>`)}
+      ${field('Completado', `<span class="badge ${e.completed?'si':'no'}">${e.completed?'Sí':'No'}</span>`)}
+      ${field('Lead asociado', e.lead)}
+      ${field('Contacto asociado', e.contact)}
+      ${field('Propiedad asociada', e.property)}
+      ${field('Propuesta asociada', e.proposal)}
+      ${field('Match asociado', e.match)}
+      ${field('Usuario creador', e.creator)}
+      ${field('Usuario modificador', e.updater)}
+      ${field('Fecha de creación', e.created)}
+      ${field('Fecha de actualización', e.updated)}
+      ${field('Tracing', e.tracing, true)}
+    </div>`;
+  modalEl.classList.add('open'); overlayEl.classList.add('open');
+  document.getElementById('modalClose').onclick = closeModal;
+}
+function closeModal(){ modalEl.classList.remove('open'); overlayEl.classList.remove('open'); }
+overlayEl.addEventListener('click', closeModal);
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeModal(); });
+document.querySelectorAll('.agenda-row').forEach(r=> r.addEventListener('click', ()=>openModal(r.dataset.code)));
+</script>
+</body>
+</html>

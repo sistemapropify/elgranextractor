@@ -1,0 +1,333 @@
+INTEGRACIÓN N8N — RESPONDEDOR NOCTURNO PROPIFAI
+================================================
+
+Fecha: 27/08/2026
+Servicio: granextractorservice
+
+
+1. ENDPOINT INICIAL
+===================
+
+Método:
+POST
+
+URL:
+https://granextractorservice-emehaffsf8e2c7eg.brazilsouth-01.azurewebsites.net/api/n8n/property-bot/v1/initial-response/
+
+Headers:
+Content-Type: application/json
+X-N8N-API-Key: TU_CLAVE_ACTUAL_DE_N8N_BRIDGE
+
+Body JSON de ejemplo:
+
+{
+  "message_id": "{{$json.message_id}}",
+  "external_conversation_id": "{{$json.external_conversation_id}}",
+  "phone": "{{$json.phone}}",
+  "contact_name": "{{$json.contact_name}}",
+  "text": "{{$json.text}}",
+  "human_takeover": false
+}
+
+Campos obligatorios:
+- message_id: identificador único del mensaje de WhatsApp.
+- phone: teléfono del contacto.
+- text: texto recibido.
+
+Campo necesario en producción:
+- external_conversation_id: identificador estable de la conversación o lead.
+
+Campos opcionales:
+- contact_name.
+- human_takeover: debe ser true si un agente humano ya tomó la conversación.
+
+
+2. RESPUESTA INMEDIATA
+======================
+
+Cuando la respuesta del endpoint inicial tenga:
+
+{
+  "action": "respond_once",
+  "delivery_mode": "immediate",
+  "reply_text": "Texto para el cliente"
+}
+
+n8n debe enviar reply_text inmediatamente a WhatsApp.
+
+Condición recomendada del nodo IF:
+
+{{$json.action === "respond_once" && $json.delivery_mode === "immediate" && !!$json.reply_text}}
+
+
+3. RESPUESTA RETRASADA DE CAPTACIÓN
+===================================
+
+Cuando el cliente quiere vender una propiedad, el endpoint inicial devuelve algo similar a:
+
+{
+  "success": true,
+  "action": "respond_once",
+  "reply_text": "",
+  "reason_code": "CAPTACION_SCHEDULED",
+  "interaction_id": "UUID-DE-LA-INTERACCION",
+  "delivery_mode": "delayed",
+  "delay_seconds": 300,
+  "configured_delay_seconds": 300,
+  "send_not_before": "2026-08-27T10:30:00-05:00",
+  "delivery_ready": false,
+  "cancel_if_agent_replied": true
+}
+
+IMPORTANTE:
+- reply_text llega vacío intencionalmente.
+- No se debe enviar ningún mensaje todavía.
+- n8n debe conservar interaction_id.
+- n8n debe esperar hasta send_not_before.
+
+Condición recomendada para entrar en la rama retrasada:
+
+{{$json.action === "respond_once" && $json.delivery_mode === "delayed" && !!$json.interaction_id}}
+
+
+4. NODO WAIT DE N8N
+===================
+
+Después de detectar delivery_mode = delayed, agregar un nodo Wait.
+
+Opción recomendada:
+- Wait Until.
+- Fecha/hora: {{$json.send_not_before}}
+
+Alternativa:
+- Wait for interval.
+- Segundos: {{$json.delay_seconds}}
+
+Se recomienda usar send_not_before porque conserva la fecha límite original aunque n8n reintente el workflow.
+
+
+5. VERIFICAR SI RESPONDIÓ UN AGENTE HUMANO
+===========================================
+
+Después del nodo Wait, n8n debe consultar la conversación de WhatsApp/CRM.
+
+Debe determinar si existe una respuesta humana posterior al primer mensaje del cliente.
+
+Resultado que debe producir el nodo de verificación:
+
+{
+  "conversation_has_agent_reply": true
+}
+
+o:
+
+{
+  "conversation_has_agent_reply": false
+}
+
+Regla:
+- true: cualquier agente humano ya respondió; la plantilla debe cancelarse.
+- false: nadie respondió; la plantilla puede liberarse.
+
+No debe considerarse como respuesta humana:
+- El mensaje entrante del cliente.
+- Mensajes automáticos del propio bot.
+- Eventos internos o cambios de estado sin mensaje enviado.
+
+
+6. NUEVO ENDPOINT DE CONFIRMACIÓN
+=================================
+
+Método:
+POST
+
+URL:
+https://granextractorservice-emehaffsf8e2c7eg.brazilsouth-01.azurewebsites.net/api/n8n/property-bot/v1/confirm-captacion-delivery/
+
+Headers:
+Content-Type: application/json
+X-N8N-API-Key: TU_CLAVE_ACTUAL_DE_N8N_BRIDGE
+
+Body JSON:
+
+{
+  "interaction_id": "{{$json.interaction_id}}",
+  "conversation_has_agent_reply": {{$json.conversation_has_agent_reply}}
+}
+
+IMPORTANTE:
+- interaction_id debe ser exactamente el recibido del endpoint inicial.
+- conversation_has_agent_reply debe ser booleano real: true o false.
+- No enviar "true" o "false" como texto entre comillas.
+
+
+7. RESPUESTA CUANDO NADIE CONTESTÓ
+==================================
+
+Si venció el plazo y ningún agente respondió, el endpoint de confirmación devuelve:
+
+{
+  "success": true,
+  "action": "respond_once",
+  "reason_code": "CAPTACION_SENT",
+  "delivery_mode": "immediate",
+  "delivery_ready": true,
+  "delay_seconds": 0,
+  "reply_text": "Plantilla de captación configurada"
+}
+
+n8n debe enviar reply_text a WhatsApp únicamente cuando:
+
+{{$json.delivery_ready === true && $json.action === "respond_once" && !!$json.reply_text}}
+
+
+8. RESPUESTA CUANDO UN AGENTE YA CONTESTÓ
+=========================================
+
+Si conversation_has_agent_reply = true, el endpoint devuelve:
+
+{
+  "success": true,
+  "action": "ignore",
+  "reason_code": "CAPTACION_CANCELLED_AGENT_REPLIED",
+  "delivery_mode": "cancelled",
+  "delivery_ready": false,
+  "reply_text": ""
+}
+
+n8n debe finalizar el workflow sin enviar ninguna plantilla.
+
+
+9. SECUENCIA COMPLETA DE NODOS
+==============================
+
+1. Trigger del mensaje entrante de WhatsApp.
+2. Preparar payload normalizado.
+3. HTTP Request: POST al endpoint initial-response.
+4. IF: action = respond_once.
+5. IF: delivery_mode = immediate.
+   - Sí: enviar reply_text a WhatsApp y finalizar.
+6. Si delivery_mode = delayed:
+   - Guardar interaction_id, send_not_before y datos de la conversación.
+   - Ejecutar nodo Wait hasta send_not_before.
+   - Consultar la conversación en WhatsApp/CRM.
+   - Calcular conversation_has_agent_reply.
+   - POST al endpoint confirm-captacion-delivery.
+   - IF: delivery_ready = true y reply_text no está vacío.
+     - Sí: enviar reply_text a WhatsApp.
+     - No: finalizar sin enviar.
+7. Si action = ignore: finalizar sin enviar.
+
+
+10. DIAGRAMA RESUMIDO
+=====================
+
+Mensaje entrante
+      |
+      v
+POST initial-response
+      |
+      +-- action = ignore --------------------------> Finalizar
+      |
+      +-- delivery_mode = immediate ----------------> Enviar reply_text
+      |
+      +-- delivery_mode = delayed
+                    |
+                    v
+             Wait send_not_before
+                    |
+                    v
+         ¿Respondió un agente humano?
+                    |
+                    v
+POST confirm-captacion-delivery
+                    |
+                    +-- delivery_ready = true ------> Enviar reply_text
+                    |
+                    +-- delivery_ready = false -----> Finalizar sin enviar
+
+
+11. CÓDIGOS DE DECISIÓN IMPORTANTES
+===================================
+
+ANSWER_SENT
+- Respuesta inmediata generada correctamente.
+
+CAPTACION_SCHEDULED
+- Captación registrada; n8n debe esperar y luego confirmar.
+
+CAPTACION_SENT
+- Captación liberada después de confirmar que nadie respondió.
+
+CAPTACION_CANCELLED_AGENT_REPLIED
+- Se canceló porque un agente humano ya respondió.
+
+NO_PROPERTY_CODE
+- El mensaje no contiene código PROP y no fue detectado como captación.
+
+ALREADY_RESPONDED
+- El bot ya respondió una vez en esa conversación.
+
+HUMAN_TAKEOVER
+- La conversación ya fue tomada por un agente humano.
+
+BOT_DISABLED
+- El bot está apagado.
+
+OUTSIDE_SCHEDULE
+- El mensaje llegó fuera de la ventana configurada.
+
+MISSING_CONVERSATION_ID
+- n8n no envió external_conversation_id.
+
+PROPERTY_NOT_PUBLISHABLE
+- La propiedad no está en estado Disponible.
+
+MISSING_REQUIRED_DATA
+- La propiedad no tiene datos suficientes para completar la plantilla.
+
+
+12. VALIDACIONES OBLIGATORIAS EN N8N
+====================================
+
+- No enviar reply_text si está vacío.
+- No enviar la captación directamente al recibir CAPTACION_SCHEDULED.
+- No perder interaction_id después del nodo Wait.
+- No volver a llamar al endpoint inicial después de la espera.
+- Llamar al endpoint de confirmación, no al inicial.
+- Consultar la respuesta humana inmediatamente antes de confirmar.
+- Enviar solo cuando delivery_ready sea booleano true.
+- Mantener el mismo X-N8N-API-Key usado por el endpoint inicial.
+- Registrar status HTTP y body de ambos endpoints para diagnóstico.
+
+
+13. PRUEBA MÍNIMA
+=================
+
+Caso A — nadie responde:
+1. Enviar: "Quiero vender mi propiedad".
+2. Confirmar que initial-response devuelve CAPTACION_SCHEDULED.
+3. Esperar el plazo configurado.
+4. Enviar conversation_has_agent_reply = false.
+5. Confirmar CAPTACION_SENT y delivery_ready = true.
+6. Verificar que WhatsApp recibió la plantilla una sola vez.
+
+Caso B — responde un agente:
+1. Enviar: "Quiero vender mi terreno".
+2. Confirmar CAPTACION_SCHEDULED.
+3. Antes de vencer el plazo, responder manualmente desde un agente.
+4. Después del Wait, enviar conversation_has_agent_reply = true.
+5. Confirmar CAPTACION_CANCELLED_AGENT_REPLIED.
+6. Verificar que n8n no envió la plantilla.
+
+
+14. NOTA SOBRE LEADS SIN CÓDIGO PROP
+====================================
+
+Los mensajes de compradores que no sean captación y no incluyan un código PROP se responden con action = ignore y reason_code = NO_PROPERTY_CODE.
+
+Si el lead proviene de un anuncio de una propiedad, n8n debe incluir en text el código PROP asociado o enriquecer el payload con el contexto de la publicación antes de llamar al endpoint inicial.
+
+
+FIN DEL DOCUMENTO
+=================

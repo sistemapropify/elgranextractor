@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "propifai_base.html" %}
 {% load tz %}
 {% block title %}Calidad del motor IA · Propifai{% endblock %}
 {% block content %}
@@ -64,6 +64,16 @@
   @media (max-width: 700px){
     .pli-phone-compare{grid-template-columns:1fr}
   }
+  /* Tema oscuro Propifai (alineado con Intelligence > Colecciones). */
+  .pli-page{--pli-ink:#e8edf7;--pli-muted:#93a4bd;--pli-line:#26344a;--pli-brand:#7c9cff;--pli-soft:#172236;background:#0b1220;color:var(--pli-ink);min-height:100vh;max-width:none;padding:28px 32px 56px;box-sizing:border-box}
+  .pli-page .pli-card,.pli-page .pli-review-row,.pli-page .pli-review-actions,.pli-page form[method="get"]{background:#111b2e!important;border-color:var(--pli-line);box-shadow:0 8px 24px rgba(0,0,0,.22)}
+  .pli-page .pli-review-row{background:linear-gradient(180deg,#142137 0%,#111b2e 100%)!important}
+  .pli-page .pli-review-result,.pli-page .pli-draft,.pli-page .pli-category-item{background:#172236!important;border-color:var(--pli-line)!important}
+  .pli-page .pli-thread-event{background:#111b2e!important;border-color:var(--pli-line)}
+  .pli-page .pli-phone-screen .pli-draft{background:#202c33!important;color:#e9edef}
+  .pli-page input,.pli-page select,.pli-page textarea{background:#0d1728!important;color:#e8edf7;border-color:#33445f!important}
+  .pli-page h1,.pli-page h2,.pli-page strong,.pli-page label{color:#e8edf7}
+  .pli-page a{color:#8aa8ff}
 </style>
 <main class="pli-page">
   <header style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:6px">

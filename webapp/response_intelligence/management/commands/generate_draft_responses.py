@@ -136,7 +136,7 @@ class Command(BaseCommand):
                         model_version=LLMService.DEEPSEEK_MODEL,
                         trace_id=f"bot_draft:{0}",
                         auto_escalation=True,
-                        blocked_reason="Mensaje de escalamiento/riesgo legal: la plantilla responde con aviso a agente",
+                        blocked_reason="Mensaje de escalamiento/riesgo legal: requiere revisión humana",
                     )
                     draft.trace_id = f"bot_draft:{draft.pk}"
                     draft.save(using="default", update_fields=["trace_id"])

@@ -3,6 +3,8 @@ from django.conf import settings
 
 
 class PropertyProspect(models.Model):
+    ORIGIN_CHOICES = [('marketplace', 'Marketplace'), ('calle', 'Calle'), ('otros', 'Otros')]
+    CONTRACT_CHOICES = [('trato_directo', 'Trato directo'), ('inmobiliaria', 'Inmobiliaria')]
 
     OPERATION_CHOICES = [
         ('alquiler', 'Alquiler'),
@@ -45,6 +47,9 @@ class PropertyProspect(models.Model):
         upload_to='prospects/photos/%Y/%m/',
         verbose_name='Foto del anuncio',
     )
+    origin = models.CharField(max_length=20, choices=ORIGIN_CHOICES, blank=True, verbose_name='Origen')
+    origin_other = models.CharField(max_length=120, blank=True, verbose_name='Otro origen')
+    marketplace_url = models.URLField(max_length=500, blank=True, verbose_name='Enlace Marketplace')
 
     # ── GPS (solo coordenadas — dirección se llena manual) ───────
     latitude = models.DecimalField(
@@ -63,6 +68,7 @@ class PropertyProspect(models.Model):
         verbose_name='Dirección (Mz/Lote/Calle)',
         help_text='Ej: Mz. D Lote 12, Urb. La Encalada',
     )
+    zone = models.CharField(max_length=150, blank=True, verbose_name='Zona')
     district = models.CharField(
         max_length=100, blank=True,
         verbose_name='Distrito',
@@ -81,6 +87,7 @@ class PropertyProspect(models.Model):
         max_length=20, choices=OPERATION_CHOICES,
         blank=True, verbose_name='Operación',
     )
+    contract_type = models.CharField(max_length=20, choices=CONTRACT_CHOICES, blank=True, verbose_name='Tipo de contrato')
     property_type = models.CharField(
         max_length=20, choices=PROPERTY_TYPES,
         blank=True, verbose_name='Tipo de inmueble',

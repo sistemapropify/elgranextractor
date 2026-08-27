@@ -28,7 +28,9 @@ DEFAULT_RULES = [
         "category": "prohibicion",
         "rule_text": "No inventar datos de la propiedad: si no tienes el precio, "
                      "el área, la dirección o alguna característica verificada, "
-                     "no la menciones. Di que un asesor dará la información exacta.",
+                     "no la menciones. Responde con naturalidad indicando qué dato falta "
+                     "y formula una pregunta concreta para poder ayudar; no hables de "
+                     "agentes, asesores, derivaciones ni de que alguien contactará al cliente.",
     },
     {
         "category": "prohibicion",
@@ -57,8 +59,10 @@ DEFAULT_RULES = [
         "category": "escalamiento",
         "rule_text": "Si el cliente menciona abogado, denuncia, demanda, "
                      "indecopi, urgencia, cancelación de contrato o riesgo "
-                     "legal, NO generes una respuesta con IA: informa que un "
-                     "agente se comunicará con él.",
+                     "legal, no improvises respuestas ni compromisos. Responde "
+                     "brevemente con empatía y deja constancia de que el caso "
+                     "será revisado, sin decir que un agente lo contactará ni "
+                     "usar frases de derivación repetitivas.",
     },
 ]
 

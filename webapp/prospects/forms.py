@@ -6,11 +6,12 @@ class ProspectEditForm(forms.ModelForm):
     class Meta:
         model = PropertyProspect
         fields = [
+            'origin', 'origin_other', 'marketplace_url',
             'owner_name', 'phone',
-            'operation_type', 'property_type',
+            'operation_type', 'contract_type', 'property_type',
             'price', 'currency',
             'bedrooms', 'area_m2',
-            'address', 'district',
+            'address', 'zone', 'district',
             'status', 'notes',
         ]
         widgets = {

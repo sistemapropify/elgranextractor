@@ -10,7 +10,7 @@ TEMPLATES = {
     "local_comercial": "¡Gracias por escribirnos! 😊\nEste local comercial está ubicado en {location}, cuenta con {features} y tiene un precio de {price}.\n\nEn este momento estamos fuera del horario de atención. Apenas uno de nuestros asesores esté disponible, continuará la conversación contigo.\n\nMientras tanto, ¿qué tipo de negocio tienes pensado y qué características son indispensables para ti? Así puedo decirte si este local se adapta a lo que buscas.",
     "otro": "¡Gracias por escribirnos! 😊\nEsta propiedad está ubicada en {location}, cuenta con {features} y tiene un precio de {price}.\n\nEn este momento estamos fuera del horario de atención. Apenas uno de nuestros asesores esté disponible, continuará la conversación contigo.\n\nMientras tanto, ¿qué es indispensable para ti en esta propiedad? Así podemos decirte si cumple con lo que buscas.",
     # Captación: el cliente quiere VENDER una propiedad (mensaje sin código PROP).
-    "captacion": "¡Hola! 👋 Claro, te ayudamos a vender tu propiedad.\nPara que uno de nuestros asesores valore tu propiedad y te contacte, cuéntanos:\n📍 Ubicación · 🏠 Tipo (casa, departamento, terreno, local) · 📐 Área · 💰 Precio referencial · 📄 Si tienes los documentos al día.\n\nTe atenderemos apenas esté disponible nuestro equipo.",
+    "captacion": "¡Hola! 👋 Claro, te ayudamos a vender tu propiedad.\nPara orientarte mejor, cuéntame:\n📍 Ubicación · 🏠 Tipo (casa, departamento, terreno, local) · 📐 Área · 💰 Precio referencial · 📄 Si tienes los documentos al día.",
 }
 
 

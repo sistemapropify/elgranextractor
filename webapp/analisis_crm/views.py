@@ -10,6 +10,131 @@ from .models import Lead, LeadAssignment, User, LeadStatus
 logger = logging.getLogger(__name__)
 
 
+def agenda_analysis(request):
+    """Análisis de agenda sobre dbo.event (solo lectura)."""
+    from eventos.models import Event, EventType
+    from datetime import date
+    import calendar
+    today = timezone.localdate()
+    granularity = request.GET.get('granularity', 'day')
+    if granularity not in {'day', 'week', 'month', 'year'}:
+        granularity = 'day'
+    try:
+        date_from = datetime.strptime(request.GET.get('from', ''), '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        date_from = today - timedelta(days=30)
+    try:
+        date_to = datetime.strptime(request.GET.get('to', ''), '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        date_to = today
+    if date_from > date_to:
+        date_from, date_to = date_to, date_from
+    qs = Event.objects.filter(start_time__date__range=(date_from, date_to), is_active=True)
+    agent_id = request.GET.get('agent', '').strip()
+    type_id = request.GET.get('event_type', '').strip()
+    status = request.GET.get('status', '').strip()
+    if agent_id.isdigit(): qs = qs.filter(assigned_agent_id=int(agent_id))
+    if type_id.isdigit(): qs = qs.filter(event_type_id=int(type_id))
+    if status: qs = qs.filter(status=status)
+    events = list(qs.order_by('start_time'))
+    type_map = {x.id: x.name for x in EventType.objects.filter(is_active=True)}
+    agent_ids = {e.assigned_agent_id for e in events if e.assigned_agent_id}
+    # dbpropify_be usa dbo.[user] (singular); el modelo Django histórico apunta
+    # a "users", por lo que aquí resolvemos los nombres sin activar ese mapeo.
+    users = {}
+    if agent_ids:
+        from django.db import connections
+        with connections['propifai'].cursor() as cursor:
+            # Cargar el catálogo completo evita incompatibilidades del driver
+            # MSSQL con listas parametrizadas en cláusulas IN.
+            cursor.execute('SELECT id, username, first_name, last_name FROM dbo.[user]')
+            users = {row[0]: (' '.join(x for x in (row[2], row[3]) if x).strip() or row[1] or f'Agente {row[0]}') for row in cursor.fetchall()}
+    def bucket(dt):
+        d = timezone.localtime(dt).date()
+        if granularity == 'year': return d.strftime('%Y')
+        if granularity == 'month': return d.strftime('%Y-%m')
+        if granularity == 'week':
+            iso = d.isocalendar(); return f'{iso.year}-W{iso.week:02d}'
+        return d.isoformat()
+    periods, by_agent, by_type, matrix = {}, {}, {}, {}
+    series = {g: {'labels': [], 'types': {}} for g in ('day', 'week', 'month', 'year')}
+    completed = pending = overdue = cancelled = 0
+    now = timezone.now()
+    for e in events:
+        p = bucket(e.start_time); periods[p] = periods.get(p, 0) + 1
+        series[granularity]['types'].setdefault(type_map.get(e.event_type_id, 'Sin tipo'), {})[p] = series[granularity]['types'].setdefault(type_map.get(e.event_type_id, 'Sin tipo'), {}).get(p, 0) + 1
+        a = users.get(e.assigned_agent_id, 'Sin asignar'); by_agent.setdefault(a, [0, 0, 0]); by_agent[a][0] += 1
+        t = type_map.get(e.event_type_id, 'Sin tipo'); by_type.setdefault(t, [0, 0, 0]); by_type[t][0] += 1
+        matrix.setdefault(a, {}); matrix[a][t] = matrix[a].get(t, 0) + 1
+        state = (e.status or '').lower()
+        if e.completed or state in {'completed', 'complete', 'done', 'completado'}:
+            completed += 1; by_agent[a][1] += 1; by_type[t][1] += 1
+        elif 'cancel' in state: cancelled += 1
+        else:
+            pending += 1; by_agent[a][2] += 1; by_type[t][2] += 1
+            if e.start_time and e.start_time < now: overdue += 1
+    period_keys = sorted(periods)
+    display_labels = period_keys
+    if granularity == 'day':
+        display_labels = [datetime.strptime(value, '%Y-%m-%d').strftime('%d/%m') for value in period_keys]
+    series_payload = {
+        'labels': display_labels,
+        'types': {t: [vals.get(p, 0) for p in period_keys] for t, vals in series[granularity]['types'].items()},
+    }
+    agent_rows = sorted(({'name': k, 'total': v[0], 'comp': v[1], 'pend': v[2], 'rate': round(v[1] * 100 / v[0]) if v[0] else 0, 'unassigned': k == 'Sin asignar'} for k, v in by_agent.items()), key=lambda x: -x['total'])
+    type_rows = sorted(({'name': k, 'total': v[0], 'comp': v[1], 'pend': v[2]} for k, v in by_type.items()), key=lambda x: -x['total'])
+    agent_choices = sorted(
+        ({'id': agent_pk, 'name': users.get(agent_pk, f'Agente {agent_pk}')} for agent_pk in agent_ids),
+        key=lambda item: item['name'].lower(),
+    )
+    agenda_payload = []
+    for e in reversed(events[-100:]):
+        state = (e.status or '').lower()
+        normalized = 'completado' if e.completed or state in {'completed', 'complete', 'done', 'completado'} else ('cancelado' if 'cancel' in state else ('vencido' if e.start_time and e.start_time < now else 'pendiente'))
+        local_start = timezone.localtime(e.start_time) if e.start_time else None
+        agenda_payload.append({
+            'code': e.code or f'EVT-{e.id}', 'title': e.title or 'Evento sin título',
+            'type': type_map.get(e.event_type_id, 'Sin tipo'), 'agent': users.get(e.assigned_agent_id, 'Sin asignar'),
+            'date': local_start.strftime('%d %b') if local_start else 'Sin fecha',
+            'time': local_start.strftime('%H:%M') if local_start else None, 'status': normalized,
+            'completed': bool(e.completed), 'lead': f'L-{e.lead_id}' if e.lead_id else 'Sin lead',
+            'contact': f'Contacto {e.contact_id}' if e.contact_id else 'Sin contacto',
+            'property': f'P-{e.property_id}' if e.property_id else None,
+            'proposal': f'PR-{e.proposal_id}' if e.proposal_id else None,
+            'match': f'M-{e.match_id}' if e.match_id else None,
+            'creator': users.get(e.created_by_id, f'Usuario {e.created_by_id}') if e.created_by_id else None,
+            'updater': users.get(e.updated_by_id, f'Usuario {e.updated_by_id}') if e.updated_by_id else None,
+            'created': timezone.localtime(e.created_at).strftime('%d/%m/%Y %H:%M') if e.created_at else None,
+            'updated': timezone.localtime(e.updated_at).strftime('%d/%m/%Y %H:%M') if e.updated_at else None,
+            'tracing': e.tracing or None, 'desc': e.description or None,
+        })
+    kpis_payload = [
+        {'val': len(events), 'label': 'Total de eventos', 'accent': 'var(--blue)'},
+        {'val': completed, 'label': 'Eventos completados', 'accent': 'var(--green)', 'cls': 'good'},
+        {'val': pending, 'label': 'Eventos pendientes', 'accent': 'var(--blue)'},
+        {'val': cancelled, 'label': 'Eventos cancelados', 'accent': 'var(--red)', 'cls': 'bad'},
+        {'val': overdue, 'label': 'Eventos vencidos', 'accent': 'var(--red)', 'cls': 'bad'},
+        {'val': len(agent_rows), 'label': 'Agentes activos', 'accent': 'var(--blue)'},
+        {'val': len(type_rows), 'label': 'Tipos de evento utilizados', 'accent': 'var(--text-2)'},
+        {'val': f'{round(completed * 100 / (completed + pending + cancelled)) if completed + pending + cancelled else 0}%', 'label': 'Tasa de cumplimiento', 'accent': 'var(--green)', 'cls': 'good'},
+        {'val': '—', 'label': 'Tiempo promedio hasta completar', 'accent': 'var(--amber)'},
+        {'val': sum(1 for e in events if not e.assigned_agent_id), 'label': 'Eventos sin agente asignado', 'accent': 'var(--amber)', 'cls': 'warn'},
+    ]
+    return render(request, 'analisis_crm/agenda_analysis.html', {
+        'events': events[-100:], 'periods': sorted(periods.items()), 'agent_rows': agent_rows,
+        'type_rows': type_rows, 'total': len(events), 'completed': completed, 'pending': pending,
+        'overdue': overdue, 'cancelled': cancelled, 'date_from': date_from, 'date_to': date_to,
+        'granularity': granularity, 'event_types': EventType.objects.filter(is_active=True).order_by('name'),
+        'agents': agent_choices, 'agent_filter': agent_id, 'type_filter': type_id, 'status_filter': status,
+        'series_json': json.dumps(series_payload, ensure_ascii=False),
+        'agents_json': json.dumps(agent_rows, ensure_ascii=False),
+        'types_json': json.dumps(type_rows, ensure_ascii=False),
+        'matrix_json': json.dumps(matrix, ensure_ascii=False),
+        'agenda_json': json.dumps(agenda_payload, ensure_ascii=False),
+        'kpis_json': json.dumps(kpis_payload, ensure_ascii=False),
+    })
+
+
 def dashboard(request):
     """
     Vista principal del dashboard de análisis de leads.

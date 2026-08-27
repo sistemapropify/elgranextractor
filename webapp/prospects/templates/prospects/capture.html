@@ -536,8 +536,8 @@
                   <circle cx="12" cy="13" r="4"/>
                 </svg>
               </div>
-              <p>Toca para tomar la foto</p>
-              <small>La cámara se abrirá directamente</small>
+              <p>Toca para seleccionar una foto</p>
+              <small>Se abrirá la galería de tu dispositivo</small>
               <small id="camera-attempt-text" style="display:none;color:var(--accent-orange);margin-top:8px;"></small>
             </div>
             <img id="photo-preview" src="" alt="" style="display:none; width:100%; border-radius:10px;">
@@ -553,7 +553,6 @@
 
         <input type="file" id="photo-input"
                accept="image/*"
-               capture="environment"
                style="display:none;">
 
         {# GPS strip #}
@@ -650,6 +649,26 @@
             id="prospect-form">
         {% csrf_token %}
 
+        <div class="card" style="margin-bottom:14px;">
+          <div class="card-title">Origen</div>
+          <div class="field-group full">
+            <select id="id_origin" name="origin" onchange="toggleOriginFields()">
+              <option value="">— Seleccionar —</option>
+              <option value="marketplace" {% if form.origin.value == 'marketplace' %}selected{% endif %}>Marketplace</option>
+              <option value="calle" {% if form.origin.value == 'calle' %}selected{% endif %}>Calle</option>
+              <option value="otros" {% if form.origin.value == 'otros' %}selected{% endif %}>Otros</option>
+            </select>
+          </div>
+          <div class="field-group full origin-extra" id="origin-other-group" style="display:none;margin-top:10px;">
+            <label for="id_origin_other">Indique el origen</label>
+            <input type="text" id="id_origin_other" name="origin_other" value="{{ form.origin_other.value|default:'' }}" placeholder="Ej. Referido, letrero, contacto directo">
+          </div>
+          <div class="field-group full origin-extra" id="marketplace-url-group" style="display:none;margin-top:10px;">
+            <label for="id_marketplace_url">Enlace de Marketplace</label>
+            <input type="url" id="id_marketplace_url" name="marketplace_url" value="{{ form.marketplace_url.value|default:'' }}" placeholder="https://www.facebook.com/marketplace/...">
+          </div>
+        </div>
+
         {# --- Datos del propietario --- #}
         <div class="card" style="margin-bottom: 14px;">
           <div class="card-title">Datos del propietario</div>
@@ -691,6 +710,15 @@
             </div>
             <input type="hidden" id="id_operation_type" name="operation_type"
                    value="{{ form.operation_type.value|default:'' }}">
+          </div>
+
+          <div class="field-group" style="margin-bottom:12px;">
+            <label>Tipo de contrato</label>
+            <div class="chips-row" id="contract-chips">
+              <span class="chip {% if form.contract_type.value == 'trato_directo' %}selected-venta{% endif %}" onclick="selectChip('contract_type','trato_directo')">Trato directo</span>
+              <span class="chip {% if form.contract_type.value == 'inmobiliaria' %}selected-alquiler{% endif %}" onclick="selectChip('contract_type','inmobiliaria')">Inmobiliaria</span>
+            </div>
+            <input type="hidden" id="id_contract_type" name="contract_type" value="{{ form.contract_type.value|default:'' }}">
           </div>
 
           <div class="field-group" id="fg-property_type">
@@ -741,6 +769,11 @@
         <div class="card" style="margin-bottom: 14px;">
           <div class="card-title">Ubicación</div>
           <div class="field-grid">
+
+            <div class="field-group full">
+              <label for="id_zone">Zona</label>
+              <input type="text" id="id_zone" name="zone" value="{{ form.zone.value|default:'' }}" placeholder="Urbanización, sector o referencia">
+            </div>
 
             <div class="field-group full">
               <label for="id_address">Dirección (Mz / Lote / Calle)</label>
@@ -840,6 +873,15 @@
   // ── GPS ──────────────────────────────────────────────────────
   let gpsLat = null, gpsLng = null;
   var gpsTimeout = null;
+
+  function toggleOriginFields() {
+    var origin = document.getElementById('id_origin')?.value;
+    var other = document.getElementById('origin-other-group');
+    var market = document.getElementById('marketplace-url-group');
+    if (other) other.style.display = origin === 'otros' ? 'block' : 'none';
+    if (market) market.style.display = origin === 'marketplace' ? 'block' : 'none';
+  }
+  document.addEventListener('DOMContentLoaded', toggleOriginFields);
 
   function initGPS() {
     if (!navigator.geolocation) {

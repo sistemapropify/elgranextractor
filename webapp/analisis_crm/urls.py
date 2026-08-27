@@ -64,4 +64,5 @@ urlpatterns = [
     path('leads/', views.lead_list, name='lead_list'),
     path('leads/<int:pk>/', views.lead_detail, name='lead_detail'),
     path('analytics/', views.analytics, name='analytics'),
+    path('agenda/', views.agenda_analysis, name='agenda_analysis'),
 ]

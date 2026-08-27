@@ -7,7 +7,8 @@ salida generada con regex y reglas simples de texto.
 Chequeos:
 1. Escalamiento: si el mensaje del cliente contiene palabras de riesgo legal o
    urgencia (abogado, denuncia, urgente, cancelar contrato...), el motor NUNCA
-   genera con IA: se deja a la plantilla "un agente te contactará" + aviso.
+   genera con IA: se deja a una respuesta breve y empática de revisión, sin
+   anunciar agentes ni repetir frases de derivación.
 2. Alucinación determinista: si no se inyectaron datos de la propiedad
    (``property_data_used`` vacío) pero la respuesta menciona precio / m² /
    dirección, se marca ``hallucination`` y se bloquea el envío.
