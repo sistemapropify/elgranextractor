@@ -46,6 +46,23 @@ def _fact_card(definition, summary):
         }
         done = len(present_codes)
         progress = (0, 33, 67, 100)[done]
+        docs = []
+        for code, label in DOCUMENTATION_DOCUMENT_TYPES:
+            matches = [
+                item for item in required_documents
+                if str(item.get("document_code") or "").strip() == code
+            ]
+            item = next(
+                (m for m in matches if m.get("file") or m.get("file_url")),
+                matches[0] if matches else None,
+            )
+            docs.append({
+                "code": code,
+                "name": label,
+                "present": bool(item and (item.get("file") or item.get("file_url"))),
+                "uploaded_by": (item.get("created_by_name") or "").strip() if item else "",
+                "evidence_url": (item.get("file_url") or item.get("file") or "") if item else "",
+            })
         base.update(
             status="completed" if done == 3 else "in_progress" if done else "pending",
             progress=progress,
@@ -55,6 +72,7 @@ def _fact_card(definition, summary):
                 (item.get("created_at") for item in required_documents if item.get("created_at")),
                 default=None,
             ),
+            docs=docs,
         )
     elif key == "legal_review":
         reviewed = summary["reviewed_documents"]
