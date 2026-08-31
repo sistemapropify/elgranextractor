@@ -16,6 +16,18 @@ from .forms import ProspectEditForm
 logger = logging.getLogger(__name__)
 
 
+def get_property_type_choices():
+    """Catálogo activo de dbo.property_type adaptado al campo del prospecto."""
+    from django.db import connections
+    value_map = {
+        'Casa': 'casa', 'Departamento': 'departamento', 'Local': 'local',
+        'Oficina': 'oficina', 'Otros': 'otro', 'Terreno': 'terreno',
+    }
+    with connections['propifai'].cursor() as cursor:
+        cursor.execute('SELECT id, name FROM dbo.property_type WHERE is_active = 1 ORDER BY name')
+        return [{'id': row[0], 'value': value_map.get(row[1], str(row[1]).lower()), 'name': row[1]} for row in cursor.fetchall()]
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # HELPER: detección de dispositivo móvil/tablet por User-Agent
 # ─────────────────────────────────────────────────────────────────────────────
@@ -47,6 +59,7 @@ class CaptureView(View):
     def get(self, request):
         return render(request, 'prospects/capture.html', {
             'mode': 'new',
+            'property_types': get_property_type_choices(),
         })
 
     def post(self, request):
@@ -89,6 +102,7 @@ class ProspectDetailView(View):
             'form': form,
             'mode': 'detail',
             'can_process': is_mobile_device(request),
+            'property_types': get_property_type_choices(),
         })
 
     def post(self, request, pk):
@@ -106,6 +120,7 @@ class ProspectDetailView(View):
             'prospect': prospect,
             'form': form,
             'mode': 'detail',
+            'property_types': get_property_type_choices(),
         })
 
 

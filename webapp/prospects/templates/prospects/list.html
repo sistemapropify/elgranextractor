@@ -6,6 +6,14 @@
 {% block extra_css %}
 {{ block.super }}
 <style>
+  /* Lista de prospección a pantalla completa: sin menú lateral global. */
+  .app-sidebar,
+  .sidebar-overlay,
+  .sidebar-toggle-desktop,
+  .mobile-menu-btn { display: none !important; }
+  .main-content { width: 100% !important; max-width: none !important; }
+  .content-area { width: 100% !important; max-width: none !important; }
+
   :root {
     --bg-body: #0d1117;
     --bg-card: #161b22;

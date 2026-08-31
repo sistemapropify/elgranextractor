@@ -8,6 +8,14 @@
 {% block extra_css %}
 {{ block.super }}
 <style>
+  /* Captura de campo a pantalla completa: sin menú lateral global. */
+  .app-sidebar,
+  .sidebar-overlay,
+  .sidebar-toggle-desktop,
+  .mobile-menu-btn { display: none !important; }
+  .main-content { width: 100% !important; max-width: none !important; }
+  .content-area { width: 100% !important; max-width: none !important; }
+
   :root {
     --bg-primary:   #0d1117;
     --bg-secondary: #161b22;
@@ -58,6 +66,8 @@
     gap: 4px;
   }
   .page-header .back-link:hover { color: var(--accent-blue); }
+  .prospects-list-btn{display:inline-flex;align-items:center;gap:7px;padding:9px 14px;border-radius:8px;border:1px solid var(--accent-blue);background:rgba(88,166,255,.12);color:var(--accent-blue);font-size:12.5px;font-weight:700;text-decoration:none;white-space:nowrap;}
+  .prospects-list-btn:hover{background:var(--accent-blue);color:#0d1117;}
 
   /* ── Status badge ── */
   .status-badge {
@@ -504,11 +514,10 @@
         {% endif %}
       </h1>
     </div>
-    {% if mode == 'detail' %}
-      <span class="status-badge status-{{ prospect.status }}">
-        {{ prospect.get_status_display }}
-      </span>
-    {% endif %}
+    <div style="display:flex;align-items:center;gap:10px;">
+      {% if mode == 'detail' %}<span class="status-badge status-{{ prospect.status }}">{{ prospect.get_status_display }}</span>{% endif %}
+      <a href="{% url 'prospects:list' %}" class="prospects-list-btn">☷ Ver lista de prospectos</a>
+    </div>
   </div>
 
   {# ── GRID PRINCIPAL ── #}
@@ -725,10 +734,10 @@
             <label for="id_property_type">Tipo de inmueble</label>
             <select id="id_property_type" name="property_type">
               <option value="">— Seleccionar —</option>
-              {% for val, label in form.instance.PROPERTY_TYPES %}
-                <option value="{{ val }}"
-                  {% if form.property_type.value == val %}selected{% endif %}>
-                  {{ label }}
+              {% for item in property_types %}
+                <option value="{{ item.value }}"
+                  {% if form.property_type.value == item.value %}selected{% endif %}>
+                  {{ item.name }}
                 </option>
               {% endfor %}
             </select>
