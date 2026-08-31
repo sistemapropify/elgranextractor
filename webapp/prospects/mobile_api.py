@@ -84,15 +84,24 @@ def mobile_login(request):
     except requests.RequestException:
         return Response({'ok': False, 'error': 'No se pudo comprobar el usuario en Propify.'}, status=503)
     if propify_response.status_code != 200:
-        return Response({'ok': False, 'error': 'Credenciales incorrectas.'}, status=401)
+        return Response({
+            'ok': False,
+            'error': f'Propify rechazó el inicio de sesión (código {propify_response.status_code}).',
+        }, status=401)
 
     # La respuesta y los tokens de Propify se descartan. Prometeo crea su sesión propia.
-    user, _ = MobileProspectUser.objects.get_or_create(username=username)
-    plain_token = secrets.token_urlsafe(48)
-    MobileProspectSession.objects.create(
-        user=user,
-        token_hash=hashlib.sha256(plain_token.encode('utf-8')).hexdigest(),
-    )
+    try:
+        user, _ = MobileProspectUser.objects.get_or_create(username=username)
+        plain_token = secrets.token_urlsafe(48)
+        MobileProspectSession.objects.create(
+            user=user,
+            token_hash=hashlib.sha256(plain_token.encode('utf-8')).hexdigest(),
+        )
+    except Exception:
+        return Response({
+            'ok': False,
+            'error': 'Propify validó el usuario, pero Prometeo no pudo crear la sesión móvil.',
+        }, status=500)
     return Response({
         'ok': True,
         'access': plain_token,
