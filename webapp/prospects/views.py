@@ -2,6 +2,7 @@ import base64
 import json
 import logging
 import re
+from decimal import Decimal, InvalidOperation
 
 import requests
 from django.contrib import messages
@@ -67,11 +68,24 @@ class CaptureView(View):
         if not photo:
             return JsonResponse({'ok': False, 'error': 'No se recibió imagen.'}, status=400)
 
+        latitude = request.POST.get('latitude')
+        longitude = request.POST.get('longitude')
+        try:
+            latitude_value = Decimal(latitude)
+            longitude_value = Decimal(longitude)
+            if not (-90 <= latitude_value <= 90 and -180 <= longitude_value <= 180):
+                raise InvalidOperation
+        except (InvalidOperation, TypeError, ValueError):
+            return JsonResponse({
+                'ok': False,
+                'error': 'Debes permitir la ubicación GPS antes de guardar la captura.',
+            }, status=400)
+
         prospect = PropertyProspect.objects.create(
             agent=request.current_user,
             photo=photo,
-            latitude=request.POST.get('latitude') or None,
-            longitude=request.POST.get('longitude') or None,
+            latitude=latitude_value,
+            longitude=longitude_value,
             status='borrador',
         )
 

@@ -881,7 +881,7 @@
 
   // ── GPS ──────────────────────────────────────────────────────
   let gpsLat = null, gpsLng = null;
-  var gpsTimeout = null;
+  let gpsRequest = null;
 
   function toggleOriginFields() {
     var origin = document.getElementById('id_origin')?.value;
@@ -892,44 +892,59 @@
   }
   document.addEventListener('DOMContentLoaded', toggleOriginFields);
 
-  function initGPS() {
+  function applyGPSPosition(pos) {
+    gpsLat = pos.coords.latitude.toFixed(7);
+    gpsLng = pos.coords.longitude.toFixed(7);
+    var latInput = document.getElementById('lat-input');
+    var lngInput = document.getElementById('lng-input');
+    if (latInput) latInput.value = gpsLat;
+    if (lngInput) lngInput.value = gpsLng;
+    var dot = document.getElementById('gps-dot');
+    if (dot) dot.classList.add('active');
+    var text = document.getElementById('gps-text');
+    if (text) text.textContent = 'Ubicación real capturada';
+    var coords = document.getElementById('gps-coords');
+    if (coords) coords.textContent = gpsLat + ', ' + gpsLng;
+    var display = document.getElementById('coords-display');
+    if (display) display.textContent = gpsLat + ', ' + gpsLng;
+    checkCaptureReady();
+  }
+
+  function gpsErrorMessage(err) {
+    if (err && err.code === 1) return 'Permiso de ubicación denegado';
+    if (err && err.code === 2) return 'No se pudo determinar tu ubicación';
+    if (err && err.code === 3) return 'El GPS tardó demasiado; vuelve a intentar';
+    return 'GPS no disponible';
+  }
+
+  function requestGPS() {
     if (!navigator.geolocation) {
       setGPSStatus('GPS no disponible', false);
-      return;
+      return Promise.reject(new Error('Geolocalización no disponible'));
     }
-    
-    // Timeout de seguridad: si GPS no responde en 5s, continuar igual
-    gpsTimeout = setTimeout(function() {
-      setGPSStatus('GPS no disponible', false);
-      checkCaptureReady();
-    }, 5000);
-    
-    navigator.geolocation.getCurrentPosition(
-      function(pos) {
-        clearTimeout(gpsTimeout);
-        gpsLat = pos.coords.latitude.toFixed(7);
-        gpsLng = pos.coords.longitude.toFixed(7);
-        var latInput = document.getElementById('lat-input');
-        var lngInput = document.getElementById('lng-input');
-        if (latInput) latInput.value = gpsLat;
-        if (lngInput) lngInput.value = gpsLng;
-        var dot = document.getElementById('gps-dot');
-        if (dot) dot.classList.add('active');
-        var text = document.getElementById('gps-text');
-        if (text) text.textContent = 'GPS capturado';
-        var coords = document.getElementById('gps-coords');
-        if (coords) coords.textContent = gpsLat + ', ' + gpsLng;
-        var display = document.getElementById('coords-display');
-        if (display) display.textContent = gpsLat + ', ' + gpsLng;
-        checkCaptureReady();
-      },
-      function(err) {
-        clearTimeout(gpsTimeout);
-        setGPSStatus('GPS no disponible', false);
-        checkCaptureReady();
-      },
-      { enableHighAccuracy: true, timeout: 8000 }
-    );
+
+    if (gpsRequest) return gpsRequest;
+    setGPSStatus('Solicitando permiso de ubicación...', false);
+    gpsRequest = new Promise(function(resolve, reject) {
+      navigator.geolocation.getCurrentPosition(
+        function(pos) {
+          applyGPSPosition(pos);
+          resolve(pos);
+        },
+        function(err) {
+          setGPSStatus(gpsErrorMessage(err), false);
+          checkCaptureReady();
+          reject(err);
+        },
+        { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+      );
+    }).finally(function() { gpsRequest = null; });
+    return gpsRequest;
+  }
+
+  function initGPS() {
+    // Esta llamada al abrir la pantalla dispara el permiso nativo del navegador.
+    requestGPS().catch(function() {});
   }
 
   // ── CÁMARA: abrir input file ─────────────────────────────────
@@ -968,19 +983,31 @@
       if (zone) zone.classList.add('has-photo');
       photoSelected = true;
       checkCaptureReady();
+      // Actualiza la ubicación para asociar la foto al punto real de captura.
+      requestGPS().catch(function() {
+        showToast('Activa la ubicación para poder guardar la foto', 'error');
+      });
     });
   }
 
-  // ── Habilitar botón capturar cuando hay foto (GPS es opcional) ──
+  // ── Foto y GPS son obligatorios para una captura nueva ──
   function checkCaptureReady() {
     var btn = document.getElementById('btn-capture-save');
-    if (btn) btn.disabled = !photoSelected;
+    if (btn) btn.disabled = !photoSelected || !gpsLat || !gpsLng;
   }
 
   // ── GUARDAR FOTO + GPS (nueva captura) ───────────────────────
   async function captureAndSave() {
     const fileInput = document.getElementById('photo-input');
     if (!fileInput.files[0]) { showToast('Primero toma una foto', 'error'); return; }
+
+    try {
+      // Obtiene una lectura nueva inmediatamente antes de guardar.
+      await requestGPS();
+    } catch (e) {
+      showToast('Debes permitir la ubicación GPS para guardar', 'error');
+      return;
+    }
 
     const btn = document.getElementById('btn-capture-save');
     btn.disabled = true;
