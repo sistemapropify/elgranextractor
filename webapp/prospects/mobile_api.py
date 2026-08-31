@@ -1,24 +1,33 @@
 """API autenticada para la aplicación Android de captura de prospectos."""
 
+import hashlib
+import secrets
+from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
 import requests
 from django.conf import settings
-from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.authentication import BaseAuthentication, SessionAuthentication, get_authorization_header
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework_simplejwt.authentication import JWTAuthentication
-from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import PropertyProspect
+from .models import MobileProspectSession, MobileProspectUser, PropertyProspect
 
 
-class PropifyJWTAuthentication(BaseAuthentication):
-    """Valida el Bearer token en Propify y lo vincula con un agente de Prometeo."""
+@dataclass(frozen=True)
+class MobilePrincipal:
+    mobile_user: MobileProspectUser
+
+    @property
+    def is_authenticated(self):
+        return True
+
+
+class PrometeoMobileAuthentication(BaseAuthentication):
+    """Autentica exclusivamente con una sesión propia emitida por Prometeo."""
 
     def authenticate(self, request):
         parts = get_authorization_header(request).split()
@@ -28,30 +37,12 @@ class PropifyJWTAuthentication(BaseAuthentication):
             raise AuthenticationFailed('Encabezado Authorization inválido.')
 
         token = parts[1].decode('utf-8')
-        try:
-            response = requests.get(
-                settings.PROPIFY_AUTH_ME_URL,
-                headers={'Authorization': f'Bearer {token}', 'Accept': 'application/json'},
-                timeout=10,
-            )
-        except requests.RequestException as exc:
-            raise AuthenticationFailed('No se pudo validar el usuario con Propify.') from exc
-        if response.status_code != 200:
-            raise AuthenticationFailed('La sesión de Propify venció o no es válida.')
-
-        payload = response.json()
-        profile = payload.get('user', payload) if isinstance(payload, dict) else {}
-        username = str(profile.get('username') or '').strip()
-        email = str(profile.get('email') or '').strip()
-        users = get_user_model().objects.filter(is_active=True)
-        user = users.filter(username__iexact=username).first() if username else None
-        if user is None and email:
-            user = users.filter(email__iexact=email).first()
-        if user is None:
-            raise AuthenticationFailed(
-                'El usuario existe en Propify pero todavía no está vinculado con un agente de Prometeo.'
-            )
-        return user, token
+        token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
+        session = MobileProspectSession.objects.select_related('user').filter(token_hash=token_hash).first()
+        if session is None:
+            raise AuthenticationFailed('La sesión móvil de Prometeo no es válida.')
+        session.save(update_fields=['last_used_at'])
+        return MobilePrincipal(session.user), token
 
 
 def _optional_decimal(value, field_name):
@@ -84,19 +75,30 @@ def mobile_login(request):
     if not username or not password:
         return Response({'ok': False, 'error': 'Usuario y contraseña son obligatorios.'}, status=400)
 
-    user = get_user_model().objects.filter(username=username, is_active=True).first()
-    if user is None or not user.check_password(password):
+    try:
+        propify_response = requests.post(
+            settings.PROPIFY_AUTH_TOKEN_URL,
+            json={'username': username, 'password': password},
+            timeout=15,
+        )
+    except requests.RequestException:
+        return Response({'ok': False, 'error': 'No se pudo comprobar el usuario en Propify.'}, status=503)
+    if propify_response.status_code != 200:
         return Response({'ok': False, 'error': 'Credenciales incorrectas.'}, status=401)
 
-    refresh = RefreshToken.for_user(user)
+    # La respuesta y los tokens de Propify se descartan. Prometeo crea su sesión propia.
+    user, _ = MobileProspectUser.objects.get_or_create(username=username)
+    plain_token = secrets.token_urlsafe(48)
+    MobileProspectSession.objects.create(
+        user=user,
+        token_hash=hashlib.sha256(plain_token.encode('utf-8')).hexdigest(),
+    )
     return Response({
         'ok': True,
-        'access': str(refresh.access_token),
-        'refresh': str(refresh),
+        'access': plain_token,
         'user': {
             'id': str(user.pk),
             'username': user.username,
-            'name': f'{user.first_name} {user.last_name}'.strip() or user.username,
         },
     })
 
@@ -174,15 +176,19 @@ def _apply_mobile_fields(prospect, request):
 
 
 @api_view(['GET', 'POST'])
-@authentication_classes([PropifyJWTAuthentication, SessionAuthentication])
+@authentication_classes([PrometeoMobileAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_capture(request):
     if request.method == 'GET':
-        prospects = PropertyProspect.objects.filter(agent=request.user).order_by('-created_at')
+        prospects = PropertyProspect.objects.filter(mobile_user=request.user.mobile_user).order_by('-created_at')
         return Response({'ok': True, 'results': [_serialize_prospect(item) for item in prospects]})
 
     try:
-        prospect = PropertyProspect(agent=request.user, status='pendiente')
+        prospect = PropertyProspect(
+            mobile_user=request.user.mobile_user,
+            captured_by_username=request.user.mobile_user.username,
+            status='pendiente',
+        )
         _apply_mobile_fields(prospect, request)
         prospect.full_clean()
         prospect.save()
@@ -200,10 +206,10 @@ def mobile_capture(request):
 
 
 @api_view(['GET', 'PUT'])
-@authentication_classes([PropifyJWTAuthentication, SessionAuthentication])
+@authentication_classes([PrometeoMobileAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_capture_detail(request, pk):
-    prospect = PropertyProspect.objects.filter(pk=pk, agent=request.user).first()
+    prospect = PropertyProspect.objects.filter(pk=pk, mobile_user=request.user.mobile_user).first()
     if prospect is None:
         return Response({'ok': False, 'error': 'Prospecto no encontrado.'}, status=404)
     if request.method == 'GET':

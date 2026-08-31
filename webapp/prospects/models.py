@@ -2,6 +2,22 @@ from django.db import models
 from django.conf import settings
 
 
+class MobileProspectUser(models.Model):
+    username = models.CharField(max_length=150, unique=True)
+    propify_user_id = models.CharField(max_length=100, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.username
+
+
+class MobileProspectSession(models.Model):
+    user = models.ForeignKey(MobileProspectUser, on_delete=models.CASCADE, related_name='sessions')
+    token_hash = models.CharField(max_length=64, unique=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(auto_now=True)
+
+
 class PropertyProspect(models.Model):
     ORIGIN_CHOICES = [('marketplace', 'Marketplace'), ('calle', 'Calle'), ('otros', 'Otros')]
     CONTRACT_CHOICES = [('trato_directo', 'Trato directo'), ('inmobiliaria', 'Inmobiliaria')]
@@ -40,6 +56,8 @@ class PropertyProspect(models.Model):
         on_delete=models.CASCADE,
         related_name='prospects',
         verbose_name='Agente',
+        null=True,
+        blank=True,
     )
 
     # ── Foto ────────────────────────────────────────────────────
@@ -47,6 +65,20 @@ class PropertyProspect(models.Model):
         upload_to='prospects/photos/%Y/%m/',
         blank=True,
         verbose_name='Foto del anuncio',
+    )
+    mobile_user = models.ForeignKey(
+        MobileProspectUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='prospects',
+        verbose_name='Usuario móvil',
+    )
+    captured_by_username = models.CharField(
+        max_length=150,
+        blank=True,
+        db_index=True,
+        verbose_name='Usuario que realizó la captura',
     )
     origin = models.CharField(max_length=20, choices=ORIGIN_CHOICES, blank=True, verbose_name='Origen')
     origin_other = models.CharField(max_length=120, blank=True, verbose_name='Otro origen')

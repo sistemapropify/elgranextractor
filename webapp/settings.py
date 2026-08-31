@@ -323,8 +323,11 @@ API_EXTERNA_TIMEOUT = env.int('API_EXTERNA_TIMEOUT', default=10)
 # Qwen3-VL API Key for AI processing of prospect images
 QWEN_API_KEY = env('QWEN_API_KEY', default='')
 
-# Autenticación de la app móvil: usuarios administrados por api.propify.pe.
-PROPIFY_AUTH_ME_URL = env('PROPIFY_AUTH_ME_URL', default='https://api.propify.pe/api/auth/me/')
+# La autenticación se comprueba en Propify; Prometeo emite su propia sesión móvil.
+PROPIFY_AUTH_TOKEN_URL = env(
+    'PROPIFY_AUTH_TOKEN_URL',
+    default='https://api.propify.pe/api/auth/token/',
+)
 
 # Monkey patch para corregir el error 'super' object has no attribute 'dicts'
 # en Django 5.0.6 con Python 3.14.2
