@@ -21,6 +21,7 @@ PUBLIC_PATHS = [
     r'^/accounts/login/?$',   # Alias del login (LOGIN_URL por defecto de Django)
     r'^/register/?$',
     r'^/api/',
+    r'^/prospects/api/mobile/',  # API Android: autenticación JWT dentro de las vistas
     r'^/admin/',
     r'^/static/',
     r'^/acm/',                   # ACM - Análisis Comparativo de Mercado (público)

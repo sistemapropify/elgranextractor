@@ -45,6 +45,7 @@ class PropertyProspect(models.Model):
     # ── Foto ────────────────────────────────────────────────────
     photo = models.ImageField(
         upload_to='prospects/photos/%Y/%m/',
+        blank=True,
         verbose_name='Foto del anuncio',
     )
     origin = models.CharField(max_length=20, choices=ORIGIN_CHOICES, blank=True, verbose_name='Origen')

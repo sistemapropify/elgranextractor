@@ -1,9 +1,12 @@
 from django.urls import path
-from . import views
+from . import mobile_api, views
 
 app_name = 'prospects'
 
 urlpatterns = [
+    path('api/mobile/captures/', mobile_api.mobile_capture, name='mobile-capture'),
+    path('api/mobile/captures/<int:pk>/', mobile_api.mobile_capture_detail, name='mobile-capture-detail'),
+
     # Lista
     path('', views.prospect_list, name='list'),
 
