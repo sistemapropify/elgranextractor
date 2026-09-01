@@ -256,6 +256,9 @@ AZURE_ACCOUNT_NAME = env('AZURE_STORAGE_ACCOUNT_NAME', default='granextractormed
 AZURE_ACCOUNT_KEY = env('AZURE_STORAGE_ACCOUNT_KEY', default='')
 AZURE_CONTAINER = env('AZURE_PHOTOS_CONTAINER', default='fotosprospecciones')
 AZURE_CUSTOM_DOMAIN = f'{AZURE_ACCOUNT_NAME}.blob.core.windows.net'
+# El contenedor es privado. Django debe entregar URLs SAS temporales para que
+# la web y la APK puedan mostrar las fotos sin hacer público el Blob Storage.
+AZURE_URL_EXPIRATION_SECS = env.int('AZURE_URL_EXPIRATION_SECS', default=3600)
 MEDIA_URL = f'https://{AZURE_CUSTOM_DOMAIN}/{AZURE_CONTAINER}/'
 MEDIA_ROOT = None  # Not needed when using Azure Storage
 
