@@ -17,6 +17,21 @@ from rest_framework.response import Response
 from .models import MobileProspectSession, MobileProspectUser, PropertyProspect
 
 
+@api_view(['GET'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def mobile_version(request):
+    """Fuente controlada de metadatos del APK móvil (sin autenticar)."""
+    return Response({
+        'latest_version_code': int(getattr(settings, 'MOBILE_APP_LATEST_VERSION_CODE', 1)),
+        'min_supported_version_code': int(getattr(settings, 'MOBILE_APP_MIN_SUPPORTED_VERSION_CODE', 1)),
+        'download_url': getattr(settings, 'MOBILE_APP_DOWNLOAD_URL', ''),
+        'sha256': getattr(settings, 'MOBILE_APP_SHA256', ''),
+        'force': bool(getattr(settings, 'MOBILE_APP_FORCE', False)),
+        'notes': getattr(settings, 'MOBILE_APP_RELEASE_NOTES', ''),
+    })
+
+
 @dataclass(frozen=True)
 class MobilePrincipal:
     mobile_user: MobileProspectUser

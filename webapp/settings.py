@@ -21,6 +21,14 @@ BASE_DIR = Path(__file__).resolve().parent
 env = environ.Env()
 environ.Env.read_env(BASE_DIR / '.env')
 
+# Metadatos de actualización in-app de propitools; se controlan por variables de entorno.
+MOBILE_APP_LATEST_VERSION_CODE = env('MOBILE_APP_LATEST_VERSION_CODE', default=1)
+MOBILE_APP_MIN_SUPPORTED_VERSION_CODE = env('MOBILE_APP_MIN_SUPPORTED_VERSION_CODE', default=1)
+MOBILE_APP_DOWNLOAD_URL = env('MOBILE_APP_DOWNLOAD_URL', default='')
+MOBILE_APP_SHA256 = env('MOBILE_APP_SHA256', default='')
+MOBILE_APP_FORCE = env.bool('MOBILE_APP_FORCE', default=False)
+MOBILE_APP_RELEASE_NOTES = env('MOBILE_APP_RELEASE_NOTES', default='')
+
 # Consolas de Windows usan cp1252 por defecto; los chats de leads contienen
 # emojis que rompen los logs con UnicodeEncodeError ('charmap' codec can't
 # encode ...). Forzamos UTF-8 con sustitución para que nunca se corte el flujo

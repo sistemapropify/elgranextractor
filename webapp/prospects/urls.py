@@ -4,6 +4,7 @@ from . import mobile_api, views
 app_name = 'prospects'
 
 urlpatterns = [
+    path('api/mobile/version/', mobile_api.mobile_version, name='mobile-version'),
     path('api/mobile/login/', mobile_api.mobile_login, name='mobile-login'),
     path('api/mobile/captures/', mobile_api.mobile_capture, name='mobile-capture'),
     path('api/mobile/captures/<int:pk>/', mobile_api.mobile_capture_detail, name='mobile-capture-detail'),
