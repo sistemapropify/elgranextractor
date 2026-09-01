@@ -1,5 +1,4 @@
 # v2 — Trigger deploy en Azure Web App - granextractorservice
-# Deployment serialized to avoid concurrent OneDeploy conflicts.
 # Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 # More info on Python, GitHub Actions, and Azure App Service: https://aka.ms/python-webapps-actions
@@ -11,12 +10,6 @@ on:
     branches:
       - main
   workflow_dispatch:
-
-# Evita que dos ejecuciones intenten usar OneDeploy al mismo tiempo (causa
-# habitual del HTTP 409 de App Service).
-concurrency:
-  group: granextractor-production-deploy
-  cancel-in-progress: false
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -143,20 +136,12 @@ jobs:
           echo "Esperando 30s antes de desplegar..."
           sleep 30
 
-      - name: Create zipDeploy package
-        run: |
-          mkdir -p .deployment
-          zip -r .deployment/prometeo-deploy.zip . -x '*.git*' '.deployment/*'
-          test -s .deployment/prometeo-deploy.zip
-          ls -lh .deployment/prometeo-deploy.zip
-
       - name: 'Deploy to Azure Web App (Attempt 1)'
-        uses: azure/cli@v2
+        uses: azure/webapps-deploy@v3
         id: deploy-attempt-1
         with:
-          inlineScript: |
-            test -s .deployment/prometeo-deploy.zip
-            az webapp deployment source config-zip --resource-group rg-elgranextractor --name granextractorservice --src .deployment/prometeo-deploy.zip --verbose
+          app-name: 'granextractorservice'
+          slot-name: 'Production'
         continue-on-error: true
 
       - name: Wait before retry
@@ -167,12 +152,11 @@ jobs:
 
       - name: 'Deploy to Azure Web App (Attempt 2)'
         if: steps.deploy-attempt-1.outcome == 'failure'
-        uses: azure/cli@v2
+        uses: azure/webapps-deploy@v3
         id: deploy-attempt-2
         with:
-          inlineScript: |
-            test -s .deployment/prometeo-deploy.zip
-            az webapp deployment source config-zip --resource-group rg-elgranextractor --name granextractorservice --src .deployment/prometeo-deploy.zip --verbose
+          app-name: 'granextractorservice'
+          slot-name: 'Production'
         continue-on-error: true
 
       - name: Wait before final retry
@@ -183,12 +167,11 @@ jobs:
 
       - name: 'Deploy to Azure Web App (Attempt 3 - Final)'
         if: steps.deploy-attempt-2.outcome == 'failure'
-        uses: azure/cli@v2
+        uses: azure/webapps-deploy@v3
         id: deploy-attempt-3
         with:
-          inlineScript: |
-            test -s .deployment/prometeo-deploy.zip
-            az webapp deployment source config-zip --resource-group rg-elgranextractor --name granextractorservice --src .deployment/prometeo-deploy.zip --verbose
+          app-name: 'granextractorservice'
+          slot-name: 'Production'
 
       # El zip deploy puede tardar mas que la ventana de cinco minutos de la
       # asercion OIDC inicial. Solicitar una credencial nueva antes de usar az.
