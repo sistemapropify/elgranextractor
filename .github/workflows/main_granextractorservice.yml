@@ -11,6 +11,12 @@ on:
       - main
   workflow_dispatch:
 
+# Evita que dos ejecuciones intenten usar OneDeploy al mismo tiempo (causa
+# habitual del HTTP 409 de App Service).
+concurrency:
+  group: granextractor-production-deploy
+  cancel-in-progress: false
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
