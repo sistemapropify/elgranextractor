@@ -144,13 +144,19 @@ jobs:
           sleep 30
 
       - name: Create zipDeploy package
-        run: zip -r /tmp/prometeo-deploy.zip . -x '*.git*'
+        run: |
+          mkdir -p .deployment
+          zip -r .deployment/prometeo-deploy.zip . -x '*.git*' '.deployment/*'
+          test -s .deployment/prometeo-deploy.zip
+          ls -lh .deployment/prometeo-deploy.zip
 
       - name: 'Deploy to Azure Web App (Attempt 1)'
         uses: azure/cli@v2
         id: deploy-attempt-1
         with:
-          inlineScript: az webapp deployment source config-zip --resource-group rg-elgranextractor --name granextractorservice --src /tmp/prometeo-deploy.zip
+          inlineScript: |
+            test -s .deployment/prometeo-deploy.zip
+            az webapp deployment source config-zip --resource-group rg-elgranextractor --name granextractorservice --src .deployment/prometeo-deploy.zip --verbose
         continue-on-error: true
 
       - name: Wait before retry
@@ -164,7 +170,9 @@ jobs:
         uses: azure/cli@v2
         id: deploy-attempt-2
         with:
-          inlineScript: az webapp deployment source config-zip --resource-group rg-elgranextractor --name granextractorservice --src /tmp/prometeo-deploy.zip
+          inlineScript: |
+            test -s .deployment/prometeo-deploy.zip
+            az webapp deployment source config-zip --resource-group rg-elgranextractor --name granextractorservice --src .deployment/prometeo-deploy.zip --verbose
         continue-on-error: true
 
       - name: Wait before final retry
@@ -178,7 +186,9 @@ jobs:
         uses: azure/cli@v2
         id: deploy-attempt-3
         with:
-          inlineScript: az webapp deployment source config-zip --resource-group rg-elgranextractor --name granextractorservice --src /tmp/prometeo-deploy.zip
+          inlineScript: |
+            test -s .deployment/prometeo-deploy.zip
+            az webapp deployment source config-zip --resource-group rg-elgranextractor --name granextractorservice --src .deployment/prometeo-deploy.zip --verbose
 
       # El zip deploy puede tardar mas que la ventana de cinco minutos de la
       # asercion OIDC inicial. Solicitar una credencial nueva antes de usar az.
