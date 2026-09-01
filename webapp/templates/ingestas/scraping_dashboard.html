@@ -606,11 +606,17 @@ function updateUI(estado) {
     const dot = document.getElementById('statusDot');
     const title = document.getElementById('terminalTitle');
 
-    btnStart.disabled = (estado === 'running' || estado === 'paused');
-    btnStop.disabled = (estado !== 'running');
+    btnStart.disabled = (estado === 'idle' || estado === 'running' || estado === 'paused');
+    btnStop.disabled = !(estado === 'idle' || estado === 'running' || estado === 'paused');
     btnPause.disabled = (estado !== 'running');
 
-    if (estado === 'running') {
+    if (estado === 'idle') {
+        btnStart.innerHTML = '<i class="bi bi-hourglass-split"></i> Preparando...';
+        btnPause.style.display = 'none';
+        btnResume.style.display = 'none';
+        dot.className = 'terminal-badge paused';
+        title.textContent = '⏳ Preparando ejecución — puede detener';
+    } else if (estado === 'running') {
         btnStart.innerHTML = '<i class="bi bi-play-fill"></i> En ejecución';
         btnPause.style.display = '';
         btnResume.style.display = 'none';
@@ -648,6 +654,7 @@ function updateUI(estado) {
     }
 
     document.getElementById('statEstado').textContent =
+        estado === 'idle' ? 'Preparando' :
         estado === 'running' ? 'Ejecutando' :
         estado === 'paused' ? 'Pausado' :
         estado === 'completed' ? 'Completado' :

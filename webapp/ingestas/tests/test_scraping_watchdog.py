@@ -31,6 +31,7 @@ class ScrapingWatchdogTests(SimpleTestCase):
 
         update = job_model.objects.filter.return_value.update.call_args.kwargs
         self.assertEqual(update['estado'], 'idle')
+        self.assertIsNone(update['execution_token'])
         self.assertEqual(update['parametros']['auto_resume_count'], 3)
         self.assertEqual(update['parametros']['checkpoints']['urbania'], 12)
         log.assert_called_once()

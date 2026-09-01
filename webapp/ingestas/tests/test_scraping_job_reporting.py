@@ -98,6 +98,9 @@ class ScrapingJobReportingTests(SimpleTestCase):
         _run_scraping(87)
 
         claim.update.assert_called_once()
+        claim_update = claim.update.call_args.kwargs
+        self.assertEqual(claim_update['estado'], 'running')
+        self.assertIsNotNone(claim_update['execution_token'])
         job.refresh_from_db.assert_not_called()
 
         instantiate_skill.assert_not_called()

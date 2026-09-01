@@ -1657,6 +1657,9 @@ SCRAPING_PORTAL_LABELS = {
 SCRAPING_STALE_AFTER_SECONDS = int(
     os.environ.get('SCRAPING_STALE_AFTER_SECONDS', '900')
 )
+SCRAPING_IDLE_STALE_AFTER_SECONDS = int(
+    os.environ.get('SCRAPING_IDLE_STALE_AFTER_SECONDS', '120')
+)
 
 
 def _decorate_scraping_job(job):
@@ -1769,9 +1772,21 @@ foreach ($target in $targets) {
 def _reconcile_stale_scraping_jobs():
     """Cierra ejecuciones running sin actividad reciente verificable."""
     cutoff = timezone.now() - timedelta(seconds=SCRAPING_STALE_AFTER_SECONDS)
+    idle_cutoff = timezone.now() - timedelta(
+        seconds=SCRAPING_IDLE_STALE_AFTER_SECONDS
+    )
+    stale_idle_ids = list(
+        ScrapingJob.objects.filter(
+            estado='idle',
+            completado_en__isnull=True,
+            creado_en__lt=idle_cutoff,
+        ).exclude(
+            logs__timestamp__gte=idle_cutoff
+        ).values_list('id', flat=True).distinct()
+    )
     stale_ids = list(
         ScrapingJob.objects.filter(
-            estado__in=SCRAPING_ACTIVE_STATES,
+            estado__in=('running', 'paused'),
             completado_en__isnull=True,
         ).filter(
             Q(iniciado_en__lt=cutoff)
@@ -1780,10 +1795,12 @@ def _reconcile_stale_scraping_jobs():
             logs__timestamp__gte=cutoff
         ).values_list('id', flat=True).distinct()
     )
+    stale_ids = list(set(stale_ids + stale_idle_ids))
     if not stale_ids:
         return 0
     return ScrapingJob.objects.filter(id__in=stale_ids).update(
         estado='error',
+        execution_token=None,
         completado_en=timezone.now(),
         mensaje_error=(
             'Ejecución huérfana detectada: no produjo logs ni progreso '
@@ -1928,6 +1945,7 @@ class ScrapingControlView(View):
                 job = ScrapingJob.objects.create(
                     # Solo el primer ejecutor puede reclamar este trabajo.
                     estado='idle',
+                    execution_token=None,
                     parametros={'portales': portales or None},
                 )
 
@@ -1987,6 +2005,7 @@ class ScrapingControlView(View):
                     id=job_id, estado__in=('error', 'stopped')
                 ).update(
                     estado='idle',
+                    execution_token=None,
                     completado_en=None,
                     mensaje_error=None,
                     portal_actual=None,
@@ -2007,6 +2026,7 @@ class ScrapingControlView(View):
                 id=job_id, estado__in=SCRAPING_ACTIVE_STATES
             ).update(
                 estado='stopped',
+                execution_token=None,
                 completado_en=timezone.now(),
             )
             terminated_browsers = _terminate_scraping_browsers() if updated else 0

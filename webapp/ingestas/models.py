@@ -417,6 +417,11 @@ class ScrapingJob(models.Model):
         max_length=20, choices=ESTADOS, default='idle',
         verbose_name='Estado'
     )
+    execution_token = models.UUIDField(
+        null=True, blank=True, editable=False, db_index=True,
+        verbose_name='Token de ejecución',
+        help_text='Impide que un proceso huérfano siga escribiendo tras una reanudación.',
+    )
     portal_actual = models.CharField(
         max_length=50, null=True, blank=True,
         verbose_name='Portal actual'

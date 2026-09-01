@@ -79,7 +79,8 @@ class Command(BaseCommand):
             parametros['auto_resume_count'] = resumes + 1
             parametros['last_auto_resume_at'] = timezone.now().isoformat()
             claimed = ScrapingJob.objects.filter(id=job.id, estado=job.estado).update(
-                estado='idle', parametros=parametros, iniciado_en=None,
+                estado='idle', execution_token=None, parametros=parametros,
+                iniciado_en=None,
                 completado_en=None, mensaje_error=None,
             )
             if claimed:

@@ -11,6 +11,7 @@ import logging
 import os
 import threading
 import time
+import uuid
 from datetime import datetime
 from typing import Dict, Any, List
 
@@ -164,7 +165,12 @@ def _crear_log(job, nivel: str, mensaje: str, portal: str = None,
     return log.id
 
 
-def _start_portal_heartbeat(job_id: int, portal: str, interval: int = 30):
+def _start_portal_heartbeat(
+    job_id: int,
+    portal: str,
+    execution_token,
+    interval: int = 30,
+):
     """Mantiene una evidencia persistente de que el portal sigue vivo.
 
     El watchdog usa los logs recientes para distinguir un proceso lento de
@@ -179,7 +185,11 @@ def _start_portal_heartbeat(job_id: int, portal: str, interval: int = 30):
         try:
             while not stop_event.wait(interval):
                 job = ScrapingJob.objects.filter(id=job_id).first()
-                if not job or job.estado not in ('running', 'paused'):
+                if (
+                    not job
+                    or job.estado not in ('running', 'paused')
+                    or job.execution_token != execution_token
+                ):
                     return
                 _crear_log(
                     job,
@@ -215,9 +225,14 @@ def _run_scraping(job_id: int):
 
     # Claim compare-and-swap: solo un ejecutor puede mover idle -> running.
     # Un segundo despacho del mismo job termina antes de abrir Camoufox.
+    execution_token = uuid.uuid4()
     claimed = ScrapingJob.objects.filter(
         id=job_id, estado='idle'
-    ).update(estado='running', iniciado_en=timezone.now())
+    ).update(
+        estado='running',
+        iniciado_en=timezone.now(),
+        execution_token=execution_token,
+    )
     if claimed != 1:
         logger.warning(
             "ScrapingJob #%s ignorado: ya fue reclamado (estado=%s)",
@@ -256,6 +271,13 @@ def _run_scraping(job_id: int):
             )
             continue
 
+        if job.execution_token != execution_token:
+            logger.info(
+                'ScrapingJob #%s: ejecución reemplazada; proceso anterior finaliza.',
+                job.id,
+            )
+            return
+
         if job.estado == 'stopped':
             _crear_log(job, 'info', f'⏹️ Scraping detenido en portal {portal}')
             job.completado_en = timezone.now()
@@ -271,10 +293,20 @@ def _run_scraping(job_id: int):
                 job.save()
                 return
 
+        if job.estado != 'running' or job.execution_token != execution_token:
+            return
+
         # ── Ejecutar scraper ──
         job.portal_actual = portal
         job.progreso = int((idx - 1) / total_portales * 100)
-        job.save()
+        updated = ScrapingJob.objects.filter(
+            id=job.id,
+            estado='running',
+            execution_token=execution_token,
+        ).update(portal_actual=portal, progreso=job.progreso)
+        if updated != 1:
+            return
+        job.refresh_from_db()
 
         _crear_log(job, 'info', f'🔍 Iniciando scraper {portal.upper()}...')
 
@@ -296,7 +328,10 @@ def _run_scraping(job_id: int):
                 while job.estado == 'paused':
                     time.sleep(2)
                     job.refresh_from_db()
-                if job.estado == 'stopped':
+                if (
+                    job.estado != 'running'
+                    or job.execution_token != execution_token
+                ):
                     return False
 
                 portal_progress = max(
@@ -333,7 +368,13 @@ def _run_scraping(job_id: int):
                     parametros['checkpoints'] = checkpoints
                     updates['parametros'] = parametros
 
-                ScrapingJob.objects.filter(id=job.id).update(**updates)
+                updated = ScrapingJob.objects.filter(
+                    id=job.id,
+                    estado='running',
+                    execution_token=execution_token,
+                ).update(**updates)
+                if updated != 1:
+                    return False
 
                 message = payload.get('message')
                 if message:
@@ -361,7 +402,7 @@ def _run_scraping(job_id: int):
                 }
                 skill = _instanciar_skill(portal)
                 heartbeat_stop, heartbeat_thread = _start_portal_heartbeat(
-                    job.id, portal
+                    job.id, portal, execution_token
                 )
                 try:
                     resultado = skill.execute(
@@ -371,6 +412,12 @@ def _run_scraping(job_id: int):
                 finally:
                     heartbeat_stop.set()
                     heartbeat_thread.join(timeout=2)
+                job.refresh_from_db()
+                if (
+                    job.estado != 'running'
+                    or job.execution_token != execution_token
+                ):
+                    return
                 if resultado.success:
                     break
                 if _error_camoufox_no_reintentable(resultado):
@@ -452,34 +499,48 @@ def _run_scraping(job_id: int):
             logger.exception(f"Error en scraper {portal}: {e}")
 
         job.refresh_from_db()
-        if job.estado == 'stopped':
+        if (
+            job.estado != 'running'
+            or job.execution_token != execution_token
+        ):
             _crear_log(job, 'info', f'⏹️  Scraping detenido tras {portal}')
-            break
+            return
 
     # ── Finalizar ──
     job.refresh_from_db()
-    if job.estado != 'stopped':
-        if job.total_propiedades <= 0:
-            job.estado = 'error'
-            job.mensaje_error = (
-                'No se detectó ninguna propiedad en los portales seleccionados.'
-            )
-        elif failed_portals:
-            job.estado = 'error'
-            job.mensaje_error = (
-                'Ejecución parcial: fallaron los portales '
-                + ', '.join(sorted(set(failed_portals)))
-                + '.'
-            )
-        elif successful_portals:
-            job.estado = 'completed'
-        else:
-            job.estado = 'error'
-            job.mensaje_error = 'Ningún portal terminó correctamente.'
-    job.progreso = 100
-    job.portal_actual = None
-    job.completado_en = timezone.now()
-    job.save()
+    if job.estado != 'running' or job.execution_token != execution_token:
+        return
+    if job.total_propiedades <= 0:
+        final_state = 'error'
+        final_error = 'No se detectó ninguna propiedad en los portales seleccionados.'
+    elif failed_portals:
+        final_state = 'error'
+        final_error = (
+            'Ejecución parcial: fallaron los portales '
+            + ', '.join(sorted(set(failed_portals)))
+            + '.'
+        )
+    elif successful_portals:
+        final_state = 'completed'
+        final_error = None
+    else:
+        final_state = 'error'
+        final_error = 'Ningún portal terminó correctamente.'
+    finalized = ScrapingJob.objects.filter(
+        id=job.id,
+        estado='running',
+        execution_token=execution_token,
+    ).update(
+        estado=final_state,
+        execution_token=None,
+        mensaje_error=final_error,
+        progreso=100,
+        portal_actual=None,
+        completado_en=timezone.now(),
+    )
+    if finalized != 1:
+        return
+    job.refresh_from_db()
 
     resumen = (
         f'🎯 Scraping completado: {job.total_propiedades} detectadas, '

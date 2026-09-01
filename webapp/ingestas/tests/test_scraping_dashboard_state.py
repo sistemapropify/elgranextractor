@@ -31,11 +31,14 @@ class ScrapingDashboardStateTests(SimpleTestCase):
         updated = _reconcile_stale_scraping_jobs()
 
         self.assertEqual(updated, 2)
-        filters = job_model.objects.filter.call_args_list[0].kwargs
-        self.assertEqual(filters["estado__in"], ("idle", "running", "paused"))
+        idle_filters = job_model.objects.filter.call_args_list[0].kwargs
+        self.assertEqual(idle_filters["estado"], "idle")
+        active_filters = job_model.objects.filter.call_args_list[1].kwargs
+        self.assertEqual(active_filters["estado__in"], ("running", "paused"))
         queryset.filter.assert_called_once()
         update = queryset.update.call_args.kwargs
         self.assertEqual(update["estado"], "error")
+        self.assertIsNone(update["execution_token"])
         self.assertIsNotNone(update["completado_en"])
         self.assertIn("huérfana", update["mensaje_error"])
 
@@ -107,6 +110,7 @@ class ScrapingDashboardStateTests(SimpleTestCase):
         self.assertEqual(response.status_code, 200)
         update = queryset.update.call_args.kwargs
         self.assertEqual(update["estado"], "stopped")
+        self.assertIsNone(update["execution_token"])
         self.assertIsNotNone(update["completado_en"])
         self.assertEqual(json.loads(response.content)["browsers_terminated"], 2)
         terminate_browsers.assert_called_once_with()
