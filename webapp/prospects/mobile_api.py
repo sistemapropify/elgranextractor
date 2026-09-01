@@ -14,7 +14,7 @@ from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from .models import MobileProspectSession, MobileProspectUser, PropertyProspect
+from .models import MobileAppVersion, MobileProspectSession, MobileProspectUser, PropertyProspect
 
 
 @api_view(['GET'])
@@ -22,6 +22,12 @@ from .models import MobileProspectSession, MobileProspectUser, PropertyProspect
 @permission_classes([AllowAny])
 def mobile_version(request):
     """Fuente controlada de metadatos del APK móvil (sin autenticar)."""
+    release = MobileAppVersion.objects.filter(published=True).order_by('-version_code').first()
+    if release:
+        return Response({'latest_version_code': release.version_code,
+                         'min_supported_version_code': release.min_supported_version_code,
+                         'download_url': release.download_url, 'sha256': release.sha256,
+                         'force': release.force_update, 'notes': release.release_notes})
     return Response({
         'latest_version_code': int(getattr(settings, 'MOBILE_APP_LATEST_VERSION_CODE', 1)),
         'min_supported_version_code': int(getattr(settings, 'MOBILE_APP_MIN_SUPPORTED_VERSION_CODE', 1)),

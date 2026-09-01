@@ -1,5 +1,13 @@
 from django.contrib import admin
-from .models import PropertyProspect
+from .models import MobileAppVersion, PropertyProspect
+
+
+@admin.register(MobileAppVersion)
+class MobileAppVersionAdmin(admin.ModelAdmin):
+    list_display = ('version_code', 'version_name', 'published', 'force_update', 'min_supported_version_code', 'created_at')
+    list_filter = ('published', 'force_update')
+    search_fields = ('version_name', 'release_notes')
+    ordering = ('-version_code',)
 
 
 @admin.register(PropertyProspect)

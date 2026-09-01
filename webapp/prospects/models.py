@@ -2,6 +2,27 @@ from django.db import models
 from django.conf import settings
 
 
+class MobileAppVersion(models.Model):
+    version_code = models.PositiveBigIntegerField(unique=True, verbose_name='Version code')
+    version_name = models.CharField(max_length=50, blank=True, verbose_name='Versión')
+    download_url = models.URLField(max_length=1000, verbose_name='URL del APK')
+    sha256 = models.CharField(max_length=64, blank=True, verbose_name='SHA-256')
+    min_supported_version_code = models.PositiveBigIntegerField(default=1)
+    force_update = models.BooleanField(default=False, verbose_name='Actualización obligatoria')
+    published = models.BooleanField(default=False, verbose_name='Publicada')
+    release_notes = models.TextField(blank=True, verbose_name='Notas de versión')
+    created_at = models.DateTimeField(auto_now_add=True)
+    published_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-version_code']
+        verbose_name = 'Versión de propitools'
+        verbose_name_plural = 'Versiones de propitools'
+
+    def __str__(self):
+        return f'{self.version_name or self.version_code} ({self.version_code})'
+
+
 class MobileProspectUser(models.Model):
     username = models.CharField(max_length=150, unique=True)
     propify_user_id = models.CharField(max_length=100, blank=True)
