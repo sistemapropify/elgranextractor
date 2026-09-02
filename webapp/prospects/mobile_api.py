@@ -44,6 +44,22 @@ def mobile_version(request):
     })
 
 
+@api_view(['GET'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def mobile_schema_health(request):
+    """Comprueba que el esquema requerido por la APK ya fue migrado."""
+    try:
+        MobileProspectUser.objects.values_list('can_view_crm_alerts', flat=True).first()
+        MobileProspectSession.objects.values_list('pk', flat=True).first()
+        CrmVisitIntentAlert.objects.values_list('pk', flat=True).first()
+        MobileNotificationDevice.objects.values_list('pk', flat=True).first()
+    except Exception:
+        logger.exception('El esquema de la API móvil de Prometeo no está disponible')
+        return Response({'status': 'unavailable'}, status=503)
+    return Response({'status': 'ok'})
+
+
 @dataclass(frozen=True)
 class MobilePrincipal:
     mobile_user: MobileProspectUser
@@ -133,6 +149,7 @@ def mobile_login(request):
             token_hash=hashlib.sha256(plain_token.encode('utf-8')).hexdigest(),
         )
     except Exception:
+        logger.exception('Propify validó a %s, pero Prometeo no pudo crear la sesión móvil', username)
         return Response({
             'ok': False,
             'error': 'Propify validó el usuario, pero Prometeo no pudo crear la sesión móvil.',

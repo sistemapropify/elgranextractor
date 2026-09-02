@@ -122,14 +122,24 @@ else
     fi
 fi
 
-# ── Run Migrations (non-blocking) ──
+# ── Run critical mobile migrations before accepting APK requests ──
+# La API móvil depende del esquema de prospects. Aplicarlo por separado evita
+# que una migración antigua de otro módulo impida crear sesiones móviles.
+echo "[4/6] Applying critical prospects migrations..."
+MIGRATE_LOG="/home/LogFiles/migrate.log"
+mkdir -p /home/LogFiles
+if timeout 90 python manage.py migrate prospects --noinput >> "$MIGRATE_LOG" 2>&1; then
+    echo "  Critical prospects migrations applied."
+else
+    echo "  WARNING: critical prospects migrations failed or timed out; see $MIGRATE_LOG."
+fi
+
+# ── Run remaining migrations (non-blocking) ──
 # No bloquear el arranque web: si SQL tarda o el driver ODBC aun se instala
 # en segundo plano, migrar en background evita el ContainerTimeout (230s).
 # Gunicorn arranca de inmediato y responde al health check (que no usa BD);
 # las migraciones terminan en paralelo. Se conserva el timeout 90.
-echo "[4/6] Scheduling database migrations (non-blocking)..."
-MIGRATE_LOG="/home/LogFiles/migrate.log"
-mkdir -p /home/LogFiles
+echo "  Scheduling remaining database migrations (non-blocking)..."
 (
     set +e
     cd "$APP_ROOT/webapp"

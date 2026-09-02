@@ -6,8 +6,42 @@ from django.utils import timezone
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from .crm_alerts import sync_crm_visit_alerts
-from .mobile_api import MobilePrincipal, mobile_crm_alerts, mobile_notification_device
-from .models import CrmVisitIntentAlert, MobileNotificationDevice, MobileProspectUser
+from .mobile_api import (
+    MobilePrincipal,
+    mobile_crm_alerts,
+    mobile_login,
+    mobile_notification_device,
+    mobile_schema_health,
+)
+from .models import CrmVisitIntentAlert, MobileNotificationDevice, MobileProspectSession, MobileProspectUser
+
+
+class MobileLoginApiTests(TestCase):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+
+    @patch("prospects.mobile_api.requests.post")
+    def test_propify_login_creates_an_independent_prometeo_session(self, propify_post):
+        propify_post.return_value.status_code = 200
+        request = self.factory.post(
+            "/prospects/api/mobile/login/",
+            {"username": "agente", "password": "secreto"},
+            format="json",
+        )
+
+        response = mobile_login(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["access"])
+        self.assertTrue(MobileProspectSession.objects.filter(user__username="agente").exists())
+
+    def test_mobile_schema_health_checks_alert_tables_and_permission_column(self):
+        request = self.factory.get("/prospects/api/mobile/schema-health/")
+
+        response = mobile_schema_health(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, {"status": "ok"})
 
 
 class MobileCrmAlertApiTests(TestCase):

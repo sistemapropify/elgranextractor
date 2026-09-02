@@ -73,6 +73,7 @@ jobs:
           grep -Fq 'propifai-camoufox-deps.installing' startup.sh
           grep -Fq 'libgtk-3-0' startup.sh
           grep -Fq 'timeout 90 python manage.py migrate' startup.sh
+          grep -Fq 'python manage.py migrate prospects --noinput' startup.sh
           grep -Fq 'python manage.py scraping_watchdog' startup.sh
           grep -Fq 'SCRAPING_EXECUTION_MODE' startup.sh
           grep -Fq 'exec gunicorn' startup.sh
@@ -217,6 +218,7 @@ jobs:
             CSS_STATUS="pending"
             JS_STATUS="pending"
             LOGO_STATUS="pending"
+            MOBILE_SCHEMA_STATUS="pending"
             if [ "$HEALTH_STATUS" = "200" ]; then
               CSS_STATUS=$(http_status /tmp/chat-workspace.css \
                 https://granextractorservice-emehaffsf8e2c7eg.brazilsouth-01.azurewebsites.net/static/intelligence/chat-workspace.css)
@@ -224,12 +226,16 @@ jobs:
                 https://granextractorservice-emehaffsf8e2c7eg.brazilsouth-01.azurewebsites.net/static/intelligence/chat.js)
               LOGO_STATUS=$(http_status /tmp/logo-propify.png \
                 https://granextractorservice-emehaffsf8e2c7eg.brazilsouth-01.azurewebsites.net/static/intelligence/img/logo-propify.png)
+              MOBILE_SCHEMA_STATUS=$(http_status /tmp/mobile-schema.json \
+                https://granextractorservice-emehaffsf8e2c7eg.brazilsouth-01.azurewebsites.net/prospects/api/mobile/schema-health/)
             fi
-            echo "Check $i/45 - health=$HEALTH_STATUS css=$CSS_STATUS js=$JS_STATUS logo=$LOGO_STATUS"
+            echo "Check $i/45 - health=$HEALTH_STATUS css=$CSS_STATUS js=$JS_STATUS logo=$LOGO_STATUS mobile_schema=$MOBILE_SCHEMA_STATUS"
             if [ "$HEALTH_STATUS" = "200" ] \
               && [ "$CSS_STATUS" = "200" ] \
               && [ "$JS_STATUS" = "200" ] \
               && [ "$LOGO_STATUS" = "200" ] \
+              && [ "$MOBILE_SCHEMA_STATUS" = "200" ] \
+              && grep -q '"status":"ok"\|"status": "ok"' /tmp/mobile-schema.json \
               && grep -q '"status":"ok"\|"status": "ok"' /tmp/health-response.json; then
               echo "Application and static assets are healthy"
               exit 0
