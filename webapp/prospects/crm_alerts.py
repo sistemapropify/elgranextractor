@@ -3,12 +3,13 @@
 import json
 import logging
 import os
-from datetime import timedelta
+from datetime import date, datetime, time, timedelta
 
 import requests
+from django.conf import settings
 from django.db import connections
 from django.utils import timezone
-from django.utils.dateparse import parse_datetime
+from django.utils.dateparse import parse_date, parse_datetime
 
 from lead_intelligence.analytics_api import get_visit_intent_leads
 from lead_intelligence.conversation_analysis import analyze_chat_history
@@ -17,6 +18,19 @@ from .models import CrmVisitIntentAlert, MobileNotificationDevice
 
 
 logger = logging.getLogger(__name__)
+
+
+def crm_alerts_start_at():
+    """Inicio operativo de alertas; los datos anteriores quedan fuera del módulo."""
+    configured = str(getattr(settings, "CRM_ALERTS_START_DATE", "2026-08-24")).strip()
+    start_date = parse_date(configured)
+    if start_date is None:
+        logger.error("CRM_ALERTS_START_DATE inválida: %s; se usará 2026-08-24", configured)
+        start_date = date(2026, 8, 24)
+    return timezone.make_aware(
+        datetime.combine(start_date, time.min),
+        timezone.get_current_timezone(),
+    )
 
 
 def _aware(value):
@@ -104,11 +118,14 @@ def send_new_alert_push(alert):
 def sync_crm_visit_alerts(date_from=None, date_to=None, limit=500):
     """Sincroniza nuevas intenciones y detecta la primera respuesta del agente."""
     date_to = date_to or timezone.localdate()
-    date_from = date_from or (date_to - timedelta(days=45))
+    start_at = crm_alerts_start_at()
+    date_from = max(date_from or (date_to - timedelta(days=45)), start_at.date())
     items = get_visit_intent_leads(date_from, date_to, limit=limit)
     created_alerts = []
     for item in items:
         detected_at = _aware(item.get("visit_intent_at")) or timezone.now()
+        if detected_at < start_at:
+            continue
         alert, created = CrmVisitIntentAlert.objects.update_or_create(
             source_lead_id=item["lead_id"],
             detected_at=detected_at,
@@ -126,7 +143,10 @@ def sync_crm_visit_alerts(date_from=None, date_to=None, limit=500):
         if created:
             created_alerts.append(alert)
 
-    pending = list(CrmVisitIntentAlert.objects.filter(status=CrmVisitIntentAlert.Status.PENDING))
+    pending = list(CrmVisitIntentAlert.objects.filter(
+        status=CrmVisitIntentAlert.Status.PENDING,
+        detected_at__gte=start_at,
+    ))
     if pending:
         lead_ids = sorted({item.source_lead_id for item in pending})
         placeholders = ",".join(["%s"] * len(lead_ids))
@@ -156,3 +176,21 @@ def sync_crm_visit_alerts(date_from=None, date_to=None, limit=500):
     for alert in created_alerts:
         send_new_alert_push(alert)
     return {"created": len(created_alerts), "checked": len(items)}
+
+
+def get_crm_lead_conversation(lead_id):
+    """Devuelve la conversación normalizada completa de un lead del CRM."""
+    with connections["propifai"].cursor() as cursor:
+        cursor.execute("SELECT chat_history FROM dbo.lead WHERE id = %s", [lead_id])
+        row = cursor.fetchone()
+    if row is None:
+        return []
+    messages = analyze_chat_history(row[0])["messages"]
+    return [
+        {
+            "sender": message["sender"],
+            "text": message["text"],
+            "timestamp": message["timestamp"].isoformat(),
+        }
+        for message in messages
+    ]

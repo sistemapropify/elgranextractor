@@ -16,7 +16,7 @@ from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from .crm_alerts import sync_crm_visit_alerts
+from .crm_alerts import crm_alerts_start_at, get_crm_lead_conversation, sync_crm_visit_alerts
 from .models import CrmVisitIntentAlert, MobileAppVersion, MobileNotificationDevice, MobileProspectSession, MobileProspectUser, PropertyProspect
 
 
@@ -291,15 +291,18 @@ def _require_alert_supervisor(request):
     return bool(getattr(request.user.mobile_user, 'can_view_crm_alerts', False))
 
 
-def _serialize_crm_alert(item):
-    return {
+def _serialize_crm_alert(item, include_evidence=False):
+    payload = {
         'id': item.pk, 'lead_id': item.source_lead_id, 'agent_name': item.agent_name,
         'contact_name': item.contact_name, 'phone': item.phone, 'property_code': item.property_code,
-        'property_title': item.property_title, 'evidence': item.evidence, 'status': item.status,
+        'property_title': item.property_title, 'status': item.status,
         'detected_at': item.detected_at.isoformat(),
         'responded_at': item.responded_at.isoformat() if item.responded_at else None,
         'response_seconds': int((item.responded_at - item.detected_at).total_seconds()) if item.responded_at else None,
     }
+    if include_evidence:
+        payload['evidence'] = item.evidence
+    return payload
 
 
 @api_view(['GET'])
@@ -316,7 +319,10 @@ def mobile_crm_alerts(request):
             sync_crm_visit_alerts()
         except Exception:
             logger.exception('No se pudieron sincronizar las alertas CRM; se devuelve el último estado persistido')
-    items = CrmVisitIntentAlert.objects.filter(status=requested_status)[:500]
+    items = CrmVisitIntentAlert.objects.filter(
+        status=requested_status,
+        detected_at__gte=crm_alerts_start_at(),
+    )[:500]
     return Response({'ok': True, 'count': len(items), 'results': [_serialize_crm_alert(item) for item in items]})
 
 
@@ -332,7 +338,16 @@ def mobile_crm_alert_detail(request, pk):
     if request.method == 'POST' and request.data.get('status') == CrmVisitIntentAlert.Status.CLOSED:
         item.status = CrmVisitIntentAlert.Status.CLOSED
         item.save(update_fields=['status', 'updated_at'])
-    return Response({'ok': True, 'alert': _serialize_crm_alert(item)})
+    try:
+        conversation = get_crm_lead_conversation(item.source_lead_id)
+    except Exception:
+        logger.exception('No se pudo cargar la conversación del lead %s', item.source_lead_id)
+        return Response({'ok': False, 'error': 'No se pudo cargar la conversación del CRM.'}, status=503)
+    return Response({
+        'ok': True,
+        'alert': _serialize_crm_alert(item, include_evidence=True),
+        'conversation': conversation,
+    })
 
 
 @api_view(['POST'])

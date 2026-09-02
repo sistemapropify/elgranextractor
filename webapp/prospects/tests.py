@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import date, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
@@ -9,6 +9,7 @@ from .crm_alerts import sync_crm_visit_alerts
 from .mobile_api import (
     MobilePrincipal,
     mobile_crm_alerts,
+    mobile_crm_alert_detail,
     mobile_login,
     mobile_notification_device,
     mobile_schema_health,
@@ -76,6 +77,51 @@ class MobileCrmAlertApiTests(TestCase):
         self.assertEqual(response.data["results"][0]["lead_id"], 42)
         sync_mock.assert_called_once()
 
+    @patch("prospects.mobile_api.sync_crm_visit_alerts")
+    def test_alerts_before_operational_start_are_not_listed(self, sync_mock):
+        CrmVisitIntentAlert.objects.create(
+            source_lead_id=41,
+            agent_name="Agente antiguo",
+            detected_at=timezone.make_aware(datetime(2026, 8, 23, 23, 59)),
+        )
+        CrmVisitIntentAlert.objects.create(
+            source_lead_id=42,
+            agent_name="Agente vigente",
+            detected_at=timezone.make_aware(datetime(2026, 8, 24, 0, 0)),
+        )
+        request = self._authenticate(
+            self.factory.get("/prospects/api/mobile/crm-alerts/?status=pending"),
+            self.supervisor,
+        )
+
+        response = mobile_crm_alerts(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["lead_id"], 42)
+        self.assertNotIn("evidence", response.data["results"][0])
+
+    @patch("prospects.mobile_api.get_crm_lead_conversation")
+    def test_alert_detail_contains_complete_conversation(self, conversation_mock):
+        alert = CrmVisitIntentAlert.objects.create(
+            source_lead_id=90,
+            detected_at=timezone.now(),
+        )
+        conversation_mock.return_value = [
+            {"sender": "lead", "text": "Quiero visitar", "timestamp": timezone.now().isoformat()},
+            {"sender": "agent", "text": "Coordinemos", "timestamp": timezone.now().isoformat()},
+        ]
+        request = self._authenticate(
+            self.factory.get(f"/prospects/api/mobile/crm-alerts/{alert.pk}/"),
+            self.supervisor,
+        )
+
+        response = mobile_crm_alert_detail(request, alert.pk)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["conversation"]), 2)
+        self.assertIn("evidence", response.data["alert"])
+
     def test_regular_user_cannot_open_control_module(self):
         request = self._authenticate(
             self.factory.get("/prospects/api/mobile/crm-alerts/"),
@@ -133,3 +179,20 @@ class CrmAlertSynchronizationTests(TestCase):
         self.assertEqual(second["created"], 0)
         self.assertEqual(CrmVisitIntentAlert.objects.filter(source_lead_id=91).count(), 1)
         push_mock.assert_called_once()
+
+    @patch("prospects.crm_alerts.send_new_alert_push")
+    @patch("prospects.crm_alerts.connections")
+    @patch("prospects.crm_alerts.get_visit_intent_leads")
+    def test_intentions_before_august_24_are_ignored(self, leads_mock, connections_mock, push_mock):
+        leads_mock.return_value = [{
+            "lead_id": 15,
+            "visit_intent_at": "2026-08-23T23:59:59-05:00",
+            "visit_intent_evidence": [{"text": "Visita antigua"}],
+        }]
+
+        result = sync_crm_visit_alerts(date_from=date(2026, 8, 1), date_to=date(2026, 9, 2))
+
+        self.assertEqual(result["created"], 0)
+        self.assertFalse(CrmVisitIntentAlert.objects.filter(source_lead_id=15).exists())
+        connections_mock.__getitem__.assert_not_called()
+        push_mock.assert_not_called()

@@ -340,6 +340,9 @@ PROPIFY_AUTH_TOKEN_URL = env(
     default='https://api.propify.pe/api/auth/token/',
 )
 
+# Inicio operativo del control móvil de intenciones de visita (hora de Lima).
+CRM_ALERTS_START_DATE = env('CRM_ALERTS_START_DATE', default='2026-08-24')
+
 # Monkey patch para corregir el error 'super' object has no attribute 'dicts'
 # en Django 5.0.6 con Python 3.14.2
 import django.template.context
