@@ -27,6 +27,7 @@ class MobileProspectUser(models.Model):
     username = models.CharField(max_length=150, unique=True)
     propify_user_id = models.CharField(max_length=100, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    can_view_crm_alerts = models.BooleanField(default=False, verbose_name='Supervisor de alertas CRM')
 
     def __str__(self):
         return self.username
@@ -37,6 +38,46 @@ class MobileProspectSession(models.Model):
     token_hash = models.CharField(max_length=64, unique=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     last_used_at = models.DateTimeField(auto_now=True)
+
+
+class CrmVisitIntentAlert(models.Model):
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Pendiente'
+        FOLLOW_UP = 'follow_up', 'Seguimiento'
+        CLOSED = 'closed', 'Cerrada'
+
+    source_lead_id = models.BigIntegerField(db_index=True)
+    agent_id = models.BigIntegerField(null=True, blank=True, db_index=True)
+    agent_name = models.CharField(max_length=200, blank=True)
+    contact_name = models.CharField(max_length=200, blank=True)
+    phone = models.CharField(max_length=50, blank=True)
+    property_id = models.BigIntegerField(null=True, blank=True)
+    property_code = models.CharField(max_length=100, blank=True)
+    property_title = models.CharField(max_length=300, blank=True)
+    evidence = models.JSONField(default=list)
+    detected_at = models.DateTimeField(db_index=True)
+    responded_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-detected_at']
+        constraints = [models.UniqueConstraint(fields=['source_lead_id', 'detected_at'], name='unique_crm_visit_intent_alert')]
+
+
+class MobileNotificationDevice(models.Model):
+    class TargetType(models.TextChoices):
+        FID = 'fid', 'Firebase Installation ID'
+        TOKEN = 'token', 'Token heredado'
+
+    user = models.ForeignKey(MobileProspectUser, on_delete=models.CASCADE, related_name='notification_devices')
+    registration_id = models.CharField(max_length=512, unique=True)
+    target_type = models.CharField(max_length=10, choices=TargetType.choices, default=TargetType.FID)
+    device_name = models.CharField(max_length=200, blank=True)
+    active = models.BooleanField(default=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
 
 class PropertyProspect(models.Model):

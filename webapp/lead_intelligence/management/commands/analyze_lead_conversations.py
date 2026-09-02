@@ -349,6 +349,19 @@ class Command(BaseCommand):
                         )
                     )
 
+        # Alimenta el módulo de control después del barrido IA. Si Firebase
+        # está configurado, las alertas nuevas se notifican en este punto.
+        if not options["dry_run"] and not _cancel_event.is_set():
+            try:
+                from prospects.crm_alerts import sync_crm_visit_alerts
+
+                sync_crm_visit_alerts(
+                    date_from=date_from or timezone.localdate(),
+                    date_to=date_to or timezone.localdate(),
+                )
+            except Exception as exc:
+                self.stderr.write(f"Alertas CRM: no se pudo sincronizar: {exc}")
+
         if run is not None:
             run.leads_analyzed = analyzed
             run.leads_skipped = skipped

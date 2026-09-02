@@ -1,14 +1,14 @@
 # Canal TIEMPO REAL de evaluación IA de leads (bidireccional, calificados,
-# intención de visita, en visita). Barrido cada 15 minutos.
+# intención de visita, en visita). Barrido cada 5 minutos.
 # Dispara el endpoint protegido del App Service vía POST con
 # X-Analytics-API-Key. La evaluación corre en segundo plano dentro de la app;
 # solo re-evalúa los leads de la ventana (6h) cuyo history_hash cambió; los
 # sin cambios se omiten (regla de oro, sin gasto DeepSeek).
-name: Evaluar leads - tiempo real (cada 15 min)
+name: Evaluar leads - tiempo real (cada 5 min)
 
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 permissions:

@@ -8,6 +8,9 @@ urlpatterns = [
     path('api/mobile/login/', mobile_api.mobile_login, name='mobile-login'),
     path('api/mobile/captures/', mobile_api.mobile_capture, name='mobile-capture'),
     path('api/mobile/captures/<int:pk>/', mobile_api.mobile_capture_detail, name='mobile-capture-detail'),
+    path('api/mobile/crm-alerts/', mobile_api.mobile_crm_alerts, name='mobile-crm-alerts'),
+    path('api/mobile/crm-alerts/<int:pk>/', mobile_api.mobile_crm_alert_detail, name='mobile-crm-alert-detail'),
+    path('api/mobile/notification-device/', mobile_api.mobile_notification_device, name='mobile-notification-device'),
 
     # Lista
     path('', views.prospect_list, name='list'),

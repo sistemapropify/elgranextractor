@@ -1,12 +1,14 @@
 """API autenticada para la aplicación Android de captura de prospectos."""
 
 import hashlib
+import logging
 import secrets
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
 import requests
 from django.conf import settings
+from django.core.cache import cache
 from rest_framework import status
 from rest_framework.authentication import BaseAuthentication, SessionAuthentication, get_authorization_header
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
@@ -14,7 +16,11 @@ from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from .models import MobileAppVersion, MobileProspectSession, MobileProspectUser, PropertyProspect
+from .crm_alerts import sync_crm_visit_alerts
+from .models import CrmVisitIntentAlert, MobileAppVersion, MobileNotificationDevice, MobileProspectSession, MobileProspectUser, PropertyProspect
+
+
+logger = logging.getLogger(__name__)
 
 
 @api_view(['GET'])
@@ -113,6 +119,14 @@ def mobile_login(request):
     # La respuesta y los tokens de Propify se descartan. Prometeo crea su sesión propia.
     try:
         user, _ = MobileProspectUser.objects.get_or_create(username=username)
+        supervisor_names = {
+            value.strip().casefold()
+            for value in str(getattr(settings, 'MOBILE_CRM_ALERT_SUPERVISORS', 'adminpropify')).split(',')
+            if value.strip()
+        }
+        if username.casefold() in supervisor_names and not user.can_view_crm_alerts:
+            user.can_view_crm_alerts = True
+            user.save(update_fields=['can_view_crm_alerts'])
         plain_token = secrets.token_urlsafe(48)
         MobileProspectSession.objects.create(
             user=user,
@@ -129,6 +143,7 @@ def mobile_login(request):
         'user': {
             'id': str(user.pk),
             'username': user.username,
+            'can_view_crm_alerts': user.can_view_crm_alerts,
         },
     })
 
@@ -253,3 +268,75 @@ def mobile_capture_detail(request, pk):
     except Exception as exc:
         return Response({'ok': False, 'error': getattr(exc, 'message_dict', str(exc))}, status=400)
     return Response({'ok': True, 'prospect_id': prospect.pk, 'status': prospect.status})
+
+
+def _require_alert_supervisor(request):
+    return bool(getattr(request.user.mobile_user, 'can_view_crm_alerts', False))
+
+
+def _serialize_crm_alert(item):
+    return {
+        'id': item.pk, 'lead_id': item.source_lead_id, 'agent_name': item.agent_name,
+        'contact_name': item.contact_name, 'phone': item.phone, 'property_code': item.property_code,
+        'property_title': item.property_title, 'evidence': item.evidence, 'status': item.status,
+        'detected_at': item.detected_at.isoformat(),
+        'responded_at': item.responded_at.isoformat() if item.responded_at else None,
+        'response_seconds': int((item.responded_at - item.detected_at).total_seconds()) if item.responded_at else None,
+    }
+
+
+@api_view(['GET'])
+@authentication_classes([PrometeoMobileAuthentication])
+@permission_classes([IsAuthenticated])
+def mobile_crm_alerts(request):
+    if not _require_alert_supervisor(request):
+        return Response({'ok': False, 'error': 'No tienes acceso al control de alertas CRM.'}, status=403)
+    requested_status = request.GET.get('status', CrmVisitIntentAlert.Status.PENDING)
+    if requested_status not in dict(CrmVisitIntentAlert.Status.choices):
+        requested_status = CrmVisitIntentAlert.Status.PENDING
+    if requested_status == CrmVisitIntentAlert.Status.PENDING and cache.add('crm-alert-sync-recent', True, timeout=20):
+        try:
+            sync_crm_visit_alerts()
+        except Exception:
+            logger.exception('No se pudieron sincronizar las alertas CRM; se devuelve el último estado persistido')
+    items = CrmVisitIntentAlert.objects.filter(status=requested_status)[:500]
+    return Response({'ok': True, 'count': len(items), 'results': [_serialize_crm_alert(item) for item in items]})
+
+
+@api_view(['GET', 'POST'])
+@authentication_classes([PrometeoMobileAuthentication])
+@permission_classes([IsAuthenticated])
+def mobile_crm_alert_detail(request, pk):
+    if not _require_alert_supervisor(request):
+        return Response({'ok': False, 'error': 'No autorizado.'}, status=403)
+    item = CrmVisitIntentAlert.objects.filter(pk=pk).first()
+    if item is None:
+        return Response({'ok': False, 'error': 'Alerta no encontrada.'}, status=404)
+    if request.method == 'POST' and request.data.get('status') == CrmVisitIntentAlert.Status.CLOSED:
+        item.status = CrmVisitIntentAlert.Status.CLOSED
+        item.save(update_fields=['status', 'updated_at'])
+    return Response({'ok': True, 'alert': _serialize_crm_alert(item)})
+
+
+@api_view(['POST'])
+@authentication_classes([PrometeoMobileAuthentication])
+@permission_classes([IsAuthenticated])
+def mobile_notification_device(request):
+    if not _require_alert_supervisor(request):
+        return Response({'ok': False, 'error': 'No autorizado.'}, status=403)
+    registration_id = str(request.data.get('registration_id') or request.data.get('fcm_token') or '').strip()
+    if not registration_id:
+        return Response({'ok': False, 'error': 'registration_id es obligatorio.'}, status=400)
+    target_type = str(request.data.get('target_type', MobileNotificationDevice.TargetType.FID))
+    if target_type not in dict(MobileNotificationDevice.TargetType.choices):
+        return Response({'ok': False, 'error': 'target_type no es válido.'}, status=400)
+    device, _ = MobileNotificationDevice.objects.update_or_create(
+        registration_id=registration_id,
+        defaults={
+            'user': request.user.mobile_user,
+            'target_type': target_type,
+            'device_name': str(request.data.get('device_name', ''))[:200],
+            'active': True,
+        },
+    )
+    return Response({'ok': True, 'device_id': device.pk})

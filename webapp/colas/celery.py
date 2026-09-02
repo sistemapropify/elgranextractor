@@ -128,10 +128,10 @@ app.conf.update(
             'options': {'queue': 'analisis'},
             'kwargs': {'lookback_hours': 24, 'stages': 'entered', 'workers': 2},
         },
-        # Canal tiempo real: leads ≥bidireccional que cambiaron (cada 15 min).
+        # Canal tiempo real: leads ≥bidireccional que cambiaron (cada 5 min).
         'evaluar-leads-bidireccionales-tiempo-real': {
             'task': 'lead_intelligence.tasks.evaluar_leads_tiempo_real',
-            'schedule': crontab(minute='*/15'),
+            'schedule': crontab(minute='*/5'),
             'options': {'queue': 'analisis'},
             'kwargs': {'lookback_hours': 6, 'stages': 'bidirectional', 'workers': 2},
         },
