@@ -307,6 +307,128 @@ def _median_label(values):
     return duration_label(median(values)) if values else "—"
 
 
+# ─────────────────────────────────────────────────────────────────────────
+# Soporte para N plantillas independientes + granularidad temporal
+# (día / semana / mes) para ver cómo evolucionó CADA plantilla.
+# ─────────────────────────────────────────────────────────────────────────
+GRANULARIDAD_OPTIONS = (
+    ("dia", "Día"),
+    ("semana", "Semana"),
+    ("mes", "Mes"),
+)
+_PLANTILLA_COLORS = [
+    "#58a6ff", "#3fb950", "#f0883e", "#d2a8ff",
+    "#ffa198", "#7ee787", "#79c0ff", "#e3b341",
+]
+
+
+def _etiqueta_visual(titulo):
+    """Quita prefijos 'Intento N · ' del título para mostrar cada plantilla
+    como independiente (no como el 'intento 2' de otra)."""
+    if not titulo:
+        return titulo
+    limpio = re.sub(
+        r"^\s*intento\s+\d+\s*[·:\-]\s*", "", str(titulo), flags=re.IGNORECASE
+    ).strip()
+    return limpio or str(titulo)
+
+
+def _color_plantilla(idx):
+    return _PLANTILLA_COLORS[idx % len(_PLANTILLA_COLORS)]
+
+
+def _bucket_key(fecha, granularidad):
+    if granularidad == "mes":
+        return fecha.replace(day=1)
+    if granularidad == "semana":
+        return fecha - timedelta(days=fecha.weekday())
+    return fecha
+
+
+def _bucket_label(key, granularidad, siguiente=None):
+    if granularidad == "mes":
+        return key.strftime("%b %Y")
+    if granularidad == "semana":
+        fin = (siguiente or (key + timedelta(days=7))) - timedelta(days=1)
+        return f"{key.strftime('%d %b')} – {fin.strftime('%d %b')}"
+    return key.strftime("%d %b %y")
+
+
+def _timeline_rows(events, date_from, date_to, granularidad, plantillas):
+    """Genera buckets (día/semana/mes) con el detalle por plantilla.
+
+    Cada fila trae totales y el desglose ``plants`` de TODAS las plantillas
+    activas (dinámico: 2 hoy, 4 mañana) para poder compararlas en el tiempo.
+    """
+    granularidad = granularidad if granularidad in {"dia", "semana", "mes"} else "dia"
+    order = {}
+    it = date_from
+    while it <= date_to:
+        b = _bucket_key(it, granularidad)
+        order.setdefault(b.isoformat(), b)
+        it += timedelta(days=1)
+    buckets = {iso: _Bucket(day) for iso, day in order.items()}
+    for ev in events:
+        b = _bucket_key(ev["launch_date"], granularidad)
+        bucket = buckets.get(b.isoformat())
+        if bucket is None:
+            continue
+        plant = bucket.por_plantilla[ev["plantilla_codigo"]]
+        plant["sent"] += 1
+        plant["responded"] += int(ev["responded"])
+        plant["repeated"] += int(ev.get("duplicate_first_attempt", False))
+
+    sorted_keys = sorted(buckets.keys())
+    color_por_codigo = {
+        pl["codigo"]: _color_plantilla(idx) for idx, pl in enumerate(plantillas)
+    }
+    rows = []
+    for pos, iso in enumerate(sorted_keys):
+        bucket = buckets[iso]
+        siguiente = buckets.get(sorted_keys[pos + 1]) if pos + 1 < len(sorted_keys) else None
+        plants = [
+            {
+                "codigo": pl["codigo"],
+                "titulo": _etiqueta_visual(pl["titulo"]),
+                "color": color_por_codigo.get(pl["codigo"], "#58a6ff"),
+                "sent": bucket.por_plantilla.get(pl["codigo"], {}).get("sent", 0),
+                "responded": bucket.por_plantilla.get(pl["codigo"], {}).get("responded", 0),
+                "repeated": bucket.por_plantilla.get(pl["codigo"], {}).get("repeated", 0),
+            }
+            for pl in plantillas
+        ]
+        total_sent = sum(p["sent"] for p in plants)
+        total_responded = sum(p["responded"] for p in plants)
+        total_repeated = sum(p["repeated"] for p in plants)
+        rows.append(
+            {
+                "key": bucket.day.isoformat(),
+                "label": _bucket_label(bucket.day, granularidad, siguiente.day if siguiente else None),
+                "sent": total_sent,
+                "responded": total_responded,
+                "repeated": total_repeated,
+                "no_response": total_sent - total_responded,
+                "response_pct": _percent(total_responded, total_sent),
+                "plants": plants,
+            }
+        )
+    peak = max((row["sent"] for row in rows), default=0)
+    for row in rows:
+        row["sent_bar_pct"] = _percent(row["sent"], peak)
+        row["responded_bar_pct"] = _percent(row["responded"], peak)
+    return rows
+
+
+class _Bucket:
+    """Agregación de un bucket temporal por plantilla."""
+
+    def __init__(self, day):
+        self.day = day
+        self.por_plantilla = defaultdict(
+            lambda: {"sent": 0, "responded": 0, "repeated": 0}
+        )
+
+
 def _lead_rows():
     """Leads cuyo chat_history contiene el hint de CUALQUIER plantilla activa."""
     plantillas = _plantillas_activas()
@@ -382,6 +504,8 @@ def _daily_rows(events, date_from, date_to):
     for row in rows:
         row["sent_bar_pct"] = _percent(row["sent"], peak)
         row["responded_bar_pct"] = _percent(row["responded"], peak)
+        for plant in row["plants"]:
+            plant["sent_share"] = _percent(plant["sent"], row["sent"])
     return rows
 
 
@@ -392,11 +516,14 @@ def get_remarketing_dashboard(
     agent_id=None,
     outcome="all",
     plantilla=None,
+    granularidad="dia",
 ):
     """Analiza los lanzamientos de remarketing de TODAS las plantillas activas.
 
-    ``plantilla`` (codigo) opcional: si se indica, filtra los resultados a esa
-    plantilla; por defecto se muestran todas las autorizadas.
+    Cada plantilla es INDEPENDIENTE y se mide por separado (con sus propios
+    intentos: 1er envío y reenvíos de la MISMA plantilla). ``plantilla``
+    (codigo) opcional filtra a una; ``granularidad`` (dia/semana/mes) define el
+    paso de la serie temporal.
     """
 
     rows = _lead_rows()
@@ -442,8 +569,8 @@ def get_remarketing_dashboard(
                     "plantilla_codigo": launch.get(
                         "plantilla_codigo", REMARKETING_TEMPLATE_CODE
                     ),
-                    "plantilla_titulo": launch.get(
-                        "plantilla_titulo", REMARKETING_TEMPLATE_LABEL
+                    "plantilla_titulo": _etiqueta_visual(
+                        launch.get("plantilla_titulo", REMARKETING_TEMPLATE_LABEL)
                     ),
                     "remarketing_attempt": int(
                         launch.get("plantilla_orden", REMARKETING_ATTEMPT)
@@ -498,38 +625,92 @@ def get_remarketing_dashboard(
     else:
         events = list(all_events)
 
-    # ── Plantillas activas (autorizadas) y filtro por plantilla ──────────
+    # ── Plantillas activas: cada plantilla es INDEPENDIENTE (N dinámico) ──
+    granularidad = granularidad if granularidad in {"dia", "semana", "mes"} else "dia"
     plantillas_activas = _plantillas_activas()
+    color_por_codigo = {
+        plantilla["codigo"]: _color_plantilla(idx)
+        for idx, plantilla in enumerate(plantillas_activas)
+    }
     plantilla_options = [
         {
             "codigo": plantilla.get("codigo"),
-            "titulo": plantilla.get("titulo"),
+            "titulo": _etiqueta_visual(plantilla.get("titulo")),
             "orden": plantilla.get("orden"),
+            "color": color_por_codigo.get(plantilla.get("codigo"), "#58a6ff"),
         }
         for plantilla in plantillas_activas
     ]
     etiqueta_por_codigo = {
-        plantilla["codigo"]: plantilla["titulo"]
-        for plantilla in plantilla_options
+        plantilla["codigo"]: _etiqueta_visual(plantilla["titulo"])
+        for plantilla in plantillas_activas
     }
-    resumen_por_plantilla = defaultdict(lambda: {"sent": 0, "responded": 0})
-    for event in all_events:
-        clave = event["plantilla_codigo"]
-        resumen_por_plantilla[clave]["sent"] += 1
-        resumen_por_plantilla[clave]["responded"] += int(event["responded"])
-    plantillas_resumen = [
-        {
+
+    # Resumen por plantilla: TODAS las activas (aunque tengan 0 envíos), con
+    # sus propios intentos: 1er envío vs reenvíos de la MISMA plantilla.
+    resumen = {}
+    for plantilla in plantillas_activas:
+        codigo = plantilla["codigo"]
+        resumen[codigo] = {
             "codigo": codigo,
-            "titulo": etiqueta_por_codigo.get(codigo, "Sin etiqueta"),
-            "sent": datos["sent"],
-            "responded": datos["responded"],
-            "response_pct": _percent(datos["responded"], datos["sent"]),
+            "titulo": _etiqueta_visual(plantilla["titulo"]),
+            "color": color_por_codigo.get(codigo, "#58a6ff"),
+            "sent": 0,
+            "sent_first": 0,
+            "sent_follow": 0,
+            "responded": 0,
+            "responded_first": 0,
+            "responded_follow": 0,
+            "qualified": 0,
+            "visit": 0,
+            "_leads": set(),
         }
-        for codigo, datos in sorted(
-            resumen_por_plantilla.items(),
-            key=lambda item: (-item[1]["sent"], item[0]),
+    for event in events:
+        dato = resumen.get(event["plantilla_codigo"])
+        if dato is None:
+            continue
+        dato["sent"] += 1
+        dato["_leads"].add(event["lead_id"])
+        if not event["duplicate_first_attempt"]:
+            dato["sent_first"] += 1
+            dato["responded_first"] += int(event["responded"])
+        else:
+            dato["sent_follow"] += 1
+            dato["responded_follow"] += int(event["responded"])
+        dato["responded"] += int(event["responded"])
+        dato["qualified"] += int(event["qualified_after"])
+        dato["visit"] += int(event["visit_after"])
+
+    plantillas_resumen = []
+    for codigo in sorted(
+        resumen.keys(), key=lambda c: (resumen[c]["titulo"].lower(), c)
+    ):
+        dato = resumen[codigo]
+        sent = dato["sent"]
+        plantillas_resumen.append(
+            {
+                "codigo": codigo,
+                "titulo": dato["titulo"],
+                "color": dato["color"],
+                "sent": sent,
+                "unique_leads": len(dato["_leads"]),
+                "sent_first": dato["sent_first"],
+                "sent_follow": dato["sent_follow"],
+                "responded": dato["responded"],
+                "responded_first": dato["responded_first"],
+                "responded_follow": dato["responded_follow"],
+                "response_pct": _percent(dato["responded"], sent),
+                "response_pct_first": _percent(
+                    dato["responded_first"], dato["sent_first"]
+                ),
+                "response_pct_follow": _percent(
+                    dato["responded_follow"], dato["sent_follow"]
+                ),
+                "qualified": dato["qualified"],
+                "visit": dato["visit"],
+            }
         )
-    ]
+
     valid_codes = {plantilla["codigo"] for plantilla in plantilla_options}
     selected_plantilla = plantilla if plantilla in valid_codes else None
     if selected_plantilla:
@@ -539,7 +720,9 @@ def get_remarketing_dashboard(
             if event["plantilla_codigo"] == selected_plantilla
         ]
 
-    daily_rows = _daily_rows(events, date_from, date_to)
+    timeline_rows = _timeline_rows(
+        events, date_from, date_to, granularidad, plantillas_activas
+    )
     total = len(events)
     responded = sum(event["responded"] for event in events)
     qualified = sum(event["qualified_after"] for event in events)
@@ -584,9 +767,9 @@ def get_remarketing_dashboard(
     loss_patterns = [
         {
             "code": "repeated_attempt_1",
-            "label": "Repeticiones del intento 1",
+            "label": "Reenvíos de la misma plantilla (intento 2+)",
             "count": repeated_sends,
-            "detail": "La misma plantilla volvió a salir para un lead que ya había recibido el intento 1.",
+            "detail": "Un lead ya recibió esta plantilla y se le reenvió la MISMA plantilla (2º, 3º… intento).",
         },
         {
             "code": "no_response_24h",
@@ -679,6 +862,8 @@ def get_remarketing_dashboard(
         "selected_agent_id": selected_agent_id,
         "outcome_options": OUTCOME_OPTIONS,
         "selected_outcome": selected_outcome,
+        "granularidad": granularidad,
+        "granularidad_options": GRANULARIDAD_OPTIONS,
         "summary": {
             "sent": total,
             "unique_leads": unique_leads,
@@ -700,7 +885,8 @@ def get_remarketing_dashboard(
                 event["response_seconds"] for event in events
             ),
         },
-        "daily_rows": daily_rows,
+        "daily_rows": timeline_rows,
+        "timeline_rows": timeline_rows,
         "agent_rows": agent_rows,
         "no_response_statuses": no_response_statuses,
         "loss_patterns": loss_patterns,
@@ -741,7 +927,7 @@ def analizar_mensaje(texto):
     return [
         {
             "codigo": plantilla["codigo"],
-            "titulo": plantilla["titulo"],
+            "titulo": _etiqueta_visual(plantilla["titulo"]),
             "orden": plantilla.get("orden"),
         }
         for plantilla in detectar_plantillas(texto)

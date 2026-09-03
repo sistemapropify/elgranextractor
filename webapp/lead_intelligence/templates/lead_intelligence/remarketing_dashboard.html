@@ -7,21 +7,27 @@
 .rm-template blockquote{background:#0d1117;border:1px solid #30363d;border-left:3px solid #58a6ff;border-radius:9px;color:#c9d1d9;font-size:.75rem;line-height:1.5;margin:9px 0 0;padding:10px 12px}
 .rm-attempt{background:rgba(88,166,255,.13);border:1px solid #1f6feb;border-radius:999px;color:#79c0ff;font-size:.68rem;font-weight:800;padding:6px 10px;white-space:nowrap}
 .rm-daily{display:grid;gap:9px;max-height:520px;overflow:auto;padding-right:5px}
-.rm-day{align-items:center;display:grid;gap:12px;grid-template-columns:82px minmax(180px,1fr) 190px}
+.rm-day{align-items:center;display:grid;gap:12px;grid-template-columns:150px minmax(160px,1fr) 210px}
 .rm-day-label{color:#c9d1d9;font-size:.72rem;font-weight:750}
-.rm-track{background:#21262d;border-radius:999px;height:22px;overflow:hidden;position:relative}
-.rm-bar{height:100%;left:0;min-width:0;position:absolute;top:0}.rm-bar-sent{background:#1f6feb}.rm-bar-result{background:#3fb950}
+.rm-stack{background:#21262d;border-radius:999px;display:flex;height:22px;overflow:hidden;position:relative}
+.rm-seg{height:100%;min-width:0}
 .rm-day-values{display:flex;gap:9px;justify-content:flex-end}.rm-day-values span{color:#8b949e;font-size:.68rem;white-space:nowrap}.rm-day-values b{color:#f0f6fc}
-.rm-legend{display:flex;gap:14px;margin-bottom:14px}.rm-legend span{align-items:center;color:#8b949e;display:flex;font-size:.69rem;gap:6px}.rm-dot{border-radius:50%;height:8px;width:8px}.rm-dot.sent{background:#1f6feb}.rm-dot.result{background:#3fb950}
+.rm-day-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}
+.rm-chip{background:#0d1117;border:1px solid #30363d;border-radius:999px;color:#c9d1d9;font-size:.64rem;padding:2px 8px}
+.rm-legend{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:14px}.rm-legend span{align-items:center;color:#8b949e;display:flex;font-size:.69rem;gap:6px}.rm-dot{border-radius:50%;height:8px;width:8px}
 .rm-patterns{display:grid;gap:10px;grid-template-columns:repeat(4,minmax(0,1fr))}.rm-pattern{background:#21262d;border:1px solid #30363d;border-radius:12px;padding:14px}.rm-pattern strong{color:#f0f6fc;display:block;font-size:1.45rem}.rm-pattern b{display:block;font-size:.74rem;margin:6px 0}.rm-pattern span{color:#8b949e;font-size:.68rem;line-height:1.4}
 .rm-two{display:grid;gap:16px;grid-template-columns:minmax(0,1.35fr) minmax(300px,.65fr);margin-bottom:16px}
 .rm-progress{align-items:center;display:grid;gap:9px;grid-template-columns:minmax(120px,1fr) 1fr 44px;margin:10px 0}.rm-progress label{font-size:.7rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rm-progress-track{background:#21262d;border-radius:999px;height:8px;overflow:hidden}.rm-progress-fill{background:#f85149;border-radius:inherit;height:100%}.rm-progress strong{font-size:.72rem;text-align:right}
 .rm-table{min-width:1180px}.rm-table td,.rm-table th{text-align:left!important}.rm-table .rm-number{text-align:right!important}.rm-outcome{display:flex;flex-wrap:wrap;gap:5px}.rm-empty{color:#8b949e;padding:28px!important;text-align:center!important}
-.rm-plant{background:#21262d;border:1px solid #30363d;border-radius:12px;display:grid;gap:6px;padding:12px}
-.rm-plant.is-active{border-color:#1f6feb}
+.rm-plant{background:#21262d;border:1px solid #30363d;border-radius:12px;display:flex;flex-direction:column;gap:8px;padding:12px;transition:border-color .15s}
+.rm-plant:hover{border-color:#58a6ff}
+.rm-plant.is-selected{border-color:#1f6feb;box-shadow:0 0 0 1px #1f6feb inset}
 .rm-plant strong{color:#f0f6fc;font-size:.9rem}
 .rm-plant blockquote{color:#8b949e;font-size:.7rem;line-height:1.45;margin:0}
-.rm-grid-plant{display:grid;gap:10px;grid-template-columns:repeat(2,minmax(0,1fr))}
+.rm-grid-plant{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+.rm-plant-metrics{display:grid;gap:6px;grid-template-columns:repeat(3,minmax(0,1fr))}
+.rm-plant-metrics span{color:#8b949e;font-size:.66rem;line-height:1.3}
+.rm-plant-metrics b{color:#f0f6fc;display:block;font-size:.9rem}
 .rm-form{display:grid;gap:9px}
 .rm-form label{color:#8b949e;font-size:.68rem;text-transform:uppercase}
 .rm-form input,.rm-form select,.rm-form textarea{background:#0d1117;border:1px solid #30363d;border-radius:8px;color:#c9d1d9;font:inherit;font-size:.8rem;padding:8px 10px;width:100%}
@@ -31,8 +37,8 @@
 .rm-result{margin-top:8px;font-size:.75rem}
 .rm-badge{background:rgba(63,185,80,.13);border:1px solid #2ea043;border-radius:999px;color:#7ee787;font-size:.68rem;font-weight:700;padding:4px 8px}
 .rm-badge.none{background:rgba(248,81,73,.13);border-color:#f85149;color:#ffa198}
-@media(max-width:1100px){.rm-patterns{grid-template-columns:repeat(2,1fr)}.rm-two{grid-template-columns:1fr}.rm-grid-plant{grid-template-columns:1fr}}
-@media(max-width:760px){.rm-day{grid-template-columns:70px 1fr}.rm-day-values{grid-column:1/-1;justify-content:flex-start;padding-left:82px}.rm-patterns{grid-template-columns:1fr}.rm-template{display:block}.rm-attempt{display:inline-block;margin-top:10px}}
+@media(max-width:1100px){.rm-patterns{grid-template-columns:repeat(2,1fr)}.rm-two{grid-template-columns:1fr}}
+@media(max-width:760px){.rm-day{grid-template-columns:120px 1fr}.rm-day-values{grid-column:1/-1;justify-content:flex-start}.rm-patterns{grid-template-columns:1fr}.rm-template{display:block}.rm-plant-metrics{grid-template-columns:repeat(2,1fr)}}
 </style>
 {% endblock %}
 {% block content %}
@@ -41,11 +47,12 @@
     <div>
       <div class="pli-kicker">Inteligencia de Leads</div>
       <h1>Dashboard de remarketing</h1>
-      <p>Analiza TODAS las plantillas de seguimiento autorizadas y sus resultados comerciales.</p>
+      <p>Analiza TODAS las plantillas de seguimiento autorizadas. Cada plantilla es independiente: intento 1 = primer envío; 2+ = reenvíos de la misma plantilla.</p>
     </div>
-    <form class="pli-filter pli-filter-wide" method="get">
+    <form class="pli-filter pli-filter-wide" method="get" id="rm-filter">
       <div><label for="from">Desde</label><input id="from" name="from" type="date" value="{{ date_from|date:'Y-m-d' }}"></div>
       <div><label for="to">Hasta</label><input id="to" name="to" type="date" value="{{ date_to|date:'Y-m-d' }}"></div>
+      <div><label for="granularidad">Granularidad</label><select id="granularidad" name="granularidad">{% for value,label in granularidad_options %}<option value="{{ value }}"{% if granularidad == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
       <div><label for="plantilla">Plantilla</label><select id="plantilla" name="plantilla">
         <option value="">Todas</option>
         {% for p in plantilla_options %}<option value="{{ p.codigo }}"{% if selected_plantilla == p.codigo %} selected{% endif %}>{{ p.titulo }}</option>{% endfor %}
@@ -58,41 +65,42 @@
 
   {% include "lead_intelligence/_analysis_tabs.html" %}
 
-  <section class="pli-card pli-section rm-template">
+  <section class="pli-card pli-section">
     <div>
-      <h2>Plantillas autorizadas</h2>
-      <p class="pli-muted">Solo estas plantillas (activas) entran en las métricas. Agrega las que quieras abajo: título + condición + texto.</p>
+      <div class="pli-section-head"><div><h2>Métricas por plantilla</h2><p>Una tarjeta por cada plantilla autorizada (se agregan solas cuando creas una). Haz clic en una para verla sola; elige "Todas" para compararlas.</p></div><span class="pli-chip">{{ plantillas_resumen|length }} plantilla{{ plantillas_resumen|length|pluralize }}</span></div>
+      {% if plantillas_resumen %}
       <div class="rm-grid-plant" style="margin-top:12px">
-        {% for p in todas_plantillas %}
-        <article class="rm-plant{% if p.activa %} is-active{% endif %}">
-          <strong>{{ p.titulo }}</strong>
-          {% if p.cuerpo %}<blockquote>{{ p.cuerpo }}</blockquote>{% endif %}
-          <span style="color:#8b949e;font-size:.66rem">
-            {% if p.activa %}<span class="rm-badge">Autorizada</span>{% else %}<span class="rm-badge none">Inactiva</span>{% endif %}
-            · condición: <code style="color:#79c0ff">{{ p.frase_condicion|default:'—' }}</code>
-          </span>
+        {% for p in plantillas_resumen %}
+        <article class="rm-plant{% if selected_plantilla == p.codigo %} is-selected{% endif %}" data-codigo="{{ p.codigo }}" title="Ver solo: {{ p.titulo }}" onclick="filtrarPlantilla('{{ p.codigo }}')">
+          <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">
+            <strong>{{ p.titulo }}</strong>
+            <span class="rm-attempt" style="background:{{ p.color }}22;border-color:{{ p.color }};color:{{ p.color }}">{{ p.sent }} envío{{ p.sent|pluralize }}</span>
+          </div>
+          <div class="rm-plant-metrics">
+            <span><b>{{ p.sent_first }}</b>1er intento</span>
+            <span><b>{{ p.sent_follow }}</b>reenvíos (2º+)</span>
+            <span><b>{{ p.unique_leads }}</b>leads</span>
+            <span><b>{{ p.responded }}</b>respuestas ({{ p.response_pct }}%)</span>
+            <span><b>{{ p.qualified }}</b>calificados</span>
+            <span><b>{{ p.visit }}</b>visitas</span>
+          </div>
         </article>
-        {% empty %}
-        <p class="pli-muted">Aún no hay plantillas. Agrega una abajo.</p>
         {% endfor %}
       </div>
-      {% if plantillas_resumen %}
-      <div class="rm-legend" style="margin-top:14px">
-        {% for r in plantillas_resumen %}<span>{{ r.titulo }}: <b style="color:#f0f6fc">{{ r.sent }}</b> envíos · {{ r.response_pct }}% resp.</span>{% endfor %}
-      </div>
+      {% else %}
+      <p class="pli-muted">Aún no hay plantillas activas. Agrega una abajo.</p>
       {% endif %}
     </div>
-    <span class="rm-attempt">Intento {{ remarketing_attempt }}</span>
   </section>
 
   <div class="rm-two" style="margin-top:16px">
     <section class="pli-card pli-section">
       <div class="pli-section-head"><div><h2>Agregar plantilla</h2><p>Título + condición (frase que debe contener el mensaje) + texto de la plantilla.</p></div></div>
       <form class="rm-form" id="rm-add-form">
-        <div><label for="rm-titulo">Título de la plantilla</label><input id="rm-titulo" name="titulo" required placeholder="Ej: Intento 2 · ¿Pudiste leer mi mensaje?"></div>
+        <div><label for="rm-titulo">Título de la plantilla</label><input id="rm-titulo" name="titulo" required placeholder="Ej: Hola de nuevo (propiedades)"></div>
         <div style="display:grid;gap:9px;grid-template-columns:1fr 80px">
           <div><label for="rm-frase">Condición (frase clave)</label><input id="rm-frase" name="frase_condicion" placeholder="Ej: pudiste leer mi mensaje"></div>
-          <div><label for="rm-orden">Orden</label><input id="rm-orden" name="orden" type="number" min="1" value="2"></div>
+          <div><label for="rm-orden">Orden</label><input id="rm-orden" name="orden" type="number" min="1" value="1"></div>
         </div>
         <div><label for="rm-cuerpo">Texto de la plantilla</label><textarea id="rm-cuerpo" name="cuerpo" placeholder="Escribe aquí el mensaje completo de la plantilla"></textarea></div>
         <div style="display:grid;gap:9px;grid-template-columns:1fr 1fr">
@@ -115,38 +123,42 @@
   </div>
 
   <section class="pli-grid-6">
-    <article class="pli-card pli-kpi"><small>Lanzamientos</small><strong>{{ summary.sent }}</strong><span>{{ summary.unique_leads }} leads únicos · promedio {{ summary.average_sends_per_lead }} por lead.</span></article>
-    <article class="pli-card pli-kpi"><small>Con respuesta</small><strong>{{ summary.responded }}</strong><span>{{ summary.responded_unique }} leads respondieron antes de otro intento.</span></article>
+    <article class="pli-card pli-kpi"><small>Lanzamientos{% if selected_plantilla %} (plantilla elegida){% else %} (todas){% endif %}</small><strong>{{ summary.sent }}</strong><span>{{ summary.unique_leads }} leads únicos · promedio {{ summary.average_sends_per_lead }} por lead.</span></article>
+    <article class="pli-card pli-kpi"><small>Con respuesta</small><strong>{{ summary.responded }}</strong><span>{{ summary.responded_unique }} leads respondieron antes de otro envío.</span></article>
     <article class="pli-card pli-kpi"><small>Tasa de respuesta</small><strong>{{ summary.response_pct }}%</strong><span>Resultado directo del envío.</span></article>
-    <article class="pli-card pli-kpi"><small>Sin respuesta</small><strong>{{ summary.no_response }}</strong><span>Lanzamientos todavía sin reacción del cliente.</span></article>
+    <article class="pli-card pli-kpi"><small>Sin respuesta</small><strong>{{ summary.no_response }}</strong><span>Envíos todavía sin reacción del cliente.</span></article>
     <article class="pli-card pli-kpi"><small>Calificados después</small><strong>{{ summary.qualified }}</strong><span>{{ summary.qualified_pct }}% con interés confirmado por IA.</span></article>
     <article class="pli-card pli-kpi"><small>Intención de visita</small><strong>{{ summary.visit }}</strong><span>{{ summary.visit_pct }}% confirmó intención después del envío.</span></article>
   </section>
 
   <div class="pli-metric-guide">
     <strong>Qué cuenta como resultado</strong>
-    <span>El lead debe escribir después del envío de una plantilla autorizada y antes del siguiente envío de la misma plantilla. La calificación y la intención de visita se atribuyen solo cuando la evidencia de la evaluación {{ analysis_version }} ocurre después del envío. Mediana de respuesta: {{ summary.median_response_label }}.</span>
+    <span>El lead debe escribir después del envío de una plantilla y antes del siguiente envío de la MISMA plantilla. Cada plantilla se mide de forma independiente; la calificación e intención de visita se atribuyen solo cuando la evidencia de la evaluación {{ analysis_version }} ocurre después del envío. Mediana de respuesta: {{ summary.median_response_label }}.</span>
   </div>
 
-  <section class="pli-card pli-section">
-    <div class="pli-section-head"><div><h2>Lanzamientos y respuestas por día</h2><p>La barra azul muestra envíos; la verde, respuestas atribuidas a esos envíos.</p></div><span class="pli-chip">{{ date_from|date:'d/m/Y' }} — {{ date_to|date:'d/m/Y' }}</span></div>
-    <div class="rm-legend"><span><i class="rm-dot sent"></i>Lanzamientos</span><span><i class="rm-dot result"></i>Con respuesta</span></div>
+  <section class="pli-card pli-section" style="margin-top:16px">
+    <div class="pli-section-head"><div><h2>Evolución en el tiempo</h2><p>{% if selected_plantilla %}Envios y respuestas de la plantilla elegida por {{ granularidad }}.{% else %}Envios por {{ granularidad }}: cada color es una plantilla (comparalas en la misma línea de tiempo).{% endif %}</p></div><span class="pli-chip">{{ date_from|date:'d/m/Y' }} — {{ date_to|date:'d/m/Y' }} · {{ granularidad|capfirst }}</span></div>
+    {% if not selected_plantilla and plantillas_resumen %}
+    <div class="rm-legend">{% for p in plantillas_resumen %}<span><i class="rm-dot" style="background:{{ p.color }}"></i>{{ p.titulo }}</span>{% endfor %}</div>
+    {% endif %}
     <div class="rm-daily">
-      {% for row in daily_rows %}
+      {% for row in timeline_rows %}
       <div class="rm-day">
-        <div class="rm-day-label">{{ row.date|date:'d M' }}</div>
-        <div class="rm-track" title="{{ row.sent }} lanzamientos · {{ row.responded }} respuestas">
-          <div class="rm-bar rm-bar-sent" style="width:{{ row.sent_bar_pct|stringformat:'g' }}%"></div>
-          <div class="rm-bar rm-bar-result" style="width:{{ row.responded_bar_pct|stringformat:'g' }}%"></div>
+        <div class="rm-day-label">{{ row.label }}</div>
+        <div style="display:grid;gap:4px;min-width:0">
+          <div class="rm-stack" title="{{ row.sent }} envíos · {{ row.responded }} respuestas">
+            {% for p in row.plants %}{% if p.sent %}<div class="rm-seg" style="width:{{ p.sent_share|stringformat:'g' }}%;background:{{ p.color }}" title="{{ p.titulo }}: {{ p.sent }}"></div>{% endif %}{% endfor %}
+          </div>
+          <div class="rm-day-chips">{% for p in row.plants %}{% if p.sent %}<span class="rm-chip" style="border-left:3px solid {{ p.color }}">{{ p.titulo }}: <b style="color:#f0f6fc">{{ p.sent }}</b> ({{ p.responded }} resp)</span>{% endif %}{% endfor %}</div>
         </div>
-        <div class="rm-day-values"><span><b>{{ row.sent }}</b> enviados</span><span><b>{{ row.repeated }}</b> repetidos</span><span><b>{{ row.responded }}</b> respuestas</span><span><b>{{ row.response_pct }}%</b></span></div>
+        <div class="rm-day-values"><span><b>{{ row.sent }}</b> envíos</span><span><b>{{ row.responded }}</b> respuestas</span><span><b>{{ row.response_pct }}%</b></span></div>
       </div>
-      {% endfor %}
+      {% empty %}<p class="pli-muted">Sin envíos en el periodo para los filtros elegidos.</p>{% endfor %}
     </div>
   </section>
 
   <section class="pli-card pli-section" style="margin-top:16px">
-    <div class="pli-section-head"><div><h2>Patrones de fuga</h2><p>Señales superpuestas: un mismo lanzamiento puede aparecer en más de un patrón.</p></div></div>
+    <div class="pli-section-head"><div><h2>Patrones de fuga</h2><p>Señales superpuestas: un mismo envío puede aparecer en más de un patrón.</p></div></div>
     <div class="rm-patterns">
       {% for pattern in loss_patterns %}<article class="rm-pattern"><strong>{{ pattern.count }}</strong><b>{{ pattern.label }}</b><span>{{ pattern.detail }}</span></article>{% endfor %}
     </div>
@@ -156,17 +168,17 @@
     <section class="pli-card pli-section">
       <div class="pli-section-head"><div><h2>Resultados por asesor actual</h2><p>Atribución según el responsable que figura hoy en el CRM.</p></div></div>
       <div class="pli-table-wrap"><table class="pli-table"><thead><tr><th>Asesor</th><th>Lanzados</th><th>Respondieron</th><th>Sin respuesta</th><th>Tasa</th><th>Calificados</th><th>Visita</th></tr></thead><tbody>
-      {% for row in agent_rows %}<tr><td>{{ row.agent_name }}</td><td>{{ row.sent }}</td><td>{{ row.responded }}</td><td>{{ row.no_response }}</td><td>{{ row.response_pct }}%</td><td>{{ row.qualified }}</td><td>{{ row.visit }}</td></tr>{% empty %}<tr><td colspan="7">Sin lanzamientos en este periodo.</td></tr>{% endfor %}
+      {% for row in agent_rows %}<tr><td>{{ row.agent_name }}</td><td>{{ row.sent }}</td><td>{{ row.responded }}</td><td>{{ row.no_response }}</td><td>{{ row.response_pct }}%</td><td>{{ row.qualified }}</td><td>{{ row.visit }}</td></tr>{% empty %}<tr><td colspan="7">Sin envíos en este periodo.</td></tr>{% endfor %}
       </tbody></table></div>
     </section>
     <section class="pli-card pli-section">
       <div class="pli-section-head"><div><h2>Dónde quedan los que no responden</h2><p>Estado actual en el CRM.</p></div></div>
-      {% for row in no_response_statuses %}<div class="rm-progress"><label title="{{ row.status_name }}">{{ row.status_name }}</label><div class="rm-progress-track"><div class="rm-progress-fill" style="width:{{ row.pct|stringformat:'g' }}%"></div></div><strong>{{ row.count }}</strong></div>{% empty %}<p class="pli-muted">No hay lanzamientos sin respuesta.</p>{% endfor %}
+      {% for row in no_response_statuses %}<div class="rm-progress"><label title="{{ row.status_name }}">{{ row.status_name }}</label><div class="rm-progress-track"><div class="rm-progress-fill" style="width:{{ row.pct|stringformat:'g' }}%"></div></div><strong>{{ row.count }}</strong></div>{% empty %}<p class="pli-muted">No hay envíos sin respuesta.</p>{% endfor %}
     </section>
   </div>
 
   <section class="pli-card pli-section">
-    <div class="pli-section-head"><div><h2>Detalle de lanzamientos</h2><p>{{ events_total }} resultados según los filtros; se muestran hasta 200.</p></div><span class="pli-chip">Plantillas autorizadas</span></div>
+    <div class="pli-section-head"><div><h2>Detalle de lanzamientos</h2><p>{{ events_total }} resultados según los filtros; se muestran hasta 200. "Intento N" es el envío N de ESA plantilla a ese lead.</p></div><span class="pli-chip">{% if selected_plantilla %}{{ selected_plantilla }}{% else %}Todas las plantillas{% endif %}</span></div>
     <div class="pli-table-wrap"><table class="pli-table rm-table">
       <thead><tr><th>Fecha</th><th>Lead</th><th>Plantilla</th><th>Envío</th><th>Asesor</th><th>Estado CRM</th><th>Resultado</th><th>Tiempo</th><th>Evaluación IA posterior</th></tr></thead>
       <tbody>
@@ -175,7 +187,7 @@
         <td>{{ event.launch_at|date:'d/m/Y H:i' }}</td>
         <td><a href="{% url 'analisis_crm:lead_conversation' event.lead_id %}?from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}">{{ event.display_name }}</a><span class="pli-rate">Lead #{{ event.lead_id }}</span></td>
         <td><span class="pli-badge">{{ event.plantilla_titulo|default:'Plantilla' }}</span></td>
-        <td><span class="pli-badge{% if event.duplicate_first_attempt %} red{% endif %}">{% if event.duplicate_first_attempt %}Repetición #{{ event.launch_sequence_for_lead }}{% else %}Intento {{ event.remarketing_attempt }}{% endif %}</span></td>
+        <td><span class="pli-badge{% if event.duplicate_first_attempt %} red{% endif %}">{% if event.duplicate_first_attempt %}Reenvío (intento {{ event.launch_sequence_for_lead }}){% else %}Intento 1{% endif %}</span></td>
         <td>{{ event.agent_name }}</td><td>{{ event.status_name }}</td>
         <td>{% if event.responded %}<span class="pli-badge green">Respondió</span>{% else %}<span class="pli-badge red">Sin respuesta</span>{% endif %}</td>
         <td>{% if event.responded %}{{ event.response_label }}{% else %}{{ event.age_label }} esperando{% endif %}</td>
@@ -188,13 +200,21 @@
 </main>
 <script>
 (function(){
+  function getCookie(name){
+    var m = document.cookie.match(new RegExp('(^|; )' + name + '=([^;]*)'));
+    return m ? decodeURIComponent(m[2]) : '';
+  }
   function show(el, text, ok){
     el.textContent = text;
     el.style.color = ok === false ? '#ffa198' : '#7ee787';
   }
+  window.filtrarPlantilla = function(codigo){
+    document.getElementById('plantilla').value = codigo;
+    document.getElementById('rm-filter').submit();
+  };
   // Agregar plantilla
   var addForm = document.getElementById('rm-add-form');
-  addForm.addEventListener('submit', function(ev){
+  if (addForm) addForm.addEventListener('submit', function(ev){
     ev.preventDefault();
     var result = document.getElementById('rm-add-result');
     var body = {
@@ -217,7 +237,7 @@
   });
   // Analizar mensaje
   var anForm = document.getElementById('rm-analyze-form');
-  anForm.addEventListener('submit', function(ev){
+  if (anForm) anForm.addEventListener('submit', function(ev){
     ev.preventDefault();
     var result = document.getElementById('rm-analyze-result');
     var mensaje = document.getElementById('rm-mensaje').value;
@@ -236,10 +256,6 @@
       } else { show(result, '✗ ' + (data.error || 'Error'), false); }
     }).catch(function(){ show(result, '✗ Error de conexión', false); });
   });
-  function getCookie(name){
-    var m = document.cookie.match(new RegExp('(^|; )' + name + '=([^;]*)'));
-    return m ? decodeURIComponent(m[2]) : '';
-  }
 })();
 </script>
 {% endblock %}

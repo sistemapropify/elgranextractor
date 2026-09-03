@@ -207,6 +207,7 @@ def remarketing_dashboard(request):
         agent_id=request.GET.get("agent"),
         outcome=request.GET.get("outcome", "all"),
         plantilla=request.GET.get("plantilla") or None,
+        granularidad=request.GET.get("granularidad") or "dia",
     )
     context["title"] = "Remarketing de Leads"
     context["active_tab"] = "remarketing"
