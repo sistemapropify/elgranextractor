@@ -22,6 +22,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 import views
 from intelligence import views as intelligence_views
+from prospects import views as prospects_views
 
 urlpatterns = [
     # Centro de control general. ACM conserva su dashboard en /acm/.
@@ -114,6 +115,13 @@ urlpatterns = [
     
     # Prospects - Captura de prospectos inmobiliarios
     path('prospects/', include('prospects.urls')),
+
+    # Dashboard de prospección (captaciones de todos los agentes)
+    path(
+        'marketing/prospeccion/',
+        prospects_views.prospect_dashboard,
+        name='marketing_prospeccion_dashboard',
+    ),
 # WhatsApp Extractor - Extracción automática de requerimientos
 path('whatsapp-extractor/', include('whatsapp_extractor.urls')),
 

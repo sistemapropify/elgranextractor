@@ -286,3 +286,108 @@ def prospect_list(request):
         'stats': stats,
         'status_filter': status_filter,
     })
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 5. DASHBOARD DE PROSPECCIONES (captaciones de todos los agentes)
+#    URL: /marketing/prospeccion/  (se mantienen Alertas CRM móviles intactas)
+# ─────────────────────────────────────────────────────────────────────────────
+def prospect_dashboard(request):
+    """Dashboard de prospecciones: KPIs, filtros y listado de captaciones."""
+    from django.db.models import Q
+
+    qs = PropertyProspect.objects.all().order_by('-created_at')
+    distrito = (request.GET.get('distrito') or '').strip()
+    tipo = (request.GET.get('tipo') or '').strip()
+    telefono = (request.GET.get('telefono') or '').strip()  # con | sin
+
+    if distrito:
+        qs = qs.filter(district=distrito)
+    if tipo:
+        qs = qs.filter(property_type=tipo)
+    if telefono == 'con':
+        qs = qs.exclude(phone='').exclude(phone__isnull=True)
+    elif telefono == 'sin':
+        qs = qs.filter(Q(phone__isnull=True) | Q(phone=''))
+
+    prospects = list(qs)
+
+    agent_ids = {prospect.agent_id for prospect in prospects if prospect.agent_id}
+    agent_model = PropertyProspect._meta.get_field('agent').remote_field.model
+    agents_by_id = (
+        {agent.pk: agent for agent in agent_model.objects.filter(pk__in=agent_ids)}
+        if agent_ids
+        else {}
+    )
+
+    rows = []
+    for prospect in prospects:
+        agent = agents_by_id.get(prospect.agent_id)
+        if agent is not None:
+            agent_name = ' '.join(
+                part
+                for part in (agent.first_name, agent.last_name)
+                if part
+            ).strip() or getattr(agent, 'username', '') or f'Usuario {agent.pk}'
+        else:
+            agent_name = prospect.captured_by_username or 'Usuario APK'
+        rows.append({
+            'id': prospect.pk,
+            'distrito': prospect.district or 'Sin distrito',
+            'tipo_propiedad': prospect.get_property_type_display() or 'Prospección',
+            'titulo': prospect.owner_name or f'Prospección #{prospect.pk}',
+            'descripcion': prospect.address or prospect.notes or 'Sin dirección registrada',
+            'precio': str(prospect.price) if prospect.price is not None else '',
+            'moneda': prospect.currency or 'USD',
+            'area': str(prospect.area_m2) if prospect.area_m2 is not None else '',
+            'habitaciones': prospect.bedrooms or '',
+            'telefono': prospect.phone or '',
+            'agente': agent_name,
+            'zona': prospect.zone or '',
+            'operacion': prospect.get_operation_type_display() or '',
+            'contrato': prospect.get_contract_type_display() or '',
+            'origen': prospect.get_origin_display() or prospect.origin or '',
+            'status': prospect.get_status_display(),
+            'url': f'/prospects/{prospect.pk}/detail/',
+            'foto': prospect.photo.url if prospect.photo else '',
+            'creado': (
+                prospect.created_at.strftime('%d/%m/%Y %H:%M')
+                if prospect.created_at
+                else ''
+            ),
+        })
+
+    districts = sorted({p.district for p in prospects if p.district})
+    tipos = sorted({
+        prospect.get_property_type_display()
+        for prospect in prospects
+        if prospect.get_property_type_display()
+    })
+    with_phone = sum(1 for prospect in prospects if (prospect.phone or '').strip())
+    geolocated = sum(
+        1
+        for prospect in prospects
+        if prospect.latitude is not None and prospect.longitude is not None
+    )
+
+    return render(request, 'prospects/dashboard.html', {
+        'prospects': rows,
+        'distritos_arequipa': districts,
+        'tipos_propiedad': tipos,
+        'filtro_distrito': distrito,
+        'filtro_tipo': tipo,
+        'filtro_telefono': telefono,
+        'dashboard_stats': {
+            'total': len(prospects),
+            'geolocated': geolocated,
+            'without_gps': len(prospects) - geolocated,
+            'users': len(
+                {
+                    prospect.agent_id or prospect.captured_by_username
+                    for prospect in prospects
+                }
+            ),
+            'with_phone': with_phone,
+            'without_phone': len(prospects) - with_phone,
+        },
+    })

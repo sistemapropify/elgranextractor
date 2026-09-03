@@ -1,0 +1,116 @@
+{% extends "acm_base_moderno.html" %}
+{% load static %}
+{% block title %}Dashboard de Prospección — Propifai{% endblock %}
+{% block extra_css %}
+{{ block.super }}
+<style>
+  /* Pantalla completa: sin menú lateral global (como la lista de prospección). */
+  .app-sidebar, .sidebar-overlay, .sidebar-toggle-desktop, .mobile-menu-btn { display: none !important; }
+  .main-content { width: 100% !important; max-width: none !important; }
+  .content-area { width: 100% !important; max-width: none !important; }
+
+  :root {
+    --bg-body: #0d1117; --bg-card: #161b22; --border-color: #30363d;
+    --text-primary: #e6edf3; --text-secondary: #8b949e; --accent-blue: #58a6ff;
+  }
+  body { background: var(--bg-body); color: var(--text-primary); }
+  .pr-wrap { padding: 18px; }
+  .pr-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 14px; }
+  .pr-head h1 { font-size: 1.35rem; margin: 0 0 4px; }
+  .pr-head p { color: var(--text-secondary); font-size: .8rem; margin: 0; }
+  .pr-stats { display: grid; gap: 10px; grid-template-columns: repeat(6, minmax(130px, 1fr)); margin-bottom: 14px; }
+  .pr-stat { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px 14px; }
+  .pr-stat b { display: block; color: var(--text-primary); font-size: 1.35rem; line-height: 1.1; }
+  .pr-stat span { color: var(--text-secondary); font-size: .68rem; text-transform: uppercase; }
+  .pr-stat.is-btn { cursor: pointer; border-color: var(--border-color); text-align: left; }
+  .pr-stat.is-active { border-color: var(--accent-blue); box-shadow: 0 0 0 1px var(--accent-blue); }
+  .pr-filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-bottom: 14px; }
+  .pr-filters label { color: var(--text-secondary); display: block; font-size: .68rem; text-transform: uppercase; }
+  .pr-filters select, .pr-filters button { background: #0d1117; border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary); font: inherit; font-size: .8rem; padding: 7px 10px; }
+  .pr-btn { background: #238636; border: 1px solid #2ea043; border-radius: 8px; color: #fff; cursor: pointer; font-size: .8rem; font-weight: 700; padding: 7px 14px; }
+  .pr-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+  .pr-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; display: grid; gap: 8px; padding: 12px; }
+  .pr-card img { border-radius: 8px; height: 130px; object-fit: cover; width: 100%; }
+  .pr-card h3 { font-size: .95rem; margin: 0; }
+  .pr-card p { color: var(--text-secondary); font-size: .75rem; line-height: 1.4; margin: 0; }
+  .pr-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pr-tag { background: rgba(88,166,255,.12); border: 1px solid #1f6feb; border-radius: 999px; color: #79c0ff; font-size: .68rem; padding: 3px 9px; }
+  .pr-tag.phone { background: rgba(63,185,80,.12); border-color: #2ea043; color: #7ee787; }
+  .pr-tag.no-phone { background: rgba(248,81,73,.12); border-color: #f85149; color: #ffa198; }
+  .pr-empty { color: var(--text-secondary); padding: 34px; text-align: center; }
+  @media (max-width: 900px) { .pr-stats { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 560px) { .pr-stats { grid-template-columns: repeat(2, 1fr); } }
+</style>
+{% endblock %}
+{% block content %}
+<div class="pr-wrap">
+  <div class="pr-head">
+    <div>
+      <h1>Dashboard de Prospección</h1>
+      <p>Captaciones de todos los agentes (fotos, teléfono, GPS y estado).</p>
+    </div>
+  </div>
+
+  <form class="pr-filters" method="get">
+    <div>
+      <label>Distrito</label>
+      <select name="distrito">
+        <option value="">Todos</option>
+        {% for d in distritos_arequipa %}<option value="{{ d }}"{% if filtro_distrito == d %} selected{% endif %}>{{ d }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>Tipo de inmueble</label>
+      <select name="tipo">
+        <option value="">Todos</option>
+        {% for t in tipos_propiedad %}<option value="{{ t }}"{% if filtro_tipo == t %} selected{% endif %}>{{ t }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>Teléfono</label>
+      <select name="telefono">
+        <option value="">Todos</option>
+        <option value="con"{% if filtro_telefono == 'con' %} selected{% endif %}>Con teléfono</option>
+        <option value="sin"{% if filtro_telefono == 'sin' %} selected{% endif %}>Sin teléfono</option>
+      </select>
+    </div>
+    <button class="pr-btn" type="submit">Filtrar</button>
+    <a class="pr-btn" href="?">Limpiar</a>
+  </form>
+
+  <div class="pr-stats">
+    <article class="pr-stat"><b>{{ dashboard_stats.total }}</b><span>Captaciones</span></article>
+    <article class="pr-stat"><b>{{ dashboard_stats.with_phone }}</b><span>Con teléfono</span></article>
+    <article class="pr-stat"><b>{{ dashboard_stats.without_phone }}</b><span>Sin teléfono</span></article>
+    <article class="pr-stat"><b>{{ dashboard_stats.geolocated }}</b><span>Con GPS</span></article>
+    <article class="pr-stat"><b>{{ dashboard_stats.without_gps }}</b><span>Sin GPS</span></article>
+    <article class="pr-stat"><b>{{ dashboard_stats.users }}</b><span>Agentes</span></article>
+  </div>
+
+  {% if prospects %}
+  <div class="pr-grid">
+    {% for p in prospects %}
+    <article class="pr-card">
+      {% if p.foto %}<img src="{{ p.foto }}" alt="Captación #{{ p.id }}" loading="lazy">{% endif %}
+      <h3><a href="{{ p.url }}" style="color:var(--accent-blue);text-decoration:none">{{ p.titulo }}</a></h3>
+      <p>{{ p.descripcion }}</p>
+      <div class="pr-tags">
+        <span class="pr-tag">{{ p.distrito }}</span>
+        {% if p.tipo_propiedad %}<span class="pr-tag">{{ p.tipo_propiedad }}</span>{% endif %}
+        {% if p.operacion %}<span class="pr-tag">{{ p.operacion }}</span>{% endif %}
+        {% if p.contrato %}<span class="pr-tag">{{ p.contrato }}</span>{% endif %}
+        {% if p.precio %}<span class="pr-tag">{{ p.precio }} {{ p.moneda }}</span>{% endif %}
+        {% if p.area %}<span class="pr-tag">{{ p.area }} m²</span>{% endif %}
+        {% if p.habitaciones %}<span class="pr-tag">{{ p.habitaciones }} hab.</span>{% endif %}
+        {% if p.telefono %}<span class="pr-tag phone">📞 {{ p.telefono }}</span>{% else %}<span class="pr-tag no-phone">Sin teléfono</span>{% endif %}
+        <span class="pr-tag">{{ p.status }}</span>
+      </div>
+      <p><small>{{ p.agente }} · {{ p.creado }}{% if p.origen %} · {{ p.origen }}{% endif %}</small></p>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="pr-empty">No hay captaciones para estos filtros. La tabla de prospecciones está en 0.</div>
+  {% endif %}
+</div>
+{% endblock %}
