@@ -16,6 +16,21 @@ urlpatterns = [
         name='attention_quality',
     ),
     path(
+        'remarketing/',
+        intelligence_views.remarketing_dashboard,
+        name='remarketing',
+    ),
+    path(
+        'remarketing/plantillas/',
+        intelligence_views.remarketing_plantillas_api,
+        name='remarketing_plantillas',
+    ),
+    path(
+        'remarketing/analizar/',
+        intelligence_views.remarketing_analizar_api,
+        name='remarketing_analizar',
+    ),
+    path(
         'calidad-motor/',
         intelligence_views.analysis_quality_dashboard,
         name='analysis_quality',

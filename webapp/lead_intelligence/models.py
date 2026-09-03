@@ -320,3 +320,60 @@ class LeadEventResolution(models.Model):
                 name="pli_event_ver_status",
             ),
         ]
+
+
+class PlantillaMensaje(models.Model):
+    """Plantilla de mensaje de seguimiento/remarketing.
+
+    El dashboard de remarketing analiza TODAS las plantillas activas
+    (``activa=True``): cada mensaje saliente se compara contra la
+    ``frase_condicion`` (normalizada) o la ``regex_condicion`` de cada
+    plantilla para decidir a qué plantilla pertenece. ``sql_hint`` es un
+    patrón SQL ``LIKE`` amplio usado solo para prefiltrar
+    ``dbo.lead.chat_history`` en el CRM.
+    """
+
+    codigo = models.CharField(max_length=100, unique=True)
+    titulo = models.CharField(max_length=200, verbose_name="Título de la plantilla")
+    cuerpo = models.TextField(
+        blank=True,
+        default="",
+        help_text="Texto literal de la plantilla (solo informativo/visual).",
+    )
+    orden = models.PositiveSmallIntegerField(
+        default=1, verbose_name="Orden / intento", help_text="Ej.: 1, 2, 3…"
+    )
+    frase_condicion = models.CharField(
+        max_length=500,
+        blank=True,
+        default="",
+        verbose_name="Condición (frase)",
+        help_text="Frase que el mensaje debe contener para contarse. Se normaliza (sin mayúsculas/signos). Ej.: pudiste leer mi mensaje",
+    )
+    regex_condicion = models.CharField(
+        max_length=500,
+        blank=True,
+        default="",
+        verbose_name="Condición (regex, opcional)",
+        help_text="Patrón regex opcional, más preciso que la frase.",
+    )
+    sql_hint = models.CharField(
+        max_length=500,
+        blank=True,
+        default="",
+        verbose_name="Patrón SQL LIKE",
+        help_text="Patrón LIKE amplio para prefiltrar el CRM. Ej.: %Pudiste leer mi mensaje%",
+    )
+    activa = models.BooleanField(
+        default=True,
+        help_text="Solo las plantillas activas se autorizan en el análisis.",
+    )
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "prometeo_plantilla_mensaje"
+        ordering = ["orden", "id"]
+
+    def __str__(self):
+        return self.titulo

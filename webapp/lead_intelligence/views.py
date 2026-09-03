@@ -196,6 +196,93 @@ def attention_quality_dashboard(request):
 
 
 @management_access_required
+def remarketing_dashboard(request):
+    """Dashboard de remarketing: analiza TODAS las plantillas activas."""
+    date_from, date_to, _ = _parameters(request)
+    from .remarketing import get_remarketing_dashboard, listar_plantillas_ui
+
+    context = get_remarketing_dashboard(
+        date_from,
+        date_to,
+        agent_id=request.GET.get("agent"),
+        outcome=request.GET.get("outcome", "all"),
+        plantilla=request.GET.get("plantilla") or None,
+    )
+    context["title"] = "Remarketing de Leads"
+    context["active_tab"] = "remarketing"
+    context["todas_plantillas"] = listar_plantillas_ui()
+    context["plantilla_options"] = context.get("plantillas") or []
+    return render(
+        request,
+        "lead_intelligence/remarketing_dashboard.html",
+        context,
+    )
+
+
+@management_access_required
+@require_POST
+def remarketing_plantillas_api(request):
+    """Crea/actualiza una plantilla (título + condición + texto)."""
+    import json as json_lib
+
+    from .remarketing import guardar_plantilla
+
+    try:
+        payload = json_lib.loads(request.body or b"{}")
+    except (TypeError, ValueError, json_lib.JSONDecodeError):
+        payload = {}
+    titulo = (payload.get("titulo") or "").strip()
+    if not titulo:
+        return JsonResponse(
+            {"success": False, "error": "El título de la plantilla es obligatorio."},
+            status=400,
+        )
+    codigo = (payload.get("codigo") or "").strip() or (
+        titulo.lower().replace(" ", "_")[:100]
+    )
+    try:
+        saved = guardar_plantilla(
+            codigo=codigo,
+            titulo=titulo,
+            cuerpo=payload.get("cuerpo") or "",
+            orden=payload.get("orden") or 1,
+            frase_condicion=(
+                payload.get("frase_condicion")
+                or payload.get("condicion")
+                or ""
+            ),
+            regex_condicion=payload.get("regex_condicion") or "",
+            sql_hint=payload.get("sql_hint") or "",
+            activa=payload.get("activa", True),
+        )
+        return JsonResponse({"success": True, "plantilla": saved})
+    except Exception as exc:  # noqa: BLE001
+        return JsonResponse({"success": False, "error": str(exc)}, status=400)
+
+
+@management_access_required
+@require_POST
+def remarketing_analizar_api(request):
+    """Analiza un mensaje y responde qué plantillas activas lo matchean."""
+    import json as json_lib
+
+    from .remarketing import analizar_mensaje
+
+    try:
+        payload = json_lib.loads(request.body or b"{}")
+    except (TypeError, ValueError, json_lib.JSONDecodeError):
+        payload = {}
+    mensaje = payload.get("mensaje") or payload.get("texto") or ""
+    return JsonResponse(
+        {
+            "success": True,
+            "mensaje": mensaje,
+            "plantillas": analizar_mensaje(mensaje),
+        }
+    )
+
+
+@management_access_required
 def analysis_quality_dashboard(request):
     date_from, date_to, _ = _parameters(request)
     context = get_analysis_quality_dashboard(date_from, date_to)
