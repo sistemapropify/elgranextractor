@@ -18,10 +18,10 @@ jobs:
       contents: read #This is required for actions/checkout
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python version
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
@@ -79,7 +79,7 @@ jobs:
       # Build the deployment artifact without generated browser profiles,
       # duplicated projects, logs, or other runtime-only data.
       - name: Upload artifact for deployment jobs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: python-app
           path: |
@@ -112,12 +112,12 @@ jobs:
 
     steps:
       - name: Download artifact from build job
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: python-app
 
       - name: Login to Azure
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_BD7ACFF66075413F896FF528B42CABC0 }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_0FA92F15F0804AE197DC2EECF943B7DB }}
@@ -175,7 +175,7 @@ jobs:
       # asercion OIDC inicial. Solicitar una credencial nueva antes de usar az.
       - name: Refresh Azure login after deployment
         if: success()
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_BD7ACFF66075413F896FF528B42CABC0 }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_0FA92F15F0804AE197DC2EECF943B7DB }}
@@ -246,7 +246,7 @@ jobs:
       # que la obtencion de logs no falle con AADSTS700024.
       - name: Refresh Azure login for diagnostics
         if: failure()
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_BD7ACFF66075413F896FF528B42CABC0 }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_0FA92F15F0804AE197DC2EECF943B7DB }}
