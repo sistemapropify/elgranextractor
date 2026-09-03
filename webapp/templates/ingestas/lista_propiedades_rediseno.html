@@ -796,6 +796,7 @@
 {% block content %}
 <div class="portal-container">
     <!-- Barra de filtros superior -->
+    {% if not hide_filters %}
     <div class="filters-bar">
         <form method="get" id="filter-form">
             <!-- FILA 1: Distritos ocupa todo el ancho -->
@@ -854,13 +855,16 @@
             </div>
         </form>
     </div>
+    {% endif %}
+
+    {% block portal_toolbar %}{% endblock %}
 
     <!-- Contenido principal: Mapa (izquierda 50%) + Propiedades (derecha 50%) -->
     <div class="portal-body">
         <!-- Mapa a la izquierda -->
         <div class="map-section">
             <div class="map-header">
-                <i class="fas fa-map"></i> Mapa de Propiedades
+                <i class="fas fa-map"></i> {{ map_title|default:"Mapa de Propiedades" }}
             </div>
             <div class="map-container">
                 <div id="propertyMap"></div>
@@ -870,12 +874,12 @@
         <!-- Propiedades filtradas a la derecha -->
         <div class="properties-section">
             <div class="properties-header">
-                <h3 class="properties-title">Propiedades seleccionadas</h3>
+                <h3 class="properties-title">{{ selection_title|default:"Propiedades seleccionadas" }}</h3>
                 <div style="display: flex; align-items: center; gap: 6px;">
                     <button class="btn-clear-selection" id="btn-clear-selection" style="display: none;" onclick="limpiarSeleccion()">
                         <i class="fas fa-times"></i> Limpiar
                     </button>
-                    <span class="properties-count" id="filtered-count">0 propiedades</span>
+                    <span class="properties-count" id="filtered-count">0 {{ entity_plural|default:"propiedades" }}</span>
                 </div>
             </div>
 
@@ -884,7 +888,7 @@
                 <div class="empty-state" id="empty-state">
                     <i class="fas fa-map-marked-alt" style="font-size: 2rem; color: var(--text-secondary); margin-bottom: 8px;"></i>
                     <h5 style="color: var(--text-primary); margin-bottom: 4px; font-size: 0.9rem;">Haz clic en los marcadores del mapa</h5>
-                    <p style="color: var(--text-secondary); font-size: 0.75rem;">Activa distritos con los checkboxes y haz clic en los marcadores del mapa. Cada marcador que selecciones agregará una tarjeta numerada aquí.</p>
+                    <p style="color: var(--text-secondary); font-size: 0.75rem;">{% if mostrar_todos_marcadores %}Haz clic en cualquier marcador para consultar la captación y el agente que la registró.{% else %}Activa distritos con los checkboxes y haz clic en los marcadores del mapa. Cada marcador que selecciones agregará una tarjeta numerada aquí.{% endif %}</p>
                 </div>
                 <div id="selected-property" style="display: none;"></div>
             </div>
@@ -907,7 +911,11 @@
     const ICONO_PROPIFFY = '{% static "requerimientos/data/Pin-propify.png" %}';
     const ICONO_REMAX = '{% static "requerimientos/data/pin-remax.png" %}';
     const ICONO_ADONDEVIVIR = '{% static "requerimientos/data/adondevivir-pin.png" %}';
+    const ICONO_FACEBOOK = '{% static "prospects/facebook-marker.jpg" %}';
     const ICONO_LOCAL = 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png';
+    const MOSTRAR_TODOS_MARCADORES = {% if mostrar_todos_marcadores %}true{% else %}false{% endif %};
+    const ETIQUETA_SINGULAR = '{{ entity_singular|default:"propiedad"|escapejs }}';
+    const ETIQUETA_PLURAL = '{{ entity_plural|default:"propiedades"|escapejs }}';
 
     // Mapeo de índices numéricos de distrito a nombres reales
     const DISTRITOS_LISTA = [
@@ -936,6 +944,27 @@
             return MAPEO_DISTRITOS[distritoVal];
         }
         return distritoVal;
+    }
+
+    function obtenerIconoBase(p) {
+        const portal = (p.portal || '').toLowerCase();
+        if (p.es_captacion || portal === 'facebook') {
+            return {
+                url: ICONO_FACEBOOK,
+                size: new google.maps.Size(40, 40),
+                origin: new google.maps.Point(15, 15),
+                anchor: new google.maps.Point(20, 20),
+                scaledSize: new google.maps.Size(70, 70)
+            };
+        }
+
+        let iconUrl;
+        if (p.es_propify) iconUrl = ICONO_PROPIFFY;
+        else if (portal === 'remax') iconUrl = ICONO_REMAX;
+        else if (portal === 'adondevivir') iconUrl = ICONO_ADONDEVIVIR;
+        else if (p.es_externo) iconUrl = ICONO_REMAX;
+        else iconUrl = ICONO_LOCAL;
+        return { url: iconUrl, scaledSize: new google.maps.Size(32, 32) };
     }
     let map = null;
     let markers = [];           // Todos los marcadores creados
@@ -1053,6 +1082,10 @@
                 
                 // Cargar zonas de cuadrantización
                 cargarZonasMapa();
+
+                if (MOSTRAR_TODOS_MARCADORES) {
+                    actualizarMarcadores();
+                }
                 
                 console.log('Mapa inicializado vacío. Esperando selección de distritos.');
             })
@@ -1135,6 +1168,11 @@
         const checkboxes = document.querySelectorAll('.distrito-checkbox:checked');
         const distritosSeleccionados = new Set();
         checkboxes.forEach(cb => distritosSeleccionados.add(cb.value));
+        if (MOSTRAR_TODOS_MARCADORES) {
+            Object.keys(propiedadesPorDistrito).forEach(distrito => {
+                distritosSeleccionados.add(distrito);
+            });
+        }
         
         console.log('Distritos seleccionados:', [...distritosSeleccionados]);
         
@@ -1170,13 +1208,6 @@
             if (entry && entry.marker) {
                 entry.marker._selectedNumero = null;
                 const p = entry.marker._propertyData;
-                const portal = (p.portal || '').toLowerCase();
-                let iconUrl;
-                if (p.es_propify) iconUrl = ICONO_PROPIFFY;
-                else if (portal === 'remax') iconUrl = ICONO_REMAX;
-                else if (portal === 'adondevivir') iconUrl = ICONO_ADONDEVIVIR;
-                else if (p.es_externo) iconUrl = ICONO_REMAX;
-                else iconUrl = ICONO_LOCAL;
                 const nombreDistrito = obtenerNombreDistrito(p);
                 let precioM2 = '';
                 if (p.precio_publicacion && p.area_construida && p.area_construida > 0) {
@@ -1185,7 +1216,7 @@
                         precioM2 = Math.round(precioNum / p.area_construida).toString();
                     }
                 }
-                entry.marker.setIcon({ url: iconUrl, scaledSize: new google.maps.Size(32, 32) });
+                entry.marker.setIcon(obtenerIconoBase(p));
                 entry.marker.setLabel(crearLabelDistrito(nombreDistrito, precioM2));
             }
             selectedMarkers.delete(numero);
@@ -1207,15 +1238,6 @@
             console.log(`Agregando ${propiedades.length} marcadores para distrito: ${distrito}`);
             
             propiedades.forEach(p => {
-                // Determinar icono según portal
-                const portal = (p.portal || '').toLowerCase();
-                let iconUrl;
-                if (p.es_propify) iconUrl = ICONO_PROPIFFY;
-                else if (portal === 'remax') iconUrl = ICONO_REMAX;
-                else if (portal === 'adondevivir') iconUrl = ICONO_ADONDEVIVIR;
-                else if (p.es_externo) iconUrl = ICONO_REMAX;
-                else iconUrl = ICONO_LOCAL;
-                
                 // Obtener nombre real del distrito para esta propiedad
                 const nombreDistrito = obtenerNombreDistrito(p);
                 
@@ -1233,10 +1255,7 @@
                     position: { lat: p.lat, lng: p.lng },
                     map: map,
                     title: p.titulo || p.descripcion || '',
-                    icon: {
-                        url: iconUrl,
-                        scaledSize: new google.maps.Size(32, 32)
-                    },
+                    icon: obtenerIconoBase(p),
                     label: crearLabelDistrito(nombreDistrito, precioM2),
                     _distrito: distrito,
                     _propertyData: p,
@@ -1358,13 +1377,19 @@
         const habs = escaparHTML(p.habitaciones || p.numero_habitaciones || '');
         const banos = escaparHTML(p.banios || p.numero_banos || '');
         const direccion = escaparHTML(p.direccion || '');
+        const agente = escaparHTML(p.agente || '');
+        const estado = escaparHTML(p.status || '');
         const url = p.url || '';
         const urlAttr = url.replace(/"/g, '%22').replace(/'/g, '%27');
         
         // Determinar portal/fuente para mostrar logo
         const portal = (p.portal || '').toLowerCase();
         let badgeClass, badgeText, logoSrc;
-        if (p.es_propify) {
+        if (p.es_captacion || portal === 'facebook') {
+            badgeClass = 'bg-primary';
+            badgeText = 'Facebook';
+            logoSrc = ICONO_FACEBOOK;
+        } else if (p.es_propify) {
             badgeClass = 'bg-success';
             badgeText = 'Propify';
             logoSrc = ICONO_PROPIFFY;
@@ -1391,7 +1416,9 @@
         
         // Determinar colores del badge numerado según portal
         let badgeBg, badgeBorder;
-        if (p.es_propify) {
+        if (p.es_captacion || portal === 'facebook') {
+            badgeBg = '#1877f2'; badgeBorder = '#5b9df5';
+        } else if (p.es_propify) {
             badgeBg = '#238636'; badgeBorder = '#2ea043';
         } else if (portal === 'remax') {
             badgeBg = '#da3633'; badgeBorder = '#f85149';
@@ -1470,6 +1497,8 @@
                         ${area ? `<div class="feature-item"><i class="fas fa-ruler-combined"></i><span>${area}</span></div>` : ''}
                         ${habs ? `<div class="feature-item"><i class="fas fa-bed"></i><span>${habs} hab.</span></div>` : ''}
                         ${banos ? `<div class="feature-item"><i class="fas fa-bath"></i><span>${banos} baños</span></div>` : ''}
+                        ${agente ? `<div class="feature-item"><i class="fas fa-user"></i><span>${agente}</span></div>` : ''}
+                        ${estado ? `<div class="feature-item"><i class="fas fa-flag"></i><span>${estado}</span></div>` : ''}
                         <div class="feature-item"><i class="fas fa-tag"></i><span>${badgeText}</span></div>
                     </div>
                     <div class="property-footer">
@@ -1578,19 +1607,6 @@
         if (entry && entry.marker) {
             entry.marker._selectedNumero = null;
             const p = entry.marker._propertyData;
-            const portal = (p.portal || '').toLowerCase();
-            let iconUrl;
-            if (p.es_propify) {
-                iconUrl = ICONO_PROPIFFY;
-            } else if (portal === 'remax') {
-                iconUrl = ICONO_REMAX;
-            } else if (portal === 'adondevivir') {
-                iconUrl = ICONO_ADONDEVIVIR;
-            } else if (p.es_externo) {
-                iconUrl = ICONO_REMAX;
-            } else {
-                iconUrl = ICONO_LOCAL;
-            }
             const nombreDistrito = obtenerNombreDistrito(p);
             let precioM2 = '';
             if (p.precio_publicacion && p.area_construida && p.area_construida > 0) {
@@ -1599,7 +1615,7 @@
                     precioM2 = Math.round(precioNum / p.area_construida).toString();
                 }
             }
-            entry.marker.setIcon({ url: iconUrl, scaledSize: new google.maps.Size(32, 32) });
+            entry.marker.setIcon(obtenerIconoBase(p));
             entry.marker.setLabel(crearLabelDistrito(nombreDistrito, precioM2));
         }
         
@@ -1617,10 +1633,11 @@
         const btnClear = document.getElementById('btn-clear-selection');
         const total = selectedMarkers.size;
         if (total === 0) {
-            countSpan.textContent = '0 propiedades';
+            countSpan.textContent = `0 ${ETIQUETA_PLURAL}`;
             if (btnClear) btnClear.style.display = 'none';
         } else {
-            countSpan.textContent = `${total} propiedad${total !== 1 ? 'es' : ''} seleccionada${total !== 1 ? 's' : ''}`;
+            const etiqueta = total === 1 ? ETIQUETA_SINGULAR : ETIQUETA_PLURAL;
+            countSpan.textContent = `${total} ${etiqueta}${total === 1 ? ' seleccionada' : ' seleccionadas'}`;
             if (btnClear) btnClear.style.display = 'inline-flex';
         }
     }
@@ -1712,19 +1729,6 @@
             if (entry.marker) {
                 entry.marker._selectedNumero = null;
                 const p = entry.marker._propertyData;
-                const portal = (p.portal || '').toLowerCase();
-                let iconUrl;
-                if (p.es_propify) {
-                    iconUrl = ICONO_PROPIFFY;
-                } else if (portal === 'remax') {
-                    iconUrl = ICONO_REMAX;
-                } else if (portal === 'adondevivir') {
-                    iconUrl = ICONO_ADONDEVIVIR;
-                } else if (p.es_externo) {
-                    iconUrl = ICONO_REMAX;
-                } else {
-                    iconUrl = ICONO_LOCAL;
-                }
                 const nombreDistrito = obtenerNombreDistrito(p);
                 let precioM2 = '';
                 if (p.precio_publicacion && p.area_construida && p.area_construida > 0) {
@@ -1733,7 +1737,7 @@
                         precioM2 = Math.round(precioNum / p.area_construida).toString();
                     }
                 }
-                entry.marker.setIcon({ url: iconUrl, scaledSize: new google.maps.Size(32, 32) });
+                entry.marker.setIcon(obtenerIconoBase(p));
                 entry.marker.setLabel(crearLabelDistrito(nombreDistrito, precioM2));
             }
         });

@@ -1,32 +1,121 @@
 import base64
 import json
 import logging
+import math
+import os
 import re
-from decimal import Decimal, InvalidOperation
+from uuid import uuid4
 
 import requests
 from django.contrib import messages
+from django.db import DatabaseError, connection
+from django.db.models import Q
 from django.utils import timezone
+from django.utils.decorators import method_decorator
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
+from django.conf import settings
 
 from .models import PropertyProspect
-from .forms import ProspectEditForm
+from .forms import ProspectCaptureForm, ProspectEditForm
+from .propify_auth import (
+    PropifyAuthError,
+    WEB_PROFILE_SESSION_KEY,
+    WEB_TOKEN_SESSION_KEY,
+    authenticate_propify_credentials,
+    clear_web_propify_session,
+    get_web_propify_principal,
+    propify_web_required,
+    safe_next_url,
+)
 
 logger = logging.getLogger(__name__)
 
 
-def get_property_type_choices():
-    """Catálogo activo de dbo.property_type adaptado al campo del prospecto."""
-    from django.db import connections
-    value_map = {
-        'Casa': 'casa', 'Departamento': 'departamento', 'Local': 'local',
-        'Oficina': 'oficina', 'Otros': 'otro', 'Terreno': 'terreno',
-    }
-    with connections['propifai'].cursor() as cursor:
-        cursor.execute('SELECT id, name FROM dbo.property_type WHERE is_active = 1 ORDER BY name')
-        return [{'id': row[0], 'value': value_map.get(row[1], str(row[1]).lower()), 'name': row[1]} for row in cursor.fetchall()]
+def _guardar_foto_azure(foto):
+    """Sube la foto directamente a Azure Blob (evita el storage de Django que
+    falla con MEDIA_ROOT=None) y devuelve el nombre del blob (ruta) para
+    guardarlo en prospect.photo."""
+    from datetime import datetime
+    from django.conf import settings as _s
+    from captura.azure_storage import get_blob_service_client
+    ext = os.path.splitext(foto.name or '')[-1] or '.jpg'
+    nombre = 'prospects/photos/%s/prospecto_%s%s' % (
+        datetime.now().strftime('%Y/%m'),
+        uuid4().hex[:10],
+        ext,
+    )
+    contenedor = getattr(_s, 'AZURE_CONTAINER', 'fotosprospecciones')
+    bsc = get_blob_service_client()
+    blob = bsc.get_container_client(contenedor).get_blob_client(nombre)
+    blob.upload_blob(foto.read(), overwrite=True,
+                     content_type=foto.content_type or 'image/jpeg')
+    return nombre
+
+
+def signed_prospect_photo(prospect):
+    """Devuelve la URL de la foto del prospecto firmada con SAS (24h).
+
+    El contenedor de fotos es privado; sin la firma el navegador recibe 403.
+    Si no hay foto o no se puede firmar, devuelve '' o la URL original.
+    """
+    try:
+        raw_url = prospect.photo.url if prospect.photo else ''
+    except (ValueError, AttributeError):
+        return ''
+    if not raw_url:
+        return ''
+    try:
+        from captura.azure_storage import generate_read_sas_url
+        return generate_read_sas_url(raw_url, expiry_minutes=1440) or raw_url
+    except Exception:
+        logger.warning('No se pudo firmar SAS de la foto del prospecto.', exc_info=True)
+        return raw_url
+
+
+def _prospects_for_principal(principal):
+    """Capturas propias de una identidad Propify, incluidas las antiguas."""
+    return PropertyProspect.objects.filter(
+        Q(mobile_user=principal.mobile_user)
+        | Q(
+            mobile_user__isnull=True,
+            captured_by_username__iexact=principal.username,
+        )
+    )
+
+
+def propify_login(request):
+    if request.method == 'GET' and get_web_propify_principal(request) is not None:
+        return redirect(safe_next_url(request))
+
+    error = ''
+    username = ''
+    if request.method == 'POST':
+        username = str(request.POST.get('username', '')).strip()
+        password = str(request.POST.get('password', ''))
+        if not username or not password:
+            error = 'Usuario y contraseña son obligatorios.'
+        else:
+            try:
+                _, principal = authenticate_propify_credentials(username, password)
+            except PropifyAuthError as exc:
+                error = str(exc)
+            else:
+                request.session[WEB_TOKEN_SESSION_KEY] = principal.token
+                request.session[WEB_PROFILE_SESSION_KEY] = principal.profile
+                return redirect(safe_next_url(request))
+
+    return render(request, 'prospects/propify_login.html', {
+        'error': error,
+        'username': username,
+        'next': safe_next_url(request),
+    })
+
+
+def propify_logout(request):
+    clear_web_propify_session(request)
+    return redirect('prospects:login')
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -48,57 +137,112 @@ def is_mobile_device(request) -> bool:
     return bool(MOBILE_UA_RE.search(ua))
 
 
+def _mobile_capture_actors():
+    """Obtiene el usuario APK sin exigir que exista un agente web relacionado."""
+    prospect_table = connection.ops.quote_name(PropertyProspect._meta.db_table)
+    mobile_user_table = connection.ops.quote_name('prospects_mobileprospectuser')
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(f'''
+                SELECT prospect.id,
+                       prospect.mobile_user_id,
+                       prospect.captured_by_username,
+                       mobile_user.username
+                FROM {prospect_table} prospect
+                LEFT JOIN {mobile_user_table} mobile_user
+                  ON mobile_user.id = prospect.mobile_user_id
+            ''')
+            return {
+                row[0]: {
+                    'mobile_user_id': row[1],
+                    'captured_by_username': row[2] or '',
+                    'mobile_username': row[3] or '',
+                }
+                for row in cursor.fetchall()
+            }
+    except DatabaseError:
+        # Compatibilidad con instalaciones anteriores a la API móvil.
+        logger.warning('No se encontró metadata de usuarios móviles de prospección.')
+        return {}
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. CAPTURA: sube foto + coordenadas GPS → guarda borrador
 # ─────────────────────────────────────────────────────────────────────────────
+@method_decorator(propify_web_required, name='dispatch')
 class CaptureView(View):
     """
     GET  → muestra el template de captura
-    POST → guarda la foto y las coordenadas GPS, devuelve JSON con el prospect_id
+    POST → guarda la captura completa en PropertyProspect y devuelve su id
     """
 
     def get(self, request):
         return render(request, 'prospects/capture.html', {
             'mode': 'new',
-            'property_types': get_property_type_choices(),
+            'property_types': PropertyProspect.PROPERTY_TYPES,
+            'google_maps_api_key': getattr(
+                settings,
+                'GOOGLE_MAPS_API_KEY',
+                'AIzaSyBrL1QF7vTl9zF8FmCUumfRpFJcaYokO7Q',
+            ),
         })
 
     def post(self, request):
-        photo = request.FILES.get('photo')
-        if not photo:
-            return JsonResponse({'ok': False, 'error': 'No se recibió imagen.'}, status=400)
-
-        latitude = request.POST.get('latitude')
-        longitude = request.POST.get('longitude')
-        try:
-            latitude_value = Decimal(latitude)
-            longitude_value = Decimal(longitude)
-            if not (-90 <= latitude_value <= 90 and -180 <= longitude_value <= 180):
-                raise InvalidOperation
-        except (InvalidOperation, TypeError, ValueError):
+        form = ProspectCaptureForm(request.POST, request.FILES)
+        if not request.POST.get('origin'):
+            form.add_error('origin', 'Selecciona el origen de la prospección.')
+        if not form.is_valid():
+            errors = {
+                field: [str(error) for error in field_errors]
+                for field, field_errors in form.errors.items()
+            }
+            first_error = next(
+                (message for field_errors in errors.values() for message in field_errors),
+                'Revisa los datos ingresados.',
+            )
             return JsonResponse({
                 'ok': False,
-                'error': 'Debes permitir la ubicación GPS antes de guardar la captura.',
+                'error': first_error,
+                'errors': errors,
             }, status=400)
 
-        prospect = PropertyProspect.objects.create(
-            agent=request.current_user,
-            photo=photo,
-            latitude=latitude_value,
-            longitude=longitude_value,
-            status='borrador',
-        )
+        prospect = form.save(commit=False)
+        prospect.agent = None
+        prospect.mobile_user = request.propify_user.mobile_user
+        prospect.captured_by_username = request.propify_user.username
+        prospect.status = 'pendiente'
+        foto = request.FILES.get('photo')
+        if foto:
+            try:
+                prospect.photo = _guardar_foto_azure(foto)
+            except Exception:
+                logger.exception('No se pudo subir la foto de la captura web.')
+                return JsonResponse({
+                    'ok': False,
+                    'error': 'No se pudo subir la foto. Inténtalo nuevamente.',
+                }, status=500)
+        try:
+            prospect.save()
+        except Exception:
+            logger.exception('No se pudo guardar la captura web de prospección.')
+            return JsonResponse({
+                'ok': False,
+                'error': 'El servidor no pudo guardar la captura. Revisa los datos e inténtalo nuevamente.',
+            }, status=500)
 
+        # Tras guardar, volver automáticamente al dashboard de prospección
+        # (/marketing/prospeccion/) en vez de abrir la página de detalle.
         return JsonResponse({
             'ok': True,
             'prospect_id': prospect.pk,
-            'redirect_url': f'/prospects/{prospect.pk}/detail/',
+            'redirect_url': '/marketing/prospeccion/',
         })
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 2. DETALLE / EDICIÓN: muestra el prospecto con opción de procesar con IA
 # ─────────────────────────────────────────────────────────────────────────────
+@method_decorator(propify_web_required, name='dispatch')
 class ProspectDetailView(View):
     """
     GET   → muestra formulario prellenado (o vacío si aún no se procesó)
@@ -106,7 +250,7 @@ class ProspectDetailView(View):
     """
 
     def get_prospect(self, request, pk):
-        return get_object_or_404(PropertyProspect, pk=pk, agent=request.current_user)
+        return get_object_or_404(_prospects_for_principal(request.propify_user), pk=pk)
 
     def get(self, request, pk):
         prospect = self.get_prospect(request, pk)
@@ -114,33 +258,77 @@ class ProspectDetailView(View):
         return render(request, 'prospects/capture.html', {
             'prospect': prospect,
             'form': form,
+            'photo_url': signed_prospect_photo(prospect),
             'mode': 'detail',
             'can_process': is_mobile_device(request),
-            'property_types': get_property_type_choices(),
+            'property_types': PropertyProspect.PROPERTY_TYPES,
+            'google_maps_api_key': getattr(
+                settings,
+                'GOOGLE_MAPS_API_KEY',
+                'AIzaSyBrL1QF7vTl9zF8FmCUumfRpFJcaYokO7Q',
+            ),
         })
 
     def post(self, request, pk):
         prospect = self.get_prospect(request, pk)
-        form = ProspectEditForm(request.POST, instance=prospect)
+        # Las coordenadas llegan a veces vacías/'' en el cliente; si el prospecto
+        # ya tiene GPS, se preservan para no invalidar el formulario ni borrarlas.
+        post_data = request.POST.copy()
+
+        def _normalizar_coord(key, actual):
+            raw = (post_data.get(key) or '').strip()
+            if raw:
+                try:
+                    val = float(raw)
+                except (TypeError, ValueError):
+                    raw = ''
+                else:
+                    # Rechazar NaN/Infinito (el JS a veces escribe 'NaN')
+                    if not math.isfinite(val):
+                        raw = ''
+            if not raw:
+                raw = str(actual) if actual is not None else ''
+            post_data[key] = raw
+
+        _normalizar_coord('latitude', prospect.latitude)
+        _normalizar_coord('longitude', prospect.longitude)
+
+        form = ProspectEditForm(post_data, request.FILES, instance=prospect)
         if form.is_valid():
             saved = form.save(commit=False)
             # Si tenía borrador y ya tiene datos, pasa a pendiente
             if saved.status == 'borrador' and (saved.phone or saved.owner_name):
                 saved.status = 'pendiente'
+            foto_edit = request.FILES.get('photo')
+            if foto_edit:
+                saved.photo = _guardar_foto_azure(foto_edit)
             saved.save()
             messages.success(request, 'Prospecto actualizado correctamente.')
-            return redirect('prospects:detail', pk=pk)
+            # Tras guardar, regresar automáticamente al dashboard de prospección
+            return redirect('marketing_prospeccion_dashboard')
+        logger.warning(
+            'ProspectEditForm inválido pk=%s errores=%s',
+            prospect.pk,
+            dict(form.errors),
+        )
         return render(request, 'prospects/capture.html', {
             'prospect': prospect,
             'form': form,
+            'photo_url': signed_prospect_photo(prospect),
             'mode': 'detail',
-            'property_types': get_property_type_choices(),
+            'property_types': PropertyProspect.PROPERTY_TYPES,
+            'google_maps_api_key': getattr(
+                settings,
+                'GOOGLE_MAPS_API_KEY',
+                'AIzaSyBrL1QF7vTl9zF8FmCUumfRpFJcaYokO7Q',
+            ),
         })
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 3. PROCESAR CON IA: llama Qwen3-VL y prellenar campos
 # ─────────────────────────────────────────────────────────────────────────────
+@method_decorator(propify_web_required, name='dispatch')
 class ProcessImageView(View):
     """
     POST → lee la foto guardada, la envía a Qwen3-VL, actualiza el prospecto
@@ -157,7 +345,7 @@ class ProcessImageView(View):
                 'error': 'El procesamiento con IA solo está disponible desde móvil o tablet.',
             }, status=403)
 
-        prospect = get_object_or_404(PropertyProspect, pk=pk, agent=request.current_user)
+        prospect = get_object_or_404(_prospects_for_principal(request.propify_user), pk=pk)
 
         if not prospect.photo:
             return JsonResponse({'ok': False, 'error': 'No hay foto asociada.'}, status=400)
@@ -265,8 +453,9 @@ No incluyas explicaciones, solo el JSON."""
 # ─────────────────────────────────────────────────────────────────────────────
 # 4. LISTA DE PROSPECTOS
 # ─────────────────────────────────────────────────────────────────────────────
+@propify_web_required
 def prospect_list(request):
-    qs = PropertyProspect.objects.filter(agent=request.current_user)
+    qs = _prospects_for_principal(request.propify_user)
 
     status_filter = request.GET.get('status', '')
     if status_filter:
@@ -288,106 +477,114 @@ def prospect_list(request):
     })
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 5. DASHBOARD DE PROSPECCIONES (captaciones de todos los agentes)
-#    URL: /marketing/prospeccion/  (se mantienen Alertas CRM móviles intactas)
-# ─────────────────────────────────────────────────────────────────────────────
+@propify_web_required
 def prospect_dashboard(request):
-    """Dashboard de prospecciones: KPIs, filtros y listado de captaciones."""
-    from django.db.models import Q
-
-    qs = PropertyProspect.objects.all().order_by('-created_at')
-    distrito = (request.GET.get('distrito') or '').strip()
-    tipo = (request.GET.get('tipo') or '').strip()
-    telefono = (request.GET.get('telefono') or '').strip()  # con | sin
-
-    if distrito:
-        qs = qs.filter(district=distrito)
-    if tipo:
-        qs = qs.filter(property_type=tipo)
-    if telefono == 'con':
-        qs = qs.exclude(phone='').exclude(phone__isnull=True)
-    elif telefono == 'sin':
-        qs = qs.filter(Q(phone__isnull=True) | Q(phone=''))
-
-    prospects = list(qs)
+    """Dashboard cartográfico con las captaciones de todos los agentes."""
+    prospects = list(PropertyProspect.objects.all().order_by('-created_at'))
+    current_mobile_user_id = request.propify_user.mobile_user.pk
+    mobile_actors = _mobile_capture_actors()
 
     agent_ids = {prospect.agent_id for prospect in prospects if prospect.agent_id}
     agent_model = PropertyProspect._meta.get_field('agent').remote_field.model
-    agents_by_id = (
-        {agent.pk: agent for agent in agent_model.objects.filter(pk__in=agent_ids)}
-        if agent_ids
-        else {}
-    )
+    agents_by_id = {
+        agent.pk: agent for agent in agent_model.objects.filter(pk__in=agent_ids)
+    }
 
-    rows = []
+    # El template del portal consume este contrato de datos para pintar
+    # marcadores y tarjetas. Se mantiene el layout y comportamiento original.
+    data = []
+    user_identities = set()
     for prospect in prospects:
+        actor = mobile_actors.get(prospect.pk, {})
         agent = agents_by_id.get(prospect.agent_id)
         if agent is not None:
             agent_name = ' '.join(
-                part
-                for part in (agent.first_name, agent.last_name)
-                if part
-            ).strip() or getattr(agent, 'username', '') or f'Usuario {agent.pk}'
+                part for part in (agent.first_name, agent.last_name) if part
+            ).strip() or agent.username or f'Usuario {agent.pk}'
+            user_identities.add(f'agent:{agent.pk}')
         else:
-            agent_name = prospect.captured_by_username or 'Usuario APK'
-        rows.append({
+            agent_name = (
+                actor.get('captured_by_username')
+                or actor.get('mobile_username')
+                or 'Usuario APK'
+            )
+            mobile_identity = actor.get('mobile_user_id') or agent_name
+            user_identities.add(f'mobile:{mobile_identity}')
+        can_edit = bool(
+            prospect.mobile_user_id == current_mobile_user_id
+            or (
+                prospect.mobile_user_id is None
+                and prospect.captured_by_username.lower() == request.propify_user.username.lower()
+            )
+        )
+
+        # Contenedor de fotos privado: firmar URL con SAS (24h) para las tarjetas/mapa
+        photo_url = signed_prospect_photo(prospect)
+
+        data.append({
             'id': prospect.pk,
+            'lat': str(prospect.latitude) if prospect.latitude is not None else '',
+            'lng': str(prospect.longitude) if prospect.longitude is not None else '',
             'distrito': prospect.district or 'Sin distrito',
+            'distrito_nombre': prospect.district or 'Sin distrito',
             'tipo_propiedad': prospect.get_property_type_display() or 'Prospección',
             'titulo': prospect.owner_name or f'Prospección #{prospect.pk}',
             'descripcion': prospect.address or prospect.notes or 'Sin dirección registrada',
+            'precio_publicacion': str(prospect.price) if prospect.price is not None else '',
             'precio': str(prospect.price) if prospect.price is not None else '',
             'moneda': prospect.currency or 'USD',
-            'area': str(prospect.area_m2) if prospect.area_m2 is not None else '',
+            'area_construida': str(prospect.area_m2) if prospect.area_m2 is not None else '',
             'habitaciones': prospect.bedrooms or '',
-            'telefono': prospect.phone or '',
+            'banios': '',
+            'direccion': prospect.address or '',
+            'portal': 'Facebook',
+            'es_externo': False,
+            'es_propify': False,
+            'es_captacion': True,
+            'primera_imagen': photo_url,
             'agente': agent_name,
+            'url': f'/prospects/{prospect.pk}/detail/' if can_edit else '',
+            'status': prospect.get_status_display(),
+            'telefono': prospect.phone or '',
+            'marketplace_url': prospect.marketplace_url or '',
+            'owner_name': prospect.owner_name or '',
+            'notas': prospect.notes or '',
             'zona': prospect.zone or '',
             'operacion': prospect.get_operation_type_display() or '',
             'contrato': prospect.get_contract_type_display() or '',
             'origen': prospect.get_origin_display() or prospect.origin or '',
-            'status': prospect.get_status_display(),
-            'url': f'/prospects/{prospect.pk}/detail/',
-            'foto': prospect.photo.url if prospect.photo else '',
-            'creado': (
-                prospect.created_at.strftime('%d/%m/%Y %H:%M')
-                if prospect.created_at
-                else ''
-            ),
+            'creado': prospect.created_at.strftime('%d/%m/%Y %H:%M') if prospect.created_at else '',
         })
 
     districts = sorted({p.district for p in prospects if p.district})
-    tipos = sorted({
-        prospect.get_property_type_display()
-        for prospect in prospects
-        if prospect.get_property_type_display()
+    geolocated = sum(1 for p in prospects if p.has_gps)
+    user_count = len(user_identities)
+    with_phone = sum(1 for p in prospects if (p.phone or '').strip())
+    without_phone = len(prospects) - with_phone
+    tipos_presentes = sorted({
+        (p.get_property_type_display() or 'Prospección') for p in prospects
     })
-    with_phone = sum(1 for prospect in prospects if (prospect.phone or '').strip())
-    geolocated = sum(
-        1
-        for prospect in prospects
-        if prospect.latitude is not None and prospect.longitude is not None
-    )
-
     return render(request, 'prospects/dashboard.html', {
-        'prospects': rows,
+        'todas_propiedades_json': data,
         'distritos_arequipa': districts,
-        'tipos_propiedad': tipos,
-        'filtro_distrito': distrito,
-        'filtro_tipo': tipo,
-        'filtro_telefono': telefono,
+        'tipos_propiedad': tipos_presentes,
+        'google_maps_api_key': getattr(
+            settings,
+            'GOOGLE_MAPS_API_KEY',
+            'AIzaSyBrL1QF7vTl9zF8FmCUumfRpFJcaYokO7Q',
+        ),
+        'hide_filters': True,
+        'mostrar_todos_marcadores': True,
+        'map_title': 'Mapa de captaciones',
+        'selection_title': 'Captaciones seleccionadas',
+        'entity_singular': 'captación',
+        'entity_plural': 'captaciones',
         'dashboard_stats': {
             'total': len(prospects),
             'geolocated': geolocated,
             'without_gps': len(prospects) - geolocated,
-            'users': len(
-                {
-                    prospect.agent_id or prospect.captured_by_username
-                    for prospect in prospects
-                }
-            ),
+            'users': user_count,
             'with_phone': with_phone,
-            'without_phone': len(prospects) - with_phone,
+            'without_phone': without_phone,
         },
     })

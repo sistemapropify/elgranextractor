@@ -69,6 +69,35 @@
   .prospects-list-btn{display:inline-flex;align-items:center;gap:7px;padding:9px 14px;border-radius:8px;border:1px solid var(--accent-blue);background:rgba(88,166,255,.12);color:var(--accent-blue);font-size:12.5px;font-weight:700;text-decoration:none;white-space:nowrap;}
   .prospects-list-btn:hover{background:var(--accent-blue);color:#0d1117;}
 
+  /* ── Navegación superior: dashboard + mis prospecciones ── */
+  .top-nav {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+  .top-nav .nav-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    line-height: 1;
+    white-space: nowrap;
+    transition: border-color .15s ease, background .15s ease;
+  }
+  .top-nav .nav-btn:hover { border-color: var(--accent-blue); }
+  .top-nav .nav-btn-dashboard { color: var(--accent-blue); }
+  .top-nav .nav-btn-dashboard:hover { background: rgba(88,166,255,.14); }
+  .top-nav .nav-btn-list { color: var(--accent-green-light); }
+  .top-nav .nav-btn-list:hover { background: rgba(63,185,80,.14); border-color: var(--accent-green-light); }
+
   /* ── Status badge ── */
   .status-badge {
     display: inline-flex;
@@ -488,6 +517,49 @@
     /* Se usa inline style position:fixed;opacity:0;pointer-events:none */
   }
 
+  /* ── Selector de ubicación del modo Marketplace (Propitools) ── */
+  .marketplace-location-picker {
+    border: 1px solid rgba(88, 166, 255, 0.35);
+    border-radius: var(--radius-md);
+    background: rgba(88, 166, 255, 0.06);
+    padding: 12px;
+  }
+  .marketplace-search-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .marketplace-search-row button {
+    border: 0;
+    border-radius: var(--radius-sm);
+    padding: 0 16px;
+    min-height: 42px;
+    background: var(--accent-blue);
+    color: #0d1117;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  #marketplace-map {
+    width: 100%;
+    height: 280px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    background: var(--bg-card);
+  }
+  .marketplace-map-help {
+    display: block;
+    margin-top: 8px;
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+  @media (max-width: 480px) {
+    .marketplace-search-row { grid-template-columns: 1fr; }
+    .marketplace-search-row button { min-height: 40px; }
+    #marketplace-map { height: 260px; }
+  }
+
   /* ── Divider ── */
   .divider {
     border: none;
@@ -500,12 +572,21 @@
 {% block content %}
 <div class="prospect-wrapper">
 
+  {# ── NAV SUPERIOR: acceso rápido a dashboard y mis prospecciones ── #}
+  <div class="top-nav">
+    <a href="{% url 'marketing_prospeccion_dashboard' %}" class="nav-btn nav-btn-dashboard" title="Ir al dashboard de prospección">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 20v-6a1 1 0 011-1h4a1 1 0 011 1v6"/><path d="M4 20V10.5a2 2 0 01.9-1.66l6-4a2 2 0 012.2 0l6 4A2 2 0 0120 10.5V20"/><line x1="3" y1="21" x2="21" y2="21"/></svg>
+      Ir al dashboard
+    </a>
+    <a href="{% url 'prospects:list' %}" class="nav-btn nav-btn-list" title="Ver mis prospecciones">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1.3" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="3.5" cy="18" r="1.3" fill="currentColor" stroke="none"/></svg>
+      Mis prospecciones
+    </a>
+  </div>
+
   {# ── HEADER ── #}
   <div class="page-header">
     <div>
-      <a href="{% url 'prospects:list' %}" class="back-link">
-        ← Mis prospectos
-      </a>
       <h1>
         {% if mode == 'detail' %}
           Prospecto #{{ prospect.pk }}
@@ -516,7 +597,6 @@
     </div>
     <div style="display:flex;align-items:center;gap:10px;">
       {% if mode == 'detail' %}<span class="status-badge status-{{ prospect.status }}">{{ prospect.get_status_display }}</span>{% endif %}
-      <a href="{% url 'prospects:list' %}" class="prospects-list-btn">☷ Ver lista de prospectos</a>
     </div>
   </div>
 
@@ -536,7 +616,7 @@
              style="cursor:pointer;">
 
           {% if mode == 'detail' and prospect.photo %}
-            <img id="photo-preview" src="{{ prospect.photo.url }}" alt="Foto del anuncio" style="width:100%;border-radius:10px;">
+            <img id="photo-preview" src="{{ photo_url|default:prospect.photo.url }}" alt="Foto del anuncio" style="width:100%;border-radius:10px;">
           {% else %}
             <div class="photo-placeholder" id="photo-placeholder">
               <div class="photo-icon">
@@ -595,7 +675,7 @@
           <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
           <circle cx="12" cy="13" r="4"/>
         </svg>
-        Guardar foto + GPS
+        Guardar prospecto
       </button>
       {% endif %}
 
@@ -654,9 +734,23 @@
     {# ══ COLUMNA DERECHA: Formulario de datos ══ #}
     <div>
       <form method="POST"
+            enctype="multipart/form-data"
             action="{% if mode == 'detail' %}{% url 'prospects:detail' prospect.pk %}{% else %}#{% endif %}"
             id="prospect-form">
         {% csrf_token %}
+        {% if mode == 'detail' %}
+        <input type="file" id="id_photo_edit" name="photo" accept="image/*" style="display:none;">
+        {% endif %}
+        {% if mode == 'detail' and form.errors %}
+        <div style="background:rgba(248,81,73,.12);border:1px solid #f85149;color:#f85149;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:13px;">
+          <strong>No se pudieron guardar los cambios:</strong>
+          <ul style="margin:6px 0 0 0;padding-left:18px;">
+            {% for field, errs in form.errors.items %}
+              <li>{{ field }}: {{ errs|join:", " }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
 
         <div class="card" style="margin-bottom:14px;">
           <div class="card-title">Origen</div>
@@ -734,10 +828,10 @@
             <label for="id_property_type">Tipo de inmueble</label>
             <select id="id_property_type" name="property_type">
               <option value="">— Seleccionar —</option>
-              {% for item in property_types %}
-                <option value="{{ item.value }}"
-                  {% if form.property_type.value == item.value %}selected{% endif %}>
-                  {{ item.name }}
+              {% for val, label in property_types %}
+                <option value="{{ val }}"
+                  {% if form.property_type.value == val %}selected{% endif %}>
+                  {{ label }}
                 </option>
               {% endfor %}
             </select>
@@ -779,6 +873,18 @@
           <div class="card-title">Ubicación</div>
           <div class="field-grid">
 
+            <div class="field-group full marketplace-location-picker" id="marketplace-location-picker" style="display:none;">
+              <label for="marketplace-location-search">Ubicación del inmueble</label>
+              <div class="marketplace-search-row">
+                <input type="search" id="marketplace-location-search"
+                       placeholder="Dirección, distrito o urbanización"
+                       autocomplete="off">
+                <button type="button" onclick="searchMarketplaceLocation()">Buscar</button>
+              </div>
+              <div id="marketplace-map" aria-label="Mapa para elegir la ubicación del inmueble"></div>
+              <small class="marketplace-map-help">Toca el mapa para mover el marcador con precisión.</small>
+            </div>
+
             <div class="field-group full">
               <label for="id_zone">Zona</label>
               <input type="text" id="id_zone" name="zone" value="{{ form.zone.value|default:'' }}" placeholder="Urbanización, sector o referencia">
@@ -808,6 +914,8 @@
                   — se captura al guardar —
                 {% endif %}
               </div>
+              <input type="hidden" id="lat-input" name="latitude" value="{% if mode == 'detail' and prospect.latitude is not None %}{{ prospect.latitude }}{% else %}{{ form.latitude.value|default:'' }}{% endif %}">
+              <input type="hidden" id="lng-input" name="longitude" value="{% if mode == 'detail' and prospect.longitude is not None %}{{ prospect.longitude }}{% else %}{{ form.longitude.value|default:'' }}{% endif %}">
             </div>
 
           </div>
@@ -865,10 +973,6 @@
 {# ── TOAST ── #}
 <div class="toast-container" id="toast-container"></div>
 
-{# ── Inputs ocultos GPS #}
-<input type="hidden" id="lat-input" value="">
-<input type="hidden" id="lng-input" value="">
-
 {% endblock %}
 
 
@@ -879,72 +983,288 @@
   const CAPTURE_URL  = "{% url 'prospects:capture' %}";
   const CSRF_TOKEN   = "{{ csrf_token }}";
 
-  // ── GPS ──────────────────────────────────────────────────────
-  let gpsLat = null, gpsLng = null;
-  let gpsRequest = null;
+  // ── Aviso centrado: se adjunta al <body> para que SIEMPRE salga al centro
+  //    y por encima de todo (sin depender del contenedor/transform de la página) ──
+  var _avisoOverlay = null;
+  function _crearAviso() {
+    if (_avisoOverlay) return _avisoOverlay;
+    var ov = document.createElement('div');
+    ov.id = 'aviso-overlay';
+    ov.setAttribute('style',
+      'display:none; position:fixed; top:0; left:0; right:0; bottom:0; ' +
+      'background:rgba(0,0,0,.68); z-index:999999; align-items:center; justify-content:center; padding:16px;');
+    ov.innerHTML =
+      '<div style="background:#1c2128; border:1px solid #f85149; border-radius:14px; ' +
+      'max-width:440px; width:100%; padding:24px 22px; text-align:center; ' +
+      'box-shadow:0 10px 40px rgba(0,0,0,.5); color:#e6edf3;">' +
+      '<div style="font-size:36px; line-height:1; margin-bottom:10px;">&#9888;&#65039;</div>' +
+      '<div style="font-size:17px; font-weight:700; margin-bottom:8px;">Enlace obligatorio</div>' +
+      '<div id="aviso-overlay-msg" style="font-size:14px; color:#c9d1d9; line-height:1.5; margin-bottom:18px;"></div>' +
+      '<button type="button" id="aviso-overlay-btn" style="background:#f85149; color:#fff; border:none; ' +
+      'border-radius:8px; padding:10px 22px; font-size:14px; font-weight:700; cursor:pointer;">Entendido</button>' +
+      '</div>';
+    ov.addEventListener('click', function (e) {
+      if (e.target === ov) ov.style.display = 'none';
+    });
+    ov.querySelector('#aviso-overlay-btn').addEventListener('click', function () {
+      ov.style.display = 'none';
+    });
+    document.body.appendChild(ov);
+    _avisoOverlay = ov;
+    return ov;
+  }
+  function mostrarAvisoCentrado(msg) {
+    var ov = _crearAviso();
+    var m = ov.querySelector('#aviso-overlay-msg');
+    if (m) m.textContent = msg || '';
+    ov.style.display = 'flex';
+  }
+
+  // Edición: si Marketplace y falta el enlace, mostrar aviso centrado y NO enviar.
+  if (typeof PROSPECT_ID !== 'undefined' && PROSPECT_ID) {
+    var _pfEdit = document.getElementById('prospect-form');
+    if (_pfEdit) {
+      _pfEdit.addEventListener('submit', function (ev) {
+        var o = (document.getElementById('id_origin') || {}).value;
+        var u = document.getElementById('id_marketplace_url');
+        if (o === 'marketplace' && (!u || !String(u.value || '').trim())) {
+          ev.preventDefault();
+          mostrarAvisoCentrado('Es obligatorio guardar el enlace del anuncio para poder guardar.');
+        }
+      });
+    }
+  }
+
+  // ── GPS y mapa Marketplace (mismo comportamiento que Propitools) ──
+  let gpsLat = document.getElementById('lat-input')?.value || null;
+  let gpsLng = document.getElementById('lng-input')?.value || null;
+  let gpsRequested = false;
+  let marketplaceMap = null;
+  let marketplaceMarker = null;
+  let marketplaceAutocomplete = null;
+  let marketplaceGeocoder = null;
+  var gpsTimeout = null;
 
   function toggleOriginFields() {
     var origin = document.getElementById('id_origin')?.value;
     var other = document.getElementById('origin-other-group');
     var market = document.getElementById('marketplace-url-group');
+    var picker = document.getElementById('marketplace-location-picker');
+    var usesMap = origin === 'marketplace' || origin === 'otros';
     if (other) other.style.display = origin === 'otros' ? 'block' : 'none';
     if (market) market.style.display = origin === 'marketplace' ? 'block' : 'none';
-  }
-  document.addEventListener('DOMContentLoaded', toggleOriginFields);
+    if (picker) picker.style.display = usesMap ? 'block' : 'none';
 
-  function applyGPSPosition(pos) {
-    gpsLat = pos.coords.latitude.toFixed(7);
-    gpsLng = pos.coords.longitude.toFixed(7);
+    if (usesMap) {
+      if (gpsLat && gpsLng) {
+        setSelectedCoordinates(gpsLat, gpsLng, 'Ubicación seleccionada en el mapa');
+      } else {
+        setGPSStatus('Selecciona la ubicación en el mapa', false);
+      }
+      if (window.google?.maps) {
+        var mapEl = document.getElementById('marketplace-map');
+        var visible = Boolean(mapEl && mapEl.clientWidth > 0 && mapEl.clientHeight > 0);
+        if (visible && !marketplaceMap && typeof initMarketplaceMap === 'function') {
+          try { initMarketplaceMap(); } catch (e) { console.error('init map:', e); }
+        } else if (marketplaceMap) {
+          // Si el mapa existe pero quedó creado oculto (tamaño 0), se recrea.
+          var divOk = marketplaceMap.getDiv && marketplaceMap.getDiv().clientWidth > 0;
+          if (!divOk) {
+            try {
+              marketplaceMap = null;
+              marketplaceMarker = null;
+              marketplaceAutocomplete = null;
+              if (typeof initMarketplaceMap === 'function') initMarketplaceMap();
+            } catch (e) { console.error('reinit map:', e); }
+          } else {
+            google.maps.event.trigger(marketplaceMap, 'resize');
+            if (gpsLat && gpsLng) {
+              const position = {lat: Number(gpsLat), lng: Number(gpsLng)};
+              marketplaceMap.setCenter(position);
+              marketplaceMarker.setPosition(position);
+            }
+          }
+        }
+        // Asegurar que el mapa repinte una vez que su contenedor es visible
+        setTimeout(function () {
+          if (marketplaceMap && window.google?.maps) {
+            google.maps.event.trigger(marketplaceMap, 'resize');
+          }
+        }, 250);
+      }
+    } else if (origin === 'calle') {
+      initGPS();
+    } else {
+      setGPSStatus('Selecciona el origen', false);
+    }
+    checkCaptureReady();
+  }
+
+  function setSelectedCoordinates(lat, lng, statusText) {
+    var numLat = Number(lat);
+    var numLng = Number(lng);
+    // Nunca escribir NaN: si las coordenadas no son válidas se ignora
+    // (en modo edición se conservan las que ya están en el formulario).
+    if (!isFinite(numLat) || !isFinite(numLng)) {
+      setGPSStatus('Ubicación inválida', false);
+      return;
+    }
+    gpsLat = numLat.toFixed(7);
+    gpsLng = numLng.toFixed(7);
     var latInput = document.getElementById('lat-input');
     var lngInput = document.getElementById('lng-input');
     if (latInput) latInput.value = gpsLat;
     if (lngInput) lngInput.value = gpsLng;
     var dot = document.getElementById('gps-dot');
     if (dot) dot.classList.add('active');
-    var text = document.getElementById('gps-text');
-    if (text) text.textContent = 'Ubicación real capturada';
+    setGPSStatus(statusText || 'GPS capturado', true);
     var coords = document.getElementById('gps-coords');
     if (coords) coords.textContent = gpsLat + ', ' + gpsLng;
     var display = document.getElementById('coords-display');
     if (display) display.textContent = gpsLat + ', ' + gpsLng;
-    checkCaptureReady();
-  }
-
-  function gpsErrorMessage(err) {
-    if (err && err.code === 1) return 'Permiso de ubicación denegado';
-    if (err && err.code === 2) return 'No se pudo determinar tu ubicación';
-    if (err && err.code === 3) return 'El GPS tardó demasiado; vuelve a intentar';
-    return 'GPS no disponible';
-  }
-
-  function requestGPS() {
-    if (!navigator.geolocation) {
-      setGPSStatus('GPS no disponible', false);
-      return Promise.reject(new Error('Geolocalización no disponible'));
-    }
-
-    if (gpsRequest) return gpsRequest;
-    setGPSStatus('Solicitando permiso de ubicación...', false);
-    gpsRequest = new Promise(function(resolve, reject) {
-      navigator.geolocation.getCurrentPosition(
-        function(pos) {
-          applyGPSPosition(pos);
-          resolve(pos);
-        },
-        function(err) {
-          setGPSStatus(gpsErrorMessage(err), false);
-          checkCaptureReady();
-          reject(err);
-        },
-        { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
-      );
-    }).finally(function() { gpsRequest = null; });
-    return gpsRequest;
   }
 
   function initGPS() {
-    // Esta llamada al abrir la pantalla dispara el permiso nativo del navegador.
-    requestGPS().catch(function() {});
+    if (gpsLat && gpsLng) {
+      setSelectedCoordinates(gpsLat, gpsLng, 'GPS capturado');
+      return;
+    }
+    if (gpsRequested) return;
+    gpsRequested = true;
+    if (!navigator.geolocation) {
+      setGPSStatus('GPS no disponible', false);
+      return;
+    }
+    
+    // Timeout de seguridad: si GPS no responde en 5s, continuar igual
+    gpsTimeout = setTimeout(function() {
+      setGPSStatus('GPS no disponible', false);
+      checkCaptureReady();
+    }, 5000);
+    
+    navigator.geolocation.getCurrentPosition(
+      function(pos) {
+        clearTimeout(gpsTimeout);
+        setSelectedCoordinates(pos.coords.latitude, pos.coords.longitude, 'GPS capturado');
+        checkCaptureReady();
+      },
+      function(err) {
+        clearTimeout(gpsTimeout);
+        setGPSStatus('GPS no disponible', false);
+        checkCaptureReady();
+      },
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  }
+
+  function updateMarketplacePosition(position, formattedAddress = '') {
+    if (!position) return;
+    const lat = typeof position.lat === 'function' ? position.lat() : position.lat;
+    const lng = typeof position.lng === 'function' ? position.lng() : position.lng;
+    const point = {lat: Number(lat), lng: Number(lng)};
+    marketplaceMarker?.setPosition(point);
+    setSelectedCoordinates(point.lat, point.lng, 'Ubicación seleccionada en el mapa');
+    if (formattedAddress) {
+      const addressInput = document.getElementById('id_address');
+      if (addressInput) addressInput.value = formattedAddress;
+    }
+  }
+
+  function initMarketplaceMap() {
+    const mapElement = document.getElementById('marketplace-map');
+    if (!mapElement || !window.google?.maps) return;
+    // Nunca usar NaN: si las coordenadas no son números finitos, centro por defecto.
+    const numLat = Number(gpsLat);
+    const numLng = Number(gpsLng);
+    const hasCoordinates = isFinite(numLat) && isFinite(numLng);
+    const initialPosition = hasCoordinates
+      ? {lat: numLat, lng: numLng}
+      : {lat: -16.3989, lng: -71.5350};
+
+    marketplaceMap = new google.maps.Map(mapElement, {
+      center: initialPosition,
+      zoom: hasCoordinates ? 17 : 13,
+      mapTypeControl: false,
+      streetViewControl: false,
+      fullscreenControl: false,
+      gestureHandling: 'greedy',
+    });
+    marketplaceMarker = new google.maps.Marker({
+      map: marketplaceMap,
+      position: initialPosition,
+      title: 'Ubicación del inmueble',
+      draggable: true,
+    });
+    marketplaceGeocoder = new google.maps.Geocoder();
+    marketplaceMap.addListener('click', event => updateMarketplacePosition(event.latLng));
+    marketplaceMarker.addListener('dragend', event => updateMarketplacePosition(event.latLng));
+
+    // Mostrar el marcador de inmediato (con las coordenadas ya guardadas, si las hay)
+    if (gpsLat && gpsLng) {
+      const pos = {lat: Number(gpsLat), lng: Number(gpsLng)};
+      if (isFinite(pos.lat) && isFinite(pos.lng)) {
+        marketplaceMap.setCenter(pos);
+        marketplaceMap.setZoom(17);
+        marketplaceMarker.setPosition(pos);
+      }
+    }
+    // Asegurar que el mapa pinte apenas se crea (aunque el contenedor se haya mostrado recién)
+    if (window.google?.maps) {
+      google.maps.event.trigger(marketplaceMap, 'resize');
+    }
+
+    const searchInput = document.getElementById('marketplace-location-search');
+    if (searchInput && google.maps.places) {
+      marketplaceAutocomplete = new google.maps.places.Autocomplete(searchInput, {
+        componentRestrictions: {country: 'pe'},
+        fields: ['formatted_address', 'geometry', 'name'],
+      });
+      marketplaceAutocomplete.addListener('place_changed', function() {
+        const place = marketplaceAutocomplete.getPlace();
+        if (!place.geometry?.location) return;
+        marketplaceMap.setCenter(place.geometry.location);
+        marketplaceMap.setZoom(17);
+        updateMarketplacePosition(
+          place.geometry.location,
+          place.formatted_address || place.name || searchInput.value
+        );
+      });
+      searchInput.addEventListener('keydown', function(event) {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          searchMarketplaceLocation();
+        }
+      });
+    }
+    toggleOriginFields();
+  }
+  window.initMarketplaceMap = initMarketplaceMap;
+
+  function searchMarketplaceLocation() {
+    const searchInput = document.getElementById('marketplace-location-search');
+    const query = searchInput?.value.trim();
+    if (!query || query.length < 3) {
+      showToast('Escribe al menos 3 caracteres para buscar', 'error');
+      return;
+    }
+    if (!marketplaceGeocoder) {
+      showToast('El mapa todavía está cargando', 'error');
+      return;
+    }
+    marketplaceGeocoder.geocode(
+      {address: query + ', Arequipa, Perú', componentRestrictions: {country: 'PE'}},
+      function(results, status) {
+        if (status !== 'OK' || !results?.length) {
+          showToast('No se encontró esa ubicación', 'error');
+          return;
+        }
+        const result = results[0];
+        searchInput.value = result.formatted_address;
+        marketplaceMap.setCenter(result.geometry.location);
+        marketplaceMap.setZoom(17);
+        updateMarketplacePosition(result.geometry.location, result.formatted_address);
+      }
+    );
   }
 
   // ── CÁMARA: abrir input file ─────────────────────────────────
@@ -958,10 +1278,8 @@
   function setGPSStatus(text, ok) {
     var el = document.getElementById('gps-text');
     if (el) el.textContent = text;
-    if (ok) {
-      var dot = document.getElementById('gps-dot');
-      if (dot) dot.classList.add('active');
-    }
+    var dot = document.getElementById('gps-dot');
+    if (dot) dot.classList.toggle('active', Boolean(ok));
   }
 
   // ── FOTO: preview al seleccionar ──────────────────────────────
@@ -982,57 +1300,71 @@
       var zone = document.getElementById('photo-zone');
       if (zone) zone.classList.add('has-photo');
       photoSelected = true;
+      // En modo edición, sincronizar el archivo con el input real del formulario
+      var editFile = document.getElementById('id_photo_edit');
+      if (editFile && file) {
+        try {
+          var dt = new DataTransfer();
+          dt.items.add(file);
+          editFile.files = dt.files;
+        } catch (err) { /* algunos navegadores no permiten asignar archivos */ }
+      }
       checkCaptureReady();
-      // Actualiza la ubicación para asociar la foto al punto real de captura.
-      requestGPS().catch(function() {
-        showToast('Activa la ubicación para poder guardar la foto', 'error');
-      });
     });
   }
 
-  // ── Foto y GPS son obligatorios para una captura nueva ──
+  // ── Igual que Propitools: foto opcional, origen obligatorio ──
   function checkCaptureReady() {
+    // Botón siempre habilitado: la validación (origen/enlace) muestra el aviso.
     var btn = document.getElementById('btn-capture-save');
-    if (btn) btn.disabled = !photoSelected || !gpsLat || !gpsLng;
+    if (btn) btn.disabled = false;
   }
 
-  // ── GUARDAR FOTO + GPS (nueva captura) ───────────────────────
+  // ── Guardar la captura completa en prospects_propertyprospect ──
   async function captureAndSave() {
     const fileInput = document.getElementById('photo-input');
-    if (!fileInput.files[0]) { showToast('Primero toma una foto', 'error'); return; }
-
-    try {
-      // Obtiene una lectura nueva inmediatamente antes de guardar.
-      await requestGPS();
-    } catch (e) {
-      showToast('Debes permitir la ubicación GPS para guardar', 'error');
+    const form = document.getElementById('prospect-form');
+    const origin = document.getElementById('id_origin')?.value;
+    if (!origin) {
+      mostrarAvisoCentrado('Debes seleccionar el origen de la prospección para poder guardar.');
       return;
+    }
+    // Marketplace: obligatorio indicar el enlace del anuncio
+    if (origin === 'marketplace') {
+      const mUrl = document.getElementById('id_marketplace_url');
+      if (!mUrl || !String(mUrl.value || '').trim()) {
+        mostrarAvisoCentrado('Es obligatorio guardar el enlace del anuncio para poder guardar.');
+        return;
+      }
     }
 
     const btn = document.getElementById('btn-capture-save');
     btn.disabled = true;
     btn.textContent = 'Guardando...';
 
-    const fd = new FormData();
-    fd.append('photo', fileInput.files[0]);
-    fd.append('latitude', gpsLat || '');
-    fd.append('longitude', gpsLng || '');
-    fd.append('csrfmiddlewaretoken', CSRF_TOKEN);
+    const fd = new FormData(form);
+    if (fileInput?.files[0]) fd.set('photo', fileInput.files[0]);
+    fd.set('latitude', gpsLat || '');
+    fd.set('longitude', gpsLng || '');
 
     try {
       const res = await fetch(CAPTURE_URL, { method: 'POST', body: fd });
-      const data = await res.json();
+      const contentType = res.headers.get('content-type') || '';
+      const data = contentType.includes('application/json')
+        ? await res.json()
+        : {ok: false, error: `El servidor devolvió un error ${res.status}.`};
       if (data.ok) {
         showToast('Prospecto guardado', 'success');
         setTimeout(() => { window.location.href = data.redirect_url; }, 800);
       } else {
         showToast(data.error || 'Error al guardar', 'error');
         btn.disabled = false;
-        btn.textContent = 'Guardar foto + GPS';
+        btn.textContent = 'Guardar prospecto';
       }
     } catch(e) {
-      showToast('Error de conexión', 'error');
+      showToast('No se pudo completar el guardado: ' + e.message, 'error');
       btn.disabled = false;
+      btn.textContent = 'Guardar prospecto';
     }
   }
 
@@ -1119,7 +1451,10 @@
   }
 
   // ── Init ─────────────────────────────────────────────────────
-  initGPS();
-  
+  document.addEventListener('DOMContentLoaded', toggleOriginFields);
+
 </script>
+{% if google_maps_api_key %}
+<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&libraries=places&callback=initMarketplaceMap&loading=async" async defer></script>
+{% endif %}
 {% endblock %}

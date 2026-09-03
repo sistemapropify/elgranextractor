@@ -19,21 +19,29 @@ class MobileAppVersion(models.Model):
         verbose_name = 'Versión de propitools'
         verbose_name_plural = 'Versiones de propitools'
 
-    def __str__(self):
-        return f'{self.version_name or self.version_code} ({self.version_code})'
-
 
 class MobileProspectUser(models.Model):
+    """Identidad de Propify usada por el módulo de prospección.
+
+    No es un usuario de Prometeo. Solo conserva la referencia mínima necesaria
+    para asociar capturas realizadas desde la APK o desde la vista web.
+    """
+
     username = models.CharField(max_length=150, unique=True)
     propify_user_id = models.CharField(max_length=100, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    can_view_crm_alerts = models.BooleanField(default=False, verbose_name='Supervisor de alertas CRM')
+    can_view_crm_alerts = models.BooleanField(
+        default=False,
+        verbose_name='Supervisor de alertas CRM',
+    )
 
     def __str__(self):
         return self.username
 
 
 class MobileProspectSession(models.Model):
+    """Sesiones antiguas conservadas solo por compatibilidad de esquema."""
+
     user = models.ForeignKey(MobileProspectUser, on_delete=models.CASCADE, related_name='sessions')
     token_hash = models.CharField(max_length=64, unique=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -63,7 +71,12 @@ class CrmVisitIntentAlert(models.Model):
 
     class Meta:
         ordering = ['-detected_at']
-        constraints = [models.UniqueConstraint(fields=['source_lead_id', 'detected_at'], name='unique_crm_visit_intent_alert')]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['source_lead_id', 'detected_at'],
+                name='unique_crm_visit_intent_alert',
+            )
+        ]
 
 
 class MobileNotificationDevice(models.Model):
@@ -71,9 +84,17 @@ class MobileNotificationDevice(models.Model):
         FID = 'fid', 'Firebase Installation ID'
         TOKEN = 'token', 'Token heredado'
 
-    user = models.ForeignKey(MobileProspectUser, on_delete=models.CASCADE, related_name='notification_devices')
+    user = models.ForeignKey(
+        MobileProspectUser,
+        on_delete=models.CASCADE,
+        related_name='notification_devices',
+    )
     registration_id = models.CharField(max_length=512, unique=True)
-    target_type = models.CharField(max_length=10, choices=TargetType.choices, default=TargetType.FID)
+    target_type = models.CharField(
+        max_length=10,
+        choices=TargetType.choices,
+        default=TargetType.FID,
+    )
     device_name = models.CharField(max_length=200, blank=True)
     active = models.BooleanField(default=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -121,6 +142,14 @@ class PropertyProspect(models.Model):
         null=True,
         blank=True,
     )
+    mobile_user = models.ForeignKey(
+        MobileProspectUser,
+        on_delete=models.SET_NULL,
+        related_name='prospects',
+        null=True,
+        blank=True,
+        verbose_name='Usuario móvil',
+    )
 
     # ── Foto ────────────────────────────────────────────────────
     photo = models.ImageField(
@@ -128,14 +157,8 @@ class PropertyProspect(models.Model):
         blank=True,
         verbose_name='Foto del anuncio',
     )
-    mobile_user = models.ForeignKey(
-        MobileProspectUser,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='prospects',
-        verbose_name='Usuario móvil',
-    )
+    # Esta columna ya existe en la base compartida por la migración de la APK.
+    # También debe estar en el modelo web para que el INSERT nunca envíe NULL.
     captured_by_username = models.CharField(
         max_length=150,
         blank=True,

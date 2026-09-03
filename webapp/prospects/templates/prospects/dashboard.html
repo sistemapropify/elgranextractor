@@ -1,116 +1,644 @@
-{% extends "acm_base_moderno.html" %}
-{% load static %}
+{% extends "ingestas/lista_propiedades_rediseno.html" %}
+
 {% block title %}Dashboard de Prospección — Propifai{% endblock %}
+
 {% block extra_css %}
 {{ block.super }}
 <style>
-  /* Pantalla completa: sin menú lateral global (como la lista de prospección). */
-  .app-sidebar, .sidebar-overlay, .sidebar-toggle-desktop, .mobile-menu-btn { display: none !important; }
-  .main-content { width: 100% !important; max-width: none !important; }
-  .content-area { width: 100% !important; max-width: none !important; }
+    .portal-container {
+        box-sizing: border-box;
+        gap: 16px;
+        margin: 0;
+        padding: 16px;
+    }
 
-  :root {
-    --bg-body: #0d1117; --bg-card: #161b22; --border-color: #30363d;
-    --text-primary: #e6edf3; --text-secondary: #8b949e; --accent-blue: #58a6ff;
-  }
-  body { background: var(--bg-body); color: var(--text-primary); }
-  .pr-wrap { padding: 18px; }
-  .pr-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 14px; }
-  .pr-head h1 { font-size: 1.35rem; margin: 0 0 4px; }
-  .pr-head p { color: var(--text-secondary); font-size: .8rem; margin: 0; }
-  .pr-stats { display: grid; gap: 10px; grid-template-columns: repeat(6, minmax(130px, 1fr)); margin-bottom: 14px; }
-  .pr-stat { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px 14px; }
-  .pr-stat b { display: block; color: var(--text-primary); font-size: 1.35rem; line-height: 1.1; }
-  .pr-stat span { color: var(--text-secondary); font-size: .68rem; text-transform: uppercase; }
-  .pr-stat.is-btn { cursor: pointer; border-color: var(--border-color); text-align: left; }
-  .pr-stat.is-active { border-color: var(--accent-blue); box-shadow: 0 0 0 1px var(--accent-blue); }
-  .pr-filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-bottom: 14px; }
-  .pr-filters label { color: var(--text-secondary); display: block; font-size: .68rem; text-transform: uppercase; }
-  .pr-filters select, .pr-filters button { background: #0d1117; border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary); font: inherit; font-size: .8rem; padding: 7px 10px; }
-  .pr-btn { background: #238636; border: 1px solid #2ea043; border-radius: 8px; color: #fff; cursor: pointer; font-size: .8rem; font-weight: 700; padding: 7px 14px; }
-  .pr-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
-  .pr-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; display: grid; gap: 8px; padding: 12px; }
-  .pr-card img { border-radius: 8px; height: 130px; object-fit: cover; width: 100%; }
-  .pr-card h3 { font-size: .95rem; margin: 0; }
-  .pr-card p { color: var(--text-secondary); font-size: .75rem; line-height: 1.4; margin: 0; }
-  .pr-tags { display: flex; flex-wrap: wrap; gap: 6px; }
-  .pr-tag { background: rgba(88,166,255,.12); border: 1px solid #1f6feb; border-radius: 999px; color: #79c0ff; font-size: .68rem; padding: 3px 9px; }
-  .pr-tag.phone { background: rgba(63,185,80,.12); border-color: #2ea043; color: #7ee787; }
-  .pr-tag.no-phone { background: rgba(248,81,73,.12); border-color: #f85149; color: #ffa198; }
-  .pr-empty { color: var(--text-secondary); padding: 34px; text-align: center; }
-  @media (max-width: 900px) { .pr-stats { grid-template-columns: repeat(3, 1fr); } }
-  @media (max-width: 560px) { .pr-stats { grid-template-columns: repeat(2, 1fr); } }
+    .capture-toolbar {
+        display: flex;
+        align-items: stretch;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 0;
+    }
+
+    .capture-stats {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(110px, 1fr));
+        gap: 8px;
+        flex: 1;
+    }
+
+    .capture-stat {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        padding: 10px 14px;
+    }
+    .capture-stat--btn {
+        cursor: pointer;
+        text-align: left;
+        font-family: inherit;
+        font-size: inherit;
+        color: inherit;
+        width: 100%;
+    }
+    .capture-stat.is-active {
+        border-color: var(--accent-blue, #58a6ff);
+        box-shadow: 0 0 0 1px var(--accent-blue, #58a6ff);
+        background: rgba(88, 166, 255, 0.08);
+    }
+    .capture-stat.is-active .capture-stat__label {
+        color: var(--accent-blue, #58a6ff);
+    }
+    /* Ocultar el botón "Limpiar" del encabezado del panel: el filtro ya tiene su propio limpiar */
+    #btn-clear-selection { display: none !important; }
+
+    .capture-stat__value {
+        color: var(--text-primary);
+        display: block;
+        font-size: 1.05rem;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+
+    .capture-stat__label {
+        color: var(--text-secondary);
+        font-size: 0.68rem;
+        text-transform: uppercase;
+    }
+
+    .btn-new-capture {
+        align-items: center;
+        display: inline-flex;
+        gap: 7px;
+        justify-content: center;
+        min-width: 190px;
+        white-space: nowrap;
+        border-radius: 10px;
+        padding-inline: 20px;
+    }
+
+    .portal-body {
+        gap: 16px;
+    }
+
+    .map-section,
+    .properties-section {
+        flex: 1 1 calc(50% - 8px);
+        width: calc(50% - 8px);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        overflow: hidden;
+    }
+
+    .map-section {
+        border-right: 1px solid var(--border-color);
+    }
+
+    .map-header,
+    .properties-header {
+        padding: 10px 14px;
+    }
+
+    .map-container {
+        background: var(--bg-card);
+        padding: 10px;
+    }
+
+    #propertyMap {
+        border: 1px solid var(--border-color);
+        border-radius: 9px;
+        overflow: hidden;
+    }
+
+    .properties-container {
+        gap: 12px;
+        padding: 12px;
+    }
+
+    .property-card {
+        border-radius: 10px;
+        padding: 14px;
+    }
+
+    @media (max-width: 900px) {
+        .portal-container {
+            gap: 12px;
+            height: auto;
+            margin: 0;
+            min-height: calc(100vh - var(--header-height, 60px) - 32px);
+            overflow: visible;
+            padding: 12px;
+        }
+        .capture-toolbar { flex-direction: column; }
+        .capture-stats { grid-template-columns: repeat(2, 1fr); }
+        .btn-new-capture { min-height: 42px; width: 100%; }
+        .portal-body { gap: 12px; overflow: visible; }
+        .map-section,
+        .properties-section {
+            flex: 1 1 auto;
+            width: 100%;
+        }
+    }
+
+    /* ===== Dashboard de prospección a pantalla completa: sin menú lateral ===== */
+    .app-sidebar,
+    .sidebar-overlay,
+    .sidebar-toggle-desktop,
+    .mobile-menu-btn { display: none !important; }
+    .main-content { width: 100% !important; max-width: none !important; margin-left: 0 !important; }
+    .content-area { width: 100% !important; max-width: none !important; }
+
+    /* ===== Filtros por desplegable (debajo de las tarjetas) ===== */
+    .capture-filters {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        gap: 12px;
+        margin-top: 14px;
+        padding: 12px 14px;
+        background: var(--bg-card, #161b22);
+        border: 1px solid var(--border-color, #30363d);
+        border-radius: 10px;
+    }
+    .capture-filters__field {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+    .capture-filters__field label {
+        font-size: 0.66rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--text-secondary, #8b949e);
+    }
+    .capture-filters__field select {
+        min-width: 210px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid var(--border-color, #30363d);
+        background: var(--bg-card, #161b22);
+        color: var(--text-primary, #e6edf3);
+        font-size: 0.85rem;
+        font-weight: 500;
+        text-transform: none;
+        letter-spacing: normal;
+    }
+    .capture-filters__field select:focus {
+        outline: none;
+        border-color: var(--accent-blue, #58a6ff);
+        box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.25);
+    }
+    @media (max-width: 600px) {
+        .capture-filters__field select { min-width: 0; width: 100%; }
+        .capture-filters__field { flex: 1 1 45%; }
+    }
+
+    /* ── Panel Captaciones seleccionadas: tarjeta clicable, sin botones ── */
+    #selected-property .selected-card { cursor: pointer; }
+    #selected-property .selected-card .btn-remove-card,
+    #selected-property .selected-card .btn-external { display: none !important; }
+    /* Detalle expandido: a TODO el ancho de la tarjeta, en rejilla de campos */
+    .prospect-detail-inline {
+        display: none;
+        border-top: 1px solid var(--border-color, #30363d);
+        margin-top: 10px;
+        padding-top: 10px;
+    }
+    .prospect-detail-inline.open {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+        gap: 8px 18px;
+    }
+    .prospect-detail-inline .ppc-field {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        min-width: 0;
+    }
+    .ppc-k {
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        color: var(--text-secondary, #8b949e);
+    }
+    .ppc-v {
+        font-size: 13px;
+        color: var(--text-primary, #e6edf3);
+        word-break: break-word;
+    }
+    .ppc-link {
+        color: var(--accent-blue, #58a6ff);
+        text-decoration: none;
+    }
+    .ppc-link:hover { text-decoration: underline; }
+    .ppc-edit-btn {
+        grid-column: 1 / -1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: 8px;
+        padding: 10px 16px;
+        border-radius: 8px;
+        border: 1px solid var(--accent-blue, #58a6ff);
+        color: #0d1117;
+        background: var(--accent-blue, #58a6ff);
+        font-size: 13px;
+        font-weight: 700;
+        text-decoration: none;
+        cursor: pointer;
+    }
+    .ppc-edit-btn:hover { filter: brightness(1.12); }
+
+    /* ── Tarjetas propias del panel de captaciones (todas, expandibles) ── */
+    #selected-property .prospect-panel-card {
+        border: 1px solid var(--border-color, #30363d);
+        border-radius: 10px;
+        background: var(--bg-card, #161b22);
+        padding: 10px 12px;
+        margin-bottom: 8px;
+        cursor: pointer;
+    }
+    #selected-property .prospect-panel-card:hover { border-color: var(--accent-blue, #58a6ff); }
+    .ppc-summary { display: flex; gap: 12px; align-items: flex-start; }
+    .ppc-thumb {
+        width: 84px;
+        height: 84px;
+        object-fit: cover;
+        border-radius: 8px;
+        flex-shrink: 0;
+        background: var(--bg-primary, #0d1117);
+    }
+    .ppc-thumb-empty {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-subtle, #484f58);
+        font-size: 10px;
+    }
+    .ppc-info { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+    .ppc-title { font-weight: 700; color: var(--text-primary, #e6edf3); font-size: 13px; }
+    .ppc-sub { color: var(--text-secondary, #8b949e); font-size: 12px; }
+    .ppc-price { color: var(--accent-green-light, #3fb950); font-size: 13px; font-weight: 700; }
+    .ppc-status { font-size: 11px; color: var(--text-secondary, #8b949e); }
+    .ppc-hint { color: var(--text-subtle, #484f58); font-size: 10px; margin-top: 2px; }
 </style>
 {% endblock %}
-{% block content %}
-<div class="pr-wrap">
-  <div class="pr-head">
-    <div>
-      <h1>Dashboard de Prospección</h1>
-      <p>Captaciones de todos los agentes (fotos, teléfono, GPS y estado).</p>
-    </div>
-  </div>
 
-  <form class="pr-filters" method="get">
-    <div>
-      <label>Distrito</label>
-      <select name="distrito">
-        <option value="">Todos</option>
-        {% for d in distritos_arequipa %}<option value="{{ d }}"{% if filtro_distrito == d %} selected{% endif %}>{{ d }}</option>{% endfor %}
-      </select>
+{% block portal_toolbar %}
+<div class="capture-toolbar">
+    <div class="capture-stats" aria-label="Resumen de captaciones">
+        <button type="button" class="capture-stat capture-stat--btn" id="stat-sin-telefono"
+                data-phone="sin" onclick="toggleFiltroTelefono('sin')"
+                title="Mostrar solo prospecciones sin teléfono (clic de nuevo para quitar el filtro)">
+            <span class="capture-stat__value">{{ dashboard_stats.without_phone }}</span>
+            <span class="capture-stat__label">Prospecciones sin teléfono</span>
+        </button>
+        <button type="button" class="capture-stat capture-stat--btn" id="stat-con-telefono"
+                data-phone="con" onclick="toggleFiltroTelefono('con')"
+                title="Mostrar solo prospecciones con teléfono (clic de nuevo para quitar el filtro)">
+            <span class="capture-stat__value">{{ dashboard_stats.with_phone }}</span>
+            <span class="capture-stat__label">Prospecciones con teléfono</span>
+        </button>
     </div>
-    <div>
-      <label>Tipo de inmueble</label>
-      <select name="tipo">
-        <option value="">Todos</option>
-        {% for t in tipos_propiedad %}<option value="{{ t }}"{% if filtro_tipo == t %} selected{% endif %}>{{ t }}</option>{% endfor %}
-      </select>
-    </div>
-    <div>
-      <label>Teléfono</label>
-      <select name="telefono">
-        <option value="">Todos</option>
-        <option value="con"{% if filtro_telefono == 'con' %} selected{% endif %}>Con teléfono</option>
-        <option value="sin"{% if filtro_telefono == 'sin' %} selected{% endif %}>Sin teléfono</option>
-      </select>
-    </div>
-    <button class="pr-btn" type="submit">Filtrar</button>
-    <a class="pr-btn" href="?">Limpiar</a>
-  </form>
-
-  <div class="pr-stats">
-    <article class="pr-stat"><b>{{ dashboard_stats.total }}</b><span>Captaciones</span></article>
-    <article class="pr-stat"><b>{{ dashboard_stats.with_phone }}</b><span>Con teléfono</span></article>
-    <article class="pr-stat"><b>{{ dashboard_stats.without_phone }}</b><span>Sin teléfono</span></article>
-    <article class="pr-stat"><b>{{ dashboard_stats.geolocated }}</b><span>Con GPS</span></article>
-    <article class="pr-stat"><b>{{ dashboard_stats.without_gps }}</b><span>Sin GPS</span></article>
-    <article class="pr-stat"><b>{{ dashboard_stats.users }}</b><span>Agentes</span></article>
-  </div>
-
-  {% if prospects %}
-  <div class="pr-grid">
-    {% for p in prospects %}
-    <article class="pr-card">
-      {% if p.foto %}<img src="{{ p.foto }}" alt="Captación #{{ p.id }}" loading="lazy">{% endif %}
-      <h3><a href="{{ p.url }}" style="color:var(--accent-blue);text-decoration:none">{{ p.titulo }}</a></h3>
-      <p>{{ p.descripcion }}</p>
-      <div class="pr-tags">
-        <span class="pr-tag">{{ p.distrito }}</span>
-        {% if p.tipo_propiedad %}<span class="pr-tag">{{ p.tipo_propiedad }}</span>{% endif %}
-        {% if p.operacion %}<span class="pr-tag">{{ p.operacion }}</span>{% endif %}
-        {% if p.contrato %}<span class="pr-tag">{{ p.contrato }}</span>{% endif %}
-        {% if p.precio %}<span class="pr-tag">{{ p.precio }} {{ p.moneda }}</span>{% endif %}
-        {% if p.area %}<span class="pr-tag">{{ p.area }} m²</span>{% endif %}
-        {% if p.habitaciones %}<span class="pr-tag">{{ p.habitaciones }} hab.</span>{% endif %}
-        {% if p.telefono %}<span class="pr-tag phone">📞 {{ p.telefono }}</span>{% else %}<span class="pr-tag no-phone">Sin teléfono</span>{% endif %}
-        <span class="pr-tag">{{ p.status }}</span>
-      </div>
-      <p><small>{{ p.agente }} · {{ p.creado }}{% if p.origen %} · {{ p.origen }}{% endif %}</small></p>
-    </article>
-    {% endfor %}
-  </div>
-  {% else %}
-  <div class="pr-empty">No hay captaciones para estos filtros. La tabla de prospecciones está en 0.</div>
-  {% endif %}
+    <a href="{% url 'prospects:capture' %}" class="btn btn-primary btn-new-capture">
+        <i class="fas fa-plus-circle"></i>
+        Agregar nueva captación
+    </a>
 </div>
+
+<div class="capture-filters" aria-label="Filtros de captaciones">
+    <div class="capture-filters__field">
+        <label for="prospect-filter-distrito">Distrito</label>
+        <select id="prospect-filter-distrito">
+            <option value="">Todos</option>
+            {% for d in distritos_arequipa %}{% if d != 'Todos' %}<option value="{{ d }}">{{ d }}</option>{% endif %}{% endfor %}
+        </select>
+    </div>
+    <div class="capture-filters__field">
+        <label for="prospect-filter-tipo">Tipo de propiedad</label>
+        <select id="prospect-filter-tipo">
+            <option value="">Todos</option>
+            {% for t in tipos_propiedad %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+        </select>
+    </div>
+    <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-clear-filters" onclick="limpiarFiltrosProspeccion()">
+        <i class="fas fa-times"></i> Limpiar filtros
+    </button>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script>
+(function () {
+    // Filtro por teléfono: '' = todas, 'con' = con teléfono, 'sin' = sin teléfono
+    var filtroTelefono = '';
+
+    function telefonoMarcador(p) {
+        return !!(p.telefono && String(p.telefono).trim());
+    }
+
+    // ¿El marcador cumple los filtros activos (teléfono + distrito + tipo)?
+    function marcadorCoincide(m) {
+        if (!m || !m._propertyData) return false;
+        var p = m._propertyData;
+        var distrito = (document.getElementById('prospect-filter-distrito') || {}).value || '';
+        var tipo = (document.getElementById('prospect-filter-tipo') || {}).value || '';
+        var d = (p.distrito_nombre || '').toString().trim()
+              || (p.distrito || '').toString().trim()
+              || (m._distrito || '');
+        var t = (p.tipo_propiedad || '').toString().trim();
+        var conTelefono = telefonoMarcador(p);
+
+        var okDistrito = !distrito || d === distrito;
+        var okTipo = !tipo || t === tipo;
+        var okTelefono = !filtroTelefono
+            || (filtroTelefono === 'con' && conTelefono)
+            || (filtroTelefono === 'sin' && !conTelefono);
+        return okDistrito && okTipo && okTelefono;
+    }
+
+    function actualizarEstadoTarjetasTelefono() {
+        var sinCard = document.getElementById('stat-sin-telefono');
+        var conCard = document.getElementById('stat-con-telefono');
+        if (sinCard) sinCard.classList.toggle('is-active', filtroTelefono === 'sin');
+        if (conCard) conCard.classList.toggle('is-active', filtroTelefono === 'con');
+    }
+
+    window.toggleFiltroTelefono = function (tipo) {
+        filtroTelefono = (filtroTelefono === tipo) ? '' : tipo;
+        actualizarEstadoTarjetasTelefono();
+        aplicarFiltrosProspeccion();
+    };
+
+    // Panel derecho = TODAS las captaciones que cumplen los filtros
+    // (tengan o no coordenadas). Cada tarjeta se expande al hacer clic.
+    function sincronizarPanel() {
+        var todas = (typeof todasPropiedadesJSON !== 'undefined') ? todasPropiedadesJSON : [];
+        var items = todas.filter(function (p) { return marcadorCoincide({ _propertyData: p }); });
+        pintarListaPanel(items);
+    }
+
+    function pintarListaPanel(items) {
+        var container = document.getElementById('selected-property');
+        var emptyState = document.getElementById('empty-state');
+        var countEl = document.getElementById('filtered-count');
+        if (!container) return;
+
+        container.innerHTML = '';
+        if (!items.length) {
+            if (emptyState) {
+                emptyState.style.display = 'flex';
+                var h5 = emptyState.querySelector('h5');
+                var pEl = emptyState.querySelector('p');
+                if (h5) h5.textContent = 'Sin resultados';
+                if (pEl) pEl.textContent = 'No hay captaciones que coincidan con los filtros aplicados.';
+            }
+            container.style.display = 'none';
+            if (countEl) countEl.textContent = '0 captaciones';
+            return;
+        }
+        if (emptyState) emptyState.style.display = 'none';
+        container.style.display = 'block';
+        if (countEl) countEl.textContent = items.length + (items.length === 1 ? ' captación' : ' captaciones');
+
+        items.forEach(function (p) {
+            var card = document.createElement('div');
+            card.className = 'prospect-panel-card';
+            card.innerHTML = resumenTarjetaHtml(p) +
+                '<div class="prospect-detail-inline">' + filasDetalleHtml(p) + '</div>';
+            container.appendChild(card);
+        });
+
+        container.querySelectorAll('.prospect-panel-card').forEach(function (card) {
+            card.addEventListener('click', function (e) {
+                if (e.target.closest('.prospect-detail-inline')) return;
+                var detalle = card.querySelector('.prospect-detail-inline');
+                if (detalle) detalle.classList.toggle('open');
+            });
+        });
+    }
+
+    function resumenTarjetaHtml(p) {
+        if (!p) return '';
+        var img = (p.primera_imagen || '').replace(/"/g, '%22');
+        var tit = (p.owner_name || p.titulo || ('Prospección #' + p.id)).toString().trim();
+        var tipo = (p.tipo_propiedad || 'Prospección');
+        var dist = (p.distrito_nombre || p.distrito || '');
+        var precio = (p.precio && String(p.precio).trim())
+            ? ((p.moneda === 'PEN' ? 'S/ ' : '$ ') + p.precio) : '';
+        return (
+            // Resumen con UNA foto a la izquierda; el detalle va debajo a todo el ancho.
+            '<div class="ppc-summary">' +
+                (img
+                    ? '<img class="ppc-thumb" src="' + escaparHtml(img) + '" alt="" loading="lazy" decoding="async" onerror="this.style.display=\'none\'">'
+                    : '<div class="ppc-thumb ppc-thumb-empty">Sin foto</div>') +
+                '<div class="ppc-info">' +
+                    '<div class="ppc-title">' + escaparHtml(tit) + '</div>' +
+                    '<div class="ppc-sub">' + escaparHtml(tipo) +
+                        (dist ? ' · ' + escaparHtml(dist) : '') + '</div>' +
+                    (precio ? '<div class="ppc-price">' + escaparHtml(precio) + '</div>' : '') +
+                    ((p.telefono && String(p.telefono).trim())
+                        ? '<div class="ppc-sub">Tel: ' + escaparHtml(p.telefono) + '</div>' : '') +
+                    (p.status ? '<div class="ppc-status">' + escaparHtml(p.status) + '</div>' : '') +
+                    '<div class="ppc-hint">▶ Clic para ver todos los datos</div>' +
+                '</div>' +
+            '</div>'
+        );
+    }
+
+    // Todos los campos de la captación (se muestran al expandir la tarjeta)
+    function filasDetalleHtml(p) {
+        var filas = [];
+        function fila(k, v) {
+            var s = (v === null || v === undefined) ? '' : String(v).trim();
+            if (!s) return;
+            filas.push(
+                '<div class="ppc-field"><span class="ppc-k">' + escaparHtml(k) + '</span>' +
+                '<span class="ppc-v">' + escaparHtml(s) + '</span></div>'
+            );
+        }
+        var titulo = (p.titulo || '');
+        var propietario = (p.owner_name || '').trim();
+        if (!propietario && titulo && titulo.indexOf('Prospección #') !== 0) propietario = titulo;
+        fila('Propietario', propietario);
+        fila('Teléfono', p.telefono);
+        fila('Tipo', p.tipo_propiedad);
+        fila('Operación', p.operacion);
+        fila('Contrato', p.contrato);
+        if (p.precio && String(p.precio).trim()) {
+            fila('Precio', (p.moneda === 'PEN' ? 'S/ ' : '$ ') + p.precio);
+            fila('Moneda', p.moneda);
+        }
+        if (p.area_construida && String(p.area_construida).trim()) fila('Área', p.area_construida + ' m²');
+        fila('Dormitorios', p.habitaciones);
+        fila('Zona', p.zona);
+        fila('Dirección', p.direccion || p.descripcion);
+        fila('Distrito', p.distrito_nombre || p.distrito);
+        if (p.marketplace_url && String(p.marketplace_url).trim()) {
+            filas.push(
+                '<div class="ppc-field"><span class="ppc-k">Enlace anuncio</span>' +
+                '<a class="ppc-v ppc-link" href="' + escaparHtml(String(p.marketplace_url)) + '" target="_blank" rel="noopener">Abrir enlace ↗</a></div>'
+            );
+        }
+        fila('Origen', p.origen);
+        fila('Estado', p.status);
+        fila('Agente', p.agente);
+        fila('Registrado', p.creado);
+        fila('Notas', p.notas);
+        if (p.lat && p.lng) fila('Coordenadas', p.lat + ', ' + p.lng);
+        var resultado = filas.join('');
+        if (p.id) {
+            resultado += '<a class="ppc-edit-btn" href="/prospects/' + p.id +
+                '/detail/" target="_blank" rel="noopener">✏️ Editar captación</a>';
+        }
+        return resultado;
+    }
+
+    function aplicarFiltrosProspeccion() {
+        // El panel siempre se sincroniza; los marcadores solo si el mapa está listo.
+        if (typeof map !== 'undefined' && map) {
+            var lista = (typeof activeMarkers !== 'undefined') ? activeMarkers : [];
+            lista.forEach(function (m) {
+                m.setMap(marcadorCoincide(m) ? map : null);
+            });
+        }
+        sincronizarPanel();
+    }
+
+    window.limpiarFiltrosProspeccion = function () {
+        var distritoSel = document.getElementById('prospect-filter-distrito');
+        var tipoSel = document.getElementById('prospect-filter-tipo');
+        if (distritoSel) distritoSel.value = '';
+        if (tipoSel) tipoSel.value = '';
+        filtroTelefono = '';
+        actualizarEstadoTarjetasTelefono();
+        aplicarFiltrosProspeccion();
+    };
+
+    function escaparHtml(str) {
+        if (str === null || str === undefined) return '';
+        return String(str).replace(/[&<>"']/g, function (c) {
+            if (c === '&') return String.fromCharCode(38) + 'amp;';
+            if (c === '<') return String.fromCharCode(60) + 'lt;';
+            if (c === '>') return String.fromCharCode(62) + 'gt;';
+            if (c === '"') return String.fromCharCode(34) + 'quot;';
+            return String.fromCharCode(38) + '#39;';
+        });
+    }
+
+    function construirDetalleInline(p) {
+        if (!p) {
+            return '<div class="prospect-detail-inline__rows"><span style="color:var(--text-muted, #7d8590)">Sin datos adicionales</span></div>';
+        }
+        var filas = [];
+        function fila(k, v) {
+            var s = (v === null || v === undefined) ? '' : String(v).trim();
+            if (!s) return;
+            filas.push(
+                '<div><span style="color:var(--text-secondary, #8b949e)">' + escaparHtml(k) + '</span>' +
+                '<span style="text-align:right;color:var(--text-primary, #e6edf3)">' + escaparHtml(s) + '</span></div>'
+            );
+        }
+        var titulo = (p.titulo || '');
+        var propietario = (p.owner_name || '').trim();
+        if (!propietario && titulo && titulo.indexOf('Prospección #') !== 0) propietario = titulo;
+        fila('Propietario', propietario);
+        fila('Teléfono', p.telefono);
+        fila('Tipo', p.tipo_propiedad);
+        if (p.precio && String(p.precio).trim()) {
+            fila('Precio', (p.moneda === 'PEN' ? 'S/ ' : '$ ') + p.precio);
+        }
+        if (p.area_construida && String(p.area_construida).trim()) {
+            fila('Área', p.area_construida + ' m²');
+        }
+        fila('Dormitorios', p.habitaciones);
+        fila('Dirección', p.direccion || p.descripcion);
+        fila('Distrito', p.distrito_nombre || p.distrito);
+        fila('Estado', p.status);
+        fila('Agente', p.agente);
+        if (p.lat && p.lng) fila('Coordenadas', p.lat + ', ' + p.lng);
+        var img = (p.primera_imagen || '').replace(/"/g, '%22');
+        return (
+            '<div>' +
+                (img
+                    ? '<img class="prospect-detail-inline__photo" src="' + escaparHtml(img) + '" alt="" onerror="this.style.display=\'none\'">'
+                    : '<div style="width:110px;height:110px;border-radius:8px;background:var(--bg-card,#161b22);display:flex;align-items:center;justify-content:center;color:var(--text-subtle,#484f58);font-size:11px;">Sin foto</div>') +
+            '</div>' +
+            '<div class="prospect-detail-inline__rows">' +
+                (filas.join('') || '<span style="color:var(--text-muted,#7d8590)">Sin datos adicionales</span>') +
+            '</div>'
+        );
+    }
+
+    function toggleDetalleTarjeta(card) {
+        if (!card) return;
+        var detalle = card.querySelector('.prospect-detail-inline');
+        if (!detalle) {
+            var numero = Number(card.getAttribute('data-numero'));
+            var p = null;
+            if (typeof selectedMarkers !== 'undefined' && selectedMarkers && selectedMarkers.get) {
+                var entry = selectedMarkers.get(numero);
+                if (entry) p = entry.propertyData;
+            }
+            detalle = document.createElement('div');
+            detalle.className = 'prospect-detail-inline';
+            detalle.innerHTML = construirDetalleInline(p);
+            card.appendChild(detalle);
+        }
+        detalle.classList.toggle('open');
+    }
+
+    function prepararTarjetasPanel() {
+        var container = document.getElementById('selected-property');
+        if (!container) return;
+        container.querySelectorAll('.selected-card').forEach(function (card) {
+            if (card.dataset.detalleOk) return;
+            card.dataset.detalleOk = '1';
+            card.addEventListener('click', function (e) {
+                if (e.target.closest('.prospect-detail-inline')) return;
+                toggleDetalleTarjeta(card);
+            });
+        });
+    }
+
+    // Quitar las etiquetas de texto de los marcadores (ej. "Sin distrito");
+    // solo debe verse el marcador.
+    function limpiarEtiquetasMarcadores() {
+        var lista = (typeof activeMarkers !== 'undefined') ? activeMarkers : [];
+        lista.forEach(function (m) {
+            if (m && typeof m.setLabel === 'function') m.setLabel(null);
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        // Evitar que los clics sobre los marcadores inyecten tarjetas duplicadas
+        // (el panel derecho ya se construye con TODAS las captaciones).
+        try { window.agregarPropiedadSeleccionada = function () {}; } catch (err) {}
+        // Llenar el panel inicialmente (aunque el mapa aún no cargue).
+        sincronizarPanel();
+
+        var distritoSel = document.getElementById('prospect-filter-distrito');
+        var tipoSel = document.getElementById('prospect-filter-tipo');
+        if (distritoSel) distritoSel.addEventListener('change', aplicarFiltrosProspeccion);
+        if (tipoSel) tipoSel.addEventListener('change', aplicarFiltrosProspeccion);
+
+        // Una vez que el mapa cargue sus marcadores, poblar el panel derecho
+        // con todas las captaciones visibles y mantenerlos sincronizados.
+        var tries = 0;
+        var timer = setInterval(function () {
+            tries++;
+            if ((typeof map !== 'undefined' && map) &&
+                (typeof activeMarkers !== 'undefined') && activeMarkers.length > 0) {
+                clearInterval(timer);
+                limpiarEtiquetasMarcadores();
+                aplicarFiltrosProspeccion();
+            } else if (tries > 300) {
+                clearInterval(timer);
+            }
+        }, 400);
+    });
+})();
+</script>
 {% endblock %}
