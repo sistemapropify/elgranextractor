@@ -3039,8 +3039,108 @@ def register_view(request):
     })
 
 
+def _login_usuario_propify(request, username, password):
+    """Autentica contra el endpoint de Propify y prepara la sesión Propify.
+
+    Si las credenciales son válidas en Propify (app.propify.pe/api/auth/token/),
+    devuelve un usuario interno sincronizado (para el resto del sistema) y deja
+    en la sesión el token/perfil Propify, de modo que /marketing/prospeccion/ y
+    los módulos Propify funcionen sin pedir un segundo login.
+    """
+    import secrets
+
+    from django.contrib.auth.hashers import make_password
+
+    from prospects.propify_auth import (
+        WEB_PROFILE_SESSION_KEY,
+        WEB_TOKEN_SESSION_KEY,
+        PropifyAuthError,
+        authenticate_propify_credentials,
+    )
+    from .models import Role, User
+
+    try:
+        _payload, principal = authenticate_propify_credentials(username, password)
+    except PropifyAuthError:
+        return None
+    except Exception:  # noqa: BLE001
+        return None
+
+    # Sesión Propify ya válida (lo que exige propify_web_required).
+    try:
+        request.session[WEB_TOKEN_SESSION_KEY] = principal.token
+        request.session[WEB_PROFILE_SESSION_KEY] = principal.profile
+    except Exception:  # noqa: BLE001
+        pass
+
+    profile = principal.profile if isinstance(principal.profile, dict) else {}
+    ident = str(
+        profile.get("username")
+        or profile.get("email")
+        or profile.get("phone")
+        or ""
+    ).strip()
+    if not ident:
+        ident = "propify_%s" % (profile.get("id") or "usuario")
+
+    # Buscar o crear el usuario interno sincronizado (mínimo, defensivo).
+    user = None
+    try:
+        user = User.objects.using("default").filter(username=ident).first()
+    except Exception:  # noqa: BLE001
+        user = None
+    if user is None:
+        role = None
+        try:
+            role = (
+                Role.objects.using("default").filter(name__icontains="admin").first()
+                or Role.objects.using("default")
+                .filter(name__icontains="gerencia")
+                .first()
+                or Role.objects.using("default")
+                .filter(name__icontains="owner")
+                .first()
+                or Role.objects.using("default").first()
+            )
+        except Exception:  # noqa: BLE001
+            role = None
+        try:
+            user = User(username=ident, is_active=True)
+            if hasattr(user, "password"):
+                user.password = make_password(secrets.token_urlsafe(24))
+            if role is not None:
+                try:
+                    user.role = role
+                except Exception:  # noqa: BLE001
+                    try:
+                        user.role_id = role.pk
+                    except Exception:  # noqa: BLE001
+                        pass
+            user.save(using="default")
+        except Exception:  # noqa: BLE001
+            try:
+                user = User.objects.using("default").create(
+                    username=ident, is_active=True
+                )
+            except Exception:  # noqa: BLE001
+                user = None
+    else:
+        try:
+            if not user.is_active:
+                user.is_active = True
+                user.save(using="default", update_fields=["is_active"])
+        except Exception:  # noqa: BLE001
+            pass
+    return user
+
+
 def login_view(request):
-    """Vista de inicio de sesión."""
+    """Vista de inicio de sesión.
+
+    Primero valida contra usuarios internos; si no coinciden, autentica contra
+    el endpoint de Propify (app.propify.pe) para que el dueño/gerencia pueda
+    entrar con su cuenta de Propify.
+    """
     if request.method == 'POST':
         username = request.POST.get('username', '')
         password = request.POST.get('password', '')
@@ -3048,6 +3148,10 @@ def login_view(request):
 
         from .authentication import authenticate_user, login_user
         user = authenticate_user(username=username, password=password)
+
+        # Fallback: credenciales de Propify (endpoint app.propify.pe).
+        if user is None:
+            user = _login_usuario_propify(request, username, password)
 
         if user:
             login_user(request, user)

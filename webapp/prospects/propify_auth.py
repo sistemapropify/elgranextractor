@@ -81,24 +81,44 @@ def _mobile_user_for_profile(profile):
     return user
 
 
-def fetch_propify_profile(token):
-    try:
-        response = requests.get(
-            settings.PROPIFY_AUTH_ME_URL,
-            headers={
-                'Authorization': f'Bearer {token}',
-                'Accept': 'application/json',
-            },
-            timeout=15,
-        )
-    except requests.RequestException as exc:
-        raise PropifyAuthError('No se pudo conectar con Propify para validar la sesión.', 503) from exc
+def _urls_con_fallback(url):
+    """Devuelve [url, url_con_el_otro_host] para tolerar app<->api.propify.pe."""
+    candidatos = [url]
+    for a, b in (("app.propify.pe", "api.propify.pe"), ("api.propify.pe", "app.propify.pe")):
+        if a in url and b not in url:
+            candidatos.append(url.replace(a, b))
+            break
+    return list(dict.fromkeys(candidatos))
 
-    if response.status_code in (401, 403):
-        raise PropifyAuthError('La sesión de Propify venció o no es válida.', 401)
-    if response.status_code != 200:
-        raise PropifyAuthError('Propify no pudo validar la sesión.', 502)
-    return _profile_from_payload(_json_object(response))
+
+def fetch_propify_profile(token):
+    ultimo_error = None
+    for url in _urls_con_fallback(settings.PROPIFY_AUTH_ME_URL):
+        try:
+            response = requests.get(
+                url,
+                headers={
+                    'Authorization': f'Bearer {token}',
+                    'Accept': 'application/json',
+                },
+                timeout=15,
+            )
+        except requests.RequestException as exc:
+            ultimo_error = PropifyAuthError(
+                'No se pudo conectar con Propify para validar la sesión.', 503
+            )
+            ultimo_error.__cause__ = exc
+            continue
+        if response.status_code in (401, 403):
+            raise PropifyAuthError('La sesión de Propify venció o no es válida.', 401)
+        if response.status_code == 200:
+            return _profile_from_payload(_json_object(response))
+        ultimo_error = PropifyAuthError('Propify no pudo validar la sesión.', 502)
+    if ultimo_error is None:
+        ultimo_error = PropifyAuthError(
+            'No se pudo conectar con Propify para validar la sesión.', 503
+        )
+    raise ultimo_error
 
 
 def principal_from_token(token):
@@ -111,27 +131,44 @@ def principal_from_token(token):
 
 
 def authenticate_propify_credentials(username, password):
-    try:
-        response = requests.post(
-            settings.PROPIFY_AUTH_TOKEN_URL,
-            json={'username': username, 'password': password},
-            headers={'Accept': 'application/json'},
-            timeout=15,
+    ultimo_error = None
+    for url in _urls_con_fallback(settings.PROPIFY_AUTH_TOKEN_URL):
+        try:
+            response = requests.post(
+                url,
+                json={'username': username, 'password': password},
+                headers={'Accept': 'application/json'},
+                timeout=15,
+            )
+        except requests.RequestException as exc:
+            ultimo_error = PropifyAuthError(
+                'No se pudo conectar con Propify. Inténtalo nuevamente.', 503
+            )
+            ultimo_error.__cause__ = exc
+            continue
+
+        try:
+            payload = _json_object(response)
+        except PropifyAuthError:
+            ultimo_error = PropifyAuthError(
+                'Propify devolvió una respuesta inválida.', 502
+            )
+            continue
+        if response.status_code in (400, 401, 403):
+            detail = payload.get('detail') or payload.get('error') or 'Usuario o contraseña incorrectos.'
+            raise PropifyAuthError(str(detail), 401)
+        if response.status_code in (200, 201):
+            token = str(payload.get('access') or payload.get('token') or '').strip()
+            if not token:
+                raise PropifyAuthError('Propify no devolvió un token de acceso.', 502)
+            return payload, principal_from_token(token)
+        ultimo_error = PropifyAuthError('Propify no pudo iniciar la sesión.', 502)
+
+    if ultimo_error is None:
+        ultimo_error = PropifyAuthError(
+            'No se pudo conectar con Propify. Inténtalo nuevamente.', 503
         )
-    except requests.RequestException as exc:
-        raise PropifyAuthError('No se pudo conectar con Propify. Inténtalo nuevamente.', 503) from exc
-
-    payload = _json_object(response)
-    if response.status_code in (400, 401, 403):
-        detail = payload.get('detail') or payload.get('error') or 'Usuario o contraseña incorrectos.'
-        raise PropifyAuthError(str(detail), 401)
-    if response.status_code not in (200, 201):
-        raise PropifyAuthError('Propify no pudo iniciar la sesión.', 502)
-
-    token = str(payload.get('access') or payload.get('token') or '').strip()
-    if not token:
-        raise PropifyAuthError('Propify no devolvió un token de acceso.', 502)
-    return payload, principal_from_token(token)
+    raise ultimo_error
 
 
 class PropifyBearerAuthentication(BaseAuthentication):
