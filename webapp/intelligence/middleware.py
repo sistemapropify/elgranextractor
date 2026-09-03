@@ -22,6 +22,10 @@ PUBLIC_PATHS = [
     r'^/register/?$',
     r'^/api/',
     r'^/prospects/api/mobile/',  # API Android: autenticación JWT dentro de las vistas
+    # Módulo Prospección: usa SOLO el login de Propify (propify_web_required),
+    # no debe pedir el login interno de Django antes.
+    r'^/prospects/',              # web + API del módulo (login Propify propio)
+    r'^/marketing/prospeccion/',  # dashboard de prospección
     r'^/admin/',
     r'^/static/',
     r'^/acm/',                   # ACM - Análisis Comparativo de Mercado (público)
