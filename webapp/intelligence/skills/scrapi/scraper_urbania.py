@@ -146,14 +146,22 @@ def _estandarizar_urbania(prop: dict, fecha_extraccion: str) -> dict:
 def _ejecutar_scraping(
     max_paginas: int = 0,
     start_page: int = 1,
+    url: str | None = None,
     progress_callback: Callable[[Dict[str, Any]], bool] | None = None,
     batch_callback: Callable[[list[Dict[str, Any]]], Dict[str, int]] | None = None,
 ) -> list[Dict[str, Any]]:
-    """Scrapea Urbania por pagina, persistiendo y reportando cada lote."""
+    """Scrapea Urbania por pagina, persistiendo y reportando cada lote.
+
+    ``url`` opcional: URL del listado de Urbania que el usuario pegó
+    (ej. .../venta-de-propiedades-en-arequipa--arequipa?page=1). Si se omite
+    se usa ``BASE_PATTERN``. Recorre las páginas hasta que una ya no devuelve
+    propiedades (final real del listado).
+    """
     from scrapi import urbania_scraper as urbania_source
     from scrapi.urbania_scraper import (
-        TOTAL_PAGINAS, BASE_PATTERN, extraer_listado, extraer_detalle,
-        navegar_con_cloudflare, manejar_sigint,
+        TOTAL_PAGINAS, BASE_PATTERN, construir_url_pagina,
+        extraer_listado, extraer_detalle, navegar_con_cloudflare,
+        manejar_sigint,
     )
     from camoufox.async_api import AsyncCamoufox
     from scrapi.camoufox_launcher import camoufox_kwargs
@@ -162,6 +170,7 @@ def _ejecutar_scraping(
     async def _run():
         urbania_source.detener = False
         todas_raw = []
+        base_url = (url or "").strip() or BASE_PATTERN
         paginas = max_paginas if max_paginas > 0 else TOTAL_PAGINAS
         pagina_inicial = max(1, min(int(start_page or 1), paginas))
 
@@ -213,8 +222,20 @@ def _ejecutar_scraping(
                 ):
                     break
                 try:
-                    await navegar_con_cloudflare(page, BASE_PATTERN.format(n))
+                    await navegar_con_cloudflare(
+                        page, construir_url_pagina(base_url, n)
+                    )
                     props = await extraer_listado(page)
+                    if not props and n > pagina_inicial:
+                        # No hay más propiedades: se terminaron las páginas.
+                        await emit_progress(
+                            processed=len(todas_raw),
+                            message=(
+                                f'Urbania: sin resultados en la pagina {n}; '
+                                f'no hay mas paginas'
+                            ),
+                        )
+                        break
                     total_lote = len(props)
                     completadas = []
                     for indice, prop in enumerate(props, 1):
@@ -290,6 +311,15 @@ class ScraperUrbaniaSkill(BaseSkill):
     is_active = True
 
     parameters_schema = {
+        'url': {
+            'type': 'string',
+            'description': (
+                'URL del listado de Urbania a scrapear (pégalo tal cual del '
+                'navegador). Ej: https://urbania.pe/buscar/venta-de-propiedades-'
+                'en-arequipa--arequipa?page=1 . Si se omite usa la URL por defecto.'
+            ),
+            'required': False,
+        },
         'max_paginas': {
             'type': 'integer',
             'description': 'Máximo de páginas a scrapear. 0 = todas (default: 0).',
@@ -306,14 +336,18 @@ class ScraperUrbaniaSkill(BaseSkill):
         context: Dict[str, Any] = None,
     ) -> SkillResult:
         try:
+            url = params.get('url') or None
             max_paginas = params.get('max_paginas', 0)
             start_page = params.get('start_page', 1)
             progress_callback = (context or {}).get('progress_callback')
+            lifecycle_run_id = (context or {}).get('lifecycle_run_id')
             incremental = {'total': 0, 'nuevas': 0, 'actualizadas': 0, 'errores': 0}
 
             def guardar_lote(propiedades_lote):
                 resultado_lote = guardar_propiedades(
-                    propiedades_lote, fuente='urbania'
+                    propiedades_lote,
+                    fuente='urbania',
+                    lifecycle_run_id=lifecycle_run_id,
                 )
                 for key in incremental:
                     incremental[key] += int(resultado_lote.get(key, 0) or 0)
@@ -322,6 +356,7 @@ class ScraperUrbaniaSkill(BaseSkill):
             propiedades = _ejecutar_scraping(
                 max_paginas,
                 start_page=start_page,
+                url=url,
                 progress_callback=progress_callback,
                 batch_callback=guardar_lote,
             )
@@ -333,7 +368,11 @@ class ScraperUrbaniaSkill(BaseSkill):
                     ),
                     skill_name=self.name,
                 )
-            guardar_propiedades(propiedades, fuente='urbania')
+            guardar_propiedades(
+                propiedades,
+                fuente='urbania',
+                lifecycle_run_id=lifecycle_run_id,
+            )
             resultado = incremental
             return SkillResult.ok(
                 data={'portal': 'urbania', **resultado},

@@ -20,12 +20,29 @@ from scrapi.camoufox_launcher import camoufox_kwargs
 # CAMBIA esta URL según lo que quieras scrapear.
 # ============================================================
 BASE_PATTERN = "https://urbania.pe/buscar/venta-de-departamentos-en-arequipa--arequipa?page={}"
-TOTAL_PAGINAS = 5  # Ajusta según el número de páginas (la página muestra 5)
+# Urbania solo muestra unos pocos números (ej. 1..5) pero hay muchas más
+# páginas. Esto es solo un TOPE DE SEGURIDAD; el scraper se detiene solo
+# cuando una página ya no devuelve propiedades (no hay más resultados).
+TOTAL_PAGINAS = 300
 SITE_DOMAIN = "https://urbania.pe"
 OUTPUT_FILE = f"urbania_arequipa_{datetime.now().strftime('%Y-%m-%d')}.xlsx"
 
 GUARDAR_CADA_N_PAGINAS = 2
 detener = False
+
+
+def construir_url_pagina(url_base, n):
+    """Devuelve la URL del listado de Urbania para la página ``n``.
+
+    Reemplaza (o añade) el parámetro ``page`` de la URL que el usuario pegó,
+    para poder recorrer página por página hasta que no queden resultados.
+    """
+    from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+
+    partes = urlparse(str(url_base).strip())
+    params = dict(parse_qsl(partes.query, keep_blank_values=True))
+    params['page'] = str(int(n))
+    return urlunparse(partes._replace(query=urlencode(params)))
 
 
 def guardar_excel(todas):
@@ -308,6 +325,14 @@ async def extraer_detalle(page, prop):
 async def main():
     global detener
     todas = []
+    # Permite pasar la URL del listado como argumento:
+    #   python urbania_scraper.py "https://urbania.pe/buscar/venta-de-propiedades-en-arequipa--arequipa?page=1"
+    base_url = (
+        sys.argv[1].strip()
+        if len(sys.argv) > 1 and sys.argv[1].strip().startswith("http")
+        else BASE_PATTERN
+    )
+    print(f"\n[Urbania] Listado de origen: {base_url}")
 
     # Registrar manejador de Ctrl+C
     signal.signal(signal.SIGINT, manejar_sigint)
@@ -334,13 +359,17 @@ async def main():
                 print(f"\n[!] Deteniendo por solicitud del usuario...")
                 break
 
-            url = BASE_PATTERN.format(n)
+            url = construir_url_pagina(base_url, n)
             print(f"\n[Pagina {n}/{TOTAL_PAGINAS}]: {url}")
             try:
                 titulo = await navegar_con_cloudflare(page, url)
                 print(f"   Titulo: {titulo}")
 
                 props = await extraer_listado(page)
+                if not props and n > 1:
+                    # No hay más propiedades: se terminaron las páginas reales.
+                    print(f"   [FIN] Pagina {n} sin propiedades: no hay mas paginas.")
+                    break
                 todas.extend(props)
                 print(f"   -> {len(props)} propiedades extraidas (total: {len(todas)})")
 
