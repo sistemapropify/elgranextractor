@@ -322,6 +322,15 @@
             {% for t in tipos_propiedad %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
         </select>
     </div>
+    <div class="capture-filters__field">
+        <label for="prospect-filter-origen">Origen</label>
+        <select id="prospect-filter-origen">
+            <option value="">Todos</option>
+            <option value="calle">Calle</option>
+            <option value="marketplace">Marketplace</option>
+            <option value="otros">Otros</option>
+        </select>
+    </div>
     <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-clear-filters" onclick="limpiarFiltrosProspeccion()">
         <i class="fas fa-times"></i> Limpiar filtros
     </button>
@@ -345,18 +354,21 @@
         var p = m._propertyData;
         var distrito = (document.getElementById('prospect-filter-distrito') || {}).value || '';
         var tipo = (document.getElementById('prospect-filter-tipo') || {}).value || '';
+        var origenFiltro = ((document.getElementById('prospect-filter-origen') || {}).value || '').toLowerCase();
         var d = (p.distrito_nombre || '').toString().trim()
               || (p.distrito || '').toString().trim()
               || (m._distrito || '');
         var t = (p.tipo_propiedad || '').toString().trim();
+        var o = (p.origen || '').toString().toLowerCase();
         var conTelefono = telefonoMarcador(p);
 
         var okDistrito = !distrito || d === distrito;
         var okTipo = !tipo || t === tipo;
+        var okOrigen = !origenFiltro || o === origenFiltro;
         var okTelefono = !filtroTelefono
             || (filtroTelefono === 'con' && conTelefono)
             || (filtroTelefono === 'sin' && !conTelefono);
-        return okDistrito && okTipo && okTelefono;
+        return okDistrito && okTipo && okOrigen && okTelefono;
     }
 
     function actualizarEstadoTarjetasTelefono() {
@@ -510,8 +522,10 @@
     window.limpiarFiltrosProspeccion = function () {
         var distritoSel = document.getElementById('prospect-filter-distrito');
         var tipoSel = document.getElementById('prospect-filter-tipo');
+        var origenSel = document.getElementById('prospect-filter-origen');
         if (distritoSel) distritoSel.value = '';
         if (tipoSel) tipoSel.value = '';
+        if (origenSel) origenSel.value = '';
         filtroTelefono = '';
         actualizarEstadoTarjetasTelefono();
         aplicarFiltrosProspeccion();
@@ -621,8 +635,10 @@
 
         var distritoSel = document.getElementById('prospect-filter-distrito');
         var tipoSel = document.getElementById('prospect-filter-tipo');
+        var origenSel = document.getElementById('prospect-filter-origen');
         if (distritoSel) distritoSel.addEventListener('change', aplicarFiltrosProspeccion);
         if (tipoSel) tipoSel.addEventListener('change', aplicarFiltrosProspeccion);
+        if (origenSel) origenSel.addEventListener('change', aplicarFiltrosProspeccion);
 
         // Una vez que el mapa cargue sus marcadores, poblar el panel derecho
         // con todas las captaciones visibles y mantenerlos sincronizados.

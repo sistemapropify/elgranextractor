@@ -899,9 +899,36 @@
 
             <div class="field-group full">
               <label for="id_district">Distrito</label>
-              <input type="text" id="id_district" name="district"
+              <input type="text" id="id_district" name="district" list="distritos-arequipa"
                      value="{{ form.district.value|default:'' }}"
-                     placeholder="Cayma, Yanahuara, Cerro Colorado...">
+                     placeholder="Escribe y elige un distrito…"
+                     autocomplete="off">
+              <datalist id="distritos-arequipa">
+                <option value="Arequipa (Cercado)">
+                <option value="Alto Selva Alegre">
+                <option value="Cayma">
+                <option value="Cerro Colorado">
+                <option value="Characato">
+                <option value="Chiguata">
+                <option value="Jacobo Hunter">
+                <option value="José Luis Bustamante y Rivero">
+                <option value="La Joya">
+                <option value="Mariano Melgar">
+                <option value="Miraflores">
+                <option value="Mollebaya">
+                <option value="Paucarpata">
+                <option value="Pocsi">
+                <option value="Polobaya">
+                <option value="Quequeña">
+                <option value="Sabandía">
+                <option value="Sachaca">
+                <option value="Socabaya">
+                <option value="Tiabaya">
+                <option value="Uchumayo">
+                <option value="Yanahuara">
+                <option value="Yarabamba">
+                <option value="Yura">
+              </datalist>
             </div>
 
             {# Coordenadas solo lectura — se capturan automáticamente #}
