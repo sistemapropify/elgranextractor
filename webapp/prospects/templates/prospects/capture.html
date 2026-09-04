@@ -566,11 +566,41 @@
     border-top: 1px solid var(--border);
     margin: 14px 0;
   }
+
+  /* ── Modo NUEVA captura: flujo en una sola columna (Origen primero) ── */
+  .prospect-wrapper.is-new .capture-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: 100%;
+    max-width: 760px;
+    margin: 0 auto;
+  }
+  .prospect-wrapper.is-new .capture-grid > div { width: 100%; }
+  /* Antes de elegir origen: solo se ve la tarjeta Origen, centrada */
+  .prospect-wrapper.is-new:not(.step-revealed) .capture-grid {
+    min-height: 55vh;
+    justify-content: center;
+    align-items: center;
+  }
+  .prospect-wrapper.is-new:not(.step-revealed) #prospect-form {
+    width: 100%;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+  .prospect-wrapper.is-new:not(.step-revealed) #prospect-form .card { margin-bottom: 0; }
+  /* Las tarjetas posteriores están ocultas hasta elegir origen */
+  .prospect-wrapper.is-new .js-later { display: none !important; }
+  .prospect-wrapper.is-new.step-revealed .js-later { display: block !important; }
+  .prospect-wrapper.is-new.step-revealed .js-later.btn-camera {
+    display: block;
+    width: 100%;
+  }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="prospect-wrapper">
+<div class="prospect-wrapper {% if mode == 'detail' %}is-detail{% else %}is-new{% endif %}">
 
   {# ── NAV SUPERIOR: acceso rápido a dashboard y mis prospecciones ── #}
   <div class="top-nav">
@@ -607,7 +637,7 @@
     <div style="display: flex; flex-direction: column; gap: 14px;">
 
       {# --- Tarjeta foto --- #}
-      <div class="card">
+      <div class="card js-later">
         <div class="card-title">Foto del anuncio</div>
 
         {# Zona de foto: clic abre la cámara directamente #}
@@ -669,7 +699,7 @@
 
       {# --- Botón principal CAPTURAR (solo en nueva captura) --- #}
       {% if mode != 'detail' %}
-      <button type="button" class="btn-camera" id="btn-capture-save"
+      <button type="button" class="btn-camera js-later" id="btn-capture-save"
               onclick="captureAndSave()" disabled>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
@@ -773,7 +803,7 @@
         </div>
 
         {# --- Datos del propietario --- #}
-        <div class="card" style="margin-bottom: 14px;">
+        <div class="card js-later" style="margin-bottom: 14px;">
           <div class="card-title">Datos del propietario</div>
           <div class="field-grid">
 
@@ -796,7 +826,7 @@
         </div>
 
         {# --- Tipo de propiedad --- #}
-        <div class="card" style="margin-bottom: 14px;">
+        <div class="card js-later" style="margin-bottom: 14px;">
           <div class="card-title">Operación</div>
 
           <div class="field-group" style="margin-bottom: 12px;">
@@ -869,7 +899,7 @@
         </div>
 
         {# --- Ubicación --- #}
-        <div class="card" style="margin-bottom: 14px;">
+        <div class="card js-later" style="margin-bottom: 14px;">
           <div class="card-title">Ubicación</div>
           <div class="field-grid">
 
@@ -949,7 +979,7 @@
         </div>
 
         {# --- Estado y notas --- #}
-        <div class="card" style="margin-bottom: 14px;">
+        <div class="card js-later" style="margin-bottom: 14px;">
           <div class="card-title">Seguimiento</div>
           <div class="field-grid">
 
@@ -1073,6 +1103,7 @@
   var gpsTimeout = null;
 
   function toggleOriginFields() {
+    actualizarRevelacionPasos(); // solo relevante en captura nueva
     var origin = document.getElementById('id_origin')?.value;
     var other = document.getElementById('origin-other-group');
     var market = document.getElementById('marketplace-url-group');
@@ -1477,7 +1508,36 @@
     setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, 3000);
   }
 
+  // ── Modo NUEVA captura (solo en /prospects/capture/) ─────────
+  // Primero solo se ve la tarjeta Origen, centrada. Al elegir origen se
+  // revelan las demás tarjetas en una sola columna: Foto → datos → … → Guardar.
+  function prepararModoNuevo() {
+    var wrapper = document.querySelector('.prospect-wrapper.is-new');
+    if (!wrapper) return; // en edición/detalle no aplica
+    var grid = wrapper.querySelector('.capture-grid');
+    var leftCol = grid && grid.children[0];
+    var form = document.getElementById('prospect-form');
+    if (!grid || !leftCol || !form) return;
+    // Foto y botón "Guardar prospecto" están fuera del <form> en el HTML;
+    // se mueven DENTRO del form para lograr la sola columna en orden:
+    // Origen → Foto → propietario → operación → ubicación → seguimiento → Guardar.
+    var originCard = form.querySelector('.card');           // 1ª tarjeta = Origen
+    var fotoCard = leftCol.querySelector('.card');          // tarjeta "Foto del anuncio"
+    var btn = document.getElementById('btn-capture-save');  // "Guardar prospecto"
+    if (fotoCard && originCard) originCard.after(fotoCard);
+    if (btn) form.appendChild(btn);
+    leftCol.style.display = 'none';
+  }
+
+  function actualizarRevelacionPasos() {
+    var wrapper = document.querySelector('.prospect-wrapper.is-new');
+    if (!wrapper) return;
+    var origin = (document.getElementById('id_origin') || {}).value || '';
+    wrapper.classList.toggle('step-revealed', Boolean(origin));
+  }
+
   // ── Init ─────────────────────────────────────────────────────
+  document.addEventListener('DOMContentLoaded', prepararModoNuevo);
   document.addEventListener('DOMContentLoaded', toggleOriginFields);
 
 </script>
