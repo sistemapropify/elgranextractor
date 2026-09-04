@@ -85,18 +85,12 @@ def _prospects_for_principal(principal):
     )
 
 
-def _post_login_target(request):
-    """Destino tras el login de Propify. Si no hay un 'next' profundo (o el next
-    es la lista/landing por defecto), se abre el dashboard cartográfico."""
-    destino = safe_next_url(request)
-    if not destino or destino.rstrip('/') in ('/prospects', '/prospects/login'):
-        destino = '/marketing/prospeccion/'
-    return destino
-
-
 def propify_login(request):
+    """Login de Propify. Tras loguear SIEMPRE se abre el dashboard cartográfico
+    de prospección (/marketing/prospeccion/)."""
+    dashboard_url = '/marketing/prospeccion/'
     if request.method == 'GET' and get_web_propify_principal(request) is not None:
-        return redirect(_post_login_target(request))
+        return redirect(dashboard_url)
 
     error = ''
     username = ''
@@ -114,12 +108,12 @@ def propify_login(request):
                 request.session[WEB_TOKEN_SESSION_KEY] = principal.token
                 request.session[WEB_PROFILE_SESSION_KEY] = principal.profile
                 request.session.set_expiry(60 * 60 * 24 * 30)  # conservar login 30 días
-                return redirect(_post_login_target(request))
+                return redirect(dashboard_url)
 
     return render(request, 'prospects/propify_login.html', {
         'error': error,
         'username': username,
-        'next': _post_login_target(request),
+        'next': dashboard_url,
     })
 
 
