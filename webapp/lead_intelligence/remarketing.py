@@ -711,8 +711,12 @@ def get_remarketing_dashboard(
             }
         )
 
-    valid_codes = {plantilla["codigo"] for plantilla in plantilla_options}
-    selected_plantilla = plantilla if plantilla in valid_codes else None
+    valid_codes = {pl["codigo"] for pl in plantilla_options}
+    selected_plantilla = (
+        plantilla
+        if isinstance(plantilla, str) and plantilla in valid_codes
+        else None
+    )
     if selected_plantilla:
         events = [
             event
