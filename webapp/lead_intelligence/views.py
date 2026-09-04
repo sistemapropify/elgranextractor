@@ -84,6 +84,30 @@ def _has_fresh_running_run(*, clean_stale=False):
     return qs.filter(heartbeat_at__gte=cutoff).exists()
 
 
+def remarketing_access_required(view_func):
+    """Acceso a remarketing: cualquier sesión interna del sistema.
+
+    A diferencia de ``management_access_required`` no exige rol de gerencia:
+    si ya hay sesión en el sistema (request.current_user o Django), deja pasar,
+    igual que el resto de páginas internas.
+    """
+    from urllib.parse import quote
+
+    from django.shortcuts import redirect, reverse
+
+    @wraps(view_func)
+    def wrapped(request, *args, **kwargs):
+        if request.current_user is None and not getattr(
+            getattr(request, "user", None), "is_authenticated", False
+        ):
+            return redirect(
+                reverse("login") + "?next=" + quote(request.get_full_path())
+            )
+        return view_func(request, *args, **kwargs)
+
+    return wrapped
+
+
 def management_access_required(view_func):
     @wraps(view_func)
     def wrapped(request, *args, **kwargs):
@@ -195,7 +219,7 @@ def attention_quality_dashboard(request):
     )
 
 
-@management_access_required
+@remarketing_access_required
 def remarketing_dashboard(request):
     """Dashboard de remarketing: analiza TODAS las plantillas activas."""
     date_from, date_to, _ = _parameters(request)
@@ -220,7 +244,7 @@ def remarketing_dashboard(request):
     )
 
 
-@management_access_required
+@remarketing_access_required
 @require_POST
 def remarketing_plantillas_api(request):
     """Crea/actualiza una plantilla (título + condición + texto)."""
@@ -261,7 +285,7 @@ def remarketing_plantillas_api(request):
         return JsonResponse({"success": False, "error": str(exc)}, status=400)
 
 
-@management_access_required
+@remarketing_access_required
 @require_POST
 def remarketing_analizar_api(request):
     """Analiza un mensaje y responde qué plantillas activas lo matchean."""
