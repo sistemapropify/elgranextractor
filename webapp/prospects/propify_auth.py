@@ -223,7 +223,7 @@ def get_web_propify_principal(request):
     return principal
 
 
-def safe_next_url(request, default='/prospects/'):
+def safe_next_url(request, default='/marketing/prospeccion/'):
     candidate = request.POST.get('next') or request.GET.get('next') or ''
     if candidate and url_has_allowed_host_and_scheme(
         candidate,
