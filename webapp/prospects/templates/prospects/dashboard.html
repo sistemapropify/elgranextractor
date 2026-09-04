@@ -282,6 +282,33 @@
     .ppc-price { color: var(--accent-green-light, #3fb950); font-size: 13px; font-weight: 700; }
     .ppc-status { font-size: 11px; color: var(--text-secondary, #8b949e); }
     .ppc-hint { color: var(--text-subtle, #484f58); font-size: 10px; margin-top: 2px; }
+    /* Clic en la foto: puntero + efecto sutil */
+    .ppc-thumb { cursor: zoom-in; transition: transform .12s ease; }
+    .ppc-thumb:hover { transform: scale(1.03); }
+    /* Modal de la foto (clic en la miniatura) */
+    .ppc-photo-modal {
+        position: fixed; inset: 0; z-index: 99990;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .ppc-photo-modal__backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, .78); }
+    .ppc-photo-modal__box {
+        position: relative; max-width: 92vw; max-height: 90vh;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .ppc-photo-modal__box img {
+        display: block; max-width: 92vw; max-height: 90vh;
+        border-radius: 10px; box-shadow: 0 12px 48px rgba(0, 0, 0, .6);
+        background: var(--bg-primary, #0d1117); object-fit: contain;
+    }
+    .ppc-photo-modal__close {
+        position: absolute; top: -14px; right: -14px; z-index: 1;
+        width: 34px; height: 34px; border-radius: 50%;
+        border: 1px solid var(--border-color, #30363d);
+        background: #161b22; color: #e6edf3; font-size: 20px; line-height: 1;
+        cursor: pointer; display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, .5);
+    }
+    .ppc-photo-modal__close:hover { background: #f85149; color: #fff; }
 </style>
 {% endblock %}
 
@@ -430,6 +457,44 @@
                 if (detalle) detalle.classList.toggle('open');
             });
         });
+        // Clic en la foto → abrir modal
+        container.querySelectorAll('.ppc-thumb').forEach(function (thumb) {
+            thumb.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                abrirFotoModal(thumb.getAttribute('src'));
+            });
+        });
+    }
+
+    // ── Modal de foto (clic en la miniatura de la tarjeta) ──────
+    function _cerrarModalFoto() {
+        var ov = document.querySelector('.ppc-photo-modal');
+        if (ov) ov.remove();
+        document.removeEventListener('keydown', _cerrarModalFotoEsc);
+        document.body.style.overflow = '';
+    }
+    function _cerrarModalFotoEsc(e) {
+        if (e.key === 'Escape') _cerrarModalFoto();
+    }
+    function abrirFotoModal(src) {
+        if (!src) return;
+        _cerrarModalFoto();
+        var ov = document.createElement('div');
+        ov.className = 'ppc-photo-modal';
+        ov.innerHTML =
+            '<div class="ppc-photo-modal__backdrop"></div>' +
+            '<div class="ppc-photo-modal__box">' +
+                '<button type="button" class="ppc-photo-modal__close" title="Cerrar">&times;</button>' +
+                '<img src="' + escaparHtml(src) + '" alt="Foto de la captación">' +
+            '</div>';
+        document.body.appendChild(ov);
+        ov.querySelector('.ppc-photo-modal__backdrop').addEventListener('click', _cerrarModalFoto);
+        ov.querySelector('.ppc-photo-modal__close').addEventListener('click', _cerrarModalFoto);
+        var im = ov.querySelector('img');
+        if (im) im.addEventListener('error', _cerrarModalFoto);
+        document.addEventListener('keydown', _cerrarModalFotoEsc);
+        document.body.style.overflow = 'hidden';
     }
 
     function resumenTarjetaHtml(p) {
