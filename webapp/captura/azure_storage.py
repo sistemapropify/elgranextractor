@@ -315,6 +315,40 @@ def upload_bytes(content_bytes, blob_name, container_name=None, content_type=Non
         raise AzureStorageError(f"Error al subir bytes: {e}")
 
 
+def _storage_account_key():
+    """Resuelve la account key de Azure sin depender del tipo de credencial
+    del cliente (varía según la versión del SDK y cómo se arma la conexión).
+
+    Orden de búsqueda: env vars explícitas -> credencial del cliente
+    (.account_key o .named_key) -> AccountKey dentro de la connection string.
+    """
+    import re
+    from django.conf import settings as _s
+    for attr in ('AZURE_STORAGE_ACCOUNT_KEY', 'AZURE_ACCOUNT_KEY', 'AZURE_STORAGE_KEY'):
+        valor = getattr(_s, attr, None) or ''
+        if valor:
+            return valor
+    try:
+        cred = get_blob_service_client().credential
+    except Exception:
+        cred = None
+    if cred is not None:
+        ak = getattr(cred, 'account_key', None)
+        if ak:
+            return ak
+        try:
+            nk = getattr(cred, 'named_key', None)
+            if nk and nk[1]:
+                return nk[1]
+        except Exception:
+            pass
+    conn = getattr(_s, 'AZURE_STORAGE_CONNECTION_STRING', '') or ''
+    m = re.search(r'AccountKey=([^;]+)', conn)
+    if m:
+        return m.group(1)
+    return None
+
+
 def generate_read_sas_url(blob_url, expiry_minutes=30):
     """Genera una URL temporal de solo lectura para un blob privado."""
     if not blob_url:
@@ -326,14 +360,16 @@ def generate_read_sas_url(blob_url, expiry_minutes=30):
         raise AzureStorageError("URL de blob invalida")
     container_name, blob_name = path_parts
 
-    service = get_blob_service_client()
-    credential = service.credential
-    account_key = getattr(credential, 'account_key', None)
+    account_key = _storage_account_key()
     if not account_key:
-        raise AzureStorageError("La credencial no permite generar SAS")
+        raise AzureStorageError("No se pudo obtener la account key para firmar el SAS")
+
+    # La cuenta se toma del host de la URL del blob (p. ej. 'granextractormedia'),
+    # así el SAS siempre apunta a la misma cuenta que expone MEDIA_URL / .url.
+    account_name = parsed.netloc.split('.')[0] or get_blob_service_client().account_name
 
     token = generate_blob_sas(
-        account_name=service.account_name,
+        account_name=account_name,
         container_name=container_name,
         blob_name=blob_name,
         account_key=account_key,
