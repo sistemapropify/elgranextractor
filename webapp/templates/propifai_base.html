@@ -973,7 +973,19 @@
                     {% block header_actions %}
                     <button class="header-btn" title="Actualizar" onclick="location.reload()">&#x21BB;</button>
                     <button class="header-btn" title="Notificaciones">&#x1F514;</button>
-                    {% if request.current_user %}
+                    {% if request.propify_user %}
+                    <div class="user-info" style="display:flex;align-items:center;gap:8px;padding:4px 12px;border-right:1px solid var(--border-color);">
+                        <div class="user-avatar" title="{{ request.propify_user.username }}">{{ request.propify_user.username|first|upper }}</div>
+                        <span style="font-size:13px;color:var(--text-primary);font-weight:500;">{{ request.propify_user.username }}</span>
+                    </div>
+                    <a href="{% url 'prospects:logout' %}?next={{ request.path }}"
+                       class="auth-btn auth-btn-logout"
+                       title="Cerrar Sesión (Propify)"
+                       style="text-decoration:none;display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:8px;border:1px solid var(--border-color);background-color:var(--bg-tertiary);color:#f85149;font-size:13px;font-weight:500;transition:all 0.2s ease;cursor:pointer;">
+                        <span style="font-size:16px;">🚪</span>
+                        <span>Cerrar Sesión</span>
+                    </a>
+                    {% elif request.current_user %}
                     <div class="user-info" style="display:flex;align-items:center;gap:8px;padding:4px 12px;border-right:1px solid var(--border-color);">
                         <div class="user-avatar" title="{{ request.current_user.username }}">{{ request.current_user.username|first|upper }}</div>
                         <span style="font-size:13px;color:var(--text-primary);font-weight:500;">{{ request.current_user.username }}</span>

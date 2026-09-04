@@ -104,6 +104,7 @@ def propify_login(request):
             else:
                 request.session[WEB_TOKEN_SESSION_KEY] = principal.token
                 request.session[WEB_PROFILE_SESSION_KEY] = principal.profile
+                request.session.set_expiry(60 * 60 * 24 * 30)  # conservar login 30 días
                 return redirect(safe_next_url(request))
 
     return render(request, 'prospects/propify_login.html', {
