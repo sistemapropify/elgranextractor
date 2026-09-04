@@ -912,6 +912,7 @@
     const ICONO_REMAX = '{% static "requerimientos/data/pin-remax.png" %}';
     const ICONO_ADONDEVIVIR = '{% static "requerimientos/data/adondevivir-pin.png" %}';
     const ICONO_FACEBOOK = '{% static "prospects/facebook-marker.jpg" %}';
+    const ICONO_CALLE = '{% static "prospects/sticker-png-car-marker-for-google-map.png" %}';
     const ICONO_LOCAL = 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png';
     const MOSTRAR_TODOS_MARCADORES = {% if mostrar_todos_marcadores %}true{% else %}false{% endif %};
     const ETIQUETA_SINGULAR = '{{ entity_singular|default:"propiedad"|escapejs }}';
@@ -948,6 +949,17 @@
 
     function obtenerIconoBase(p) {
         const portal = (p.portal || '').toLowerCase();
+        const origen = (p.origen || '').toString().toLowerCase();
+        // Captaciones tomadas "en calle": marcador de auto (sticker), no el logo de Facebook.
+        // La imagen es vertical (890x1136), con fondo transparente. NO se usa size/origin
+        // (recortaban la imagen). Es un pin tipo Google Maps: anclado en la punta (centro-abajo).
+        if (origen === 'calle') {
+            return {
+                url: ICONO_CALLE,
+                scaledSize: new google.maps.Size(34, 43),
+                anchor: new google.maps.Point(17, 43)
+            };
+        }
         if (p.es_captacion || portal === 'facebook') {
             return {
                 url: ICONO_FACEBOOK,
@@ -1384,8 +1396,13 @@
         
         // Determinar portal/fuente para mostrar logo
         const portal = (p.portal || '').toLowerCase();
+        const origen = (p.origen || '').toString().toLowerCase();
         let badgeClass, badgeText, logoSrc;
-        if (p.es_captacion || portal === 'facebook') {
+        if (origen === 'calle') {
+            badgeClass = 'bg-secondary';
+            badgeText = 'Calle';
+            logoSrc = ICONO_CALLE;
+        } else if (p.es_captacion || portal === 'facebook') {
             badgeClass = 'bg-primary';
             badgeText = 'Facebook';
             logoSrc = ICONO_FACEBOOK;
@@ -1416,7 +1433,9 @@
         
         // Determinar colores del badge numerado según portal
         let badgeBg, badgeBorder;
-        if (p.es_captacion || portal === 'facebook') {
+        if (origen === 'calle') {
+            badgeBg = '#8250df'; badgeBorder = '#a371f7';
+        } else if (p.es_captacion || portal === 'facebook') {
             badgeBg = '#1877f2'; badgeBorder = '#5b9df5';
         } else if (p.es_propify) {
             badgeBg = '#238636'; badgeBorder = '#2ea043';
@@ -1482,7 +1501,9 @@
                         <span class="property-type">
                             ${tipo}
                             <span class="badge ${badgeClass} ms-1" style="font-size: 0.6rem; padding: 0.1rem 0.3rem; display: inline-flex; align-items: center; gap: 3px;">
-                                ${logoSrc ? `<img src="${logoSrc}" style="width: 12px; height: 12px; border-radius: 50%; object-fit: cover;">` : ''}
+                                ${logoSrc ? (origen === 'calle'
+                                    ? `<img src="${logoSrc}" style="height: 16px; width: auto; border-radius: 3px; object-fit: contain;">`
+                                    : `<img src="${logoSrc}" style="width: 12px; height: 12px; border-radius: 50%; object-fit: cover;">`) : ''}
                                 ${badgeText}
                             </span>
                         </span>

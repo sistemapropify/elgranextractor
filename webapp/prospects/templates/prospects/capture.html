@@ -1050,7 +1050,9 @@
     var other = document.getElementById('origin-other-group');
     var market = document.getElementById('marketplace-url-group');
     var picker = document.getElementById('marketplace-location-picker');
-    var usesMap = origin === 'marketplace' || origin === 'otros';
+    // 'calle' usa la MISMA lógica de obtención de coordenadas que 'marketplace':
+    // mapa de Google con autocompletado, buscás la dirección y el marcador se posiciona ahí.
+    var usesMap = origin === 'marketplace' || origin === 'calle' || origin === 'otros';
     if (other) other.style.display = origin === 'otros' ? 'block' : 'none';
     if (market) market.style.display = origin === 'marketplace' ? 'block' : 'none';
     if (picker) picker.style.display = usesMap ? 'block' : 'none';
@@ -1092,8 +1094,6 @@
           }
         }, 250);
       }
-    } else if (origin === 'calle') {
-      initGPS();
     } else {
       setGPSStatus('Selecciona el origen', false);
     }
