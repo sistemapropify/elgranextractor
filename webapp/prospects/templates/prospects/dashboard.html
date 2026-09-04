@@ -371,6 +371,10 @@
     // Filtro por teléfono: '' = todas, 'con' = con teléfono, 'sin' = sin teléfono
     var filtroTelefono = '';
 
+    // IDs de captaciones con la tarjeta EXPANDIDA: mientras haya alguna,
+    // en el mapa solo se muestran los marcadores de esas captaciones.
+    var idsExpandidos = new Set();
+
     function telefonoMarcador(p) {
         return !!(p.telefono && String(p.telefono).trim());
     }
@@ -445,16 +449,47 @@
         items.forEach(function (p) {
             var card = document.createElement('div');
             card.className = 'prospect-panel-card';
+            card.setAttribute('data-prospect-id', p.id != null ? p.id : '');
             card.innerHTML = resumenTarjetaHtml(p) +
                 '<div class="prospect-detail-inline">' + filasDetalleHtml(p) + '</div>';
             container.appendChild(card);
         });
 
+        // Reaplicar el estado expandido en las tarjetas que siguen visibles
+        // (p. ej. tras cambiar un filtro se repinta el panel).
+        container.querySelectorAll('.prospect-panel-card').forEach(function (card) {
+            var pid = String(card.getAttribute('data-prospect-id') || '');
+            if (pid && idsExpandidos.has(pid)) {
+                var d = card.querySelector('.prospect-detail-inline');
+                if (d) d.classList.add('open');
+            }
+        });
+
+        // Mantener el conjunto consistente con las tarjetas realmente visibles/abiertas.
+        var nuevoSet = new Set();
+        container.querySelectorAll('.prospect-panel-card').forEach(function (card) {
+            var pid = String(card.getAttribute('data-prospect-id') || '');
+            if (pid && card.querySelector('.prospect-detail-inline.open')) nuevoSet.add(pid);
+        });
+        idsExpandidos = nuevoSet;
+
         container.querySelectorAll('.prospect-panel-card').forEach(function (card) {
             card.addEventListener('click', function (e) {
+                // El clic dentro del detalle (ya expandido) no contrae la tarjeta.
                 if (e.target.closest('.prospect-detail-inline')) return;
                 var detalle = card.querySelector('.prospect-detail-inline');
-                if (detalle) detalle.classList.toggle('open');
+                if (!detalle) return;
+                var pid = String(card.getAttribute('data-prospect-id') || '');
+                if (detalle.classList.contains('open')) {
+                    // Contraer → su marcador deja de mostrarse
+                    detalle.classList.remove('open');
+                    if (pid) idsExpandidos.delete(pid);
+                } else {
+                    // Expandir → en el mapa su marcador (junto a otras expandidas)
+                    detalle.classList.add('open');
+                    if (pid) idsExpandidos.add(pid);
+                }
+                actualizarMarcadoresMapa();
             });
         });
         // Clic en la foto → abrir modal
@@ -573,15 +608,32 @@
         return resultado;
     }
 
-    function aplicarFiltrosProspeccion() {
-        // El panel siempre se sincroniza; los marcadores solo si el mapa está listo.
+    // ¿El marcador debe mostrarse en el mapa?
+    function marcadorVisibleEnMapa(m) {
+        // Si hay tarjetas expandidas, en el mapa SOLO se ven los marcadores de
+        // esas captaciones (los filtros no aplican sobre ellas).
+        if (idsExpandidos.size > 0) {
+            var pid = m._propertyData ? m._propertyData.id : null;
+            return pid != null && idsExpandidos.has(String(pid));
+        }
+        // Sin tarjetas expandidas: prima el filtro activo.
+        return marcadorCoincide(m);
+    }
+
+    function actualizarMarcadoresMapa() {
         if (typeof map !== 'undefined' && map) {
             var lista = (typeof activeMarkers !== 'undefined') ? activeMarkers : [];
             lista.forEach(function (m) {
-                m.setMap(marcadorCoincide(m) ? map : null);
+                m.setMap(marcadorVisibleEnMapa(m) ? map : null);
             });
         }
+    }
+
+    function aplicarFiltrosProspeccion() {
+        // Primero se repinta el panel (recalcula idsExpandidos según tarjetas
+        // visibles/abiertas) y después se actualizan los marcadores del mapa.
         sincronizarPanel();
+        actualizarMarcadoresMapa();
     }
 
     window.limpiarFiltrosProspeccion = function () {
