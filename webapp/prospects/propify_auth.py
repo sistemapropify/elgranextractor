@@ -81,6 +81,18 @@ def _mobile_user_for_profile(profile):
     return user
 
 
+def _crear_principal(profile, token):
+    """Principal Propify a partir del perfil del propio /api/auth/token/.
+
+    No llama a /me: el login ya autentica y entrega el token/usuario.
+    """
+    return PropifyPrincipal(
+        mobile_user=_mobile_user_for_profile(profile),
+        profile=profile,
+        token=token,
+    )
+
+
 def _urls_con_fallback(url):
     """Devuelve [url, url_con_el_otro_host] para tolerar app<->api.propify.pe."""
     candidatos = [url]
@@ -161,7 +173,10 @@ def authenticate_propify_credentials(username, password):
             token = str(payload.get('access') or payload.get('token') or '').strip()
             if not token:
                 raise PropifyAuthError('Propify no devolvió un token de acceso.', 502)
-            return payload, principal_from_token(token)
+            # Autenticación SOLO con /api/auth/token/: el perfil viene en la
+            # propia respuesta (payload.get('user') o el payload).
+            perfil = _profile_from_payload(payload)
+            return payload, _crear_principal(perfil, token)
         ultimo_error = PropifyAuthError('Propify no pudo iniciar la sesión.', 502)
 
     if ultimo_error is None:
@@ -196,11 +211,12 @@ def get_web_propify_principal(request):
     if cached is not None:
         return cached
     token = str(request.session.get(WEB_TOKEN_SESSION_KEY, '')).strip()
-    if not token:
+    profile = request.session.get(WEB_PROFILE_SESSION_KEY)
+    if not token or not isinstance(profile, dict):
         return None
     try:
-        principal = principal_from_token(token)
-    except PropifyAuthError:
+        principal = _crear_principal(profile, token)
+    except Exception:
         clear_web_propify_session(request)
         return None
     request.propify_principal = principal
