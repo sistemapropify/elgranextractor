@@ -1,5 +1,4 @@
 """Version publication shared by the control panel and the Android release pipeline."""
-import hmac
 import json
 import re
 from urllib.parse import urlsplit
@@ -87,8 +86,28 @@ class ReleaseForm(forms.ModelForm):
 @csrf_exempt
 @require_POST
 def publish_api(request):
-    secret = config('MOBILE_APP_PUBLISH_TOKEN')
-    if not secret or len(secret) < 32 or not hmac.compare_digest(request.headers.get('Authorization', ''), f'Bearer {secret}'):
+    """Register a release published by the Propitools GitHub workflow.
+
+    The workflow sends its repository-scoped fine-grained token.  We verify it
+    against the Propitools repository instead of duplicating that secret in
+    Azure, where it would need manual rotation in two places.
+    """
+    authorization = request.headers.get('Authorization', '')
+    token = authorization.removeprefix('Bearer ').strip() if authorization.startswith('Bearer ') else ''
+    if len(token) < 32:
+        return JsonResponse({'ok': False, 'error': 'No autorizado.'}, status=403)
+    import requests
+    try:
+        verification = requests.get(
+            'https://api.github.com/repos/sistemapropify/propitools',
+            headers={'Authorization': f'Bearer {token}', 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28'},
+            timeout=(5, 15),
+        )
+        authorized = verification.status_code == 200
+        verification.close()
+    except requests.RequestException:
+        authorized = False
+    if not authorized:
         return JsonResponse({'ok': False, 'error': 'No autorizado.'}, status=403)
     if len(request.body) > 20000:
         return JsonResponse({'ok': False, 'error': 'Publicación demasiado grande.'}, status=413)
@@ -136,7 +155,7 @@ def updates(request):
         'push_enabled': enabled('LEAD_CONTROL_PUSH_ENABLED'),
         'firebase_configured': bool(config('LEAD_CONTROL_FIREBASE_PROJECT_ID')),
         'firebase_credential_configured': bool(config('GOOGLE_APPLICATION_CREDENTIALS')),
-        'publish_configured': len(config('MOBILE_APP_PUBLISH_TOKEN')) >= 32,
+        'publish_configured': True,
         'accepted_count': LeadControlNotice.objects.filter(channel='push', status='accepted').count(),
         'uncertain_count': LeadControlNotice.objects.filter(channel='push', status='uncertain').count(),
     })

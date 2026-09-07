@@ -1,6 +1,6 @@
 import json
 from datetime import timedelta
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from django.test import TestCase, RequestFactory, override_settings
 from rest_framework.test import APIRequestFactory, force_authenticate
 from prospects.models import MobileProspectUser, MobileNotificationDevice, MobileAppVersion
@@ -65,8 +65,9 @@ class MobileReleaseTests(TestCase):
     def post(self, data, auth='Bearer '+('x'*40)):
         return app_updates.publish_api(RequestFactory().post('/', json.dumps(data), content_type='application/json', HTTP_AUTHORIZATION=auth))
 
-    @override_settings(MOBILE_APP_PUBLISH_TOKEN='x'*40)
-    def test_publishing_authenticated_idempotent_and_immutable(self):
+    @patch('prospects.app_updates.requests.get')
+    def test_publishing_authenticated_idempotent_and_immutable(self, github_get):
+        github_get.return_value = MagicMock(status_code=200)
         data = {'version_code':100, 'version_name':'1.1', 'min_supported_version_code':1, 'download_url':'https://example.com/app.apk','sha256':'a'*64}
         self.assertEqual(self.post(data, 'Bearer wrong').status_code, 403)
         self.assertEqual(self.post(data).status_code, 201)
