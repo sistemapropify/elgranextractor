@@ -82,7 +82,7 @@ def _prospects_for_principal(principal):
             mobile_user__isnull=True,
             captured_by_username__iexact=principal.username,
         )
-    )
+    ).order_by('-created_at', '-pk')
 
 
 def propify_login(request):
