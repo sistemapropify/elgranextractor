@@ -21,6 +21,7 @@ urlpatterns = [
     path('control/directorio/', control_views.directory, name='control_directory'),
     path('control/directorio/<int:member_id>/', control_views.directory, name='control_member'),
     path('api/control/snapshot/', control_views.ingest, name='control_ingest'),
+    path('api/control/process/', control_views.scheduled_process, name='control_process'),
     path('remarketing/campanas/', remarketing_views.campaigns, name='remarketing_campaigns'),
     path('remarketing/campanas/nueva/', remarketing_views.campaign_edit, name='remarketing_campaign_new'),
     path('remarketing/campanas/<int:campaign_id>/', remarketing_views.campaign_edit, name='remarketing_campaign_edit'),

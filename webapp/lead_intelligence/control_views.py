@@ -3,6 +3,7 @@ import json
 import uuid
 from datetime import timedelta
 from django.contrib import messages
+from django.core.management import call_command
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Q, Case, When, Value, IntegerField
@@ -224,3 +225,19 @@ def ingest(request):
         return JsonResponse({'ok': True, 'lead_id': state.source_lead_id, 'quality': state.quality})
     except (ValueError, TypeError, KeyError):
         return JsonResponse({'error': 'Snapshot inválido.'}, status=400)
+
+
+@csrf_exempt
+@require_POST
+def scheduled_process(request):
+    """Protected entrypoint for the five-minute production control sweep."""
+    token = config('ANALYTICS_BRIDGE_API_KEY')
+    if not token or not hmac.compare_digest(request.headers.get('X-Analytics-API-Key', '').encode(), token.encode()):
+        return HttpResponseForbidden()
+    if not enabled('LEAD_CONTROL_SCHEDULER_ENABLED'):
+        return JsonResponse({'ok': True, 'status': 'disabled'})
+    try:
+        call_command('process_lead_control', notify=enabled('LEAD_CONTROL_NOTIFY_ENABLED'))
+    except Exception as exc:
+        return JsonResponse({'ok': False, 'error': str(exc)}, status=500)
+    return JsonResponse({'ok': True, 'status': 'processed'})

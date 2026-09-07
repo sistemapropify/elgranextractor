@@ -1,4 +1,6 @@
 """Transactional notification outbox with internal, SMTP and Firebase channels."""
+import json
+import os
 import re
 from datetime import timedelta
 
@@ -104,7 +106,16 @@ def send_firebase(device, title, body, item_id):
     """HTTP v1 supports registered FIDs and legacy registration tokens."""
     import google.auth
     from google.auth.transport.requests import Request
-    credentials, default_project = google.auth.default(scopes=['https://www.googleapis.com/auth/firebase.messaging'])
+    raw_credentials = os.environ.get('FIREBASE_SERVICE_ACCOUNT_JSON', '').strip()
+    if raw_credentials:
+        from google.oauth2 import service_account
+        info = json.loads(raw_credentials)
+        credentials = service_account.Credentials.from_service_account_info(
+            info, scopes=['https://www.googleapis.com/auth/firebase.messaging']
+        )
+        default_project = info.get('project_id')
+    else:
+        credentials, default_project = google.auth.default(scopes=['https://www.googleapis.com/auth/firebase.messaging'])
     project = config('LEAD_CONTROL_FIREBASE_PROJECT_ID') or default_project
     if not project or not re.fullmatch(r'[A-Za-z0-9_-]+', project):
         raise ValueError('Proyecto Firebase no configurado.')

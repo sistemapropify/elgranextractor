@@ -1,0 +1,22 @@
+name: Control de leads - barrido automático (cada 5 min)
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  procesar-control:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sincronizar cartera, plazos y avisos pendientes
+        run: |
+          curl -sS -f --max-time 180 -X POST \
+            -H "X-Analytics-API-Key: ${{ secrets.ANALYTICS_BRIDGE_API_KEY }}" \
+            -H "Referer: https://acm.propifai.com/" \
+            -H "User-Agent: GitHub-Actions" \
+            -w "\nHTTP %{http_code}\n" \
+            "https://granextractorservice-emehaffsf8e2c7eg.brazilsouth-01.azurewebsites.net/analisis-crm/api/control/process/"
