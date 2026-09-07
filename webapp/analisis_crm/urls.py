@@ -10,7 +10,6 @@ app_name = 'analisis_crm'
 
 urlpatterns = [
     path('control/apk/', app_updates.updates, name='mobile_updates'),
-    path('', control_views.board, name='home'),
     path('control/', control_views.board, name='control_board'),
     path('control/sincronizar/', control_views.sync_lead, name='control_sync'),
     path('control/leads/<int:lead_id>/', control_views.lead_detail, name='control_lead'),
@@ -28,7 +27,9 @@ urlpatterns = [
     path('remarketing/campanas/<int:campaign_id>/accion/', remarketing_views.campaign_action, name='remarketing_campaign_action'),
     path('remarketing/envios/', remarketing_views.deliveries_report, name='remarketing_deliveries'),
     path('api/remarketing/receipt/', remarketing_views.delivery_receipt, name='remarketing_receipt'),
-    # El control es la entrada operativa; el embudo conserva su URL nombrada.
+    # El inicio conserva el embudo comercial oficial de PROMETEO. El control
+    # operativo vive bajo /control/ y nunca sustituye las etapas del embudo.
+    path('', intelligence_views.management_dashboard, name='home'),
     path('resumen/', intelligence_views.management_dashboard, name='dashboard'),
     path('cohortes/', intelligence_views.cohorts_dashboard, name='cohorts'),
     path(
