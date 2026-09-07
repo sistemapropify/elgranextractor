@@ -20,6 +20,19 @@ from .models import MobileAppVersion, MobileNotificationDevice
 
 
 @require_GET
+def mobile_schema_health(request):
+    """Health check used by Azure after deployment of the mobile API schema."""
+    try:
+        # Query both tables that back registration and update delivery. This
+        # verifies that the migrations required by the APK are available.
+        MobileNotificationDevice.objects.exists()
+        MobileAppVersion.objects.exists()
+    except Exception:
+        return JsonResponse({'status': 'unavailable'}, status=503)
+    return JsonResponse({'status': 'ok'})
+
+
+@require_GET
 def download_apk(request, asset_id):
     """Expose only published installers; keep the private GitHub token on the server."""
     path = f'/prospects/api/mobile/apk/{asset_id}/'

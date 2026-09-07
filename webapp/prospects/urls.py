@@ -6,6 +6,7 @@ from . import app_updates
 app_name = 'prospects'
 
 urlpatterns = [
+    path('api/mobile/schema-health/', app_updates.mobile_schema_health, name='mobile_schema_health'),
     path('api/mobile/version/publish/', app_updates.publish_api, name='publish_version'),
     path('api/mobile/apk/<int:asset_id>/', app_updates.download_apk, name='download_apk'),
     path('api/mobile/notification-device/', control_api.register_device, name='notification_device'),
