@@ -9,7 +9,6 @@ from uuid import uuid4
 import requests
 from django.contrib import messages
 from django.db import DatabaseError, connection
-from django.db.models import Q
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.http import JsonResponse
@@ -72,17 +71,6 @@ def signed_prospect_photo(prospect):
     except Exception:
         logger.warning('No se pudo firmar SAS de la foto del prospecto.', exc_info=True)
         return raw_url
-
-
-def _prospects_for_principal(principal):
-    """Capturas propias de una identidad Propify, incluidas las antiguas."""
-    return PropertyProspect.objects.filter(
-        Q(mobile_user=principal.mobile_user)
-        | Q(
-            mobile_user__isnull=True,
-            captured_by_username__iexact=principal.username,
-        )
-    ).order_by('-created_at', '-pk')
 
 
 def propify_login(request):
@@ -254,7 +242,10 @@ class ProspectDetailView(View):
     """
 
     def get_prospect(self, request, pk):
-        return get_object_or_404(_prospects_for_principal(request.propify_user), pk=pk)
+        # El módulo de prospección es colaborativo: cualquier usuario que haya
+        # iniciado sesión con Propify puede consultar y editar las captaciones
+        # del equipo. La autenticación sigue siendo obligatoria por el decorador.
+        return get_object_or_404(PropertyProspect, pk=pk)
 
     def get(self, request, pk):
         prospect = self.get_prospect(request, pk)
@@ -349,7 +340,9 @@ class ProcessImageView(View):
                 'error': 'El procesamiento con IA solo está disponible desde móvil o tablet.',
             }, status=403)
 
-        prospect = get_object_or_404(_prospects_for_principal(request.propify_user), pk=pk)
+        # Igual que la edición manual, el procesamiento pertenece al espacio
+        # compartido de prospecciones y no se restringe al creador.
+        prospect = get_object_or_404(PropertyProspect, pk=pk)
 
         if not prospect.photo:
             return JsonResponse({'ok': False, 'error': 'No hay foto asociada.'}, status=400)
@@ -459,7 +452,9 @@ No incluyas explicaciones, solo el JSON."""
 # ─────────────────────────────────────────────────────────────────────────────
 @propify_web_required
 def prospect_list(request):
-    qs = _prospects_for_principal(request.propify_user)
+    # La prospección es colaborativa: la lista contiene las captaciones de todo
+    # el equipo, igual que el dashboard cartográfico.
+    qs = PropertyProspect.objects.all().order_by('-created_at', '-pk')
 
     status_filter = request.GET.get('status', '')
     if status_filter:
@@ -485,7 +480,6 @@ def prospect_list(request):
 def prospect_dashboard(request):
     """Dashboard cartográfico con las captaciones de todos los agentes."""
     prospects = list(PropertyProspect.objects.all().order_by('-created_at'))
-    current_mobile_user_id = request.propify_user.mobile_user.pk
     mobile_actors = _mobile_capture_actors()
 
     agent_ids = {prospect.agent_id for prospect in prospects if prospect.agent_id}
@@ -514,14 +508,6 @@ def prospect_dashboard(request):
             )
             mobile_identity = actor.get('mobile_user_id') or agent_name
             user_identities.add(f'mobile:{mobile_identity}')
-        can_edit = bool(
-            prospect.mobile_user_id == current_mobile_user_id
-            or (
-                prospect.mobile_user_id is None
-                and prospect.captured_by_username.lower() == request.propify_user.username.lower()
-            )
-        )
-
         # Contenedor de fotos privado: firmar URL con SAS (24h) para las tarjetas/mapa
         photo_url = signed_prospect_photo(prospect)
 
@@ -547,7 +533,9 @@ def prospect_dashboard(request):
             'es_captacion': True,
             'primera_imagen': photo_url,
             'agente': agent_name,
-            'url': f'/prospects/{prospect.pk}/detail/' if can_edit else '',
+            # Todas las captaciones son editables por cualquier usuario Propify
+            # autenticado; la vista de detalle aplica esa misma regla.
+            'url': f'/prospects/{prospect.pk}/detail/',
             'status': prospect.get_status_display(),
             'telefono': prospect.phone or '',
             'marketplace_url': prospect.marketplace_url or '',

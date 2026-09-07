@@ -3,7 +3,7 @@
 from decimal import Decimal, InvalidOperation
 
 from django.conf import settings
-from django.db.models import Q
+from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -170,10 +170,9 @@ def _apply_mobile_fields(prospect, request):
 def mobile_capture(request):
     mobile_user = request.user.mobile_user
     if request.method == 'GET':
-        prospects = PropertyProspect.objects.filter(
-            Q(mobile_user=mobile_user)
-            | Q(mobile_user__isnull=True, captured_by_username__iexact=request.user.username)
-        ).order_by('-created_at')
+        # Catálogo compartido: todos los usuarios Propify autenticados pueden
+        # consultar y editar las captaciones de todo el equipo.
+        prospects = PropertyProspect.objects.all().order_by('-created_at')
         return Response({'ok': True, 'results': [_serialize_prospect(item) for item in prospects]})
 
     try:
@@ -203,12 +202,7 @@ def mobile_capture(request):
 @authentication_classes([PropifyBearerAuthentication])
 @permission_classes([IsAuthenticated])
 def mobile_capture_detail(request, pk):
-    prospect = PropertyProspect.objects.filter(pk=pk).filter(
-        Q(mobile_user=request.user.mobile_user)
-        | Q(mobile_user__isnull=True, captured_by_username__iexact=request.user.username)
-    ).first()
-    if prospect is None:
-        return Response({'ok': False, 'error': 'Prospecto no encontrado.'}, status=404)
+    prospect = get_object_or_404(PropertyProspect, pk=pk)
     if request.method == 'GET':
         return Response({'ok': True, 'prospect': _serialize_prospect(prospect)})
     try:
