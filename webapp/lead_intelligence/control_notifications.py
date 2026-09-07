@@ -11,7 +11,7 @@ from django.core.mail import EmailMessage
 from django.utils import timezone
 
 from .models import LeadObligation, LeadControlMember, LeadControlNotice, LeadControlEvent, RecommendedAction
-from .control_engine import policy
+from .control_engine import policy, active_since
 from .control_calendar import add_minutes, business_seconds
 from .remarketing_gateway import config
 
@@ -68,7 +68,11 @@ def tick(now=None):
         if key not in existing:
             pending_notices.append(LeadControlNotice(dedupe_key=key, obligation=item, level=level, channel='internal', status='unroutable', last_error='Configura un responsable y su ruta de supervisión/gerencia.'))
             existing.add(key)
-    for item in LeadObligation.objects.filter(action__status='pending', lead__active=True).select_related('lead', 'action').iterator(chunk_size=200):
+    items = LeadObligation.objects.filter(action__status='pending', lead__active=True)
+    cutoff = active_since()
+    if cutoff:
+        items = items.filter(started_at__gte=cutoff)
+    for item in items.select_related('lead', 'action').iterator(chunk_size=200):
         stale = item.lead.observed_at is None or now-item.lead.observed_at > timedelta(minutes=settings.stale_minutes)
         if stale or item.lead.quality != 'valid':
             enqueue(item, 'data')

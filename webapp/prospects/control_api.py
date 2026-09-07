@@ -12,7 +12,7 @@ from .propify_auth import PropifyBearerAuthentication
 from .models import MobileNotificationDevice
 from lead_intelligence.models import LeadControlMember, LeadObligation, LeadControlNotice
 from lead_intelligence.control_access import ControlAccess
-from lead_intelligence.control_engine import intervene, policy, KINDS
+from lead_intelligence.control_engine import intervene, policy, KINDS, active_since
 
 
 def access_for_mobile(principal):
@@ -57,6 +57,9 @@ def alerts(request):
     if not access.member and not access.admin:
         return Response({'ok': False, 'error': 'Sin acceso al control de leads.'}, status=403)
     items = LeadObligation.objects.filter(lead__in=access.states()).select_related('lead', 'action')
+    cutoff = active_since()
+    if cutoff:
+        items = items.filter(started_at__gte=cutoff)
     status = request.query_params.get('status', 'pending')
     category = request.query_params.get('kind', '')
     try:

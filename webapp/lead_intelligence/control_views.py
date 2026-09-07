@@ -16,7 +16,7 @@ from django.views.decorators.http import require_GET, require_POST, require_http
 
 from .models import LeadControlState, LeadObligation, LeadControlMember, LeadControlNotice, LeadControlDigest
 from .control_access import control_required
-from .control_engine import observe, policy, intervene, create_obligation, change_owner, resolve, KINDS
+from .control_engine import observe, policy, intervene, create_obligation, change_owner, resolve, KINDS, active_since
 from .control_forms import PolicyForm, MemberForm
 from .control_metrics import metrics
 from .control_notifications import enabled
@@ -72,6 +72,9 @@ def board(request):
     stale_before = now-timedelta(minutes=settings.stale_minutes)
     fresh = Q(lead__quality='valid', lead__observed_at__gte=stale_before)
     all_items = LeadObligation.objects.filter(lead__in=states).select_related('lead', 'action')
+    cutoff = active_since()
+    if cutoff:
+        all_items = all_items.filter(started_at__gte=cutoff)
     items = all_items.filter(action__status='pending')
     category = request.GET.get('category', '')
     if category in KINDS:

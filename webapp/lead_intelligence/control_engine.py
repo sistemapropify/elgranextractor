@@ -1,10 +1,12 @@
 """Operational obligations: deterministic timing, immutable evidence and audit."""
 import hashlib
 import json
+import os
 from datetime import timedelta
 
 from django.db import transaction
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 
 from .models import AnalysisRun, LeadDiagnosis, RecommendedAction, ActionOutcome, LeadControlPolicy, LeadControlState, LeadObligation, LeadControlEvent
 from .remarketing_engine import as_time, timeline
@@ -12,6 +14,15 @@ from .conversation_analysis import normalize_text
 from .control_calendar import calendar_for, add_minutes
 
 KINDS = {'first_response': 'Dar primera respuesta humana', 'reply': 'Responder al cliente', 'assignment': 'Asignar responsable', 'visit': 'Coordinar visita solicitada', 'commitment': 'Cumplir compromiso', 'followup': 'Retomar seguimiento', 'postvisit': 'Registrar resultado de visita', 'data': 'Verificar datos del lead'}
+
+
+def active_since():
+    """Control starts at an explicit cutover; historic CRM debt is not an alert."""
+    raw = os.environ.get('LEAD_CONTROL_ACTIVE_SINCE', '').strip()
+    parsed = parse_datetime(raw)
+    if parsed is None:
+        return None
+    return timezone.make_aware(parsed, timezone.get_current_timezone()) if timezone.is_naive(parsed) else parsed
 
 
 def policy():
