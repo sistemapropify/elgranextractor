@@ -1,0 +1,2 @@
+# Azure App Service runs these files under Linux.
+*.sh text eol=lf
