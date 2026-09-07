@@ -374,6 +374,8 @@
     // IDs de captaciones con la tarjeta EXPANDIDA: mientras haya alguna,
     // en el mapa solo se muestran los marcadores de esas captaciones.
     var idsExpandidos = new Set();
+    // Al elegir un marcador se entra en modo de selección única.
+    var prospectoSeleccionadoId = null;
 
     function telefonoMarcador(p) {
         return !!(p.telefono && String(p.telefono).trim());
@@ -412,6 +414,8 @@
     window.toggleFiltroTelefono = function (tipo) {
         filtroTelefono = (filtroTelefono === tipo) ? '' : tipo;
         actualizarEstadoTarjetasTelefono();
+        prospectoSeleccionadoId = null;
+        idsExpandidos.clear();
         aplicarFiltrosProspeccion();
     };
 
@@ -610,6 +614,10 @@
 
     // ¿El marcador debe mostrarse en el mapa?
     function marcadorVisibleEnMapa(m) {
+        if (prospectoSeleccionadoId !== null) {
+            var seleccionadoId = m && m._propertyData ? m._propertyData.id : null;
+            return seleccionadoId != null && String(seleccionadoId) === prospectoSeleccionadoId;
+        }
         // Si hay tarjetas expandidas, en el mapa SOLO se ven los marcadores de
         // esas captaciones (los filtros no aplican sobre ellas).
         if (idsExpandidos.size > 0) {
@@ -644,9 +652,27 @@
         if (tipoSel) tipoSel.value = '';
         if (origenSel) origenSel.value = '';
         filtroTelefono = '';
+        prospectoSeleccionadoId = null;
+        idsExpandidos.clear();
         actualizarEstadoTarjetasTelefono();
         aplicarFiltrosProspeccion();
     };
+
+    function seleccionarMarcadorUnico(marker) {
+        if (!marker || !marker._propertyData) return;
+        var p = marker._propertyData;
+        if (p.id === null || p.id === undefined) return;
+
+        prospectoSeleccionadoId = String(p.id);
+        idsExpandidos.clear();
+        pintarListaPanel([p]);
+        actualizarMarcadoresMapa();
+
+        if (typeof map !== 'undefined' && map && typeof marker.getPosition === 'function') {
+            map.panTo(marker.getPosition());
+            if (typeof map.getZoom === 'function' && map.getZoom() < 15) map.setZoom(15);
+        }
+    }
 
     function escaparHtml(str) {
         if (str === null || str === undefined) return '';
@@ -744,18 +770,26 @@
     }
 
     document.addEventListener('DOMContentLoaded', function () {
-        // Evitar que los clics sobre los marcadores inyecten tarjetas duplicadas
-        // (el panel derecho ya se construye con TODAS las captaciones).
-        try { window.agregarPropiedadSeleccionada = function () {}; } catch (err) {}
+        // El template padre consulta este hook antes de ejecutar su selección
+        // acumulativa. `true` indica que prospección ya manejó el clic.
+        window.onPropertyMarkerClick = function (marker) {
+            seleccionarMarcadorUnico(marker);
+            return true;
+        };
         // Llenar el panel inicialmente (aunque el mapa aún no cargue).
         sincronizarPanel();
 
         var distritoSel = document.getElementById('prospect-filter-distrito');
         var tipoSel = document.getElementById('prospect-filter-tipo');
         var origenSel = document.getElementById('prospect-filter-origen');
-        if (distritoSel) distritoSel.addEventListener('change', aplicarFiltrosProspeccion);
-        if (tipoSel) tipoSel.addEventListener('change', aplicarFiltrosProspeccion);
-        if (origenSel) origenSel.addEventListener('change', aplicarFiltrosProspeccion);
+        function reiniciarSeleccionYAplicarFiltros() {
+            prospectoSeleccionadoId = null;
+            idsExpandidos.clear();
+            aplicarFiltrosProspeccion();
+        }
+        if (distritoSel) distritoSel.addEventListener('change', reiniciarSeleccionYAplicarFiltros);
+        if (tipoSel) tipoSel.addEventListener('change', reiniciarSeleccionYAplicarFiltros);
+        if (origenSel) origenSel.addEventListener('change', reiniciarSeleccionYAplicarFiltros);
 
         // Una vez que el mapa cargue sus marcadores, poblar el panel derecho
         // con todas las captaciones visibles y mantenerlos sincronizados.

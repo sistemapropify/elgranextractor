@@ -1275,6 +1275,10 @@
                 });
                 
                 marker.addListener('click', () => {
+                    if (typeof window.onPropertyMarkerClick === 'function' &&
+                        window.onPropertyMarkerClick(marker) === true) {
+                        return;
+                    }
                     agregarPropiedadSeleccionada(marker);
                 });
                 

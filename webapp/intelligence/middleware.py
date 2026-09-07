@@ -28,6 +28,7 @@ PUBLIC_PATHS = [
     r'^/marketing/prospeccion/',  # dashboard de prospección
     r'^/admin/',
     r'^/static/',
+    r'^/favicon\.ico$',           # Icono global del navegador
     r'^/acm/',                   # ACM - Análisis Comparativo de Mercado (público)
     r'^/ingestas/propiedades/',  # Catálogo público de propiedades
     r'^/market-analysis/',       # Market analysis (heatmap, dashboard) público

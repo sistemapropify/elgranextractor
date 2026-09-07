@@ -25,6 +25,15 @@ from intelligence import views as intelligence_views
 from prospects import views as prospects_views
 
 urlpatterns = [
+    # Evita el 404 que los navegadores generan automáticamente al pedir el icono.
+    path(
+        'favicon.ico',
+        RedirectView.as_view(
+            url=f'{settings.STATIC_URL}intelligence/img/logo-propify.png',
+            permanent=True,
+        ),
+        name='favicon',
+    ),
     # Centro de control general. ACM conserva su dashboard en /acm/.
     path('', views.home, name='home'),
     
