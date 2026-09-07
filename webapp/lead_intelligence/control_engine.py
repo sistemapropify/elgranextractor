@@ -128,6 +128,14 @@ def observe(snapshot, settings=None, now=None):
         state.save()
         if old_owner != state.owner_id:
             change_owner(state, state.owner_id, 'Cambio observado en CRM', previous=old_owner)
+        cutoff = active_since()
+        if cutoff and (state.entered_at is None or state.entered_at < cutoff):
+            # A backlog scan may observe an old CRM lead today.  That must not
+            # turn historical debt into a current alert.  Close any obligations
+            # created by earlier faulty sweeps and stop before creating more.
+            for obligation in state.obligations.filter(action__status='pending').select_related('action'):
+                resolve(obligation, now, {'type': 'before_control_cutover', 'lead_entered_at': state.entered_at.isoformat() if state.entered_at else None}, dismissed=True)
+            return state
         if not state.active:
             for obligation in state.obligations.filter(action__status='pending').select_related('action'):
                 resolve(obligation, now, {'type': 'crm_closed', 'status': state.status_name}, dismissed=True)

@@ -45,7 +45,7 @@ def serialize(item, owners=None, stale_before=None):
     stale_before = stale_before or now-timedelta(minutes=policy().stale_minutes)
     fresh = bool(state.quality == 'valid' and state.observed_at and state.observed_at >= stale_before)
     fallback = (state.snapshot or {}).get('agent_name') if state.owner_id == action.source_assigned_user_id else None
-    return {'id': item.pk, 'lead_id': state.source_lead_id, 'agent_name': owners.get(action.source_assigned_user_id, fallback or str(action.source_assigned_user_id or 'Sin asignar')), 'contact_name': state.name, 'phone': '', 'property_code': '', 'property_title': state.property_title, 'evidence': [{'text': action.title}], 'status': 'closed' if action.status != 'pending' else ('follow_up' if item.acknowledged_at else 'pending'), 'detected_at': item.started_at.isoformat(), 'responded_at': action.completed_at.isoformat() if action.completed_at else None, 'response_seconds': int((action.completed_at-item.started_at).total_seconds()) if action.completed_at else None, 'kind': item.kind, 'due_at': action.due_at.isoformat(), 'overdue': fresh and action.status == 'pending' and action.due_at < now, 'escalated': fresh and action.status == 'pending' and item.manager_at <= now, 'quality': state.quality, 'fresh': fresh, 'observed_at': state.observed_at.isoformat() if state.observed_at else None}
+    return {'id': item.pk, 'lead_id': state.source_lead_id, 'agent_name': owners.get(action.source_assigned_user_id, fallback or str(action.source_assigned_user_id or 'Sin asignar')), 'contact_name': state.name, 'phone': '', 'property_code': '', 'property_title': state.property_title, 'evidence': [{'text': action.title}], 'status': 'closed' if action.status != 'pending' else ('follow_up' if item.acknowledged_at else 'pending'), 'lead_entered_at': state.entered_at.isoformat() if state.entered_at else None, 'detected_at': item.started_at.isoformat(), 'responded_at': action.completed_at.isoformat() if action.completed_at else None, 'response_seconds': int((action.completed_at-item.started_at).total_seconds()) if action.completed_at else None, 'kind': item.kind, 'due_at': action.due_at.isoformat(), 'overdue': fresh and action.status == 'pending' and action.due_at < now, 'escalated': fresh and action.status == 'pending' and item.manager_at <= now, 'quality': state.quality, 'fresh': fresh, 'observed_at': state.observed_at.isoformat() if state.observed_at else None}
 
 
 @api_view(['POST', 'DELETE'])
@@ -73,7 +73,7 @@ def alerts(request):
     items = LeadObligation.objects.filter(lead__in=access.states()).select_related('lead', 'action')
     cutoff = active_since()
     if cutoff:
-        items = items.filter(started_at__gte=cutoff)
+        items = items.filter(lead__entered_at__gte=cutoff)
     status = request.query_params.get('status', 'pending')
     category = request.query_params.get('kind', '')
     try:

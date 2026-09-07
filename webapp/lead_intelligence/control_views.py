@@ -74,7 +74,10 @@ def board(request):
     all_items = LeadObligation.objects.filter(lead__in=states).select_related('lead', 'action')
     cutoff = active_since()
     if cutoff:
-        all_items = all_items.filter(started_at__gte=cutoff)
+        # The cutover applies to the CRM lead entry time.  Using the obligation
+        # creation time makes every historical lead processed by a new sweep
+        # look like a lead from today.
+        all_items = all_items.filter(lead__entered_at__gte=cutoff)
     items = all_items.filter(action__status='pending')
     category = request.GET.get('category', '')
     if category in KINDS:

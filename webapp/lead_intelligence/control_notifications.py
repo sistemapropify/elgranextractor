@@ -71,7 +71,7 @@ def tick(now=None):
     items = LeadObligation.objects.filter(action__status='pending', lead__active=True)
     cutoff = active_since()
     if cutoff:
-        items = items.filter(started_at__gte=cutoff)
+        items = items.filter(lead__entered_at__gte=cutoff)
     for item in items.select_related('lead', 'action').iterator(chunk_size=200):
         stale = item.lead.observed_at is None or now-item.lead.observed_at > timedelta(minutes=settings.stale_minutes)
         if stale or item.lead.quality != 'valid':
